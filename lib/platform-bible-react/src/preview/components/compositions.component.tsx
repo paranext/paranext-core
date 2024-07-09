@@ -30,7 +30,7 @@ function Compositions({ direction }: HasDirection) {
       </VerticalTabsList>
 
       <VerticalTabsContent value="Search Bar">
-        <SearchBar onSearch={() => {}} />
+        <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} /> &larr; type here
       </VerticalTabsContent>
 
       <VerticalTabsContent value="Book Chapter Control">

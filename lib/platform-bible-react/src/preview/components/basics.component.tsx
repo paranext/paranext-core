@@ -66,17 +66,6 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsList>
 
         <VerticalTabsContent value="Button">
-          Wrapped
-          <div>
-            <Button onClick={() => alert('Hello World')}>Wrapped Button</Button>
-            <Button className="primary">primary</Button>
-            <Button className="secondary">secondary</Button>
-            <Button className="secondary">disabled</Button>
-            <Button className="video">video</Button>
-            <Button className="paratext">paratext</Button>
-            <Button className="paratext bright">paratext bright</Button>
-          </div>
-          Shadcn
           <table>
             <tbody>
               <tr>
@@ -157,7 +146,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
-          <p>Note: the dropdown has a bad visibility in dark mode right now</p>
+          <p>Note: the shadcn dropdown has a bad contrast to the background in dark mode</p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <ShadcnButton>Open</ShadcnButton>
@@ -230,7 +219,10 @@ function Basics({ direction }: HasDirection) {
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => (
-                <TableRow key={invoice.invoice}>
+                <TableRow
+                  key={invoice.invoice}
+                  data-state={invoice.paymentStatus === 'Paid' ? 'selected' : ''}
+                >
                   <TableCell className="font-medium">{invoice.invoice}</TableCell>
                   <TableCell>{invoice.paymentStatus}</TableCell>
                   <TableCell>{invoice.paymentMethod}</TableCell>
