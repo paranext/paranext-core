@@ -125,7 +125,7 @@ function Examples({ direction }: HasDirection) {
               </DropdownMenu>
               <Button variant="ghost">X</Button>
             </div>
-            <Button className="pr-h-14 pr-w-14 pr-text-2xl" variant="secondary">
+            <Button className="pr-h-14 pr-w-14 pr-rounded-ss-none pr-text-2xl" variant="secondary">
               +
             </Button>
           </div>
