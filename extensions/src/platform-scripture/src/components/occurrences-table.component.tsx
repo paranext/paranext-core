@@ -17,6 +17,7 @@ const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNu
 type SearchResult = {
   reference: ScriptureReference;
   snippet: string;
+  key: number;
 };
 
 const extractOccurrences = (
@@ -31,6 +32,7 @@ const extractOccurrences = (
 
   let currentChapter: string = '0';
   let currentVerse: string = '0';
+  let key: number = 0;
 
   lines.forEach((line) => {
     const words = line.split(/\s+/);
@@ -53,7 +55,9 @@ const extractOccurrences = (
         const result: SearchResult = {
           reference: { ...scriptureRef, chapterNum: +currentChapter, verseNum: +currentVerse },
           snippet,
+          key,
         };
+        key += 1;
         results.push(result);
       }
     }
@@ -99,8 +103,8 @@ function OccurrencesTable({ selectedCharacter, text }: OccurrencesTableProps) {
       </TableHeader>
       <TableBody>
         {tableData.map((result) => (
-          // This needs a unique key
           <TableRow
+            key={result.key}
             onClick={() => {
               setScriptureRef(result.reference);
             }}

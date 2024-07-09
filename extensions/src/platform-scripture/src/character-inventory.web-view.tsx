@@ -152,13 +152,6 @@ global.webViewComponent = function CharacterInventory({ useWebViewState }: WebVi
         });
       });
 
-      // Early return if changed characters don't appear in table
-      const updatedCharacters = new Set(characters);
-      const characterData = tableData.filter((tableEntry) =>
-        updatedCharacters.has(tableEntry.character),
-      );
-      if (characterData.length === 0) return tableData;
-
       setValidCharacters((prevValidCharacters) => {
         let newValidCharacters: string[] = [...prevValidCharacters];
         characters.forEach((character) => {
