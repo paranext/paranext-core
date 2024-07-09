@@ -146,7 +146,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
-          <p>Note: the dropdown has a bad visibility in dark mode right now</p>
+          <p>Note: the shadcn dropdown has a bad contrast to the background in dark mode</p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <ShadcnButton>Open</ShadcnButton>
@@ -219,7 +219,10 @@ function Basics({ direction }: HasDirection) {
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => (
-                <TableRow key={invoice.invoice}>
+                <TableRow
+                  key={invoice.invoice}
+                  data-state={invoice.paymentStatus === 'Paid' ? 'selected' : ''}
+                >
                   <TableCell className="font-medium">{invoice.invoice}</TableCell>
                   <TableCell>{invoice.paymentStatus}</TableCell>
                   <TableCell>{invoice.paymentMethod}</TableCell>
