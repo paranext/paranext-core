@@ -12,7 +12,6 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
   Tabs,
-  TabsContent,
   TabsList,
   TabsTrigger,
   VerticalTabs,
