@@ -38,7 +38,7 @@ function Examples({ direction }: HasDirection) {
       </VerticalTabsList>
 
       <VerticalTabsContent value="Window">
-        <div className="pr-flex pr-flex-row pr-rounded-sm pr-border-2 pr-border-muted pr-bg-muted/50">
+        <div className="pr-flex pr-flex-row pr-rounded-sm pr-rounded-b-none pr-border-2 pr-border-muted pr-bg-muted/50">
           <div className="pr-m-2">
             <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
           </div>
@@ -127,7 +127,7 @@ function Examples({ direction }: HasDirection) {
             +
           </Button>
         </div>
-        <div className="pr-rounded-sm pr-border-2 pr-border-t-0 pr-border-muted pr-p-4">
+        <div className="pr-rounded-sm pr-rounded-t-none pr-border-2 pr-border-t-0 pr-border-muted pr-p-4">
           <p>
             Imagine here the text of <code>{JSON.stringify(scrRef)}</code>
           </p>
