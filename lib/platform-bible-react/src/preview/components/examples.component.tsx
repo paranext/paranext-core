@@ -125,8 +125,11 @@ function Examples({ direction }: HasDirection) {
               </DropdownMenu>
               <Button variant="ghost">X</Button>
             </div>
-            <Button className="pr-h-14 pr-w-14 pr-rounded-ss-none pr-text-2xl" variant="secondary">
-              +
+            <Button
+              className="pr-h-14 pr-w-14 pr-rounded-t-none pr-rounded-ee-none pr-rounded-ss-none"
+              variant="secondary"
+            >
+              <p className="pr-text-2xl">+</p>
             </Button>
           </div>
           <div className="pr-rounded-sm pr-rounded-t-none pr-border-2 pr-border-t-0 pr-border-muted pr-p-4">
