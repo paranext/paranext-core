@@ -3,6 +3,7 @@ import { ScriptureReference } from 'platform-bible-utils';
 import ThemeToggle from '@/preview/theme-toggle.component';
 import {
   BookChapterControl,
+  DataTable,
   SearchBar,
   VerticalTabs,
   VerticalTabsContent,
@@ -10,6 +11,7 @@ import {
   VerticalTabsTrigger,
 } from '../..';
 import { HasDirection } from '../direction-toggle';
+import { columns, data } from './data-sources/data-table-content';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -26,6 +28,7 @@ function Compositions({ direction }: HasDirection) {
         <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
         <VerticalTabsTrigger value="Book Chapter Control">Book Chapter Control</VerticalTabsTrigger>
         <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
+        <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
       </VerticalTabsList>
 
       <VerticalTabsContent value="Search Bar">
@@ -39,6 +42,10 @@ function Compositions({ direction }: HasDirection) {
 
       <VerticalTabsContent value="Theme Toggle">
         <ThemeToggle />
+      </VerticalTabsContent>
+
+      <VerticalTabsContent value="Data Table">
+        <DataTable enablePagination showPaginationControls columns={columns} data={data} />
       </VerticalTabsContent>
     </VerticalTabs>
   );
