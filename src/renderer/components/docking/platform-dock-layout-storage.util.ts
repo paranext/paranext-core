@@ -21,10 +21,8 @@ import {
   mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
 } from '@renderer/services/web-view.service-host';
-import {
-  TAB_TYPE_CHECKING_RESULTS_LIST,
-  loadCheckingResultsListTab,
-} from '@renderer/components/checking-results-list/checking-results-list.component';
+import { loadCheckingResultsListTab } from '@renderer/components/checking-results-list/checking-results-list.component';
+import TAB_TYPE_CHECKING_RESULTS_LIST from '@renderer/components/checking-results-list/checking-results-list.constants';
 import DIALOGS from '@renderer/components/dialogs';
 import {
   TAB_TYPE_EXTENSION_MANAGER,

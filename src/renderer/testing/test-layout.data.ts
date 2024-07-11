@@ -9,8 +9,8 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 // import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/extension-manager/extension-manager-tab.component';
 import { TAB_TYPE_SETTINGS_DIALOG } from '@renderer/components/settings-dialog/settings-tab.component';
 import { TAB_TYPE_RUN_BASIC_CHECKS } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
-import { TAB_TYPE_CHECKING_RESULTS_LIST } from '@renderer/components/checking-results-list/checking-results-list.component';
 import { ScriptureItemDetail } from 'platform-bible-utils';
+import TAB_TYPE_CHECKING_RESULTS_LIST from '@renderer/components/checking-results-list/checking-results-list.constants';
 import LOREM_IPSUM from './lorem-ipsum';
 
 function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
@@ -62,14 +62,14 @@ function createTestCheck(id: string, displayName: string, possibleErrors: string
   };
 }
 
-const badLeftoversCheck = createTestCheck('badLeftovers', 'Bad Leftovers', [
+export const badLeftoversCheck = createTestCheck('badLeftovers', 'Bad Leftovers', [
   'Moldy lasagna',
   'Iffy meatloaf',
   'Dried out chicken',
   'Stinky cheese',
 ]);
 
-const engineProblemsCheck = createTestCheck('engineProblems', 'Engine problems', [
+export const engineProblemsCheck = createTestCheck('engineProblems', 'Engine problems', [
   'Dirty spark plugs',
   'Low oil',
   'Stuck valves',
@@ -109,12 +109,9 @@ const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
                 id: 'Checking Results List',
                 tabType: TAB_TYPE_CHECKING_RESULTS_LIST,
                 data: {
-                  sources: [badLeftoversCheck, engineProblemsCheck],
+                  sources: undefined,
                   project: 'Dummy project',
-                  onRerun: () => {
-                    badLeftoversCheck.reRun();
-                    engineProblemsCheck.reRun();
-                  },
+                  onRerun: undefined,
                 },
               },
             ] as SavedTabInfo[],

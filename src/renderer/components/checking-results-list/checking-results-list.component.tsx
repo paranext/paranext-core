@@ -1,3 +1,4 @@
+import { badLeftoversCheck, engineProblemsCheck } from '@renderer/testing/test-layout.data';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import {
   Button,
@@ -7,8 +8,6 @@ import {
   ScriptureResultsViewerProps,
 } from 'platform-bible-react';
 import { useState, useCallback, useEffect } from 'react';
-
-export const TAB_TYPE_CHECKING_RESULTS_LIST = 'checking-results-list';
 
 export type CheckingResultsListProps = ScriptureResultsViewerProps & {
   project?: string;
@@ -71,8 +70,17 @@ export default function CheckingResultsList(props: CheckingResultsListProps) {
 export function loadCheckingResultsListTab(savedTabInfo: SavedTabInfo): TabInfo {
   if (!savedTabInfo.id) throw new Error('Tab creation "id" is missing');
 
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const data = savedTabInfo.data as CheckingResultsListProps;
+  // This is stub code to get some dummy checking results.
+  // TODO (#994): Replace this with calls to get actual check results and subscribe to updates.
+  const data = {
+    sources: [badLeftoversCheck, engineProblemsCheck],
+    // TODO (#993): Get real project name.
+    project: 'Dummy project',
+    onRerun: () => {
+      badLeftoversCheck.reRun();
+      engineProblemsCheck.reRun();
+    },
+  };
 
   return {
     ...savedTabInfo,
