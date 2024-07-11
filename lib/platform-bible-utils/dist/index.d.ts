@@ -530,7 +530,7 @@ export declare function getLocalizedIdFromBookNumber(bookNumber: number, localiz
  *   scrRef2 in sorting order. - Zero if scrRef1 and scrRef2 are equivalent in sorting order. -
  *   Positive value if scrRef1 follows scrRef2 in sorting order.
  */
-export declare function compare(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number;
+export declare function compareScrRefs(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number;
 /**
  * Formats a Scripture reference.
  *
@@ -545,7 +545,7 @@ export declare function compare(scrRef1: ScriptureReference, scrRef2: ScriptureR
  *   Default is a single space. Note: More than one character is allowed.
  * @returns The formatted reference.
  */
-export declare function format(scrRef: ScriptureReference, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
+export declare function formatScrRef(scrRef: ScriptureReference, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
 /** Collection of functions, objects, and types that are used as helpers in other services. */
 export declare function newGuid(): string;
 /**

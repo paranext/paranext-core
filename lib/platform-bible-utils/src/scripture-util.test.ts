@@ -1,4 +1,4 @@
-import { getLocalizedIdFromBookNumber, compare, format } from './scripture-util';
+import { getLocalizedIdFromBookNumber, compareScrRefs, formatScrRef } from './scripture-util';
 
 async function mockGetLocalizedString(item: {
   localizeKey: string;
@@ -35,11 +35,14 @@ test('getLocalizedIdFromBookNumber with khmer which defines a localization with 
 
 test('compare references when books are different', async () => {
   expect(
-    compare({ bookNum: 1, chapterNum: 3, verseNum: 6 }, { bookNum: 2, chapterNum: 3, verseNum: 6 }),
+    compareScrRefs(
+      { bookNum: 1, chapterNum: 3, verseNum: 6 },
+      { bookNum: 2, chapterNum: 3, verseNum: 6 },
+    ),
   ).toBeLessThan(0);
 
   expect(
-    compare(
+    compareScrRefs(
       { bookNum: 66, chapterNum: 3, verseNum: 6 },
       { bookNum: 65, chapterNum: 3, verseNum: 6 },
     ),
@@ -48,14 +51,14 @@ test('compare references when books are different', async () => {
 
 test('compare references when books are the same but chapters are different', async () => {
   expect(
-    compare(
+    compareScrRefs(
       { bookNum: 10, chapterNum: 3, verseNum: 6 },
       { bookNum: 10, chapterNum: 4, verseNum: 6 },
     ),
   ).toBeLessThan(0);
 
   expect(
-    compare(
+    compareScrRefs(
       { bookNum: 10, chapterNum: 150, verseNum: 6 },
       { bookNum: 10, chapterNum: 149, verseNum: 6 },
     ),
@@ -64,14 +67,14 @@ test('compare references when books are the same but chapters are different', as
 
 test('compare references when books and chapters are the same but verses are different', async () => {
   expect(
-    compare(
+    compareScrRefs(
       { bookNum: 10, chapterNum: 4, verseNum: 6 },
       { bookNum: 10, chapterNum: 4, verseNum: 7 },
     ),
   ).toBeLessThan(0);
 
   expect(
-    compare(
+    compareScrRefs(
       { bookNum: 10, chapterNum: 150, verseNum: 2 },
       { bookNum: 10, chapterNum: 150, verseNum: 1 },
     ),
@@ -80,7 +83,7 @@ test('compare references when books and chapters are the same but verses are dif
 
 test('compare references when identical', async () => {
   expect(
-    compare(
+    compareScrRefs(
       { bookNum: 10, chapterNum: 4, verseNum: 6 },
       { bookNum: 10, chapterNum: 4, verseNum: 6 },
     ),
@@ -88,25 +91,29 @@ test('compare references when identical', async () => {
 });
 
 test('format reference using 3-letter book id', async () => {
-  expect(format({ bookNum: 5, chapterNum: 5, verseNum: 4 })).toBe('DEU 5:4');
-  expect(format({ bookNum: 66, chapterNum: 4, verseNum: 6 }, undefined, '.')).toBe('REV 4.6');
-  expect(format({ bookNum: 2, chapterNum: 10, verseNum: 1 }, 'id', ';', '-')).toBe('EXO-10;1');
+  expect(formatScrRef({ bookNum: 5, chapterNum: 5, verseNum: 4 })).toBe('DEU 5:4');
+  expect(formatScrRef({ bookNum: 66, chapterNum: 4, verseNum: 6 }, undefined, '.')).toBe('REV 4.6');
+  expect(formatScrRef({ bookNum: 2, chapterNum: 10, verseNum: 1 }, 'id', ';', '-')).toBe(
+    'EXO-10;1',
+  );
 });
 
 test('format reference using English book name', async () => {
-  expect(format({ bookNum: 5, chapterNum: 5, verseNum: 4 }, 'English')).toBe('Deuteronomy 5:4');
-  expect(format({ bookNum: 66, chapterNum: 4, verseNum: 6 }, 'English', '.')).toBe(
+  expect(formatScrRef({ bookNum: 5, chapterNum: 5, verseNum: 4 }, 'English')).toBe(
+    'Deuteronomy 5:4',
+  );
+  expect(formatScrRef({ bookNum: 66, chapterNum: 4, verseNum: 6 }, 'English', '.')).toBe(
     'Revelation 4.6',
   );
-  expect(format({ bookNum: 2, chapterNum: 10, verseNum: 1 }, 'English', ';', '-')).toBe(
+  expect(formatScrRef({ bookNum: 2, chapterNum: 10, verseNum: 1 }, 'English', ';', '-')).toBe(
     'Exodus-10;1',
   );
 });
 
 test('format reference using arbitrary book name, abbrev, etc.', async () => {
-  expect(format({ bookNum: 5, chapterNum: 5, verseNum: 4 }, 'Deuteronomio')).toBe(
+  expect(formatScrRef({ bookNum: 5, chapterNum: 5, verseNum: 4 }, 'Deuteronomio')).toBe(
     'Deuteronomio 5:4',
   );
-  expect(format({ bookNum: 66, chapterNum: 4, verseNum: 6 }, 'Rev.', '.')).toBe('Rev. 4.6');
-  expect(format({ bookNum: 2, chapterNum: 10, verseNum: 1 }, 'Ex', ';', '-')).toBe('Ex-10;1');
+  expect(formatScrRef({ bookNum: 66, chapterNum: 4, verseNum: 6 }, 'Rev.', '.')).toBe('Rev. 4.6');
+  expect(formatScrRef({ bookNum: 2, chapterNum: 10, verseNum: 1 }, 'Ex', ';', '-')).toBe('Ex-10;1');
 });

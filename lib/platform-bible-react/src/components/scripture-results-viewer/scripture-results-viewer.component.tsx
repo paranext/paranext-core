@@ -16,8 +16,8 @@ import {
 import { Canon } from '@sillsdev/scripture';
 import '@/components/scripture-results-viewer/scripture-results-viewer.component.css';
 import {
-  compare,
-  format,
+  compareScrRefs,
+  formatScrRef,
   ScriptureCheckDefinition,
   ScriptureItemDetail,
   ScriptureReference,
@@ -97,24 +97,24 @@ function getColumns(
         if (info.row.getIsGrouped()) {
           return Canon.bookNumberToEnglishName(row.start.bookNum);
         }
-        return info.row.groupingColumnId === scrBookColId ? format(row.start) : undefined;
+        return info.row.groupingColumnId === scrBookColId ? formatScrRef(row.start) : undefined;
       },
       getGroupingValue: (row) => row.start.bookNum,
       sortingFn: (a, b) => {
-        return compare(a.original.start, b.original.start);
+        return compareScrRefs(a.original.start, b.original.start);
       },
       enableGrouping: true,
     },
     {
-      accessorFn: (row) => format(row.start),
+      accessorFn: (row) => formatScrRef(row.start),
       id: scrRefColId,
       header: undefined,
       cell: (info) => {
         const row = info.row.original;
-        return info.row.getIsGrouped() ? undefined : format(row.start);
+        return info.row.getIsGrouped() ? undefined : formatScrRef(row.start);
       },
       sortingFn: (a, b) => {
-        return compare(a.original.start, b.original.start);
+        return compareScrRefs(a.original.start, b.original.start);
       },
       enableGrouping: false,
     },
@@ -202,7 +202,7 @@ export default function ScriptureResultsViewer({
 
   const toRefOrRange = useCallback(
     (start: ScriptureReference, end: ScriptureReference | undefined) => {
-      if (!end || compare(start, end) === 0) return `${toBCV(start)}`;
+      if (!end || compareScrRefs(start, end) === 0) return `${toBCV(start)}`;
       return `${toBCV(start)}-${toBCV(end)}`;
     },
     [],

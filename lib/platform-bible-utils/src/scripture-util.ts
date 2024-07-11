@@ -152,7 +152,7 @@ export async function getLocalizedIdFromBookNumber(
  *   scrRef2 in sorting order. - Zero if scrRef1 and scrRef2 are equivalent in sorting order. -
  *   Positive value if scrRef1 follows scrRef2 in sorting order.
  */
-export function compare(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number {
+export function compareScrRefs(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number {
   // TODO: consider edge cases for invalid references
   return (
     scrRef1.bookNum * 100000 +
@@ -176,7 +176,7 @@ export function compare(scrRef1: ScriptureReference, scrRef2: ScriptureReference
  *   Default is a single space. Note: More than one character is allowed.
  * @returns The formatted reference.
  */
-export function format(
+export function formatScrRef(
   scrRef: ScriptureReference,
   optionOrLocalizedBookName?: 'id' | 'English' | string,
   chapterVerseSeparator?: string,
