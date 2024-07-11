@@ -6,7 +6,7 @@ import {
   ScriptureResultsViewer,
   ScriptureResultsViewerProps,
 } from 'platform-bible-react';
-import { useEffect, useState } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 
 export const TAB_TYPE_CHECKING_RESULTS_LIST = 'checking-results-list';
 
@@ -37,32 +37,33 @@ const getLabel = (
 export default function CheckingResultsList(props: CheckingResultsListProps) {
   const { sources, project, onRerun } = props;
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<string | undefined>(undefined);
+  const [currentSources, setCurrentSources] = useState(sources);
 
-  function handleResultsUpdated() {
+  useEffect(() => {
+    setCurrentSources(sources);
+  }, [sources]);
+
+  const handleResultsUpdated = useCallback(() => {
     const currentTimestamp = new Date().toLocaleString();
     setLastUpdateTimestamp(currentTimestamp);
-  }
+  }, []);
 
-  // Subscribe to resultsUpdated event for each source
-  useEffect(() => {
-    sources.map((source) => {
-      return source.resultsUpdated.addEventListener('resultsUpdated', handleResultsUpdated);
-    });
-
-    // Clean up event listeners when component unmounts
-    return () => {
-      sources.forEach((s) => s.removeEventListener('resultsUpdated', handleResultsUpdated));
-    };
-  }, [sources]);
+  const reRunChecks = useCallback(() => {
+    if (onRerun) {
+      onRerun();
+      // Since onRerun modifies the sources directly, we need to trigger a state update
+      setCurrentSources([...sources]);
+      handleResultsUpdated();
+    }
+  }, [onRerun, sources, handleResultsUpdated]);
 
   const label = getLabel(project, lastUpdateTimestamp, sources);
 
   return (
     <div>
-      {onRerun && <Button onClick={onRerun}>Rerun</Button>}
-      {/* TODO: Find a way to truncate the text and display ellipsis using Tailwind. */}
+      {onRerun && <Button onClick={reRunChecks}>Rerun</Button>}
       {label && <Label>{label}</Label>}
-      <ScriptureResultsViewer sources={sources} />
+      <ScriptureResultsViewer sources={currentSources} />
     </div>
   );
 }

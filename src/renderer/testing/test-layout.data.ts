@@ -10,8 +10,7 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 import { TAB_TYPE_SETTINGS_DIALOG } from '@renderer/components/settings-dialog/settings-tab.component';
 import { TAB_TYPE_RUN_BASIC_CHECKS } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
 import { TAB_TYPE_CHECKING_RESULTS_LIST } from '@renderer/components/checking-results-list/checking-results-list.component';
-import { ResultsSource } from 'platform-bible-react';
-import { ScriptureCheckDefinition, ScriptureItemDetail } from 'platform-bible-utils';
+import { ScriptureItemDetail } from 'platform-bible-utils';
 import LOREM_IPSUM from './lorem-ipsum';
 
 function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
@@ -45,34 +44,32 @@ function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
 
 export const FIRST_TAB_ID = 'About';
 
-class TestCheck extends ResultsSource {
-  check: ScriptureCheckDefinition;
-  possibleErrors: string[];
+function createTestCheck(id: string, displayName: string, possibleErrors: string[]) {
+  const check = {
+    id: `test.${id}`,
+    displayName,
+  };
 
-  constructor(id: string, displayName: string, possibleErrors: string[]) {
-    const chk = {
-      id: `test.${id}`,
-      displayName,
-    };
-    super(chk, generateRandomCheckingData(possibleErrors));
-    this.check = chk;
-    this.possibleErrors = possibleErrors;
-  }
+  let data = generateRandomCheckingData(possibleErrors);
 
-  reRun(): void {
-    const newRandomData = generateRandomCheckingData(this.possibleErrors);
-    this.updateData(newRandomData);
-  }
+  return {
+    src: check,
+    data,
+    reRun() {
+      data = generateRandomCheckingData(possibleErrors);
+      this.data = data; // Update the data property
+    },
+  };
 }
 
-const badLeftoversCheck = new TestCheck('badLeftovers', 'Bad Leftovers', [
+const badLeftoversCheck = createTestCheck('badLeftovers', 'Bad Leftovers', [
   'Moldy lasagna',
   'Iffy meatloaf',
   'Dried out chicken',
   'Stinky cheese',
 ]);
 
-const engineProblemsCheck = new TestCheck('engineProblems', 'Engine problems', [
+const engineProblemsCheck = createTestCheck('engineProblems', 'Engine problems', [
   'Dirty spark plugs',
   'Low oil',
   'Stuck valves',

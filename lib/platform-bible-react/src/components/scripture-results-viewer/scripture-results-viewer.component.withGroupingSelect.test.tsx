@@ -3,7 +3,6 @@ import '@testing-library/jest-dom';
 import ScriptureResultsViewer, {
   ScriptureSrcItemDetail,
 } from '@/components/scripture-results-viewer/scripture-results-viewer.component';
-import ResultsSource from './results-source.class';
 
 let lastSelectedItem: ScriptureSrcItemDetail | undefined;
 let numberOfRowSelectsHandled: number = 0;
@@ -32,28 +31,37 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
   const textAnchor = { jsonPath: '', offset: 3 };
 
   const sources = [
-    new ResultsSource(repeatedWordsCheck, [
-      {
-        start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
-        detail: frogRepeatedError,
-      },
-    ]),
-    new ResultsSource(markersCheck, [
-      {
-        start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
-        detail: unknownMarkerError,
-      },
-      {
-        start: { bookNum: 66, chapterNum: 10, verseNum: 15, ...textAnchor },
-        detail: unclosedMarkerError,
-      },
-    ]),
-    new ResultsSource(quotationsCheck, [
-      {
-        start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
-        detail: missingEndQuote,
-      },
-    ]),
+    {
+      src: repeatedWordsCheck,
+      data: [
+        {
+          start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
+          detail: frogRepeatedError,
+        },
+      ],
+    },
+    {
+      src: markersCheck,
+      data: [
+        {
+          start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
+          detail: unknownMarkerError,
+        },
+        {
+          start: { bookNum: 66, chapterNum: 10, verseNum: 15, ...textAnchor },
+          detail: unclosedMarkerError,
+        },
+      ],
+    },
+    {
+      src: quotationsCheck,
+      data: [
+        {
+          start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
+          detail: missingEndQuote,
+        },
+      ],
+    },
   ];
 
   beforeEach(() => {
@@ -156,6 +164,6 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
     expect(lastSelectedItem?.source).toBe(sources[0].src);
     expect(lastSelectedItem?.detail).toBe(sources[0].data[0].detail);
     expect(lastSelectedItem?.start).toBe(sources[0].data[0].start);
-    expect(lastSelectedItem?.end).toBe(sources[0].data[0].end);
+    expect(lastSelectedItem?.end).toBeUndefined();
   });
 });

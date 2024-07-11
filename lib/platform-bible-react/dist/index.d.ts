@@ -37,12 +37,21 @@ export interface ScriptureReference {
 	chapterNum: number;
 	verseNum: number;
 }
+/**
+ * Represents a "node" in the JSON used to present Scripture in the editor, with a path that is
+ * relative to the start of a verse.
+ */
 export type ScriptureNode = ScriptureReference & {
 	jsonPath: string;
 };
+/** Represents a specific character offset in the text of a textual Scripture node (in the editor.) */
 export type ScriptureTextAnchor = ScriptureNode & {
 	offset: number;
 };
+/**
+ * Represents a range of text in the Scripture editor. The start and end node are expected to be in
+ * the same book.
+ */
 export type ScriptureSelection = {
 	start: ScriptureNode | ScriptureTextAnchor;
 	end?: ScriptureNode | ScriptureTextAnchor;
@@ -152,8 +161,38 @@ export type MultiColumnMenu = {
  * can be applied to any menu type as needed.
  */
 export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
+/**
+ * Information (e.g., a checking error or some other type of "transient" annotation) about something
+ * noteworthy at a specific place in an instance of the Scriptures.
+ */
 export type ScriptureItemDetail = ScriptureSelection & {
-	detail: string | React$1.ReactElement;
+	/**
+	 * Text of the error, note, etc. In the future, we might want to support something more than just
+	 * text so that a JSX element could be provided with a link or some other controls related to the
+	 * issue being reported. That presumably can't be represented here in the model, unless we just
+	 * turn this into an "any" and determine the actual type at runtime.
+	 */
+	detail: string;
+};
+/**
+ * Represents a source of results keyed by Scripture reference. Generally, the source will be a
+ * particular Scripture check, but this type also allows for other types of (uniquely identifiable
+ * but potentially unnamed) sources.
+ */
+export type ResultsSource = {
+	/**
+	 * Object that defines/describes the backing source associated with this results source, ensuring
+	 * that it can be uniquely identified.
+	 *
+	 * @type {string | ScriptureCheckDefinition}
+	 */
+	src: string | ScriptureCheckDefinition;
+	/**
+	 * Array of Scripture item details (messages keyed by Scripture reference).
+	 *
+	 * @type {ScriptureItemDetail[]}
+	 */
+	data: ScriptureItemDetail[];
 };
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
@@ -533,73 +572,6 @@ export interface ScrRefSelectorProps {
 	id?: string;
 }
 export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
-/**
- * Interface to be implemented by a ResultsEventDispatcher. This interface with its generic T (which
- * will probably always be a ResultsSource) somehow helps to break a circular dependency. It's
- * complicated and I don't really understand it.
- */
-export interface ResultsEventTarget<T> {
-	addEventListener: (type: "resultsUpdated", callback: (event: CustomEvent<T>) => void) => void;
-	removeEventListener: (type: "resultsUpdated", callback: (event: CustomEvent<T>) => void) => void;
-	dispatchEvent: (event: CustomEvent<T>) => void;
-}
-/**
- * Class representing a source of results keyed by Scripture reference. Generally, the source will
- * be a particular Scripture check, but this class also allows for other types of (uniquely
- * identifiable but potentially unnamed) sources. It handles storing and updating Scripture item
- * details and notifies listeners about updates.
- */
-export declare class ResultsSource {
-	/**
-	 * Object that defines/describes the backing source associated with this results source, ensuring
-	 * that it can be uniquely identified.
-	 *
-	 * @type {string | ScriptureCheckDefinition}
-	 */
-	src: string | ScriptureCheckDefinition;
-	/**
-	 * Array of Scripture item details (messages keyed by Scripture reference).
-	 *
-	 * @type {ScriptureItemDetail[]}
-	 */
-	data: ScriptureItemDetail[];
-	/**
-	 * Event target for dispatching results-updated events.
-	 *
-	 * @type {ResultsEventTarget<ResultsSource>}
-	 */
-	resultsUpdated: ResultsEventTarget<ResultsSource>;
-	/**
-	 * Creates an instance of ResultsSource.
-	 *
-	 * @param {string | ScriptureCheckDefinition} [source] - Object that defines/describes the backing
-	 *   source associated with this results source, ensuring that it can be uniquely identified
-	 * @param {ScriptureItemDetail[]} initialData - Initial data for the results source.
-	 */
-	constructor(source: string | ScriptureCheckDefinition, initialData: ScriptureItemDetail[]);
-	/**
-	 * Updates the results data with new Scripture item details and dispatches a 'resultsUpdated'
-	 * event.
-	 */
-	updateData(newData: ScriptureItemDetail[]): void;
-	/**
-	 * Adds an event listener to receive notification when the results for this source are updated.
-	 *
-	 * @param {'resultsUpdated'} type - Type of the event to listen for (always 'resultsUpdated').
-	 * @param {(event: CustomEvent<ResultsSource>) => void} callback - Function to call when the event
-	 *   is dispatched.
-	 */
-	addEventListener(type: "resultsUpdated", callback: (event: CustomEvent<ResultsSource>) => void): void;
-	/**
-	 * Removes a 'resultsUpdated' event listener.
-	 *
-	 * @param {'resultsUpdated'} type - Type of the event to remove the listener for (always
-	 *   'resultsUpdated').
-	 * @param {(event: CustomEvent<ResultsSource>) => void} callback - Listener callback function to
-	 *   remove.
-	 */
-	removeEventListener(type: "resultsUpdated", callback: (event: CustomEvent<ResultsSource>) => void): void;
-}
 export type ScriptureSrcItemDetail = ScriptureItemDetail & {
 	/** Source/type of detail. Can be used for grouping. */
 	source: string | ScriptureCheckDefinition;

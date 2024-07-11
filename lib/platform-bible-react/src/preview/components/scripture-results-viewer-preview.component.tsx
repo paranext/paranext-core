@@ -1,5 +1,4 @@
 import ScriptureResultsViewer from '@/components/scripture-results-viewer/scripture-results-viewer.component';
-import ResultsSource from '@/components/scripture-results-viewer/results-source.class';
 import { useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import generateRandomCheckingData from './generate-random-checking-data';
@@ -35,16 +34,26 @@ export default function ScriptureResultsViewerPreview() {
     },
   ];
 
-  const [sources] = useState(() =>
-    checks.map(
-      (check) => new ResultsSource(check.id, generateRandomCheckingData(check.possibleErrors)),
-    ),
+  const [sources, setSources] = useState(() =>
+    checks.map((check) => ({
+      src: check.id,
+      data: generateRandomCheckingData(check.possibleErrors),
+    })),
   );
 
   const updateSource = (index: number) => {
     const newData = generateRandomCheckingData(checks[index].possibleErrors);
-    const updatedSource = sources[index];
-    updatedSource.updateData(newData);
+    const updatedSource = {
+      ...sources[index],
+      data: newData,
+    };
+
+    // Create a new array with the updated source
+    const updatedSources = [...sources];
+    updatedSources[index] = updatedSource;
+
+    // Set the new array as the state
+    setSources(updatedSources);
   };
 
   return (

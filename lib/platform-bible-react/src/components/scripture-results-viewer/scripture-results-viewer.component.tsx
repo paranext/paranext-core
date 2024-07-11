@@ -21,9 +21,9 @@ import {
   ScriptureCheckDefinition,
   ScriptureItemDetail,
   ScriptureReference,
+  ResultsSource,
 } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
-import ResultsSource from './results-source.class';
 import { Button } from '../shadcn-ui/button';
 import {
   Select,
@@ -171,32 +171,16 @@ export default function ScriptureResultsViewer({
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   useEffect(() => {
-    const handleUpdatedResults = (event: CustomEvent<ResultsSource>) => {
-      const { detail: updatedSource } = event;
-      const { src } = updatedSource;
-      const newDataFromSource: ScriptureSrcItemDetail[] = updatedSource.data.map((item) => ({
-        ...item,
-        source: src,
-      }));
-
-      setData((prevData) => {
-        // Filter out items from prevData that originated from the updated source
-        const filteredPrevData = prevData.filter((item) => item.source !== src);
-
-        // Create a unique set of data merging filteredPrevData and newDataFromSource
-        return [...filteredPrevData, ...newDataFromSource];
+    // Update data whenever sources change
+    setData(() => {
+      return sources.flatMap((source) => {
+        const srcOrId = source.src;
+        return source.data.map((item) => ({
+          ...item,
+          source: srcOrId,
+        }));
       });
-    };
-
-    sources.forEach((source) => {
-      source.addEventListener('resultsUpdated', handleUpdatedResults);
     });
-
-    return () => {
-      sources.forEach((source) => {
-        source.removeEventListener('resultsUpdated', handleUpdatedResults);
-      });
-    };
   }, [sources]);
 
   const columns = useMemo(

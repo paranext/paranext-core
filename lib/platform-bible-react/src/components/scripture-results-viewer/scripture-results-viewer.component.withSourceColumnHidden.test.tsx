@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ScriptureResultsViewer from '@/components/scripture-results-viewer/scripture-results-viewer.component';
-import ResultsSource from './results-source.class';
 
 describe('ScriptureResultsViewer with only Scripture ref and details columns', () => {
   const repeatedWordsCheck = { id: 'testCheck1', displayName: 'Repeated Words' };
@@ -16,28 +15,37 @@ describe('ScriptureResultsViewer with only Scripture ref and details columns', (
   const textAnchor = { jsonPath: '', offset: 3 };
 
   const sources = [
-    new ResultsSource(repeatedWordsCheck, [
-      {
-        start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
-        detail: frogRepeatedError,
-      },
-    ]),
-    new ResultsSource(markersCheck, [
-      {
-        start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
-        detail: unknownMarkerError,
-      },
-      {
-        start: { bookNum: 66, chapterNum: 10, verseNum: 15, ...textAnchor },
-        detail: unclosedMarkerError,
-      },
-    ]),
-    new ResultsSource(quotationsCheck, [
-      {
-        start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
-        detail: missingEndQuote,
-      },
-    ]),
+    {
+      src: repeatedWordsCheck,
+      data: [
+        {
+          start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
+          detail: frogRepeatedError,
+        },
+      ],
+    },
+    {
+      src: markersCheck,
+      data: [
+        {
+          start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
+          detail: unknownMarkerError,
+        },
+        {
+          start: { bookNum: 66, chapterNum: 10, verseNum: 15, ...textAnchor },
+          detail: unclosedMarkerError,
+        },
+      ],
+    },
+    {
+      src: quotationsCheck,
+      data: [
+        {
+          start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
+          detail: missingEndQuote,
+        },
+      ],
+    },
   ];
 
   beforeEach(() => {
