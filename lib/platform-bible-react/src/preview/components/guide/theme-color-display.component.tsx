@@ -66,12 +66,6 @@ export default function ThemeColorDisplay() {
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <td>ABC123</td>
-            <td>
-              <Input className="pr-border-2 pr-bg-accent" value="ABC123" />
-            </td>
-          </tr>
           {['primary', 'secondary', 'destructive', 'muted', 'accent', 'popover', 'card'].map(
             (color) => {
               return (
