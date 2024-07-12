@@ -56,6 +56,7 @@ const invoices = [
 function Basics({ direction }: HasDirection) {
   return (
     <div>
+      <p className="pr-mb-2 pr-text-muted-foreground">A place for the most simple components</p>
       <VerticalTabs defaultValue="Button" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
@@ -66,17 +67,6 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsList>
 
         <VerticalTabsContent value="Button">
-          Wrapped
-          <div>
-            <Button onClick={() => alert('Hello World')}>Wrapped Button</Button>
-            <Button className="primary">primary</Button>
-            <Button className="secondary">secondary</Button>
-            <Button className="secondary">disabled</Button>
-            <Button className="video">video</Button>
-            <Button className="paratext">paratext</Button>
-            <Button className="paratext bright">paratext bright</Button>
-          </div>
-          Shadcn
           <table>
             <tbody>
               <tr>
@@ -110,54 +100,56 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Input">
           <table>
-            <tr>
-              <td>
-                Text Field <div className="pr-text-xs">(wrapped)</div>
-              </td>
-              <td>
-                <TextField />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                Shadcn Input
-                <div className="pr-text-xs">(shadcn-ui/input)</div>
-              </td>
-              <td>
-                <Input />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                Shdcn Input <div className="pr-text-xs">(from ui.shadcn.com &rarr; input)</div>
-              </td>
-              <td className="">
-                {/* copied from ui.shadcn.com but replaced ring-ring with pr-ring-[240 5% 64.9%], as they set --ring to this value in their style.css */}
-                <Input className="pr-flex pr-h-10 pr-w-full pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-border-0 file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-[color:hsl(240,5%,64.9%)] focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                Small Input
-                <div className="pr-text-xs">(from ui.jln.dev &rarr; popover)</div>
-              </td>
-              <td>
-                <Input className="pr-full pr-file:border-0 pr-col-span-2 pr-flex pr-h-8 pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                BVC Input <div className="pr-text-xs">(from book-chapter-control)</div>
-              </td>
-              <td>
-                <Input className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none" />
-              </td>
-            </tr>
+            <tbody>
+              <tr>
+                <td>
+                  Text Field <div className="pr-text-xs">(wrapped)</div>
+                </td>
+                <td>
+                  <TextField />
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Shadcn Input
+                  <div className="pr-text-xs">(shadcn-ui/input)</div>
+                </td>
+                <td>
+                  <Input />
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Shdcn Input <div className="pr-text-xs">(from ui.shadcn.com &rarr; input)</div>
+                </td>
+                <td className="">
+                  {/* copied from ui.shadcn.com but replaced ring-ring with pr-ring-[240 5% 64.9%], as they set --ring to this value in their style.css */}
+                  <Input className="pr-flex pr-h-10 pr-w-full pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-border-0 file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-[color:hsl(240,5%,64.9%)] focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Small Input
+                  <div className="pr-text-xs">(from ui.jln.dev &rarr; popover)</div>
+                </td>
+                <td>
+                  <Input className="pr-full pr-file:border-0 pr-col-span-2 pr-flex pr-h-8 pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  BVC Input <div className="pr-text-xs">(from book-chapter-control)</div>
+                </td>
+                <td>
+                  <Input className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none" />
+                </td>
+              </tr>
+            </tbody>
           </table>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
-          <p>Note: the dropdown has a bad visibility in dark mode right now</p>
+          <p>Note: the shadcn dropdown has a bad contrast to the background in dark mode</p>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <ShadcnButton>Open</ShadcnButton>
@@ -230,7 +222,10 @@ function Basics({ direction }: HasDirection) {
             </TableHeader>
             <TableBody>
               {invoices.map((invoice) => (
-                <TableRow key={invoice.invoice}>
+                <TableRow
+                  key={invoice.invoice}
+                  data-state={invoice.paymentStatus === 'Paid' ? 'selected' : ''}
+                >
                   <TableCell className="font-medium">{invoice.invoice}</TableCell>
                   <TableCell>{invoice.paymentStatus}</TableCell>
                   <TableCell>{invoice.paymentMethod}</TableCell>

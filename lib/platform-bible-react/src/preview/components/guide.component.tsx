@@ -10,15 +10,32 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { DirToggle, DirectionProps } from '../direction-toggle';
 import { ThemeButton } from '../theme-toggle.component';
+import { useTheme } from '../theme-provider.component';
+
+function createColorCells(color: string) {
+  const colorString = getComputedStyle(document.documentElement).getPropertyValue(`--${color}`);
+  const additionalClasses = colorString.split(', ')[2] === '0%' ? ' pr-text-white' : '';
+  return (
+    <>
+      <td>{color}</td>
+      <td>
+        <Input className={`pr-bg-${color} pr-border-2${additionalClasses}`} value={colorString} />
+      </td>
+    </>
+  );
+}
 
 function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
   return (
     <div>
-      <p className="pr-mb-2">This section allows you too look up and learn about some concepts</p>
+      <p className="pr-mb-2 pr-text-muted-foreground">
+        A place to look up and learn about some concepts
+      </p>
       <VerticalTabs dir={direction} defaultValue="Direction">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Direction">Direction</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Theming">Theming</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Theme">Current Theme Colors</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Direction">
@@ -41,7 +58,7 @@ function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
             of &#39;left&#39; or &#39;right&#39;. See{' '}
             <a
               href="https://tailwindcss.com/docs/margin#using-logical-properties"
-              className="hover: pr-text-blue-600 pr-underline"
+              className="pr-text-blue-600 hover:pr-underline"
               target="_blank"
               rel="noreferrer"
             >
@@ -153,6 +170,57 @@ function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
                   />
                 </td>
               </tr>
+            </tbody>
+          </table>
+        </VerticalTabsContent>
+        <VerticalTabsContent value="Theme">
+          <p>
+            Color variables are defined in{' '}
+            <a
+              className="pr-text-blue-600 hover:pr-underline"
+              href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
+            >
+              index.css
+              <br />
+              <br />
+            </a>
+          </p>
+          {useTheme().theme.includes('paratext') ? (
+            ''
+          ) : (
+            <p>
+              The currently selected theme is matching the Shadcn Slate theme, whereas ui.shadcn.com
+              uses the Zinc theme (with a deviating --ring 240 5% 64.9%). So be aware of the slight
+              differences of grayish / blueish tones.
+              <br />
+              <br />
+            </p>
+          )}
+          <p>Following colors are defined by the current theme:</p>
+          {/* dummy to create all classes */}
+          <div
+            style={{ display: 'none' }}
+            className="pr-bg-background-foreground pr-bg-accent pr-bg-accent-foreground pr-bg-background pr-bg-border pr-bg-card pr-bg-card-foreground pr-bg-destructive pr-bg-destructive-foreground pr-bg-input pr-bg-muted pr-bg-muted-foreground pr-bg-popover pr-bg-popover-foreground pr-bg-primary pr-bg-primary pr-bg-primary-foreground pr-bg-ring pr-bg-secondary pr-bg-secondary-foreground"
+          />
+          <table>
+            <tbody>
+              {['primary', 'secondary', 'destructive', 'muted', 'accent', 'popover', 'card'].map(
+                (color) => {
+                  return (
+                    <tr>
+                      {createColorCells(color)}
+                      {createColorCells(`${color}-foreground`)}
+                    </tr>
+                  );
+                },
+              )}
+              <tr>
+                {createColorCells('background')}
+                {createColorCells('foreground')}
+              </tr>
+              {['border', 'input', 'ring'].map((color) => {
+                return <tr>{createColorCells(color)}</tr>;
+              })}
             </tbody>
           </table>
         </VerticalTabsContent>

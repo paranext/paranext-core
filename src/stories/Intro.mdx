@@ -88,15 +88,15 @@ import Button from './Button';
 import { Story, Meta } from '@storybook/react/types-6-0';
 
 export default {
-    title: 'Components/Button',
-    component: Button,
+  title: 'Components/Button',
+  component: Button,
 } as Meta;
 
 const Template: Story<ButtonProps> = (args) => <Button {...args} />;
 
 export const Primary = Template.bind({});
 Primary.args = {
-    label: 'Translate',
+  label: 'Translate',
 };
 ```
 

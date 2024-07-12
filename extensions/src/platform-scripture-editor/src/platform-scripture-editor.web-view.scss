@@ -4,7 +4,11 @@
 @import './editor-overrides';
 
 body {
-  background-color: #eee;
+  // use the same color as the editor content - caution: long term this should be changed to support
+  // theming (e.g. dark mode)
+  background-color: #fff;
+// remove margins added by the electron browser user-agent style sheet
+  margin: 0;
 }
 
 // #region verse number highlight

@@ -3,6 +3,7 @@
 import { SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { VariantProps } from 'class-variance-authority';
 import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
@@ -141,29 +142,14 @@ export type BookChapterControlProps = {
 	handleSubmit: (scrRef: ScriptureReference) => void;
 };
 export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
-export type ButtonProps = React$1.PropsWithChildren<{
-	/** Optional unique identifier */
-	id?: string;
-	/**
-	 * Enabled status of button
-	 *
-	 * @default false
-	 */
-	isDisabled?: boolean;
-	/** Additional css classes to help with unique styling of the button */
-	className?: string;
-	/** Optional click handler */
-	onClick?: React$1.MouseEventHandler<HTMLButtonElement>;
-	/** Optional context menu handler */
-	onContextMenu?: React$1.MouseEventHandler<HTMLButtonElement>;
-}>;
-/**
- * Button a user can click to do something
- *
- * Thanks to Shadcn for heavy inspiration and documentation
- * https://ui.shadcn.com/docs/components/button
- */
-export declare function Button({ id, isDisabled, className, onClick, onContextMenu, children, }: ButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare const buttonVariants: (props?: ({
+	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+	asChild?: boolean;
+}
+export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type ChapterRangeSelectorProps = {
 	handleSelectStartChapter: (chapter: number) => void;
 	handleSelectEndChapter: (chapter: number) => void;

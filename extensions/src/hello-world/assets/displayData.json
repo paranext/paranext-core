@@ -1,0 +1,10 @@
+{
+  "icon": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Hello World Extension",
+      "shortSummary": "Simple hello world extension",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}
