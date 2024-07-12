@@ -1739,6 +1739,25 @@ declare module 'shared/models/data-provider.model' {
      */
     whichUpdates?: 'deeply-equal' | '*';
   };
+  export type DataProviderLock = {
+    /** Unique identifier for an individual lock */
+    id: number;
+    /**
+     * Random number to prevent accidental use and release of locks by someone they weren't granted
+     * to. Not intended to be cryptographically secure.
+     */
+    weakSecret: number;
+  };
+  export type DataProviderSetterLockOptions = {
+    /** Lock being held for the data provider while a `set` operation occurs. */
+    lock: DataProviderLock;
+    /**
+     * Lock ID from the most recent `get` call for a data provider. This can be used to ensure that
+     * someone calling `set` is aware of the most recent data updates and not losing data with its
+     * update.
+     */
+    expectedLastLockId: number;
+  };
   /**
    * Information that papi uses to interpret whether to send out updates on a data provider when the
    * engine runs `set<data_type>` or `notifyUpdate`.
@@ -1765,6 +1784,7 @@ declare module 'shared/models/data-provider.model' {
    *
    * @param selector Tells the provider what subset of data is being set
    * @param data The data that determines what to set at the selector
+   * @param lockOptions
    * @returns Information that papi uses to interpret whether to send out updates. Defaults to `true`
    *   (meaning send updates only for this data type).
    * @see {@link DataProviderUpdateInstructions} for more info on what to return
@@ -1775,6 +1795,7 @@ declare module 'shared/models/data-provider.model' {
   > = (
     selector: TDataTypes[DataType]['selector'],
     data: TDataTypes[DataType]['setData'],
+    lockOptions?: Partial<DataProviderSetterLockOptions>,
   ) => Promise<DataProviderUpdateInstructions<TDataTypes>>;
   /**
    * Get a subset of data from the provider according to the selector.
@@ -2096,6 +2117,7 @@ declare module 'shared/models/data-provider-engine.model' {
     DataProviderGetters,
     DataProviderUpdateInstructions,
     DataProviderSetters,
+    DataProviderLock,
   } from 'shared/models/data-provider.model';
   import { NetworkableObject } from 'shared/models/network-object.model';
   /**
@@ -2137,6 +2159,7 @@ declare module 'shared/models/data-provider-engine.model' {
    */
   export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTypes> = (
     updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
+    lockId?: number,
   ) => void;
   /**
    * Addon type for IDataProviderEngine to specify that there is a `notifyUpdate` method on the data
@@ -2261,7 +2284,14 @@ declare module 'shared/models/data-provider-engine.model' {
        * @see {@link DataProviderGetter} for more information
        */
       DataProviderGetters<TDataTypes> &
-      Partial<WithNotifyUpdate<TDataTypes>>;
+      Partial<
+        WithNotifyUpdate<TDataTypes> & {
+          obtainLock: (timeoutInMilliseconds: number) => Promise<DataProviderLock>;
+          releaseLock: (lock: DataProviderLock) => void;
+          isActiveLock: (lock: DataProviderLock) => boolean;
+          mostRecentlyReleasedLockId: () => number;
+        }
+      >;
   export default IDataProviderEngine;
   /**
    *
@@ -3206,6 +3236,50 @@ declare module 'shared/services/internet.service' {
    */
   const internetService: InternetService;
   export default internetService;
+}
+declare module 'shared/models/data-provider-lock-manager.model' {
+  import { DataProviderLock } from 'shared/models/data-provider.model';
+  export default class DataProviderLockManager {
+    private readonly dataProviderName;
+    private readonly asyncVariableQueue;
+    private readonly mutex;
+    private lastCompletedLockId;
+    private activeDataProviderLock;
+    constructor(dataProviderName: string);
+    /**
+     * Get a promise to a lock. If another lock is active when this is called, the returned promise
+     * will resolve when either the active lock is released or the timeout period elapses. Note that
+     * successive calls to `obtainLock` will queue, so requests are handled FIFO.
+     *
+     * @param timeoutInMilliseconds Milliseconds to wait before rejecting the returned promise to a
+     *   lock. Use -1 if you do not want a timeout at all.
+     * @returns Promise to a {@link DataProviderLock} that will be the active lock. The lock must be
+     *   released before another lock can be obtained.
+     */
+    obtainLock(timeoutInMilliseconds: number): Promise<DataProviderLock>;
+    /**
+     * Release a lock previously obtained by {@link obtainLock}
+     *
+     * @param lock Lock to be released
+     * @returns True if the lock was recognized as the active lock and released. False if the lock was
+     *   not recognized as the active lock.
+     */
+    releaseLock(lock: DataProviderLock): boolean;
+    /**
+     * Gets the most recently released lock ID
+     *
+     * @returns ID of the most recent lock that was successfully released by {@link releaseLock}
+     */
+    mostRecentlyReleasedLockId(): number;
+    /**
+     * Indicates if the provided {@link DataProviderLock} is equal to the active lock
+     *
+     * @param lock Object to compare against the active lock
+     * @returns True if @param lock is the active lock, false otherwise
+     */
+    isActiveLock(lock: DataProviderLock): boolean;
+    private processQueue;
+  }
 }
 declare module 'shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */

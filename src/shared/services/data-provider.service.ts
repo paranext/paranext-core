@@ -10,6 +10,7 @@ import DataProviderInternal, {
   DataTypeNames,
   getDataProviderDataTypeFromFunctionName,
   DataProviderDataType,
+  DataProviderSetterLockOptions,
 } from '@shared/models/data-provider.model';
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
@@ -36,6 +37,7 @@ import {
   DisposableDataProviders,
 } from 'papi-shared-types';
 import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
+import DataProviderLockManager from '@shared/models/data-provider-lock-manager.model';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -559,6 +561,7 @@ const decorators = {
  * @returns Data provider layering over the provided data provider engine
  */
 function buildDataProvider<DataProviderName extends DataProviderNames>(
+  providerName: DataProviderName,
   dataProviderEngine: IDataProviderEngine<DataProviderTypes[DataProviderName]>,
   dataProviderPromise: Promise<DataProviders[DataProviderName]>,
   onDidUpdateEmitter: PlatformEventEmitter<
@@ -606,6 +609,26 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
   )
     throw new Error('Data provider engine does not have matching get and set functions!');
 
+  // Provide lock management for the data provider engine if it doesn't do it already
+  const dpHasObtainLock = !!dataProviderEngine.obtainLock;
+  const dpHasReleaseLock = !!dataProviderEngine.releaseLock;
+  const dpHasIsActiveLock = !!dataProviderEngine.isActiveLock;
+  const dpHasLockIdGetter = !!dataProviderEngine.mostRecentlyReleasedLockId;
+  if (
+    (dpHasObtainLock || dpHasReleaseLock || dpHasIsActiveLock || dpHasLockIdGetter) &&
+    !(dpHasObtainLock && dpHasReleaseLock && dpHasIsActiveLock && dpHasLockIdGetter)
+  )
+    throw new Error(
+      'Data provider engine must provide "obtainLock", "releaseLock", "isActiveLock", and "mostRecentlyReleasedLockId" or none of them at all',
+    );
+  if (!dpHasObtainLock) {
+    const lockManager = new DataProviderLockManager(providerName);
+    dataProviderEngine.obtainLock = lockManager.obtainLock;
+    dataProviderEngine.releaseLock = lockManager.releaseLock;
+    dataProviderEngine.isActiveLock = lockManager.isActiveLock;
+    dataProviderEngine.mostRecentlyReleasedLockId = lockManager.mostRecentlyReleasedLockId;
+  }
+
   // Layer over data provider engine methods to give it control over emitting updates
 
   // Layer over the data provider engine's notifyUpdate with one that actually emits an update
@@ -647,13 +670,47 @@ function buildDataProvider<DataProviderName extends DataProviderNames>(
         typeof dataType
       >) =
         /* eslint-enable */
-        async (...args) => {
-          const dpeSetResult = await dpeSet(...args);
-          const updateEventResult = mapUpdateInstructionsToUpdateEvent<
-            DataProviderTypes[DataProviderName]
-          >(dpeSetResult, dataType);
-          if (updateEventResult) onDidUpdateEmitter.emit(updateEventResult);
-          return dpeSetResult;
+        async (selector, data, lockOptions) => {
+          // We ensured the lock-related functions were set earlier
+          /* eslint-disable no-type-assertion/no-type-assertion */
+          const mostRecentlyReleasedLockId = dataProviderEngine.mostRecentlyReleasedLockId!();
+          let verifiedOptions: DataProviderSetterLockOptions;
+          try {
+            // Either take a lock on the data provider engine or verify the provided lock is current
+            const lock = lockOptions?.lock ?? (await dataProviderEngine.obtainLock!(5000));
+            if (lockOptions?.lock && !dataProviderEngine.isActiveLock!(lockOptions.lock))
+              throw new Error(`Mismatched lock: ${JSON.stringify(lockOptions.lock)}`);
+            /* eslint-enable no-type-assertion/no-type-assertion */
+            verifiedOptions = {
+              lock,
+              expectedLastLockId: lockOptions?.expectedLastLockId ?? mostRecentlyReleasedLockId,
+            };
+          } catch (error) {
+            const errString = `Error checking lock for ${providerName}: ${JSON.stringify(error)}`;
+            logger.error(errString);
+            throw new Error(errString);
+          }
+
+          try {
+            // Verify that the most recent lock ID that our caller knows about matches the actual ID
+            if (mostRecentlyReleasedLockId !== verifiedOptions.expectedLastLockId)
+              throw new Error(
+                `Mismatched most recent lock ID, expected = ${JSON.stringify(verifiedOptions.expectedLastLockId)}, actual = ${JSON.stringify(mostRecentlyReleasedLockId)}`,
+              );
+
+            const dpeSetResult = await dpeSet(selector, data, verifiedOptions);
+            const updateEventResult = mapUpdateInstructionsToUpdateEvent<
+              DataProviderTypes[DataProviderName]
+            >(dpeSetResult, dataType);
+            if (updateEventResult) {
+              onDidUpdateEmitter.emit(updateEventResult);
+            }
+            return dpeSetResult;
+          } finally {
+            // We ensured the lock-related functions were set earlier
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            dataProviderEngine.releaseLock!(verifiedOptions.lock);
+          }
         };
     }
   });
@@ -716,6 +773,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
 
   // Build the data provider
   const dataProviderInternal = buildDataProvider(
+    providerName,
     dataProviderEngine,
     dataProviderVariable.promise,
     onDidUpdateEmitter,

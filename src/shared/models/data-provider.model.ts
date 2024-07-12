@@ -39,6 +39,27 @@ export type DataProviderSubscriberOptions = {
   whichUpdates?: 'deeply-equal' | '*';
 };
 
+export type DataProviderLock = {
+  /** Unique identifier for an individual lock */
+  id: number;
+  /**
+   * Random number to prevent accidental use and release of locks by someone they weren't granted
+   * to. Not intended to be cryptographically secure.
+   */
+  weakSecret: number;
+};
+
+export type DataProviderSetterLockOptions = {
+  /** Lock being held for the data provider while a `set` operation occurs. */
+  lock: DataProviderLock;
+  /**
+   * Lock ID from the most recent `get` call for a data provider. This can be used to ensure that
+   * someone calling `set` is aware of the most recent data updates and not losing data with its
+   * update.
+   */
+  expectedLastLockId: number;
+};
+
 /**
  * Information that papi uses to interpret whether to send out updates on a data provider when the
  * engine runs `set<data_type>` or `notifyUpdate`.
@@ -66,6 +87,7 @@ export type DataProviderUpdateInstructions<TDataTypes extends DataProviderDataTy
  *
  * @param selector Tells the provider what subset of data is being set
  * @param data The data that determines what to set at the selector
+ * @param lockOptions
  * @returns Information that papi uses to interpret whether to send out updates. Defaults to `true`
  *   (meaning send updates only for this data type).
  * @see {@link DataProviderUpdateInstructions} for more info on what to return
@@ -76,6 +98,7 @@ export type DataProviderSetter<
 > = (
   selector: TDataTypes[DataType]['selector'],
   data: TDataTypes[DataType]['setData'],
+  lockOptions?: Partial<DataProviderSetterLockOptions>,
 ) => Promise<DataProviderUpdateInstructions<TDataTypes>>;
 
 /**

@@ -3,6 +3,7 @@ import {
   DataProviderGetters,
   DataProviderUpdateInstructions,
   DataProviderSetters,
+  DataProviderLock,
 } from '@shared/models/data-provider.model';
 import { NetworkableObject } from '@shared/models/network-object.model';
 
@@ -50,6 +51,7 @@ import { NetworkableObject } from '@shared/models/network-object.model';
  */
 export type DataProviderEngineNotifyUpdate<TDataTypes extends DataProviderDataTypes> = (
   updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
+  lockId?: number,
 ) => void;
 
 /**
@@ -141,7 +143,14 @@ type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProvider
      * @see {@link DataProviderGetter} for more information
      */
     DataProviderGetters<TDataTypes> &
-    Partial<WithNotifyUpdate<TDataTypes>>;
+    Partial<
+      WithNotifyUpdate<TDataTypes> & {
+        obtainLock: (timeoutInMilliseconds: number) => Promise<DataProviderLock>;
+        releaseLock: (lock: DataProviderLock) => void;
+        isActiveLock: (lock: DataProviderLock) => boolean;
+        mostRecentlyReleasedLockId: () => number;
+      }
+    >;
 
 export default IDataProviderEngine;
 
