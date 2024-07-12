@@ -15,7 +15,7 @@ export interface NetworkObjectStatusRemoteServiceType {
 }
 
 // Functions that are added in the service client on top of what is provided by the network object
-/** Provides functions related to the set of available network objects */
+/** JSDOC DESTINATION networkObjectStatusService */
 export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
   /**
    * Get a promise that resolves when a network object is registered or rejects if a timeout is hit

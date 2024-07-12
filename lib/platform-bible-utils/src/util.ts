@@ -165,13 +165,15 @@ export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTime
  * etc.
  *
  * @param obj Object whose functions to get
- * @param objId Optional ID of the object to use for debug logging
+ * @param _objId Optional ID of the object to use for debug logging
  * @returns Array of all function names on an object
  */
 // Note: lodash has something that MIGHT do the same thing as this. Investigate for https://github.com/paranext/paranext-core/issues/134
 export function getAllObjectFunctionNames(
   obj: { [property: string]: unknown },
-  objId: string = 'obj',
+  // Leaving it here for debugging
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _objId: string = 'obj',
 ): Set<string> {
   const objectFunctionNames = new Set<string>();
 
@@ -180,7 +182,8 @@ export function getAllObjectFunctionNames(
     try {
       if (typeof obj[property] === 'function') objectFunctionNames.add(property);
     } catch (error) {
-      console.debug(`Skipping ${property} on ${objId} due to error: ${error}`);
+      // Too noisy - only reenable if you need more details
+      // console.trace(`Skipping ${property} on ${objId} due to error: ${error}`);
     }
   });
 
@@ -192,7 +195,8 @@ export function getAllObjectFunctionNames(
       try {
         if (typeof obj[property] === 'function') objectFunctionNames.add(property);
       } catch (error) {
-        console.debug(`Skipping ${property} on ${objId}'s prototype due to error: ${error}`);
+        // Too noisy - only reenable if you need more details
+        // console.trace(`Skipping ${property} on ${objId}'s prototype due to error: ${error}`);
       }
     });
     objectPrototype = Object.getPrototypeOf(objectPrototype);
