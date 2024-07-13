@@ -265,7 +265,7 @@ export type ComboBoxProps<T> = {
 	/** Text to display when no options match input */
 	commandEmptyMessage?: string;
 	/** Variant of button */
-	buttonVariant?: "outline" | "link" | "default" | "secondary" | "destructive" | "ghost";
+	buttonVariant?: ButtonProps["variant"];
 };
 /**
  * Autocomplete input and command palette with a list of suggestions.

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Button } from '@/components/shadcn-ui/button';
+import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
   Command,
@@ -38,7 +38,7 @@ export type ComboBoxProps<T> = {
   /** Text to display when no options match input */
   commandEmptyMessage?: string;
   /** Variant of button */
-  buttonVariant?: 'outline' | 'link' | 'default' | 'secondary' | 'destructive' | 'ghost';
+  buttonVariant?: ButtonProps['variant'];
 };
 
 function getOptionLabelDefault(option: ComboBoxOption): string {
