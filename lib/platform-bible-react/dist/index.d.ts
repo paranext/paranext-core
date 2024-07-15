@@ -138,6 +138,15 @@ export type MultiColumnMenu = {
  * can be applied to any menu type as needed.
  */
 export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
+/** Localized string value associated with this key */
+export type LocalizedStringValue = string;
+/**
+ * Map whose keys are localized string keys and whose values provide information about how to
+ * localize strings for the localized string key
+ */
+export interface LanguageStrings {
+	[k: LocalizeKey]: LocalizedStringValue;
+}
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -884,6 +893,16 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export interface CharacterInventoryProps {
+	scriptureReference: ScriptureReference;
+	setScriptureReference: (scriptureReference: ScriptureReference) => void;
+	localizedStrings: LanguageStrings;
+	projectId: string;
+	getSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string) => Promise<string[]>;
+	setSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string, characters: string[]) => void;
+	getText: (projectId: string, scriptureRef: ScriptureReference, scope: string) => Promise<string | undefined>;
+}
+export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, projectId, getSetting, setSetting, getText, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

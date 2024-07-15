@@ -16,13 +16,12 @@ import {
   Slider,
   Switch,
   TextField,
-  ScriptureReference,
   useEvent,
 } from 'platform-bible-react';
 import type { WebViewProps } from '@papi/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
-import { debounce } from 'platform-bible-utils';
+import { debounce, ScriptureReference } from 'platform-bible-utils';
 import Clock from './components/clock.component';
 import Logo from '../../assets/offline.svg';
 import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';

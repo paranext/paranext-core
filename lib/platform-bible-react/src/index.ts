@@ -60,6 +60,10 @@ export {
   VerticalTabsTrigger,
 } from './components/shadcn-ui/tabs-vertical';
 
+// Paratext components
+
+export { default as CharacterInventory } from './components/paratext-10-studio-components/inventory/character-inventory.component';
+
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';

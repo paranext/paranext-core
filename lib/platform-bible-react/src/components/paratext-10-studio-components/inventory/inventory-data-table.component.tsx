@@ -1,4 +1,3 @@
-import { Button, DataTable } from 'platform-bible-react';
 import { ReactNode } from 'react';
 import {
   ArrowUpDownIcon,
@@ -8,11 +7,10 @@ import {
   CircleXIcon,
   CircleHelpIcon,
 } from 'lucide-react';
-// TODO: Is this okay or should we integrate this into our DataTable component and re-export from there?
-// Also there's a name conflict between tanstack Table and our shadcn Table component (which we're not using here, fortunately)
 import { ColumnDef, Row, SortDirection, Table } from '@tanstack/react-table';
-import { LocalizeKey } from 'platform-bible-utils';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { LanguageStrings } from 'platform-bible-utils';
+import { Button } from '@/components/shadcn-ui/button';
+import DataTable from '@/components/advanced-components/data-table/data-table.component';
 
 export type Status = true | false | undefined;
 
@@ -144,32 +142,23 @@ export const columns = (
 
 // #endregion
 
-const STRING_KEYS: LocalizeKey[] = [
-  '%webView_inventory_table_header_character%',
-  '%webView_inventory_table_header_unicode_value%',
-  '%webView_inventory_table_header_count%',
-  '%webView_inventory_table_header_status%',
-];
-
 interface InventoryDataTableProps {
   tableData: CharacterData[];
   onStatusChange: (characters: string[], status: Status) => void;
   onSelectCharacter: (character: string) => void;
+  localizedStrings: LanguageStrings;
 }
 
 function InventoryDataTable({
   tableData,
   onStatusChange,
   onSelectCharacter,
+  localizedStrings,
 }: InventoryDataTableProps) {
-  const [
-    {
-      '%webView_inventory_table_header_character%': characterLabel,
-      '%webView_inventory_table_header_unicode_value%': unicodeValueLabel,
-      '%webView_inventory_table_header_count%': countLabel,
-      '%webView_inventory_table_header_status%': statusLabel,
-    },
-  ] = useLocalizedStrings(STRING_KEYS);
+  const characterLabel = localizedStrings['%webView_inventory_table_header_character%'];
+  const unicodeValueLabel = localizedStrings['%webView_inventory_table_header_unicode_value%'];
+  const countLabel = localizedStrings['%webView_inventory_table_header_count%'];
+  const statusLabel = localizedStrings['%webView_inventory_table_header_status%'];
 
   const rowClickHandler = (row: Row<CharacterData>, table: Table<CharacterData>) => {
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows

@@ -1,18 +1,14 @@
-import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
-import { Canon } from '@sillsdev/scripture';
 import {
-  ScriptureReference,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-} from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
+} from '@/components/shadcn-ui/table';
+import { Canon } from '@sillsdev/scripture';
+import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
 import { useEffect, useState } from 'react';
-
-const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
 
 type SearchResult = {
   reference: ScriptureReference;
@@ -69,28 +65,27 @@ const extractOccurrences = (
 interface OccurrencesTableProps {
   selectedCharacter: string;
   text: string | undefined;
+  scriptureReference: ScriptureReference;
+  setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  localizedStrings: LanguageStrings;
 }
 
-const STRING_KEYS: LocalizeKey[] = [
-  '%webView_inventory_occurrences_table_header_reference%',
-  '%webView_inventory_occurrences_table_header_occurrence%',
-];
-
-function OccurrencesTable({ selectedCharacter, text }: OccurrencesTableProps) {
-  const [
-    {
-      '%webView_inventory_occurrences_table_header_reference%': reference,
-      '%webView_inventory_occurrences_table_header_occurrence%': occurrence,
-    },
-  ] = useLocalizedStrings(STRING_KEYS);
-  const [scriptureRef, setScriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
+function OccurrencesTable({
+  selectedCharacter,
+  text,
+  scriptureReference,
+  setScriptureReference,
+  localizedStrings,
+}: OccurrencesTableProps) {
+  const reference = localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
+  const occurrence = localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
   const [tableData, setTableData] = useState<SearchResult[]>(
-    extractOccurrences(text, selectedCharacter, scriptureRef),
+    extractOccurrences(text, selectedCharacter, scriptureReference),
   );
 
   useEffect(
-    () => setTableData(extractOccurrences(text, selectedCharacter, scriptureRef)),
-    [text, selectedCharacter, scriptureRef],
+    () => setTableData(extractOccurrences(text, selectedCharacter, scriptureReference)),
+    [text, selectedCharacter, scriptureReference],
   );
 
   return (
@@ -106,7 +101,7 @@ function OccurrencesTable({ selectedCharacter, text }: OccurrencesTableProps) {
           <TableRow
             key={result.key}
             onClick={() => {
-              setScriptureRef(result.reference);
+              setScriptureReference(result.reference);
             }}
           >
             <TableCell>{`${Canon.bookNumberToEnglishName(result.reference.bookNum)} ${result.reference.chapterNum}:${result.reference.verseNum}`}</TableCell>
