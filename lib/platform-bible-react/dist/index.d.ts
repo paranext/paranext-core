@@ -3,6 +3,8 @@
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as SelectPrimitive from '@radix-ui/react-select';
+import * as SliderPrimitive from '@radix-ui/react-slider';
+import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { ColumnDef, Row, Table as tsTable } from '@tanstack/react-table';
 import { VariantProps } from 'class-variance-authority';
@@ -975,5 +977,23 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
+export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const CardDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const CardContent: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CardFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & VariantProps<(props?: ({
+	variant?: "default" | "destructive" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+declare const Slider$1: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.SliderProps & React$1.RefAttributes<HTMLSpanElement>, "ref"> & React$1.RefAttributes<HTMLSpanElement>>;
+declare const Switch$1: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+
+export {
+	Slider$1 as ShadCnSlider,
+	Switch$1 as ShadCnSwitch,
+};
 
 export {};

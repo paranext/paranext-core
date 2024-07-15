@@ -41,7 +41,8 @@
         "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
         "IN_VSCODE": "true",
         "DEV_NOISY": "false"
-      }
+      },
+      "autoAttachChildProcesses": true
     },
     {
       "name": "Attach to Renderer",

@@ -9,8 +9,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
+import { AlertTitle } from '@mui/material';
+import { AlertCircle } from 'lucide-react';
+import { useState } from 'react';
 import {
+  Alert,
+  AlertDescription,
   Button,
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -20,6 +30,8 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
   Input,
+  Slider,
+  Switch,
   Tabs,
   TabsContent,
   TabsList,
@@ -54,16 +66,35 @@ const invoices = [
 ];
 
 function Basics({ direction }: HasDirection) {
+  const [sliderValue, setSlider] = useState(3);
   return (
     <div>
+      <p className="pr-mb-2 pr-text-muted-foreground">A place for the most simple components</p>
       <VerticalTabs defaultValue="Button" dir={direction}>
         <VerticalTabsList>
+          <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
         </VerticalTabsList>
+
+        <VerticalTabsContent value="Alert">
+          <Alert className="pr-max-w-64">Alert! Why do I look like a Card? 🤔</Alert>
+          <Alert variant="destructive" className="pr-max-w-64">
+            {/* not sure, why this is displaying black, in the sandbox it's red 🤷 */}
+            <AlertCircle />
+            <AlertTitle>Settings are incomplete</AlertTitle>
+            <AlertDescription>
+              Results from the Capitalization check may be misleading because settings are
+              incomplete
+            </AlertDescription>
+          </Alert>
+        </VerticalTabsContent>
 
         <VerticalTabsContent value="Button">
           <table>
@@ -97,52 +128,96 @@ function Basics({ direction }: HasDirection) {
           </table>
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Card">
+          <Card className="sm:col-span-2">
+            <CardHeader className="pb-3">Hello World</CardHeader>
+          </Card>
+          <Card className="sm:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle>Psalms Layer-by-Layer</CardTitle>
+              <CardDescription className="max-w-lg text-balance leading-relaxed flex">
+                Unpacking the meaning of the Psalms for translators
+              </CardDescription>
+            </CardHeader>
+            <CardFooter>
+              <Button>More information</Button>
+            </CardFooter>
+          </Card>
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Input">
           <table>
-            <tr>
-              <td>
-                Text Field <div className="pr-text-xs">(wrapped)</div>
-              </td>
-              <td>
-                <TextField />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                Shadcn Input
-                <div className="pr-text-xs">(shadcn-ui/input)</div>
-              </td>
-              <td>
-                <Input />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                Shdcn Input <div className="pr-text-xs">(from ui.shadcn.com &rarr; input)</div>
-              </td>
-              <td className="">
-                {/* copied from ui.shadcn.com but replaced ring-ring with pr-ring-[240 5% 64.9%], as they set --ring to this value in their style.css */}
-                <Input className="pr-flex pr-h-10 pr-w-full pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-border-0 file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-[color:hsl(240,5%,64.9%)] focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                Small Input
-                <div className="pr-text-xs">(from ui.jln.dev &rarr; popover)</div>
-              </td>
-              <td>
-                <Input className="pr-full pr-file:border-0 pr-col-span-2 pr-flex pr-h-8 pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
-              </td>
-            </tr>
-            <tr>
-              <td>
-                BVC Input <div className="pr-text-xs">(from book-chapter-control)</div>
-              </td>
-              <td>
-                <Input className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none" />
-              </td>
-            </tr>
+            <tbody>
+              <tr>
+                <td>
+                  Text Field <div className="pr-text-xs">(wrapped)</div>
+                </td>
+                <td>
+                  <TextField />
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Shadcn Input
+                  <div className="pr-text-xs">(shadcn-ui/input)</div>
+                </td>
+                <td>
+                  <Input />
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Shdcn Input <div className="pr-text-xs">(from ui.shadcn.com &rarr; input)</div>
+                </td>
+                <td className="">
+                  {/* copied from ui.shadcn.com but replaced ring-ring with pr-ring-[240 5% 64.9%], as they set --ring to this value in their style.css */}
+                  <Input className="pr-flex pr-h-10 pr-w-full pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-border-0 file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-[color:hsl(240,5%,64.9%)] focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  Small Input
+                  <div className="pr-text-xs">(from ui.jln.dev &rarr; popover)</div>
+                </td>
+                <td>
+                  <Input className="pr-full pr-file:border-0 pr-col-span-2 pr-flex pr-h-8 pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50" />
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  BVC Input <div className="pr-text-xs">(from book-chapter-control)</div>
+                </td>
+                <td>
+                  <Input className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none" />
+                </td>
+              </tr>
+            </tbody>
           </table>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Slider">
+          Default Shadcn sliders are not themed and always blue 🥺
+          <Slider />
+          <Slider isDisabled />
+          <Slider
+            min={0}
+            max={5}
+            value={sliderValue}
+            onChange={(_e, value) => setSlider(Array.isArray(value) ? value?.[0] : value)}
+          />
+          {/* Wondering in which case the slider would output a number[] as its value 🤷 */}
+          {sliderValue}
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Switch">
+          Default Shadcn switches are not themed and always blue 🥺
+          <div>
+            <Switch />
+            <Switch isDisabled />
+            <Switch isChecked />
+            <Switch isChecked isDisabled />
+            <Switch hasError />
+          </div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">

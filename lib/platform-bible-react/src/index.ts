@@ -69,3 +69,14 @@ export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from './components/shadcn-ui/card';
+export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
+export { Slider as ShadCnSlider } from './components/shadcn-ui/slider';
+export { Switch as ShadCnSwitch } from './components/shadcn-ui/switch';
