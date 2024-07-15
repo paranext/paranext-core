@@ -9,8 +9,18 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
+import { AlertTitle } from '@mui/material';
+import { AlertCircle } from 'lucide-react';
+import { useState } from 'react';
 import {
+  Alert,
+  AlertDescription,
   Button,
+  Card,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -20,6 +30,8 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
   Input,
+  Slider,
+  Switch,
   Tabs,
   TabsContent,
   TabsList,
@@ -54,17 +66,35 @@ const invoices = [
 ];
 
 function Basics({ direction }: HasDirection) {
+  const [sliderValue, setSlider] = useState(3);
   return (
     <div>
       <p className="pr-mb-2 pr-text-muted-foreground">A place for the most simple components</p>
       <VerticalTabs defaultValue="Button" dir={direction}>
         <VerticalTabsList>
+          <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
         </VerticalTabsList>
+
+        <VerticalTabsContent value="Alert">
+          <Alert className="pr-max-w-64">Alert! Why do I look like a Card? 🤔</Alert>
+          <Alert variant="destructive" className="pr-max-w-64">
+            {/* not sure, why this is displaying black, in the sandbox it's red 🤷 */}
+            <AlertCircle />
+            <AlertTitle>Settings are incomplete</AlertTitle>
+            <AlertDescription>
+              Results from the Capitalization check may be misleading because settings are
+              incomplete
+            </AlertDescription>
+          </Alert>
+        </VerticalTabsContent>
 
         <VerticalTabsContent value="Button">
           <table>
@@ -96,6 +126,23 @@ function Basics({ direction }: HasDirection) {
               </tr>
             </tbody>
           </table>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Card">
+          <Card className="sm:col-span-2">
+            <CardHeader className="pb-3">Hello World</CardHeader>
+          </Card>
+          <Card className="sm:col-span-2">
+            <CardHeader className="pb-3">
+              <CardTitle>Psalms Layer-by-Layer</CardTitle>
+              <CardDescription className="max-w-lg text-balance leading-relaxed flex">
+                Unpacking the meaning of the Psalms for translators
+              </CardDescription>
+            </CardHeader>
+            <CardFooter>
+              <Button>More information</Button>
+            </CardFooter>
+          </Card>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Input">
@@ -146,6 +193,31 @@ function Basics({ direction }: HasDirection) {
               </tr>
             </tbody>
           </table>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Slider">
+          Default Shadcn sliders are not themed and always blue 🥺
+          <Slider />
+          <Slider isDisabled />
+          <Slider
+            min={0}
+            max={5}
+            value={sliderValue}
+            onChange={(_e, value) => setSlider(Array.isArray(value) ? value?.[0] : value)}
+          />
+          {/* Wondering in which case the slider would output a number[] as its value 🤷 */}
+          {sliderValue}
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Switch">
+          Default Shadcn switches are not themed and always blue 🥺
+          <div>
+            <Switch />
+            <Switch isDisabled />
+            <Switch isChecked />
+            <Switch isChecked isDisabled />
+            <Switch hasError />
+          </div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
