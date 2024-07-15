@@ -1,4 +1,4 @@
-import * as React from 'react';
+import React from 'react';
 import { type DialogProps } from '@radix-ui/react-dialog';
 import { Command as CommandPrimitive } from 'cmdk';
 import { Search } from 'lucide-react';
@@ -23,7 +23,7 @@ Command.displayName = CommandPrimitive.displayName;
 
 interface CommandDialogProps extends DialogProps {}
 
-const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
+function CommandDialog({ children, ...props }: CommandDialogProps) {
   return (
     <Dialog {...props}>
       <DialogContent className="pr-overflow-hidden pr-p-0 pr-shadow-lg">
@@ -33,13 +33,13 @@ const CommandDialog = ({ children, ...props }: CommandDialogProps) => {
       </DialogContent>
     </Dialog>
   );
-};
+}
 
 const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
 >(({ className, ...props }, ref) => (
-  <div className="pr-flex pr-items-center pr-border-b pr-px-3" cmdk-input-wrapper="">
+  <div className="pr-flex pr-items-center pr-border-b pr-px-3">
     <Search className="pr-mr-2 pr-h-4 pr-w-4 pr-shrink-0 pr-opacity-50" />
     <CommandPrimitive.Input
       ref={ref}
@@ -120,14 +120,14 @@ const CommandItem = React.forwardRef<
 
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 
-const CommandShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => {
+function CommandShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
   return (
     <span
       className={cn('pr-ml-auto pr-text-xs pr-tracking-widest pr-text-muted-foreground', className)}
       {...props}
     />
   );
-};
+}
 CommandShortcut.displayName = 'CommandShortcut';
 
 export {
