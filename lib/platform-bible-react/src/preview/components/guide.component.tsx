@@ -12,16 +12,26 @@ import { DirToggle, DirectionProps } from '../direction-toggle';
 import { ThemeButton } from '../theme-toggle.component';
 import { useTheme } from '../theme-provider.component';
 
-function createColorCells(color: string) {
+function createColorCells(color: string, invert: boolean = false) {
   const colorString = getComputedStyle(document.documentElement).getPropertyValue(`--${color}`);
-  const additionalClasses = colorString.split(', ')[2] === '0%' ? ' pr-text-white' : '';
   return (
     <>
-      <td>{color}</td>
-      <td>
-        <Input className={`pr-bg-${color} pr-border-2${additionalClasses}`} value={colorString} />
-      </td>
+      {invert ? '' : <td>{color}</td>}
+      {createPreviewCell(
+        color,
+        colorString.split(', ')[2] === '0%' ? 'white' : 'inherit',
+        colorString,
+      )}
+      {invert ? <td>{color}</td> : ''}
     </>
+  );
+}
+
+function createPreviewCell(color: string, foreground: string, text: string) {
+  return (
+    <td>
+      <Input className={`pr-bg-${color} pr-border-2 pr-text-${foreground}`} value={text} />
+    </td>
   );
 }
 
@@ -203,23 +213,39 @@ function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
             className="pr-bg-background-foreground pr-bg-accent pr-bg-accent-foreground pr-bg-background pr-bg-border pr-bg-card pr-bg-card-foreground pr-bg-destructive pr-bg-destructive-foreground pr-bg-input pr-bg-muted pr-bg-muted-foreground pr-bg-popover pr-bg-popover-foreground pr-bg-primary pr-bg-primary pr-bg-primary-foreground pr-bg-ring pr-bg-secondary pr-bg-secondary-foreground"
           />
           <table>
+            <thead>
+              <tr>
+                <th>Preview</th>
+                <th />
+                <th>Background</th>
+                <th>Foreground</th>
+                <th />
+              </tr>
+            </thead>
             <tbody>
               {['primary', 'secondary', 'destructive', 'muted', 'accent', 'popover', 'card'].map(
                 (color) => {
                   return (
                     <tr>
+                      {createPreviewCell(color, `${color}-foreground`, color)}
                       {createColorCells(color)}
-                      {createColorCells(`${color}-foreground`)}
+                      {createColorCells(`${color}-foreground`, true)}
                     </tr>
                   );
                 },
               )}
               <tr>
+                {createPreviewCell('background', 'foreground', 'background')}
                 {createColorCells('background')}
-                {createColorCells('foreground')}
+                {createColorCells('foreground', true)}
               </tr>
               {['border', 'input', 'ring'].map((color) => {
-                return <tr>{createColorCells(color)}</tr>;
+                return (
+                  <tr>
+                    <td />
+                    {createColorCells(color)}
+                  </tr>
+                );
               })}
             </tbody>
           </table>
