@@ -1,5 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
+// import { RepeatedWordsInventory } from 'platform-bible-react';
 import { CharacterInventory } from 'platform-bible-react';
 import { ScriptureReference } from 'platform-bible-utils';
 import { INVENTORY_STRING_KEYS, getSetting, getText, setSetting } from './util';

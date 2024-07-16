@@ -15,12 +15,16 @@ import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/p
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
 import characterInventoryWebView from './character-inventory.web-view?inline';
+import repeatedWordsInventoryWebView from './repeated-words-inventory.web-view?inline';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
+const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
 
 interface InventoryOptions extends GetWebViewOptions {
+  title: string;
   projectId: string | undefined;
-  // Add inventory/check type
+  webView: string;
+  webViewType: string | undefined;
 }
 
 // #region Project Setting Validators
@@ -47,10 +51,38 @@ const charactersValidator: ProjectSettingValidator<
   return typeof newValue === 'string';
 };
 
+const repeatableWordsValidator: ProjectSettingValidator<
+  'platformScripture.repeatableWords' | 'platformScripture.nonRepeatableWords'
+> = async (newValue) => {
+  return typeof newValue === 'string';
+};
+
 // #endregion
 
 async function openPlatformCharactersInventory(
   webViewId: string | undefined,
+): Promise<string | undefined> {
+  const title: string = 'Character Inventory';
+  return openInventory(title, webViewId, characterInventoryWebView, characterInventoryWebViewType);
+}
+
+async function openPlatformRepeatedWordsInventory(
+  webViewId: string | undefined,
+): Promise<string | undefined> {
+  const title: string = 'Repeated Words Inventory';
+  return openInventory(
+    title,
+    webViewId,
+    repeatedWordsInventoryWebView,
+    repeatedWordsInventoryWebViewType,
+  );
+}
+
+async function openInventory(
+  title: string,
+  webViewId: string | undefined,
+  webView: string,
+  webViewType: string,
 ): Promise<string | undefined> {
   let projectId: string | undefined;
 
@@ -63,8 +95,8 @@ async function openPlatformCharactersInventory(
     return undefined;
   }
 
-  const options: InventoryOptions = { projectId };
-  return papi.webViews.getWebView(characterInventoryWebViewType, { type: 'float' }, options);
+  const options: InventoryOptions = { title, projectId, webView, webViewType };
+  return papi.webViews.getWebView(webViewType, { type: 'float' }, options);
 }
 
 const inventoryWebViewProvider: IWebViewProvider = {
@@ -72,9 +104,9 @@ const inventoryWebViewProvider: IWebViewProvider = {
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: InventoryOptions,
   ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== characterInventoryWebViewType)
+    if (savedWebView.webViewType !== getWebViewOptions.webViewType)
       throw new Error(
-        `${characterInventoryWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        `${getWebViewOptions.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
     // We know that the projectId (if present in the state) will be a string.
@@ -83,12 +115,13 @@ const inventoryWebViewProvider: IWebViewProvider = {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       (savedWebView.state?.projectId as string) ||
       undefined;
-    const title = 'Character Inventory';
+
+    const title = getWebViewOptions.title || undefined;
 
     return {
       title,
       ...savedWebView,
-      content: characterInventoryWebView,
+      content: getWebViewOptions.webView,
       state: {
         ...savedWebView.state,
         projectId,
@@ -143,9 +176,24 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.openCharactersInventory',
     openPlatformCharactersInventory,
   );
-
-  const inventoryWebViewProviderPromise = papi.webViewProviders.register(
+  const characterInventoryWebViewProviderPromise = papi.webViewProviders.register(
     characterInventoryWebViewType,
+    inventoryWebViewProvider,
+  );
+  const repeatableWordsPromise = papi.projectSettings.registerValidator(
+    'platformScripture.repeatableWords',
+    repeatableWordsValidator,
+  );
+  const nonRepeatableWordsPromise = papi.projectSettings.registerValidator(
+    'platformScripture.nonRepeatableWords',
+    repeatableWordsValidator,
+  );
+  const openRepeatedWordsInventoryPromise = papi.commands.registerCommand(
+    'platformScripture.openRepeatedWordsInventory',
+    openPlatformRepeatedWordsInventory,
+  );
+  const repeatableWordsInventoryWebViewProviderPromise = papi.webViewProviders.register(
+    repeatedWordsInventoryWebViewType,
     inventoryWebViewProvider,
   );
 
@@ -161,7 +209,11 @@ export async function activate(context: ExecutionActivationContext) {
     await validCharactersPromise,
     await invalidCharactersPromise,
     await openCharactersInventoryPromise,
-    await inventoryWebViewProviderPromise,
+    await characterInventoryWebViewProviderPromise,
+    await repeatableWordsPromise,
+    await nonRepeatableWordsPromise,
+    await openRepeatedWordsInventoryPromise,
+    await repeatableWordsInventoryWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

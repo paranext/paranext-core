@@ -18,10 +18,10 @@ type SearchResult = {
 
 const extractOccurrences = (
   text: string | undefined,
-  character: string,
+  item: string,
   scriptureRef: ScriptureReference,
 ): SearchResult[] => {
-  if (!text || text === '' || character === '') return [];
+  if (!text || text === '' || item === '') return [];
 
   const results: SearchResult[] = [];
   const lines = text.split('\n');
@@ -30,6 +30,8 @@ const extractOccurrences = (
   let currentVerse: string = '0';
   let key: number = 0;
 
+
+  /* Refactor to WebView */
   lines.forEach((line) => {
     const words = line.split(/\s+/);
     if (line.startsWith('\\c')) {
@@ -44,7 +46,7 @@ const extractOccurrences = (
     }
 
     for (let i = 0; i < words.length; i++) {
-      if (words[i].includes(character)) {
+      if (words[i].includes(item)) {
         const start = Math.max(0, i - 2);
         const end = Math.min(words.length, i + 3);
         const snippet = words.slice(start, end).join(' ');
@@ -57,13 +59,14 @@ const extractOccurrences = (
         results.push(result);
       }
     }
+    /* end */
   });
 
   return results;
 };
 
 interface OccurrencesTableProps {
-  selectedCharacter: string;
+  selectedItem: string;
   text: string | undefined;
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
@@ -71,7 +74,7 @@ interface OccurrencesTableProps {
 }
 
 function OccurrencesTable({
-  selectedCharacter,
+  selectedItem,
   text,
   scriptureReference,
   setScriptureReference,
@@ -80,12 +83,12 @@ function OccurrencesTable({
   const reference = localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
   const occurrence = localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
   const [tableData, setTableData] = useState<SearchResult[]>(
-    extractOccurrences(text, selectedCharacter, scriptureReference),
+    extractOccurrences(text, selectedItem, scriptureReference),
   );
 
   useEffect(
-    () => setTableData(extractOccurrences(text, selectedCharacter, scriptureReference)),
-    [text, selectedCharacter, scriptureReference],
+    () => setTableData(extractOccurrences(text, selectedItem, scriptureReference)),
+    [text, selectedItem, scriptureReference],
   );
 
   return (

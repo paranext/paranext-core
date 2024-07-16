@@ -25,6 +25,18 @@
         "description": "%project_settings_platformScripture_invalidCharacters_description%",
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.repeatableWords": {
+        "label": "%project_settings_platformScripture_repeatableWords_label%",
+        "description": "%project_settings_platformScripture_repeatableWords_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.nonRepeatableWords": {
+        "label": "%project_settings_platformScripture_nonRepeatableWords_label%",
+        "description": "%project_settings_platformScripture_nonRepeatableWords_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

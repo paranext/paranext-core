@@ -75,6 +75,12 @@
             "command": "platformScripture.openCharactersInventory"
           },
           {
+            "label": "%webView_platformScriptureEditor_repeatedWordsInventory%",
+            "group": "platformScriptureEditor.inventory",
+            "order": 1,
+            "command": "platformScripture.openRepeatedWordsInventory"
+          },
+          {
             "label": "%webView_platformScriptureEditor_thickBorders%",
             "group": "platformScriptureEditor.layout",
             "order": 1,

@@ -14,8 +14,8 @@ import DataTable from '@/components/advanced-components/data-table/data-table.co
 
 export type Status = true | false | undefined;
 
-export type CharacterData = {
-  character: string;
+export type ItemData = {
+  item: string;
   count: number;
   status: Status;
 };
@@ -36,19 +36,20 @@ const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
 
 // #region Columns
 
+/* Refactor */
 export const columns = (
-  characterLabel: string,
+  itemLabel: string,
   unicodeValueLabel: string,
   countLabel: string,
   statusLabel: string,
-  statusChangeHandler: (characters: string[], status: Status) => void,
-): ColumnDef<CharacterData>[] => [
+  statusChangeHandler: (items: string[], status: Status) => void,
+): ColumnDef<ItemData>[] => [
   {
-    accessorKey: 'character',
+    accessorKey: 'item',
     header: ({ column }) => {
       return (
         <Button onClick={() => column.toggleSorting(undefined)}>
-          {characterLabel}
+          {itemLabel}
           {getSortingIcon(column.getIsSorted())}
         </Button>
       );
@@ -65,8 +66,8 @@ export const columns = (
       );
     },
     cell: ({ row }) => {
-      const character: string = row.getValue('character');
-      return character.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
+      const item: string = row.getValue('item');
+      return item.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
     },
   },
   {
@@ -85,9 +86,9 @@ export const columns = (
     header: ({ column, table }) => {
       const selectedRows = table.getSelectedRowModel().rows;
 
-      const characters: string[] = [];
+      const items: string[] = [];
       selectedRows.forEach((row) => {
-        characters.push(row.getValue('character'));
+        items.push(row.getValue('item'));
       });
 
       return (
@@ -103,7 +104,7 @@ export const columns = (
               <CircleCheckIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  statusChangeHandler(characters, true);
+                  statusChangeHandler(items, true);
                 }}
               />
             </Button>
@@ -111,7 +112,7 @@ export const columns = (
               <CircleXIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  statusChangeHandler(characters, false);
+                  statusChangeHandler(items, false);
                 }}
               />
             </Button>
@@ -119,7 +120,7 @@ export const columns = (
               <CircleHelpIcon
                 className="pr-h-5 pr-w-5"
                 onClick={() => {
-                  statusChangeHandler(characters, undefined);
+                  statusChangeHandler(items, undefined);
                 }}
               />
             </Button>
@@ -143,35 +144,35 @@ export const columns = (
 // #endregion
 
 interface InventoryDataTableProps {
-  tableData: CharacterData[];
-  onStatusChange: (characters: string[], status: Status) => void;
-  onSelectCharacter: (character: string) => void;
+  tableData: ItemData[];
+  onStatusChange: (items: string[], status: Status) => void;
+  onSelectItem: (item: string) => void;
   localizedStrings: LanguageStrings;
 }
 
 function InventoryDataTable({
   tableData,
   onStatusChange,
-  onSelectCharacter,
+  onSelectItem,
   localizedStrings,
 }: InventoryDataTableProps) {
-  const characterLabel = localizedStrings['%webView_inventory_table_header_character%'];
+  const itemLabel = localizedStrings['%webView_inventory_table_header_character%'];
   const unicodeValueLabel = localizedStrings['%webView_inventory_table_header_unicode_value%'];
   const countLabel = localizedStrings['%webView_inventory_table_header_count%'];
   const statusLabel = localizedStrings['%webView_inventory_table_header_status%'];
 
-  const rowClickHandler = (row: Row<CharacterData>, table: Table<CharacterData>) => {
+  const rowClickHandler = (row: Row<ItemData>, table: Table<ItemData>) => {
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
 
-    onSelectCharacter(row.getValue('character'));
+    onSelectItem(row.getValue('item'));
   };
 
   return (
     <div className="pr-overflow-y-auto">
       <DataTable
         columns={columns(
-          characterLabel,
+          itemLabel,
           unicodeValueLabel,
           countLabel,
           statusLabel,

@@ -26,6 +26,12 @@ public sealed class ProjectSettingsNames
     public const string PB_INVALID_CHARACTERS = "platformScripture.invalidCharacters";
     public const string PT_INVALID_CHARACTERS = "InvalidCharacters";
 
+    public const string PB_REPEATABLE_WORDS = "platformScripture.repeatableWords";
+    public const string PT_REPEATABLE_WORDS = "RepeatableWords";
+
+    public const string PB_NONREPEATABLE_WORDS = "platformScripture.nonRepeatableWords";
+    public const string PT_NONREPEATABLE_WORDS = "NonRepeatableWords";
+
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
@@ -43,6 +49,8 @@ public sealed class ProjectSettingsNames
             { PB_IS_EDITABLE, PT_IS_EDITABLE },
             { PB_VALID_CHARACTERS, PT_VALID_CHARACTERS },
             { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
+            { PB_REPEATABLE_WORDS, PT_REPEATABLE_WORDS },
+            { PB_NONREPEATABLE_WORDS, PT_NONREPEATABLE_WORDS },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
