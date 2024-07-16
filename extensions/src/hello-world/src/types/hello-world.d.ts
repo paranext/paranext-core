@@ -1,6 +1,6 @@
 declare module 'hello-world' {
   import type { DataProviderDataType, MandatoryProjectDataTypes } from '@papi/core';
-  import type { IProjectDataProvider } from 'papi-shared-types';
+  import type { IBaseProjectDataProvider } from 'papi-shared-types';
 
   export type HelloWorldProjectDataTypes = MandatoryProjectDataTypes & {
     /**
@@ -24,8 +24,8 @@ declare module 'hello-world' {
     removeName(name: string): Promise<boolean>;
   };
 
-  export type HelloWorldProjectDataProvider = IProjectDataProvider<HelloWorldProjectDataTypes> &
-    HelloWorldProjectDataProviderMethods;
+  export type IHelloWorldProjectDataProvider =
+    IBaseProjectDataProvider<HelloWorldProjectDataTypes> & HelloWorldProjectDataProviderMethods;
 
   /** Event containing information about `helloWorld` */
   type HelloWorldEvent = {
@@ -182,7 +182,7 @@ declare module 'hello-world' {
 }
 
 declare module 'papi-shared-types' {
-  import type { HelloWorldProjectDataProvider, HTMLColorNames } from 'hello-world';
+  import type { IHelloWorldProjectDataProvider, HTMLColorNames } from 'hello-world';
 
   export interface CommandHandlers {
     'helloWorld.helloWorld': () => string;
@@ -233,8 +233,8 @@ declare module 'papi-shared-types' {
     'helloWorld.openViewerByWebViewId': (webViewId?: string) => Promise<string | undefined>;
   }
 
-  export interface ProjectDataProviders {
-    helloWorld: HelloWorldProjectDataProvider;
+  export interface ProjectDataProviderInterfaces {
+    helloWorld: IHelloWorldProjectDataProvider;
   }
 
   export interface SettingTypes {

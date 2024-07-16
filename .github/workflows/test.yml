@@ -26,6 +26,14 @@ jobs:
         dotnet_version: [8.0.x]
 
     steps:
+      - name: Install MacPorts
+        if: ${{ matrix.os == 'macos-latest' }}
+        uses: melusina-org/setup-macports@v1
+
+      - name: Install icu4c on macOS
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: sudo port -v install icu
+
       - name: Check out Git repository
         uses: actions/checkout@v4
 
@@ -49,28 +57,33 @@ jobs:
       - name: npm install
         run: npm install
 
-      - name: Install DMG license
-        if: ${{ matrix.os == 'macos-latest' }}
-        run: npm install dmg-license
-
       - name: Build
         run: npm run build
 
-      - name: run dotnet unit tests
+      - name: dotnet unit tests
         run: dotnet test c-sharp-tests/c-sharp-tests.csproj
 
-      - name: check dotnet formatting
-        run: cd c-sharp && dotnet tool restore && dotnet csharpier --check .
+      - name: npm unit tests
+        run: npm test
 
-      - name: npm test
+      - name: check dotnet formatting
+        run: |
+          cd c-sharp
+          dotnet tool restore
+          dotnet csharpier --check .
+
+      - name: check JS/TS formatting
+        run: npm run format:check
+
+      - name: check JS/TS linting
+        run: npm run lint
+
+      - name: check packaging
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          npm run lint
-          npm test
-          npm run package
+        run: npm run package
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

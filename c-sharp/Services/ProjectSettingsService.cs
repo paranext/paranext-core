@@ -2,7 +2,7 @@ using System.Text.Json;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 
-namespace Paranext.DataProvider.Projects
+namespace Paranext.DataProvider.Services
 {
     internal static class ProjectSettingsService
     {
@@ -27,16 +27,13 @@ namespace Paranext.DataProvider.Projects
         /// <param name="allChangesJson">A JSON object containing the keys and values of
         /// all the settings being changed as part of an atomic operation (i.e., a single batch of
         /// changes)</param>
-        /// <param name="projectType">The `projectType` to get default setting value for (probably
-        /// always "ParatextStandard")</param>
         /// <returns><c>true</c> if change is valid, <c>false</c> otherwise</returns>
         public static bool IsValid(
             PapiClient papiClient,
             string newValueJson,
             string currentValueJson,
             string key,
-            string allChangesJson,
-            string projectType
+            string allChangesJson
         )
         {
             bool requestSucceeded = false;
@@ -45,15 +42,7 @@ namespace Paranext.DataProvider.Projects
 
             papiClient.SendRequest(
                 PROJECT_SETTINGS_SERVICE,
-                new[]
-                {
-                    "isValid",
-                    key,
-                    newValueJson,
-                    currentValueJson,
-                    projectType,
-                    allChangesJson,
-                },
+                new object[] { "isValid", key, newValueJson, currentValueJson, allChangesJson, },
                 (bool success, object? returnValue) =>
                 {
                     try
@@ -89,13 +78,11 @@ namespace Paranext.DataProvider.Projects
         /// (this will probably always be different from the corresponding key known to
         /// Platform.Bible)
         /// </param>
-        /// <param name="projectType">The `projectType` to get default setting value for (probably
-        /// always "ParatextStandard")</param>
         /// <remarks>Every Project Data Provider **must** run this function when it receives a
         /// request to get a project setting if the project does not have a value for the project
         /// setting requested. It should return the response from this function directly, either
         /// the returned default value or throw.</remarks>
-        public static string? GetDefault(PapiClient papiClient, string key, string projectType)
+        public static string? GetDefault(PapiClient papiClient, string key)
         {
             string? defaultValue = null;
             TaskCompletionSource taskSource = new();
@@ -103,7 +90,7 @@ namespace Paranext.DataProvider.Projects
 
             papiClient.SendRequest(
                 PROJECT_SETTINGS_SERVICE,
-                new[] { "getDefault", key, projectType },
+                new object[] { "getDefault", key },
                 (bool success, object? returnValue) =>
                 {
                     try
@@ -146,12 +133,7 @@ namespace Paranext.DataProvider.Projects
             PapiClient papiClient,
             string key,
             Func<
-                (
-                    string newValueJson,
-                    string currentValueJson,
-                    string allChangesJson,
-                    string projectType
-                ),
+                (string newValueJson, string currentValueJson, string allChangesJson),
                 (bool result, string? error)
             > validatorCallback
         )
@@ -160,13 +142,12 @@ namespace Paranext.DataProvider.Projects
             {
                 // Check if the JsonElement is an array
                 if (
-                    jsonElement.ValueKind != JsonValueKind.Array
-                    || jsonElement.GetArrayLength() != 3
+                    jsonElement.ValueKind != JsonValueKind.Array || jsonElement.GetArrayLength() < 3
                 )
                 {
                     return ResponseToRequest.Failed(
                         $"Validator for {key} expected a JSON array with 3 items: newValueJson"
-                            + "currentValueJson, allChangesJson."
+                            + "currentValueJson, allChangesJson"
                     );
                 }
 
@@ -175,7 +156,7 @@ namespace Paranext.DataProvider.Projects
                 string allChangesJson = jsonElement[2].GetString() ?? "";
 
                 var validationResponse = validatorCallback(
-                    (newValueJson, currentValueJson, allChangesJson, ProjectType.Paratext)
+                    (newValueJson, currentValueJson, allChangesJson)
                 );
                 return validationResponse.result
                     ? ResponseToRequest.Succeeded()

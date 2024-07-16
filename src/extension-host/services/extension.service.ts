@@ -35,7 +35,7 @@ import menuDataService from '@shared/services/menu-data.service';
 import { localizedStringsDocumentCombiner } from '@extension-host/services/localization.service-host';
 import { settingsDocumentCombiner } from '@extension-host/services/settings.service-host';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import { projectSettingsDocumentCombiner } from './project-settings.service-host';
+import { projectSettingsDocumentCombiner } from '@extension-host/services/project-settings.service-host';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -408,6 +408,23 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
     )
       extensionInfos.push(extensionInfo);
   });
+
+  // TODO: Properly sort the order of extensions for activation based on their stated dependencies
+  // All embedded extensions should probably also be given priority over others. If we want to be
+  // "fancy" we could use a tree instead of a list and activate functions all on the same level
+  // concurrently instead of sequentially. For now, manually prioritize some extensions.
+  extensionInfos.sort((extA, extB) => {
+    if (extA.name === 'platformScripture') return -1;
+    if (extB.name === 'platformScripture') return 1;
+    if (extA.name === 'platformScriptureEditor') return -1;
+    if (extB.name === 'platformScriptureEditor') return 1;
+    const extAIsPT = extA.name.startsWith('paratext');
+    const extBIsPT = extB.name.startsWith('paratext');
+    if (extAIsPT && !extBIsPT) return -1;
+    if (extBIsPT && !extAIsPT) return 1;
+    return extA.name < extB.name ? -1 : 1;
+  });
+
   return extensionInfos;
 }
 
@@ -696,20 +713,18 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   };
 
   // Import the extensions and run their activate() functions
-  // Assert the type has been filtered for undefined.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const extensionsActive = (
-    await Promise.all(
-      extensionsWithCheck.map((extensionWithCheck) =>
-        activateExtension(extensionWithCheck.extension).catch((e) => {
-          logger.error(
-            `Extension '${extensionWithCheck.extension.name}' threw while activating! ${e}`,
-          );
-          return undefined;
-        }),
-      ),
-    )
-  ).filter((activeExtension) => activeExtension !== undefined) as ActiveExtension[];
+  const extensionsActive: ActiveExtension[] = [];
+  // This is a case where we want to run through the array in order sequentially
+  // eslint-disable-next-line no-restricted-syntax
+  for (const extensionWithCheck of extensionsWithCheck) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const extension = await activateExtension(extensionWithCheck.extension);
+      extensionsActive.push(extension);
+    } catch (e) {
+      logger.error(`Extension '${extensionWithCheck.extension.name}' threw while activating! ${e}`);
+    }
+  }
 
   return extensionsActive;
 }

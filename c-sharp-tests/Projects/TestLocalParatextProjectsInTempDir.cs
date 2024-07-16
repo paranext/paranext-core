@@ -17,26 +17,31 @@ namespace TestParanextDataProvider.Projects
         public void Dispose()
         {
             _folder.Dispose();
-            ScrTextCollection.RefreshScrTexts();
+            // Reset ScrTextCollection's folder to be the global test project folder
+            ParatextData.Initialize(FixtureSetup.TestFolderPath, false);
         }
 
         protected override string ProjectRootFolder => _folder.Path;
 
-        internal void CreateTempProject(string folder, ProjectMetadata projectMetadata)
+        public string TestProjectRootFolder => _folder.Path;
+
+        internal void CreateTempProject(string folder, ProjectDetails projectDetails)
         {
             var folderPath = Path.Combine(ProjectRootFolder, folder);
             CreateDirectory(folderPath);
-            var settings = new MinimalParatextProjectSettings { Guid = projectMetadata.ID };
-            var projectParatextSubdirectory = Path.Join(
-                folderPath,
-                PROJECT_SUBDIRECTORY,
-                PARATEXT_DATA_SUBDIRECTORY
-            );
-            CreateDirectory(projectParatextSubdirectory);
-            var settingsPath = Path.Join(projectParatextSubdirectory, "Settings.xml");
+            var settings = new MinimalParatextProjectSettings
+            {
+                Name = projectDetails.Name,
+                Guid = projectDetails.Metadata.ID,
+                // Baked-in functional language code. Just needed something that worked for ScrText
+                // to load. Feel free to change this for testing purposes
+                LanguageIsoCode = "en:::",
+                // Baked-in functional Paratext version. Just needed something that worked for ScrText
+                // to load. Feel free to change this for testing purposes
+                MinParatextVersion = "8.0.100.76"
+            };
+            var settingsPath = Path.Join(folderPath, "Settings.xml");
             XmlSerializationHelper.SerializeToFileWithWriteThrough(settingsPath, settings);
-
-            SaveProjectMetadata(folderPath, projectMetadata, false);
         }
     }
 }

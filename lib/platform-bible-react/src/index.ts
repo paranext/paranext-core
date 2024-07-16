@@ -2,8 +2,7 @@ import './index.css';
 
 // Components and Types
 export { default as BookChapterControl } from './components/book-chapter-control/book-chapter-control.component';
-export { default as Button } from './components/button.component';
-export type { ButtonProps } from './components/button.component';
+export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/chapter-range-selector.component';
 export { default as Checkbox } from './components/checkbox.component';
@@ -78,3 +77,14 @@ export {
   VerticalTabsContent,
   VerticalTabsTrigger,
 } from '@/components/shadcn-ui/tabs-vertical';
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from './components/shadcn-ui/card';
+export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
+export { Slider as ShadCnSlider } from './components/shadcn-ui/slider';
+export { Switch as ShadCnSwitch } from './components/shadcn-ui/switch';

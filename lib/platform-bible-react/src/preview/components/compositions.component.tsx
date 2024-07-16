@@ -4,11 +4,13 @@ import ThemeToggle from '@/preview/theme-toggle.component';
 import {
   BookChapterControl,
   RefSelector,
+  SearchBar,
   VerticalTabs,
   VerticalTabsContent,
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '../..';
+import { HasDirection } from '../direction-toggle';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -16,28 +18,38 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-function Compositions() {
+function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
 
   return (
-    <VerticalTabs defaultValue="Book Chapter Control">
-      <VerticalTabsList>
-        <VerticalTabsTrigger value="Book Chapter Control">Book Chapter Control</VerticalTabsTrigger>
-        <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
-      </VerticalTabsList>
+    <div>
+      <p className="pr-mb-2 pr-text-muted-foreground">
+        A place for components that are composed from basic components
+      </p>
+      <VerticalTabs defaultValue="Book Chapter Control" dir={direction}>
+        <VerticalTabsList>
+          <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Book Chapter Control">
+            Book Chapter Control
+          </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
+        </VerticalTabsList>
 
-      <VerticalTabsContent value="Book Chapter Control">
-        <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
-        <div className="bcv-control-div">
+        <VerticalTabsContent value="Search Bar">
+          <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} /> &larr; type here
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Book Chapter Control">
+          <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
-        </div>
-        <div>{JSON.stringify(scrRef)}</div>
-      </VerticalTabsContent>
+          <div>{JSON.stringify(scrRef)}</div>
+        </VerticalTabsContent>
 
-      <VerticalTabsContent value="Theme Toggle">
-        <ThemeToggle />
-      </VerticalTabsContent>
-    </VerticalTabs>
+        <VerticalTabsContent value="Theme Toggle">
+          <ThemeToggle />
+        </VerticalTabsContent>
+      </VerticalTabs>
+    </div>
   );
 }
 

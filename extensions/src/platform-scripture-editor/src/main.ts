@@ -42,12 +42,12 @@ async function open(
   const projectForWebView = { projectId, isEditable: !isReadOnly };
   if (!projectForWebView.projectId) {
     // Get a list of projects that are editable or not editable to show in the select project dialog
-    const projectMetadatas = (await papi.projectLookup.getMetadataForAllProjects()).filter(
-      (projectMetadata) => projectMetadata.projectType === 'ParatextStandard',
-    );
+    const projectMetadatas = await papi.projectLookup.getMetadataForAllProjects({
+      includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+    });
     const projectsWithEditable = await Promise.all(
       projectMetadatas.map(async (projectMetadata) => {
-        const pdp = await papi.projectDataProviders.get('ParatextStandard', projectMetadata.id);
+        const pdp = await papi.projectDataProviders.get('platform.base', projectMetadata.id);
         return {
           projectId: projectMetadata.id,
           isEditable: await pdp.getSetting('platform.isEditable'),
@@ -55,24 +55,29 @@ async function open(
       }),
     );
 
-    projectForWebView.projectId = await papi.dialogs.selectProject({
-      title: isReadOnly
-        ? '%platformScriptureEditor_dialog_openResourceViewer_title%'
-        : '%platformScriptureEditor_dialog_openScriptureEditor_title%',
-      prompt: isReadOnly
-        ? '%platformScriptureEditor_dialog_openResourceViewer_prompt%'
-        : '%platformScriptureEditor_dialog_openScriptureEditor_prompt%',
-      // Include projects whose editable matches readonly
-      includeProjectIds: projectsWithEditable
-        .filter(({ isEditable }) => isEditable !== isReadOnly)
-        .map(({ projectId: pId }) => pId),
-    });
+    const projectIdsMatchingReadonly = projectsWithEditable
+      .filter(({ isEditable }) => isEditable !== isReadOnly)
+      .map(({ projectId: pId }) => pId);
+
+    if (projectIdsMatchingReadonly.length > 0) {
+      projectForWebView.projectId = await papi.dialogs.selectProject({
+        title: isReadOnly
+          ? '%platformScriptureEditor_dialog_openResourceViewer_title%'
+          : '%platformScriptureEditor_dialog_openScriptureEditor_title%',
+        prompt: isReadOnly
+          ? '%platformScriptureEditor_dialog_openResourceViewer_prompt%'
+          : '%platformScriptureEditor_dialog_openScriptureEditor_prompt%',
+        // Include projects whose editable matches readonly
+        includeProjectIds: projectIdsMatchingReadonly,
+      });
+    } else {
+      logger.warn(
+        `Open ${isReadOnly ? 'Resource Viewer' : 'Scripture Editor'} did not find any projects with matching isEditable! Would show a prompt or something if there were a dialog available to do so`,
+      );
+    }
   } else {
     // Get whether the provided project is editable
-    const pdp = await papi.projectDataProviders.get(
-      'ParatextStandard',
-      projectForWebView.projectId,
-    );
+    const pdp = await papi.projectDataProviders.get('platform.base', projectForWebView.projectId);
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
@@ -103,7 +108,11 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
     let title = '';
     if (projectId) {
-      title = `${(await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId}${isReadOnly ? '' : ' (Editable)'}`;
+      title = `${
+        (await (
+          await papi.projectDataProviders.get('platform.base', projectId)
+        ).getSetting('platform.name')) ?? projectId
+      }${isReadOnly ? '' : ' (Editable)'}`;
     } else title = isReadOnly ? 'Resource Viewer' : 'Scripture Editor';
 
     return {

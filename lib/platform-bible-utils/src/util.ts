@@ -165,13 +165,15 @@ export function waitForDuration<TResult>(fn: () => Promise<TResult>, maxWaitTime
  * etc.
  *
  * @param obj Object whose functions to get
- * @param objId Optional ID of the object to use for debug logging
+ * @param _objId Optional ID of the object to use for debug logging
  * @returns Array of all function names on an object
  */
 // Note: lodash has something that MIGHT do the same thing as this. Investigate for https://github.com/paranext/paranext-core/issues/134
 export function getAllObjectFunctionNames(
   obj: { [property: string]: unknown },
-  objId: string = 'obj',
+  // Leaving it here for debugging
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _objId: string = 'obj',
 ): Set<string> {
   const objectFunctionNames = new Set<string>();
 
@@ -180,7 +182,8 @@ export function getAllObjectFunctionNames(
     try {
       if (typeof obj[property] === 'function') objectFunctionNames.add(property);
     } catch (error) {
-      console.debug(`Skipping ${property} on ${objId} due to error: ${error}`);
+      // Too noisy - only reenable if you need more details
+      // console.trace(`Skipping ${property} on ${objId} due to error: ${error}`);
     }
   });
 
@@ -192,7 +195,8 @@ export function getAllObjectFunctionNames(
       try {
         if (typeof obj[property] === 'function') objectFunctionNames.add(property);
       } catch (error) {
-        console.debug(`Skipping ${property} on ${objId}'s prototype due to error: ${error}`);
+        // Too noisy - only reenable if you need more details
+        // console.trace(`Skipping ${property} on ${objId}'s prototype due to error: ${error}`);
       }
     });
     objectPrototype = Object.getPrototypeOf(objectPrototype);
@@ -244,3 +248,36 @@ export type ReplaceType<T, A, B> = T extends A
   : T extends object
     ? { [K in keyof T]: ReplaceType<T[K], A, B> }
     : T;
+
+// Thanks to jcalz at https://stackoverflow.com/a/50375286
+/**
+ * Converts a union type to an intersection type (`|` to `&`).
+ *
+ * Note: this utility type is for use on object types. It may fail on other types.
+ *
+ * @example
+ *
+ * ```typescript
+ * type TypeOne = { one: string };
+ * type TypeTwo = { two: number };
+ * type TypeThree = { three: string };
+ *
+ * type TypeNums = { one: TypeOne; two: TypeTwo; three: TypeThree };
+ * const numNames = ['one', 'two'] as const;
+ * type TypeNumNames = typeof numNames;
+ *
+ * // Same as `TypeOne | TypeTwo`
+ * // `{ one: string } | { two: number }`
+ * type TypeOneTwoUnion = TypeNums[TypeNumNames[number]];
+ *
+ * // Same as `TypeOne & TypeTwo`
+ * // `{ one: string; two: number }`
+ * type TypeOneTwoIntersection = UnionToIntersection<TypeOneTwoUnion>;
+ * ```
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) extends (
+  x: infer I,
+) => void
+  ? I
+  : never;

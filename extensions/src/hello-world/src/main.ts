@@ -19,6 +19,8 @@ import helloWorldProjectWebView from './web-views/hello-world-project/hello-worl
 import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hello-world-project.web-view.scss?inline';
 import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
 import { HTML_COLOR_NAMES } from './util';
+import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
+import { checkDetails, createHelloCheck } from './checks';
 
 /** User data storage key for all hello world project data */
 const allProjectDataStorageKey = 'allHelloWorldProjectData';
@@ -108,7 +110,9 @@ const helloWorldProjectWebViewProvider: IWebViewProviderWithType = {
     return {
       title: projectId
         ? `Hello World Project: ${
-            (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
+            (await (
+              await papi.projectDataProviders.get('platform.base', projectId)
+            ).getSetting('platform.name')) ?? projectId
           }`
         : 'Hello World Project',
       ...savedWebView,
@@ -135,7 +139,7 @@ async function openHelloWorldProjectWebView(
     projectIdForWebView = await papi.dialogs.selectProject({
       title: 'Open Hello World Project',
       prompt: 'Choose the Hello World project to view:',
-      includeProjectTypes: '^helloWorld$',
+      includeProjectInterfaces: '^helloWorld$',
     });
   }
   if (!projectIdForWebView) return undefined;
@@ -148,7 +152,7 @@ async function openHelloWorldProjectWebView(
 
 function selectProjectToDelete(): Promise<string | undefined> {
   return papi.dialogs.selectProject({
-    includeProjectTypes: 'helloWorld',
+    includeProjectInterfaces: 'helloWorld',
     title: 'Delete Hello World Project',
     prompt: 'Please choose a project to delete:',
   });
@@ -174,7 +178,9 @@ const helloWorldProjectViewerProvider: IWebViewProviderWithType = {
     return {
       title: projectId
         ? `Hello World Project Viewer: ${
-            (await papi.projectLookup.getMetadataForProject(projectId)).name ?? projectId
+            (await (
+              await papi.projectDataProviders.get('platform.base', projectId)
+            ).getSetting('platform.name')) ?? projectId
           }`
         : 'Hello World Project Viewer',
       ...savedWebView,
@@ -231,7 +237,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   );
 
   const helloWorldPdpefPromise = papi.projectDataProviders.registerProjectDataProviderEngineFactory(
-    'helloWorld',
+    'helloWorld.helloWorldPdpf',
+    HELLO_WORLD_PROJECT_INTERFACES,
     helloWorldProjectDataProviderEngineFactory,
   );
 
@@ -293,7 +300,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       const projectIdForWebView =
         projectId ??
         (await papi.dialogs.selectProject({
-          includeProjectTypes: 'helloWorld',
+          includeProjectInterfaces: 'helloWorld',
           title: 'Open Hello World Project Viewer',
           prompt: 'Please choose a project for which to open the viewer:',
         }));
@@ -363,17 +370,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     .fetch('https://www.example.com')
     .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
 
-  // Create webviews or get an existing webview if one already exists for this type
-  // Note: here, we are using `existingId: '?'` to indicate we do not want to create a new webview
-  // if one already exists. The webview that already exists could have been created by anyone
-  // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
-  // an existing webview that was specifically created by `hello-someone`.
-  papi.webViews.getWebView(htmlWebViewProvider.webViewType, undefined, { existingId: '?' });
-  papi.webViews.getWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
-  papi.webViews.getWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
-
   const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
-
   if (peopleDataProvider) {
     // Test subscribing to a data provider
     const unsubGreetings = await peopleDataProvider.subscribeGreeting(
@@ -383,6 +380,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
     context.registrations.add(unsubGreetings);
   }
+
+  const checkPromise = papi.commands.sendCommand(
+    'platformScripture.registerCheck',
+    checkDetails,
+    createHelloCheck,
+  );
 
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
@@ -403,7 +406,17 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     onHelloWorldEmitter,
     await helloWorldPromise,
     await helloExceptionPromise,
+    await checkPromise,
   );
+
+  // Create webviews or get an existing webview if one already exists for this type
+  // Note: here, we are using `existingId: '?'` to indicate we do not want to create a new webview
+  // if one already exists. The webview that already exists could have been created by anyone
+  // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
+  // an existing webview that was specifically created by `hello-someone`.
+  papi.webViews.getWebView(htmlWebViewProvider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.getWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.getWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
 
   logger.info('Hello World is finished activating!');
 }

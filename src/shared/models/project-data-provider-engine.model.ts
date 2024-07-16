@@ -1,55 +1,10 @@
-import {
-  ProjectTypes,
-  ProjectDataTypes,
-  WithProjectDataProviderEngineSettingMethods,
-  ProjectSettingNames,
-  ProjectSettingTypes,
-} from 'papi-shared-types';
-import {
-  MandatoryProjectDataTypes,
-  WithProjectDataProviderEngineExtensionDataMethods,
-} from '@shared/models/project-data-provider.model';
+import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
-import { DataProviderDataType } from '@shared/models/data-provider.model';
-import { ProjectMetadata } from '@shared/models/project-metadata.model';
-
-/** All possible types for ProjectDataProviderEngines: IProjectDataProviderEngine<ProjectDataType> */
-export type ProjectDataProviderEngineTypes = {
-  [ProjectType in ProjectTypes]: IProjectDataProviderEngine<ProjectType>;
-};
-
-/**
- * A factory object registered with the papi that creates a Project Data Provider Engine for each
- * project of the factory's `projectType` when the papi requests. Used by the papi to create
- * {@link IProjectDataProviderEngine}s for a specific project when someone gets a project data
- * provider with `papi.projectDataProviders.get`. When this factory object is registered with
- * `papi.projectDataProviders.registerProjectDataProviderEngineFactory`, the papi creates a
- * {@link ProjectDataProviderFactory} that layers over this engine to create
- * {@link IProjectDataProvider}s.
- *
- * Project Data Provider Engine Factories create Project Data Provider Engines for a specific
- * `projectType`. For each project available, a new instance of a PDP with that project's
- * `projectType` is created by the Project Data Provider Factory with that project's `projectType`.
- */
-export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTypes> {
-  /**
-   * Get a list of metadata objects for all projects that can be the targets of PDPs created by this
-   * factory engine
-   */
-  getAvailableProjects(): Promise<ProjectMetadata[]>;
-  /**
-   * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
-   * {@link IProjectDataProvider} for the project. This project will have the same `projectType` as
-   * this Project Data Provider Engine Factory
-   *
-   * @param projectId Id of the project for which to create a {@link IProjectDataProviderEngine}
-   * @returns A promise that resolves to a {@link IProjectDataProviderEngine} for the project passed
-   *   in
-   */
-  createProjectDataProviderEngine(
-    projectId: string,
-  ): Promise<ProjectDataProviderEngineTypes[ProjectType]>;
-}
+import { DataProviderDataTypes } from '@shared/models/data-provider.model';
+import { UnionToIntersection } from 'platform-bible-utils';
+// Referenced in JSDoc below
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model.ts';
 
 /**
  * The object to return from
@@ -71,7 +26,7 @@ export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTy
  *    Intellisense that you can run `notifyUpdate` with the `Setting` data type for you:
  *
  * ```typescript
- * class MyPDPE extends ProjectDataProviderEngine<'MyProjectData'> implements IProjectDataProviderEngine<'MyProjectData'> {
+ * class MyPDPE extends ProjectDataProviderEngine<['MyProjectData']> implements IProjectDataProviderEngine<['MyProjectData']> {
  *   ...
  * }
  * ```
@@ -81,7 +36,7 @@ export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTy
  *    the {@link WithNotifyUpdate} type) to your Project Data Provider Engine like so:
  *
  * ```typescript
- * const myPDPE: IProjectDataProviderEngine<'MyProjectData'> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
+ * const myPDPE: IProjectDataProviderEngine<['MyProjectData']> & WithNotifyUpdate<ProjectDataTypes['MyProjectData']> = {
  *   notifyUpdate(updateInstructions) {},
  *   ...
  * }
@@ -90,17 +45,16 @@ export interface IProjectDataProviderEngineFactory<ProjectType extends ProjectTy
  * OR
  *
  * ```typescript
- * class MyPDPE implements IProjectDataProviderEngine<'MyProjectData'> {
+ * class MyPDPE implements IProjectDataProviderEngine<['MyProjectData']> {
  *   notifyUpdate(updateInstructions?: DataProviderEngineNotifyUpdate<ProjectDataTypes['MyProjectData']>) {}
  *   ...
  * }
  * ```
  */
-export type IProjectDataProviderEngine<ProjectType extends ProjectTypes> = IDataProviderEngine<
-  ProjectDataTypes[ProjectType] & MandatoryProjectDataTypes
-> &
-  WithProjectDataProviderEngineSettingMethods<ProjectDataTypes[ProjectType]> &
-  WithProjectDataProviderEngineExtensionDataMethods<ProjectDataTypes[ProjectType]>;
+export type IProjectDataProviderEngine<SupportedProjectInterfaces extends ProjectInterfaces[]> =
+  IDataProviderEngine<
+    UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
+  >;
 
 /**
  * JSDOC SOURCE ProjectDataProviderEngine
@@ -119,15 +73,9 @@ export type IProjectDataProviderEngine<ProjectType extends ProjectTypes> = IData
  * @see {@link IProjectDataProviderEngine} for more information on extending this class.
  */
 export abstract class ProjectDataProviderEngine<
-  ProjectType extends ProjectTypes,
+  SupportedProjectInterfaces extends ProjectInterfaces[],
+  AdditionalDataTypes extends DataProviderDataTypes = {},
 > extends DataProviderEngine<
-  ProjectDataTypes[ProjectType] & {
-    // Including `Setting` here so we can emit `Setting` events though the event types are not
-    // tight enough to use on the actual `Setting` data type and methods
-    Setting: DataProviderDataType<
-      ProjectSettingNames,
-      ProjectSettingTypes[ProjectSettingNames],
-      ProjectSettingTypes[ProjectSettingNames]
-    >;
-  }
+  UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> &
+    AdditionalDataTypes
 > {}

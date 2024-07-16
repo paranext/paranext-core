@@ -6,8 +6,7 @@ namespace Paranext.DataProvider.JsonUtils
     internal static class ProjectMetadataConverter
     {
         private const string ID = "id";
-        private const string NAME = "name";
-        private const string PROJECT_TYPE = "projectType";
+        private const string PROJECT_INTERFACES = "projectInterfaces";
 
         public static bool TryGetMetadata(
             string jsonString,
@@ -19,9 +18,8 @@ namespace Paranext.DataProvider.JsonUtils
             {
                 JObject parsedArgs = JObject.Parse(jsonString);
                 string id = Get(parsedArgs, ID);
-                string name = Get(parsedArgs, NAME);
-                string projectType = Get(parsedArgs, PROJECT_TYPE);
-                projectMetadata = new ProjectMetadata(id, name, projectType);
+                List<string> projectInterfaces = GetStrings(parsedArgs, PROJECT_INTERFACES);
+                projectMetadata = new ProjectMetadata(id, projectInterfaces);
             }
             catch (Exception ex)
             {
@@ -32,6 +30,17 @@ namespace Paranext.DataProvider.JsonUtils
 
             errorMessage = "";
             return true;
+        }
+
+        private static List<string> GetStrings(JObject jObject, string propertyName)
+        {
+            if (
+                !jObject.TryGetValue(propertyName, out var property)
+                || (property.Values<string>() == null)
+            )
+                throw new ArgumentException($"Missing \"{propertyName}\" property in JSON");
+
+            return property.Values<string>().ToList()!;
         }
 
         private static string Get(JObject jObject, string propertyName)
@@ -50,18 +59,16 @@ namespace Paranext.DataProvider.JsonUtils
             return new JObject
             {
                 [ID] = projectMetadata.ID,
-                [NAME] = projectMetadata.Name,
-                [PROJECT_TYPE] = projectMetadata.ProjectType
+                [PROJECT_INTERFACES] = JToken.FromObject(projectMetadata.ProjectInterfaces)
             }.ToString();
         }
 
-        public static string ToJsonString(string id, string name, string projectType)
+        public static string ToJsonString(string id, List<string> projectInterfaces)
         {
             return new JObject
             {
                 [ID] = id,
-                [NAME] = name,
-                [PROJECT_TYPE] = projectType
+                [PROJECT_INTERFACES] = JToken.FromObject(projectInterfaces)
             }.ToString();
         }
     }

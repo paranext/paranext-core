@@ -1,3 +1,4 @@
+import { dirname, join } from 'path';
 import type { StorybookConfig } from '@storybook/react-webpack5';
 import { mergeWithCustomize } from 'webpack-merge';
 import { RuleSetRule } from 'webpack';
@@ -6,17 +7,16 @@ const config: StorybookConfig = {
   stories: ['../src/**/*.mdx', '../src/**/*.stories.@(js|jsx|ts|tsx)'],
   staticDirs: ['../src/stories/assets'], // static asset folder
   addons: [
-    '@storybook/addon-links',
-    '@storybook/addon-essentials',
-    '@storybook/addon-interactions',
+    getAbsolutePath('@storybook/addon-links'),
+    getAbsolutePath('@storybook/addon-essentials'),
+    getAbsolutePath('@storybook/addon-interactions'),
+    getAbsolutePath('@storybook/addon-webpack5-compiler-babel'),
   ],
   framework: {
-    name: '@storybook/react-webpack5',
+    name: getAbsolutePath('@storybook/react-webpack5'),
     options: {},
   },
-  docs: {
-    autodocs: 'tag',
-  },
+  docs: {},
   typescript: {
     check: false,
     checkOptions: {},
@@ -76,3 +76,10 @@ const config: StorybookConfig = {
   },
 };
 export default config;
+
+// Using `any` so the output doesn't conflict when used in `config.framework.name` above that has
+// type `FrameworkName`, which is complicated and not exported.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function getAbsolutePath(value: string): any {
+  return dirname(require.resolve(join(value, 'package.json')));
+}

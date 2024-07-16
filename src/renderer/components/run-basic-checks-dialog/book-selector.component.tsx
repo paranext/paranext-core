@@ -92,7 +92,7 @@ export default function BookSelector({
           </div>
           <div className="book-selection-radio-action">
             <Button
-              isDisabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
+              disabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
               onClick={() => selectBooks()}
             >
               Choose...

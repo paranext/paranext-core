@@ -39,7 +39,7 @@
     "react-dom": ">=18.2.0"
   },
   "dependencies": {
-    "@sillsdev/scripture": "^1.4.3",
+    "@sillsdev/scripture": "^2.0.0",
     "platform-bible-utils": "file:../lib/platform-bible-utils"
   },
   "devDependencies": {
@@ -79,7 +79,6 @@
     "webpack-merge": "^5.10.0",
     "zip-folder-promise": "^1.2.0"
   },
-  "workspaces": ["src/*"],
   "volta": {
     "extends": "../package.json"
   }

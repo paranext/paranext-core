@@ -2,7 +2,10 @@
 
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import * as SliderPrimitive from '@radix-ui/react-slider';
+import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { VariantProps } from 'class-variance-authority';
 import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
 import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
@@ -141,29 +144,14 @@ export type BookChapterControlProps = {
 	handleSubmit: (scrRef: ScriptureReference) => void;
 };
 export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
-export type ButtonProps = React$1.PropsWithChildren<{
-	/** Optional unique identifier */
-	id?: string;
-	/**
-	 * Enabled status of button
-	 *
-	 * @default false
-	 */
-	isDisabled?: boolean;
-	/** Additional css classes to help with unique styling of the button */
-	className?: string;
-	/** Optional click handler */
-	onClick?: React$1.MouseEventHandler<HTMLButtonElement>;
-	/** Optional context menu handler */
-	onContextMenu?: React$1.MouseEventHandler<HTMLButtonElement>;
-}>;
-/**
- * Button a user can click to do something
- *
- * Thanks to Shadcn for heavy inspiration and documentation
- * https://ui.shadcn.com/docs/components/button
- */
-export declare function Button({ id, isDisabled, className, onClick, onContextMenu, children, }: ButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare const buttonVariants: (props?: ({
+	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+	asChild?: boolean;
+}
+export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type ChapterRangeSelectorProps = {
 	handleSelectStartChapter: (chapter: number) => void;
 	handleSelectEndChapter: (chapter: number) => void;
@@ -538,8 +526,10 @@ export type SearchBarProps = {
 	onSearch: (searchQuery: string) => void;
 	/** Optional string that appears in the search bar without a search string */
 	placeholder?: string;
+	/** Optional boolean to set the input base to full width */
+	isFullWidth?: boolean;
 };
-export function SearchBar({ onSearch, placeholder }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SliderProps = {
 	/** Optional unique identifier */
 	id?: string;
@@ -930,6 +920,12 @@ export type TextFieldProps = {
 	 * @default false
 	 */
 	hasError?: boolean;
+	/**
+	 * If `true`, the input will take up the full width of its container.
+	 *
+	 * @default false
+	 */
+	isFullWidth?: boolean;
 	/** Text that gives the user instructions on what contents the TextField expects */
 	helperText?: string;
 	/** The title of the TextField */
@@ -961,7 +957,7 @@ export type TextFieldProps = {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/input#with-label
  */
-export declare function TextField({ id, isDisabled, hasError, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;
@@ -1149,5 +1145,23 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const CardDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const CardContent: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CardFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & VariantProps<(props?: ({
+	variant?: "default" | "destructive" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+declare const Slider$1: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.SliderProps & React$1.RefAttributes<HTMLSpanElement>, "ref"> & React$1.RefAttributes<HTMLSpanElement>>;
+declare const Switch$1: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+
+export {
+	Slider$1 as ShadCnSlider,
+	Switch$1 as ShadCnSwitch,
+};
 
 export {};
