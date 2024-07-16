@@ -21,6 +21,7 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  ComboBox,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -67,6 +68,7 @@ const invoices = [
 
 function Basics({ direction }: HasDirection) {
   const [sliderValue, setSlider] = useState(3);
+  const [comboBoxValue, setComboBox] = useState<string | undefined>(undefined);
   return (
     <div>
       <p className="pr-mb-2 pr-text-muted-foreground">A place for the most simple components</p>
@@ -81,6 +83,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Alert">
@@ -312,6 +315,16 @@ function Basics({ direction }: HasDirection) {
               </TableRow>
             </TableFooter>
           </Table>
+        </VerticalTabsContent>
+        <VerticalTabsContent value="ComboBox">
+          <ComboBox
+            options={['Option1', 'Option2', 'Option3']}
+            textPlaceholder="Text Placeholder"
+            buttonPlaceholder="Button Placeholder"
+            commandEmptyMessage="Empty Message"
+            value={comboBoxValue}
+            onChange={setComboBox}
+          />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
