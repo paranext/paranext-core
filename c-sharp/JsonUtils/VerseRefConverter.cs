@@ -82,9 +82,9 @@ namespace Paranext.DataProvider.JsonUtils
             }
             else if (parsedArgs.ContainsKey("chapterNum"))
             {
-                var verse = parsedArgs.ContainsKey("verse")
-                    ? parsedArgs["verse"]!.Value<string>()
-                    : parsedArgs["verseNum"]!.Value<int>().ToString();
+                var verse =
+                    (parsedArgs.ContainsKey("verse") ? parsedArgs["verse"]!.Value<string>() : null)
+                    ?? parsedArgs["verseNum"]!.Value<int>().ToString();
                 verseRef =
                     (versification != null)
                         ? new VerseRef(
