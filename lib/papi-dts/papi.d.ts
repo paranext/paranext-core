@@ -4334,6 +4334,13 @@ declare module 'node/services/node-file-system.service' {
     mode?: Parameters<typeof fs.promises.copyFile>[2],
   ): Promise<void>;
   /**
+   * Moves a file from one location to another
+   *
+   * @param sourceUri The location of the file to move
+   * @param destinationUri The uri where the file should be moved
+   */
+  export function moveFile(sourceUri: Uri, destinationUri: Uri): Promise<void>;
+  /**
    * Delete a file if it exists
    *
    * @param uri URI of file
@@ -4405,6 +4412,19 @@ declare module 'node/utils/crypto-util' {
    * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
    */
   export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
+  /**
+   * Calculates the hash of a given data buffer
+   *
+   * @param hashAlgorithm Name of the hash algorithm to use, such as "sha512"
+   * @param encodingType String encoding to use for returning the binary hash value that is calculated
+   * @param buffer Raw data to be fed into the hash algorithm
+   * @returns String encoded value of the digest (https://csrc.nist.gov/glossary/term/hash_digest)
+   */
+  export function generateHashFromBuffer(
+    hashAlgorithm: string,
+    encodingType: 'base64' | 'base64url' | 'hex' | 'binary',
+    buffer: Buffer,
+  ): string;
 }
 declare module 'node/models/execution-token.model' {
   /** For now this is just for extensions, but maybe we will want to expand this in the future */
@@ -4762,15 +4782,93 @@ declare module 'shared/services/dialog.service' {
   const dialogService: DialogService;
   export default dialogService;
 }
+declare module 'shared/models/manage-extensions-privilege.model' {
+  /** Base64 encoded hash values */
+  export type HashValues = Partial<{
+    sha256: string;
+    sha512: string;
+  }>;
+  /** Represents an extension that can be enabled or disabled */
+  export type ExtensionIdentifier = {
+    extensionName: string;
+    extensionVersion: string;
+  };
+  /**
+   * Represents all extensions that are installed. Note that packaged extensions cannot be disabled,
+   * so they are implied to always be enabled.
+   */
+  export type InstalledExtensions = {
+    packaged: ExtensionIdentifier[];
+    enabled: ExtensionIdentifier[];
+    disabled: ExtensionIdentifier[];
+  };
+  /**
+   * Download an extension from a given URL and enable it
+   *
+   * @param extensionUrlToDownload URL to the extension ZIP file to download
+   * @param fileSize Expected size of the file
+   * @param fileHashes Hash value(s) of the file to download
+   * @returns Promise that resolves when the extension has been installed
+   */
+  export type InstallExtensionFunction = (
+    extensionUrlToDownload: string,
+    fileSize: number,
+    fileHashes: HashValues,
+  ) => Promise<void>;
+  /**
+   * Start running an extension that had been previously downloaded and disabled
+   *
+   * @param extensionIdentifier Details of the extension to enable
+   * @returns Promise that resolves when the extension has been enabled, throws if enabling fails
+   */
+  export type EnableExtensionFunction = (extensionIdentifier: ExtensionIdentifier) => Promise<void>;
+  /**
+   * Stop running an extension that had been previously downloaded and enabled
+   *
+   * @param extensionIdentifier Details of the extension to disable
+   * @returns Promise that resolves when the extension has been enabled, throws if enabling fails
+   */
+  export type DisableExtensionFunction = (
+    extensionIdentifier: ExtensionIdentifier,
+  ) => Promise<void>;
+  /** Get extension identifiers of all extensions on the system */
+  export type GetInstalledExtensionsFunction = () => Promise<InstalledExtensions>;
+  /** Functions needed to manage extensions */
+  export type ManageExtensions = {
+    /** Function to download an extension and enable it */
+    installExtension: InstallExtensionFunction;
+    /** Function to start running an extension that had been previously downloaded and disabled */
+    enableExtension: EnableExtensionFunction;
+    /** Function to stop running an extension that had been previously downloaded and enabled */
+    disableExtension: DisableExtensionFunction;
+    /** Function to retrieve details about all installed extensions */
+    getInstalledExtensions: GetInstalledExtensionsFunction;
+  };
+}
+declare module 'shared/models/elevated-privileges.model' {
+  import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  /** String constants that are listed in an extension's manifest.json to state needed privileges */
+  export enum ElevatedPrivilegeNames {
+    manageExtensions = 'ManageExtensions',
+  }
+  /** Object that contains properties with special capabilities for extensions that required them */
+  export type ElevatedPrivileges = {
+    /** Functions that can be run to manage what extensions are running */
+    manageExtensions: ManageExtensions | undefined;
+  };
+}
 declare module 'extension-host/extension-types/extension-activation-context.model' {
   import { ExecutionToken } from 'node/models/execution-token.model';
   import { UnsubscriberAsyncList } from 'platform-bible-utils';
+  import { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
     /** Canonical name of the extension */
     name: string;
     /** Used to save and load data from the storage service. */
     executionToken: ExecutionToken;
+    /** Special permissions required by an extension based on its manifest */
+    elevatedPrivileges: ElevatedPrivileges;
     /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
     registrations: UnsubscriberAsyncList;
   };
@@ -5884,6 +5982,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
      */
     main: string;
+    /** List of special permissions required by the extension to work as intended */
+    elevatedPrivileges: string[];
     /**
      * Path to the TypeScript type declaration file that describes this extension and its interactions
      * on the PAPI. Relative to the extension's root folder.

@@ -15,6 +15,8 @@ export type ExtensionManifest = {
    * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
    */
   main: string;
+  /** List of special permissions required by the extension to work as intended */
+  elevatedPrivileges: string[];
   /**
    * Path to the TypeScript type declaration file that describes this extension and its interactions
    * on the PAPI. Relative to the extension's root folder.
