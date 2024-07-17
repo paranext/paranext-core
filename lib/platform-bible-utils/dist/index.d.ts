@@ -612,12 +612,12 @@ export declare function waitForDuration<TResult>(fn: () => Promise<TResult>, max
  * etc.
  *
  * @param obj Object whose functions to get
- * @param objId Optional ID of the object to use for debug logging
+ * @param _objId Optional ID of the object to use for debug logging
  * @returns Array of all function names on an object
  */
 export declare function getAllObjectFunctionNames(obj: {
 	[property: string]: unknown;
-}, objId?: string): Set<string>;
+}, _objId?: string): Set<string>;
 /**
  * Creates a synchronous proxy for an asynchronous object. The proxy allows calling methods on an
  * object that is asynchronously fetched using a provided asynchronous function.
