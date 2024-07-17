@@ -3,18 +3,15 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { LoaderCircle } from 'lucide-react';
 
 type RemoveButtonProps = {
-  /**
-   * The removing boolean value determines the state of the button.
-   */
+  /** The removing boolean value determines the state of the button. */
   isRemoving: boolean;
-  /**
-   * The handleClick function is called when the button is clicked.
-   */
+  /** The handleClick function is called when the button is clicked. */
   handleClick: () => void;
-}
+};
 
 /**
- * The RemoveButton component is a button designed for initiating removals of downloads. It includes visuals for active removals and idle states.
+ * The RemoveButton component is a button designed for initiating removals of downloads. It includes
+ * visuals for active removals and idle states.
  *
  * @param isRemoving The removing boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
@@ -25,7 +22,9 @@ export default function RemoveButton({ isRemoving, handleClick }: RemoveButtonPr
     <Button
       className={cn(
         'pr-h-8 pr-rounded-md pr-bg-gray-300 pr-text-black pr-transition pr-duration-300 pr-ease-in-out hover:pr-text-white',
-        isRemoving ? 'pr-cursor-not-allowed pr-bg-gray-400' : '',
+        {
+          'pr-cursor-not-allowed pr-bg-gray-400': isRemoving,
+        },
       )}
       onClick={handleClick}
     >
