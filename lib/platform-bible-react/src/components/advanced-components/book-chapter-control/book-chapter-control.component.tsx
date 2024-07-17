@@ -15,9 +15,11 @@ import {
   DropdownMenuLabel as ShadDropdownMenuLabel,
   DropdownMenuSeparator as ShadDropdownMenuSeparator,
 } from '@/components/shadcn-ui/dropdown-menu';
-import BookChapterInput from '@/components/book-chapter-control/book-chapter-input.component';
-import ChapterSelect from '@/components/book-chapter-control/chapter-select.component';
-import BookMenuItem, { BookType } from '@/components/book-chapter-control/book-menu-item.component';
+import BookChapterInput from '@/components/advanced-components/book-chapter-control/book-chapter-input.component';
+import ChapterSelect from '@/components/advanced-components/book-chapter-control/chapter-select.component';
+import BookMenuItem, {
+  BookType,
+} from '@/components/advanced-components/book-chapter-control/book-menu-item.component';
 import GoToMenuItem from './go-to-menu-item.component';
 
 type BookTypeLabels = {

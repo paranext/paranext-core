@@ -20,6 +20,12 @@ public sealed class ProjectSettingsNames
     public const string PB_IS_EDITABLE = "platform.isEditable";
     public const string PT_IS_EDITABLE = "Editable";
 
+    public const string PB_VALID_CHARACTERS = "platformScripture.validCharacters";
+    public const string PT_VALID_CHARACTERS = "ValidCharacters";
+
+    public const string PB_INVALID_CHARACTERS = "platformScripture.invalidCharacters";
+    public const string PT_INVALID_CHARACTERS = "InvalidCharacters";
+
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
@@ -35,6 +41,8 @@ public sealed class ProjectSettingsNames
             { PB_NAME, PT_NAME },
             { PB_VERSIFICATION, PT_VERSIFICATION },
             { PB_IS_EDITABLE, PT_IS_EDITABLE },
+            { PB_VALID_CHARACTERS, PT_VALID_CHARACTERS },
+            { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
         };
 
     private static readonly Dictionary<string, string> s_paratextToPlatformBibleSettingsNames =
