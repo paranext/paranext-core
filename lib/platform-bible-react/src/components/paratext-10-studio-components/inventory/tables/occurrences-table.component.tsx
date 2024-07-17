@@ -17,9 +17,10 @@ type SearchResult = {
 };
 
 const extractOccurrences = (
-  text: string | undefined,
+  text: string,
   item: string,
   scriptureRef: ScriptureReference,
+  // match: (words: string[], item: string) => boolean
 ): SearchResult[] => {
   if (!text || text === '' || item === '') return [];
 
@@ -30,8 +31,6 @@ const extractOccurrences = (
   let currentVerse: string = '0';
   let key: number = 0;
 
-
-  /* Refactor to WebView */
   lines.forEach((line) => {
     const words = line.split(/\s+/);
     if (line.startsWith('\\c')) {
@@ -59,7 +58,6 @@ const extractOccurrences = (
         results.push(result);
       }
     }
-    /* end */
   });
 
   return results;
@@ -67,7 +65,7 @@ const extractOccurrences = (
 
 interface OccurrencesTableProps {
   selectedItem: string;
-  text: string | undefined;
+  text: string;
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;

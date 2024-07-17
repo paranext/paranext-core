@@ -895,13 +895,14 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export type ItemKeys = "validCharacters" | "invalidCharacters" | "repeatableWords" | "nonRepeatableWords";
 export interface CharacterInventoryProps {
 	scriptureReference: ScriptureReference;
 	setScriptureReference: (scriptureReference: ScriptureReference) => void;
 	localizedStrings: LanguageStrings;
 	projectId: string;
-	getSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string) => Promise<string[]>;
-	setSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string, characters: string[]) => void;
+	getSetting: (itemSet: ItemKeys, projectId: string) => Promise<string[]>;
+	setSetting: (itemSet: ItemKeys, projectId: string, items: string[]) => void;
 	getText: (projectId: string, scriptureRef: ScriptureReference, scope: string) => Promise<string | undefined>;
 }
 export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, projectId, getSetting, setSetting, getText, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;

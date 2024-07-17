@@ -8,16 +8,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import InventoryDataTable, { ItemData, Status } from './tables/inventory-data-table.component';
+import { ColumnDef } from '@tanstack/react-table';
+import InventoryDataTable from './tables/inventory-data-table.component';
 import OccurrencesTable from './tables/occurrences-table.component';
+import { ItemData, Status } from './types';
 
-const buildTableData = async (
+const buildTableData = (
   items: string[],
   statusFilter: string,
   textFilter: string,
   approvedItems: string[],
   unapprovedItems: string[],
-): Promise<ItemData[]> => {
+): ItemData[] => {
   const itemData: ItemData[] = [];
   items.forEach((item) => {
     if (textFilter !== '' && !item.includes(textFilter)) return;
@@ -49,7 +51,11 @@ const buildTableData = async (
   return itemData;
 };
 
-type ItemKeys = 'validCharacters' | 'invalidCharacters' | 'repeatableWords' | 'nonRepeatableWords';
+export type ItemKeys =
+  | 'validCharacters'
+  | 'invalidCharacters'
+  | 'repeatableWords'
+  | 'nonRepeatableWords';
 
 interface InventoryProps {
   scriptureReference: ScriptureReference;
@@ -65,7 +71,8 @@ interface InventoryProps {
   ) => Promise<string | undefined>;
   approvedItemsKey: ItemKeys;
   unapprovedItemsKey: ItemKeys;
-  convertTextToItems: (text: string | undefined) => string[];
+  convertTextToItems: (text: string) => string[];
+  columns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
 }
 
 function BaseInventory({
@@ -79,6 +86,7 @@ function BaseInventory({
   approvedItemsKey,
   unapprovedItemsKey,
   convertTextToItems,
+  columns,
 }: InventoryProps) {
   const allItemsText = localizedStrings['%webView_inventory_all%'];
   const approvedItemsText = localizedStrings['%webView_inventory_approved%'];
@@ -90,7 +98,7 @@ function BaseInventory({
   const filterText = localizedStrings['%webView_inventory_filter_text%'];
   const [approvedItems, setApprovedItems] = useState<string[]>([]);
   const [unapprovedItems, setUnapprovedItems] = useState<string[]>([]);
-  const [text, setText] = useState<string | undefined>(undefined);
+  const [text, setText] = useState<string>('');
   const [items, setItems] = useState<string[]>([]);
   const [scope, setScope] = useState<string>('book');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -164,7 +172,7 @@ function BaseInventory({
     const getNewText = async () => {
       try {
         const newText = await getText(projectId, scriptureReference, scope);
-        setText(newText);
+        setText(newText || '');
       } catch (error) {
         throw new Error('Failed getting scripture text');
       }
@@ -182,10 +190,10 @@ function BaseInventory({
       setInventoryTableData([]);
       return;
     }
-    const buildData = async () => {
+    const buildData = () => {
       try {
         setInventoryTableData(
-          await buildTableData(items, statusFilter, textFilter, approvedItems, unapprovedItems),
+          buildTableData(items, statusFilter, textFilter, approvedItems, unapprovedItems),
         );
       } catch (error) {
         throw new Error('Failed building table data');
@@ -232,12 +240,11 @@ function BaseInventory({
         className={`pr-overflow-y-auto pr-rounded-md pr-border ${selectedItem !== '' && 'pr-max-h-96'}`}
       >
         <InventoryDataTable
+          columns={columns(statusChangeHandler)}
           tableData={inventoryTableData}
-          onStatusChange={statusChangeHandler}
           onSelectItem={(item: string) => {
             setSelectedItem(item);
           }}
-          localizedStrings={localizedStrings}
         />
       </div>
       {selectedItem !== '' && (
