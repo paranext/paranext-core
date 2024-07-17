@@ -36,7 +36,9 @@ function Compositions({ direction }: HasDirection) {
             Book Chapter Control
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Marketplace Buttons">Marketplace Buttons</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Download Button">Download Button</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Remove Button">Remove Button</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Update Button">Update Button</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Search Bar">
@@ -53,15 +55,27 @@ function Compositions({ direction }: HasDirection) {
           <ThemeToggle />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Marketplace Buttons">
-          <DownloadButton downloading={false} handleClick={() => {}} position="right" buttonText='Get' />
-          <DownloadButton downloading={true} handleClick={() => {}} position="right" buttonText='Get' />
-          <DownloadButton downloading={false} handleClick={() => {}} position="left" buttonText='Get' />
-          <DownloadButton downloading={true} handleClick={() => {}} position="left" buttonText='Get' />
-          <UpdateButton updating={false} handleClick={() => {}} />
-          <UpdateButton updating={true} handleClick={() => {}} />
-          <RemoveButton removing={false} handleClick={() => {}} />
-          <RemoveButton removing={true} handleClick={() => {}} />
+        <VerticalTabsContent value="Download Button">
+          <div className="pr-space-x-2">
+            <DownloadButton isDownloading={false} handleClick={() => {}} buttonText="Get" />
+            <DownloadButton isDownloading handleClick={() => {}} buttonText="Get" />
+            <DownloadButton isDownloading={false} handleClick={() => {}} />
+            <DownloadButton isDownloading handleClick={() => {}} />
+          </div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Remove Button">
+          <div className="pr-space-x-2">
+            <RemoveButton isRemoving={false} handleClick={() => {}} />
+            <RemoveButton isRemoving handleClick={() => {}} />
+          </div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Update Button">
+          <div className="pr-space-x-2">
+            <UpdateButton isUpdating={false} handleClick={() => {}} />
+            <UpdateButton isUpdating handleClick={() => {}} />
+          </div>
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
