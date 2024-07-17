@@ -6,7 +6,7 @@ import RemoveButton from '@/components/extension-marketplace/buttons/remove-butt
 import UpdateButton from '@/components/extension-marketplace/buttons/update-button.component';
 import {
   BookChapterControl,
-  RefSelector,
+  DataTable,
   SearchBar,
   VerticalTabs,
   VerticalTabsContent,
@@ -14,6 +14,7 @@ import {
   VerticalTabsTrigger,
 } from '../..';
 import { HasDirection } from '../direction-toggle';
+import { columns, data } from './data-sources/data-table-content';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -36,9 +37,13 @@ function Compositions({ direction }: HasDirection) {
             Book Chapter Control
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
+          
           <VerticalTabsTrigger value="Download Button">Download Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Remove Button">Remove Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Update Button">Update Button</VerticalTabsTrigger>
+        
+          <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
+        
         </VerticalTabsList>
 
         <VerticalTabsContent value="Search Bar">
@@ -46,7 +51,6 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Book Chapter Control">
-          <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
           <div>{JSON.stringify(scrRef)}</div>
         </VerticalTabsContent>
@@ -76,6 +80,10 @@ function Compositions({ direction }: HasDirection) {
             <UpdateButton isUpdating={false} handleClick={() => {}} />
             <UpdateButton isUpdating handleClick={() => {}} />
           </div>
+            
+        <VerticalTabsContent value="Data Table">
+          <DataTable enablePagination showPaginationControls columns={columns} data={data} />
+          
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import './app.component.css';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
 import { ThemeProvider } from './theme-provider.component';
 import { ThemeButton } from './theme-toggle.component';

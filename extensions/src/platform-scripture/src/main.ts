@@ -1,12 +1,27 @@
 import papi, { logger, projectLookup } from '@papi/backend';
-import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
 import { VerseRef } from '@sillsdev/scripture';
+import {
+  ExecutionActivationContext,
+  GetWebViewOptions,
+  IWebViewProvider,
+  ProjectSettingValidator,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import ScriptureExtenderProjectDataProviderEngineFactory, {
   SCRIPTURE_EXTENDER_PDPF_ID,
 } from './project-data-provider/platform-scripture-extender-pdpef.model';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
+import characterInventoryWebView from './character-inventory.web-view?inline';
+
+const characterInventoryWebViewType = 'platformScripture.characterInventory';
+
+interface InventoryOptions extends GetWebViewOptions {
+  projectId: string | undefined;
+  // Add inventory/check type
+}
 
 // #region Project Setting Validators
 
@@ -26,7 +41,61 @@ const versificationValidator: ProjectSettingValidator<'platformScripture.versifi
   );
 };
 
+const charactersValidator: ProjectSettingValidator<
+  'platformScripture.validCharacters' | 'platformScripture.invalidCharacters'
+> = async (newValue) => {
+  return typeof newValue === 'string';
+};
+
 // #endregion
+
+async function openPlatformCharactersInventory(
+  webViewId: string | undefined,
+): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  if (!projectId) {
+    return undefined;
+  }
+
+  const options: InventoryOptions = { projectId };
+  return papi.webViews.getWebView(characterInventoryWebViewType, { type: 'float' }, options);
+}
+
+const inventoryWebViewProvider: IWebViewProvider = {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: InventoryOptions,
+  ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== characterInventoryWebViewType)
+      throw new Error(
+        `${characterInventoryWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+
+    // We know that the projectId (if present in the state) will be a string.
+    const projectId =
+      getWebViewOptions.projectId ||
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (savedWebView.state?.projectId as string) ||
+      undefined;
+    const title = 'Character Inventory';
+
+    return {
+      title,
+      ...savedWebView,
+      content: characterInventoryWebView,
+      state: {
+        ...savedWebView.state,
+        projectId,
+      },
+    };
+  },
+};
 
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
@@ -62,6 +131,23 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.versification',
     versificationValidator,
   );
+  const validCharactersPromise = papi.projectSettings.registerValidator(
+    'platformScripture.validCharacters',
+    charactersValidator,
+  );
+  const invalidCharactersPromise = papi.projectSettings.registerValidator(
+    'platformScripture.invalidCharacters',
+    charactersValidator,
+  );
+  const openCharactersInventoryPromise = papi.commands.registerCommand(
+    'platformScripture.openCharactersInventory',
+    openPlatformCharactersInventory,
+  );
+
+  const inventoryWebViewProviderPromise = papi.webViewProviders.register(
+    characterInventoryWebViewType,
+    inventoryWebViewProvider,
+  );
 
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
@@ -72,6 +158,10 @@ export async function activate(context: ExecutionActivationContext) {
     await includeProjectsValidatorPromise,
     await booksPresentPromise,
     await versificationPromise,
+    await validCharactersPromise,
+    await invalidCharactersPromise,
+    await openCharactersInventoryPromise,
+    await inventoryWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

@@ -12,6 +12,7 @@ import networkObjectService from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import logger from '@shared/services/logger.service';
 import { isSerializable } from 'platform-bible-utils';
+import networkObjectStatusService from '@shared/services/network-object-status.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const WEB_VIEW_PROVIDER_LABEL = 'webViewProvider';
@@ -117,6 +118,12 @@ async function get(webViewType: string): Promise<WebViewProvider | undefined> {
 
   // Get the object id for this web view provider name
   const webViewProviderObjectId = getWebViewProviderObjectId(webViewType);
+
+  await networkObjectStatusService.waitForNetworkObject(
+    { id: webViewProviderObjectId },
+    // Wait up to 20 seconds for the web view provider to appear
+    20000,
+  );
 
   const webViewProvider = await networkObjectService.get<WebViewProvider>(webViewProviderObjectId);
 
