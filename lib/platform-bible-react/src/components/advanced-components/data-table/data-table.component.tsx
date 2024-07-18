@@ -71,7 +71,7 @@ function DataTable<TData, TValue>({
   return (
     <div>
       {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
-      <div className="pr-twp pr-font-sans">
+      <div className="pr-twp">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (

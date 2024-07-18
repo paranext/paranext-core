@@ -9,6 +9,11 @@
     src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
   }
 
+  /* Added this so that pr-font-sans is automatically added everywhere we include preflight */
+  .pr-twp {
+    @apply pr-font-sans;
+  }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;

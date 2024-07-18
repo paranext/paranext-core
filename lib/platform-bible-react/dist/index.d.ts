@@ -905,6 +905,65 @@ export interface CharacterInventoryProps {
 	getText: (projectId: string, scriptureRef: ScriptureReference, scope: string) => Promise<string | undefined>;
 }
 export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, projectId, getSetting, setSetting, getText, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
+export type DownloadButtonProps = {
+	/** The downloading boolean value determines the state of the button. */
+	isDownloading: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+	/** Optional text for the button. */
+	buttonText?: string;
+};
+/**
+ * The DownloadButton component is a button designed for initiating downloads. It includes visuals
+ * for active downloading and idle states.
+ *
+ * @param isDownloading The downloading boolean value determines the state of the button.
+ * @param handleClick The handleClick function is called when the button is clicked.
+ * @param buttonText Optional text for the button.
+ * @returns A download button.
+ */
+export function DownloadButton({ isDownloading, handleClick, buttonText, }: DownloadButtonProps): import("react/jsx-runtime").JSX.Element;
+export type RemoveButtonProps = {
+	/** The removing boolean value determines the state of the button. */
+	isRemoving: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+};
+/**
+ * The RemoveButton component is a button designed for initiating removals of downloads. It includes
+ * visuals for active removals and idle states.
+ *
+ * @param isRemoving The removing boolean value determines the state of the button.
+ * @param handleClick The handleClick function is called when the button is clicked.
+ * @returns A button that can be used to remove.
+ */
+export function RemoveButton({ isRemoving, handleClick }: RemoveButtonProps): import("react/jsx-runtime").JSX.Element;
+export type UpdateButtonProps = {
+	/** The updating boolean value determines the state of the button. */
+	isUpdating: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+};
+/**
+ * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
+ * It includes visuals for active updating and idle states.
+ *
+ * @param isUpdating The updating boolean value determines the state of the button.
+ * @param handleClick The handleClick function is called when the button is clicked.
+ * @returns A button that can be used to update.
+ */
+export function UpdateButton({ isUpdating, handleClick }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
+export interface MarkdownRendererProps {
+	markdown: string;
+}
+/**
+ * This component renders markdown content given a markdown string. It uses typography styles from
+ * the platform.
+ *
+ * @param markdown The markdown string to render.
+ * @returns A div containing the rendered markdown content.
+ */
+export function MarkdownRenderer({ markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
