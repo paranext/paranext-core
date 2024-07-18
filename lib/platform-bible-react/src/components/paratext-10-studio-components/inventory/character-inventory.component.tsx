@@ -191,24 +191,27 @@ function CharacterInventory({
   }, [validCharacters, invalidCharacters, text, statusFilter, textFilter]);
 
   return (
-    <div className="pr-twp pr-font-sans">
+    <div className="pr-twp">
       <div className="pr-flex">
-        <Select onValueChange={(value) => setStatusFilter(value)} defaultValue={statusFilter}>
+        <Select
+          onValueChange={(value: string) => setStatusFilter(value)}
+          defaultValue={statusFilter}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
-          <SelectContent className="pr-font-sans">
+          <SelectContent>
             <SelectItem value="all">{allCharacters}</SelectItem>
             <SelectItem value="approved">{approvedCharacters}</SelectItem>
             <SelectItem value="unapproved">{unapprovedCharacters}</SelectItem>
             <SelectItem value="unknown">{unknownCharacters}</SelectItem>
           </SelectContent>
         </Select>
-        <Select onValueChange={(value) => setScope(value)} defaultValue={scope}>
+        <Select onValueChange={(value: string) => setScope(value)} defaultValue={scope}>
           <SelectTrigger>
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
-          <SelectContent className="pr-font-sans">
+          <SelectContent>
             <SelectItem value="book">{scopeBook}</SelectItem>
             <SelectItem value="chapter">{scopeChapter}</SelectItem>
             <SelectItem value="verse">{scopeVerse}</SelectItem>

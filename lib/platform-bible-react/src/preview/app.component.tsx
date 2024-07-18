@@ -16,8 +16,7 @@ function App() {
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      {/* pr-font-sans is added to mitigate issue introduced by scopedPreflightStyles */}
-      <div className="pr-twp pr-p-2 pr-font-sans">
+      <div className="pr-twp pr-p-2">
         <div className="pr-fixed pr-right-4 pr-top-4 pr-flex pr-gap-2">
           <DirToggle direction={direction} onChangeDirection={changeDirectionHandler} />
           <ThemeButton />
