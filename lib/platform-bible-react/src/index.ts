@@ -63,6 +63,10 @@ export {
 // Paratext components
 
 export { default as CharacterInventory } from './components/paratext-10-studio-components/inventory/character-inventory.component';
+export { default as DownloadButton } from './components/extension-marketplace/buttons/download-button.component';
+export { default as RemoveButton } from './components/extension-marketplace/buttons/remove-button.component';
+export { default as UpdateButton } from './components/extension-marketplace/buttons/update-button.component';
+export { default as MarkdownRenderer } from './components/extension-marketplace/markdown-renderer.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
