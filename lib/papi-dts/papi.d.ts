@@ -4798,8 +4798,23 @@ declare module 'shared/models/manage-extensions-privilege.model' {
    * so they are implied to always be enabled.
    */
   export type InstalledExtensions = {
+    /**
+     * Extensions that are explicitly bundled to be part of the application. They cannot be disabled.
+     * At runtime no extensions can be added or removed from the set of packaged extensions.
+     */
     packaged: ExtensionIdentifier[];
+    /**
+     * Extensions that are running but can be dynamically disabled. At runtime extensions can be added
+     * or removed from the set of enabled extensions.
+     */
     enabled: ExtensionIdentifier[];
+    /**
+     * Extensions that are not running but can be dynamically enabled. At runtime extensions can be
+     * added or removed from the set of disabled extensions.
+     *
+     * The only difference between a disabled extension and an extension that isn't installed is that
+     * disabled extensions do not need to be downloaded again to run them.
+     */
     disabled: ExtensionIdentifier[];
   };
   /**
@@ -4807,7 +4822,10 @@ declare module 'shared/models/manage-extensions-privilege.model' {
    *
    * @param extensionUrlToDownload URL to the extension ZIP file to download
    * @param fileSize Expected size of the file
-   * @param fileHashes Hash value(s) of the file to download
+   * @param fileHashes Hash value(s) of the file to download. Note that only one hash value may be
+   *   validated, but multiple hash values may be provided so the installer can choose any of them for
+   *   validation. For example, if you provide a sha256 hash value and a sha512 hash value, the
+   *   installer may only use the sha512 hash value for validation.
    * @returns Promise that resolves when the extension has been installed
    */
   export type InstallExtensionFunction = (
@@ -4849,7 +4867,7 @@ declare module 'shared/models/elevated-privileges.model' {
   import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
   /** String constants that are listed in an extension's manifest.json to state needed privileges */
   export enum ElevatedPrivilegeNames {
-    manageExtensions = 'ManageExtensions',
+    manageExtensions = 'manageExtensions',
   }
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
@@ -4865,9 +4883,18 @@ declare module 'extension-host/extension-types/extension-activation-context.mode
   export type ExecutionActivationContext = {
     /** Canonical name of the extension */
     name: string;
-    /** Used to save and load data from the storage service. */
+    /** Used to save and load data by the storage service. */
     executionToken: ExecutionToken;
-    /** Special permissions required by an extension based on its manifest */
+    /**
+     * Objects that provide special capabilities required by an extension based on the
+     * `elevatedPrivileges` values listed in its manifest. For example, if an extension needs to be
+     * able to manage other extensions, then it should include `manageExtensions` in the
+     * `elevatedPrivileges` array in `manifest.json`. Then when the extension is activated this
+     * {@link ElevatedPrivileges} object will have the `manageExtensions` property set to an object
+     * with functions used to manage extensions.
+     *
+     * See {@link ElevatedPrivilegeNames} for the full list of elevated privileges available.
+     */
     elevatedPrivileges: ElevatedPrivileges;
     /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
     registrations: UnsubscriberAsyncList;
@@ -5965,6 +5992,7 @@ declare module 'extension-host/extension-types/extension.interface' {
   }
 }
 declare module 'extension-host/extension-types/extension-manifest.model' {
+  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges.model';
   /** Information about an extension provided by the extension developer. */
   export type ExtensionManifest = {
     /** Name of the extension */
@@ -5983,7 +6011,7 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      */
     main: string;
     /** List of special permissions required by the extension to work as intended */
-    elevatedPrivileges: string[];
+    elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
     /**
      * Path to the TypeScript type declaration file that describes this extension and its interactions
      * on the PAPI. Relative to the extension's root folder.

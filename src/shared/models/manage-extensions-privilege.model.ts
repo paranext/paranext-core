@@ -15,8 +15,23 @@ export type ExtensionIdentifier = {
  * so they are implied to always be enabled.
  */
 export type InstalledExtensions = {
+  /**
+   * Extensions that are explicitly bundled to be part of the application. They cannot be disabled.
+   * At runtime no extensions can be added or removed from the set of packaged extensions.
+   */
   packaged: ExtensionIdentifier[];
+  /**
+   * Extensions that are running but can be dynamically disabled. At runtime extensions can be added
+   * or removed from the set of enabled extensions.
+   */
   enabled: ExtensionIdentifier[];
+  /**
+   * Extensions that are not running but can be dynamically enabled. At runtime extensions can be
+   * added or removed from the set of disabled extensions.
+   *
+   * The only difference between a disabled extension and an extension that isn't installed is that
+   * disabled extensions do not need to be downloaded again to run them.
+   */
   disabled: ExtensionIdentifier[];
 };
 
@@ -25,7 +40,10 @@ export type InstalledExtensions = {
  *
  * @param extensionUrlToDownload URL to the extension ZIP file to download
  * @param fileSize Expected size of the file
- * @param fileHashes Hash value(s) of the file to download
+ * @param fileHashes Hash value(s) of the file to download. Note that only one hash value may be
+ *   validated, but multiple hash values may be provided so the installer can choose any of them for
+ *   validation. For example, if you provide a sha256 hash value and a sha512 hash value, the
+ *   installer may only use the sha512 hash value for validation.
  * @returns Promise that resolves when the extension has been installed
  */
 export type InstallExtensionFunction = (

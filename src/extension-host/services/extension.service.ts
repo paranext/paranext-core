@@ -738,16 +738,19 @@ async function disableExtension(extensionId: ExtensionIdentifier) {
 
 async function getInstalledExtensions(): Promise<InstalledExtensions> {
   // "Enabled" extensions are all the ones in the "installed" directory
-  const installedExtensions = (
+  const installedExtensionZips = (
     await nodeFS.readDir(installedExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
   ).file;
-  const enabled = extractExtensionDetailsFromFileNames(installedExtensions);
+  const enabled = extractExtensionDetailsFromFileNames(installedExtensionZips);
 
-  // "Disabled" extensions are all the ones in the "disabled" directory
-  const disabledExtensions = (
+  // "Disabled" extensions are all the ones in the "disabled" directory that aren't also "enabled"
+  const disabledExtensionZips = (
     await nodeFS.readDir(disabledExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
   ).file;
-  const disabled = extractExtensionDetailsFromFileNames(disabledExtensions);
+  const disabled = extractExtensionDetailsFromFileNames(disabledExtensionZips).filter(
+    (disabledId) =>
+      !enabled.find((enabledId) => enabledId.extensionName === disabledId.extensionName),
+  );
 
   // "Packaged" extensions are all the running extensions that aren't "enabled"
   const packaged = [...activeExtensions.values()]

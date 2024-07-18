@@ -1,3 +1,5 @@
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges.model';
+
 /** Information about an extension provided by the extension developer. */
 export type ExtensionManifest = {
   /** Name of the extension */
@@ -16,7 +18,7 @@ export type ExtensionManifest = {
    */
   main: string;
   /** List of special permissions required by the extension to work as intended */
-  elevatedPrivileges: string[];
+  elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
   /**
    * Path to the TypeScript type declaration file that describes this extension and its interactions
    * on the PAPI. Relative to the extension's root folder.
