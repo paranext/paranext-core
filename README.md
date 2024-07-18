@@ -44,6 +44,8 @@ To make the process of customizing from the template as smooth as possible, we r
 - In `assets/displayData.json`:
 
   - If your extension has an icon, update the `icon` value to point towards the icon file (for example: `assets/icon.svg`)
+  - Update the `moreInfoUrl` field to web URL to a page where users can find out more information about you / your organization / your extension.
+  - Update the `supportUrl` field to web URL to a support page where users can request help and report issues with your extension.
   - Update the `en` entry of `localizedDisplayInfo` so that:
 
     - `displayName` contains a human-readable name for your extension (i.e. `Your Extension Name`).
