@@ -80,6 +80,7 @@ function Compositions({ direction }: HasDirection) {
             <UpdateButton isUpdating={false} handleClick={() => {}} />
             <UpdateButton isUpdating handleClick={() => {}} />
           </div>
+        </VerticalTabsContent>
             
         <VerticalTabsContent value="Data Table">
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
