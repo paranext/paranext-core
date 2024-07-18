@@ -9,7 +9,8 @@
     src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
   }
 
-  /* Added this so that pr-font-sans is automatically added everywhere we include preflight */
+  /* Adding the preflight selector (pr-twp) to components was not changing the font as desired.
+  So this piece of code adds pr-font-sans everywhere we include preflight. */
   .pr-twp {
     @apply pr-font-sans;
   }
