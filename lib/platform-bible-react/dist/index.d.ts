@@ -3,13 +3,14 @@
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
+import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { VariantProps } from 'class-variance-authority';
 import React$1 from 'react';
-import { ChangeEvent, ChangeEventHandler, FocusEventHandler, Key, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactElement, ReactNode, SyntheticEvent } from 'react';
-import { CellClickArgs, CellKeyDownArgs, CellKeyboardEvent, CellMouseEvent, CopyEvent, PasteEvent, RenderCellProps, RowsChangeData, SortColumn } from 'react-data-grid';
+import { ChangeEvent, ChangeEventHandler, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
 
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
@@ -159,11 +160,33 @@ export type MultiColumnMenu = {
  * can be applied to any menu type as needed.
  */
 export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
+/** Localized string value associated with this key */
+export type LocalizedStringValue = string;
+/**
+ * Map whose keys are localized string keys and whose values provide information about how to
+ * localize strings for the localized string key
+ */
+export interface LanguageStrings {
+	[k: LocalizeKey]: LocalizedStringValue;
+}
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
 };
 export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
+export type RowContents<TData> = TSRow<TData>;
+export type TableContents<TData> = TSTable<TData>;
+export type SortDirection = TSSortDirection;
+export interface DataTableProps<TData, TValue> {
+	columns: ColumnDef<TData, TValue>[];
+	data: TData[];
+	enablePagination?: boolean;
+	showPaginationControls?: boolean;
+	showColumnVisibilityControls?: boolean;
+	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
+}
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
@@ -531,12 +554,6 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
-export interface ScrRefSelectorProps {
-	scrRef: ScriptureReference;
-	handleSubmit: (scrRef: ScriptureReference) => void;
-	id?: string;
-}
-export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -800,215 +817,6 @@ export type SwitchProps = {
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Switch({ id, isChecked: checked, isDisabled, hasError, className, onChange, }: SwitchProps): import("react/jsx-runtime").JSX.Element;
-export interface TableCalculatedColumn<R> extends TableColumn<R> {
-	readonly parent: TableCalculatedColumnParent<R> | undefined;
-	readonly idx: number;
-	readonly level: number;
-	readonly width: number | string;
-	readonly minWidth: number;
-	readonly maxWidth: number | undefined;
-	readonly resizable: boolean;
-	readonly sortable: boolean;
-	readonly draggable: boolean;
-	readonly frozen: boolean;
-	readonly isLastFrozenColumn: boolean;
-	readonly renderCell: (props: RenderCellProps<R>) => React$1.ReactNode;
-}
-export declare interface TableCalculatedColumnParent<R> {
-	readonly name: string | React$1.ReactElement;
-	readonly parent: TableCalculatedColumnParent<R> | undefined;
-	readonly idx: number;
-	readonly colSpan: number;
-	readonly level: number;
-	readonly headerCellClass?: string | null;
-}
-export type TableCellClickArgs<R> = CellClickArgs<R>;
-export type TableCellKeyboardEvent = CellKeyboardEvent;
-export type TableCellKeyDownArgs<R> = CellKeyDownArgs<R>;
-export type TableCellMouseEvent = CellMouseEvent;
-export type TableColumn<R> = {
-	/** The name of the column. By default it will be displayed in the header cell */
-	readonly name: string | React$1.ReactElement;
-	/** A unique key to distinguish each column */
-	readonly key: string;
-	/**
-	 * Column width. If not specified, it will be determined automatically based on grid width and
-	 * specified widths of other columns
-	 */
-	readonly width?: number | string;
-	/** Minimum column width in px. */
-	readonly minWidth?: number;
-	/** Maximum column width in px. */
-	readonly maxWidth?: number;
-	/**
-	 * If `true`, editing is enabled. If no custom cell editor is provided through `renderEditCell`
-	 * the default text editor will be used for editing. Note: If `editable` is set to 'true' and no
-	 * custom `renderEditCell` is provided, the internal logic that sets the `renderEditCell` will
-	 * shallow clone the column.
-	 */
-	readonly editable?: boolean | ((row: R) => boolean) | null;
-	/** Determines whether column is frozen or not */
-	readonly frozen?: boolean;
-	/** Enable resizing of a column */
-	readonly resizable?: boolean;
-	/** Enable sorting of a column */
-	readonly sortable?: boolean;
-	/**
-	 * Sets the column sort order to be descending instead of ascending the first time the column is
-	 * sorted
-	 */
-	readonly sortDescendingFirst?: boolean | null;
-	/**
-	 * Editor to be rendered when cell of column is being edited. Don't forget to also set the
-	 * `editable` prop to true in order to enable editing.
-	 */
-	readonly renderEditCell?: ((props: TableEditorProps<R>) => React$1.ReactNode) | null;
-};
-export type TableCopyEvent<R> = CopyEvent<R>;
-export type TableEditorProps<R> = {
-	column: TableCalculatedColumn<R>;
-	row: R;
-	onRowChange: (row: R, commitChanges?: boolean) => void;
-	onClose: (commitChanges?: boolean) => void;
-};
-export type TablePasteEvent<R> = PasteEvent<R>;
-export type TableRowsChangeData<R> = RowsChangeData<R>;
-export type TableSortColumn = SortColumn;
-export type TableProps<R> = {
-	/** An array of objects representing each column on the grid */
-	columns: readonly TableColumn<R>[];
-	/** Whether or not a column with checkboxes is inserted that allows you to select rows */
-	enableSelectColumn?: boolean;
-	/**
-	 * Specifies the width of the select column. Only relevant when enableSelectColumn is true
-	 *
-	 * @default 50
-	 */
-	selectColumnWidth?: number;
-	/** An array of objects representing the currently sorted columns */
-	sortColumns?: readonly TableSortColumn[];
-	/**
-	 * A callback function that is called when the sorted columns change
-	 *
-	 * @param sortColumns An array of objects representing the currently sorted columns in the table.
-	 */
-	onSortColumnsChange?: (sortColumns: TableSortColumn[]) => void;
-	/**
-	 * A callback function that is called when a column is resized
-	 *
-	 * @param idx The index of the column being resized
-	 * @param width The new width of the column in pixels
-	 */
-	onColumnResize?: (idx: number, width: number) => void;
-	/**
-	 * Default column width. If not specified, it will be determined automatically based on grid width
-	 * and specified widths of other columns
-	 */
-	defaultColumnWidth?: number;
-	/** Minimum column width in px. */
-	defaultColumnMinWidth?: number;
-	/** Maximum column width in px. */
-	defaultColumnMaxWidth?: number;
-	/**
-	 * Whether or not columns are sortable by default
-	 *
-	 * @default true
-	 */
-	defaultColumnSortable?: boolean;
-	/**
-	 * Whether or not columns are resizable by default
-	 *
-	 * @default true
-	 */
-	defaultColumnResizable?: boolean;
-	/** An array of objects representing the rows in the grid */
-	rows: readonly R[];
-	/** A function that returns the key for a given row */
-	rowKeyGetter?: (row: R) => React$1.Key;
-	/**
-	 * The height of each row in pixels
-	 *
-	 * @default 35
-	 */
-	rowHeight?: number;
-	/**
-	 * The height of the header row in pixels
-	 *
-	 * @default 35
-	 */
-	headerRowHeight?: number;
-	/** A set of keys representing the currently selected rows */
-	selectedRows?: ReadonlySet<React$1.Key>;
-	/** A callback function that is called when the selected rows change */
-	onSelectedRowsChange?: (selectedRows: Set<React$1.Key>) => void;
-	/** A callback function that is called when the rows in the grid change */
-	onRowsChange?: (rows: R[], data: TableRowsChangeData<R>) => void;
-	/**
-	 * A callback function that is called when a cell is clicked
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCellClick?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
-	/**
-	 * A callback function that is called when a cell is double-clicked
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCellDoubleClick?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
-	/**
-	 * A callback function that is called when a cell is right-clicked
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCellContextMenu?: (args: TableCellClickArgs<R>, event: TableCellMouseEvent) => void;
-	/**
-	 * A callback function that is called when a key is pressed while a cell is focused
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCellKeyDown?: (args: TableCellKeyDownArgs<R>, event: TableCellKeyboardEvent) => void;
-	/**
-	 * The text direction of the table
-	 *
-	 * @default 'ltr'
-	 */
-	direction?: "ltr" | "rtl";
-	/**
-	 * Whether or not virtualization is enabled for the table
-	 *
-	 * @default true
-	 */
-	enableVirtualization?: boolean;
-	/**
-	 * A callback function that is called when the table is scrolled
-	 *
-	 * @param event The event source of the callback
-	 */
-	onScroll?: (event: React$1.UIEvent<HTMLDivElement>) => void;
-	/**
-	 * A callback function that is called when the user copies data from the table.
-	 *
-	 * @param event The event source of the callback
-	 */
-	onCopy?: (event: TableCopyEvent<R>) => void;
-	/**
-	 * A callback function that is called when the user pastes data into the table.
-	 *
-	 * @param event The event source of the callback
-	 */
-	onPaste?: (event: TablePasteEvent<R>) => R;
-	/** Additional css classes to help with unique styling of the table */
-	className?: string;
-	/** Optional unique identifier for testing */
-	"data-testid"?: string;
-};
-/**
- * Configurable table component
- *
- * Thanks to Adazzle for heavy inspiration and documentation
- * https://adazzle.github.io/react-data-grid/
- */
-export declare function Table<R>({ columns, sortColumns, onSortColumnsChange, onColumnResize, defaultColumnWidth, defaultColumnMinWidth, defaultColumnMaxWidth, defaultColumnSortable, defaultColumnResizable, rows, enableSelectColumn, selectColumnWidth, rowKeyGetter, rowHeight, headerRowHeight, selectedRows, onSelectedRowsChange, onRowsChange, onCellClick, onCellDoubleClick, onCellContextMenu, onCellKeyDown, direction, enableVirtualization, onCopy, onPaste, onScroll, className, "data-testid": testId, }: TableProps<R>): import("react/jsx-runtime").JSX.Element;
 export type TextFieldProps = {
 	/** Optional unique identifier */
 	id?: string;
@@ -1076,6 +884,195 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	className?: string;
 }>;
 export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement> {
+}
+export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React$1.RefAttributes<HTMLInputElement>>;
+export declare const DropdownMenu: React$1.FC<DropdownMenuPrimitive.DropdownMenuProps>;
+export declare const DropdownMenuTrigger: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const DropdownMenuGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuPortal: React$1.FC<DropdownMenuPrimitive.DropdownMenuPortalProps>;
+export declare const DropdownMenuSub: React$1.FC<DropdownMenuPrimitive.DropdownMenuSubProps>;
+export declare const DropdownMenuRadioGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+export type DropdownMenuSubTriggerProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
+	className?: string;
+	inset?: boolean;
+};
+export type DropdownMenuSubContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent> & {
+	className?: string;
+};
+export type DropdownMenuContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
+	className?: string;
+	sideOffset?: number;
+};
+export type DropdownMenuItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
+	className?: string;
+	inset?: boolean;
+};
+export type DropdownMenuCheckboxItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
+	className?: string;
+	checked?: boolean;
+};
+export type DropdownMenuRadioItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem> & {
+	className?: string;
+};
+export type DropdownMenuLabelProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
+	className?: string;
+	inset?: boolean;
+};
+export type DropdownMenuSeparatorProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator> & {
+	className?: string;
+};
+export type DropdownMenuShortcutProps = React$1.HTMLAttributes<HTMLSpanElement> & {
+	className?: string;
+};
+export declare const DropdownMenuSubTrigger: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubTriggerProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+	inset?: boolean | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuSubContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+	sideOffset?: number | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+	inset?: boolean | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+	checked?: boolean | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuLabel: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+	inset?: boolean | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DropdownMenuSeparator: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
+export declare namespace DropdownMenuShortcut {
+	var displayName: string;
+}
+export declare const Select: React$1.FC<SelectPrimitive.SelectProps>;
+export declare const SelectGroup: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectValueProps & React$1.RefAttributes<HTMLSpanElement>>;
+export declare const SelectTrigger: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const SelectScrollUpButton: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectScrollUpButtonProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectScrollDownButton: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectScrollDownButtonProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectContent: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & React$1.RefAttributes<HTMLTableElement>>;
+export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
+export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
+export declare const TableCell: React$1.ForwardRefExoticComponent<React$1.TdHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
+export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableCaptionElement> & React$1.RefAttributes<HTMLTableCaptionElement>>;
+export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
+export type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
+	className?: string;
+};
+export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: import("class-variance-authority/dist/types").ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
+export type LeftTabsTriggerProps = TabsTriggerProps & {
+	value: string;
+	ref?: React$1.Ref<HTMLButtonElement>;
+};
+export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
+	className?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>>;
+export interface CharacterInventoryProps {
+	scriptureReference: ScriptureReference;
+	setScriptureReference: (scriptureReference: ScriptureReference) => void;
+	localizedStrings: LanguageStrings;
+	projectId: string;
+	getSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string) => Promise<string[]>;
+	setSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string, characters: string[]) => void;
+	getText: (projectId: string, scriptureRef: ScriptureReference, scope: string) => Promise<string | undefined>;
+}
+export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, projectId, getSetting, setSetting, getText, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
+export type DownloadButtonProps = {
+	/** The downloading boolean value determines the state of the button. */
+	isDownloading: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+	/** Optional text for the button. */
+	buttonText?: string;
+};
+/**
+ * The DownloadButton component is a button designed for initiating downloads. It includes visuals
+ * for active downloading and idle states.
+ *
+ * @param isDownloading The downloading boolean value determines the state of the button.
+ * @param handleClick The handleClick function is called when the button is clicked.
+ * @param buttonText Optional text for the button.
+ * @returns A download button.
+ */
+export function DownloadButton({ isDownloading, handleClick, buttonText, }: DownloadButtonProps): import("react/jsx-runtime").JSX.Element;
+export type RemoveButtonProps = {
+	/** The removing boolean value determines the state of the button. */
+	isRemoving: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+};
+/**
+ * The RemoveButton component is a button designed for initiating removals of downloads. It includes
+ * visuals for active removals and idle states.
+ *
+ * @param isRemoving The removing boolean value determines the state of the button.
+ * @param handleClick The handleClick function is called when the button is clicked.
+ * @returns A button that can be used to remove.
+ */
+export function RemoveButton({ isRemoving, handleClick }: RemoveButtonProps): import("react/jsx-runtime").JSX.Element;
+export type UpdateButtonProps = {
+	/** The updating boolean value determines the state of the button. */
+	isUpdating: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+};
+/**
+ * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
+ * It includes visuals for active updating and idle states.
+ *
+ * @param isUpdating The updating boolean value determines the state of the button.
+ * @param handleClick The handleClick function is called when the button is clicked.
+ * @returns A button that can be used to update.
+ */
+export function UpdateButton({ isUpdating, handleClick }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
+export interface MarkdownRendererProps {
+	markdown: string;
+}
+/**
+ * This component renders markdown content given a markdown string. It uses typography styles from
+ * the platform.
+ *
+ * @param markdown The markdown string to render.
+ * @returns A div containing the rendered markdown content.
+ */
+export function MarkdownRenderer({ markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
@@ -1148,108 +1145,6 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
-export interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement> {
-}
-export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React$1.RefAttributes<HTMLInputElement>>;
-export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: import("class-variance-authority/dist/types").ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
-export declare const DropdownMenu: React$1.FC<DropdownMenuPrimitive.DropdownMenuProps>;
-export declare const DropdownMenuTrigger: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
-export declare const DropdownMenuGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
-export declare const DropdownMenuPortal: React$1.FC<DropdownMenuPrimitive.DropdownMenuPortalProps>;
-export declare const DropdownMenuSub: React$1.FC<DropdownMenuPrimitive.DropdownMenuSubProps>;
-export declare const DropdownMenuRadioGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
-export type DropdownMenuSubTriggerProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
-	className?: string;
-	inset?: boolean;
-};
-export type DropdownMenuSubContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent> & {
-	className?: string;
-};
-export type DropdownMenuContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
-	className?: string;
-	sideOffset?: number;
-};
-export type DropdownMenuItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
-	className?: string;
-	inset?: boolean;
-};
-export type DropdownMenuCheckboxItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
-	className?: string;
-	checked?: boolean;
-};
-export type DropdownMenuRadioItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem> & {
-	className?: string;
-};
-export type DropdownMenuLabelProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
-	className?: string;
-	inset?: boolean;
-};
-export type DropdownMenuSeparatorProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator> & {
-	className?: string;
-};
-export type DropdownMenuShortcutProps = React$1.HTMLAttributes<HTMLSpanElement> & {
-	className?: string;
-};
-export declare const DropdownMenuSubTrigger: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubTriggerProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	inset?: boolean | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const DropdownMenuSubContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	sideOffset?: number | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	inset?: boolean | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const DropdownMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	checked?: boolean | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const DropdownMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const DropdownMenuLabel: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	inset?: boolean | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const DropdownMenuSeparator: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
-export declare namespace DropdownMenuShortcut {
-	var displayName: string;
-}
-export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
-export type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
-	className?: string;
-};
-export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLButtonElement>>;
-export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export type LeftTabsTriggerProps = TabsTriggerProps & {
-	value: string;
-	ref?: React$1.Ref<HTMLButtonElement>;
-};
-export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
-export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
-export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-} & React$1.RefAttributes<HTMLDivElement>>;
 export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;

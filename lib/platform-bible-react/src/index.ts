@@ -1,7 +1,15 @@
 import './index.css';
 
 // Components and Types
-export { default as BookChapterControl } from './components/book-chapter-control/book-chapter-control.component';
+export { default as BookChapterControl } from './components/advanced-components/book-chapter-control/book-chapter-control.component';
+export { default as DataTable } from './components/advanced-components/data-table/data-table.component';
+export type {
+  ColumnDef,
+  RowContents,
+  SortDirection,
+  TableContents,
+} from './components/advanced-components/data-table/data-table.component';
+
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/chapter-range-selector.component';
@@ -28,8 +36,6 @@ export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
 export { default as MenuItem } from './components/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/menu-item.component';
-export { default as RefSelector } from './components/ref-selector.component';
-export type { ScrRefSelectorProps } from './components/ref-selector.component';
 export { default as ScriptureResultsViewer } from './components/scripture-results-viewer/scripture-results-viewer.component';
 export type {
   ResultsSet,
@@ -52,41 +58,37 @@ export type {
 } from './components/snackbar.component';
 export { default as Switch } from './components/switch.component';
 export type { SwitchProps } from './components/switch.component';
-export { default as Table } from './components/table.component';
-export type {
-  TableCalculatedColumn,
-  TableCellClickArgs,
-  TableCellKeyboardEvent,
-  TableCellKeyDownArgs,
-  TableCellMouseEvent,
-  TableColumn,
-  TableCopyEvent,
-  TableEditorProps,
-  TablePasteEvent,
-  TableRowsChangeData,
-  TableSortColumn,
-  TableProps,
-} from './components/table.component';
 export { default as TextField } from './components/text-field.component';
 export type { TextFieldProps } from './components/text-field.component';
 export { default as Toolbar } from './components/toolbar.component';
 export type { ToolbarProps } from './components/toolbar.component';
+
+export { Input } from './components/shadcn-ui/input';
+export * from './components/shadcn-ui/dropdown-menu';
+export * from './components/shadcn-ui/select';
+export * from './components/shadcn-ui/table';
+export { Tabs, TabsList, TabsContent, TabsTrigger } from './components/shadcn-ui/tabs';
+export { Label } from '@/components/shadcn-ui/label';
+export {
+  VerticalTabs,
+  VerticalTabsList,
+  VerticalTabsContent,
+  VerticalTabsTrigger,
+} from './components/shadcn-ui/tabs-vertical';
+
+// Paratext components
+
+export { default as CharacterInventory } from './components/paratext-10-studio-components/inventory/character-inventory.component';
+export { default as DownloadButton } from './components/extension-marketplace/buttons/download-button.component';
+export { default as RemoveButton } from './components/extension-marketplace/buttons/remove-button.component';
+export { default as UpdateButton } from './components/extension-marketplace/buttons/update-button.component';
+export { default as MarkdownRenderer } from './components/extension-marketplace/markdown-renderer.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
-export { Input } from '@/components/shadcn-ui/input';
-export { Label } from '@/components/shadcn-ui/label';
-export * from '@/components/shadcn-ui/dropdown-menu';
-export { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/shadcn-ui/tabs';
-export {
-  VerticalTabs,
-  VerticalTabsList,
-  VerticalTabsContent,
-  VerticalTabsTrigger,
-} from '@/components/shadcn-ui/tabs-vertical';
 export {
   Card,
   CardHeader,

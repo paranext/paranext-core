@@ -65,6 +65,18 @@ export async function copyFile(
 }
 
 /**
+ * Moves a file from one location to another
+ *
+ * @param sourceUri The location of the file to move
+ * @param destinationUri The uri where the file should be moved
+ */
+export async function moveFile(sourceUri: Uri, destinationUri: Uri) {
+  const filePathSource: string = getPathFromUri(sourceUri);
+  const filePathDest: string = getPathFromUri(destinationUri);
+  await fs.promises.rename(filePathSource, filePathDest);
+}
+
+/**
  * Delete a file if it exists
  *
  * @param uri URI of file
@@ -72,7 +84,7 @@ export async function copyFile(
  */
 export async function deleteFile(uri: Uri): Promise<void> {
   const stats = await getStats(uri);
-  if (stats && stats.isFile()) await fs.promises.rm(getPathFromUri(uri));
+  if (stats?.isFile()) await fs.promises.rm(getPathFromUri(uri));
 }
 
 /**
@@ -140,7 +152,7 @@ export async function readDir(
   entryFilter?: (entryName: string) => boolean,
 ): Promise<DirectoryEntries> {
   const stats = await getStats(uri);
-  if (!stats || !stats.isDirectory())
+  if (!stats?.isDirectory())
     // Assert return type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     return Object.freeze(Object.fromEntries(fillMissingEntryTypeProperties())) as DirectoryEntries;
@@ -189,6 +201,6 @@ export async function createDir(uri: Uri): Promise<void> {
  */
 export async function deleteDir(uri: Uri): Promise<void> {
   const stats = await getStats(uri);
-  if (!stats || !stats.isDirectory()) return;
+  if (!stats?.isDirectory()) return;
   await fs.promises.rm(getPathFromUri(uri), { recursive: true, maxRetries: 1 });
 }
