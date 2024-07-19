@@ -1,4 +1,9 @@
-import { getLocalizedIdFromBookNumber, compareScrRefs, formatScrRef } from './scripture-util';
+import {
+  getLocalizedIdFromBookNumber,
+  compareScrRefs,
+  formatScrRef,
+  scrRefToBBBCCCVVV,
+} from './scripture-util';
 
 async function mockGetLocalizedString(item: {
   localizeKey: string;
@@ -31,6 +36,10 @@ test('getLocalizedIdFromBookNumber with french', async () => {
 test('getLocalizedIdFromBookNumber with khmer which defines a localization with localized.id', async () => {
   const result = await getLocalizedIdFromBookNumber(1, 'kh', mockGetLocalizedString);
   expect(result).toEqual('លប');
+});
+
+test('get reference as BBBCCCVVV', async () => {
+  expect(scrRefToBBBCCCVVV({ bookNum: 10, chapterNum: 4, verseNum: 6 })).toBe(10004006);
 });
 
 test('compare references when books are different', async () => {

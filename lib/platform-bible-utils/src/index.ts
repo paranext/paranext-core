@@ -36,7 +36,12 @@ export {
   getAllObjectFunctionNames,
   createSyncProxyForAsyncObject,
 } from './util';
-export { compareScrRefs, formatScrRef, getLocalizedIdFromBookNumber } from './scripture-util';
+export {
+  compareScrRefs,
+  formatScrRef,
+  getLocalizedIdFromBookNumber,
+  scrRefToBBBCCCVVV,
+} from './scripture-util';
 export {
   at,
   charAt,

@@ -150,7 +150,7 @@ export async function getLocalizedIdFromBookNumber(
  * @returns An integer where the first three digits represent the book, the next three represent the
  *   chapter and the last three represent the verse.
  */
-export function ScrRefToBBBCCCVVV(scrRef: ScriptureReference): number {
+export function scrRefToBBBCCCVVV(scrRef: ScriptureReference): number {
   return new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum).BBBCCCVVV;
 }
 
@@ -166,7 +166,7 @@ export function ScrRefToBBBCCCVVV(scrRef: ScriptureReference): number {
 export function compareScrRefs(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number {
   // TODO: consider edge cases for invalid references (current implementation should suffice for
   // all but the most extreme cases)
-  return ScrRefToBBBCCCVVV(scrRef1) - ScrRefToBBBCCCVVV(scrRef2);
+  return scrRefToBBBCCCVVV(scrRef1) - scrRefToBBBCCCVVV(scrRef2);
 }
 
 /**

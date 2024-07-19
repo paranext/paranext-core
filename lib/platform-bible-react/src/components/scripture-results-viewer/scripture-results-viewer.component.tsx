@@ -18,6 +18,7 @@ import '@/components/scripture-results-viewer/scripture-results-viewer.component
 import {
   compareScrRefs,
   formatScrRef,
+  scrRefToBBBCCCVVV,
   ScriptureSelection,
   ScriptureReference,
 } from 'platform-bible-utils';
@@ -258,14 +259,10 @@ export default function ScriptureResultsViewer({
     }
   }, [grouping]);
 
-  function toBCV(ref: ScriptureReference) {
-    return ref.bookNum * 1000000 + ref.chapterNum * 1000 + ref.verseNum;
-  }
-
   const toRefOrRange = useCallback(
     (start: ScriptureReference, end: ScriptureReference | undefined) => {
-      if (!end || compareScrRefs(start, end) === 0) return `${toBCV(start)}`;
-      return `${toBCV(start)}-${toBCV(end)}`;
+      if (!end || compareScrRefs(start, end) === 0) return `${scrRefToBBBCCCVVV(start)}`;
+      return `${scrRefToBBBCCCVVV(start)}-${scrRefToBBBCCCVVV(end)}`;
     },
     [],
   );

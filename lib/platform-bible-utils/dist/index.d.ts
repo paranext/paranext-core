@@ -518,6 +518,14 @@ export declare function getLocalizedIdFromBookNumber(bookNumber: number, localiz
 	languagesToSearch?: string[];
 }) => Promise<string>): Promise<string>;
 /**
+ * Get the Scripture reference as an easily comparable/sortable integer.
+ *
+ * @param scrRef The Scripture reference.
+ * @returns An integer where the first three digits represent the book, the next three represent the
+ *   chapter and the last three represent the verse.
+ */
+export declare function scrRefToBBBCCCVVV(scrRef: ScriptureReference): number;
+/**
  * Compares two Scripture references canonically.
  *
  * @param scrRef1 The first Scripture reference to compare.
