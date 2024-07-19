@@ -3,7 +3,7 @@ import Switch from '@/components/switch.component';
 export default function SwitchExamples() {
   return (
     <>
-      Default Shadcn switches are not themed and always blue 🥺
+      Wrongly using MUI switch right now 😬
       <div>
         <Switch />
         <Switch isDisabled />

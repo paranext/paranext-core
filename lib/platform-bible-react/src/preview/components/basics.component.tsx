@@ -3,8 +3,10 @@ import { HasDirection } from '../direction-toggle';
 import ExampleAlerts from './basics/alert.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
+import CheckboxExamples from './basics/checkbox.examples.component';
 import DropdownExamples from './basics/dropdown.examples.component';
 import InputExamples from './basics/input.examples.component';
+import SelectExamples from './basics/select.examples.component';
 import SliderExamples from './basics/slider.examples.component';
 import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
@@ -19,8 +21,10 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
@@ -39,8 +43,16 @@ function Basics({ direction }: HasDirection) {
           <CardExamples />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Checkbox">
+          <CheckboxExamples />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Input">
           <InputExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Select">
+          <SelectExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Slider">
