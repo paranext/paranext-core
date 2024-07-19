@@ -7,18 +7,27 @@ import logger from '@shared/services/logger.service';
 import networkObjectService from '@shared/services/network-object.service';
 import dataProviderService from '@shared/services/data-provider.service';
 import extensionAssetService from '@shared/services/extension-asset.service';
-import { getErrorMessage, substring } from 'platform-bible-utils';
+import { getErrorMessage, isString, substring } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { registerCommand } from '@shared/services/command.service';
 import { initialize as initializeMenuData } from '@extension-host/services/menu-data.service-host';
 import { initialize as initializeSettingsService } from '@extension-host/services/settings.service-host';
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
+import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
 );
 logger.info(`Extension host process.env.NODE_ENV = ${process.env.NODE_ENV}`);
+
+// Make a graceful way to tear down the process since Windows and POSIX operating systems handle it differently
+process.on('message', (message) => {
+  if (isString(message) && message === gracefulShutdownMessage) {
+    logger.info('Shutting down process due to graceful shutdown message');
+    process.exit();
+  }
+});
 
 // #region Services setup
 
