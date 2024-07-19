@@ -3,6 +3,12 @@ import './index.css';
 // Components and Types
 export { default as BookChapterControl } from './components/advanced-components/book-chapter-control/book-chapter-control.component';
 export { default as DataTable } from './components/advanced-components/data-table/data-table.component';
+export type {
+  ColumnDef,
+  RowContents,
+  SortDirection,
+  TableContents,
+} from './components/advanced-components/data-table/data-table.component';
 
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/chapter-range-selector.component';
@@ -63,6 +69,10 @@ export {
 // Paratext components
 
 export { default as CharacterInventory } from './components/paratext-10-studio-components/inventory/character-inventory.component';
+export { default as DownloadButton } from './components/extension-marketplace/buttons/download-button.component';
+export { default as RemoveButton } from './components/extension-marketplace/buttons/remove-button.component';
+export { default as UpdateButton } from './components/extension-marketplace/buttons/update-button.component';
+export { default as MarkdownRenderer } from './components/extension-marketplace/markdown-renderer.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

@@ -150,7 +150,7 @@ function CharacterInventory({
   };
 
   return (
-    <div className="pr-twp pr-font-sans">
+    <div className="pr-twp">
       <BaseInventory
         projectId={projectId}
         localizedStrings={localizedStrings}
