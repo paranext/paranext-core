@@ -1,0 +1,93 @@
+query {
+  node(id: "PVT_kwDOB1NPs84AKwz2") {
+    ... on ProjectV2 {
+      id
+      title
+      createdAt
+      updatedAt
+      items(first: 1) {
+        nodes {
+          id
+          fieldValues(first: 20) {
+            nodes {
+              ... on ProjectV2ItemFieldTextValue {
+                text
+                field {
+                  ... on ProjectV2FieldCommon {
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldDateValue {
+                date
+                field {
+                  ... on ProjectV2FieldCommon {
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldIterationValue {
+                title
+                field {
+                  ... on ProjectV2FieldCommon {
+                    name
+                  }
+                }
+              }
+              ... on ProjectV2ItemFieldSingleSelectValue {
+                name
+                field {
+                  ... on ProjectV2FieldCommon {
+                    name
+                  }
+                }
+              }
+            }
+          }
+          content {
+            ... on Issue {
+              id
+              number
+              title
+              url
+              body
+              state
+              createdAt
+              updatedAt
+              labels(first: 10) {
+                nodes {
+                  id
+                  name
+                  description
+                  color
+                }
+              }
+              comments(first: 25) {
+                nodes {
+                  id
+                  body
+                  createdAt
+                  author {
+                    login
+                  }
+                }
+              }
+              milestone {
+                id
+                title
+                description
+                dueOn
+                state
+              }
+              assignees(first: 10) {
+                nodes {
+                  login
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

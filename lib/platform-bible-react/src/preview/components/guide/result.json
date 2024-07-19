@@ -1,0 +1,1057 @@
+{
+  "data": {
+    "node": {
+      "id": "PVT_kwDOB1NPs84AKwz2",
+      "title": "Paranext",
+      "createdAt": "2023-01-17T15:43:51Z",
+      "updatedAt": "2024-07-16T21:32:31Z",
+      "items": {
+        "nodes": [
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEW7HQ",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {},
+                {},
+                {
+                  "text": "Hello World for Electron",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🐂 Medium",
+                  "field": {
+                    "name": "Size"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOImvens5a-ARH",
+              "number": 2,
+              "title": "Hello World for Electron",
+              "url": "https://github.com/paranext/paranext/issues/2",
+              "body": "As an architect I need to have a working example of a cross platform build.\n\nDevelop an application UI shell (an empty application frame) that can be built and deployed to Windows, Linux and Mac.\nAll necessary code should be checked into this repository.\nInclude a build on demand system for all three platforms.  \n\n- [x] Add electron-react-boilerplate\n- [x] check x-platform builds through GHA\n_Move to a new card for a future sprint_\n- [ ] Add .NET Core\n- [ ] check x-platform builds through GHA",
+              "state": "CLOSED",
+              "createdAt": "2023-01-09T19:40:56Z",
+              "updatedAt": "2023-02-02T00:02:12Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": {
+                "id": "MI_kwDOImvens4AiNMf",
+                "title": "Sprint 1",
+                "description": "This is an attempt to use Milestones to track sprints and continue to use Github projects",
+                "dueOn": "2023-01-25T00:00:00Z",
+                "state": "CLOSED"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "irahopkinson"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEYb_0",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {},
+                {
+                  "text": "Investigate Node vs C# server resource usage, web socket limitations",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🐇 Small",
+                  "field": {
+                    "name": "Size"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOImvens5bsPKJ",
+              "number": 10,
+              "title": "Investigate Node vs C# server resource usage, web socket limitations",
+              "url": "https://github.com/paranext/paranext/issues/10",
+              "body": "As an architect, I want to know how well Node would suit us as a web server technology as opposed to C# to determine if we should use a C# web server or Node web server (assuming we do not go with Electron-Edge as referenced in #9).\n\n- **Are we limiting ourselves using Node websocket as opposed to a C# websocket?**\n- **How do startup and resource use look between C# and Node?**",
+              "state": "CLOSED",
+              "createdAt": "2023-01-18T16:39:49Z",
+              "updatedAt": "2023-01-25T20:19:28Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": {
+                "id": "MI_kwDOImvens4AiNMf",
+                "title": "Sprint 1",
+                "description": "This is an attempt to use Milestones to track sprints and continue to use Github projects",
+                "dueOn": "2023-01-25T00:00:00Z",
+                "state": "CLOSED"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "tjcouch-sil"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEYb9k",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {},
+                {
+                  "text": "Investigate Electron-Edge async C#",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🐂 Medium",
+                  "field": {
+                    "name": "Size"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOImvens5bsPJA",
+              "number": 9,
+              "title": "Investigate Electron-Edge async C#",
+              "url": "https://github.com/paranext/paranext/issues/9",
+              "body": "As an architect, I want to know if forking Node processes to call C# asynchronous code is a viable solution to determine if we should try Electron-Edge as our base architecture.\n\n- How costly is forking Node processes? Startup time, memory cost\n- Can we reuse Node processes and call different asynchronous C# methods?\n- Can we create an interface that hides implementation details of \"asynchronous\" forking and calling C#?\n- Can we start threads that continue to execute in C# after returning to edge? Can we subsequently check those threads for completion or errors?",
+              "state": "CLOSED",
+              "createdAt": "2023-01-18T16:39:46Z",
+              "updatedAt": "2023-01-25T20:19:41Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": {
+                "id": "MI_kwDOImvens4AiNMf",
+                "title": "Sprint 1",
+                "description": "This is an attempt to use Milestones to track sprints and continue to use Github projects",
+                "dueOn": "2023-01-25T00:00:00Z",
+                "state": "CLOSED"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "tjcouch-sil"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEW7Kc",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {},
+                {},
+                {
+                  "text": "Flesh out starting details",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOImvens5bJV10",
+              "number": 7,
+              "title": "Flesh out starting details",
+              "url": "https://github.com/paranext/paranext/issues/7",
+              "body": "Tim and TJ make decisions on fundamental concepts of Paranext:\n- [x] Repo structure\n- [x] How will PT9 and Paranext interoperate?\n- [x] How will we leverage existing PT9 code?\n- [x] C# Extensions?\n- [x] New API endpoints vs extend existing API endpoints\n- [x] Node vs Deno\n- [x] How much core Paranext will be made of extensions?\n- [x] RTE - starting point and data format\n- [x] How to deal with project-scoped extensions?\n- [x] Extension ecosystem - how are extensions found without curation?\n- [x] gRPC vs REST/Web sockets vs Web sockets\n- [x] How to keep UI consistent?\n- [x] What extension DX features are we aiming for?\n- [x] C# or Node as primary webserver?\n- [x] Web server or Electron-Edge?",
+              "state": "CLOSED",
+              "createdAt": "2023-01-11T14:38:28Z",
+              "updatedAt": "2023-01-25T20:19:53Z",
+              "labels": {
+                "nodes": [
+                  {
+                    "id": "LA_kwDOImvens8AAAABJEASuQ",
+                    "name": "question",
+                    "description": "Further information is requested",
+                    "color": "d876e3"
+                  }
+                ]
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": {
+                "id": "MI_kwDOImvens4AiNMf",
+                "title": "Sprint 1",
+                "description": "This is an attempt to use Milestones to track sprints and continue to use Github projects",
+                "dueOn": "2023-01-25T00:00:00Z",
+                "state": "CLOSED"
+              },
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "FoolRunning"
+                  },
+                  {
+                    "login": "tjcouch-sil"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEW66E",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {
+                  "text": "Survey of reusable extension frameworks",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOImvens5a-AtD",
+              "number": 3,
+              "title": "Survey of reusable extension frameworks",
+              "url": "https://github.com/paranext/paranext/issues/3",
+              "body": "As an architect I want to know if there is an easier path to defining an extension framework.\r\n\r\nInvestigate the possibility of finding and using an extension framework for Paranext.\r\nTime boxed to 3 days.",
+              "state": "CLOSED",
+              "createdAt": "2023-01-09T19:42:36Z",
+              "updatedAt": "2023-09-29T18:38:42Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": []
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEW6-o",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {
+                  "text": "Distributed repository strategy",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85ybisq",
+              "number": 483,
+              "title": "Distributed repository strategy",
+              "url": "https://github.com/paranext/paranext-core/issues/483",
+              "body": "As an architect I want to have a rough plan of how Paranext can be subdivided into different repositories.\r\n\r\nDevelop a plan for how to subdivide Paranext into distributed but related github repos.  Setup any additional repos that we know we need now.",
+              "state": "CLOSED",
+              "createdAt": "2023-01-09T19:53:40Z",
+              "updatedAt": "2023-10-03T14:29:23Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": []
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEW6_8",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {
+                  "text": "Proskomma Investigation",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOImvens5bD_hf",
+              "number": 6,
+              "title": "Proskomma Investigation",
+              "url": "https://github.com/paranext/paranext/issues/6",
+              "body": "Integrate the Proskomma library to parse USFM data into JSON.\nChris Hubbard can be a resource for learning more,",
+              "state": "CLOSED",
+              "createdAt": "2023-01-10T17:38:58Z",
+              "updatedAt": "2023-02-08T20:32:37Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": []
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEW7l0",
+            "fieldValues": {
+              "nodes": [
+                {
+                  "text": "Ideas",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "📮 Idea Bucket",
+                  "field": {
+                    "name": "Status"
+                  }
+                }
+              ]
+            },
+            "content": {}
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEgkKg",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {
+                  "text": "Investigate Electronite",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🚲 Moderate",
+                  "field": {
+                    "name": "Priority"
+                  }
+                },
+                {
+                  "title": "Sprint 2",
+                  "field": {
+                    "name": "Sprint"
+                  }
+                },
+                {
+                  "name": "🦔 Tiny",
+                  "field": {
+                    "name": "Size"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85c0ffm",
+              "number": 9,
+              "title": "Investigate Electronite",
+              "url": "https://github.com/paranext/paranext-core/issues/9",
+              "body": "Let's investigate if Electronite is a good fit for us.\r\n\r\n- Is it maintained well?\r\n- Is having Graphite support useful and worth it?\r\n- Can it fit into our ecosystem?\r\n- Is there an electronite builder tool?\r\n\r\nhttps://github.com/unfoldingWord/electronite",
+              "state": "CLOSED",
+              "createdAt": "2023-01-25T20:58:55Z",
+              "updatedAt": "2023-03-01T20:13:41Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "irahopkinson"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEozBQ",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {
+                  "text": "Change to Gitflow",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "📮 Idea Bucket",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🚶 Low",
+                  "field": {
+                    "name": "Priority"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85ybij3",
+              "number": 482,
+              "title": "Change to Gitflow",
+              "url": "https://github.com/paranext/paranext-core/issues/482",
+              "body": "We want to swap to using Gitflow branching strategy on all of our repositories.\n\nhttps://nvie.com/posts/a-successful-git-branching-model/",
+              "state": "OPEN",
+              "createdAt": "2023-02-01T21:08:47Z",
+              "updatedAt": "2023-10-03T14:42:51Z",
+              "labels": {
+                "nodes": [
+                  {
+                    "id": "LA_kwDOIyvJf88AAAABZ-TFDw",
+                    "name": "internal",
+                    "description": "Internal issue that doesn't directly affect extension developers or users",
+                    "color": "30415D"
+                  }
+                ]
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": []
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgExhgg",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {
+                  "text": "Generate types code between TS and C#",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🚲 Moderate",
+                  "field": {
+                    "name": "Priority"
+                  }
+                },
+                {
+                  "name": "🦑 Large",
+                  "field": {
+                    "name": "Size"
+                  }
+                },
+                {
+                  "title": "Sprint 2",
+                  "field": {
+                    "name": "Sprint"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85d-46b",
+              "number": 21,
+              "title": "Generate types code between TS and C#",
+              "url": "https://github.com/paranext/paranext-core/issues/21",
+              "body": "Figure out a good way to generate type code for different data types that are carried across the PAPI interface and used in C# and in JS",
+              "state": "CLOSED",
+              "createdAt": "2023-02-08T20:36:37Z",
+              "updatedAt": "2023-02-28T01:08:15Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "irahopkinson"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgExh8k",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {
+                  "text": "Architect unit testing infrastructure",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "📥 On Deck",
+                  "field": {
+                    "name": "Status"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85d-664",
+              "number": 23,
+              "title": "Architect unit testing infrastructure",
+              "url": "https://github.com/paranext/paranext-core/issues/23",
+              "body": "We need tests for C#, Node main process, Node renderer process, React, integration",
+              "state": "OPEN",
+              "createdAt": "2023-02-08T20:44:43Z",
+              "updatedAt": "2023-10-03T14:42:39Z",
+              "labels": {
+                "nodes": [
+                  {
+                    "id": "LA_kwDOIyvJf88AAAABZ-TFDw",
+                    "name": "internal",
+                    "description": "Internal issue that doesn't directly affect extension developers or users",
+                    "color": "30415D"
+                  }
+                ]
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": []
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgExjIs",
+            "fieldValues": {
+              "nodes": [
+                {
+                  "text": "UX Conversation",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "📥 On Deck",
+                  "field": {
+                    "name": "Status"
+                  }
+                }
+              ]
+            },
+            "content": {}
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgExl-o",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {
+                  "text": "PAPI websocket client live interactive documentation page",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": " 📮 Idea Bucket",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🚶 Low",
+                  "field": {
+                    "name": "Priority"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85yFgtw",
+              "number": 444,
+              "title": "PAPI websocket client live interactive documentation page",
+              "url": "https://github.com/paranext/paranext-core/issues/444",
+              "body": "As an extension developer, I want to be able to open a page that shows all the features on the PAPI (commands, events, data providers, etc) and lets me interact with them by clicking buttons, entering data, etc.\n\n----\n\nWe could make a websocket client page that shows the different commands/data and such and lets you hit a button to send those messages and get responses back. Like an [interactive swagger api page](https://petstore.swagger.io/).",
+              "state": "OPEN",
+              "createdAt": "2023-09-26T18:14:23Z",
+              "updatedAt": "2024-02-08T22:34:47Z",
+              "labels": {
+                "nodes": [
+                  {
+                    "id": "LA_kwDOIyvJf88AAAABKwTzGg",
+                    "name": "documentation",
+                    "description": "Improvements or additions to documentation",
+                    "color": "0075ca"
+                  }
+                ]
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": []
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEdQdY",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {},
+                {
+                  "text": "Scaffold Core - Combine Electron, React, Edge, C#",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🦑 Large",
+                  "field": {
+                    "name": "Size"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85cl99R",
+              "number": 1,
+              "title": "Scaffold Core - Combine Electron, React, Edge, C#",
+              "url": "https://github.com/paranext/paranext-core/issues/1",
+              "body": "As a developer, I want to develop on a base of code projects including the relevant technologies for the software so I can develop the software.\n\n- Combine ERB and Edge\n- Add C# solution that integrates well with the Node stuff",
+              "state": "CLOSED",
+              "createdAt": "2023-01-23T17:09:45Z",
+              "updatedAt": "2023-02-01T22:24:01Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "FoolRunning"
+                  },
+                  {
+                    "login": "tjcouch-sil"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEYpmo",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {
+                  "text": "Determine and add license",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🐇 Small",
+                  "field": {
+                    "name": "Size"
+                  }
+                },
+                {
+                  "title": "Sprint 1",
+                  "field": {
+                    "name": "Sprint"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOImvens5c0AHb",
+              "number": 12,
+              "title": "Determine and add license",
+              "url": "https://github.com/paranext/paranext/issues/12",
+              "body": "As an architect, I need to know the license we are putting on our new code in order to start working on open source repositories.\n\nWe need to set the license file on each repository appropriately.",
+              "state": "CLOSED",
+              "createdAt": "2023-01-25T19:03:33Z",
+              "updatedAt": "2023-09-29T18:38:39Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "GlennPruitt"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEgcsE",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {},
+                {
+                  "text": "Add multi-format icon files",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🦔 Tiny",
+                  "field": {
+                    "name": "Size"
+                  }
+                },
+                {
+                  "name": "🚗 Average",
+                  "field": {
+                    "name": "Priority"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85cz_1k",
+              "number": 6,
+              "title": "Add multi-format icon files",
+              "url": "https://github.com/paranext/paranext-core/issues/6",
+              "body": "When you run `npm run package`, you get an installer at `paranext-core\\release\\build` that has a generic installer icon. Let's fix it to use our icon.\n\nEDIT: Changed to just uploading icon files. Actual installer updating will happen in #14 ",
+              "state": "CLOSED",
+              "createdAt": "2023-01-25T19:02:33Z",
+              "updatedAt": "2023-02-02T15:09:47Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "tjcouch-sil"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEgjCg",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {
+                  "text": "Create the API backend connections (JS <-> C#)",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🐂 Medium",
+                  "field": {
+                    "name": "Size"
+                  }
+                },
+                {
+                  "name": "🚗 Average",
+                  "field": {
+                    "name": "Priority"
+                  }
+                },
+                {
+                  "title": "Sprint 2",
+                  "field": {
+                    "name": "Sprint"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85c0aj6",
+              "number": 7,
+              "title": "Create the API backend connections (JS <-> C#)",
+              "url": "https://github.com/paranext/paranext-core/issues/7",
+              "body": "",
+              "state": "CLOSED",
+              "createdAt": "2023-01-25T20:38:14Z",
+              "updatedAt": "2023-03-22T21:04:06Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "FoolRunning"
+                  },
+                  {
+                    "login": "tjcouch-sil"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgEgjLo",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {
+                  "text": "Hello World for Electron C# Cross Platform",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "name": "🐂 Medium",
+                  "field": {
+                    "name": "Size"
+                  }
+                },
+                {
+                  "name": "🚗 Average",
+                  "field": {
+                    "name": "Priority"
+                  }
+                },
+                {
+                  "title": "Sprint 2",
+                  "field": {
+                    "name": "Sprint"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85c0bIJ",
+              "number": 8,
+              "title": "Hello World for Electron C# Cross Platform",
+              "url": "https://github.com/paranext/paranext-core/issues/8",
+              "body": " check x-platform builds through GHA",
+              "state": "CLOSED",
+              "createdAt": "2023-01-25T20:40:38Z",
+              "updatedAt": "2023-02-27T23:00:49Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "irahopkinson"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "id": "PVTI_lADOB1NPs84AKwz2zgExhnU",
+            "fieldValues": {
+              "nodes": [
+                {},
+                {},
+                {},
+                {
+                  "text": "Events over WebSocket (Node)",
+                  "field": {
+                    "name": "Title"
+                  }
+                },
+                {
+                  "name": "✅ Done",
+                  "field": {
+                    "name": "Status"
+                  }
+                },
+                {
+                  "title": "Sprint 4",
+                  "field": {
+                    "name": "Sprint"
+                  }
+                },
+                {
+                  "name": "🚲 Moderate",
+                  "field": {
+                    "name": "Priority"
+                  }
+                },
+                {
+                  "name": "🐇 Small",
+                  "field": {
+                    "name": "Size"
+                  }
+                }
+              ]
+            },
+            "content": {
+              "id": "I_kwDOIyvJf85d-5Rq",
+              "number": 22,
+              "title": "Events over WebSocket (Node)",
+              "url": "https://github.com/paranext/paranext-core/issues/22",
+              "body": "Create Events and Event Handler API for distribution over WebSocket",
+              "state": "CLOSED",
+              "createdAt": "2023-02-08T20:38:04Z",
+              "updatedAt": "2023-03-16T18:47:12Z",
+              "labels": {
+                "nodes": []
+              },
+              "comments": {
+                "nodes": []
+              },
+              "milestone": null,
+              "assignees": {
+                "nodes": [
+                  {
+                    "login": "tjcouch-sil"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}
