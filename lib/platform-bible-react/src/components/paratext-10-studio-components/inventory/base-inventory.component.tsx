@@ -61,17 +61,13 @@ interface InventoryProps {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
-  projectId: string;
-  getSetting: (itemSet: ItemKeys, projectId: string) => Promise<string[]>;
-  setSetting: (itemSet: ItemKeys, projectId: string, items: string[]) => void;
-  getText: (
-    projectId: string,
-    scriptureRef: ScriptureReference,
-    scope: string,
-  ) => Promise<string | undefined>;
-  approvedItemsKey: ItemKeys;
-  unapprovedItemsKey: ItemKeys;
   convertTextToItems: (text: string) => string[];
+  approvedItems: string[];
+  onApprovedItemsChange: (items: string[]) => void;
+  unapprovedItems: string[];
+  onUnapprovedItemsChange: (items: string[]) => void;
+  text: string | undefined;
+  onScopeChange: (scope: string) => void;
   columns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
 }
 
@@ -79,13 +75,13 @@ function BaseInventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,
-  projectId,
-  getSetting,
-  setSetting,
-  getText,
-  approvedItemsKey,
-  unapprovedItemsKey,
   convertTextToItems,
+  approvedItems,
+  onApprovedItemsChange,
+  unapprovedItems,
+  onUnapprovedItemsChange,
+  text,
+  onScopeChange,
   columns,
 }: InventoryProps) {
   const allItemsText = localizedStrings['%webView_inventory_all%'];
@@ -96,11 +92,8 @@ function BaseInventory({
   const scopeChapterText = localizedStrings['%webView_inventory_scope_chapter%'];
   const scopeVerseText = localizedStrings['%webView_inventory_scope_verse%'];
   const filterText = localizedStrings['%webView_inventory_filter_text%'];
-  const [approvedItems, setApprovedItems] = useState<string[]>([]);
-  const [unapprovedItems, setUnapprovedItems] = useState<string[]>([]);
-  const [text, setText] = useState<string>('');
   const [items, setItems] = useState<string[]>([]);
-  const [scope, setScope] = useState<string>('book');
+  const [scope] = useState<string>('book');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [textFilter, setTextFilter] = useState<string>('');
   const [inventoryTableData, setInventoryTableData] = useState<ItemData[]>([]);
@@ -116,72 +109,36 @@ function BaseInventory({
           return tableEntry;
         });
       });
-
-      setApprovedItems((prevApprovedItems) => {
-        let newApprovedItems: string[] = [...prevApprovedItems];
-        newItems.forEach((item) => {
-          if (status === true) {
-            if (!newApprovedItems.includes(item)) {
-              newApprovedItems.push(item);
-            }
-          } else {
-            newApprovedItems = newApprovedItems.filter((validItem) => validItem !== item);
-          }
-        });
-
-        setSetting(approvedItemsKey, projectId, newApprovedItems);
-        return newApprovedItems;
-      });
-
-      setUnapprovedItems((prevUnapprovedItems) => {
-        let newUnapprovedItems: string[] = [...prevUnapprovedItems];
-        newItems.forEach((item) => {
-          if (status === false) {
-            if (!newUnapprovedItems.includes(item)) {
-              newUnapprovedItems.push(item);
-            }
-          } else {
-            newUnapprovedItems = newUnapprovedItems.filter(
-              (unapprovedItem) => unapprovedItem !== item,
-            );
-          }
-        });
-
-        setSetting(unapprovedItemsKey, projectId, newUnapprovedItems);
-        return newUnapprovedItems;
-      });
-
       return tableData;
     });
+
+    let newApprovedItems: string[] = [...approvedItems];
+    newItems.forEach((item) => {
+      if (status === true) {
+        if (!newApprovedItems.includes(item)) {
+          newApprovedItems.push(item);
+        }
+      } else {
+        newApprovedItems = newApprovedItems.filter((validItem) => validItem !== item);
+      }
+    });
+    onApprovedItemsChange(newApprovedItems);
+
+    let newUnapprovedItems: string[] = [...unapprovedItems];
+    newItems.forEach((item) => {
+      if (status === false) {
+        if (!newUnapprovedItems.includes(item)) {
+          newUnapprovedItems.push(item);
+        }
+      } else {
+        newUnapprovedItems = newUnapprovedItems.filter((unapprovedItem) => unapprovedItem !== item);
+      }
+    });
+    onUnapprovedItemsChange(newUnapprovedItems);
   };
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setApprovedItems(await getSetting(approvedItemsKey, projectId));
-        setUnapprovedItems(await getSetting(unapprovedItemsKey, projectId));
-      } catch (error) {
-        throw new Error('Failed to fetch (un)approved items from project settings');
-      }
-    };
-
-    fetchData();
-  }, [projectId, getSetting, approvedItemsKey, unapprovedItemsKey]);
-
-  useEffect(() => {
-    const getNewText = async () => {
-      try {
-        const newText = await getText(projectId, scriptureReference, scope);
-        setText(newText || '');
-      } catch (error) {
-        throw new Error('Failed getting scripture text');
-      }
-    };
-
-    getNewText();
-  }, [projectId, scriptureReference, scope, getText]);
-
-  useEffect(() => {
+    if (!text) return;
     setItems(convertTextToItems(text));
   }, [convertTextToItems, text]);
 
@@ -217,7 +174,7 @@ function BaseInventory({
             <SelectItem value="unknown">{unknownItemsText}</SelectItem>
           </SelectContent>
         </Select>
-        <Select onValueChange={(value) => setScope(value)} defaultValue={scope}>
+        <Select onValueChange={(value) => onScopeChange(value)} defaultValue={scope}>
           <SelectTrigger>
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>

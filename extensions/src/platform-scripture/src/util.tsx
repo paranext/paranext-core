@@ -1,6 +1,6 @@
-import papi, { projectDataProviders, projectLookup } from '@papi/frontend';
+import papi from '@papi/frontend';
 import { VerseRef } from '@sillsdev/scripture';
-import { LocalizeKey, ScriptureReference, split } from 'platform-bible-utils';
+import { LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 
 export const INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_all%',
@@ -20,30 +20,11 @@ export const INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_occurrences_table_header_occurrence%',
 ];
 
-export const getSetting = async (
-  itemSet: 'validCharacters' | 'invalidCharacters' | 'repeatableWords' | 'nonRepeatableWords',
-  projectId: string,
-) => {
-  const projectMetadata = await projectLookup.getMetadataForProject(projectId);
-  const pdp = await projectDataProviders.get('platform.base', projectMetadata.id);
-  return split(await pdp.getSetting(`platformScripture.${itemSet}`), ' ');
-};
-
-export const setSetting = async (
-  itemSet: 'validCharacters' | 'invalidCharacters' | 'repeatableWords' | 'nonRepeatableWords',
-  projectId: string,
-  items: string[],
-) => {
-  const projectMetadata = await projectLookup.getMetadataForProject(projectId);
-  const pdp = await projectDataProviders.get('platform.base', projectMetadata.id);
-  pdp.setSetting(`platformScripture.${itemSet}`, items.join(' '));
-};
-
 export const getText = async (
-  projectId: string,
-  scriptureRef: ScriptureReference,
   scope: string,
-): Promise<string | undefined> => {
+  scriptureRef: ScriptureReference,
+  projectId: string,
+) => {
   const verseRef = new VerseRef(
     scriptureRef.bookNum,
     scriptureRef.chapterNum,

@@ -17,7 +17,7 @@ type SearchResult = {
 };
 
 const extractOccurrences = (
-  text: string,
+  text: string | undefined,
   item: string,
   scriptureRef: ScriptureReference,
   // match: (words: string[], item: string) => boolean
@@ -65,7 +65,7 @@ const extractOccurrences = (
 
 interface OccurrencesTableProps {
   selectedItem: string;
-  text: string;
+  text: string | undefined;
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;

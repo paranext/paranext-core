@@ -1,8 +1,9 @@
 import { WebViewProps } from '@papi/core';
-import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
-import { CharacterInventory } from 'platform-bible-react';
+import { useLocalizedStrings, useProjectSetting, useSetting } from '@papi/frontend/react';
+import { CharacterInventory, usePromise } from 'platform-bible-react';
 import { ScriptureReference } from 'platform-bible-utils';
-import { INVENTORY_STRING_KEYS, getSetting, getText, setSetting } from './util';
+import { useCallback, useMemo, useState } from 'react';
+import { getText, INVENTORY_STRING_KEYS } from './util';
 
 const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
 
@@ -10,16 +11,39 @@ global.webViewComponent = function CharacterInventoryWebView({ useWebViewState }
   const [localizedStrings] = useLocalizedStrings(INVENTORY_STRING_KEYS);
   const [projectId] = useWebViewState('projectId', '');
   const [scriptureRef, setScriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
+  const [validCharacters, setValidCharacters] = useProjectSetting(
+    projectId,
+    'platformScripture.validCharacters',
+    '',
+  );
+  const [invalidCharacters, setInvalidCharacters] = useProjectSetting(
+    projectId,
+    'platformScripture.invalidCharacters',
+    '',
+  );
+  const [scope, setScope] = useState<string>('');
+  const [text] = usePromise(
+    useCallback(async () => {
+      return getText(scope, scriptureRef, projectId);
+    }, [scope, scriptureRef, projectId]),
+    useMemo(() => '', []),
+  );
 
   return (
     <CharacterInventory
       scriptureReference={scriptureRef}
       setScriptureReference={setScriptureRef}
       localizedStrings={localizedStrings}
-      projectId={projectId}
-      getSetting={getSetting}
-      setSetting={setSetting}
-      getText={getText}
+      approvedItems={validCharacters.split(' ')}
+      onApprovedItemsChange={(items: string[]) => {
+        if (setValidCharacters) setValidCharacters(items.join(' '));
+      }}
+      unapprovedItems={invalidCharacters.split(' ')}
+      onUnapprovedItemsChange={(items: string[]) => {
+        if (setInvalidCharacters) setInvalidCharacters(items.join(' '));
+      }}
+      text={text}
+      onScopeChange={(newScope: string) => setScope(newScope)}
     />
   );
 };

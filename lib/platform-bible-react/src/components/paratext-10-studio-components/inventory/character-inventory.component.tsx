@@ -2,12 +2,9 @@ import { LanguageStrings, ScriptureReference, split } from 'platform-bible-utils
 import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { ColumnDef } from '@/components/advanced-components/data-table/data-table.component';
-import BaseInventory, { ItemKeys } from './base-inventory.component';
+import BaseInventory from './base-inventory.component';
 import { ItemData, Status } from './types';
 import { getSortingIcon } from './utils';
-
-const APPROVED_ITEMS_KEY = 'validCharacters';
-const UNAPPROVED_ITEMS_KEY = 'invalidCharacters';
 
 const buildColumns = (
   itemLabel: string,
@@ -121,24 +118,24 @@ interface CharacterInventoryProps {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
-  projectId: string;
-  getSetting: (itemSet: ItemKeys, projectId: string) => Promise<string[]>;
-  setSetting: (itemSet: ItemKeys, projectId: string, items: string[]) => void;
-  getText: (
-    projectId: string,
-    scriptureRef: ScriptureReference,
-    scope: string,
-  ) => Promise<string | undefined>;
+  approvedItems: string[];
+  onApprovedItemsChange: (items: string[]) => void;
+  unapprovedItems: string[];
+  onUnapprovedItemsChange: (items: string[]) => void;
+  text: string | undefined;
+  onScopeChange: (scope: string) => void;
 }
 
 function CharacterInventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,
-  projectId,
-  getSetting,
-  setSetting,
-  getText,
+  approvedItems,
+  onApprovedItemsChange,
+  unapprovedItems,
+  onUnapprovedItemsChange,
+  text,
+  onScopeChange,
 }: CharacterInventoryProps) {
   const itemLabel = localizedStrings['%webView_inventory_table_header_character%'];
   const unicodeValueLabel = localizedStrings['%webView_inventory_table_header_unicode_value%'];
@@ -152,16 +149,16 @@ function CharacterInventory({
   return (
     <div className="pr-twp">
       <BaseInventory
-        projectId={projectId}
-        localizedStrings={localizedStrings}
         scriptureReference={scriptureReference}
         setScriptureReference={setScriptureReference}
-        approvedItemsKey={APPROVED_ITEMS_KEY}
-        unapprovedItemsKey={UNAPPROVED_ITEMS_KEY}
+        localizedStrings={localizedStrings}
         convertTextToItems={convertTextToItems}
-        getSetting={getSetting}
-        setSetting={setSetting}
-        getText={getText}
+        approvedItems={approvedItems}
+        onApprovedItemsChange={onApprovedItemsChange}
+        unapprovedItems={unapprovedItems}
+        onUnapprovedItemsChange={onUnapprovedItemsChange}
+        text={text}
+        onScopeChange={onScopeChange}
         columns={columns}
       />
     </div>

@@ -69,6 +69,7 @@ export {
 // Paratext components
 
 export { default as CharacterInventory } from './components/paratext-10-studio-components/inventory/character-inventory.component';
+export { default as RepeatedWordsInventory } from './components/paratext-10-studio-components/inventory/repeated-words-inventory.component';
 export { default as DownloadButton } from './components/extension-marketplace/buttons/download-button.component';
 export { default as RemoveButton } from './components/extension-marketplace/buttons/remove-button.component';
 export { default as UpdateButton } from './components/extension-marketplace/buttons/update-button.component';

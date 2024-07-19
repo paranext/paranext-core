@@ -96,7 +96,11 @@ async function openInventory(
   }
 
   const options: InventoryOptions = { title, projectId, webView, webViewType };
-  return papi.webViews.getWebView(webViewType, { type: 'float' }, options);
+  return papi.webViews.getWebView(
+    webViewType,
+    { type: 'float', floatSize: { width: 400, height: 600 } },
+    options,
+  );
 }
 
 const inventoryWebViewProvider: IWebViewProvider = {
