@@ -7,18 +7,20 @@ import { getText, INVENTORY_STRING_KEYS } from './util';
 
 const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
 
-global.webViewComponent = function CharacterInventoryWebView({ useWebViewState }: WebViewProps) {
+global.webViewComponent = function RepeatedWordsInventoryWebView({
+  useWebViewState,
+}: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(INVENTORY_STRING_KEYS);
   const [projectId] = useWebViewState('projectId', '');
   const [scriptureRef, setScriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
-  const [validCharacters, setValidCharacters] = useProjectSetting(
+  const [validItems, setValidItems] = useProjectSetting(
     projectId,
-    'platformScripture.validCharacters',
+    'platformScripture.repeatableWords',
     '',
   );
-  const [invalidCharacters, setInvalidCharacters] = useProjectSetting(
+  const [invalidItems, setInvalidItems] = useProjectSetting(
     projectId,
-    'platformScripture.invalidCharacters',
+    'platformScripture.nonRepeatableWords',
     '',
   );
   const [scope, setScope] = useState<string>('');
@@ -34,13 +36,13 @@ global.webViewComponent = function CharacterInventoryWebView({ useWebViewState }
       scriptureReference={scriptureRef}
       setScriptureReference={setScriptureRef}
       localizedStrings={localizedStrings}
-      approvedItems={validCharacters.split(' ')}
+      approvedItems={validItems.split(' ')}
       onApprovedItemsChange={(items: string[]) => {
-        if (setValidCharacters) setValidCharacters(items.join(' '));
+        if (setValidItems) setValidItems(items.join(' '));
       }}
-      unapprovedItems={invalidCharacters.split(' ')}
+      unapprovedItems={invalidItems.split(' ')}
       onUnapprovedItemsChange={(items: string[]) => {
-        if (setInvalidCharacters) setInvalidCharacters(items.join(' '));
+        if (setInvalidItems) setInvalidItems(items.join(' '));
       }}
       text={text}
       onScopeChange={(newScope: string) => setScope(newScope)}
