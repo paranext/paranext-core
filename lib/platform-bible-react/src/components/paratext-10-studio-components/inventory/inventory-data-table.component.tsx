@@ -7,10 +7,14 @@ import {
   CircleXIcon,
   CircleHelpIcon,
 } from 'lucide-react';
-import { ColumnDef, Row, SortDirection, Table } from '@tanstack/react-table';
 import { LanguageStrings } from 'platform-bible-utils';
 import { Button } from '@/components/shadcn-ui/button';
-import DataTable from '@/components/advanced-components/data-table/data-table.component';
+import DataTable, {
+  ColumnDef,
+  RowContents,
+  SortDirection,
+  TableContents,
+} from '@/components/advanced-components/data-table/data-table.component';
 
 export type Status = true | false | undefined;
 
@@ -160,7 +164,10 @@ function InventoryDataTable({
   const countLabel = localizedStrings['%webView_inventory_table_header_count%'];
   const statusLabel = localizedStrings['%webView_inventory_table_header_status%'];
 
-  const rowClickHandler = (row: Row<CharacterData>, table: Table<CharacterData>) => {
+  const rowClickHandler = (
+    row: RowContents<CharacterData>,
+    table: TableContents<CharacterData>,
+  ) => {
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
 
