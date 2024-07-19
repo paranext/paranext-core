@@ -6,7 +6,7 @@ import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
-import { ColumnDef as TSColumnDef, Row as TSRow, Table as TSTable } from '@tanstack/react-table';
+import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { VariantProps } from 'class-variance-authority';
 import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
@@ -157,6 +157,7 @@ export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapter
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
+export type SortDirection = TSSortDirection;
 export interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];

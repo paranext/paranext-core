@@ -3,6 +3,12 @@ import './index.css';
 // Components and Types
 export { default as BookChapterControl } from './components/advanced-components/book-chapter-control/book-chapter-control.component';
 export { default as DataTable } from './components/advanced-components/data-table/data-table.component';
+export type {
+  ColumnDef,
+  RowContents,
+  SortDirection,
+  TableContents,
+} from './components/advanced-components/data-table/data-table.component';
 
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/chapter-range-selector.component';
