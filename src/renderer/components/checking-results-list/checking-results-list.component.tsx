@@ -3,7 +3,7 @@ import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import {
   Button,
   Label,
-  ResultsSource,
+  ResultsSet,
   ScriptureResultsViewer,
   ScriptureResultsViewerProps,
 } from 'platform-bible-react';
@@ -18,7 +18,7 @@ export type CheckingResultsListProps = ScriptureResultsViewerProps & {
 const getLabel = (
   project: string | undefined,
   datetime: string | undefined,
-  sources: ResultsSource[],
+  sources: ResultsSet[],
 ): string => {
   let result = '';
   if (project) {
@@ -27,7 +27,7 @@ const getLabel = (
   }
   if (datetime) result += `${datetime}; `;
   result += sources
-    .map((s) => (typeof s.src === 'object' ? s.src.displayName : s.src))
+    .map((s) => s.source.displayName)
     .filter(Boolean)
     .join(', ');
   return result;

@@ -1,4 +1,4 @@
-import { ScriptureItemDetail } from 'platform-bible-utils';
+import { ScriptureItemDetail } from '@/components/scripture-results-viewer/scripture-results-viewer.component';
 
 export default function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
   const getRandomNumber = (min: number, max: number) =>

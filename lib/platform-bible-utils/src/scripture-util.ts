@@ -1,4 +1,4 @@
-import { Canon } from '@sillsdev/scripture';
+import { Canon, VerseRef } from '@sillsdev/scripture';
 import { BookInfo, ScriptureReference } from './scripture.model';
 import { split, startsWith } from './string-util';
 
@@ -144,6 +144,17 @@ export async function getLocalizedIdFromBookNumber(
 }
 
 /**
+ * Get the Scripture reference as an easily comparable/sortable integer.
+ *
+ * @param scrRef The Scripture reference.
+ * @returns An integer where the first three digits represent the book, the next three represent the
+ *   chapter and the last three represent the verse.
+ */
+export function ScrRefToBBBCCCVVV(scrRef: ScriptureReference): number {
+  return new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum).BBBCCCVVV;
+}
+
+/**
  * Compares two Scripture references canonically.
  *
  * @param scrRef1 The first Scripture reference to compare.
@@ -153,13 +164,9 @@ export async function getLocalizedIdFromBookNumber(
  *   Positive value if scrRef1 follows scrRef2 in sorting order.
  */
 export function compareScrRefs(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number {
-  // TODO: consider edge cases for invalid references
-  return (
-    scrRef1.bookNum * 100000 +
-    scrRef1.chapterNum * 100 +
-    scrRef1.verseNum -
-    (scrRef2.bookNum * 100000 + scrRef2.chapterNum * 100 + scrRef2.verseNum)
-  );
+  // TODO: consider edge cases for invalid references (current implementation should suffice for
+  // all but the most extreme cases)
+  return ScrRefToBBBCCCVVV(scrRef1) - ScrRefToBBBCCCVVV(scrRef2);
 }
 
 /**

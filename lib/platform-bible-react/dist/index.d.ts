@@ -58,10 +58,6 @@ export type ScriptureSelection = {
 	start: ScriptureNode | ScriptureTextAnchor;
 	end?: ScriptureNode | ScriptureTextAnchor;
 };
-export type ScriptureCheckDefinition = {
-	id: string;
-	displayName: string;
-};
 /** Within type T, recursively change properties that were of type A to be of type B */
 export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
@@ -163,39 +159,6 @@ export type MultiColumnMenu = {
  * can be applied to any menu type as needed.
  */
 export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
-/**
- * Information (e.g., a checking error or some other type of "transient" annotation) about something
- * noteworthy at a specific place in an instance of the Scriptures.
- */
-export type ScriptureItemDetail = ScriptureSelection & {
-	/**
-	 * Text of the error, note, etc. In the future, we might want to support something more than just
-	 * text so that a JSX element could be provided with a link or some other controls related to the
-	 * issue being reported. That presumably can't be represented here in the model, unless we just
-	 * turn this into an "any" and determine the actual type at runtime.
-	 */
-	detail: string;
-};
-/**
- * Represents a source of results keyed by Scripture reference. Generally, the source will be a
- * particular Scripture check, but this type also allows for other types of (uniquely identifiable
- * but potentially unnamed) sources.
- */
-export type ResultsSource = {
-	/**
-	 * Object that defines/describes the backing source associated with this results source, ensuring
-	 * that it can be uniquely identified.
-	 *
-	 * @type {string | ScriptureCheckDefinition}
-	 */
-	src: string | ScriptureCheckDefinition;
-	/**
-	 * Array of Scripture item details (messages keyed by Scripture reference).
-	 *
-	 * @type {ScriptureItemDetail[]}
-	 */
-	data: ScriptureItemDetail[];
-};
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -574,9 +537,59 @@ export interface ScrRefSelectorProps {
 	id?: string;
 }
 export declare function RefSelector({ scrRef, handleSubmit, id }: ScrRefSelectorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Information (e.g., a checking error or some other type of "transient" annotation) about something
+ * noteworthy at a specific place in an instance of the Scriptures.
+ */
+export type ScriptureItemDetail = ScriptureSelection & {
+	/**
+	 * Text of the error, note, etc. In the future, we might want to support something more than just
+	 * text so that a JSX element could be provided with a link or some other controls related to the
+	 * issue being reported.
+	 */
+	detail: string;
+};
+/**
+ * A uniquely identifiable source of results that can be displayed in the ScriptureResultsViewer.
+ * Generally, the source will be a particular Scripture check, but there may be other types of
+ * sources.
+ */
+export type ResultsSource = {
+	/**
+	 * Uniquely identifies the source.
+	 *
+	 * @type {string}
+	 */
+	id: string;
+	/**
+	 * Name (potentially localized) of the source, suitable for display in the UI.
+	 *
+	 * @type {string}
+	 */
+	displayName: string;
+};
 export type ScriptureSrcItemDetail = ScriptureItemDetail & {
 	/** Source/type of detail. Can be used for grouping. */
-	source: string | ScriptureCheckDefinition;
+	source: ResultsSource;
+};
+/**
+ * Represents a set of results keyed by Scripture reference. Generally, the source will be a
+ * particular Scripture check, but this type also allows for other types of uniquely identifiable
+ * sources.
+ */
+export type ResultsSet = {
+	/**
+	 * The backing source associated with this set of results.
+	 *
+	 * @type {ResultsSource}
+	 */
+	source: ResultsSource;
+	/**
+	 * Array of Scripture item details (messages keyed by Scripture reference).
+	 *
+	 * @type {ScriptureItemDetail[]}
+	 */
+	data: ScriptureItemDetail[];
 };
 export type ScriptureResultsViewerColumnInfo = {
 	/** Optional header to display for the Reference column. Default value: 'Scripture Reference'. */
@@ -589,11 +602,8 @@ export type ScriptureResultsViewerColumnInfo = {
 	detailsColumnName?: string;
 };
 export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
-	/**
-	 * Instances of Scripture checks or other objects that emit resultsUpdated events and provide
-	 * ScriptureItemDetail objects
-	 */
-	sources: ResultsSource[];
+	/** Groups of ScriptureItemDetail objects from particular sources (e.g., Scripture checks) */
+	sources: ResultsSet[];
 	/** Flag indicating whether to display column headers. Default is false. */
 	showColumnHeaders?: boolean;
 	/** Flag indicating whether to display source column. Default is false. */

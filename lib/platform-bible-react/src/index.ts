@@ -32,6 +32,9 @@ export { default as RefSelector } from './components/ref-selector.component';
 export type { ScrRefSelectorProps } from './components/ref-selector.component';
 export { default as ScriptureResultsViewer } from './components/scripture-results-viewer/scripture-results-viewer.component';
 export type {
+  ResultsSet,
+  ResultsSource,
+  ScriptureItemDetail,
   ScriptureResultsViewerColumnInfo,
   ScriptureResultsViewerProps,
   ScriptureSrcItemDetail,

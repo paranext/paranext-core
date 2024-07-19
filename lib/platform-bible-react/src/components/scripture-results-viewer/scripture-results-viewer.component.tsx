@@ -18,10 +18,8 @@ import '@/components/scripture-results-viewer/scripture-results-viewer.component
 import {
   compareScrRefs,
   formatScrRef,
-  ScriptureCheckDefinition,
-  ScriptureItemDetail,
+  ScriptureSelection,
   ScriptureReference,
-  ResultsSource,
 } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button } from '../shadcn-ui/button';
@@ -35,9 +33,64 @@ import {
 } from '../shadcn-ui/select';
 import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '../shadcn-ui/table';
 
+/**
+ * Information (e.g., a checking error or some other type of "transient" annotation) about something
+ * noteworthy at a specific place in an instance of the Scriptures.
+ */
+export type ScriptureItemDetail = ScriptureSelection & {
+  /**
+   * Text of the error, note, etc. In the future, we might want to support something more than just
+   * text so that a JSX element could be provided with a link or some other controls related to the
+   * issue being reported.
+   */
+  detail: string;
+};
+
+/**
+ * A uniquely identifiable source of results that can be displayed in the ScriptureResultsViewer.
+ * Generally, the source will be a particular Scripture check, but there may be other types of
+ * sources.
+ */
+export type ResultsSource = {
+  /**
+   * Uniquely identifies the source.
+   *
+   * @type {string}
+   */
+  id: string;
+
+  /**
+   * Name (potentially localized) of the source, suitable for display in the UI.
+   *
+   * @type {string}
+   */
+  displayName: string;
+};
+
 export type ScriptureSrcItemDetail = ScriptureItemDetail & {
   /** Source/type of detail. Can be used for grouping. */
-  source: string | ScriptureCheckDefinition;
+  source: ResultsSource;
+};
+
+/**
+ * Represents a set of results keyed by Scripture reference. Generally, the source will be a
+ * particular Scripture check, but this type also allows for other types of uniquely identifiable
+ * sources.
+ */
+export type ResultsSet = {
+  /**
+   * The backing source associated with this set of results.
+   *
+   * @type {ResultsSource}
+   */
+  source: ResultsSource;
+
+  /**
+   * Array of Scripture item details (messages keyed by Scripture reference).
+   *
+   * @type {ScriptureItemDetail[]}
+   */
+  data: ScriptureItemDetail[];
 };
 
 const scrBookColId = 'scrBook';
@@ -65,11 +118,8 @@ export type ScriptureResultsViewerColumnInfo = {
 };
 
 export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
-  /**
-   * Instances of Scripture checks or other objects that emit resultsUpdated events and provide
-   * ScriptureItemDetail objects
-   */
-  sources: ResultsSource[];
+  /** Groups of ScriptureItemDetail objects from particular sources (e.g., Scripture checks) */
+  sources: ResultsSet[];
 
   /** Flag indicating whether to display column headers. Default is false. */
   showColumnHeaders?: boolean;
@@ -119,13 +169,13 @@ function getColumns(
       enableGrouping: false,
     },
     {
-      accessorFn: (row) =>
-        typeof row.source === 'object' && 'displayName' in row.source
-          ? row.source.displayName
-          : row.source,
+      accessorFn: (row) => row.source.displayName,
       id: typeColId,
       header: showSrcCol ? colInfo?.typeColumnName ?? defaultTypeColumnName : undefined,
       cell: (info) => (showSrcCol || info.row.getIsGrouped() ? info.getValue() : undefined),
+      getGroupingValue: (row) => row.source.id,
+      sortingFn: (a, b) =>
+        a.original.source.displayName.localeCompare(b.original.source.displayName),
       enableGrouping: true,
     },
     {
@@ -161,10 +211,10 @@ export default function ScriptureResultsViewer({
   const [data, setData] = useState<ScriptureSrcItemDetail[]>(() => {
     // Initial data extraction from sources
     return sources.flatMap((source) => {
-      const srcOrId = source.src;
+      const src = source.source;
       return source.data.map((item) => ({
         ...item,
-        source: srcOrId,
+        source: src,
       }));
     });
   });
@@ -174,10 +224,10 @@ export default function ScriptureResultsViewer({
     // Update data whenever sources change
     setData(() => {
       return sources.flatMap((source) => {
-        const srcOrId = source.src;
+        const src = source.source;
         return source.data.map((item) => ({
           ...item,
-          source: srcOrId,
+          source: src,
         }));
       });
     });
@@ -195,6 +245,18 @@ export default function ScriptureResultsViewer({
       ),
     [scriptureReferenceColumnName, typeColumnName, detailsColumnName, showSourceColumn],
   );
+
+  useEffect(() => {
+    // Ensure sorting is applied correctly when grouped by type
+    if (grouping.includes(typeColId)) {
+      setSorting([
+        { id: typeColId, desc: false },
+        { id: scrBookColId, desc: false },
+      ]);
+    } else {
+      setSorting([{ id: scrBookColId, desc: false }]);
+    }
+  }, [grouping]);
 
   function toBCV(ref: ScriptureReference) {
     return ref.bookNum * 1000000 + ref.chapterNum * 1000 + ref.verseNum;

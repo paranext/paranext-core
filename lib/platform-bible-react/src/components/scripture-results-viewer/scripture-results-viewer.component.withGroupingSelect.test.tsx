@@ -32,7 +32,7 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
 
   const sources = [
     {
-      src: repeatedWordsCheck,
+      source: repeatedWordsCheck,
       data: [
         {
           start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
@@ -41,7 +41,7 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
       ],
     },
     {
-      src: markersCheck,
+      source: markersCheck,
       data: [
         {
           start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
@@ -54,7 +54,7 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
       ],
     },
     {
-      src: quotationsCheck,
+      source: quotationsCheck,
       data: [
         {
           start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
@@ -161,7 +161,7 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
     expect(dataState?.value).toBe('selected');
 
     expect(numberOfRowSelectsHandled).toBe(1);
-    expect(lastSelectedItem?.source).toBe(sources[0].src);
+    expect(lastSelectedItem?.source).toBe(sources[0].source);
     expect(lastSelectedItem?.detail).toBe(sources[0].data[0].detail);
     expect(lastSelectedItem?.start).toBe(sources[0].data[0].start);
     expect(lastSelectedItem?.end).toBeUndefined();

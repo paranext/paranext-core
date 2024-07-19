@@ -31,8 +31,3 @@ export type ScriptureSelection = {
   start: ScriptureNode | ScriptureTextAnchor;
   end?: ScriptureNode | ScriptureTextAnchor;
 };
-
-export type ScriptureCheckDefinition = {
-  id: string;
-  displayName: string;
-};

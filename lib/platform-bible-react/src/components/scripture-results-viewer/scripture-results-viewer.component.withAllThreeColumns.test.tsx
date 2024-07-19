@@ -16,7 +16,7 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
 
   const sources = [
     {
-      src: repeatedWordsCheck,
+      source: repeatedWordsCheck,
       data: [
         {
           start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
@@ -25,7 +25,7 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
       ],
     },
     {
-      src: markersCheck,
+      source: markersCheck,
       data: [
         {
           start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
@@ -38,7 +38,7 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
       ],
     },
     {
-      src: quotationsCheck,
+      source: quotationsCheck,
       data: [
         {
           start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },

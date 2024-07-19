@@ -53,7 +53,7 @@ function createTestCheck(id: string, displayName: string, possibleErrors: string
   let data = generateRandomCheckingData(possibleErrors);
 
   return {
-    src: check,
+    source: check,
     data,
     reRun() {
       data = generateRandomCheckingData(possibleErrors);

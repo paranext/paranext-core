@@ -6,15 +6,18 @@ import generateRandomCheckingData from './generate-random-checking-data';
 export default function ScriptureResultsViewerPreview() {
   const checks = [
     {
-      id: 'Repeated Words',
+      id: 'preview.repeatedWords',
+      displayName: 'Repeated Words',
       possibleErrors: ['Word repeated'],
     },
     {
-      id: 'Characters',
+      id: 'preview.characters',
+      displayName: 'Characters',
       possibleErrors: ['Invalid character', 'Unknown character'],
     },
     {
-      id: 'Quotation marks',
+      id: 'preview.quotationMarks',
+      displayName: 'Quotation Marks',
       possibleErrors: [
         'Closing first-level quotation mark missing',
         'Closing second-level quotation mark missing',
@@ -23,7 +26,8 @@ export default function ScriptureResultsViewerPreview() {
       ],
     },
     {
-      id: 'Chapter/Verse Numbers',
+      id: 'preview.chapterVerseNumbers',
+      displayName: 'Chapter/Verse Numbers',
       possibleErrors: [
         'Missing Verse number',
         'Missing chapter',
@@ -36,7 +40,7 @@ export default function ScriptureResultsViewerPreview() {
 
   const [sources, setSources] = useState(() =>
     checks.map((check) => ({
-      src: check.id,
+      source: check,
       data: generateRandomCheckingData(check.possibleErrors),
     })),
   );
@@ -66,7 +70,7 @@ export default function ScriptureResultsViewerPreview() {
             onClick={() => updateSource(index)}
             style={{ margin: '0px 6px 10px 0px' }}
           >
-            Update {check.id} check results
+            Update {check.displayName} check results
           </Button>
         ))}
       </div>

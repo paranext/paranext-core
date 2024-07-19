@@ -73,11 +73,8 @@ export type {
   CanHaveOnDidDispose,
 } from './disposal.model';
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
-export type { ResultsSource } from './results-source-model';
-export type { ScriptureItemDetail } from './scripture-item-detail-model';
 export type {
   BookInfo,
-  ScriptureCheckDefinition,
   ScriptureReference,
   ScriptureNode,
   ScriptureSelection,
