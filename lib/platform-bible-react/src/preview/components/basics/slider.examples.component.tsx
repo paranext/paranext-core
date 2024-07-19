@@ -5,7 +5,7 @@ export default function SliderExamples() {
   const [sliderValue, setSlider] = useState(3);
   return (
     <>
-      Wrongly using MUI slide right now 😬
+      Wrongly using MUI slider right now 😬
       <Slider />
       <Slider isDisabled />
       <Slider
