@@ -1,18 +1,19 @@
 import { useState } from 'react';
 
 import {
-  ColumnDef,
+  ColumnDef as TSColumnDef,
   ColumnFiltersState,
-  Row,
-  SortingState,
-  VisibilityState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  Row as TSRow,
+  SortDirection as TSSortDirection,
+  SortingState,
+  Table as TSTable,
   useReactTable,
-  Table as tsTable,
+  VisibilityState,
 } from '@tanstack/react-table';
 
 import {
@@ -27,13 +28,18 @@ import { Button } from '@/components/shadcn-ui/button';
 import DataTablePagination from './data-table-pagination.component';
 import DataTableViewOptions from './data-table-column-toggle.component';
 
+export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
+export type RowContents<TData> = TSRow<TData>;
+export type TableContents<TData> = TSTable<TData>;
+export type SortDirection = TSSortDirection;
+
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   enablePagination?: boolean;
   showPaginationControls?: boolean;
   showColumnVisibilityControls?: boolean;
-  onRowClickHandler?: (row: Row<TData>, table: tsTable<TData>) => void;
+  onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
 
 function DataTable<TData, TValue>({
@@ -71,7 +77,7 @@ function DataTable<TData, TValue>({
   return (
     <div>
       {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
-      <div className="pr-twp">
+      <div className="pr-twp pr-font-sans">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
