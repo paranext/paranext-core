@@ -1,5 +1,8 @@
-import { ColumnDef, Row, Table } from '@tanstack/react-table';
-import DataTable from '@/components/advanced-components/data-table/data-table.component';
+import DataTable, {
+  ColumnDef,
+  RowContents,
+  TableContents,
+} from '@/components/advanced-components/data-table/data-table.component';
 import { ItemData } from '../types';
 
 interface InventoryDataTableProps {
@@ -9,7 +12,7 @@ interface InventoryDataTableProps {
 }
 
 function InventoryDataTable({ columns, tableData, onSelectItem }: InventoryDataTableProps) {
-  const rowClickHandler = (row: Row<ItemData>, table: Table<ItemData>) => {
+  const rowClickHandler = (row: RowContents<ItemData>, table: TableContents<ItemData>) => {
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
 

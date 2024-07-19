@@ -8,7 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import { ColumnDef } from '@tanstack/react-table';
+import { ColumnDef } from '@/components/advanced-components/data-table/data-table.component';
 import InventoryDataTable from './tables/inventory-data-table.component';
 import OccurrencesTable from './tables/occurrences-table.component';
 import { ItemData, Status } from './types';

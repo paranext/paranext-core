@@ -1,7 +1,7 @@
 import { LanguageStrings, ScriptureReference, split } from 'platform-bible-utils';
-import { ColumnDef } from '@tanstack/react-table';
 import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
+import { ColumnDef } from '@/components/advanced-components/data-table/data-table.component';
 import BaseInventory, { ItemKeys } from './base-inventory.component';
 import { ItemData, Status } from './types';
 import { getSortingIcon } from './utils';

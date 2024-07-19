@@ -1,4 +1,4 @@
-import { SortDirection } from '@tanstack/react-table';
+import { SortDirection } from '@/components/advanced-components/data-table/data-table.component';
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
 import { ReactNode } from 'react';
 

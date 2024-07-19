@@ -1,4 +1,7 @@
-import { ColumnDef, SortDirection } from '@tanstack/react-table';
+import {
+  ColumnDef,
+  SortDirection,
+} from '@/components/advanced-components/data-table/data-table.component';
 import { Button } from '../../..';
 
 type MyDataType = {
