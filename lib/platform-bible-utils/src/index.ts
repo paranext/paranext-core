@@ -13,7 +13,6 @@ export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 // Consts
 export {
   getChaptersForBook,
-  getLocalizedIdFromBookNumber,
   offsetBook,
   offsetChapter,
   offsetVerse,
@@ -37,6 +36,12 @@ export {
   getAllObjectFunctionNames,
   createSyncProxyForAsyncObject,
 } from './util';
+export {
+  compareScrRefs,
+  formatScrRef,
+  getLocalizedIdFromBookNumber,
+  scrRefToBBBCCCVVV,
+} from './scripture-util';
 export {
   at,
   charAt,
@@ -73,7 +78,13 @@ export type {
   CanHaveOnDidDispose,
 } from './disposal.model';
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
-export type { ScriptureReference, BookInfo } from './scripture.model';
+export type {
+  BookInfo,
+  ScriptureReference,
+  ScriptureNode,
+  ScriptureSelection,
+  ScriptureTextAnchor,
+} from './scripture.model';
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 export type {

@@ -36,6 +36,15 @@ export type { IconButtonProps } from './components/icon-button.component';
 export { default as LabelPosition } from './components/label-position.model';
 export { default as MenuItem } from './components/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/menu-item.component';
+export { default as ScriptureResultsViewer } from './components/scripture-results-viewer/scripture-results-viewer.component';
+export type {
+  ResultsSet,
+  ResultsSource,
+  ScriptureItemDetail,
+  ScriptureResultsViewerColumnInfo,
+  ScriptureResultsViewerProps,
+  ScriptureSrcItemDetail,
+} from './components/scripture-results-viewer/scripture-results-viewer.component';
 export { default as SearchBar } from './components/search-bar.component';
 export type { SearchBarProps } from './components/search-bar.component';
 export { default as Slider } from './components/slider.component';
@@ -59,6 +68,7 @@ export * from './components/shadcn-ui/dropdown-menu';
 export * from './components/shadcn-ui/select';
 export * from './components/shadcn-ui/table';
 export { Tabs, TabsList, TabsContent, TabsTrigger } from './components/shadcn-ui/tabs';
+export { Label } from '@/components/shadcn-ui/label';
 export {
   VerticalTabs,
   VerticalTabsList,

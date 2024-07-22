@@ -2,6 +2,7 @@
 
 import { AutocompleteChangeDetails, AutocompleteChangeReason, AutocompleteValue, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import * as LabelPrimitive from '@radix-ui/react-label';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
@@ -39,6 +40,25 @@ export interface ScriptureReference {
 	chapterNum: number;
 	verseNum: number;
 }
+/**
+ * Represents a "node" in the JSON used to present Scripture in the editor, with a path that is
+ * relative to the start of a verse.
+ */
+export type ScriptureNode = ScriptureReference & {
+	jsonPath: string;
+};
+/** Represents a specific character offset in the text of a textual Scripture node (in the editor.) */
+export type ScriptureTextAnchor = ScriptureNode & {
+	offset: number;
+};
+/**
+ * Represents a range of text in the Scripture editor. The start and end node are expected to be in
+ * the same book.
+ */
+export type ScriptureSelection = {
+	start: ScriptureNode | ScriptureTextAnchor;
+	end?: ScriptureNode | ScriptureTextAnchor;
+};
 /** Within type T, recursively change properties that were of type A to be of type B */
 export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
@@ -534,6 +554,90 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Information (e.g., a checking error or some other type of "transient" annotation) about something
+ * noteworthy at a specific place in an instance of the Scriptures.
+ */
+export type ScriptureItemDetail = ScriptureSelection & {
+	/**
+	 * Text of the error, note, etc. In the future, we might want to support something more than just
+	 * text so that a JSX element could be provided with a link or some other controls related to the
+	 * issue being reported.
+	 */
+	detail: string;
+};
+/**
+ * A uniquely identifiable source of results that can be displayed in the ScriptureResultsViewer.
+ * Generally, the source will be a particular Scripture check, but there may be other types of
+ * sources.
+ */
+export type ResultsSource = {
+	/**
+	 * Uniquely identifies the source.
+	 *
+	 * @type {string}
+	 */
+	id: string;
+	/**
+	 * Name (potentially localized) of the source, suitable for display in the UI.
+	 *
+	 * @type {string}
+	 */
+	displayName: string;
+};
+export type ScriptureSrcItemDetail = ScriptureItemDetail & {
+	/** Source/type of detail. Can be used for grouping. */
+	source: ResultsSource;
+};
+/**
+ * Represents a set of results keyed by Scripture reference. Generally, the source will be a
+ * particular Scripture check, but this type also allows for other types of uniquely identifiable
+ * sources.
+ */
+export type ResultsSet = {
+	/**
+	 * The backing source associated with this set of results.
+	 *
+	 * @type {ResultsSource}
+	 */
+	source: ResultsSource;
+	/**
+	 * Array of Scripture item details (messages keyed by Scripture reference).
+	 *
+	 * @type {ScriptureItemDetail[]}
+	 */
+	data: ScriptureItemDetail[];
+};
+export type ScriptureResultsViewerColumnInfo = {
+	/** Optional header to display for the Reference column. Default value: 'Scripture Reference'. */
+	scriptureReferenceColumnName?: string;
+	/** Optional text to display to refer to the Scripture book group. Default value: 'Scripture Book'. */
+	scriptureBookGroupName?: string;
+	/** Optional header to display for the Type column. Default value: 'Type'. */
+	typeColumnName?: string;
+	/** Optional header to display for the Details column. Default value: 'Details' */
+	detailsColumnName?: string;
+};
+export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
+	/** Groups of ScriptureItemDetail objects from particular sources (e.g., Scripture checks) */
+	sources: ResultsSet[];
+	/** Flag indicating whether to display column headers. Default is false. */
+	showColumnHeaders?: boolean;
+	/** Flag indicating whether to display source column. Default is false. */
+	showSourceColumn?: boolean;
+	/** Callback function to notify when a row is selected */
+	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
+};
+/**
+ * Component to display a combined list of detailed items from one or more sources, where the items
+ * are keyed primarily by Scripture reference. This is particularly useful for displaying a list of
+ * results from Scripture checks, but more generally could be used to display any "results" from any
+ * source(s). The component allows for grouping by Scripture book, source, or both. By default, it
+ * displays somewhat "tree-like" which allows it to be more horizontally compact and intuitive. But
+ * it also has the option of displaying as a traditional table with column headings (with or without
+ * the source column showing).
+ */
+export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed
@@ -885,6 +989,7 @@ export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPri
 export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: import("class-variance-authority/dist/types").ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
 export type LeftTabsTriggerProps = TabsTriggerProps & {
 	value: string;
 	ref?: React$1.Ref<HTMLButtonElement>;
