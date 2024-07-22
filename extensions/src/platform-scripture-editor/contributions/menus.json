@@ -77,7 +77,7 @@
           {
             "label": "%webView_platformScriptureEditor_repeatedWordsInventory%",
             "group": "platformScriptureEditor.inventory",
-            "order": 1,
+            "order": 2,
             "command": "platformScripture.openRepeatedWordsInventory"
           },
           {
