@@ -14,8 +14,7 @@ import ScriptureExtenderProjectDataProviderEngineFactory, {
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
-import characterInventoryWebView from './character-inventory.web-view?inline';
-import repeatedWordsInventoryWebView from './repeated-words-inventory.web-view?inline';
+import inventoryWebView from './inventory.web-view?inline';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -63,19 +62,14 @@ async function openPlatformCharactersInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
   const title: string = 'Character Inventory';
-  return openInventory(title, webViewId, characterInventoryWebView, characterInventoryWebViewType);
+  return openInventory(title, webViewId, inventoryWebView, characterInventoryWebViewType);
 }
 
 async function openPlatformRepeatedWordsInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
   const title: string = 'Repeated Words Inventory';
-  return openInventory(
-    title,
-    webViewId,
-    repeatedWordsInventoryWebView,
-    repeatedWordsInventoryWebViewType,
-  );
+  return openInventory(title, webViewId, inventoryWebView, repeatedWordsInventoryWebViewType);
 }
 
 async function openInventory(
@@ -98,41 +92,45 @@ async function openInventory(
   const options: InventoryOptions = { title, projectId, webView, webViewType };
   return papi.webViews.getWebView(
     webViewType,
-    { type: 'float', floatSize: { width: 400, height: 600 } },
+    { type: 'float', floatSize: { width: 600, height: 800 } },
     options,
   );
 }
 
-const inventoryWebViewProvider: IWebViewProvider = {
-  async getWebView(
-    savedWebView: SavedWebViewDefinition,
-    getWebViewOptions: InventoryOptions,
-  ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== getWebViewOptions.webViewType)
-      throw new Error(
-        `${getWebViewOptions.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
-      );
+class WebViewProviderGenerator {
+  inventoryWebViewProvider: IWebViewProvider = {
+    async getWebView(
+      savedWebView: SavedWebViewDefinition,
+      getWebViewOptions: InventoryOptions,
+    ): Promise<WebViewDefinition | undefined> {
+      const webViewType = getWebViewOptions.webViewType || undefined;
+      if (savedWebView.webViewType !== webViewType)
+        throw new Error(
+          `${webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+        );
 
-    // We know that the projectId (if present in the state) will be a string.
-    const projectId =
-      getWebViewOptions.projectId ||
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      (savedWebView.state?.projectId as string) ||
-      undefined;
+      // We know that the projectId (if present in the state) will be a string.
+      const projectId =
+        getWebViewOptions.projectId ||
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        (savedWebView.state?.projectId as string) ||
+        undefined;
 
-    const title = getWebViewOptions.title || undefined;
+      const title = getWebViewOptions.title || undefined;
 
-    return {
-      title,
-      ...savedWebView,
-      content: getWebViewOptions.webView,
-      state: {
-        ...savedWebView.state,
-        projectId,
-      },
-    };
-  },
-};
+      return {
+        title,
+        ...savedWebView,
+        content: getWebViewOptions.webView,
+        state: {
+          ...savedWebView.state,
+          projectId,
+          webViewType,
+        },
+      };
+    },
+  };
+}
 
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
@@ -143,6 +141,9 @@ export async function activate(context: ExecutionActivationContext) {
       SCRIPTURE_EXTENDER_PROJECT_INTERFACES,
       new ScriptureExtenderProjectDataProviderEngineFactory(SCRIPTURE_EXTENDER_PDPF_ID),
     );
+
+  const characterInventoryWebViewProviderGenerator = new WebViewProviderGenerator();
+  const repeatedWordsInventoryWebViewProviderGenerator = new WebViewProviderGenerator();
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
@@ -182,7 +183,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const characterInventoryWebViewProviderPromise = papi.webViewProviders.register(
     characterInventoryWebViewType,
-    inventoryWebViewProvider,
+    characterInventoryWebViewProviderGenerator.inventoryWebViewProvider,
   );
   const repeatableWordsPromise = papi.projectSettings.registerValidator(
     'platformScripture.repeatableWords',
@@ -198,7 +199,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const repeatableWordsInventoryWebViewProviderPromise = papi.webViewProviders.register(
     repeatedWordsInventoryWebViewType,
-    inventoryWebViewProvider,
+    repeatedWordsInventoryWebViewProviderGenerator.inventoryWebViewProvider,
   );
 
   await checkHostingService.initialize();
