@@ -9,7 +9,7 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 // import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/extension-manager/extension-manager-tab.component';
 import { TAB_TYPE_SETTINGS_DIALOG } from '@renderer/components/settings-dialog/settings-tab.component';
 import { TAB_TYPE_RUN_BASIC_CHECKS } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
-import { ScriptureItemDetail } from 'platform-bible-utils';
+import { ScriptureItemDetail } from 'platform-bible-react';
 import TAB_TYPE_CHECKING_RESULTS_LIST from '@renderer/components/checking-results-list/checking-results-list.constants';
 import LOREM_IPSUM from './lorem-ipsum';
 
