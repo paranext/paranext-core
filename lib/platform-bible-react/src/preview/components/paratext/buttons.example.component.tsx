@@ -5,6 +5,10 @@ import UpdateButton from '@/components/extension-marketplace/buttons/update-butt
 export default function MarketplaceButtonExamples() {
   return (
     <>
+      <p>
+        Note: These buttons are currently styled with fixed colors and are therefore not themeable
+      </p>
+      <br />
       Download Button:
       <div className="pr-space-x-2">
         <DownloadButton isDownloading={false} handleClick={() => {}} buttonText="Get" />
