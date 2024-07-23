@@ -126,10 +126,10 @@
     --muted-foreground: 33.9, 32.4%, 86.1%;
     --popover: 180, 71.4%, 5%;
     --popover-foreground: 0, 0%, 100%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --border: 220 13% 91%;
-    --input: 161.3, 26.7%, 88.2%;
+    --card: 0 0% 0%;
+    --card-foreground: 0, 0%, 100%;
+    --border: 220 13% 20%;
+    --input: 220 13% 20%;
     --primary: 161.3, 26.7%, 88.2%;
     --primary-foreground: 173.4, 82.1%, 15.3%;
     --secondary: 180, 71.4%, 11%;
