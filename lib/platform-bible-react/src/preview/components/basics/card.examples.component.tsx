@@ -1,20 +1,101 @@
-import { Button, Card, CardDescription, CardFooter, CardHeader, CardTitle } from '../../..';
+import { Label } from '@/components/shadcn-ui/label';
+import { Switch } from '@/components/shadcn-ui/switch';
+import { BellRing, Check } from 'lucide-react';
+import {
+  Button,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+  Input,
+} from '../../..';
+import SelectExamples from './select.examples.component';
 
 export default function CardExamples() {
+  const cardContent = (
+    <div className="pr-flex pr-items-center pr-space-x-4 pr-rounded-md pr-border pr-p-4">
+      <BellRing />
+      <div className="pr-flex-1 pr-space-y-1">
+        <p className="pr-text-sm pr-font-medium pr-leading-none">Push Notifications</p>
+        <p className="pr-text-sm pr-text-muted-foreground">Send notifications to device.</p>
+      </div>
+      <Switch />
+    </div>
+  );
+
   return (
     <>
-      <Card className="sm:col-span-2">
-        <CardHeader className="pb-3">Hello World</CardHeader>
+      <Card>Card only</Card>
+
+      <Card>
+        <CardDescription>Card with CardDescription only</CardDescription>
       </Card>
-      <Card className="sm:col-span-2">
-        <CardHeader className="pb-3">
+
+      <Card>
+        <CardHeader>Card with CardHeader only</CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardDescription>Card with CardHeader including a CardDescription</CardDescription>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Card with CardHeader including a CardTitle</CardTitle>
+        </CardHeader>
+      </Card>
+
+      <Card>
+        <CardHeader className="pr-pb-3">
           <CardTitle>Psalms Layer-by-Layer</CardTitle>
-          <CardDescription className="max-w-lg text-balance leading-relaxed flex">
+          <CardDescription className="pr-flex pr-max-w-lg pr-text-balance pr-leading-relaxed">
             Unpacking the meaning of the Psalms for translators
           </CardDescription>
         </CardHeader>
         <CardFooter>
           <Button>More information</Button>
+        </CardFooter>
+      </Card>
+
+      <Card className="pr-w-[350px]">
+        <CardHeader>
+          <CardTitle>Create project</CardTitle>
+          <CardDescription>Deploy your new project in one-click.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form>
+            <div className="pr-grid pr-w-full pr-items-center pr-gap-4">
+              <div className="pr-flex pr-flex-col pr-space-y-1.5">
+                <Label htmlFor="name">Name</Label>
+                <Input id="name" placeholder="Name of your project" />
+              </div>
+              <div className="pr-flex pr-flex-col pr-space-y-1.5">
+                <Label htmlFor="framework">Framework</Label>
+                <SelectExamples />
+              </div>
+            </div>
+          </form>
+        </CardContent>
+        <CardFooter className="pr-flex pr-justify-between">
+          <Button variant="outline">Cancel</Button>
+          <Button>Deploy</Button>
+        </CardFooter>
+      </Card>
+
+      <Card className="pr-w-[350px]">
+        <CardHeader>
+          <CardTitle>Notifications</CardTitle>
+          <CardDescription>You have 3 unread messages.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4">{cardContent}</CardContent>
+        <CardFooter>
+          <Button className="w-full">
+            <Check className="mr-2 h-4 w-4" /> Mark all as read
+          </Button>
         </CardFooter>
       </Card>
     </>

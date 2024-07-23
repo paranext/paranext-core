@@ -28,9 +28,13 @@
             "label": "%webView_platformScriptureEditor_options%",
             "order": 3
           },
+          "platformScriptureEditor.tools": {
+            "label": "%webView_platformScriptureEditor_tools%",
+            "order": 4
+          },
           "platformScriptureEditor.info": {
             "label": "%webView_platformScriptureEditor_info%",
-            "order": 4
+            "order": 5
           }
         },
         "groups": {
@@ -44,6 +48,10 @@
           },
           "platformScriptureEditor.general": {
             "column": "platformScriptureEditor.info",
+            "order": 2
+          },
+          "platformScriptureEditor.inventory": {
+            "column": "platformScriptureEditor.tools",
             "order": 2
           }
         },
@@ -59,6 +67,12 @@
             "group": "platformScriptureEditor.colors",
             "order": 1,
             "command": "platformScriptureEditor.changeTextColor"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_charactersInventory%",
+            "group": "platformScriptureEditor.inventory",
+            "order": 1,
+            "command": "platformScripture.openCharactersInventory"
           },
           {
             "label": "%webView_platformScriptureEditor_thickBorders%",

@@ -1,4 +1,4 @@
-import { createUuid, createNonce } from './crypto-util';
+import { createUuid, createNonce, generateHashFromBuffer } from './crypto-util';
 
 test('createUuid returns a property formatted UUID', () => {
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[8-9a-b][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -64,3 +64,13 @@ function calculateEntropy(data: Uint8Array): number {
 
   return entropy;
 }
+
+test('hash algorithm works as expected', () => {
+  const buffer = Buffer.from('Hello, World!', 'utf-8');
+  const hashValue256 = generateHashFromBuffer('sha256', 'base64', buffer);
+  expect(hashValue256).toBe('3/1gIbsr1bCvZ2KQgJ7DpTGR3YHH9wpLKGiKNiGCmG8=');
+  const hashValue512 = generateHashFromBuffer('SHA-512', 'base64', buffer);
+  expect(hashValue512).toBe(
+    'N015SpXNz9izWZMYX++bo2jxYNja9DLQi6nx7R5avmzGkpHg+i/gAGpSVw7xjBne9OYXwzzlLvCm5fvjGMsDhw==',
+  );
+});

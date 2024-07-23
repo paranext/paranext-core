@@ -13,7 +13,7 @@ function Examples({ direction }: HasDirection) {
         </VerticalTabsList>
 
         <VerticalTabsContent value="Window">
-          <div className="pr-my-2 pr-flex pr-gap-2">
+          <div className="pr-mb-2 pr-flex pr-gap-2">
             <WindowOrTabExample direction={direction} />
             <WindowOrTabExample direction={direction} />
           </div>

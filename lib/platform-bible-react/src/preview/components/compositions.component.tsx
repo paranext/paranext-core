@@ -1,9 +1,9 @@
-import { useState } from 'react';
-import { ScriptureReference } from 'platform-bible-utils';
 import ThemeToggle from '@/preview/theme-toggle.component';
+import { ScriptureReference } from 'platform-bible-utils';
+import { useState } from 'react';
 import {
   BookChapterControl,
-  RefSelector,
+  DataTable,
   SearchBar,
   VerticalTabs,
   VerticalTabsContent,
@@ -11,6 +11,7 @@ import {
   VerticalTabsTrigger,
 } from '../..';
 import { HasDirection } from '../direction-toggle';
+import { columns, data } from './data-sources/data-table-content';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -33,6 +34,7 @@ function Compositions({ direction }: HasDirection) {
             Book Chapter Control
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Search Bar">
@@ -40,13 +42,16 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Book Chapter Control">
-          <RefSelector scrRef={scrRef} handleSubmit={setScrRef} />
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
           <div>{JSON.stringify(scrRef)}</div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Theme Toggle">
           <ThemeToggle />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Data Table">
+          <DataTable enablePagination showPaginationControls columns={columns} data={data} />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

@@ -21,10 +21,8 @@ import {
   mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
 } from '@renderer/services/web-view.service-host';
-import {
-  TAB_TYPE_BASIC_LIST,
-  loadBasicListTab,
-} from '@renderer/components/basic-list/basic-list.component';
+import { loadCheckingResultsListTab } from '@renderer/components/checking-results-list/checking-results-list.component';
+import TAB_TYPE_CHECKING_RESULTS_LIST from '@renderer/components/checking-results-list/checking-results-list.constants';
 import DIALOGS from '@renderer/components/dialogs';
 import {
   TAB_TYPE_EXTENSION_MANAGER,
@@ -75,7 +73,7 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
     [TAB_TYPE_SETTINGS_DIALOG, loadSettingsDialog],
     [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
-    [TAB_TYPE_BASIC_LIST, loadBasicListTab],
+    [TAB_TYPE_CHECKING_RESULTS_LIST, loadCheckingResultsListTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition

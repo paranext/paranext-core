@@ -1,18 +1,28 @@
-import { AlertTitle } from '@mui/material';
-import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '../../..';
+import { AlertCircle, Terminal } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '../../..';
 
 export default function ExampleAlerts() {
   return (
     <>
-      <Alert className="pr-max-w-64">Alert! Why do I look like a Card? 🤔</Alert>
+      <Alert>
+        <Terminal className="pr-h-4 pr-w-4" />
+        <AlertTitle>Heads up!</AlertTitle>
+        <AlertDescription>You can add components to your app using the cli.</AlertDescription>
+      </Alert>
       <Alert variant="destructive" className="pr-max-w-64">
-        {/* not sure, why this is displaying black, in the sandbox it's red 🤷 */}
-        <AlertCircle />
+        <AlertCircle className="pr-h-4 pr-w-4" />
         <AlertTitle>Settings are incomplete</AlertTitle>
         <AlertDescription>
           Results from the Capitalization check may be misleading because settings are incomplete
         </AlertDescription>
+      </Alert>
+      <Alert className="pr-max-w-64">
+        <AlertDescription>
+          Alert! With only AlertDescription, this looks like a Card 🤔
+        </AlertDescription>
+      </Alert>
+      <Alert className="pr-max-w-64">
+        Alert! With nothing else in it, this looks like a Card 🤔
       </Alert>
     </>
   );

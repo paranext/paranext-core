@@ -5,7 +5,7 @@ export default function SliderExamples() {
   const [sliderValue, setSlider] = useState(3);
   return (
     <>
-      Default Shadcn sliders are not themed and always blue 🥺
+      Wrongly using MUI slider right now 😬
       <Slider />
       <Slider isDisabled />
       <Slider
