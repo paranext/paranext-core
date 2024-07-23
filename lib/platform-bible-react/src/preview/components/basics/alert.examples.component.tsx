@@ -1,19 +1,16 @@
-import { AlertTitle } from '@mui/material';
 import { AlertCircle, Terminal } from 'lucide-react';
-import { Alert, AlertDescription } from '../../..';
+import { Alert, AlertDescription, AlertTitle } from '../../..';
 
 export default function ExampleAlerts() {
   return (
     <>
-      <p>Note: Spacing and font sizes seems to differ from what is on the shadcn website 🤷</p>
-      <br />
       <Alert>
-        <Terminal className="h-4 w-4" />
+        <Terminal className="pr-h-4 pr-w-4" />
         <AlertTitle>Heads up!</AlertTitle>
         <AlertDescription>You can add components to your app using the cli.</AlertDescription>
       </Alert>
       <Alert variant="destructive" className="pr-max-w-64">
-        <AlertCircle />
+        <AlertCircle className="pr-h-4 pr-w-4" />
         <AlertTitle>Settings are incomplete</AlertTitle>
         <AlertDescription>
           Results from the Capitalization check may be misleading because settings are incomplete
