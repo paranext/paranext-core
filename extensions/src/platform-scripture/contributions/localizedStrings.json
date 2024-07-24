@@ -28,7 +28,7 @@
       "%webView_inventory_scope_chapter%": "Current chapter",
       "%webView_inventory_scope_verse%": "Current verse",
       "%webView_inventory_filter_text%": "Filter text...",
-      "%webView_inventory_table_header_repeatedWords%": "Words",
+      "%webView_inventory_table_header_repeated_words%": "Repeated Word",
       "%webView_inventory_table_header_character%": "Character",
       "%webView_inventory_table_header_unicode_value%": "Unicode Value",
       "%webView_inventory_table_header_count%": "Count",

@@ -1,4 +1,4 @@
-import { LanguageStrings, ScriptureReference, split } from 'platform-bible-utils';
+import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
 import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { ColumnDef } from '@/components/advanced-components/data-table/data-table.component';
@@ -94,8 +94,14 @@ const buildColumns = (
   },
 ];
 
-const convertTextToItems = (text: string): string[] => {
-  return split(text, ' ');
+const extractItems = (text: string, target: string | undefined = undefined): string[] => {
+  const repeatedWords: string[] = [];
+  const words = text.split(/[\s]+/);
+  words.forEach((word, index, allWords) => {
+    if (target && word !== target) return;
+    if (index + 1 < allWords.length && word === allWords[index + 1]) repeatedWords.push(word);
+  });
+  return repeatedWords;
 };
 
 interface RepeatedWordsInventoryProps {
@@ -107,6 +113,7 @@ interface RepeatedWordsInventoryProps {
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
   text: string | undefined;
+  scope: string;
   onScopeChange: (scope: string) => void;
 }
 
@@ -119,13 +126,14 @@ function RepeatedWordsInventory({
   unapprovedItems,
   onUnapprovedItemsChange,
   text,
+  scope,
   onScopeChange,
 }: RepeatedWordsInventoryProps) {
   const itemLabel = localizedStrings['%webView_inventory_table_header_repeated_words%'];
   const countLabel = localizedStrings['%webView_inventory_table_header_count%'];
   const statusLabel = localizedStrings['%webView_inventory_table_header_status%'];
 
-  const columns = (onStatusChange: (newItems: string[], status: Status) => void) => {
+  const columns = (onStatusChange: (changedItems: string[], status: Status) => void) => {
     return buildColumns(itemLabel, countLabel, statusLabel, onStatusChange);
   };
 
@@ -135,12 +143,13 @@ function RepeatedWordsInventory({
         scriptureReference={scriptureReference}
         setScriptureReference={setScriptureReference}
         localizedStrings={localizedStrings}
-        convertTextToItems={convertTextToItems}
+        extractItems={extractItems}
         approvedItems={approvedItems}
         onApprovedItemsChange={onApprovedItemsChange}
         unapprovedItems={unapprovedItems}
         onUnapprovedItemsChange={onUnapprovedItemsChange}
         text={text}
+        scope={scope}
         onScopeChange={onScopeChange}
         columns={columns}
       />

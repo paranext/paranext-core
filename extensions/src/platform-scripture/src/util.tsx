@@ -11,7 +11,7 @@ export const INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_scope_chapter%',
   '%webView_inventory_scope_verse%',
   '%webView_inventory_filter_text%',
-  '%webView_inventory_table_header_repeatedWords%',
+  '%webView_inventory_table_header_repeated_words%',
   '%webView_inventory_table_header_character%',
   '%webView_inventory_table_header_unicode_value%',
   '%webView_inventory_table_header_count%',
@@ -31,8 +31,12 @@ export const getText = async (
     scriptureRef.verseNum,
   );
 
+  console.log('rolf1', scope);
+
   if (scope === 'book') {
+    console.log('rolf2');
     const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Book', projectId);
+    console.log('rolf3');
     return PDP.getBookUSFM(verseRef);
   }
   if (scope === 'chapter') {

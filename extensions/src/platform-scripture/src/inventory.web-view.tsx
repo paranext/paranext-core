@@ -31,7 +31,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
 
   const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
   const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
-  const [scope, setScope] = useState<string>('');
+  const [scope, setScope] = useState<string>('book');
   const [text] = usePromise(
     useCallback(async () => {
       return getText(scope, scriptureRef, projectId);
@@ -53,6 +53,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
         if (setInvalidItems) setInvalidItems(items.join(' '));
       }}
       text={text}
+      scope={scope}
       onScopeChange={(newScope: string) => setScope(newScope)}
     />
   );

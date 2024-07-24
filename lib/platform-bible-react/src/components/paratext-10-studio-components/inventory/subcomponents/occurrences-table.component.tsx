@@ -16,47 +16,56 @@ type SearchResult = {
   key: number;
 };
 
+const extractNumber = (text: string): number => {
+  const regex = /^\\[vc]\s+(\d+)/;
+  const match = text.match(regex);
+  if (match) {
+    return +match[1];
+  }
+  return 0;
+};
+
 const extractOccurrences = (
   text: string | undefined,
   item: string,
+  extractItems: (text: string, item?: string | undefined) => string[],
   scriptureRef: ScriptureReference,
-  // match: (words: string[], item: string) => boolean
 ): SearchResult[] => {
   if (!text || text === '' || item === '') return [];
 
   const results: SearchResult[] = [];
   const lines = text.split('\n');
 
-  let currentChapter: string = '0';
-  let currentVerse: string = '0';
+  let currentChapter: number = scriptureRef.chapterNum;
+  let currentVerse: number = scriptureRef.verseNum;
   let key: number = 0;
 
   lines.forEach((line) => {
-    const words = line.split(/\s+/);
+    if (line.startsWith('\\id')) {
+      currentChapter = 0;
+      currentVerse = 0;
+    }
     if (line.startsWith('\\c')) {
-      [, currentChapter] = words;
-      currentVerse = '0';
+      currentChapter = extractNumber(line);
+      currentVerse = 0;
     }
     if (line.startsWith('\\v')) {
-      [, currentVerse] = words;
-      if (currentChapter === '0') {
-        currentChapter = scriptureRef.chapterNum.toString();
+      currentVerse = extractNumber(line);
+      if (currentChapter === 0) {
+        currentChapter = scriptureRef.chapterNum;
       }
     }
 
-    for (let i = 0; i < words.length; i++) {
-      if (words[i].includes(item)) {
-        const start = Math.max(0, i - 2);
-        const end = Math.min(words.length, i + 3);
-        const snippet = words.slice(start, end).join(' ');
-        const result: SearchResult = {
-          reference: { ...scriptureRef, chapterNum: +currentChapter, verseNum: +currentVerse },
-          snippet,
-          key,
-        };
-        key += 1;
-        results.push(result);
-      }
+    const items: string[] = extractItems(line, item);
+
+    for (let i = 0; i < items.length; i++) {
+      const result: SearchResult = {
+        reference: { ...scriptureRef, chapterNum: +currentChapter, verseNum: +currentVerse },
+        snippet: line,
+        key,
+      };
+      key += 1;
+      results.push(result);
     }
   });
 
@@ -66,6 +75,7 @@ const extractOccurrences = (
 interface OccurrencesTableProps {
   selectedItem: string;
   text: string | undefined;
+  extractItems: (text: string, item?: string | undefined) => string[];
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
@@ -74,6 +84,7 @@ interface OccurrencesTableProps {
 function OccurrencesTable({
   selectedItem,
   text,
+  extractItems,
   scriptureReference,
   setScriptureReference,
   localizedStrings,
@@ -81,12 +92,12 @@ function OccurrencesTable({
   const reference = localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
   const occurrence = localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
   const [tableData, setTableData] = useState<SearchResult[]>(
-    extractOccurrences(text, selectedItem, scriptureReference),
+    extractOccurrences(text, selectedItem, extractItems, scriptureReference),
   );
 
   useEffect(
-    () => setTableData(extractOccurrences(text, selectedItem, scriptureReference)),
-    [text, selectedItem, scriptureReference],
+    () => setTableData(extractOccurrences(text, selectedItem, extractItems, scriptureReference)),
+    [text, selectedItem, scriptureReference, extractItems],
   );
 
   return (

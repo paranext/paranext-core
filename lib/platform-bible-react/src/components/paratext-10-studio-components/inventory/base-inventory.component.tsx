@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
 import { Input } from '@/components/shadcn-ui/input';
 import {
@@ -9,64 +9,74 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { ColumnDef } from '@/components/advanced-components/data-table/data-table.component';
-import InventoryDataTable from './tables/inventory-data-table.component';
-import OccurrencesTable from './tables/occurrences-table.component';
+import InventoryDataTable from './subcomponents/inventory-data-table.component';
+import OccurrencesTable from './subcomponents/occurrences-table.component';
 import { ItemData, Status } from './types';
 
-const buildTableData = (
-  items: string[],
+const filterItemData = (
+  items: ItemData[],
   statusFilter: string,
   textFilter: string,
-  approvedItems: string[],
-  unapprovedItems: string[],
+): ItemData[] => {
+  let filteredItemData: ItemData[] = items;
+
+  if (statusFilter !== 'all') {
+    filteredItemData = filteredItemData.filter(
+      (item) =>
+        (statusFilter === 'approved' && item.status === true) ||
+        (statusFilter === 'unapproved' && item.status === false) ||
+        (statusFilter === 'unknown' && item.status === undefined),
+    );
+  }
+
+  if (textFilter !== '')
+    filteredItemData = filteredItemData.filter((item) => item.item.includes(textFilter));
+
+  console.log('filtered data:', filteredItemData);
+
+  return filteredItemData;
+};
+
+const convertTextToItemData = (
+  text: string,
+  getInventoryItems: (text: string) => string[],
+  getStatusForItem: (item: string) => Status,
 ): ItemData[] => {
   const itemData: ItemData[] = [];
-  items.forEach((item) => {
-    if (textFilter !== '' && !item.includes(textFilter)) return;
-    const characterDataPoint = itemData.find((dataPoint) => {
-      return dataPoint.item === item;
+
+  const items: string[] = getInventoryItems(text);
+
+  for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
+    const item = items[itemIndex];
+    const existingItem = itemData.find((entry) => {
+      return entry.item === item;
     });
-    if (characterDataPoint) {
-      characterDataPoint.count += 1;
+    if (existingItem) {
+      existingItem.count += 1;
     } else {
-      let status: Status;
-      if (approvedItems.includes(item)) status = true;
-      if (unapprovedItems.includes(item)) status = false;
-      if (
-        statusFilter === 'all' ||
-        (statusFilter === 'approved' && status === true) ||
-        (statusFilter === 'unapproved' && status === false) ||
-        (statusFilter === 'unknown' && status === undefined)
-      ) {
-        const newCharacter: ItemData = {
-          item,
-          count: 1,
-          status,
-        };
-        itemData.push(newCharacter);
-      }
+      const newItem: ItemData = {
+        item,
+        count: 1,
+        status: getStatusForItem(item),
+      };
+      itemData.push(newItem);
     }
-  });
+  }
 
   return itemData;
 };
-
-export type ItemKeys =
-  | 'validCharacters'
-  | 'invalidCharacters'
-  | 'repeatableWords'
-  | 'nonRepeatableWords';
 
 interface InventoryProps {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
-  convertTextToItems: (text: string) => string[];
+  extractItems: (text: string, item?: string | undefined) => string[];
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
   text: string | undefined;
+  scope: string;
   onScopeChange: (scope: string) => void;
   columns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
 }
@@ -75,12 +85,13 @@ function BaseInventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,
-  convertTextToItems,
+  extractItems,
   approvedItems,
   onApprovedItemsChange,
   unapprovedItems,
   onUnapprovedItemsChange,
   text,
+  scope,
   onScopeChange,
   columns,
 }: InventoryProps) {
@@ -92,17 +103,16 @@ function BaseInventory({
   const scopeChapterText = localizedStrings['%webView_inventory_scope_chapter%'];
   const scopeVerseText = localizedStrings['%webView_inventory_scope_verse%'];
   const filterText = localizedStrings['%webView_inventory_filter_text%'];
-  const [items, setItems] = useState<string[]>([]);
-  const [scope] = useState<string>('book');
+
+  const [items, setItems] = useState<ItemData[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [textFilter, setTextFilter] = useState<string>('');
-  const [inventoryTableData, setInventoryTableData] = useState<ItemData[]>([]);
   const [selectedItem, setSelectedItem] = useState<string>('');
 
-  const statusChangeHandler = (newItems: string[], status: Status) => {
-    setInventoryTableData((prevTableData) => {
+  const statusChangeHandler = (changedItems: string[], status: Status) => {
+    setItems((prevTableData) => {
       let tableData: ItemData[] = [];
-      newItems.forEach((item) => {
+      changedItems.forEach((item) => {
         tableData = prevTableData.map((tableEntry) => {
           if (tableEntry.item === item && tableEntry.status !== status)
             return { ...tableEntry, status };
@@ -113,7 +123,7 @@ function BaseInventory({
     });
 
     let newApprovedItems: string[] = [...approvedItems];
-    newItems.forEach((item) => {
+    changedItems.forEach((item) => {
       if (status === true) {
         if (!newApprovedItems.includes(item)) {
           newApprovedItems.push(item);
@@ -125,7 +135,7 @@ function BaseInventory({
     onApprovedItemsChange(newApprovedItems);
 
     let newUnapprovedItems: string[] = [...unapprovedItems];
-    newItems.forEach((item) => {
+    changedItems.forEach((item) => {
       if (status === false) {
         if (!newUnapprovedItems.includes(item)) {
           newUnapprovedItems.push(item);
@@ -137,28 +147,25 @@ function BaseInventory({
     onUnapprovedItemsChange(newUnapprovedItems);
   };
 
+  const getStatusForItem = useCallback(
+    (item: string): Status => {
+      if (approvedItems.includes(item)) return true;
+      if (unapprovedItems.includes(item)) return false;
+      return undefined;
+    },
+    [approvedItems, unapprovedItems],
+  );
+
   useEffect(() => {
     if (!text) return;
-    setItems(convertTextToItems(text));
-  }, [convertTextToItems, text]);
+    // scope-based early return
+    console.log('Updating itemData');
+    setItems(convertTextToItemData(text, extractItems, getStatusForItem));
+  }, [extractItems, scriptureReference, text, getStatusForItem]);
 
-  useEffect(() => {
-    if (items.length === 0) {
-      setInventoryTableData([]);
-      return;
-    }
-    const buildData = () => {
-      try {
-        setInventoryTableData(
-          buildTableData(items, statusFilter, textFilter, approvedItems, unapprovedItems),
-        );
-      } catch (error) {
-        throw new Error('Failed building table data');
-      }
-    };
-
-    buildData();
-  }, [approvedItems, unapprovedItems, items, statusFilter, textFilter]);
+  const filteredItemData = useMemo(() => {
+    return filterItemData(items, statusFilter, textFilter);
+  }, [items, statusFilter, textFilter]);
 
   return (
     <div className="pr-twp pr-font-sans">
@@ -198,7 +205,7 @@ function BaseInventory({
       >
         <InventoryDataTable
           columns={columns(statusChangeHandler)}
-          tableData={inventoryTableData}
+          tableData={filteredItemData}
           onSelectItem={(item: string) => {
             setSelectedItem(item);
           }}
@@ -209,6 +216,7 @@ function BaseInventory({
           <OccurrencesTable
             selectedItem={selectedItem}
             text={text}
+            extractItems={extractItems}
             scriptureReference={scriptureReference}
             setScriptureReference={(newScriptureReference) =>
               setScriptureReference(newScriptureReference)

@@ -908,9 +908,10 @@ export interface CharacterInventoryProps {
 	unapprovedItems: string[];
 	onUnapprovedItemsChange: (items: string[]) => void;
 	text: string | undefined;
+	scope: string;
 	onScopeChange: (scope: string) => void;
 }
-export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, onScopeChange, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
 export interface RepeatedWordsInventoryProps {
 	scriptureReference: ScriptureReference;
 	setScriptureReference: (scriptureReference: ScriptureReference) => void;
@@ -920,9 +921,10 @@ export interface RepeatedWordsInventoryProps {
 	unapprovedItems: string[];
 	onUnapprovedItemsChange: (items: string[]) => void;
 	text: string | undefined;
+	scope: string;
 	onScopeChange: (scope: string) => void;
 }
-export declare function RepeatedWordsInventory({ scriptureReference, setScriptureReference, localizedStrings, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, onScopeChange, }: RepeatedWordsInventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function RepeatedWordsInventory({ scriptureReference, setScriptureReference, localizedStrings, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, }: RepeatedWordsInventoryProps): import("react/jsx-runtime").JSX.Element;
 export type DownloadButtonProps = {
 	/** The downloading boolean value determines the state of the button. */
 	isDownloading: boolean;

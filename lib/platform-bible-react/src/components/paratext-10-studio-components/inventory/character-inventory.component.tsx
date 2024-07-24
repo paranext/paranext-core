@@ -110,8 +110,10 @@ const buildColumns = (
   },
 ];
 
-const convertTextToItems = (text: string): string[] => {
-  return split(text, '');
+const extractItems = (text: string, item: string | undefined = undefined): string[] => {
+  let characters: string[] = split(text, '');
+  if (item) characters = characters.filter((character) => character === item);
+  return characters;
 };
 
 interface CharacterInventoryProps {
@@ -123,6 +125,7 @@ interface CharacterInventoryProps {
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
   text: string | undefined;
+  scope: string;
   onScopeChange: (scope: string) => void;
 }
 
@@ -135,6 +138,7 @@ function CharacterInventory({
   unapprovedItems,
   onUnapprovedItemsChange,
   text,
+  scope,
   onScopeChange,
 }: CharacterInventoryProps) {
   const itemLabel = localizedStrings['%webView_inventory_table_header_character%'];
@@ -142,7 +146,7 @@ function CharacterInventory({
   const countLabel = localizedStrings['%webView_inventory_table_header_count%'];
   const statusLabel = localizedStrings['%webView_inventory_table_header_status%'];
 
-  const columns = (onStatusChange: (newItems: string[], status: Status) => void) => {
+  const columns = (onStatusChange: (changedItems: string[], status: Status) => void) => {
     return buildColumns(itemLabel, unicodeValueLabel, countLabel, statusLabel, onStatusChange);
   };
 
@@ -152,12 +156,13 @@ function CharacterInventory({
         scriptureReference={scriptureReference}
         setScriptureReference={setScriptureReference}
         localizedStrings={localizedStrings}
-        convertTextToItems={convertTextToItems}
+        extractItems={extractItems}
         approvedItems={approvedItems}
         onApprovedItemsChange={onApprovedItemsChange}
         unapprovedItems={unapprovedItems}
         onUnapprovedItemsChange={onUnapprovedItemsChange}
         text={text}
+        scope={scope}
         onScopeChange={onScopeChange}
         columns={columns}
       />
