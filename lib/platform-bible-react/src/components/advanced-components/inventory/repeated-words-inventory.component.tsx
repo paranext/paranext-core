@@ -138,7 +138,7 @@ function RepeatedWordsInventory({
   };
 
   return (
-    <div className="pr-twp pr-font-sans">
+    <div className="pr-twp pr-h-full">
       <BaseInventory
         scriptureReference={scriptureReference}
         setScriptureReference={setScriptureReference}

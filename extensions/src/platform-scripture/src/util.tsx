@@ -31,12 +31,8 @@ export const getText = async (
     scriptureRef.verseNum,
   );
 
-  console.log('rolf1', scope);
-
   if (scope === 'book') {
-    console.log('rolf2');
     const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Book', projectId);
-    console.log('rolf3');
     return PDP.getBookUSFM(verseRef);
   }
   if (scope === 'chapter') {

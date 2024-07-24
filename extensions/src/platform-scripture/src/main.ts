@@ -15,6 +15,7 @@ import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/p
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
 import inventoryWebView from './inventory.web-view?inline';
+import inventoryWebViewStyles from './inventory.web-view.scss?inline';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -122,6 +123,7 @@ class WebViewProviderGenerator {
         title,
         ...savedWebView,
         content: getWebViewOptions.webView,
+        styles: inventoryWebViewStyles,
         state: {
           ...savedWebView.state,
           projectId,

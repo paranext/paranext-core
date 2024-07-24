@@ -151,7 +151,7 @@ function CharacterInventory({
   };
 
   return (
-    <div className="pr-twp">
+    <div className="pr-twp pr-h-full">
       <BaseInventory
         scriptureReference={scriptureReference}
         setScriptureReference={setScriptureReference}

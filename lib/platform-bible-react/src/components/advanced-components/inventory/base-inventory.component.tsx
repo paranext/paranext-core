@@ -32,8 +32,6 @@ const filterItemData = (
   if (textFilter !== '')
     filteredItemData = filteredItemData.filter((item) => item.item.includes(textFilter));
 
-  console.log('filtered data:', filteredItemData);
-
   return filteredItemData;
 };
 
@@ -158,8 +156,6 @@ function BaseInventory({
 
   useEffect(() => {
     if (!text) return;
-    // scope-based early return
-    console.log('Updating itemData');
     setItems(convertTextToItemData(text, extractItems, getStatusForItem));
   }, [extractItems, scriptureReference, text, getStatusForItem]);
 
@@ -168,10 +164,10 @@ function BaseInventory({
   }, [items, statusFilter, textFilter]);
 
   return (
-    <div className="pr-twp pr-font-sans">
+    <div className="pr-flex pr-h-full pr-flex-col">
       <div className="pr-flex">
         <Select onValueChange={(value) => setStatusFilter(value)} defaultValue={statusFilter}>
-          <SelectTrigger>
+          <SelectTrigger className="pr-m-1">
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
           <SelectContent className="pr-font-sans">
@@ -182,7 +178,7 @@ function BaseInventory({
           </SelectContent>
         </Select>
         <Select onValueChange={(value) => onScopeChange(value)} defaultValue={scope}>
-          <SelectTrigger>
+          <SelectTrigger className="pr-m-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
           <SelectContent className="pr-font-sans">
@@ -192,7 +188,7 @@ function BaseInventory({
           </SelectContent>
         </Select>
         <Input
-          className="pr-rounded-md pr-border"
+          className="pr-m-1 pr-rounded-md pr-border"
           placeholder={filterText}
           value={textFilter}
           onChange={(event) => {
@@ -200,9 +196,7 @@ function BaseInventory({
           }}
         />
       </div>
-      <div
-        className={`pr-overflow-y-auto pr-rounded-md pr-border ${selectedItem !== '' && 'pr-max-h-96'}`}
-      >
+      <div className="pr-m-1 pr-flex-1 pr-overflow-auto pr-rounded-md pr-border">
         <InventoryDataTable
           columns={columns(statusChangeHandler)}
           tableData={filteredItemData}
@@ -212,7 +206,7 @@ function BaseInventory({
         />
       </div>
       {selectedItem !== '' && (
-        <div className="pr-mt-4 pr-rounded-md pr-border">
+        <div className="pr-m-1 pr-flex-1 pr-overflow-auto pr-rounded-md pr-border">
           <OccurrencesTable
             selectedItem={selectedItem}
             text={text}
