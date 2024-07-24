@@ -1,0 +1,4 @@
+.checking-results-list {
+  height : 100vh;
+  overflow-y: scroll;  /* Probably temporary. Really want the table rows to scroll */
+}

@@ -14,7 +14,7 @@ import {
   RowSelectionState,
 } from '@tanstack/react-table';
 import { Canon } from '@sillsdev/scripture';
-import '@/components/scripture-results-viewer/scripture-results-viewer.component.css';
+import '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component.css';
 import {
   compareScrRefs,
   formatScrRef,
@@ -23,7 +23,7 @@ import {
   ScriptureReference,
 } from 'platform-bible-utils';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Button } from '../shadcn-ui/button';
+import { Button } from '../../shadcn-ui/button';
 import {
   Select,
   SelectContent,
@@ -31,8 +31,15 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../shadcn-ui/select';
-import { Table, TableHeader, TableHead, TableBody, TableRow, TableCell } from '../shadcn-ui/table';
+} from '../../shadcn-ui/select';
+import {
+  Table,
+  TableHeader,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+} from '../../shadcn-ui/table';
 
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
@@ -367,7 +374,7 @@ export default function ScriptureResultsViewer({
   };
 
   return (
-    <div className="pr-twp pr-w-full">
+    <div className="pr-twp pr-flex pr-w-full pr-flex-col">
       {!showColumnHeaders && (
         <Select
           value={JSON.stringify(grouping)}
@@ -389,7 +396,7 @@ export default function ScriptureResultsViewer({
           </SelectContent>
         </Select>
       )}
-      <Table className="pr-p-0">
+      <Table className="pr-flex pr-h-full pr-flex-col pr-p-0">
         {showColumnHeaders && (
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -407,9 +414,7 @@ export default function ScriptureResultsViewer({
                               onClick={header.column.getToggleGroupingHandler()}
                               type="button"
                             >
-                              {header.column.getIsGrouped()
-                                ? `🛑(${header.column.getGroupedIndex()}) `
-                                : `👊 `}
+                              {header.column.getIsGrouped() ? `🛑` : `👊 `}
                             </Button>
                           ) : undefined}{' '}
                           {flexRender(header.column.columnDef.header, header.getContext())}
@@ -421,7 +426,7 @@ export default function ScriptureResultsViewer({
             ))}
           </TableHeader>
         )}
-        <TableBody>
+        <TableBody className="pr-overflow-y-auto">
           {table.getRowModel().rows.map((row, rowIndex) => {
             return (
               <TableRow

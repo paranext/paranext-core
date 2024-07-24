@@ -1,3 +1,4 @@
+import './checking-results-list.component.css';
 import { badLeftoversCheck, engineProblemsCheck } from '@renderer/testing/test-layout.data';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import {
@@ -59,7 +60,7 @@ export default function CheckingResultsList(props: CheckingResultsListProps) {
   const label = getLabel(project, lastUpdateTimestamp, sources);
 
   return (
-    <div>
+    <div className="checking-results-list">
       {onRerun && <Button onClick={reRunChecks}>Rerun</Button>}
       {label && <Label>{label}</Label>}
       <ScriptureResultsViewer sources={currentSources} />
