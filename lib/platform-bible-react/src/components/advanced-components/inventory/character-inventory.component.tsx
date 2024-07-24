@@ -2,7 +2,7 @@ import { LanguageStrings, ScriptureReference, split } from 'platform-bible-utils
 import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { ColumnDef } from '@/components/advanced-components/data-table/data-table.component';
-import BaseInventory from './base-inventory.component';
+import BaseInventory from '@/components/advanced-components/inventory/base-inventory.component';
 import { ItemData, Status } from './types';
 import { getSortingIcon } from './utils';
 
