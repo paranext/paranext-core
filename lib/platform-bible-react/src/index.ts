@@ -77,8 +77,9 @@ export {
 
 export { default as CharacterInventory } from './components/advanced-components/inventory/character-inventory.component';
 export { default as RepeatedWordsInventory } from './components/advanced-components/inventory/repeated-words-inventory.component';
-export { default as DownloadButton } from './components/extension-marketplace/buttons/download-button.component';
-export { default as RemoveButton } from './components/extension-marketplace/buttons/remove-button.component';
+export { default as InstallButton } from './components/extension-marketplace/buttons/install-button.component';
+export { default as EnableButton } from './components/extension-marketplace/buttons/enable-button.component';
+export { default as DisableButton } from './components/extension-marketplace/buttons/disable-button.component';
 export { default as UpdateButton } from './components/extension-marketplace/buttons/update-button.component';
 export { default as MarkdownRenderer } from './components/extension-marketplace/markdown-renderer.component';
 
