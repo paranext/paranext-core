@@ -1,5 +1,11 @@
-import { VerticalTabs, VerticalTabsContent, VerticalTabsList, VerticalTabsTrigger } from '../..';
-import { HasDirection } from '../direction-toggle';
+import SearchBar from '@/components/basics/search-bar.component';
+import {
+  VerticalTabs,
+  VerticalTabsContent,
+  VerticalTabsList,
+  VerticalTabsTrigger,
+} from '@/components/basics/tabs-vertical';
+import { HasDirection } from '@/preview/preview-components/direction-toggle';
 import ExampleAlerts from './basics/alert.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
@@ -25,6 +31,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
@@ -51,6 +58,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Input">
           <InputExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Search Bar">
+          <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} /> &larr; type here
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Select">
