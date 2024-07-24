@@ -1,8 +1,22 @@
-import { VerticalTabs, VerticalTabsContent, VerticalTabsList, VerticalTabsTrigger } from '../..';
+import { useState } from 'react';
+import { ScriptureReference } from 'platform-bible-utils';
+import {
+  CharacterInventory,
+  VerticalTabs,
+  VerticalTabsContent,
+  VerticalTabsList,
+  VerticalTabsTrigger,
+} from '../..';
 import { HasDirection } from '../direction-toggle';
 import MarketplaceButtonExamples from './paratext/buttons.example.component';
 
 function Paratext({ direction }: HasDirection) {
+  const defaultScrRef: ScriptureReference = {
+    bookNum: 1,
+    chapterNum: 1,
+    verseNum: 1,
+  };
+  const [scrRef, setScrRef] = useState(defaultScrRef);
   return (
     <div>
       <p className="pr-mb-2 pr-text-muted-foreground">
@@ -21,7 +35,20 @@ function Paratext({ direction }: HasDirection) {
         </VerticalTabsContent>
         <VerticalTabsContent value="Result List">TODO</VerticalTabsContent>
 
-        <VerticalTabsContent value="Inventory">TODO</VerticalTabsContent>
+        <VerticalTabsContent value="Inventory">
+          <CharacterInventory
+            scriptureReference={scrRef}
+            setScriptureReference={setScrRef}
+            localizedStrings={{}}
+            approvedItems={[]}
+            onApprovedItemsChange={() => {}}
+            unapprovedItems={[]}
+            onUnapprovedItemsChange={() => {}}
+            text=""
+            scope=""
+            onScopeChange={() => {}}
+          />
+        </VerticalTabsContent>
       </VerticalTabs>
     </div>
   );
