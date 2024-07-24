@@ -1,6 +1,6 @@
+import '@/components/mui/slider.component.css';
 import { Slider as MuiSlider } from '@mui/material';
 import { SyntheticEvent } from 'react';
-import './slider.component.css';
 
 export type SliderProps = {
   /** Optional unique identifier */

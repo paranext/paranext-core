@@ -1,3 +1,5 @@
+import GridMenu from '@/components/mui/grid-menu.component';
+import { Command, CommandHandler } from '@/components/mui/menu-item.component';
 import usePromise from '@/hooks/use-promise.hook';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import { Drawer, IconButton } from '@mui/material';
@@ -10,8 +12,6 @@ import {
   useEffect,
   useState,
 } from 'react';
-import GridMenu from './grid-menu.component';
-import { Command, CommandHandler } from './menu-item.component';
 
 export interface MultiColumnMenuProvider {
   (isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;

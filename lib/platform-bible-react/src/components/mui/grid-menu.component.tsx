@@ -1,4 +1,7 @@
-import { useMemo } from 'react';
+import '@/components/mui/grid-menu.component.css';
+import { GroupedMenuPropsBase } from '@/components/mui/grouped-menu-item-list.component';
+import { CommandHandler } from '@/components/mui/menu-item.component';
+import TopLevelMenu from '@/components/mui/top-level-menu.component';
 import { Grid, List } from '@mui/material';
 import {
   Localized,
@@ -6,10 +9,7 @@ import {
   MultiColumnMenu,
   ReferencedItem,
 } from 'platform-bible-utils';
-import { CommandHandler } from './menu-item.component';
-import { GroupedMenuPropsBase } from './grouped-menu-item-list.component';
-import TopLevelMenu from './top-level-menu.component';
-import './grid-menu.component.css';
+import { useMemo } from 'react';
 
 type ColumnInfo = {
   /*

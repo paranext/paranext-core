@@ -1,6 +1,6 @@
+import GroupedMenuItemList from '@/components/mui/grouped-menu-item-list.component';
+import { MenuItemListProps } from '@/components/mui/menu-item.component';
 import { MultiColumnMenu } from 'platform-bible-utils';
-import GroupedMenuItemList from './grouped-menu-item-list.component';
-import { MenuItemListProps } from './menu-item.component';
 
 /**
  * This component is internal; it does not need to be exposed to the outside world since it is not
