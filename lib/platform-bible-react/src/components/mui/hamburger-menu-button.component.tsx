@@ -1,17 +1,17 @@
+import usePromise from '@/hooks/use-promise.hook';
+import { Menu as MenuIcon } from '@mui/icons-material';
+import { Drawer, IconButton } from '@mui/material';
+import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import {
-  useCallback,
-  useState,
   MouseEvent,
   MutableRefObject,
-  useEffect,
   PropsWithChildren,
+  useCallback,
+  useEffect,
+  useState,
 } from 'react';
-import { IconButton, Drawer } from '@mui/material';
-import { Menu as MenuIcon } from '@mui/icons-material';
-import { MultiColumnMenu, Localized } from 'platform-bible-utils';
-import { Command, CommandHandler } from './menu-item.component';
 import GridMenu from './grid-menu.component';
-import usePromise from '../../hooks/use-promise.hook';
+import { Command, CommandHandler } from './menu-item.component';
 
 export interface MultiColumnMenuProvider {
   (isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;

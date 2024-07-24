@@ -1,7 +1,7 @@
+import '@/components/mui/checkbox.component.css';
+import LabelPosition from '@/components/mui/label-position.model';
 import { FormLabel, Checkbox as MuiCheckbox } from '@mui/material';
 import { ChangeEvent } from 'react';
-import './checkbox.component.css';
-import LabelPosition from './label-position.model';
 
 export type CheckboxProps = {
   /** Optional unique identifier */

@@ -2,10 +2,10 @@
 
 'use client';
 
-import React from 'react';
-import * as TabsPrimitive from '@radix-ui/react-tabs';
+import { TabsContentProps, TabsListProps, TabsTriggerProps } from '@/components/shadcn-ui/tabs';
 import { cn } from '@/utils/shadcn-ui.util';
-import { TabsContentProps, TabsListProps, TabsTriggerProps } from '../shadcn-ui/tabs';
+import * as TabsPrimitive from '@radix-ui/react-tabs';
+import React from 'react';
 
 export type VerticalTabsProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Root> & {
   className?: string;

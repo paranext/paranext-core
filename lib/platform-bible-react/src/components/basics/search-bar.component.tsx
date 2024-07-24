@@ -1,6 +1,5 @@
+import TextField from '@/components/basics/text-field.component';
 import { useState } from 'react';
-import TextField from './text-field.component';
-import './search-bar.component.css';
 
 export type SearchBarProps = {
   /**
