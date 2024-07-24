@@ -4,6 +4,7 @@ import ExampleAlerts from './basics/alert.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
 import CheckboxExamples from './basics/checkbox.examples.component';
+import ComboBoxExamples from './basics/combo-box.examples.component';
 import DropdownExamples from './basics/dropdown.examples.component';
 import InputExamples from './basics/input.examples.component';
 import SelectExamples from './basics/select.examples.component';
@@ -29,6 +30,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Alert">
@@ -73,6 +75,9 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Table">
           <TableExamples />
+        </VerticalTabsContent>
+        <VerticalTabsContent value="ComboBox">
+          <ComboBoxExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
