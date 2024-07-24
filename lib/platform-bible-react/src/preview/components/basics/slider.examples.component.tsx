@@ -1,5 +1,5 @@
+import Slider from '@/components/mui/slider.component';
 import { useState } from 'react';
-import Slider from '@/components/slider.component';
 
 export default function SliderExamples() {
   const [sliderValue, setSlider] = useState(3);

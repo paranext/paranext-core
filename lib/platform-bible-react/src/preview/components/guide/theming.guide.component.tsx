@@ -1,5 +1,5 @@
 import { Input } from '@/components/shadcn-ui/input';
-import { ThemeButton } from '@/preview/theme-toggle.component';
+import { ThemeButton } from '@/preview/preview-components/theme-toggle.component';
 
 export default function ThemingGuide() {
   return (

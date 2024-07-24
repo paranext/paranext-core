@@ -1,9 +1,6 @@
-import { useState } from 'react';
-import { ScriptureReference } from 'platform-bible-utils';
-import { HasDirection } from '@/preview/direction-toggle';
+import BookChapterControl from '@/components/advanced-components/book-chapter-control/book-chapter-control.component';
+import { Button } from '@/components/shadcn-ui/button';
 import {
-  Button,
-  BookChapterControl,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -12,10 +9,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-  Tabs,
-  TabsList,
-  TabsTrigger,
-} from '../../..';
+} from '@/components/shadcn-ui/dropdown-menu';
+import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
+import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { ScriptureReference } from 'platform-bible-utils';
+import { useState } from 'react';
 
 export default function WindowOrTabExample({ direction }: HasDirection) {
   const defaultScrRef: ScriptureReference = {
