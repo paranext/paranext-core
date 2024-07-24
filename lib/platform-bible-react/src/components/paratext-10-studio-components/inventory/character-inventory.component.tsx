@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react';
-import { LanguageStrings, ScriptureReference, split } from 'platform-bible-utils';
+import InventoryDataTable, {
+  CharacterData,
+  Status,
+} from '@/components/paratext-10-studio-components/inventory/inventory-data-table.component';
+import OccurrencesTable from '@/components/paratext-10-studio-components/inventory/occurrences-table.component';
 import { Input } from '@/components/shadcn-ui/input';
 import {
   Select,
@@ -8,8 +11,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import InventoryDataTable, { CharacterData, Status } from './inventory-data-table.component';
-import OccurrencesTable from './occurrences-table.component';
+import { LanguageStrings, ScriptureReference, split } from 'platform-bible-utils';
+import { useEffect, useState } from 'react';
 
 const buildTableData = async (
   text: string,

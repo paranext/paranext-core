@@ -1,5 +1,5 @@
-import Checkbox from './checkbox.component';
-import './checklist.component.css';
+import Checkbox from '@/components/mui/checkbox.component';
+import '@/components/mui/checklist.component.css';
 
 export type ChecklistProps = {
   /** Optional string representing the id attribute of the fieldset element */

@@ -1,7 +1,9 @@
-import React, { PropsWithChildren, useCallback, useMemo } from 'react';
+import '@/components/mui/context-menu.component.css';
+import MenuItemList, {
+  GroupedMenuPropsBase,
+} from '@/components/mui/grouped-menu-item-list.component';
 import Menu from '@mui/material/Menu';
-import MenuItemList, { GroupedMenuPropsBase } from './grouped-menu-item-list.component';
-import './context-menu.component.css';
+import React, { PropsWithChildren, useCallback, useMemo } from 'react';
 
 export type ContextMenuProps = GroupedMenuPropsBase & {
   /** Additional css classes to help with styling of the context menu */

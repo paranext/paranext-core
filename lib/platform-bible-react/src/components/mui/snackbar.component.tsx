@@ -1,6 +1,6 @@
+import '@/components/mui/snackbar.component.css';
 import { Snackbar as MuiSnackbar, SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
-import { SyntheticEvent, ReactNode, PropsWithChildren } from 'react';
-import './snackbar.component.css';
+import { PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
 
 export type CloseReason = SnackbarCloseReason;
 export type AnchorOrigin = SnackbarOrigin;

@@ -1,4 +1,8 @@
-import { MouseEvent, useMemo, useState } from 'react';
+import MenuItem, {
+  MenuItemListProps,
+  MenuItemProps,
+  MenuPropsBase,
+} from '@/components/mui/menu-item.component';
 import { Menu } from '@mui/material';
 import {
   Localized,
@@ -9,7 +13,7 @@ import {
   ReferencedItem,
   SingleColumnMenu,
 } from 'platform-bible-utils';
-import MenuItem, { MenuItemListProps, MenuItemProps, MenuPropsBase } from './menu-item.component';
+import { MouseEvent, useMemo, useState } from 'react';
 
 /**
  * All the exported types in this file should be regarded as "internal" (i.e., they should not be

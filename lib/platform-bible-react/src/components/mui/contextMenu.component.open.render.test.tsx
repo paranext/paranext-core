@@ -1,9 +1,9 @@
-import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
-import { fireEvent, render, screen } from '@testing-library/react';
+import ContextMenu from '@/components/mui/context-menu.component';
+import * as jsonMenu from '@/components/mui/sample.composed.full.menu.json';
 import '@testing-library/jest-dom';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
 import { PropsWithChildren } from 'react';
-import ContextMenu from './context-menu.component';
-import * as jsonMenu from './sample.composed.full.menu.json';
 
 jest.mock('@mui/material', () => {
   const mui = jest.requireActual('@mui/material'); // Import the actual MUI components
