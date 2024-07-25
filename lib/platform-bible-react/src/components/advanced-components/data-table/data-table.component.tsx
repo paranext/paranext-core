@@ -1,21 +1,24 @@
 import { useState } from 'react';
 
 import {
-  ColumnDef as TSColumnDef,
   ColumnFiltersState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
+  SortingState,
+  ColumnDef as TSColumnDef,
   Row as TSRow,
   SortDirection as TSSortDirection,
-  SortingState,
   Table as TSTable,
   useReactTable,
   VisibilityState,
 } from '@tanstack/react-table';
 
+import DataTableViewOptions from '@/components/advanced-components/data-table/data-table-column-toggle.component';
+import DataTablePagination from '@/components/advanced-components/data-table/data-table-pagination.component';
+import { Button } from '@/components/shadcn-ui/button';
 import {
   Table,
   TableBody,
@@ -24,9 +27,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
-import { Button } from '@/components/shadcn-ui/button';
-import DataTablePagination from './data-table-pagination.component';
-import DataTableViewOptions from './data-table-column-toggle.component';
 
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;

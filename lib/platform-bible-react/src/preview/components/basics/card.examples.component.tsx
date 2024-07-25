@@ -1,16 +1,16 @@
-import { Label } from '@/components/shadcn-ui/label';
-import { Switch } from '@/components/shadcn-ui/switch';
-import { BellRing, Check } from 'lucide-react';
+import { Button } from '@/components/shadcn-ui/button';
 import {
-  Button,
   Card,
   CardContent,
   CardDescription,
   CardFooter,
   CardHeader,
   CardTitle,
-  Input,
-} from '../../..';
+} from '@/components/shadcn-ui/card';
+import { Input } from '@/components/shadcn-ui/input';
+import { Label } from '@/components/shadcn-ui/label';
+import { Switch } from '@/components/shadcn-ui/switch';
+import { BellRing, Check } from 'lucide-react';
 import SelectExamples from './select.examples.component';
 
 export default function CardExamples() {

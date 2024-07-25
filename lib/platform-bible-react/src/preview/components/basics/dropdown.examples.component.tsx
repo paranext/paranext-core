@@ -1,5 +1,5 @@
+import { Button } from '@/components/shadcn-ui/button';
 import {
-  Button,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -8,7 +8,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from '../../..';
+} from '@/components/shadcn-ui/dropdown-menu';
 
 export default function DropdownExamples() {
   return (

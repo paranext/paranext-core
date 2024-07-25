@@ -1,3 +1,18 @@
+import BookChapterInput from '@/components/advanced-components/book-chapter-control/book-chapter-input.component';
+import BookMenuItem, {
+  BookType,
+} from '@/components/advanced-components/book-chapter-control/book-menu-item.component';
+import ChapterSelect from '@/components/advanced-components/book-chapter-control/chapter-select.component';
+import GoToMenuItem from '@/components/advanced-components/book-chapter-control/go-to-menu-item.component';
+import {
+  DropdownMenu as ShadDropdownMenu,
+  DropdownMenuContent as ShadDropdownMenuContent,
+  DropdownMenuLabel as ShadDropdownMenuLabel,
+  DropdownMenuSeparator as ShadDropdownMenuSeparator,
+  DropdownMenuTrigger as ShadDropdownMenuTrigger,
+} from '@/components/shadcn-ui/dropdown-menu';
+import { Canon } from '@sillsdev/scripture';
+import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
 import {
   KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -6,21 +21,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Canon } from '@sillsdev/scripture';
-import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
-import {
-  DropdownMenuTrigger as ShadDropdownMenuTrigger,
-  DropdownMenu as ShadDropdownMenu,
-  DropdownMenuContent as ShadDropdownMenuContent,
-  DropdownMenuLabel as ShadDropdownMenuLabel,
-  DropdownMenuSeparator as ShadDropdownMenuSeparator,
-} from '@/components/shadcn-ui/dropdown-menu';
-import BookChapterInput from '@/components/advanced-components/book-chapter-control/book-chapter-input.component';
-import ChapterSelect from '@/components/advanced-components/book-chapter-control/chapter-select.component';
-import BookMenuItem, {
-  BookType,
-} from '@/components/advanced-components/book-chapter-control/book-menu-item.component';
-import GoToMenuItem from './go-to-menu-item.component';
 
 type BookTypeLabels = {
   [bookType in BookType]: string;
