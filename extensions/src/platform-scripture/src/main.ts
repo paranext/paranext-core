@@ -21,10 +21,7 @@ const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
 
 interface InventoryOptions extends GetWebViewOptions {
-  title: string;
   projectId: string | undefined;
-  webView: string;
-  webViewType: string | undefined;
 }
 
 // #region Project Setting Validators
@@ -62,21 +59,17 @@ const repeatableWordsValidator: ProjectSettingValidator<
 async function openPlatformCharactersInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
-  const title: string = 'Character Inventory';
-  return openInventory(title, webViewId, inventoryWebView, characterInventoryWebViewType);
+  return openInventory(webViewId, characterInventoryWebViewType);
 }
 
 async function openPlatformRepeatedWordsInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
-  const title: string = 'Repeated Words Inventory';
-  return openInventory(title, webViewId, inventoryWebView, repeatedWordsInventoryWebViewType);
+  return openInventory(webViewId, repeatedWordsInventoryWebViewType);
 }
 
 async function openInventory(
-  title: string,
   webViewId: string | undefined,
-  webView: string,
   webViewType: string,
 ): Promise<string | undefined> {
   let projectId: string | undefined;
@@ -90,48 +83,51 @@ async function openInventory(
     return undefined;
   }
 
-  const options: InventoryOptions = { title, projectId, webView, webViewType };
+  const options: InventoryOptions = { projectId };
   return papi.webViews.getWebView(
     webViewType,
-    { type: 'float', floatSize: { width: 800, height: 900 } },
+    { type: 'float', floatSize: { width: 700, height: 800 } },
     options,
   );
 }
 
-class WebViewProviderGenerator {
-  inventoryWebViewProvider: IWebViewProvider = {
-    async getWebView(
-      savedWebView: SavedWebViewDefinition,
-      getWebViewOptions: InventoryOptions,
-    ): Promise<WebViewDefinition | undefined> {
-      const webViewType = getWebViewOptions.webViewType || undefined;
-      if (savedWebView.webViewType !== webViewType)
-        throw new Error(
-          `${webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
-        );
+class InventoryWebViewProvider implements IWebViewProvider {
+  title: string;
+  webViewType: string;
 
-      // We know that the projectId (if present in the state) will be a string.
-      const projectId =
-        getWebViewOptions.projectId ||
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        (savedWebView.state?.projectId as string) ||
-        undefined;
+  constructor(title: string, webViewType: string) {
+    this.title = title;
+    this.webViewType = webViewType;
+  }
 
-      const title = getWebViewOptions.title || undefined;
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: InventoryOptions,
+  ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== this.webViewType)
+      throw new Error(
+        `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
 
-      return {
-        title,
-        ...savedWebView,
-        content: getWebViewOptions.webView,
-        styles: inventoryWebViewStyles,
-        state: {
-          ...savedWebView.state,
-          projectId,
-          webViewType,
-        },
-      };
-    },
-  };
+    // We know that the projectId (if present in the state) will be a string.
+    const projectId =
+      getWebViewOptions.projectId ||
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (savedWebView.state?.projectId as string) ||
+      undefined;
+
+    return {
+      title: this.title,
+      ...savedWebView,
+      content: inventoryWebView,
+      styles: inventoryWebViewStyles,
+      state: {
+        ...savedWebView.state,
+        projectId,
+        webViewType: this.webViewType,
+      },
+    };
+  }
 }
 
 export async function activate(context: ExecutionActivationContext) {
@@ -144,8 +140,14 @@ export async function activate(context: ExecutionActivationContext) {
       new ScriptureExtenderProjectDataProviderEngineFactory(SCRIPTURE_EXTENDER_PDPF_ID),
     );
 
-  const characterInventoryWebViewProviderGenerator = new WebViewProviderGenerator();
-  const repeatedWordsInventoryWebViewProviderGenerator = new WebViewProviderGenerator();
+  const characterInventoryWebViewProvider = new InventoryWebViewProvider(
+    'Character Inventory',
+    characterInventoryWebViewType,
+  );
+  const repeatedWordsInventoryWebViewProvider = new InventoryWebViewProvider(
+    'Repeated Words Inventory',
+    repeatedWordsInventoryWebViewType,
+  );
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
@@ -185,7 +187,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const characterInventoryWebViewProviderPromise = papi.webViewProviders.register(
     characterInventoryWebViewType,
-    characterInventoryWebViewProviderGenerator.inventoryWebViewProvider,
+    characterInventoryWebViewProvider,
   );
   const repeatableWordsPromise = papi.projectSettings.registerValidator(
     'platformScripture.repeatableWords',
@@ -201,7 +203,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const repeatableWordsInventoryWebViewProviderPromise = papi.webViewProviders.register(
     repeatedWordsInventoryWebViewType,
-    repeatedWordsInventoryWebViewProviderGenerator.inventoryWebViewProvider,
+    repeatedWordsInventoryWebViewProvider,
   );
 
   await checkHostingService.initialize();
