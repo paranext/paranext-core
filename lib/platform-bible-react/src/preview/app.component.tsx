@@ -3,7 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
 import Compositions from './components/advanced.component';
 import Basics from './components/basics.component';
 import Guide from './components/guide.component';
-import Examples from './components/layouts.component';
+import Layouts from './components/layouts.component';
 import Playground from './components/playground.component';
 import { DirToggle, Direction } from './preview-components/direction-toggle';
 import { ThemeProvider } from './preview-components/theme-provider.component';
@@ -38,7 +38,7 @@ function App() {
             <Compositions direction={direction} />
           </TabsContent>
           <TabsContent value="Layouts">
-            <Examples direction={direction} />
+            <Layouts direction={direction} />
           </TabsContent>
           <TabsContent value="Playground">
             <Playground />

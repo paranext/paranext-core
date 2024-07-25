@@ -5,9 +5,10 @@ import {
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
 import { HasDirection } from '@/preview/preview-components/direction-toggle';
-import WindowOrTabExample from './examples/window.examples.component';
+import WindowOrTabExample from './layouts/window.layout.component';
+import Dashboard5Examples from './layouts/dashboard5.layout.component';
 
-function Examples({ direction }: HasDirection) {
+function Layouts({ direction }: HasDirection) {
   return (
     <div>
       <p className="pr-mb-2 pr-text-muted-foreground">A place to add examples for layouts</p>
@@ -15,6 +16,7 @@ function Examples({ direction }: HasDirection) {
         <VerticalTabsList>
           <VerticalTabsTrigger value="Window">Window or Tab</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Settings">Settings (n/a)</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Shadcn Dashboard 5">Shadcn Dashboard 5</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Window">
@@ -26,9 +28,15 @@ function Examples({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Settings">TODO</VerticalTabsContent>
+
+        <VerticalTabsContent value="Shadcn Dashboard 5">
+          <div className="pr-h-[405px] pr-rounded-md pr-border">
+            <Dashboard5Examples />
+          </div>
+        </VerticalTabsContent>
       </VerticalTabs>
     </div>
   );
 }
 
-export default Examples;
+export default Layouts;

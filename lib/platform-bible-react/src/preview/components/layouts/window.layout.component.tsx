@@ -23,8 +23,8 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
   };
   const [scrRef, setScrRef] = useState(defaultScrRef);
   return (
-    <div>
-      <div className="pr-flex pr-flex-row pr-rounded-sm pr-rounded-b-none pr-border-2 pr-border-border pr-bg-muted/50">
+    <div className="pr-rounded-md pr-border">
+      <div className="pr-flex pr-flex-row pr-bg-muted/50">
         <div className="pr-m-2">
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
         </div>
@@ -116,7 +116,7 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
           <p className="pr-text-2xl">+</p>
         </Button>
       </div>
-      <div className="pr-rounded-sm pr-rounded-t-none pr-border-2 pr-border-t-0 pr-border-border pr-p-4">
+      <div className="pr-p-4">
         <p>
           Imagine here the text of <code>{JSON.stringify(scrRef)}</code>
         </p>
