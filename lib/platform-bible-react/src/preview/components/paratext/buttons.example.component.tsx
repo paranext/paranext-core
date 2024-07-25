@@ -1,6 +1,7 @@
-import DownloadButton from '@/components/extension-marketplace/buttons/download-button.component';
-import RemoveButton from '@/components/extension-marketplace/buttons/remove-button.component';
+import InstallButton from '@/components/extension-marketplace/buttons/install-button.component';
+import DisableButton from '@/components/extension-marketplace/buttons/disable-button.component';
 import UpdateButton from '@/components/extension-marketplace/buttons/update-button.component';
+import EnableButton from '@/components/extension-marketplace/buttons/enable-button.component';
 
 export default function MarketplaceButtonExamples() {
   return (
@@ -9,17 +10,22 @@ export default function MarketplaceButtonExamples() {
         Note: These buttons are currently styled with fixed colors and are therefore not themeable
       </p>
       <br />
-      Download Button:
+      InstallButton Button:
       <div className="pr-space-x-2">
-        <DownloadButton isDownloading={false} handleClick={() => {}} buttonText="Get" />
-        <DownloadButton isDownloading handleClick={() => {}} buttonText="Get" />
-        <DownloadButton isDownloading={false} handleClick={() => {}} />
-        <DownloadButton isDownloading handleClick={() => {}} />
+        <InstallButton isInstalling={false} handleClick={() => {}} buttonText="Get" />
+        <InstallButton isInstalling handleClick={() => {}} buttonText="Get" />
+        <InstallButton isInstalling={false} handleClick={() => {}} />
+        <InstallButton isInstalling handleClick={() => {}} />
       </div>
-      RemoveButton Button:
+      DisableButton Button:
       <div className="pr-space-x-2">
-        <RemoveButton isRemoving={false} handleClick={() => {}} />
-        <RemoveButton isRemoving handleClick={() => {}} />
+        <DisableButton isDisabling={false} handleClick={() => {}} />
+        <DisableButton isDisabling handleClick={() => {}} />
+      </div>
+      EnableButton Button:
+      <div className="pr-space-x-2">
+        <EnableButton isEnabling={false} handleClick={() => {}} />
+        <EnableButton isEnabling handleClick={() => {}} />
       </div>
       UpdateButton Button:
       <div className="pr-space-x-2">

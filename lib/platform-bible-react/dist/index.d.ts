@@ -988,39 +988,54 @@ export interface CharacterInventoryProps {
 	getText: (projectId: string, scriptureRef: ScriptureReference, scope: string) => Promise<string | undefined>;
 }
 export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, projectId, getSetting, setSetting, getText, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
-export type DownloadButtonProps = {
-	/** The downloading boolean value determines the state of the button. */
-	isDownloading: boolean;
+export type InstallButtonProps = {
+	/** The installing boolean value determines the state of the button. */
+	isInstalling: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
 	/** Optional text for the button. */
 	buttonText?: string;
 };
 /**
- * The DownloadButton component is a button designed for initiating downloads. It includes visuals
- * for active downloading and idle states.
+ * The InstallButton component is a button designed for initiating installs. It includes visuals for
+ * active installing and idle states.
  *
- * @param isDownloading The downloading boolean value determines the state of the button.
+ * @param isInstalling The installing boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
  * @param buttonText Optional text for the button.
- * @returns A download button.
+ * @returns A install button.
  */
-export function DownloadButton({ isDownloading, handleClick, buttonText, }: DownloadButtonProps): import("react/jsx-runtime").JSX.Element;
-export type RemoveButtonProps = {
-	/** The removing boolean value determines the state of the button. */
-	isRemoving: boolean;
+export function InstallButton({ isInstalling, handleClick, buttonText, }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
+export type EnableButtonProps = {
+	/** The enabling boolean value determines the state of the button. */
+	isEnabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
 };
 /**
- * The RemoveButton component is a button designed for initiating removals of downloads. It includes
- * visuals for active removals and idle states.
+ * The EnableButton component is a button designed for initiating enabling of downloads. It includes
+ * visuals for active enabling and idle states.
  *
- * @param isRemoving The removing boolean value determines the state of the button.
+ * @param isEnabling The enabling boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
- * @returns A button that can be used to remove.
+ * @returns A button that can be used to enable.
  */
-export function RemoveButton({ isRemoving, handleClick }: RemoveButtonProps): import("react/jsx-runtime").JSX.Element;
+export function EnableButton({ isEnabling, handleClick }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
+export type DisableButtonProps = {
+	/** The disabling boolean value determines the state of the button. */
+	isDisabling: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+};
+/**
+ * The DisableButton component is a button designed for initiating disabling of downloads. It
+ * includes visuals for active disabling and idle states.
+ *
+ * @param isDisabling The disabling boolean value determines the state of the button.
+ * @param handleClick The handleClick function is called when the button is clicked.
+ * @returns A button that can be used to disable.
+ */
+export function DisableButton({ isDisabling, handleClick }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
 export type UpdateButtonProps = {
 	/** The updating boolean value determines the state of the button. */
 	isUpdating: boolean;
