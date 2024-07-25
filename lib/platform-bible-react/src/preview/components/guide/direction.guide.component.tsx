@@ -1,7 +1,7 @@
 import { History } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
-import { DirectionProps, DirToggle } from '@/preview/direction-toggle';
+import { DirectionProps, DirToggle } from '@/preview/preview-components/direction-toggle';
 
 export default function DirectionGuide({
   direction,

@@ -1,4 +1,5 @@
-import { Input, TextField } from '../../..';
+import TextField from '@/components/basics/text-field.component';
+import { Input } from '@/components/shadcn-ui/input';
 
 export default function InputExamples() {
   return (

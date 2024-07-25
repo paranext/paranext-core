@@ -1,5 +1,5 @@
 import { Input } from '@/components/shadcn-ui/input';
-import { useTheme } from '@/preview/theme-provider.component';
+import { useTheme } from '@/preview/preview-components/theme-provider.component';
 
 function createColorCells(color: string, invert: boolean = false) {
   const colorString = getComputedStyle(document.documentElement).getPropertyValue(`--${color}`);

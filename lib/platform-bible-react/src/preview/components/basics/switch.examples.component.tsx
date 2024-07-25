@@ -1,4 +1,4 @@
-import Switch from '@/components/switch.component';
+import Switch from '@/components/mui/switch.component';
 
 export default function SwitchExamples() {
   return (

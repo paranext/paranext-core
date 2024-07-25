@@ -1,15 +1,13 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
-import { ThemeProvider } from './theme-provider.component';
-import { ThemeButton } from './theme-toggle.component';
+import Compositions from './components/advanced.component';
 import Basics from './components/basics.component';
-import Compositions from './components/compositions.component';
-import Examples from './components/examples.component';
-import Playground from './components/playground.component';
-import ScriptureResultsViewerPreview from './components/scripture-results-viewer-preview.component';
-import { DirToggle, Direction } from './direction-toggle';
 import Guide from './components/guide.component';
-import Paratext from './components/paratext';
+import Examples from './components/layouts.component';
+import Playground from './components/playground.component';
+import { DirToggle, Direction } from './preview-components/direction-toggle';
+import { ThemeProvider } from './preview-components/theme-provider.component';
+import { ThemeButton } from './preview-components/theme-toggle.component';
 
 function App() {
   const [direction, setDirection] = useState<Direction>('ltr');
@@ -27,10 +25,8 @@ function App() {
         <Tabs defaultValue="Playground" className="pr-pt-4" dir={direction}>
           <TabsList>
             <TabsTrigger value="Basics">Basic Components</TabsTrigger>
-            <TabsTrigger value="Compositions">Composition Components</TabsTrigger>
-            <TabsTrigger value="Paratext">Paratext Components</TabsTrigger>
-            <TabsTrigger value="Examples">Example Layouts</TabsTrigger>
-            <TabsTrigger value="Scripture Item List">Scripture Item List</TabsTrigger>
+            <TabsTrigger value="Advanced">Advanced Components</TabsTrigger>
+            <TabsTrigger value="Layouts">Example Layouts</TabsTrigger>
             <TabsTrigger value="Playground">Playground</TabsTrigger>
             <TabsTrigger value="Guide">Guide & Colors</TabsTrigger>
           </TabsList>
@@ -38,17 +34,11 @@ function App() {
           <TabsContent value="Basics">
             <Basics direction={direction} />
           </TabsContent>
-          <TabsContent value="Compositions">
+          <TabsContent value="Advanced">
             <Compositions direction={direction} />
           </TabsContent>
-          <TabsContent value="Paratext">
-            <Paratext direction={direction} />
-          </TabsContent>
-          <TabsContent value="Examples">
+          <TabsContent value="Layouts">
             <Examples direction={direction} />
-          </TabsContent>
-          <TabsContent value="Scripture Item List">
-            <ScriptureResultsViewerPreview />
           </TabsContent>
           <TabsContent value="Playground">
             <Playground />

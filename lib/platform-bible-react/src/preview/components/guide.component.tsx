@@ -3,12 +3,12 @@ import {
   VerticalTabsContent,
   VerticalTabsList,
   VerticalTabsTrigger,
-} from '@/components/shadcn-ui/tabs-vertical';
+} from '@/components/basics/tabs-vertical';
 
-import { DirectionProps } from '../direction-toggle';
+import { DirectionProps } from '@/preview/preview-components/direction-toggle';
 import DirectionGuide from './guide/direction.guide.component';
-import ThemingGuide from './guide/theming.guide.component';
 import ThemeColorDisplay from './guide/theme-color-display.component';
+import ThemingGuide from './guide/theming.guide.component';
 
 function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
   return (
