@@ -1,5 +1,5 @@
+import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn-ui/alert';
 import { AlertCircle, Terminal } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '../../..';
 
 export default function ExampleAlerts() {
   return (

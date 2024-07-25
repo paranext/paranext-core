@@ -1,29 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, MouseEvent } from 'react';
-import {
-  GroupingState,
-  useReactTable,
-  getCoreRowModel,
-  getGroupedRowModel,
-  getExpandedRowModel,
-  getSortedRowModel,
-  ColumnDef,
-  flexRender,
-  SortingState,
-  Row,
-  Cell,
-  RowSelectionState,
-} from '@tanstack/react-table';
-import { Canon } from '@sillsdev/scripture';
-import '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component.css';
-import {
-  compareScrRefs,
-  formatScrRef,
-  scrRefToBBBCCCVVV,
-  ScriptureSelection,
-  ScriptureReference,
-} from 'platform-bible-utils';
-import { cn } from '@/utils/shadcn-ui.util';
-import { Button } from '../../shadcn-ui/button';
+import { Button } from '@/components/shadcn-ui/button';
 import {
   Select,
   SelectContent,
@@ -31,15 +6,40 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '../../shadcn-ui/select';
+} from '@/components/shadcn-ui/select';
 import {
   Table,
-  TableHeader,
-  TableHead,
   TableBody,
-  TableRow,
   TableCell,
-} from '../../shadcn-ui/table';
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/shadcn-ui/table';
+import { cn } from '@/utils/shadcn-ui.util';
+import { Canon } from '@sillsdev/scripture';
+import {
+  Cell,
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getExpandedRowModel,
+  getGroupedRowModel,
+  getSortedRowModel,
+  GroupingState,
+  Row,
+  RowSelectionState,
+  SortingState,
+  useReactTable,
+} from '@tanstack/react-table';
+import '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component.css';
+import {
+  compareScrRefs,
+  formatScrRef,
+  ScriptureReference,
+  ScriptureSelection,
+  scrRefToBBBCCCVVV,
+} from 'platform-bible-utils';
+import { MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
