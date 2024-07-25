@@ -20,9 +20,12 @@ function InventoryDataTable({ columns, tableData, onSelectItem }: InventoryDataT
   };
 
   return (
-    <div className="pr-overflow-y-auto">
-      <DataTable columns={columns} data={tableData} onRowClickHandler={rowClickHandler} />
-    </div>
+    <DataTable
+      columns={columns}
+      data={tableData}
+      stickyHeader
+      onRowClickHandler={rowClickHandler}
+    />
   );
 }
 

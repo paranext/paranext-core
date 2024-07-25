@@ -39,6 +39,7 @@ interface DataTableProps<TData, TValue> {
   enablePagination?: boolean;
   showPaginationControls?: boolean;
   showColumnVisibilityControls?: boolean;
+  stickyHeader?: boolean;
   onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
 
@@ -48,6 +49,7 @@ function DataTable<TData, TValue>({
   enablePagination = false,
   showPaginationControls = false,
   showColumnVisibilityControls = false,
+  stickyHeader = false,
   onRowClickHandler = () => {},
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -75,50 +77,48 @@ function DataTable<TData, TValue>({
   });
 
   return (
-    <div>
+    <div className="pr-twp pr-font-sans">
       {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
-      <div className="pr-twp pr-font-sans">
-        <Table>
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? undefined
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  );
-                })}
+      <Table stickyHeader={stickyHeader}>
+        <TableHeader stickyHeader={stickyHeader}>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <TableRow key={headerGroup.id}>
+              {headerGroup.headers.map((header) => {
+                return (
+                  <TableHead key={header.id}>
+                    {header.isPlaceholder
+                      ? undefined
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                );
+              })}
+            </TableRow>
+          ))}
+        </TableHeader>
+        <TableBody>
+          {table.getRowModel().rows?.length ? (
+            table.getRowModel().rows.map((row) => (
+              <TableRow
+                onClick={() => onRowClickHandler(row, table)}
+                key={row.id}
+                data-state={row.getIsSelected() && 'selected'}
+              >
+                {row.getVisibleCells().map((cell) => (
+                  <TableCell key={cell.id}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </TableCell>
+                ))}
               </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  onClick={() => onRowClickHandler(row, table)}
-                  key={row.id}
-                  data-state={row.getIsSelected() && 'selected'}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell colSpan={columns.length} className="pr-h-24 pr-text-center">
-                  No results.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell colSpan={columns.length} className="pr-h-24 pr-text-center">
+                No results.
+              </TableCell>
+            </TableRow>
+          )}
+        </TableBody>
+      </Table>
       {enablePagination && (
         <div className="pr-flex pr-items-center pr-justify-end pr-space-x-2 pr-py-4">
           <Button

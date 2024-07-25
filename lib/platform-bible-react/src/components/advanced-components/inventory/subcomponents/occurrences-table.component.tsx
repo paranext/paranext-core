@@ -101,8 +101,8 @@ function OccurrencesTable({
   );
 
   return (
-    <Table>
-      <TableHeader>
+    <Table stickyHeader>
+      <TableHeader stickyHeader>
         <TableRow>
           <TableHead>{reference}</TableHead>
           <TableHead>{occurrence}</TableHead>

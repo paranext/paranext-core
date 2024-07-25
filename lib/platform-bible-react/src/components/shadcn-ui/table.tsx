@@ -2,24 +2,33 @@ import React from 'react';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="pr-relative pr-w-full pr-overflow-auto">
-      <table
-        ref={ref}
-        className={cn('pr-w-full pr-caption-bottom pr-text-sm', className)}
-        {...props}
-      />
-    </div>
-  ),
-);
+const Table = React.forwardRef<
+  HTMLTableElement,
+  React.HTMLAttributes<HTMLTableElement> & { stickyHeader?: boolean }
+>(({ className, stickyHeader, ...props }, ref) => (
+  <div className={cn('pr-relative pr-w-full', { 'pr-overflow-auto': !stickyHeader })}>
+    <table
+      ref={ref}
+      className={cn('pr-w-full pr-caption-bottom pr-text-sm', className)}
+      {...props}
+    />
+  </div>
+));
 Table.displayName = 'Table';
 
 const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn('[&_tr]:pr-border-b', className)} {...props} />
+  React.HTMLAttributes<HTMLTableSectionElement> & { stickyHeader?: boolean }
+>(({ className, stickyHeader, ...props }, ref) => (
+  <thead
+    ref={ref}
+    className={cn(
+      { 'pr-sticky pr-top-0 pr-bg-white': stickyHeader },
+      '[&_tr]:pr-border-b',
+      className,
+    )}
+    {...props}
+  />
 ));
 TableHeader.displayName = 'TableHeader';
 

@@ -184,9 +184,10 @@ export interface DataTableProps<TData, TValue> {
 	enablePagination?: boolean;
 	showPaginationControls?: boolean;
 	showColumnVisibilityControls?: boolean;
+	stickyHeader?: boolean;
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
@@ -942,8 +943,12 @@ export declare const SelectContent: React$1.ForwardRefExoticComponent<Omit<Selec
 export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
-export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & React$1.RefAttributes<HTMLTableElement>>;
-export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & {
+	stickyHeader?: boolean | undefined;
+} & React$1.RefAttributes<HTMLTableElement>>;
+export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & {
+	stickyHeader?: boolean | undefined;
+} & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
