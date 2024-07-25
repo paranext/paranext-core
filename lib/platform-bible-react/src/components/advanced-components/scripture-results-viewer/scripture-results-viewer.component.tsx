@@ -374,7 +374,7 @@ export default function ScriptureResultsViewer({
   };
 
   return (
-    <div className="pr-twp pr-flex pr-w-full pr-flex-col">
+    <div className="pr-twp pr-flex pr-h-full pr-w-full pr-flex-col">
       {!showColumnHeaders && (
         <Select
           value={JSON.stringify(grouping)}
@@ -396,7 +396,7 @@ export default function ScriptureResultsViewer({
           </SelectContent>
         </Select>
       )}
-      <Table className="pr-flex pr-h-full pr-flex-col pr-p-0">
+      <Table className="pr-relative pr-flex pr-flex-col pr-overflow-y-auto pr-p-0">
         {showColumnHeaders && (
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -404,7 +404,8 @@ export default function ScriptureResultsViewer({
                 {headerGroup.headers
                   .filter((h) => h.column.columnDef.header)
                   .map((header) => (
-                    <TableHead key={header.id} colSpan={header.colSpan}>
+                    /* For sticky column headers to work, we probably need to change the default definition of the shadcn Table component. See https://github.com/shadcn-ui/ui/issues/1151 */
+                    <TableHead key={header.id} colSpan={header.colSpan} className="top-0 pr-sticky">
                       {header.isPlaceholder ? undefined : (
                         <div>
                           {header.column.getCanGroup() ? (
@@ -426,7 +427,7 @@ export default function ScriptureResultsViewer({
             ))}
           </TableHeader>
         )}
-        <TableBody className="pr-overflow-y-auto">
+        <TableBody>
           {table.getRowModel().rows.map((row, rowIndex) => {
             return (
               <TableRow

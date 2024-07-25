@@ -61,7 +61,7 @@ export default function ScriptureResultsViewerPreview() {
   };
 
   return (
-    <>
+    <div className="pr-h-96 pr-overflow-y-hidden">
       <div>
         {checks.map((check, index) => (
           <Button
@@ -80,6 +80,6 @@ export default function ScriptureResultsViewerPreview() {
         typeColumnName="Check Type"
         detailsColumnName="Error Details"
       />
-    </>
+    </div>
   );
 }
