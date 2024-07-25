@@ -2,7 +2,7 @@ import DataTable, {
   ColumnDef,
   RowContents,
   TableContents,
-} from '@/components/advanced-components/data-table/data-table.component';
+} from '@/components/advanced/data-table/data-table.component';
 import { ItemData } from '../types';
 
 interface InventoryDataTableProps {

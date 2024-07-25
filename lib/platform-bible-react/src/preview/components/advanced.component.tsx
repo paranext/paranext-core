@@ -1,12 +1,12 @@
-import BookChapterControl from '@/components/advanced-components/book-chapter-control/book-chapter-control.component';
-import DataTable from '@/components/advanced-components/data-table/data-table.component';
+import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import DataTable from '@/components/advanced/data-table/data-table.component';
 import {
   VerticalTabs,
   VerticalTabsContent,
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import Inventory from '@/components/advanced-components/inventory/inventory.component';
+import Inventory from '@/components/advanced/inventory/inventory.component';
 import { HasDirection } from '@/preview/preview-components/direction-toggle';
 import ThemeToggle from '@/preview/preview-components/theme-toggle.component';
 import { ScriptureReference } from 'platform-bible-utils';

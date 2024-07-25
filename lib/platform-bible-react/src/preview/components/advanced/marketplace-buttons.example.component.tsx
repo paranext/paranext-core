@@ -1,7 +1,7 @@
-import InstallButton from '@/components/advanced-components/extension-marketplace/buttons/install-button.component';
-import DisableButton from '@/components/advanced-components/extension-marketplace/buttons/disable-button.component';
-import UpdateButton from '@/components/advanced-components/extension-marketplace/buttons/update-button.component';
-import EnableButton from '@/components/advanced-components/extension-marketplace/buttons/enable-button.component';
+import InstallButton from '@/components/advanced/extension-marketplace/buttons/install-button.component';
+import DisableButton from '@/components/advanced/extension-marketplace/buttons/disable-button.component';
+import UpdateButton from '@/components/advanced/extension-marketplace/buttons/update-button.component';
+import EnableButton from '@/components/advanced/extension-marketplace/buttons/enable-button.component';
 
 export default function MarketplaceButtonExamples() {
   return (

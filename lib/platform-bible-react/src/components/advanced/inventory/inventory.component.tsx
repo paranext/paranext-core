@@ -8,9 +8,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import { ColumnDef } from '@/components/advanced-components/data-table/data-table.component';
-import InventoryDataTable from '@/components/advanced-components/inventory/subcomponents/inventory-data-table.component';
-import OccurrencesTable from '@/components/advanced-components/inventory/subcomponents/occurrences-table.component';
+import { ColumnDef } from '@/components/advanced/data-table/data-table.component';
+import InventoryDataTable from '@/components/advanced/inventory/subcomponents/inventory-data-table.component';
+import OccurrencesTable from '@/components/advanced/inventory/subcomponents/occurrences-table.component';
 import { ItemData, Status } from './types';
 
 const filterItemData = (

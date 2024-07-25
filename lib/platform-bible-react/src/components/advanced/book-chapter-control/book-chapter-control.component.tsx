@@ -1,9 +1,9 @@
-import BookChapterInput from '@/components/advanced-components/book-chapter-control/book-chapter-input.component';
+import BookChapterInput from '@/components/advanced/book-chapter-control/book-chapter-input.component';
 import BookMenuItem, {
   BookType,
-} from '@/components/advanced-components/book-chapter-control/book-menu-item.component';
-import ChapterSelect from '@/components/advanced-components/book-chapter-control/chapter-select.component';
-import GoToMenuItem from '@/components/advanced-components/book-chapter-control/go-to-menu-item.component';
+} from '@/components/advanced/book-chapter-control/book-menu-item.component';
+import ChapterSelect from '@/components/advanced/book-chapter-control/chapter-select.component';
+import GoToMenuItem from '@/components/advanced/book-chapter-control/go-to-menu-item.component';
 import {
   DropdownMenu as ShadDropdownMenu,
   DropdownMenuContent as ShadDropdownMenuContent,

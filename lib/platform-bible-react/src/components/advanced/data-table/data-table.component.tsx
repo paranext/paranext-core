@@ -16,8 +16,8 @@ import {
   VisibilityState,
 } from '@tanstack/react-table';
 
-import DataTableViewOptions from '@/components/advanced-components/data-table/data-table-column-toggle.component';
-import DataTablePagination from '@/components/advanced-components/data-table/data-table-pagination.component';
+import DataTableViewOptions from '@/components/advanced/data-table/data-table-column-toggle.component';
+import DataTablePagination from '@/components/advanced/data-table/data-table-pagination.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Table,

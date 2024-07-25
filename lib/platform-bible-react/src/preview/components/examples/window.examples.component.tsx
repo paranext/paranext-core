@@ -1,4 +1,4 @@
-import BookChapterControl from '@/components/advanced-components/book-chapter-control/book-chapter-control.component';
+import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   DropdownMenu,
