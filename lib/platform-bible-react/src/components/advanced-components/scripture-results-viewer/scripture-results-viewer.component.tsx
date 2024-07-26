@@ -179,7 +179,7 @@ function getColumns(
     {
       accessorFn: (row) => row.source.displayName,
       id: typeColId,
-      header: showSrcCol ? colInfo?.typeColumnName ?? defaultTypeColumnName : undefined,
+      header: showSrcCol ? (colInfo?.typeColumnName ?? defaultTypeColumnName) : undefined,
       cell: (info) => (showSrcCol || info.row.getIsGrouped() ? info.getValue() : undefined),
       getGroupingValue: (row) => row.source.id,
       sortingFn: (a, b) =>

@@ -11,9 +11,12 @@ import { HasDirection } from '@/preview/preview-components/direction-toggle';
 import ThemeToggle from '@/preview/preview-components/theme-toggle.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
-import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
-import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
-import { columns, data } from './data-sources/data-table-content';
+import MarketplaceButtonExamples from '@/preview/components/advanced/marketplace-buttons.example.component';
+import ScriptureResultsViewerExample from '@/preview/components/advanced/scripture-results-viewer.examples.component';
+import { columns, data } from '@/preview/components/data-sources/data-table-content';
+import NavigationContentSearch from '@/components/advanced-components/navigation-content-search.component';
+import { List, ListItem, ListHeader } from '@/components/basics/list.component';
+import { Input } from '@/components/shadcn-ui/input';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -23,6 +26,48 @@ const defaultScrRef: ScriptureReference = {
 
 function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
+  const [searchValue, setSearchValue] = useState<string>('');
+
+  const tabList = [
+    {
+      key: 'tab1',
+      value: 'tab1',
+      content: (
+        <div>
+          <h1>TAB 1 CONTENT</h1>
+        </div>
+      ),
+    },
+    {
+      key: 'tab2',
+      value: 'tab2',
+      content: (
+        <div>
+          <h3>TAB 2 CONTENT</h3>
+        </div>
+      ),
+    },
+    {
+      key: 'tab3',
+      value: 'tab3',
+      content: (
+        <div>
+          <h2>TAB 3 CONTENT</h2>
+        </div>
+      ),
+    },
+  ];
+
+  const handleSearchChange = (newSearchValue: string) => {
+    setSearchValue(newSearchValue);
+  };
+  const generateComponent = (placeholder: string) => {
+    return (
+      <>
+        <Input placeholder={placeholder} />{' '}
+      </>
+    );
+  };
 
   return (
     <div>
@@ -39,6 +84,10 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Marketplace Buttons">Marketplace Buttons</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Navigation Content Search">
+            Navigation Content Search
+          </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="List">List</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
@@ -76,6 +125,46 @@ function Compositions({ direction }: HasDirection) {
               throw new Error('getSetting not implemented.');
             }}
           />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Navigation Content Search">
+          <NavigationContentSearch
+            headerTitle={`Testing the NavigationContentSearch, current search value: ${searchValue}`}
+            tabList={tabList}
+            onSearch={handleSearchChange}
+            searchPlaceholder="Search..."
+          />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="List">
+          <List>
+            <ListHeader
+              primary="Settings"
+              secondary="User settings for styling the header"
+              includeSeparator
+            />
+            <ListItem
+              primary="Header color"
+              secondary="The color of the header"
+              generateActionComponent={() => generateComponent('Red')}
+              isLoading={false}
+              loadingMessage="Loading setting"
+            />
+            <ListItem
+              primary="Header size"
+              secondary="The size of the header"
+              generateActionComponent={() => generateComponent('56')}
+              isLoading
+              loadingMessage="Loading setting"
+            />
+            <ListItem
+              primary="Header bold"
+              secondary="Wether or not the header is bold"
+              generateActionComponent={() => generateComponent('color')}
+              isLoading={false}
+              loadingMessage="Loading setting"
+            />
+          </List>
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

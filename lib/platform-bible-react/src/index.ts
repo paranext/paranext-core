@@ -47,6 +47,11 @@ export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Slider } from './components/mui/slider.component';
 export type { SliderProps } from './components/mui/slider.component';
 export { default as Snackbar } from './components/mui/snackbar.component';
+export {
+  default as NavigationContentSearch,
+  type TabKeyValueContent,
+} from './components/advanced-components/navigation-content-search.component';
+export { List, ListItem, ListHeader } from './components/basics/list.component';
 export type {
   AnchorOrigin,
   CloseReason,
