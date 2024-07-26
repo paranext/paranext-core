@@ -65,7 +65,7 @@ function IconButton({
       edge={adjustMarginToAlignToEdge}
       size={size}
       aria-label={label}
-      title={isTooltipSuppressed ? undefined : (tooltip ?? label)}
+      title={isTooltipSuppressed ? undefined : tooltip ?? label}
       className={`papi-icon-button ${className ?? ''}`}
       onClick={onClick}
     >
