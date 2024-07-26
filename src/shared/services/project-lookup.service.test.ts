@@ -5,7 +5,7 @@ import {
   ProjectMetadataWithoutFactoryInfo,
 } from '@shared/models/project-metadata.model';
 import {
-  ProjectMetadataFilterOptions,
+  getPDPFactoryIdFromNetworkObjectName,
   getPDPFactoryNetworkObjectNameFromId,
   testingProjectLookupService,
 } from '@shared/models/project-lookup.service-model';
@@ -13,10 +13,12 @@ import networkObjectService from '@shared/services/network-object.service';
 import networkObjectStatusService from '@shared/services/network-object-status.service';
 import IProjectDataProviderFactory, {
   PDP_FACTORY_OBJECT_TYPE,
+  ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
 import { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { ProjectInterfaces } from 'papi-shared-types';
 import projectLookupService from '@shared/services/project-lookup.service';
+import { LayeringProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model';
 
 jest.mock('@shared/services/network-object.service', () => ({
   __esModule: true,
@@ -47,16 +49,315 @@ beforeEach(() => {
   });
 });
 
+describe('Getting project metadata with Layering PDPs', () => {
+  const testProjectId = 'test-project';
+  const baseProjectInterfaces: ProjectInterfaces[] = ['platform.base', 'platform.placeholder'];
+  const layeringPDPInterfaces: { [pdpfName: string]: ProjectInterfaces[] } = {
+    [getPDPFactoryNetworkObjectNameFromId('layer-1')]: ['platformScripture.USJ_Chapter'],
+    [getPDPFactoryNetworkObjectNameFromId('layer-2')]: ['platformScripture.USX_Chapter'],
+    [getPDPFactoryNetworkObjectNameFromId('layer-3')]: ['platformScripture.USX_Chapter'],
+    [getPDPFactoryNetworkObjectNameFromId('meta-layer-3')]: ['platform.notesOnly'],
+    [getPDPFactoryNetworkObjectNameFromId('non-layer')]: ['platformScripture.USFM_Book'],
+  };
+  function getIncludedPdpfIds(pdpfIds: string[]) {
+    return pdpfIds.filter(
+      (pdpfId) =>
+        !pdpfId.startsWith('non-') &&
+        (!pdpfId.startsWith('meta-') || pdpfIds.includes(pdpfId.substring('meta-'.length))),
+    );
+  }
+  function getAggregatedProjectInterfaces(pdpfIds: string[]) {
+    const interfaces = new Set([
+      ...baseProjectInterfaces,
+      ...getIncludedPdpfIds(pdpfIds)
+        .filter((pdpfId) => pdpfId !== 'base')
+        .flatMap(
+          (layeringPdpfId) =>
+            layeringPDPInterfaces[getPDPFactoryNetworkObjectNameFromId(layeringPdpfId)],
+        ),
+    ]);
+    return [...interfaces];
+  }
+  const testPDPFInfo: Record<string, Partial<NetworkObjectDetails>> = {
+    ...Object.fromEntries(
+      Object.entries(layeringPDPInterfaces).map(([pdpfName, projectInterfaces]) => [
+        pdpfName,
+        {
+          objectType: PDP_FACTORY_OBJECT_TYPE,
+          attributes: {
+            projectInterfaces,
+          },
+        },
+      ]),
+    ),
+    [getPDPFactoryNetworkObjectNameFromId('base')]: {
+      objectType: PDP_FACTORY_OBJECT_TYPE,
+      attributes: {
+        projectInterfaces: baseProjectInterfaces,
+      },
+    },
+    extraneous: {
+      objectType: 'not-a-pdpf',
+    },
+  };
+  function getTestPDPFInfoSubset(pdpfIds: string[]) {
+    return Object.fromEntries(
+      pdpfIds.map((pdpfId) => {
+        const pdpfName = getPDPFactoryNetworkObjectNameFromId(pdpfId);
+        return [pdpfName, testPDPFInfo[pdpfName]];
+      }),
+    );
+  }
+  const testPDPFs: Record<string, Partial<IProjectDataProviderFactory>> = {
+    ...Object.fromEntries(
+      Object.entries(layeringPDPInterfaces).map(([pdpfName, projectInterfaces]) => {
+        let projectInterfacesToLayerOver: string | (string | string[])[] = 'platform.placeholder';
+        const pdpfId = getPDPFactoryIdFromNetworkObjectName(pdpfName);
+        if (pdpfId.startsWith('non-'))
+          projectInterfacesToLayerOver = 'blah-does-not-match-anything';
+        else if (pdpfId.startsWith('meta-')) {
+          const layerOverPdpfId = pdpfId.substring('meta-'.length);
+          projectInterfacesToLayerOver =
+            layeringPDPInterfaces[getPDPFactoryNetworkObjectNameFromId(layerOverPdpfId)];
+        }
+        class LayeringPDP extends LayeringProjectDataProviderEngineFactory<
+          typeof projectInterfaces
+        > {
+          projectInterfacesToLayerOver = projectInterfacesToLayerOver;
+          providedProjectInterfaces = projectInterfaces;
+        }
+        return [pdpfName, new LayeringPDP(pdpfId)];
+      }),
+    ),
+    [getPDPFactoryNetworkObjectNameFromId('base')]: {
+      async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+        return [
+          {
+            id: testProjectId,
+            projectInterfaces: baseProjectInterfaces,
+          },
+        ];
+      },
+    },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectService.get.mockImplementation(
+      (networkObjectId: string) => testPDPFs[networkObjectId],
+    );
+  });
+
+  it('should successfully get just the base metadata if that is the only pdpf available', async () => {
+    const pdpfIds = ['base'];
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
+      getTestPDPFInfoSubset(pdpfIds),
+    );
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+
+    expect(projectsMetadata.length).toBe(1);
+
+    // Check project 1
+    const testProjectMetadataPossiblyUndefined = projectsMetadata.find(
+      (projectMetadata) => projectMetadata.id === testProjectId,
+    );
+    expect(testProjectMetadataPossiblyUndefined).toBeDefined();
+    const testProjectMetadata = testProjectMetadataPossiblyUndefined as ProjectMetadata;
+
+    // Should be provided by the right number of pdpfs
+    expect(Object.entries(testProjectMetadata.pdpFactoryInfo).length).toBe(
+      getIncludedPdpfIds(pdpfIds).length,
+    );
+
+    // `projectInterface`s should be a combination of all available `projectInterface`s
+    const correctProjectInterfaces = getAggregatedProjectInterfaces(pdpfIds);
+    expect(testProjectMetadata.projectInterfaces.length).toEqual(correctProjectInterfaces.length);
+    correctProjectInterfaces.forEach((projectInterface) =>
+      expect(testProjectMetadata.projectInterfaces).toContain(projectInterface),
+    );
+  });
+
+  it('should successfully get no projects if only a layering pdpf is available', async () => {
+    const pdpfIds = ['layer-1'];
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
+      getTestPDPFInfoSubset(pdpfIds),
+    );
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+
+    expect(projectsMetadata.length).toBe(0);
+  });
+
+  it('should successfully get the base plus one layering metadata if there is just one layering pdpfs available', async () => {
+    const pdpfIds = ['base', 'layer-1'];
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
+      getTestPDPFInfoSubset(pdpfIds),
+    );
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+
+    expect(projectsMetadata.length).toBe(1);
+
+    // Check project 1
+    const testProjectMetadataPossiblyUndefined = projectsMetadata.find(
+      (projectMetadata) => projectMetadata.id === testProjectId,
+    );
+    expect(testProjectMetadataPossiblyUndefined).toBeDefined();
+    const testProjectMetadata = testProjectMetadataPossiblyUndefined as ProjectMetadata;
+
+    // Should be provided by the right number of pdpfs
+    expect(Object.entries(testProjectMetadata.pdpFactoryInfo).length).toBe(
+      getIncludedPdpfIds(pdpfIds).length,
+    );
+
+    // `projectInterface`s should be a combination of all available `projectInterface`s
+    const correctProjectInterfaces = getAggregatedProjectInterfaces(pdpfIds);
+    expect(testProjectMetadata.projectInterfaces.length).toEqual(correctProjectInterfaces.length);
+    correctProjectInterfaces.forEach((projectInterface) =>
+      expect(testProjectMetadata.projectInterfaces).toContain(projectInterface),
+    );
+  });
+
+  it('should not cause an infinite loop of calling each other but should successfully get base and layering metadata with multiple layering pdpfs (as far as we can control)', async () => {
+    const pdpfIds = ['base', 'layer-1', 'layer-2'];
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
+      getTestPDPFInfoSubset(pdpfIds),
+    );
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+
+    expect(projectsMetadata.length).toBe(1);
+
+    // Check project 1
+    const testProjectMetadataPossiblyUndefined = projectsMetadata.find(
+      (projectMetadata) => projectMetadata.id === testProjectId,
+    );
+    expect(testProjectMetadataPossiblyUndefined).toBeDefined();
+    const testProjectMetadata = testProjectMetadataPossiblyUndefined as ProjectMetadata;
+
+    // Should be provided by the right number of pdpfs
+    expect(Object.entries(testProjectMetadata.pdpFactoryInfo).length).toBe(
+      getIncludedPdpfIds(pdpfIds).length,
+    );
+
+    // `projectInterface`s should be a combination of all available `projectInterface`s
+    const correctProjectInterfaces = getAggregatedProjectInterfaces(pdpfIds);
+    expect(testProjectMetadata.projectInterfaces.length).toEqual(correctProjectInterfaces.length);
+    correctProjectInterfaces.forEach((projectInterface) =>
+      expect(testProjectMetadata.projectInterfaces).toContain(projectInterface),
+    );
+  });
+
+  it('should successfully get base and layering metadata with duplicate layering pdpfs', async () => {
+    const pdpfIds = ['base', 'layer-1', 'layer-2', 'layer-3'];
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
+      getTestPDPFInfoSubset(pdpfIds),
+    );
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+
+    expect(projectsMetadata.length).toBe(1);
+
+    // Check project 1
+    const testProjectMetadataPossiblyUndefined = projectsMetadata.find(
+      (projectMetadata) => projectMetadata.id === testProjectId,
+    );
+    expect(testProjectMetadataPossiblyUndefined).toBeDefined();
+    const testProjectMetadata = testProjectMetadataPossiblyUndefined as ProjectMetadata;
+
+    // Should be provided by the right number of pdpfs
+    expect(Object.entries(testProjectMetadata.pdpFactoryInfo).length).toBe(
+      getIncludedPdpfIds(pdpfIds).length,
+    );
+
+    // `projectInterface`s should be a combination of all available `projectInterface`s
+    const correctProjectInterfaces = getAggregatedProjectInterfaces(pdpfIds);
+    expect(testProjectMetadata.projectInterfaces.length).toEqual(correctProjectInterfaces.length);
+    correctProjectInterfaces.forEach((projectInterface) =>
+      expect(testProjectMetadata.projectInterfaces).toContain(projectInterface),
+    );
+  });
+
+  it('should not get interfaces for non-matching layering pdpfs', async () => {
+    const pdpfIds = ['base', 'layer-1', 'non-layer', 'meta-layer-3'];
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
+      getTestPDPFInfoSubset(pdpfIds),
+    );
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+
+    expect(projectsMetadata.length).toBe(1);
+
+    // Check project 1
+    const testProjectMetadataPossiblyUndefined = projectsMetadata.find(
+      (projectMetadata) => projectMetadata.id === testProjectId,
+    );
+    expect(testProjectMetadataPossiblyUndefined).toBeDefined();
+    const testProjectMetadata = testProjectMetadataPossiblyUndefined as ProjectMetadata;
+
+    // Should be provided by the right number of pdpfs
+    expect(Object.entries(testProjectMetadata.pdpFactoryInfo).length).toBe(
+      getIncludedPdpfIds(pdpfIds).length,
+    );
+
+    // `projectInterface`s should be a combination of all available `projectInterface`s
+    const correctProjectInterfaces = getAggregatedProjectInterfaces(pdpfIds);
+    expect(testProjectMetadata.projectInterfaces.length).toEqual(correctProjectInterfaces.length);
+    correctProjectInterfaces.forEach((projectInterface) =>
+      expect(testProjectMetadata.projectInterfaces).toContain(projectInterface),
+    );
+  });
+
+  it('should successfully get metadata for layering pdpfs that layer over layering pdpfs', async () => {
+    const pdpfIds = ['base', 'layer-1', 'layer-3', 'meta-layer-3'];
+    // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
+    networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() =>
+      getTestPDPFInfoSubset(pdpfIds),
+    );
+
+    const projectsMetadata = await projectLookupService.getMetadataForAllProjects();
+
+    expect(projectsMetadata.length).toBe(1);
+
+    // Check project 1
+    const testProjectMetadataPossiblyUndefined = projectsMetadata.find(
+      (projectMetadata) => projectMetadata.id === testProjectId,
+    );
+    expect(testProjectMetadataPossiblyUndefined).toBeDefined();
+    const testProjectMetadata = testProjectMetadataPossiblyUndefined as ProjectMetadata;
+
+    // Should be provided by the right number of pdpfs
+    expect(Object.entries(testProjectMetadata.pdpFactoryInfo).length).toBe(
+      getIncludedPdpfIds(pdpfIds).length,
+    );
+
+    // `projectInterface`s should be a combination of all available `projectInterface`s
+    const correctProjectInterfaces = getAggregatedProjectInterfaces(pdpfIds);
+    expect(testProjectMetadata.projectInterfaces.length).toEqual(correctProjectInterfaces.length);
+    correctProjectInterfaces.forEach((projectInterface) =>
+      expect(testProjectMetadata.projectInterfaces).toContain(projectInterface),
+    );
+  });
+});
+
 describe('Metadata generation:', () => {
   const testProjectId = 'test-project';
   const expectedTestProjectInterfaces: ProjectInterfaces[] = [
     'platform.placeholder',
     'platform.notesOnly',
-    'platformScripture.USFM_BookChapterVerse',
+    'platformScripture.USFM_Book',
     'helloWorld',
   ];
   const expectedTest2ProjectInterfaces: ProjectInterfaces[] = [
-    'platformScripture.USFM_BookChapterVerse',
+    'platformScripture.USFM_Book',
     'platform.notesOnly',
   ];
   const test2ProjectId = 'test-2-project';
@@ -100,7 +401,7 @@ describe('Metadata generation:', () => {
           },
           {
             id: test2ProjectId,
-            projectInterfaces: ['platformScripture.USFM_BookChapterVerse', 'platform.notesOnly'],
+            projectInterfaces: ['platformScripture.USFM_Book', 'platform.notesOnly'],
           },
         ];
       },
@@ -113,7 +414,7 @@ describe('Metadata generation:', () => {
             projectInterfaces: [
               'platform.placeholder',
               'platform.notesOnly',
-              'platformScripture.USFM_BookChapterVerse',
+              'platformScripture.USFM_Book',
             ],
           },
         ];
@@ -182,7 +483,7 @@ describe('Metadata generation:', () => {
       expect(pdpfInfoValuesSorted[3].projectInterfaces).toEqual([
         'platform.placeholder',
         'platform.notesOnly',
-        'platformScripture.USFM_BookChapterVerse',
+        'platformScripture.USFM_Book',
       ]);
     });
   });
@@ -341,7 +642,7 @@ describe('Metadata generation:', () => {
           projectInterfaces: [
             'platform.placeholder',
             'platform.notesOnly',
-            'platformScripture.USFM_BookChapterVerse',
+            'platformScripture.USFM_Book',
           ],
         },
         'test-0': { projectInterfaces: ['platform.placeholder'] },
@@ -401,7 +702,7 @@ describe('Metadata generation:', () => {
 
       // `projectInterface`s should be just the `projectInterface`s from this pdpf
       const expectedTest2ProjectInterfacesOnePDPF = [
-        'platformScripture.USFM_BookChapterVerse',
+        'platformScripture.USFM_Book',
         'platform.notesOnly',
       ];
       expect(test2ProjectMetadata.projectInterfaces.length).toEqual(
@@ -414,7 +715,7 @@ describe('Metadata generation:', () => {
       // Each entry in pdpfInfo should have only the `projectInterface`s provided by this pdpf
       expect(test2ProjectMetadata.pdpFactoryInfo).toEqual({
         'test-1': {
-          projectInterfaces: ['platformScripture.USFM_BookChapterVerse', 'platform.notesOnly'],
+          projectInterfaces: ['platformScripture.USFM_Book', 'platform.notesOnly'],
         },
       });
     });
@@ -490,12 +791,12 @@ describe('filterProjectsMetadata', () => {
     },
     {
       id: 'asdfg',
-      projectInterfaces: ['platformScripture.USFM_BookChapterVerse', 'platform.notesOnly'],
+      projectInterfaces: ['platformScripture.USFM_Book', 'platform.notesOnly'],
       pdpFactoryInfo: {
         test2: {
-          projectInterfaces: ['platformScripture.USFM_BookChapterVerse', 'platform.notesOnly'],
+          projectInterfaces: ['platformScripture.USFM_Book', 'platform.notesOnly'],
         },
-        test4: { projectInterfaces: ['platformScripture.USFM_BookChapterVerse'] },
+        test4: { projectInterfaces: ['platformScripture.USFM_Book'] },
       },
     },
     {
@@ -539,10 +840,7 @@ describe('filterProjectsMetadata', () => {
 
     options = {
       excludeProjectIds: ['asdf', 'asdfg'],
-      includeProjectInterfaces: [
-        '^platformScripture\\.USFM_BookChapterVerse$',
-        '^platform\\.placeholder$',
-      ],
+      includeProjectInterfaces: ['^platformScripture\\.USFM_Book$', '^platform\\.placeholder$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -576,10 +874,7 @@ describe('filterProjectsMetadata', () => {
     options = {
       includeProjectIds: ['asdf', 'asdfg', 'asdfgh'],
       excludeProjectIds: 'asdfg',
-      includeProjectInterfaces: [
-        '^platformScripture\\.USFM_BookChapterVerse$',
-        '^platform\\.placeholder$',
-      ],
+      includeProjectInterfaces: ['^platformScripture\\.USFM_Book$', '^platform\\.placeholder$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -611,7 +906,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple OR'ed RegExps that match two project interfaces
 
     options = {
-      excludeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_BookChapterVerse$'],
+      excludeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_Book$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -652,10 +947,7 @@ describe('filterProjectsMetadata', () => {
 
     options = {
       excludeProjectInterfaces: 'USFM',
-      includeProjectInterfaces: [
-        '^platformScripture\\.USFM_BookChapterVerse$',
-        '^platform\\.placeholder$',
-      ],
+      includeProjectInterfaces: ['^platformScripture\\.USFM_Book$', '^platform\\.placeholder$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -687,7 +979,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple RegExps that match two project interfaces
 
     options = {
-      includeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_BookChapterVerse$'],
+      includeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_Book$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -728,10 +1020,7 @@ describe('filterProjectsMetadata', () => {
 
     options = {
       excludeProjectInterfaces: 'USFM',
-      includeProjectInterfaces: [
-        '^platformScripture\\.USFM_BookChapterVerse$',
-        '^platform\\.placeholder$',
-      ],
+      includeProjectInterfaces: ['^platformScripture\\.USFM_Book$', '^platform\\.placeholder$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -823,5 +1112,119 @@ describe('filterProjectsMetadata', () => {
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
 
     expect(filteredMetadata.length).toEqual(1);
+  });
+});
+
+describe('Merging metadata filters', () => {
+  it('properly keeps the filter minimal', () => {
+    let merged = projectLookupService.mergeMetadataFilters(undefined, undefined);
+    expect(merged).toEqual({});
+    merged = projectLookupService.mergeMetadataFilters({}, undefined);
+    expect(merged).toEqual({});
+    merged = projectLookupService.mergeMetadataFilters(undefined, {
+      extraneousProperty: 'blah',
+    } as ProjectMetadataFilterOptions);
+    expect(merged).toEqual({});
+  });
+
+  it('properly merges simple string filters', () => {
+    const merged = projectLookupService.mergeMetadataFilters(
+      {
+        excludePdpFactoryIds: 'blah0',
+        excludeProjectIds: 'blah1',
+        excludeProjectInterfaces: 'blah2',
+        includePdpFactoryIds: 'blah3',
+        includeProjectIds: 'blah4',
+        includeProjectInterfaces: 'blah5',
+      },
+      {
+        excludePdpFactoryIds: 'thing0',
+        excludeProjectIds: 'thing1',
+        excludeProjectInterfaces: 'thing2',
+        includePdpFactoryIds: 'thing3',
+        includeProjectIds: 'thing4',
+        includeProjectInterfaces: 'thing5',
+      },
+    );
+    expect(merged).toEqual({
+      excludePdpFactoryIds: ['blah0', 'thing0'],
+      excludeProjectIds: ['blah1', 'thing1'],
+      excludeProjectInterfaces: ['blah2', 'thing2'],
+      includePdpFactoryIds: ['blah3', 'thing3'],
+      includeProjectIds: ['blah4', 'thing4'],
+      includeProjectInterfaces: ['blah5', 'thing5'],
+    });
+  });
+
+  it('properly merges complex filters', () => {
+    const merged = projectLookupService.mergeMetadataFilters(
+      {
+        excludePdpFactoryIds: ['blah0', 'blah0.5'],
+        excludeProjectIds: ['blah1'],
+        excludeProjectInterfaces: ['blah2', ['blah2.5', 'blah2.6']],
+        includePdpFactoryIds: 'blah3',
+        includeProjectIds: ['blah4'],
+        includeProjectInterfaces: ['blah5', ['blah5.5', 'blah5.6']],
+      },
+      {
+        excludePdpFactoryIds: 'thing0',
+        excludeProjectIds: ['thing1'],
+        excludeProjectInterfaces: 'thing2',
+        includePdpFactoryIds: ['thing3'],
+        includeProjectIds: ['thing4', 'thing4.5'],
+        includeProjectInterfaces: [['thing5.5', 'thing5.6', 'thing5.7'], 'thing5'],
+      },
+    );
+    expect(merged).toEqual({
+      excludePdpFactoryIds: ['blah0', 'blah0.5', 'thing0'],
+      excludeProjectIds: ['blah1', 'thing1'],
+      excludeProjectInterfaces: ['blah2', ['blah2.5', 'blah2.6'], 'thing2'],
+      includePdpFactoryIds: ['blah3', 'thing3'],
+      includeProjectIds: ['blah4', 'thing4', 'thing4.5'],
+      includeProjectInterfaces: [
+        'blah5',
+        ['blah5.5', 'blah5.6'],
+        ['thing5.5', 'thing5.6', 'thing5.7'],
+        'thing5',
+      ],
+    });
+  });
+
+  it('properly merges filters with missing entries and de-dupes duplicates', () => {
+    const merged = projectLookupService.mergeMetadataFilters(
+      {
+        excludePdpFactoryIds: ['blah0', 'blah0.5'],
+        // excludeProjectIds
+        excludeProjectInterfaces: [
+          'blah2',
+          'blah2',
+          ['blah2.5', 'blah2.6'],
+          ['blah2.5', 'blah2.6'],
+        ],
+        includePdpFactoryIds: 'blah3',
+        // includeProjectIds
+        includeProjectInterfaces: ['blah5'],
+      },
+      {
+        // excludePdpFactoryIds
+        excludeProjectIds: 'thing1',
+        excludeProjectInterfaces: 'thing2',
+        includePdpFactoryIds: 'blah3',
+        includeProjectIds: ['thing4', 'thing4.5'],
+        includeProjectInterfaces: [['thing5.5', 'thing5.6', 'thing5.7'], 'blah5', 'thing5'],
+      },
+    );
+    expect(merged).toEqual({
+      excludePdpFactoryIds: ['blah0', 'blah0.5'],
+      // Wraps individual strings in an array, which is functionally equivalent
+      excludeProjectIds: ['thing1'],
+      // Does not properly look into arrays and deduplicate them at the moment. Would be nice to fix
+      // sometime, but it's not a high priority as they are functionally equivalent and this is
+      // probably rare
+      excludeProjectInterfaces: ['blah2', ['blah2.5', 'blah2.6'], ['blah2.5', 'blah2.6'], 'thing2'],
+      includePdpFactoryIds: ['blah3'],
+      includeProjectIds: ['thing4', 'thing4.5'],
+      includeProjectInterfaces: ['blah5', ['thing5.5', 'thing5.6', 'thing5.7'], 'thing5'],
+    });
   });
 });

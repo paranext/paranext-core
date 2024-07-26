@@ -68,7 +68,7 @@ class QuickVerseDataProviderEngine
   latestVerseRef = 'JHN 11:35';
 
   usfmDataProviderPromise = papi.projectDataProviders.get(
-    'platformScripture.USFM_BookChapterVerse',
+    'platformScripture.USFM_Verse',
     '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
   );
 

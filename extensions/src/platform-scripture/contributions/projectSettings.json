@@ -13,6 +13,18 @@
         "description": "%project_settings_platformScripture_versification_description%",
         "default": 4,
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.validCharacters": {
+        "label": "%project_settings_platformScripture_validCharacters_label%",
+        "description": "%project_settings_platformScripture_validCharacters_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.invalidCharacters": {
+        "label": "%project_settings_platformScripture_invalidCharacters_label%",
+        "description": "%project_settings_platformScripture_invalidCharacters_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

@@ -3,10 +3,7 @@ import {
   ProjectInterfaceDataTypes,
   ProjectDataProviderInterfaces,
 } from 'papi-shared-types';
-import {
-  IProjectDataProviderEngineFactory,
-  IProjectDataProviderEngine,
-} from '@shared/models/project-data-provider-engine.model';
+import { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import networkObjectService from '@shared/services/network-object.service';
 import { getByType, registerEngineByType } from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
@@ -18,11 +15,13 @@ import {
 } from 'platform-bible-utils';
 import IProjectDataProviderFactory, {
   PDP_FACTORY_OBJECT_TYPE,
+  ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { getPDPFactoryNetworkObjectNameFromId } from '@shared/models/project-lookup.service-model';
+import { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model';
 
 /**
  * Class that creates Project Data Providers of a specific set of `projectInterface`s. Layers over
@@ -55,12 +54,10 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
     this.pdpEngineFactory = pdpEngineFactory;
   }
 
-  /**
-   * Returns a list of metadata objects for all projects that can be the targets of PDPs created by
-   * this factory
-   */
-  getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
-    return this.pdpEngineFactory.getAvailableProjects();
+  getAvailableProjects(
+    layeringFilters?: ProjectMetadataFilterOptions,
+  ): Promise<ProjectMetadataWithoutFactoryInfo[]> {
+    return this.pdpEngineFactory.getAvailableProjects(layeringFilters);
   }
 
   /** Disposes of all PDPs that were created by this PDP Factory */
@@ -151,8 +148,8 @@ export async function registerProjectDataProviderEngineFactory<
  * @example
  *
  * ```typescript
- * const pdp = await get('platformScripture.USFM_BookChapterVerse', 'ProjectID12345');
- * pdp.getVerse(new VerseRef('JHN', '1', '1'));
+ * const pdp = await get('platformScripture.USFM_Verse', 'ProjectID12345');
+ * pdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
  * ```
  *
  * @param projectInterface `projectInterface` that the project to load must support. The TypeScript

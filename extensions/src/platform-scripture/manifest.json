@@ -1,10 +1,12 @@
 {
   "name": "platformScripture",
   "version": "0.0.1",
-  "description": "Basic Scripture access functionality extension for Platform.Bible",
+  "displayData": "assets/displayData.json",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",
+  "extensionDependencies": {},
+  "elevatedPrivileges": [],
   "types": "src/types/platform-scripture.d.ts",
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",

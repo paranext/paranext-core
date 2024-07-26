@@ -3,13 +3,15 @@ const core = {};
 export default core;
 
 export type { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
-
 export type { ExecutionToken } from '@node/models/execution-token.model';
-
+export type { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
+export type { ManageExtensions } from '@shared/models/manage-extensions-privilege.model';
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
-
-export type { default as IDataProvider } from '@shared/models/data-provider.interface';
+export type {
+  default as IDataProvider,
+  IDisposableDataProvider,
+} from '@shared/models/data-provider.interface';
 export type {
   DataProviderUpdateInstructions,
   DataProviderDataType,
@@ -22,12 +24,13 @@ export type {
   ExtensionDataScope,
   MandatoryProjectDataTypes,
 } from '@shared/models/project-data-provider.model';
-export type {
-  IProjectDataProviderEngine,
-  IProjectDataProviderEngineFactory,
-} from '@shared/models/project-data-provider-engine.model';
+export type { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
+export type { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model.ts';
 export type { IBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
-export type { default as IProjectDataProviderFactory } from '@shared/models/project-data-provider-factory.interface';
+export type {
+  default as IProjectDataProviderFactory,
+  ProjectMetadataFilterOptions,
+} from '@shared/models/project-data-provider-factory.interface';
 export type {
   ProjectDataProviderFactoryMetadataInfo,
   ProjectMetadata,
@@ -38,6 +41,7 @@ export type {
   LocalizationSelector,
   LocalizationSelectors,
 } from '@shared/services/localization.service-model';
+export type { NetworkObjectDetails } from '@shared/models/network-object.model';
 export type { SettingValidator } from '@shared/services/settings.service-model';
 export type {
   GetWebViewOptions,
@@ -47,9 +51,7 @@ export type {
   WebViewDefinition,
   WebViewProps,
 } from '@shared/models/web-view.model';
-
 export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
-
 export type {
   SimultaneousProjectSettingsChanges,
   ProjectSettingValidator,

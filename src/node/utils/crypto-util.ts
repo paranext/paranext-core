@@ -19,3 +19,26 @@ export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes: number
   const randomBytes = crypto.randomBytes(numberOfBytes);
   return randomBytes.toString(encoding);
 }
+
+/**
+ * Calculates the hash of a given data buffer
+ *
+ * @param hashAlgorithm Name of the hash algorithm to use, such as "sha512"
+ * @param encodingType String encoding to use for returning the binary hash value that is calculated
+ * @param buffer Raw data to be fed into the hash algorithm
+ * @returns String encoded value of the digest (https://csrc.nist.gov/glossary/term/hash_digest)
+ */
+export function generateHashFromBuffer(
+  hashAlgorithm: string,
+  encodingType: 'base64' | 'base64url' | 'hex' | 'binary',
+  buffer: Buffer,
+): string {
+  // Names of hash algorithms can vary based on the library used
+  // The 'crypto' module wants lowercase with no dashes according to the docs
+  const algorithm = crypto.getHashes().find((algo) => algo === hashAlgorithm)
+    ? hashAlgorithm
+    : hashAlgorithm.toLowerCase().replaceAll('-', '');
+  const hashAlgo = crypto.createHash(algorithm);
+  hashAlgo.update(buffer);
+  return hashAlgo.digest(encodingType);
+}

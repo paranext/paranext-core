@@ -1,9 +1,5 @@
-import {
-  IProjectDataProviderEngine,
-  IProjectDataProviderEngineFactory,
-  ProjectMetadataWithoutFactoryInfo,
-} from '@papi/core';
-import papi from '@papi/backend';
+import { IProjectDataProviderEngine, IProjectDataProviderEngineFactory } from '@papi/core';
+import papi, { LayeringProjectDataProviderEngineFactory } from '@papi/backend';
 import { escapeStringRegexp } from 'platform-bible-utils';
 import ScriptureExtenderProjectDataProviderEngine, {
   SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES,
@@ -13,48 +9,32 @@ import ScriptureExtenderProjectDataProviderEngine, {
 
 /** PDP Factory ID for the Scripture Extender PDPF */
 export const SCRIPTURE_EXTENDER_PDPF_ID = 'platformScripture.scriptureExtenderPdpf';
-const SCRIPTURE_EXTENDER_PDPF_ID_REGEX_STRING = escapeStringRegexp(SCRIPTURE_EXTENDER_PDPF_ID);
 
-/** Regex strings for the project interfaces the Scripture Extender Layering PDPF layers over */
-const SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES_REGEX_STRINGS =
+/**
+ * Regex strings for the project interfaces the Scripture Extender Layering PDPF layers over
+ *
+ * Need to wrap in an array to AND the interfaces together since this Layering PDPF only supports
+ * projects that have all three interfaces available
+ */
+const SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES_REGEX_STRINGS = [
   SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES.map((projectInterface) =>
     escapeStringRegexp(projectInterface),
-  );
+  ),
+];
 
 class ScriptureExtenderProjectDataProviderEngineFactory
+  extends LayeringProjectDataProviderEngineFactory<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
   implements IProjectDataProviderEngineFactory<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
 {
-  // Implementing an interface method, so can't be static
-  // eslint-disable-next-line class-methods-use-this
-  async getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]> {
-    try {
-      const projectsToOverlayMetadata = await papi.projectLookup.getMetadataForAllProjects({
-        includeProjectInterfaces: SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES_REGEX_STRINGS,
-        // The `projectInterface`s we provide are excluded because we don't need to provide them
-        // again if they're already provided. Wrapped in another array so we only exclude projects
-        // that already serve all the `projectInterface`s we support
-        excludeProjectInterfaces: [SCRIPTURE_EXTENDER_PROJECT_INTERFACES],
-        excludePdpFactoryIds: SCRIPTURE_EXTENDER_PDPF_ID_REGEX_STRING,
-      });
-      return projectsToOverlayMetadata.map((projectMetadataToOverlay) => {
-        const projectMetadata: ProjectMetadataWithoutFactoryInfo & { pdpFactoryInfo?: unknown } =
-          projectMetadataToOverlay;
-        delete projectMetadata.pdpFactoryInfo;
-        projectMetadata.projectInterfaces = SCRIPTURE_EXTENDER_PROJECT_INTERFACES;
-        return projectMetadata;
-      });
-    } catch (e) {
-      throw new Error(
-        `${SCRIPTURE_EXTENDER_PDPF_ID} was not able to get metadata for projects to overlay. ${e}`,
-      );
-    }
-  }
+  projectInterfacesToLayerOver = SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES_REGEX_STRINGS;
+
+  providedProjectInterfaces = SCRIPTURE_EXTENDER_PROJECT_INTERFACES;
 
   // Implementing an interface method, so can't be static
   // eslint-disable-next-line class-methods-use-this
   async createProjectDataProviderEngine(
     projectId: string,
-  ): Promise<IProjectDataProviderEngine<['platformScripture.USJ_Chapter']>> {
+  ): Promise<IProjectDataProviderEngine<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>> {
     // We're creating a ScriptureExtenderOverlayPDPs. Seems Object.fromEntries doesn't support
     // mapped types very well
     // eslint-disable-next-line no-type-assertion/no-type-assertion

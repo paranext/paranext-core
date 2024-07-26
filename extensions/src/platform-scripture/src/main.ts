@@ -1,9 +1,27 @@
-import papi, { logger } from '@papi/backend';
-import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
+import papi, { logger, projectLookup } from '@papi/backend';
+import { VerseRef } from '@sillsdev/scripture';
+import {
+  ExecutionActivationContext,
+  GetWebViewOptions,
+  IWebViewProvider,
+  ProjectSettingValidator,
+  SavedWebViewDefinition,
+  WebViewDefinition,
+} from '@papi/core';
 import ScriptureExtenderProjectDataProviderEngineFactory, {
   SCRIPTURE_EXTENDER_PDPF_ID,
 } from './project-data-provider/platform-scripture-extender-pdpef.model';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
+import checkHostingService from './checks/extension-host-check-runner.service';
+import checkAggregatorService from './checks/check-aggregator.service';
+import characterInventoryWebView from './character-inventory.web-view?inline';
+
+const characterInventoryWebViewType = 'platformScripture.characterInventory';
+
+interface InventoryOptions extends GetWebViewOptions {
+  projectId: string | undefined;
+  // Add inventory/check type
+}
 
 // #region Project Setting Validators
 
@@ -23,7 +41,61 @@ const versificationValidator: ProjectSettingValidator<'platformScripture.versifi
   );
 };
 
+const charactersValidator: ProjectSettingValidator<
+  'platformScripture.validCharacters' | 'platformScripture.invalidCharacters'
+> = async (newValue) => {
+  return typeof newValue === 'string';
+};
+
 // #endregion
+
+async function openPlatformCharactersInventory(
+  webViewId: string | undefined,
+): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  if (!projectId) {
+    return undefined;
+  }
+
+  const options: InventoryOptions = { projectId };
+  return papi.webViews.getWebView(characterInventoryWebViewType, { type: 'float' }, options);
+}
+
+const inventoryWebViewProvider: IWebViewProvider = {
+  async getWebView(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: InventoryOptions,
+  ): Promise<WebViewDefinition | undefined> {
+    if (savedWebView.webViewType !== characterInventoryWebViewType)
+      throw new Error(
+        `${characterInventoryWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
+      );
+
+    // We know that the projectId (if present in the state) will be a string.
+    const projectId =
+      getWebViewOptions.projectId ||
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      (savedWebView.state?.projectId as string) ||
+      undefined;
+    const title = 'Character Inventory';
+
+    return {
+      title,
+      ...savedWebView,
+      content: characterInventoryWebView,
+      state: {
+        ...savedWebView.state,
+        projectId,
+      },
+    };
+  },
+};
 
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
@@ -32,7 +104,7 @@ export async function activate(context: ExecutionActivationContext) {
     papi.projectDataProviders.registerProjectDataProviderEngineFactory(
       SCRIPTURE_EXTENDER_PDPF_ID,
       SCRIPTURE_EXTENDER_PROJECT_INTERFACES,
-      new ScriptureExtenderProjectDataProviderEngineFactory(),
+      new ScriptureExtenderProjectDataProviderEngineFactory(SCRIPTURE_EXTENDER_PDPF_ID),
     );
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
@@ -59,6 +131,26 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.versification',
     versificationValidator,
   );
+  const validCharactersPromise = papi.projectSettings.registerValidator(
+    'platformScripture.validCharacters',
+    charactersValidator,
+  );
+  const invalidCharactersPromise = papi.projectSettings.registerValidator(
+    'platformScripture.invalidCharacters',
+    charactersValidator,
+  );
+  const openCharactersInventoryPromise = papi.commands.registerCommand(
+    'platformScripture.openCharactersInventory',
+    openPlatformCharactersInventory,
+  );
+
+  const inventoryWebViewProviderPromise = papi.webViewProviders.register(
+    characterInventoryWebViewType,
+    inventoryWebViewProvider,
+  );
+
+  await checkHostingService.initialize();
+  await checkAggregatorService.initialize();
 
   context.registrations.add(
     await scriptureExtenderPdpefPromise,
@@ -66,7 +158,50 @@ export async function activate(context: ExecutionActivationContext) {
     await includeProjectsValidatorPromise,
     await booksPresentPromise,
     await versificationPromise,
+    await validCharactersPromise,
+    await invalidCharactersPromise,
+    await openCharactersInventoryPromise,
+    await inventoryWebViewProviderPromise,
+    checkHostingService.dispose,
+    checkAggregatorService.dispose,
   );
+
+  if (globalThis.isNoisyDevModeEnabled) {
+    setTimeout(async () => {
+      const checkSvc = checkAggregatorService.serviceObject;
+      const checks = await checkSvc.getAvailableChecks(undefined);
+      if (checks.length === 0) {
+        logger.debug('Testing out checks: No checks registered');
+        return;
+      }
+      const projectMetadata = await projectLookup.getMetadataForAllProjects();
+      if (projectMetadata.length === 0) {
+        logger.debug('Testing out checks: No projects available');
+        return;
+      }
+      const projectId = projectMetadata[0].id;
+      await Promise.all(
+        checks.map(async (checkDetails) => {
+          try {
+            const problems = await checkSvc.enableCheck(checkDetails.checkId, projectId);
+            logger.debug(
+              `Testing out checks: enabled ${checkDetails.checkId} - ${JSON.stringify(problems)}`,
+            );
+          } catch (error) {
+            logger.debug(`Testing out checks: threw enabling check: ${error}`);
+          }
+        }),
+      );
+
+      try {
+        await checkSvc.setActiveRanges(undefined, [{ projectId, start: new VerseRef('JHN 1:1') }]);
+        const results = await checkSvc.getCheckResults(undefined);
+        logger.debug(`Testing out checks: results = ${JSON.stringify(results)}`);
+      } catch (error) {
+        logger.debug(`Error running checks: ${error}`);
+      }
+    }, 20000);
+  }
 
   logger.info('platformScripture is finished activating!');
 }

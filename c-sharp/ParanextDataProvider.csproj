@@ -28,7 +28,7 @@
     <PackageReference Include="SIL.WritingSystems" Version="14.2.0-beta0009" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
-    <PackageReference Include="icu.net" Version="2.9.1-beta.9" />
+    <PackageReference Include="icu.net" Version="2.10.0" />
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.1" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
   </ItemGroup>
 
@@ -37,7 +37,7 @@
     For some reason, the .config file only copies inconsistently from the NuGet package without this explicit reference.
   -->
   <ItemGroup>
-    <None Update="$(NuGetPackageRoot)\icu.net\2.9.1-beta.9\contentFiles\any\any\icu.net.dll.config">
+    <None Update="$(NuGetPackageRoot)\icu.net\2.10.0\contentFiles\any\any\icu.net.dll.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>

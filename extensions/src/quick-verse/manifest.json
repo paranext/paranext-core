@@ -1,10 +1,12 @@
 {
   "name": "quickVerse",
   "version": "0.0.1",
-  "description": "Simple quick verse extension for Platform.Bible",
+  "displayData": "assets/displayData.json",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",
+  "extensionDependencies": {},
+  "elevatedPrivileges": [],
   "types": "src/types/quick-verse.d.ts",
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",

@@ -18,6 +18,7 @@ import dataProviderService, { DataProviderService } from '@shared/services/data-
 import { DataProviderEngine as PapiDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import { BaseProjectDataProviderEngine as PapiBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
+import { LayeringProjectDataProviderEngineFactory as PapiLayeringProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model';
 import {
   papiBackendProjectDataProviderService,
   PapiBackendProjectDataProviderService,
@@ -27,16 +28,22 @@ import extensionStorageService, {
 } from '@extension-host/services/extension-storage.service';
 import { ProjectLookupServiceType } from '@shared/models/project-lookup.service-model';
 import projectLookupService from '@shared/services/project-lookup.service';
-import dialogService from '@shared/services/dialog.service';
 import { DialogService } from '@shared/services/dialog.service-model';
-import menuDataService from '@shared/services/menu-data.service';
-import localizationService from '@shared/services/localization.service';
+import dialogService from '@shared/services/dialog.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
-import settingsService from '@shared/services/settings.service';
-import { ISettingsService } from '@shared/services/settings.service-model';
-import projectSettingsService from '@shared/services/project-settings.service';
-import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
+import menuDataService from '@shared/services/menu-data.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
+import localizationService from '@shared/services/localization.service';
+import {
+  MinimalNetworkObjectService,
+  minimalNetworkObjectService,
+} from '@shared/services/network-object.service';
+import { NetworkObjectStatusServiceType } from '@shared/models/network-object-status.service-model';
+import networkObjectStatusService from '@shared/services/network-object-status.service';
+import { ISettingsService } from '@shared/services/settings.service-model';
+import settingsService from '@shared/services/settings.service';
+import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
+import projectSettingsService from '@shared/services/project-settings.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -54,6 +61,8 @@ const papi = {
   ProjectDataProviderEngine: PapiProjectDataProviderEngine,
   /** JSDOC DESTINATION BaseProjectDataProviderEngine */
   BaseProjectDataProviderEngine: PapiBaseProjectDataProviderEngine,
+  /** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
+  LayeringProjectDataProviderEngineFactory: PapiLayeringProjectDataProviderEngineFactory,
 
   // Functions
   /** This is just an alias for internet.fetch */
@@ -70,6 +79,10 @@ const papi = {
   dialogs: dialogService as DialogService,
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
+  /** JSDOC DESTINATION networkObjectService */
+  networkObjects: minimalNetworkObjectService as MinimalNetworkObjectService,
+  /** JSDOC DESTINATION networkObjectStatusService */
+  networkObjectStatus: networkObjectStatusService as NetworkObjectStatusServiceType,
   /** JSDOC DESTINATION logger */
   logger: papiLogger,
   /** JSDOC DESTINATION internetService */
@@ -110,6 +123,9 @@ Object.freeze(papi.ProjectDataProviderEngine);
 /** JSDOC DESTINATION BaseProjectDataProviderEngine */
 export const { BaseProjectDataProviderEngine } = papi;
 Object.freeze(papi.BaseProjectDataProviderEngine);
+/** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
+export const { LayeringProjectDataProviderEngineFactory } = papi;
+Object.freeze(papi.LayeringProjectDataProviderEngineFactory);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);
@@ -128,6 +144,12 @@ Object.freeze(papi.dialogs);
 /** JSDOC DESTINATION papiNetworkService */
 export const { network } = papi;
 Object.freeze(papi.network);
+/** JSDOC DESTINATION networkObjectService */
+export const { networkObjects } = papi;
+Object.freeze(papi.networkObjects);
+/** JSDOC DESTINATION networkObjectStatusService */
+export const { networkObjectStatus } = papi;
+Object.freeze(papi.networkObjectStatus);
 /** JSDOC DESTINATION logger */
 export const { logger } = papi;
 Object.freeze(papi.logger);
@@ -149,6 +171,9 @@ Object.freeze(papi.projectSettings);
 /** JSDOC DESTINATION extensionStorageService */
 export const { storage } = papi;
 Object.freeze(papi.storage);
+/** JSDOC DESTINATION settingsService */
+export const { settings } = papi;
+Object.freeze(papi.settings);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);

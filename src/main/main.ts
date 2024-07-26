@@ -368,7 +368,9 @@ async function main() {
 }
 
 async function restartExtensionHost() {
+  logger.info('Restarting extension host');
   await extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT);
+  logger.debug('Extension host closed, restarting now');
   await extensionHostService.start();
 }
 

@@ -4,6 +4,8 @@ import {
   EditorRef,
   Marginal,
   MarginalRef,
+  getViewOptions,
+  DEFAULT_VIEW_MODE,
 } from '@biblionexus-foundation/platform-editor';
 import { Usj } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
@@ -29,6 +31,18 @@ const defaultScrRef: ScriptureReference = {
 };
 
 const usjDocumentDefault: Usj = { type: 'USJ', version: '0.2.1', content: [] };
+
+/**
+ * Check deep equality of two values such that two equal objects or arrays created in two different
+ * iframes successfully test as equal
+ *
+ * @param a
+ * @param b
+ * @returns
+ */
+function deepEqualAcrossIframes(a: unknown, b: unknown) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
 
 function scrollToScrRef(scrRef: ScriptureReference) {
   const verseElement = document.querySelector<HTMLElement>(
@@ -88,15 +102,37 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     usjDocumentDefault,
   );
 
-  const debouncedSetUsx = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
+  const debouncedSetUsj = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
+
+  // Editor's current usj state
+  const editorUsj = useRef(usj);
 
   // TODO: remove debounce when issue #826 is done.
-  const onChange = useCallback(debouncedSetUsx, [debouncedSetUsx]);
+  const onChange = useCallback(
+    (newUsj: Usj) => {
+      // There is a bug where the editor's onChange runs when the state is externally set, so let's
+      // not run onChange if the change came externally (our tracked editorUsj.current editor state
+      // will already be up-to-date)
+      if (deepEqualAcrossIframes(newUsj, editorUsj.current)) return;
 
+      editorUsj.current = newUsj;
+      debouncedSetUsj(newUsj);
+    },
+    [debouncedSetUsj],
+  );
+
+  // Update the editor if a change comes in
   useEffect(() => {
-    if (usj) editorRef.current?.setUsj(usj);
+    // Deep compare the old and current state of the usj to make sure we don't change the editor's
+    // state without a need. Note that it already does that internally using a different algorithm,
+    // but we need to compare in such a way that the same object across iframes works fine
+    if (usj && !deepEqualAcrossIframes(usj, editorUsj.current)) {
+      editorUsj.current = usj;
+      editorRef.current?.setUsj(usj);
+    }
   }, [usj]);
 
+  // On loading the first time, scroll the selected verse into view
   useEffect(() => {
     if (usj && !hasFirstRetrievedScripture.current) {
       hasFirstRetrievedScripture.current = true;
@@ -143,7 +179,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
-  const options: EditorOptions = { hasSpellCheck: false, isReadonly: isReadOnly };
+  const options = useMemo<EditorOptions>(
+    () => ({
+      // We need to provide view options to prevent a bug where the editor re-renders every key
+      // press and loses cursor position
+      view: getViewOptions(DEFAULT_VIEW_MODE),
+      hasSpellCheck: false,
+      isReadonly: isReadOnly,
+    }),
+    [isReadOnly],
+  );
 
   return (
     <Editor
@@ -151,7 +196,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       scrRef={scrRef}
       setScrRef={setScrRef}
       options={options}
-      onChange={onChange}
+      onChange={isReadOnly ? undefined : onChange}
       logger={logger}
     />
   );

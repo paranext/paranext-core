@@ -1557,14 +1557,17 @@ declare module 'shared/services/network-object.service' {
         }
       | undefined,
   ) => Promise<DisposableNetworkObject<T>>;
-  interface NetworkObjectService {
-    initialize: typeof initialize;
-    hasKnown: typeof hasKnown;
+  export interface MinimalNetworkObjectService {
     get: typeof get;
     set: typeof set;
     onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
   }
+  export interface NetworkObjectService extends MinimalNetworkObjectService {
+    initialize: typeof initialize;
+    hasKnown: typeof hasKnown;
+  }
   /**
+   *
    * Network objects are distributed objects within PAPI for TS/JS objects. @see
    * https://en.wikipedia.org/wiki/Distributed_object
    *
@@ -1593,6 +1596,35 @@ declare module 'shared/services/network-object.service' {
    */
   const networkObjectService: NetworkObjectService;
   export default networkObjectService;
+  /**
+   *
+   * Network objects are distributed objects within PAPI for TS/JS objects. @see
+   * https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using
+   * {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+   * the registered object are proxied except for constructors, `dispose`, and functions starting with
+   * `on` since those should be events (which are not intended to be proxied) based on our naming
+   * convention. If you don't want a function to be proxied, don't make it a property of the
+   * registered object.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be called
+   * across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+   * of that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  export const minimalNetworkObjectService: MinimalNetworkObjectService;
 }
 declare module 'shared/models/network-object.model' {
   import {
@@ -3037,11 +3069,18 @@ declare module 'shared/models/network-object-status.service-model' {
      */
     getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
   }
-  /** Provides functions related to the set of available network objects */
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
   export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
     /**
      * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
      *
+     * @param objectDetailsToMatch Subset of object details on the network object to wait for.
+     *   Compared to object details using {@link isSubset}
+     * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
+     *   indefinitely
      * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
      *   once the network object is registered, or rejects if a timeout is provided and the timeout is
      *   reached before the network object is registered
@@ -3055,6 +3094,10 @@ declare module 'shared/models/network-object-status.service-model' {
 }
 declare module 'shared/services/network-object-status.service' {
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
   const networkObjectStatusService: NetworkObjectStatusServiceType;
   export default networkObjectStatusService;
 }
@@ -3575,14 +3618,228 @@ declare module 'shared/models/project-metadata.model' {
     };
   };
 }
-declare module 'shared/models/project-data-provider-engine.model' {
-  import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
-  import IDataProviderEngine, {
-    DataProviderEngine,
-  } from 'shared/models/data-provider-engine.model';
-  import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+declare module 'shared/models/project-data-provider-factory.interface' {
+  import { Dispose, ModifierProject } from 'platform-bible-utils';
   import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
-  import { UnionToIntersection } from 'platform-bible-utils';
+  export const PDP_FACTORY_OBJECT_TYPE: string;
+  export type ProjectMetadataFilterOptions = ModifierProject & {
+    /** Project IDs to include */
+    includeProjectIds?: string | string[];
+    /** Project IDs to exclude */
+    excludeProjectIds?: string | string[];
+  };
+  /**
+   * Network object that creates Project Data Providers of a specific set of `projectInterface`s as
+   * requested on the `papi`. These are created internally within the platform to layer over
+   * TypeScript-extension-provided {@link IProjectDataProviderEngineFactory} or are created by
+   * independent processes on the `papi`.
+   *
+   * A PDP Factory can provide its own unique project ids (Base PDP Factory) or layer over other PDPFs
+   * and provide additional `projectInterface`s on those projects (Layering PDP Factory). Base PDP
+   * Factories must create PDPs that support the `platform.base` `projectInterface`. See
+   * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
+   */
+  interface IProjectDataProviderFactory extends Dispose {
+    /**
+     *
+     * Get metadata about all projects that can be served by PDPs created by this PDP factory.
+     *
+     * If this is a Base PDP Factory, this method should return this PDP Factory's own unique project
+     * IDs.
+     *
+     * If this is a Layering PDP Factory, this method should call
+     * `papi.projectLookup.getMetadataForAllProjects` with some set of metadata filters in order to
+     * determine which projects it can layer over. The set of metadata filters relevant to this PDP
+     * Factory **absolutely must** be merged with the `layeringFilters` provided using
+     * `papi.projectLookup.mergeMetadataFilters`, or it will get into an infinite loop of calling
+     * other layering PDPs.
+     *
+     * WARNING: If this is a Layering PDP Factory, it **absolutely must** merge its metadata filters
+     * with `layeringFilters` provided using `papi.projectLookup.mergeMetadataFilters`! Otherwise you
+     * will cause an infinite loop that will break things.
+     *
+     * @param layeringFilters If applicable, filters used to prevent this Layering PDP Factory from
+     *   entering an infinite loop with another Layering PDP Factory. You **absolutely must** merge
+     *   these filters with your own filters using `papi.projectLookup.mergeMetadataFilters` when
+     *   calling `papi.projectLookup.getMetadataForAllProjects` inside this method. If you are not
+     *   calling `getMetadataForAllProjects` inside this method (likely if this is a Base PDPF), you
+     *   can safely ignore this parameter.
+     */
+    getAvailableProjects(
+      layeringFilters?: ProjectMetadataFilterOptions,
+    ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
+    /**
+     * Returns the registered network object name of a PDP for the given project ID. Called by the
+     * platform when someone uses the project data provider service to access a project's data.
+     *
+     * @param projectId Id of the project for which to return a project data provider.
+     * @returns Id of the project data provider this `IProjectDataProviderFactory` created for this
+     *   project id. It should return the same project data provider for the same combination of
+     *   parameters throughout one session (in other words, in general, there should just be one
+     *   project data provider for one project id).
+     */
+    getProjectDataProviderId(projectId: string): Promise<string>;
+  }
+  export default IProjectDataProviderFactory;
+}
+declare module 'shared/models/project-lookup.service-model' {
+  import {
+    ProjectDataProviderFactoryMetadataInfo,
+    ProjectMetadata,
+  } from 'shared/models/project-metadata.model';
+  import { ProjectInterfaces } from 'papi-shared-types';
+  import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
+  /**
+   * Transform the well-known pdp factory id into an id for its network object to use
+   *
+   * @param pdpFactoryId Id extensions use to identify this pdp factory
+   * @returns Id for then network object for this pdp factory
+   */
+  export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string): string;
+  /**
+   * Transform a network object id for a pdp factory into its well-known pdp factory id
+   *
+   * @param pdpFactoryNetworkObjectName Id for then network object for this pdp factory
+   * @returns Id extensions use to identify this pdp factory
+   */
+  export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string): string;
+  /**
+   *
+   * Provides metadata for projects known by the platform
+   *
+   * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
+   * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
+   * their types are synchronous locally.
+   */
+  export type ProjectLookupServiceType = {
+    /**
+     * Provide metadata for all projects that have PDP factories
+     *
+     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
+     * the parameters, their project metadata will all be combined, so all available
+     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
+     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
+     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+     *
+     * @param options Options for specifying filters for the project metadata retrieved. If a PDP
+     *   Factory Id does not match the filter, it will not be contacted at all for this function call.
+     *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
+     *   its id in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
+     * @returns ProjectMetadata for all projects stored on the local system
+     */
+    getMetadataForAllProjects(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
+    /**
+     * Look up metadata for a specific project ID
+     *
+     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
+     * the parameters, their project metadata will all be combined, so all available
+     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
+     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
+     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+     *
+     * @param projectId ID of the project to load
+     * @param projectInterface Optional `projectInterface` of the project to load. If not provided,
+     *   then look at all `projectInterface`s for the given project ID.
+     * @param pdpFactoryId Optional ID of the PDP factory where the project ID should be loaded. If
+     *   not provided, then look in all available PDP factories for the given project ID.
+     * @returns ProjectMetadata for the given project
+     */
+    getMetadataForProject(
+      projectId: string,
+      projectInterface?: ProjectInterfaces,
+      pdpFactoryId?: string,
+    ): Promise<ProjectMetadata>;
+    /**
+     * Compare two project ids to determine if they are equal
+     *
+     * We're treating project IDs as case insensitive strings.
+     *
+     * From
+     * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Collator/Collator:
+     *
+     * Only strings that differ in base letters or accents and other diacritic marks compare as
+     * unequal. Examples: a ≠ b, a ≠ á, a = A.
+     */
+    areProjectIdsEqual(projectIdA: string, projectIdB: string): boolean;
+    /** Filter an array of {@link ProjectMetadata} in various ways */
+    filterProjectsMetadata(
+      projectsMetadata: ProjectMetadata[],
+      options: ProjectMetadataFilterOptions,
+    ): ProjectMetadata[];
+    /** Combines two project metadata filters, removing duplicate items */
+    mergeMetadataFilters(
+      metadataFilter1: ProjectMetadataFilterOptions | undefined,
+      metadataFilter2: ProjectMetadataFilterOptions | undefined,
+    ): ProjectMetadataFilterOptions;
+    /**
+     * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
+     * `projectInterface`
+     *
+     * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s
+     * to avoid unnecessary redirects through layered PDPs
+     *
+     * @param projectMetadata Metadata for project for which to get minimally matching PDPF
+     * @param projectInterface Which `projectInterface` to minimally match for
+     * @returns PDP Factory id whose `projectInterface`s minimally match the provided
+     *   `projectInterface` if at least one PDP Factory was found that supports the `projectInterface`
+     *   provided
+     */
+    getMinimalMatchPdpFactoryId(
+      projectMetadata: ProjectMetadata,
+      projectInterface: ProjectInterfaces,
+    ): string | undefined;
+  };
+  /** Local object of functions to run locally on each process as part of the project lookup service */
+  export const projectLookupServiceBase: ProjectLookupServiceType;
+  /**
+   * Note: If there are multiple PDPs available whose metadata matches the conditions provided by the
+   * parameters, their project metadata will all be combined, so all available `projectInterface`s
+   * provided by the PDP Factory with the matching id (or all PDP Factories if no id is specified) for
+   * the project will be returned. If you need `projectInterface`s supported by specific PDP
+   * Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
+   */
+  function internalGetMetadata(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
+  function transformGetMetadataForProjectParametersToFilter(
+    projectId?: string,
+    projectInterface?: ProjectInterfaces,
+    pdpFactoryId?: string,
+  ): {
+    includeProjectIds: string | undefined;
+    includeProjectInterfaces: string | undefined;
+    includePdpFactoryIds: string | undefined;
+  };
+  /**
+   * Compare function (for array sorting and such) that compares two PDPF Metadata infos by most
+   * minimal match to the `projectInterface` in question.
+   *
+   * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s to
+   * avoid unnecessary redirects through layered PDPs
+   *
+   * @param pdpFMetadataInfoA First ProjectDataProviderFactoryMetadataInfo to compare
+   * @param pdpFMetadataInfoB Second ProjectDataProviderFactoryMetadataInfo to compare
+   * @returns -1 if a is less than b, 0 if equal, and 1 otherwise
+   */
+  function compareProjectDataProviderFactoryMetadataInfoMinimalMatch(
+    pdpFMetadataInfoA: ProjectDataProviderFactoryMetadataInfo | undefined,
+    pdpFMetadataInfoB: ProjectDataProviderFactoryMetadataInfo | undefined,
+  ): -1 | 0 | 1;
+  /** This is an internal-only export for testing purposes and should not be used in development */
+  export const testingProjectLookupService: {
+    internalGetMetadata: typeof internalGetMetadata;
+    compareProjectDataProviderFactoryMetadataInfoMinimalMatch: typeof compareProjectDataProviderFactoryMetadataInfoMinimalMatch;
+    transformGetMetadataForProjectParametersToFilter: typeof transformGetMetadataForProjectParametersToFilter;
+  };
+}
+declare module 'shared/services/project-lookup.service' {
+  const projectLookupService: import('shared/models/project-lookup.service-model').ProjectLookupServiceType;
+  export default projectLookupService;
+}
+declare module 'shared/models/project-data-provider-engine-factory.model' {
+  import { ProjectInterfaces } from 'papi-shared-types';
+  import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
+  import { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
    * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
@@ -3601,15 +3858,47 @@ declare module 'shared/models/project-data-provider-engine.model' {
    * and provide additional `projectInterface`s on those projects (Layering PDP Factory). Base PDP
    * Factories must create PDPs that support the `platform.base` `projectInterface`. See
    * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
+   *
+   * WARNING: For Layering PDPFs, `getAvailableProjects` has very specific requirements that
+   * **absolutely must** be met. Please see
+   * {@link IProjectDataProviderEngineFactory.getAvailableProjects} for more information on the
+   * requirements.
+   *
+   * To make creating a Layering PDPF easier, you can extend
+   * {@link LayeringProjectDataProviderEngineFactory}, which automatically fulfills the special
+   * requirements for Layering PDPFs. We highly recommend using it.
    */
   export interface IProjectDataProviderEngineFactory<
     SupportedProjectInterfaces extends ProjectInterfaces[],
   > {
     /**
-     * Get a list of metadata objects for all projects that can be the targets of PDPs created by this
-     * factory engine
+     *
+     * Get metadata about all projects that can be served by PDPs created by this PDP factory.
+     *
+     * If this is a Base PDP Factory, this method should return this PDP Factory's own unique project
+     * IDs.
+     *
+     * If this is a Layering PDP Factory, this method should call
+     * `papi.projectLookup.getMetadataForAllProjects` with some set of metadata filters in order to
+     * determine which projects it can layer over. The set of metadata filters relevant to this PDP
+     * Factory **absolutely must** be merged with the `layeringFilters` provided using
+     * `papi.projectLookup.mergeMetadataFilters`, or it will get into an infinite loop of calling
+     * other layering PDPs.
+     *
+     * WARNING: If this is a Layering PDP Factory, it **absolutely must** merge its metadata filters
+     * with `layeringFilters` provided using `papi.projectLookup.mergeMetadataFilters`! Otherwise you
+     * will cause an infinite loop that will break things.
+     *
+     * @param layeringFilters If applicable, filters used to prevent this Layering PDP Factory from
+     *   entering an infinite loop with another Layering PDP Factory. You **absolutely must** merge
+     *   these filters with your own filters using `papi.projectLookup.mergeMetadataFilters` when
+     *   calling `papi.projectLookup.getMetadataForAllProjects` inside this method. If you are not
+     *   calling `getMetadataForAllProjects` inside this method (likely if this is a Base PDPF), you
+     *   can safely ignore this parameter.
      */
-    getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]>;
+    getAvailableProjects(
+      layeringFilters?: ProjectMetadataFilterOptions,
+    ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
     /**
      * Create a {@link IProjectDataProviderEngine} for the project requested so the papi can create an
      * {@link IProjectDataProvider} for the project. This project will have the same
@@ -3623,6 +3912,83 @@ declare module 'shared/models/project-data-provider-engine.model' {
       projectId: string,
     ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
   }
+  /**
+   *
+   * Abstract class with partial implementation of {@link IProjectDataProviderEngineFactory}
+   * specifically for Layering PDPFs. You can extend this class to make creating a Layering PDPF
+   * easier.
+   *
+   * Extending this class automatically fulfills the special requirements for Layering PDPfs, so we
+   * highly recommend extending this class. Please see
+   * {@link IProjectDataProviderEngineFactory.getAvailableProjects} for more information on the
+   * requirements.
+   */
+  export abstract class LayeringProjectDataProviderEngineFactory<
+    SupportedProjectInterfaces extends ProjectInterfaces[],
+  > {
+    pdpfId: string;
+    /** Regex-escaped string of this `pdpfId`. */
+    protected pdpfIdRegexString: string;
+    /**
+     * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
+     * (using the
+     * [`test`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp/test)
+     * function) to determine if they should be included in the available projects this Layering PDPF
+     * provides. This is used as {@link ProjectMetadataFilterOptions.includeProjectInterfaces} when
+     * determining what available projects this layering PDPF supports. You should list here all
+     * combinations of `projectInterface`s your Layering PDPs require to make sure this layering PDPF
+     * announces that it supports the right projects.
+     *
+     * See {@link ProjectMetadataFilterOptions.includeProjectInterfaces} for more information on how to
+     * use this field.
+     *
+     * @example
+     *
+     * ```typescript
+     * projectInterfacesToLayerOver: ['one', ['two', 'three']];
+     * ```
+     *
+     * This layering PDPF will announce that it supports projects whose `projectInterface`s fulfill at
+     * least one of the following conditions (At least one entry in the array must match) and will
+     * provide `providedProjectInterfaces` for those projects:
+     *
+     * - Include `one`
+     * - Include both `two` and `three`.
+     */
+    abstract projectInterfacesToLayerOver: undefined | string | (string | string[])[];
+    /**
+     * The list of `projectInterface`s that this layering PDPF provides on top of existing projects.
+     *
+     * @example
+     *
+     * ```typescript
+     * providedProjectInterfaces: ['four', 'five'];
+     * ```
+     *
+     * This layering PDPF will announce that its provides the `projectInterface`s `four` and `five`
+     * for projects that match `projectInterfacesToLayerOver`.
+     */
+    abstract providedProjectInterfaces: SupportedProjectInterfaces;
+    /** @param pdpfId The id of this Project Data Provider Factory */
+    constructor(pdpfId: string);
+    /**
+     * Implementation of {@link IProjectDataProviderEngineFactory.getAvailableProjects} that properly
+     * fulfills the requirements of the method for Layering PDPFs. Announces that this Layering PDPF
+     * provides the `providedProjectInterfaces` for projects that match
+     * `projectInterfacesToLayerOver`.
+     */
+    getAvailableProjects(
+      layeringFilters?: ProjectMetadataFilterOptions,
+    ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
+  }
+}
+declare module 'shared/models/project-data-provider-engine.model' {
+  import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
+  import IDataProviderEngine, {
+    DataProviderEngine,
+  } from 'shared/models/data-provider-engine.model';
+  import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import { UnionToIntersection } from 'platform-bible-utils';
   /**
    * The object to return from
    * {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} that the PAPI registers
@@ -3798,196 +4164,10 @@ declare module 'shared/models/base-project-data-provider-engine.model' {
     }
   > {}
 }
-declare module 'shared/models/project-data-provider-factory.interface' {
-  import { Dispose } from 'platform-bible-utils';
-  import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
-  export const PDP_FACTORY_OBJECT_TYPE: string;
-  /**
-   * Network object that creates Project Data Providers of a specific set of `projectInterface`s as
-   * requested on the `papi`. These are created internally within the platform to layer over
-   * TypeScript-extension-provided {@link IProjectDataProviderEngineFactory} or are created by
-   * independent processes on the `papi`.
-   *
-   * A PDP Factory can provide its own unique project ids (Base PDP Factory) or layer over other PDPFs
-   * and provide additional `projectInterface`s on those projects (Layering PDP Factory). Base PDP
-   * Factories must create PDPs that support the `platform.base` `projectInterface`. See
-   * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
-   */
-  interface IProjectDataProviderFactory extends Dispose {
-    /** Get data about all projects that can be created by this PDP factory */
-    getAvailableProjects(): Promise<ProjectMetadataWithoutFactoryInfo[]>;
-    /**
-     * Returns the registered network object name of a PDP for the given project ID. Called by the
-     * platform when someone uses the project data provider service to access a project's data.
-     *
-     * @param projectId Id of the project for which to return a project data provider.
-     * @returns Id of the project data provider this `IProjectDataProviderFactory` created for this
-     *   project id. It should return the same project data provider for the same combination of
-     *   parameters throughout one session (in other words, in general, there should just be one
-     *   project data provider for one project id).
-     */
-    getProjectDataProviderId(projectId: string): Promise<string>;
-  }
-  export default IProjectDataProviderFactory;
-}
-declare module 'shared/models/project-lookup.service-model' {
-  import {
-    ProjectDataProviderFactoryMetadataInfo,
-    ProjectMetadata,
-  } from 'shared/models/project-metadata.model';
-  import { ProjectInterfaces } from 'papi-shared-types';
-  import { ModifierProject } from 'platform-bible-utils';
-  export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
-  /**
-   * Transform the well-known pdp factory id into an id for its network object to use
-   *
-   * @param pdpFactoryId Id extensions use to identify this pdp factory
-   * @returns Id for then network object for this pdp factory
-   */
-  export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string): string;
-  /**
-   * Transform a network object id for a pdp factory into its well-known pdp factory id
-   *
-   * @param pdpFactoryNetworkObjectName Id for then network object for this pdp factory
-   * @returns Id extensions use to identify this pdp factory
-   */
-  export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string): string;
-  export type ProjectMetadataFilterOptions = ModifierProject & {
-    /** Project IDs to include */
-    includeProjectIds?: string | string[];
-    /** Project IDs to exclude */
-    excludeProjectIds?: string | string[];
-  };
-  /**
-   *
-   * Provides metadata for projects known by the platform
-   *
-   * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
-   * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
-   * their types are synchronous locally.
-   */
-  export type ProjectLookupServiceType = {
-    /**
-     * Provide metadata for all projects that have PDP factories
-     *
-     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
-     * the parameters, their project metadata will all be combined, so all available
-     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
-     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
-     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
-     *
-     * @param options Options for specifying filters for the project metadata retrieved. If a PDP
-     *   Factory Id does not match the filter, it will not be contacted at all for this function call.
-     *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
-     *   its id in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
-     * @returns ProjectMetadata for all projects stored on the local system
-     */
-    getMetadataForAllProjects(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
-    /**
-     * Look up metadata for a specific project ID
-     *
-     * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
-     * the parameters, their project metadata will all be combined, so all available
-     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
-     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
-     * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
-     *
-     * @param projectId ID of the project to load
-     * @param projectInterface Optional `projectInterface` of the project to load. If not provided,
-     *   then look at all `projectInterface`s for the given project ID.
-     * @param pdpFactoryId Optional ID of the PDP factory where the project ID should be loaded. If
-     *   not provided, then look in all available PDP factories for the given project ID.
-     * @returns ProjectMetadata for the given project
-     */
-    getMetadataForProject(
-      projectId: string,
-      projectInterface?: ProjectInterfaces,
-      pdpFactoryId?: string,
-    ): Promise<ProjectMetadata>;
-    /**
-     * Compare two project ids to determine if they are equal
-     *
-     * We're treating project IDs as case insensitive strings.
-     *
-     * From
-     * https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Collator/Collator:
-     *
-     * Only strings that differ in base letters or accents and other diacritic marks compare as
-     * unequal. Examples: a ≠ b, a ≠ á, a = A.
-     */
-    areProjectIdsEqual(projectIdA: string, projectIdB: string): boolean;
-    /** Filter an array of {@link ProjectMetadata} in various ways */
-    filterProjectsMetadata(
-      projectsMetadata: ProjectMetadata[],
-      options: ProjectMetadataFilterOptions,
-    ): ProjectMetadata[];
-    /**
-     * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
-     * `projectInterface`
-     *
-     * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s
-     * to avoid unnecessary redirects through layered PDPs
-     *
-     * @param projectMetadata Metadata for project for which to get minimally matching PDPF
-     * @param projectInterface Which `projectInterface` to minimally match for
-     * @returns PDP Factory id whose `projectInterface`s minimally match the provided
-     *   `projectInterface` if at least one PDP Factory was found that supports the `projectInterface`
-     *   provided
-     */
-    getMinimalMatchPdpFactoryId(
-      projectMetadata: ProjectMetadata,
-      projectInterface: ProjectInterfaces,
-    ): string | undefined;
-  };
-  /** Local object of functions to run locally on each process as part of the project lookup service */
-  export const projectLookupServiceBase: ProjectLookupServiceType;
-  /**
-   * Note: If there are multiple PDPs available whose metadata matches the conditions provided by the
-   * parameters, their project metadata will all be combined, so all available `projectInterface`s
-   * provided by the PDP Factory with the matching id (or all PDP Factories if no id is specified) for
-   * the project will be returned. If you need `projectInterface`s supported by specific PDP
-   * Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
-   */
-  function internalGetMetadata(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
-  function transformGetMetadataForProjectParametersToFilter(
-    projectId?: string,
-    projectInterface?: ProjectInterfaces,
-    pdpFactoryId?: string,
-  ): {
-    includeProjectIds: string | undefined;
-    includeProjectInterfaces: string | undefined;
-    includePdpFactoryIds: string | undefined;
-  };
-  /**
-   * Compare function (for array sorting and such) that compares two PDPF Metadata infos by most
-   * minimal match to the `projectInterface` in question.
-   *
-   * Hopefully this will allow us to get the PDP that most closely matches the `projectInterface`s to
-   * avoid unnecessary redirects through layered PDPs
-   *
-   * @param pdpFMetadataInfoA First ProjectDataProviderFactoryMetadataInfo to compare
-   * @param pdpFMetadataInfoB Second ProjectDataProviderFactoryMetadataInfo to compare
-   * @returns -1 if a is less than b, 0 if equal, and 1 otherwise
-   */
-  function compareProjectDataProviderFactoryMetadataInfoMinimalMatch(
-    pdpFMetadataInfoA: ProjectDataProviderFactoryMetadataInfo | undefined,
-    pdpFMetadataInfoB: ProjectDataProviderFactoryMetadataInfo | undefined,
-  ): -1 | 0 | 1;
-  /** This is an internal-only export for testing purposes and should not be used in development */
-  export const testingProjectLookupService: {
-    internalGetMetadata: typeof internalGetMetadata;
-    compareProjectDataProviderFactoryMetadataInfoMinimalMatch: typeof compareProjectDataProviderFactoryMetadataInfoMinimalMatch;
-    transformGetMetadataForProjectParametersToFilter: typeof transformGetMetadataForProjectParametersToFilter;
-  };
-}
-declare module 'shared/services/project-lookup.service' {
-  const projectLookupService: import('shared/models/project-lookup.service-model').ProjectLookupServiceType;
-  export default projectLookupService;
-}
 declare module 'shared/services/project-data-provider.service' {
   import { ProjectInterfaces, ProjectDataProviderInterfaces } from 'papi-shared-types';
-  import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine.model';
   import { Dispose } from 'platform-bible-utils';
+  import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine.
    *
@@ -4011,8 +4191,8 @@ declare module 'shared/services/project-data-provider.service' {
    * @example
    *
    * ```typescript
-   * const pdp = await get('platformScripture.USFM_BookChapterVerse', 'ProjectID12345');
-   * pdp.getVerse(new VerseRef('JHN', '1', '1'));
+   * const pdp = await get('platformScripture.USFM_Verse', 'ProjectID12345');
+   * pdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
    * ```
    *
    * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
@@ -4154,6 +4334,13 @@ declare module 'node/services/node-file-system.service' {
     mode?: Parameters<typeof fs.promises.copyFile>[2],
   ): Promise<void>;
   /**
+   * Moves a file from one location to another
+   *
+   * @param sourceUri The location of the file to move
+   * @param destinationUri The uri where the file should be moved
+   */
+  export function moveFile(sourceUri: Uri, destinationUri: Uri): Promise<void>;
+  /**
    * Delete a file if it exists
    *
    * @param uri URI of file
@@ -4225,6 +4412,19 @@ declare module 'node/utils/crypto-util' {
    * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
    */
   export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
+  /**
+   * Calculates the hash of a given data buffer
+   *
+   * @param hashAlgorithm Name of the hash algorithm to use, such as "sha512"
+   * @param encodingType String encoding to use for returning the binary hash value that is calculated
+   * @param buffer Raw data to be fed into the hash algorithm
+   * @returns String encoded value of the digest (https://csrc.nist.gov/glossary/term/hash_digest)
+   */
+  export function generateHashFromBuffer(
+    hashAlgorithm: string,
+    encodingType: 'base64' | 'base64url' | 'hex' | 'binary',
+    buffer: Buffer,
+  ): string;
 }
 declare module 'node/models/execution-token.model' {
   /** For now this is just for extensions, but maybe we will want to expand this in the future */
@@ -4469,7 +4669,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   import { DialogOptions } from 'shared/models/dialog-options.model';
   import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
-  import { ProjectMetadataFilterOptions } from 'shared/models/project-lookup.service-model';
+  import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
   export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
   /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
@@ -4582,15 +4782,120 @@ declare module 'shared/services/dialog.service' {
   const dialogService: DialogService;
   export default dialogService;
 }
+declare module 'shared/models/manage-extensions-privilege.model' {
+  /** Base64 encoded hash values */
+  export type HashValues = Partial<{
+    sha256: string;
+    sha512: string;
+  }>;
+  /** Represents an extension that can be enabled or disabled */
+  export type ExtensionIdentifier = {
+    extensionName: string;
+    extensionVersion: string;
+  };
+  /**
+   * Represents all extensions that are installed. Note that packaged extensions cannot be disabled,
+   * so they are implied to always be enabled.
+   */
+  export type InstalledExtensions = {
+    /**
+     * Extensions that are explicitly bundled to be part of the application. They cannot be disabled.
+     * At runtime no extensions can be added or removed from the set of packaged extensions.
+     */
+    packaged: ExtensionIdentifier[];
+    /**
+     * Extensions that are running but can be dynamically disabled. At runtime extensions can be added
+     * or removed from the set of enabled extensions.
+     */
+    enabled: ExtensionIdentifier[];
+    /**
+     * Extensions that are not running but can be dynamically enabled. At runtime extensions can be
+     * added or removed from the set of disabled extensions.
+     *
+     * The only difference between a disabled extension and an extension that isn't installed is that
+     * disabled extensions do not need to be downloaded again to run them.
+     */
+    disabled: ExtensionIdentifier[];
+  };
+  /**
+   * Download an extension from a given URL and enable it
+   *
+   * @param extensionUrlToDownload URL to the extension ZIP file to download
+   * @param fileSize Expected size of the file
+   * @param fileHashes Hash value(s) of the file to download. Note that only one hash value may be
+   *   validated, but multiple hash values may be provided so the installer can choose any of them for
+   *   validation. For example, if you provide a sha256 hash value and a sha512 hash value, the
+   *   installer may only use the sha512 hash value for validation.
+   * @returns Promise that resolves when the extension has been installed
+   */
+  export type InstallExtensionFunction = (
+    extensionUrlToDownload: string,
+    fileSize: number,
+    fileHashes: HashValues,
+  ) => Promise<void>;
+  /**
+   * Start running an extension that had been previously downloaded and disabled
+   *
+   * @param extensionIdentifier Details of the extension to enable
+   * @returns Promise that resolves when the extension has been enabled, throws if enabling fails
+   */
+  export type EnableExtensionFunction = (extensionIdentifier: ExtensionIdentifier) => Promise<void>;
+  /**
+   * Stop running an extension that had been previously downloaded and enabled
+   *
+   * @param extensionIdentifier Details of the extension to disable
+   * @returns Promise that resolves when the extension has been enabled, throws if enabling fails
+   */
+  export type DisableExtensionFunction = (
+    extensionIdentifier: ExtensionIdentifier,
+  ) => Promise<void>;
+  /** Get extension identifiers of all extensions on the system */
+  export type GetInstalledExtensionsFunction = () => Promise<InstalledExtensions>;
+  /** Functions needed to manage extensions */
+  export type ManageExtensions = {
+    /** Function to download an extension and enable it */
+    installExtension: InstallExtensionFunction;
+    /** Function to start running an extension that had been previously downloaded and disabled */
+    enableExtension: EnableExtensionFunction;
+    /** Function to stop running an extension that had been previously downloaded and enabled */
+    disableExtension: DisableExtensionFunction;
+    /** Function to retrieve details about all installed extensions */
+    getInstalledExtensions: GetInstalledExtensionsFunction;
+  };
+}
+declare module 'shared/models/elevated-privileges.model' {
+  import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  /** String constants that are listed in an extension's manifest.json to state needed privileges */
+  export enum ElevatedPrivilegeNames {
+    manageExtensions = 'manageExtensions',
+  }
+  /** Object that contains properties with special capabilities for extensions that required them */
+  export type ElevatedPrivileges = {
+    /** Functions that can be run to manage what extensions are running */
+    manageExtensions: ManageExtensions | undefined;
+  };
+}
 declare module 'extension-host/extension-types/extension-activation-context.model' {
   import { ExecutionToken } from 'node/models/execution-token.model';
   import { UnsubscriberAsyncList } from 'platform-bible-utils';
+  import { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
     /** Canonical name of the extension */
     name: string;
-    /** Used to save and load data from the storage service. */
+    /** Used to save and load data by the storage service. */
     executionToken: ExecutionToken;
+    /**
+     * Objects that provide special capabilities required by an extension based on the
+     * `elevatedPrivileges` values listed in its manifest. For example, if an extension needs to be
+     * able to manage other extensions, then it should include `manageExtensions` in the
+     * `elevatedPrivileges` array in `manifest.json`. Then when the extension is activated this
+     * {@link ElevatedPrivileges} object will have the `manageExtensions` property set to an object
+     * with functions used to manage extensions.
+     *
+     * See {@link ElevatedPrivilegeNames} for the full list of elevated privileges available.
+     */
+    elevatedPrivileges: ElevatedPrivileges;
     /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
     registrations: UnsubscriberAsyncList;
   };
@@ -5096,9 +5401,14 @@ declare module '@papi/core' {
   export default core;
   export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
   export type { ExecutionToken } from 'node/models/execution-token.model';
+  export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
+  export type { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
-  export type { default as IDataProvider } from 'shared/models/data-provider.interface';
+  export type {
+    default as IDataProvider,
+    IDisposableDataProvider,
+  } from 'shared/models/data-provider.interface';
   export type {
     DataProviderUpdateInstructions,
     DataProviderDataType,
@@ -5111,12 +5421,13 @@ declare module '@papi/core' {
     ExtensionDataScope,
     MandatoryProjectDataTypes,
   } from 'shared/models/project-data-provider.model';
-  export type {
-    IProjectDataProviderEngine,
-    IProjectDataProviderEngineFactory,
-  } from 'shared/models/project-data-provider-engine.model';
+  export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
+  export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
   export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
-  export type { default as IProjectDataProviderFactory } from 'shared/models/project-data-provider-factory.interface';
+  export type {
+    default as IProjectDataProviderFactory,
+    ProjectMetadataFilterOptions,
+  } from 'shared/models/project-data-provider-factory.interface';
   export type {
     ProjectDataProviderFactoryMetadataInfo,
     ProjectMetadata,
@@ -5127,6 +5438,7 @@ declare module '@papi/core' {
     LocalizationSelector,
     LocalizationSelectors,
   } from 'shared/services/localization.service-model';
+  export type { NetworkObjectDetails } from 'shared/models/network-object.model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type {
     GetWebViewOptions,
@@ -5297,14 +5609,17 @@ declare module '@papi/backend' {
   import { DataProviderEngine as PapiDataProviderEngine } from 'shared/models/data-provider-engine.model';
   import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   import { BaseProjectDataProviderEngine as PapiBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
+  import { LayeringProjectDataProviderEngineFactory as PapiLayeringProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
   import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { MinimalNetworkObjectService } from 'shared/services/network-object.service';
+  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
-  import { ILocalizationService } from 'shared/services/localization.service-model';
   const papi: {
     /**
      *
@@ -5347,6 +5662,18 @@ declare module '@papi/backend' {
      * @see {@link IBaseProjectDataProviderEngine} for more information on extending this class.
      */
     BaseProjectDataProviderEngine: typeof PapiBaseProjectDataProviderEngine;
+    /**
+     *
+     * Abstract class with partial implementation of {@link IProjectDataProviderEngineFactory}
+     * specifically for Layering PDPFs. You can extend this class to make creating a Layering PDPF
+     * easier.
+     *
+     * Extending this class automatically fulfills the special requirements for Layering PDPfs, so we
+     * highly recommend extending this class. Please see
+     * {@link IProjectDataProviderEngineFactory.getAvailableProjects} for more information on the
+     * requirements.
+     */
+    LayeringProjectDataProviderEngineFactory: typeof PapiLayeringProjectDataProviderEngineFactory;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
     /**
@@ -5379,6 +5706,40 @@ declare module '@papi/backend' {
      * Service that provides a way to send and receive network events
      */
     network: PapiNetworkService;
+    /**
+     *
+     * Network objects are distributed objects within PAPI for TS/JS objects. @see
+     * https://en.wikipedia.org/wiki/Distributed_object
+     *
+     * Objects registered via {@link networkObjectService.set} are retrievable using
+     * {@link networkObjectService.get}.
+     *
+     * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+     * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+     * the registered object are proxied except for constructors, `dispose`, and functions starting with
+     * `on` since those should be events (which are not intended to be proxied) based on our naming
+     * convention. If you don't want a function to be proxied, don't make it a property of the
+     * registered object.
+     *
+     * Functions on a network object will be called asynchronously by other processes regardless of
+     * whether the functions are synchronous or asynchronous, so it is best to make them all
+     * asynchronous. All shared functions' arguments and return values must be serializable to be called
+     * across processes.
+     *
+     * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+     * of that service, and only that service, to call `dispose` on that object when it is no longer
+     * intended to be shared with other services.
+     *
+     * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+     * event handler will be called. After an object is disposed, calls to its functions will no longer
+     * be proxied to the original object.
+     */
+    networkObjects: MinimalNetworkObjectService;
+    /**
+     *
+     * Provides functions related to the set of available network objects
+     */
+    networkObjectStatus: NetworkObjectStatusServiceType;
     /**
      *
      * All extensions and services should use this logger to provide a unified output of logs
@@ -5477,6 +5838,18 @@ declare module '@papi/backend' {
    * @see {@link IBaseProjectDataProviderEngine} for more information on extending this class.
    */
   export const BaseProjectDataProviderEngine: typeof PapiBaseProjectDataProviderEngine;
+  /**
+   *
+   * Abstract class with partial implementation of {@link IProjectDataProviderEngineFactory}
+   * specifically for Layering PDPFs. You can extend this class to make creating a Layering PDPF
+   * easier.
+   *
+   * Extending this class automatically fulfills the special requirements for Layering PDPfs, so we
+   * highly recommend extending this class. Please see
+   * {@link IProjectDataProviderEngineFactory.getAvailableProjects} for more information on the
+   * requirements.
+   */
+  export const LayeringProjectDataProviderEngineFactory: typeof PapiLayeringProjectDataProviderEngineFactory;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
   /**
@@ -5509,6 +5882,40 @@ declare module '@papi/backend' {
    * Service that provides a way to send and receive network events
    */
   export const network: PapiNetworkService;
+  /**
+   *
+   * Network objects are distributed objects within PAPI for TS/JS objects. @see
+   * https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using
+   * {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+   * the registered object are proxied except for constructors, `dispose`, and functions starting with
+   * `on` since those should be events (which are not intended to be proxied) based on our naming
+   * convention. If you don't want a function to be proxied, don't make it a property of the
+   * registered object.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be called
+   * across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+   * of that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  export const networkObjects: MinimalNetworkObjectService;
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export const networkObjectStatus: NetworkObjectStatusServiceType;
   /**
    *
    * All extensions and services should use this logger to provide a unified output of logs
@@ -5552,6 +5959,8 @@ declare module '@papi/backend' {
    * within the renderer.
    */
   export const storage: ExtensionStorageService;
+  /** */
+  export const settings: ISettingsService;
   /**
    *
    * Service that allows to get and store menu data
@@ -5585,6 +5994,7 @@ declare module 'extension-host/extension-types/extension.interface' {
   }
 }
 declare module 'extension-host/extension-types/extension-manifest.model' {
+  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges.model';
   /** Information about an extension provided by the extension developer. */
   export type ExtensionManifest = {
     /** Name of the extension */
@@ -5602,6 +6012,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
      */
     main: string;
+    /** List of special permissions required by the extension to work as intended */
+    elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
     /**
      * Path to the TypeScript type declaration file that describes this extension and its interactions
      * on the PAPI. Relative to the extension's root folder.
@@ -5927,8 +6339,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   /**
    * React hook to use data from a Project Data Provider
    *
-   * @example `useProjectData('platformScripture.USFM_BookChapterVerse', 'project
-   * id').VerseUSFM(...);`
+   * @example `useProjectData('platformScripture.USFM_Verse', 'project id').VerseUSFM(...);`
    */
   type UseProjectDataHook = {
     <ProjectInterface extends ProjectInterfaces>(
@@ -5989,13 +6400,12 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * Provider with `useProjectData('<projectInterface>', '<project_id>').<data_type>` and use like any
    * other React hook.
    *
-   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a
-   * `platformScripture.USFM_BookChapterVerse` project with projectId
-   * `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
+   * _＠example_ Subscribing to Verse USFM info at JHN 11:35 on a `platformScripture.USFM_Verse`
+   * project with projectId `32664dc3288a28df2e2bb75ded887fc8f17a15fb`:
    *
    * ```typescript
    * const [verse, setVerse, verseIsLoading] = useProjectData(
-   *   'platformScripture.USFM_BookChapterVerse',
+   *   'platformScripture.USFM_Verse',
    *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
    * ).VerseUSFM(
    *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),

@@ -10,10 +10,71 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 import { TAB_TYPE_SETTINGS_DIALOG } from '@renderer/components/settings-dialog/settings-tab.component';
 import { TAB_TYPE_PROJECT_SETTINGS_DIALOG } from '@renderer/components/project-settings-dialog/project-settings-tab.component';
 import { TAB_TYPE_RUN_BASIC_CHECKS } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
-import { TAB_TYPE_BASIC_LIST } from '@renderer/components/basic-list/basic-list.component';
+import { ScriptureItemDetail } from 'platform-bible-react';
+import TAB_TYPE_CHECKING_RESULTS_LIST from '@renderer/components/checking-results-list/checking-results-list.constants';
 import LOREM_IPSUM from './lorem-ipsum';
 
+function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
+  const getRandomNumber = (min: number, max: number) =>
+    Math.floor(Math.random() * (max - min + 1)) + min;
+
+  const numberOfResults = getRandomNumber(1, 10);
+  const results: ScriptureItemDetail[] = [];
+
+  for (let i = 0; i < numberOfResults; i++) {
+    const randomOffset = getRandomNumber(0, 300);
+    const randomBookNum = getRandomNumber(1, 66);
+    const randomChapterNum = getRandomNumber(1, 150);
+    const randomVerseNum = getRandomNumber(1, 175);
+    const randomDetail = details[getRandomNumber(0, details.length - 1)];
+
+    results.push({
+      start: {
+        jsonPath: '',
+        offset: randomOffset,
+        bookNum: randomBookNum,
+        chapterNum: randomChapterNum,
+        verseNum: randomVerseNum,
+      },
+      detail: randomDetail,
+    });
+  }
+
+  return results;
+}
+
 export const FIRST_TAB_ID = 'About';
+
+function createTestCheck(id: string, displayName: string, possibleErrors: string[]) {
+  const check = {
+    id: `test.${id}`,
+    displayName,
+  };
+
+  let data = generateRandomCheckingData(possibleErrors);
+
+  return {
+    source: check,
+    data,
+    reRun() {
+      data = generateRandomCheckingData(possibleErrors);
+      this.data = data; // Update the data property
+    },
+  };
+}
+
+export const badLeftoversCheck = createTestCheck('badLeftovers', 'Bad Leftovers', [
+  'Moldy lasagna',
+  'Iffy meatloaf',
+  'Dried out chicken',
+  'Stinky cheese',
+]);
+
+export const engineProblemsCheck = createTestCheck('engineProblems', 'Engine problems', [
+  'Dirty spark plugs',
+  'Low oil',
+  'Stuck valves',
+]);
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
@@ -44,7 +105,17 @@ const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
             tabs: [{ id: 'Test Buttons', tabType: TAB_TYPE_BUTTONS }] as SavedTabInfo[],
           },
           {
-            tabs: [{ id: 'Basic List', tabType: TAB_TYPE_BASIC_LIST }] as SavedTabInfo[],
+            tabs: [
+              {
+                id: 'Checking Results List',
+                tabType: TAB_TYPE_CHECKING_RESULTS_LIST,
+                data: {
+                  sources: undefined,
+                  project: 'Dummy project',
+                  onRerun: undefined,
+                },
+              },
+            ] as SavedTabInfo[],
           },
         ],
       },

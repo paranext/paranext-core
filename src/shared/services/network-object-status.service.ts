@@ -56,22 +56,43 @@ async function waitForNetworkObject(
   objectDetailsToMatch: Partial<NetworkObjectDetails>,
   timeoutInMS?: number,
 ): Promise<NetworkObjectDetails> {
-  const asyncVar = new AsyncVariable<NetworkObjectDetails>(`wait-for-net-obj`, timeoutInMS ?? -1);
-  // Watch the stream of incoming network objects before getting a snapshot to avoid race conditions
-  const unsub = onDidCreateNetworkObject((networkObjectDetails) => {
-    if (isSubset(networkObjectDetails, objectDetailsToMatch))
-      asyncVar.resolveToValue(networkObjectDetails, false);
-    if (asyncVar.hasSettled) unsub();
-  });
-  // Now check if the needed network object has already been created
-  const existingNetworkObjectDetails = await getAllNetworkObjectDetails();
-  const match = Object.values(existingNetworkObjectDetails).find((networkObjectDetails) =>
-    isSubset(networkObjectDetails, objectDetailsToMatch),
+  const asyncVar = new AsyncVariable<NetworkObjectDetails>(
+    `wait-for-net-obj with details ${JSON.stringify(objectDetailsToMatch)}`,
+    timeoutInMS ?? -1,
   );
-  if (match) asyncVar.resolveToValue(match, false);
+  try {
+    // Watch the stream of incoming network objects before getting a snapshot to avoid race conditions
+    const unsub = onDidCreateNetworkObject((networkObjectDetails) => {
+      if (!asyncVar.hasSettled && isSubset(networkObjectDetails, objectDetailsToMatch)) {
+        asyncVar.resolveToValue(networkObjectDetails, false);
+      }
+      if (asyncVar.hasSettled) {
+        unsub();
+      }
+    });
+    // Now check if the needed network object has already been created
+    const existingNetworkObjectDetails = await getAllNetworkObjectDetails();
+    if (!asyncVar.hasSettled) {
+      const match = Object.values(existingNetworkObjectDetails).find((networkObjectDetails) =>
+        isSubset(networkObjectDetails, objectDetailsToMatch),
+      );
+      if (match) {
+        asyncVar.resolveToValue(match, false);
+      }
+    }
+  } catch (e) {
+    const message = `waitForNetworkObject failed for details ${JSON.stringify(objectDetailsToMatch)}! ${e}`;
+    asyncVar.rejectWithReason(message, true);
+    throw e;
+  }
   return asyncVar.promise;
 }
 
+/**
+ * JSDOC SOURCE networkObjectStatusService
+ *
+ * Provides functions related to the set of available network objects
+ */
 const networkObjectStatusService: NetworkObjectStatusServiceType = {
   getAllNetworkObjectDetails,
   waitForNetworkObject,

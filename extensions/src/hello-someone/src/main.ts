@@ -321,21 +321,24 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     existingPeopleWebViewId = undefined;
   }
 
-  // Get the existing web view if one exists or create a new one
-  const peopleWebViewId = await papi.webViews.getWebView(
-    peopleWebViewType,
-    { type: 'panel', direction: 'top' },
-    { existingId: existingPeopleWebViewId },
-  );
+  // Don't block on the web view to keep going
+  setTimeout(async () => {
+    // Get the existing web view if one exists or create a new one
+    const peopleWebViewId = await papi.webViews.getWebView(
+      peopleWebViewType,
+      { type: 'panel', direction: 'top' },
+      { existingId: existingPeopleWebViewId },
+    );
 
-  // Save newly acquired webview id
-  await papi.storage.writeUserData(
-    context.executionToken,
-    peopleWebViewIdKey,
-    peopleWebViewId || '',
-  );
+    // Save newly acquired webview id
+    await papi.storage.writeUserData(
+      context.executionToken,
+      peopleWebViewIdKey,
+      peopleWebViewId || '',
+    );
+  }, 1000);
 
-  await papi.webViews.getWebView(emotionTestWebViewType, undefined, { existingId: '?' });
+  papi.webViews.getWebView(emotionTestWebViewType, undefined, { existingId: '?' });
 
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(

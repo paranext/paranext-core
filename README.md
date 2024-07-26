@@ -1,6 +1,6 @@
 # paranext-core
 
-Electron client, extension host, and C# library for Paranext
+Extensible Bible translation software
 
 <div align="center">
   <img src="doc-meta/doc-icon.png" />
@@ -14,9 +14,17 @@ Electron client, extension host, and C# library for Paranext
 
 </div>
 
+## Summary
+
+Platform.Bible is an extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
+
+This repository contains the core Platform.Bible software (Electron client, extension host including "PAPI", and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional Platform.Bible extensions.
+
 ## Users
 
-This software is not yet ready for users. We'll update here with where you can install it when its ready.
+This software is not yet ready for users. We'll update here with where you can install it when it is ready.
+
+If you would still like to try Platform.Bible, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
 
 ### Linux Users
 
@@ -27,6 +35,20 @@ sudo apt install libfuse2
 ```
 
 Then simply [execute/run](https://github.com/AppImage/AppImageKit/wiki) the `.AppImage` file, which you can download from [Releases](https://github.com/paranext/paranext-core/releases).
+
+### Mac Users
+
+If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is damaged and can't be opened. You should move it to the Trash." or something very similar:
+
+![mac-arm-damaged-warning](doc-meta/mac-arm-damaged-warning.png)
+
+Unfortunately, this is the message Apple chose to display for ARM applications that are not signed (including Platform.Bible since we have not yet set up application code signing on Mac).
+
+If you trust Platform.Bible and would like to run it even though it is not code signed, you will need to run the following terminal command every time you install a new version of Platform.Bible:
+
+`xattr -c /Applications/Platform.Bible.app`
+
+[`xattr -c` clears all attributes on the provided file](https://ss64.com/mac/xattr.html). Running this command removes all attributes on the currently-installed Platform.Bible application file including the quarantine flag Gatekeeper puts on unsigned ARM applications downloaded from the internet.
 
 ## Developer Install
 
@@ -104,6 +126,8 @@ After you run `npm start` (or, in VSCode, launch `Debug Paranext Core`), you can
 Paranext Core extensions are found in the `extensions` folder. Please follow the instructions in
 `extensions/README.md` to develop extensions.
 
+Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing extensions.
+
 ## GitHub Pages
 
 **[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
@@ -140,7 +164,7 @@ npm run package
    cd ./release/app
    npm version 1.2.3
    ```
-3. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository), ensure the following are included:
+3. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository). Ensure the following are included:
    - a _Tag version_, e.g. `v1.2.3`, choose _Create new tag on publish_.
    - set the **Target** to the release branch.
    - a copy of the change log. Click **Generate release notes** as a starting point.
@@ -230,7 +254,7 @@ Formatting happens automatically when you commit. If you use VS Code with this r
 To check TypeScript for readability, maintainability, and functionality errors, and to check a few other files for proper formatting, run the following from the repo root (or just use VS Code with this repo's recommended extensions)
 
 ```bash
-npm run prettier
+npm run format
 npm run lint
 ```
 

@@ -1,10 +1,12 @@
 {
   "name": "helloSomeone",
   "version": "0.0.1",
-  "description": "Simple hello someone extension for Platform.Bible",
+  "displayData": "assets/displayData.json",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",
+  "extensionDependencies": {},
+  "elevatedPrivileges": [],
   "types": "src/types/hello-someone.d.ts",
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
