@@ -33,7 +33,7 @@ export type { IconButtonProps } from './components/mui/icon-button.component';
 export { default as LabelPosition } from './components/mui/label-position.model';
 export { default as MenuItem } from './components/mui/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/mui/menu-item.component';
-export { default as ScriptureResultsViewer } from './components/scripture-results-viewer/scripture-results-viewer.component';
+export { default as ScriptureResultsViewer } from './components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
 export type {
   ResultsSet,
   ResultsSource,
@@ -41,7 +41,7 @@ export type {
   ScriptureResultsViewerColumnInfo,
   ScriptureResultsViewerProps,
   ScriptureSrcItemDetail,
-} from './components/scripture-results-viewer/scripture-results-viewer.component';
+} from './components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Slider } from './components/mui/slider.component';

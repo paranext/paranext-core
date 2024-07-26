@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ScriptureResultsViewer from '@/components/scripture-results-viewer/scripture-results-viewer.component';
+import ScriptureResultsViewer from '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
 
-describe('ScriptureResultsViewer with all three column headers (showing Check Type/source column)', () => {
+describe('ScriptureResultsViewer with only Scripture ref and details columns', () => {
   const repeatedWordsCheck = { id: 'testCheck1', displayName: 'Repeated Words' };
   const markersCheck = { id: 'testCheck2', displayName: 'Markers' };
   const quotationsCheck = { id: 'testCheck3', displayName: 'Quotations' };
@@ -50,29 +50,24 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
 
   beforeEach(() => {
     render(
+      // By default, it should omit Check Type/source column
       <ScriptureResultsViewer
         sources={sources}
         typeColumnName={checkTypeHeader}
         detailsColumnName={errorDetailsTypeHeader}
         showColumnHeaders
-        showSourceColumn
       />,
     );
   });
 
-  it('should render column headers', () => {
-    const scrRefHeaderElement = screen.getByText('Scripture Reference');
-    const scrRefButton = screen.getByTitle('Toggle grouping by Scripture Reference');
-    expect(scrRefHeaderElement).toBe(scrRefButton.parentNode);
-    const checkTypeHeaderElement = screen.getByText(checkTypeHeader);
-    const checkTypeButton = screen.getByTitle('Toggle grouping by Check Type');
-    expect(checkTypeHeaderElement).toBe(checkTypeButton.parentNode);
-    const headerRow = scrRefHeaderElement.closest('tr');
-    expect(headerRow).toBe(checkTypeHeaderElement.closest('tr'));
-    expect(headerRow).toBe(screen.getByText(errorDetailsTypeHeader).closest('tr'));
+  it('should render the other headers', () => {
+    expect(screen.queryByTitle('Toggle grouping by Scripture Reference')).toBeDefined();
+    expect(screen.queryByText(checkTypeHeader)).toBeNull();
+    expect(screen.queryByTitle('Toggle grouping by Check Type')).toBeNull();
+    expect(screen.queryByText(errorDetailsTypeHeader)).toBeDefined();
   });
 
-  it('should render body with no grouping', () => {
+  it('should render the other cells in the body', () => {
     const table = screen.getByRole('table');
     if (!table) {
       throw new Error('The table is missing.');
@@ -87,18 +82,14 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
     const children = Array.from(body?.childNodes);
     children.forEach((child) => {
       expect(child).toBeDefined();
-      expect(child.childNodes.length).toBe(3);
+      expect(child.childNodes.length).toBe(2);
       const cellScrRef = child.childNodes[0];
       if (!(cellScrRef instanceof HTMLElement))
-        throw new Error('Each row should have three td elements');
+        throw new Error('Each row should have two td elements');
       expect(cellScrRef).toHaveClass('scrRef');
-      const cellSource = child.childNodes[1];
-      if (!(cellSource instanceof HTMLElement))
-        throw new Error('Each row should have three td elements');
-      expect(cellSource).toHaveClass('source');
-      const cellDetails = child.childNodes[2];
+      const cellDetails = child.childNodes[1];
       if (!(cellDetails instanceof HTMLElement))
-        throw new Error('Each row should have three td elements');
+        throw new Error('Each row should have two td elements');
       expect(cellDetails).toHaveClass('details');
     });
   });
