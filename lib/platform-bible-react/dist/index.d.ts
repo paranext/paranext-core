@@ -162,13 +162,6 @@ export type MultiColumnMenu = {
 export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
-/**
- * Map whose keys are localized string keys and whose values provide information about how to
- * localize strings for the localized string key
- */
-export interface LanguageStrings {
-	[k: LocalizeKey]: LocalizedStringValue;
-}
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -188,7 +181,21 @@ export interface DataTableProps<TData, TValue> {
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
-export declare const INVENTORY_STRING_KEYS: LocalizeKey[];
+export declare const INVENTORY_STRING_KEYS: readonly [
+	"%webView_inventory_all%",
+	"%webView_inventory_approved%",
+	"%webView_inventory_unapproved%",
+	"%webView_inventory_unknown%",
+	"%webView_inventory_scope_book%",
+	"%webView_inventory_scope_chapter%",
+	"%webView_inventory_scope_verse%",
+	"%webView_inventory_filter_text%",
+	"%webView_inventory_occurrences_table_header_reference%",
+	"%webView_inventory_occurrences_table_header_occurrence%"
+];
+export type InventoryLocalizedStrings = {
+	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
 export type Status = true | false | undefined;
 export type ItemData = {
 	item: string;
@@ -199,7 +206,7 @@ export declare const getSortingIcon: (sortDirection: false | SortDirection) => R
 export interface InventoryProps {
 	scriptureReference: ScriptureReference;
 	setScriptureReference: (scriptureReference: ScriptureReference) => void;
-	localizedStrings: LanguageStrings;
+	localizedStrings: InventoryLocalizedStrings;
 	extractItems: (text: string, item?: string | undefined) => string[];
 	approvedItems: string[];
 	onApprovedItemsChange: (items: string[]) => void;

@@ -10,9 +10,12 @@ export type {
   TableContents,
 } from './components/advanced/data-table/data-table.component';
 export { default as Inventory } from './components/advanced/inventory/inventory.component';
-export type {
-  INVENTORY_STRING_KEYS,
+export {
   getSortingIcon,
+  INVENTORY_STRING_KEYS,
+} from './components/advanced/inventory/inventory.component';
+export type {
+  InventoryLocalizedStrings,
   ItemData,
   Status,
 } from './components/advanced/inventory/inventory.component';

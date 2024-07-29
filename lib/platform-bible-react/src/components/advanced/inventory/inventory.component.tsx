@@ -1,5 +1,5 @@
 import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { LocalizedStringValue, ScriptureReference } from 'platform-bible-utils';
 import { Input } from '@/components/shadcn-ui/input';
 import {
   Select,
@@ -17,7 +17,7 @@ import DataTable, {
 import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
 
-export const INVENTORY_STRING_KEYS: LocalizeKey[] = [
+export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_all%',
   '%webView_inventory_approved%',
   '%webView_inventory_unapproved%',
@@ -28,7 +28,11 @@ export const INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_filter_text%',
   '%webView_inventory_occurrences_table_header_reference%',
   '%webView_inventory_occurrences_table_header_occurrence%',
-];
+] as const);
+
+export type InventoryLocalizedStrings = {
+  [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
 
 export type Status = true | false | undefined;
 
@@ -99,10 +103,17 @@ const convertTextToItemData = (
   return itemData;
 };
 
+const localizeString = (
+  strings: InventoryLocalizedStrings,
+  key: keyof InventoryLocalizedStrings,
+) => {
+  return strings[key] ?? key;
+};
+
 interface InventoryProps {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
-  localizedStrings: LanguageStrings;
+  localizedStrings: InventoryLocalizedStrings;
   extractItems: (text: string, item?: string | undefined) => string[];
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
@@ -128,14 +139,14 @@ function Inventory({
   onScopeChange,
   columns,
 }: InventoryProps) {
-  const allItemsText = localizedStrings['%webView_inventory_all%'];
-  const approvedItemsText = localizedStrings['%webView_inventory_approved%'];
-  const unapprovedItemsText = localizedStrings['%webView_inventory_unapproved%'];
-  const unknownItemsText = localizedStrings['%webView_inventory_unknown%'];
-  const scopeBookText = localizedStrings['%webView_inventory_scope_book%'];
-  const scopeChapterText = localizedStrings['%webView_inventory_scope_chapter%'];
-  const scopeVerseText = localizedStrings['%webView_inventory_scope_verse%'];
-  const filterText = localizedStrings['%webView_inventory_filter_text%'];
+  const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
+  const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
+  const unapprovedItemsText = localizeString(localizedStrings, '%webView_inventory_unapproved%');
+  const unknownItemsText = localizeString(localizedStrings, '%webView_inventory_unknown%');
+  const scopeBookText = localizeString(localizedStrings, '%webView_inventory_scope_book%');
+  const scopeChapterText = localizeString(localizedStrings, '%webView_inventory_scope_chapter%');
+  const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
+  const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
 
   const [items, setItems] = useState<ItemData[]>([]);
   const [statusFilter, setStatusFilter] = useState<string>('all');
