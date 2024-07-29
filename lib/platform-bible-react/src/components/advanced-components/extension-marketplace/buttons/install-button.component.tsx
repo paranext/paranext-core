@@ -28,11 +28,11 @@ export default function InstallButton({
   return (
     <Button
       className={cn(
-        'pr-h-8 pr-rounded-md pr-text-white pr-transition pr-duration-300 pr-ease-in-out',
+        'pr-h-8 pr-rounded-md pr-text-white pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-blue-700',
         {
           'pr-cursor-not-allowed pr-bg-blue-700': isInstalling,
           'pr-bg-blue-600': !isInstalling,
-          'pr-bg-white pr-text-blue-600': !buttonText,
+          'pr-bg-white pr-text-blue-600 hover:pr-text-white': !buttonText,
           'pr-w-20': buttonText,
         },
       )}

@@ -2,12 +2,33 @@ import InstallButton from '@/components/advanced-components/extension-marketplac
 import DisableButton from '@/components/advanced-components/extension-marketplace/buttons/disable-button.component';
 import UpdateButton from '@/components/advanced-components/extension-marketplace/buttons/update-button.component';
 import EnableButton from '@/components/advanced-components/extension-marketplace/buttons/enable-button.component';
+import FilterDropdown from '@/components/advanced-components/extension-marketplace/filter-dropdown.component';
 
 export default function MarketplaceButtonExamples() {
+  const filterItems = ['All', 'Verified', 'Experimental'];
+
+  const filterGroup = {
+    label: 'Publishers',
+    items: [
+      ...filterItems.map((items) => ({
+        label: items,
+        checkbox: true,
+        onClick: () => {},
+      })),
+    ],
+  };
+
+  const sortGroup = {
+    label: 'Sort by',
+    items: [
+      { label: 'Release Date (Newest First)', checkbox: false, onClick: () => {} },
+      { label: 'Name A-Z', checkbox: false, onClick: () => {} },
+    ],
+  };
   return (
     <>
       <p>
-        Note: These buttons are currently styled with fixed colors and are therefore not themeable
+        Note: These buttons are currently styled with fixed colors and are therefore not theme-able
       </p>
       <br />
       InstallButton Button:
@@ -31,6 +52,10 @@ export default function MarketplaceButtonExamples() {
       <div className="pr-space-x-2">
         <UpdateButton isUpdating={false} handleClick={() => {}} />
         <UpdateButton isUpdating handleClick={() => {}} />
+      </div>
+      FilterButton Button:
+      <div className="pr-space-x-2">
+        <FilterDropdown groups={[filterGroup, sortGroup]} />
       </div>
     </>
   );
