@@ -21,7 +21,7 @@ export default function EnableButton({ isEnabling, handleClick }: EnableButtonPr
   return (
     <Button
       className={cn(
-        'pr-h-8 pr-rounded-md pr-bg-blue-600 pr-px-4 pr-text-white pr-transition pr-duration-300 pr-ease-in-out hover:pr-text-white',
+        'pr-h-8 pr-rounded-md pr-bg-blue-600 pr-px-4 pr-text-white pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-blue-700',
         {
           'pr-cursor-not-allowed pr-bg-blue-700': isEnabling,
         },

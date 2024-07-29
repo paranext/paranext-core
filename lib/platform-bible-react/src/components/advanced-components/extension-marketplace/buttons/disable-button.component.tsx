@@ -21,7 +21,7 @@ export default function DisableButton({ isDisabling, handleClick }: DisableButto
   return (
     <Button
       className={cn(
-        'pr-h-8 pr-rounded-md pr-bg-gray-300 pr-text-black pr-transition pr-duration-300 pr-ease-in-out hover:pr-text-white',
+        'pr-h-8 pr-rounded-md pr-bg-gray-300 pr-text-black pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-gray-400',
         {
           'pr-cursor-not-allowed pr-bg-gray-400': isDisabling,
         },
