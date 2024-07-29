@@ -18,7 +18,7 @@ export enum DropdownMenuItemType {
 export type DropdownItem = {
   /** The label is the text that will be displayed on the dropdown item. */
   label: string;
-  /** The itemType determines if the item is a checkbox or radio item. */
+  /** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
   itemType: DropdownMenuItemType;
   /** The onClick function is called when the item is clicked. */
   onClick: () => void;

@@ -1062,14 +1062,14 @@ export interface MarkdownRendererProps {
  * @returns A div containing the rendered markdown content.
  */
 export function MarkdownRenderer({ markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
-declare enum DropdownMenuItemType {
+export declare enum DropdownMenuItemType {
 	Check = 0,
 	Radio = 1
 }
 export type DropdownItem = {
 	/** The label is the text that will be displayed on the dropdown item. */
 	label: string;
-	/** The itemType determines if the item is a checkbox or radio item. */
+	/** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
 	itemType: DropdownMenuItemType;
 	/** The onClick function is called when the item is clicked. */
 	onClick: () => void;
@@ -1190,7 +1190,6 @@ declare const Slider$1: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.S
 declare const Switch$1: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 
 export {
-	FilterDropdown as DropdownMenuItemType,
 	Slider$1 as ShadCnSlider,
 	Switch$1 as ShadCnSwitch,
 };
