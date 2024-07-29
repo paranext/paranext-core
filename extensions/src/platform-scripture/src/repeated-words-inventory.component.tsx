@@ -1,10 +1,20 @@
-import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
-import { Button } from '@/components/shadcn-ui/button';
-import { ColumnDef } from '@/components/advanced/data-table/data-table.component';
-import Inventory from '@/components/advanced/inventory/inventory.component';
-import { ItemData, Status } from './types';
-import { getSortingIcon } from './utils';
+import {
+  Button,
+  ColumnDef,
+  Inventory,
+  getSortingIcon,
+  ItemData,
+  Status,
+} from 'platform-bible-react';
+import { useLocalizedStrings } from '@papi/frontend/react';
+
+const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
+  '%webView_inventory_table_header_repeated_words%',
+  '%webView_inventory_table_header_count%',
+  '%webView_inventory_table_header_status%',
+];
 
 const buildColumns = (
   itemLabel: string,
@@ -129,9 +139,12 @@ function RepeatedWordsInventory({
   scope,
   onScopeChange,
 }: RepeatedWordsInventoryProps) {
-  const itemLabel = localizedStrings['%webView_inventory_table_header_repeated_words%'];
-  const countLabel = localizedStrings['%webView_inventory_table_header_count%'];
-  const statusLabel = localizedStrings['%webView_inventory_table_header_status%'];
+  const [repeatedWordsInventoryStrings] = useLocalizedStrings(REPEATED_WORDS_INVENTORY_STRING_KEYS);
+
+  const itemLabel =
+    repeatedWordsInventoryStrings['%webView_inventory_table_header_repeated_words%'];
+  const countLabel = repeatedWordsInventoryStrings['%webView_inventory_table_header_count%'];
+  const statusLabel = repeatedWordsInventoryStrings['%webView_inventory_table_header_status%'];
 
   const columns = (onStatusChange: (changedItems: string[], status: Status) => void) => {
     return buildColumns(itemLabel, countLabel, statusLabel, onStatusChange);

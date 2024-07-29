@@ -9,6 +9,13 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
+export { default as Inventory } from './components/advanced/inventory/inventory.component';
+export type {
+  INVENTORY_STRING_KEYS,
+  getSortingIcon,
+  ItemData,
+  Status,
+} from './components/advanced/inventory/inventory.component';
 
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/mui/chapter-range-selector.component';
@@ -73,10 +80,6 @@ export {
   VerticalTabsTrigger,
 } from './components/basics/tabs-vertical';
 
-// Paratext components
-
-export { default as CharacterInventory } from './components/advanced/inventory/character-inventory.component';
-export { default as RepeatedWordsInventory } from './components/advanced/inventory/repeated-words-inventory.component';
 export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
 export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
 export { default as DisableButton } from './components/advanced/extension-marketplace/buttons/disable-button.component';

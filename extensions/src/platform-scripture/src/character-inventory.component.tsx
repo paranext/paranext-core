@@ -1,10 +1,21 @@
-import { LanguageStrings, ScriptureReference, split } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey, ScriptureReference, split } from 'platform-bible-utils';
 import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
-import { Button } from '@/components/shadcn-ui/button';
-import { ColumnDef } from '@/components/advanced/data-table/data-table.component';
-import Inventory from '@/components/advanced/inventory/inventory.component';
-import { ItemData, Status } from './types';
-import { getSortingIcon } from './utils';
+import {
+  Button,
+  ColumnDef,
+  Inventory,
+  getSortingIcon,
+  ItemData,
+  Status,
+} from 'platform-bible-react';
+import { useLocalizedStrings } from '@papi/frontend/react';
+
+const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
+  '%webView_inventory_table_header_character%',
+  '%webView_inventory_table_header_unicode_value%',
+  '%webView_inventory_table_header_count%',
+  '%webView_inventory_table_header_status%',
+];
 
 const buildColumns = (
   itemLabel: string,
@@ -141,10 +152,12 @@ function CharacterInventory({
   scope,
   onScopeChange,
 }: CharacterInventoryProps) {
-  const itemLabel = localizedStrings['%webView_inventory_table_header_character%'];
-  const unicodeValueLabel = localizedStrings['%webView_inventory_table_header_unicode_value%'];
-  const countLabel = localizedStrings['%webView_inventory_table_header_count%'];
-  const statusLabel = localizedStrings['%webView_inventory_table_header_status%'];
+  const [characterInventoryStrings] = useLocalizedStrings(CHARACTER_INVENTORY_STRING_KEYS);
+  const itemLabel = characterInventoryStrings['%webView_inventory_table_header_character%'];
+  const unicodeValueLabel =
+    characterInventoryStrings['%webView_inventory_table_header_unicode_value%'];
+  const countLabel = characterInventoryStrings['%webView_inventory_table_header_count%'];
+  const statusLabel = characterInventoryStrings['%webView_inventory_table_header_status%'];
 
   const columns = (onStatusChange: (changedItems: string[], status: Status) => void) => {
     return buildColumns(itemLabel, unicodeValueLabel, countLabel, statusLabel, onStatusChange);

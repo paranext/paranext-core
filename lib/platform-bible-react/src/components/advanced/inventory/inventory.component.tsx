@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
+import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import { Input } from '@/components/shadcn-ui/input';
 import {
   Select,
@@ -8,10 +8,45 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import { ColumnDef } from '@/components/advanced/data-table/data-table.component';
-import InventoryDataTable from '@/components/advanced/inventory/subcomponents/inventory-data-table.component';
-import OccurrencesTable from '@/components/advanced/inventory/subcomponents/occurrences-table.component';
-import { ItemData, Status } from './types';
+import DataTable, {
+  ColumnDef,
+  RowContents,
+  SortDirection,
+  TableContents,
+} from '@/components/advanced/data-table/data-table.component';
+import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
+import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
+
+export const INVENTORY_STRING_KEYS: LocalizeKey[] = [
+  '%webView_inventory_all%',
+  '%webView_inventory_approved%',
+  '%webView_inventory_unapproved%',
+  '%webView_inventory_unknown%',
+  '%webView_inventory_scope_book%',
+  '%webView_inventory_scope_chapter%',
+  '%webView_inventory_scope_verse%',
+  '%webView_inventory_filter_text%',
+  '%webView_inventory_occurrences_table_header_reference%',
+  '%webView_inventory_occurrences_table_header_occurrence%',
+];
+
+export type Status = true | false | undefined;
+
+export type ItemData = {
+  item: string;
+  count: number;
+  status: Status;
+};
+
+export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
+  if (sortDirection === 'asc') {
+    return <ArrowUpIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
+  }
+  if (sortDirection === 'desc') {
+    return <ArrowDownIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
+  }
+  return <ArrowUpDownIcon className="pr-ml-2 pr-h-4 pr-w-4" />;
+};
 
 const filterItemData = (
   items: ItemData[],
@@ -163,6 +198,13 @@ function Inventory({
     return filterItemData(items, statusFilter, textFilter);
   }, [items, statusFilter, textFilter]);
 
+  const rowClickHandler = (row: RowContents<ItemData>, table: TableContents<ItemData>) => {
+    table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
+    row.toggleSelected(undefined);
+
+    setSelectedItem(row.getValue('item'));
+  };
+
   return (
     <div className="pr-flex pr-h-full pr-flex-col">
       <div className="pr-flex">
@@ -197,12 +239,11 @@ function Inventory({
         />
       </div>
       <div className="pr-m-1 pr-flex-1 pr-overflow-auto pr-rounded-md pr-border">
-        <InventoryDataTable
+        <DataTable
           columns={columns(statusChangeHandler)}
-          tableData={filteredItemData}
-          onSelectItem={(item: string) => {
-            setSelectedItem(item);
-          }}
+          data={filteredItemData}
+          onRowClickHandler={rowClickHandler}
+          stickyHeader
         />
       </div>
       {selectedItem !== '' && (

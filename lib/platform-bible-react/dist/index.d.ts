@@ -188,6 +188,29 @@ export interface DataTableProps<TData, TValue> {
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare const INVENTORY_STRING_KEYS: LocalizeKey[];
+export type Status = true | false | undefined;
+export type ItemData = {
+	item: string;
+	count: number;
+	status: Status;
+};
+export declare const getSortingIcon: (sortDirection: false | SortDirection) => React$1.ReactNode;
+export interface InventoryProps {
+	scriptureReference: ScriptureReference;
+	setScriptureReference: (scriptureReference: ScriptureReference) => void;
+	localizedStrings: LanguageStrings;
+	extractItems: (text: string, item?: string | undefined) => string[];
+	approvedItems: string[];
+	onApprovedItemsChange: (items: string[]) => void;
+	unapprovedItems: string[];
+	onUnapprovedItemsChange: (items: string[]) => void;
+	text: string | undefined;
+	scope: string;
+	onScopeChange: (scope: string) => void;
+	columns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
+}
+export declare function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
@@ -983,32 +1006,6 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-export interface CharacterInventoryProps {
-	scriptureReference: ScriptureReference;
-	setScriptureReference: (scriptureReference: ScriptureReference) => void;
-	localizedStrings: LanguageStrings;
-	approvedItems: string[];
-	onApprovedItemsChange: (items: string[]) => void;
-	unapprovedItems: string[];
-	onUnapprovedItemsChange: (items: string[]) => void;
-	text: string | undefined;
-	scope: string;
-	onScopeChange: (scope: string) => void;
-}
-export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
-export interface RepeatedWordsInventoryProps {
-	scriptureReference: ScriptureReference;
-	setScriptureReference: (scriptureReference: ScriptureReference) => void;
-	localizedStrings: LanguageStrings;
-	approvedItems: string[];
-	onApprovedItemsChange: (items: string[]) => void;
-	unapprovedItems: string[];
-	onUnapprovedItemsChange: (items: string[]) => void;
-	text: string | undefined;
-	scope: string;
-	onScopeChange: (scope: string) => void;
-}
-export declare function RepeatedWordsInventory({ scriptureReference, setScriptureReference, localizedStrings, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, }: RepeatedWordsInventoryProps): import("react/jsx-runtime").JSX.Element;
 export type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;
