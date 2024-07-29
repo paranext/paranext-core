@@ -209,6 +209,10 @@ function Inventory({
     return filterItemData(items, statusFilter, textFilter);
   }, [items, statusFilter, textFilter]);
 
+  useEffect(() => {
+    setSelectedItem('');
+  }, [filteredItemData]);
+
   const rowClickHandler = (row: RowContents<ItemData>, table: TableContents<ItemData>) => {
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
@@ -217,7 +221,7 @@ function Inventory({
   };
 
   return (
-    <div className="pr-flex pr-h-full pr-flex-col">
+    <div className="pr-twp pr-flex pr-h-full pr-flex-col">
       <div className="pr-flex">
         <Select onValueChange={(value) => setStatusFilter(value)} defaultValue={statusFilter}>
           <SelectTrigger className="pr-m-1">

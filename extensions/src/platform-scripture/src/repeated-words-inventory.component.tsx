@@ -55,51 +55,48 @@ const buildColumns = (
       });
 
       return (
-        <div>
-          <div className="pr-flex pr-justify-center">
+        <>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
             <Button onClick={() => column.toggleSorting(undefined)}>
               {statusLabel}
               {getSortingIcon(column.getIsSorted())}
             </Button>
           </div>
-          <div className="pr-flex pr-justify-center">
-            <Button>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <Button style={{ margin: 2 }}>
               <CircleCheckIcon
-                className="pr-h-5 pr-w-5"
                 onClick={() => {
                   statusChangeHandler(items, true);
                 }}
               />
             </Button>
-            <Button>
+            <Button style={{ margin: 2 }}>
               <CircleXIcon
-                className="pr-h-5 pr-w-5"
                 onClick={() => {
                   statusChangeHandler(items, false);
                 }}
               />
             </Button>
-            <Button>
+            <Button style={{ margin: 2 }}>
               <CircleHelpIcon
-                className="pr-h-5 pr-w-5"
                 onClick={() => {
                   statusChangeHandler(items, undefined);
                 }}
               />
             </Button>
           </div>
-        </div>
+        </>
       );
     },
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
       if (status === true) {
-        return <CircleCheckIcon className="pr-ml-2 pr-h-5 pr-w-5" />;
+        return <CircleCheckIcon />;
       }
       if (status === false) {
-        return <CircleXIcon className="pr-ml-2 pr-h-5 pr-w-5" />;
+        return <CircleXIcon />;
       }
-      return <CircleHelpIcon className="pr-ml-2 pr-h-5 pr-w-5" />;
+      return <CircleHelpIcon />;
     },
   },
 ];
@@ -151,22 +148,20 @@ function RepeatedWordsInventory({
   };
 
   return (
-    <div className="pr-twp pr-h-full">
-      <Inventory
-        scriptureReference={scriptureReference}
-        setScriptureReference={setScriptureReference}
-        localizedStrings={localizedStrings}
-        extractItems={extractItems}
-        approvedItems={approvedItems}
-        onApprovedItemsChange={onApprovedItemsChange}
-        unapprovedItems={unapprovedItems}
-        onUnapprovedItemsChange={onUnapprovedItemsChange}
-        text={text}
-        scope={scope}
-        onScopeChange={onScopeChange}
-        columns={columns}
-      />
-    </div>
+    <Inventory
+      scriptureReference={scriptureReference}
+      setScriptureReference={setScriptureReference}
+      localizedStrings={localizedStrings}
+      extractItems={extractItems}
+      approvedItems={approvedItems}
+      onApprovedItemsChange={onApprovedItemsChange}
+      unapprovedItems={unapprovedItems}
+      onUnapprovedItemsChange={onUnapprovedItemsChange}
+      text={text}
+      scope={scope}
+      onScopeChange={onScopeChange}
+      columns={columns}
+    />
   );
 }
 

@@ -35,7 +35,7 @@ const getText = async (scope: string, scriptureRef: ScriptureReference, projectI
 };
 
 global.webViewComponent = function InventoryWebView({ useWebViewState }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(INVENTORY_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings(Array.from(INVENTORY_STRING_KEYS));
   const [projectId] = useWebViewState('projectId', '');
   const [webViewType] = useWebViewState('webViewType', '');
   const [scriptureRef, setScriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
