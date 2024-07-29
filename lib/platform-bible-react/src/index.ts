@@ -1,4 +1,3 @@
-import { Filter } from 'lucide-react';
 import './index.css';
 
 // Components and Types
