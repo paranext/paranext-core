@@ -54,11 +54,11 @@ export default function FilterDropdown({ groups }: FilterDropdownProps) {
       </DropdownMenuTrigger>
       <DropdownMenuContent>
         {groups.map((group) => (
-          <>
+          <div key={group.label}>
             <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
             <DropdownMenuGroup>
               {group.items.map((item) => (
-                <div>
+                <div key={item.label}>
                   {item.itemType === DropdownMenuItemType.Check ? (
                     <DropdownMenuCheckboxItem onClick={item.onClick}>
                       {item.label}
@@ -72,7 +72,7 @@ export default function FilterDropdown({ groups }: FilterDropdownProps) {
               ))}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-          </>
+          </div>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
