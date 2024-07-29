@@ -74,13 +74,19 @@ export {
 } from './components/basics/tabs-vertical';
 
 // Paratext components
-
 export { default as CharacterInventory } from './components/paratext-10-studio-components/inventory/character-inventory.component';
 export { default as InstallButton } from './components/advanced-components/extension-marketplace/buttons/install-button.component';
 export { default as EnableButton } from './components/advanced-components/extension-marketplace/buttons/enable-button.component';
 export { default as DisableButton } from './components/advanced-components/extension-marketplace/buttons/disable-button.component';
 export { default as UpdateButton } from './components/advanced-components/extension-marketplace/buttons/update-button.component';
 export { default as MarkdownRenderer } from './components/advanced-components/extension-marketplace/markdown-renderer.component';
+export {
+  default as FilterDropdown,
+  DropdownMenuItemType,
+  type DropdownItem,
+  type DropdownGroup,
+} from './components/advanced-components/extension-marketplace/filter-dropdown.component';
+export { default as FilterButton } from './components/advanced-components/extension-marketplace/buttons/filter-button.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

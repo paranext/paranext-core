@@ -1062,6 +1062,47 @@ export interface MarkdownRendererProps {
  * @returns A div containing the rendered markdown content.
  */
 export function MarkdownRenderer({ markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export declare enum DropdownMenuItemType {
+	Check = 0,
+	Radio = 1
+}
+export type DropdownItem = {
+	/** The label is the text that will be displayed on the dropdown item. */
+	label: string;
+	/** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
+	itemType: DropdownMenuItemType;
+	/** The onClick function is called when the item is clicked. */
+	onClick: () => void;
+};
+export type DropdownGroup = {
+	/**
+	 * The label is the text that will be displayed on the dropdown group. It is used to categorize
+	 * the items in the group.
+	 */
+	label: string;
+	/** The items array contains the items that will be displayed in the dropdown group */
+	items: DropdownItem[];
+};
+export type FilterDropdownProps = {
+	/** The groups array contains the groups that will be displayed in the dropdown */
+	groups: DropdownGroup[];
+};
+/**
+ * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
+ * items that can be checkboxes or radio items.
+ *
+ * @param groups The groups array contains the groups that will be displayed in the dropdown
+ * @returns A filter dropdown.
+ */
+export function FilterDropdown({ groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The FilterButton component is a button designed for initiating filtering of data. It is designed
+ * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
+ * asChild.
+ *
+ * @returns A button that can be used to filter.
+ */
+export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
