@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ScriptureResultsViewer, {
   ScriptureSrcItemDetail,
-} from '@/components/scripture-results-viewer/scripture-results-viewer.component';
+} from '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
 
 let lastSelectedItem: ScriptureSrcItemDetail | undefined;
 let numberOfRowSelectsHandled: number = 0;

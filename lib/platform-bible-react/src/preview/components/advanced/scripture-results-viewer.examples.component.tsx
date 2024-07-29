@@ -1,4 +1,4 @@
-import ScriptureResultsViewer from '@/components/scripture-results-viewer/scripture-results-viewer.component';
+import ScriptureResultsViewer from '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
 import { useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import generateRandomCheckingData from '../generate-random-checking-data';
@@ -61,7 +61,7 @@ export default function ScriptureResultsViewerExample() {
   };
 
   return (
-    <>
+    <div className="pr-h-96 pr-overflow-y-hidden">
       <div>
         {checks.map((check, index) => (
           <Button
@@ -80,6 +80,6 @@ export default function ScriptureResultsViewerExample() {
         typeColumnName="Check Type"
         detailsColumnName="Error Details"
       />
-    </>
+    </div>
   );
 }
