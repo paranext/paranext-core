@@ -3,9 +3,9 @@ import { forwardRef } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 
 /**
- * The FilterButton component is a button designed for initiating filtering of data. It includes
- * dropdown visuals for active filtering and idle states. it uses forwardRef to pass the button to
- * the dropdown trigger asChild.
+ * The FilterButton component is a button designed for initiating filtering of data. It is designed
+ * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
+ * asChild.
  *
  * @returns A button that can be used to filter.
  */

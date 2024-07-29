@@ -1062,15 +1062,19 @@ export interface MarkdownRendererProps {
  * @returns A div containing the rendered markdown content.
  */
 export function MarkdownRenderer({ markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
-export interface DropdownItem {
+declare enum DropdownMenuItemType {
+	Check = 0,
+	Radio = 1
+}
+export type DropdownItem = {
 	/** The label is the text that will be displayed on the dropdown item. */
 	label: string;
-	/** The checkbox boolean value determines if the item is a checkbox or radio item. */
-	checkbox: boolean;
+	/** The itemType determines if the item is a checkbox or radio item. */
+	itemType: DropdownMenuItemType;
 	/** The onClick function is called when the item is clicked. */
 	onClick: () => void;
-}
-export interface DropdownGroup {
+};
+export type DropdownGroup = {
 	/**
 	 * The label is the text that will be displayed on the dropdown group. It is used to categorize
 	 * the items in the group.
@@ -1078,11 +1082,11 @@ export interface DropdownGroup {
 	label: string;
 	/** The items array contains the items that will be displayed in the dropdown group */
 	items: DropdownItem[];
-}
-export interface FilterDropdownProps {
+};
+export type FilterDropdownProps = {
 	/** The groups array contains the groups that will be displayed in the dropdown */
 	groups: DropdownGroup[];
-}
+};
 /**
  * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
  * items that can be checkboxes or radio items.
@@ -1092,9 +1096,9 @@ export interface FilterDropdownProps {
  */
 export function FilterDropdown({ groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
 /**
- * The FilterButton component is a button designed for initiating filtering of data. It includes
- * dropdown visuals for active filtering and idle states. it uses forwardRef to pass the button to
- * the dropdown trigger asChild.
+ * The FilterButton component is a button designed for initiating filtering of data. It is designed
+ * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
+ * asChild.
  *
  * @returns A button that can be used to filter.
  */
@@ -1186,6 +1190,7 @@ declare const Slider$1: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.S
 declare const Switch$1: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 
 export {
+	FilterDropdown as DropdownMenuItemType,
 	Slider$1 as ShadCnSlider,
 	Switch$1 as ShadCnSwitch,
 };

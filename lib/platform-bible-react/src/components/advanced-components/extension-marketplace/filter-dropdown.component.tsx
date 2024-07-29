@@ -10,16 +10,21 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import FilterButton from './buttons/filter-button.component';
 
-interface DropdownItem {
-  /** The label is the text that will be displayed on the dropdown item. */
-  label: string;
-  /** The checkbox boolean value determines if the item is a checkbox or radio item. */
-  checkbox: boolean;
-  /** The onClick function is called when the item is clicked. */
-  onClick: () => void;
+export enum DropdownMenuItemType {
+  Check,
+  Radio,
 }
 
-interface DropdownGroup {
+export type DropdownItem = {
+  /** The label is the text that will be displayed on the dropdown item. */
+  label: string;
+  /** The itemType determines if the item is a checkbox or radio item. */
+  itemType: DropdownMenuItemType;
+  /** The onClick function is called when the item is clicked. */
+  onClick: () => void;
+};
+
+export type DropdownGroup = {
   /**
    * The label is the text that will be displayed on the dropdown group. It is used to categorize
    * the items in the group.
@@ -27,12 +32,12 @@ interface DropdownGroup {
   label: string;
   /** The items array contains the items that will be displayed in the dropdown group */
   items: DropdownItem[];
-}
+};
 
-interface FilterDropdownProps {
+export type FilterDropdownProps = {
   /** The groups array contains the groups that will be displayed in the dropdown */
   groups: DropdownGroup[];
-}
+};
 
 /**
  * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
@@ -54,7 +59,7 @@ export default function FilterDropdown({ groups }: FilterDropdownProps) {
             <DropdownMenuGroup>
               {group.items.map((item) => (
                 <div>
-                  {item.checkbox ? (
+                  {item.itemType === DropdownMenuItemType.Check ? (
                     <DropdownMenuCheckboxItem onClick={item.onClick}>
                       {item.label}
                     </DropdownMenuCheckboxItem>

@@ -82,6 +82,11 @@ export { default as UpdateButton } from './components/advanced-components/extens
 export { default as MarkdownRenderer } from './components/advanced-components/extension-marketplace/markdown-renderer.component';
 export { default as FilterDropdown } from './components/advanced-components/extension-marketplace/filter-dropdown.component';
 export { default as FilterButton } from './components/advanced-components/extension-marketplace/buttons/filter-button.component';
+export type {
+  DropdownItem,
+  DropdownGroup,
+} from './components/advanced-components/extension-marketplace/filter-dropdown.component';
+export { default as DropdownMenuItemType } from './components/advanced-components/extension-marketplace/filter-dropdown.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
