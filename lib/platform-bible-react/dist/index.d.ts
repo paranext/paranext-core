@@ -774,17 +774,17 @@ export type NavigationContentSearchProps = {
 	isSearchBarFullWidth?: boolean;
 };
 export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
-/** Props for the List component, currently just children */
-export type ListProps = React$1.PropsWithChildren;
+/** Props for the SettingsList component, currently just children */
+export type SettingsListProps = React$1.PropsWithChildren;
 /**
- * List component is a wrapper for list items. Rendered with a formatted div
+ * SettingsList component is a wrapper for list items. Rendered with a formatted div
  *
  * @param children To populate the list with
  * @returns Formatted div encompassing the children
  */
-export declare function List({ children }: ListProps): import("react/jsx-runtime").JSX.Element;
-/** Props for ListItem component */
-export type ListItemProps = {
+export declare function SettingsList({ children }: SettingsListProps): import("react/jsx-runtime").JSX.Element;
+/** Props for SettingsListItem component */
+export type SettingsListItemProps = {
 	/** Primary text of the list item */
 	primary: string;
 	/** Optional text of the list item */
@@ -800,7 +800,7 @@ export type ListItemProps = {
 	loadingMessage?: string;
 };
 /**
- * ListItem component is a common list item. Rendered with a formatted div
+ * SettingsListItem component is a common list item. Rendered with a formatted div
  *
  * @param primary Primary text of the list item
  * @param secondary Optional secondary text of the list item
@@ -811,9 +811,9 @@ export type ListItemProps = {
  * @param loadingMessage Optional, message to display if isLoading
  * @returns Formatted div encompassing the list item content
  */
-export declare function ListItem({ primary, secondary, generateActionComponent, isLoading, loadingMessage, }: ListItemProps): import("react/jsx-runtime").JSX.Element;
-/** Props for ListHeader component */
-export type ListHeaderProps = {
+export declare function SettingsListItem({ primary, secondary, generateActionComponent, isLoading, loadingMessage, }: SettingsListItemProps): import("react/jsx-runtime").JSX.Element;
+/** Props for SettingsListHeader component */
+export type SettingsListHeaderProps = {
 	/** The primary text of the list header */
 	primary: string;
 	/** Optional secondary text of the list header */
@@ -822,7 +822,7 @@ export type ListHeaderProps = {
 	includeSeparator?: boolean;
 };
 /**
- * ListHeader component displays text above the list
+ * SettingsListHeader component displays text above the list
  *
  * @param primary The primary text of the list header
  * @param secondary Optional secondary text of the list header
@@ -830,7 +830,7 @@ export type ListHeaderProps = {
  *   Defaults to false
  * @returns Formatted div with list header content
  */
-export declare function ListHeader({ primary, secondary, includeSeparator }: ListHeaderProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
 export type SwitchProps = {
 	/** Optional unique identifier */
 	id?: string;

@@ -15,8 +15,7 @@ import MarketplaceButtonExamples from '@/preview/components/advanced/marketplace
 import ScriptureResultsViewerExample from '@/preview/components/advanced/scripture-results-viewer.examples.component';
 import { columns, data } from '@/preview/components/data-sources/data-table-content';
 import NavigationContentSearch from '@/components/advanced-components/navigation-content-search.component';
-import { List, ListItem, ListHeader } from '@/components/basics/list.component';
-import { Input } from '@/components/shadcn-ui/input';
+import SettingsListExamples from './advanced/settings-list.examples.component';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -61,13 +60,6 @@ function Compositions({ direction }: HasDirection) {
   const handleSearchChange = (newSearchValue: string) => {
     setSearchValue(newSearchValue);
   };
-  const generateComponent = (placeholder: string) => {
-    return (
-      <>
-        <Input placeholder={placeholder} />{' '}
-      </>
-    );
-  };
 
   return (
     <div>
@@ -87,7 +79,7 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Navigation Content Search">
             Navigation Content Search
           </VerticalTabsTrigger>
-          <VerticalTabsTrigger value="List">List</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Settings List">Settings Components</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
@@ -133,38 +125,12 @@ function Compositions({ direction }: HasDirection) {
             tabList={tabList}
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
+            isSearchBarFullWidth
           />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="List">
-          <List>
-            <ListHeader
-              primary="Settings"
-              secondary="User settings for styling the header"
-              includeSeparator
-            />
-            <ListItem
-              primary="Header color"
-              secondary="The color of the header"
-              generateActionComponent={() => generateComponent('Red')}
-              isLoading={false}
-              loadingMessage="Loading setting"
-            />
-            <ListItem
-              primary="Header size"
-              secondary="The size of the header"
-              generateActionComponent={() => generateComponent('56')}
-              isLoading
-              loadingMessage="Loading setting"
-            />
-            <ListItem
-              primary="Header bold"
-              secondary="Wether or not the header is bold"
-              generateActionComponent={() => generateComponent('color')}
-              isLoading={false}
-              loadingMessage="Loading setting"
-            />
-          </List>
+        <VerticalTabsContent value="Settings List">
+          <SettingsListExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

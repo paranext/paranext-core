@@ -87,6 +87,7 @@ function Basics({ direction }: HasDirection) {
         <VerticalTabsContent value="Table">
           <TableExamples />
         </VerticalTabsContent>
+
         <VerticalTabsContent value="ComboBox">
           <ComboBoxExamples />
         </VerticalTabsContent>

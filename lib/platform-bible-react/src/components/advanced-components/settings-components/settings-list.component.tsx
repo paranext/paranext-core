@@ -1,21 +1,21 @@
 import { PropsWithChildren, JSX } from 'react';
 import { Separator } from '@/components/shadcn-ui/separator';
 
-/** Props for the List component, currently just children */
-type ListProps = PropsWithChildren;
+/** Props for the SettingsList component, currently just children */
+type SettingsListProps = PropsWithChildren;
 
 /**
- * List component is a wrapper for list items. Rendered with a formatted div
+ * SettingsList component is a wrapper for list items. Rendered with a formatted div
  *
  * @param children To populate the list with
  * @returns Formatted div encompassing the children
  */
-export function List({ children }: ListProps) {
+export function SettingsList({ children }: SettingsListProps) {
   return <div className="pr-twp pr-grid">{children}</div>;
 }
 
-/** Props for ListItem component */
-type ListItemProps = {
+/** Props for SettingsListItem component */
+type SettingsListItemProps = {
   /** Primary text of the list item */
   primary: string;
 
@@ -36,7 +36,7 @@ type ListItemProps = {
 };
 
 /**
- * ListItem component is a common list item. Rendered with a formatted div
+ * SettingsListItem component is a common list item. Rendered with a formatted div
  *
  * @param primary Primary text of the list item
  * @param secondary Optional secondary text of the list item
@@ -47,13 +47,13 @@ type ListItemProps = {
  * @param loadingMessage Optional, message to display if isLoading
  * @returns Formatted div encompassing the list item content
  */
-export function ListItem({
+export function SettingsListItem({
   primary,
   secondary,
   generateActionComponent,
   isLoading = false,
   loadingMessage,
-}: ListItemProps) {
+}: SettingsListItemProps) {
   return (
     <div className="pr-flex pr-items-center pr-justify-between pr-space-x-4 pr-py-2">
       <div>
@@ -70,8 +70,8 @@ export function ListItem({
   );
 }
 
-/** Props for ListHeader component */
-type ListHeaderProps = {
+/** Props for SettingsListHeader component */
+type SettingsListHeaderProps = {
   /** The primary text of the list header */
   primary: string;
 
@@ -83,7 +83,7 @@ type ListHeaderProps = {
 };
 
 /**
- * ListHeader component displays text above the list
+ * SettingsListHeader component displays text above the list
  *
  * @param primary The primary text of the list header
  * @param secondary Optional secondary text of the list header
@@ -91,7 +91,11 @@ type ListHeaderProps = {
  *   Defaults to false
  * @returns Formatted div with list header content
  */
-export function ListHeader({ primary, secondary, includeSeparator = false }: ListHeaderProps) {
+export function SettingsListHeader({
+  primary,
+  secondary,
+  includeSeparator = false,
+}: SettingsListHeaderProps) {
   return (
     <div className="pr-space-y-4 pr-py-2">
       <div>

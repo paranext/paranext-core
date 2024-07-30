@@ -51,7 +51,11 @@ export {
   default as NavigationContentSearch,
   type TabKeyValueContent,
 } from './components/advanced-components/navigation-content-search.component';
-export { List, ListItem, ListHeader } from './components/basics/list.component';
+export {
+  SettingsList,
+  SettingsListHeader,
+  SettingsListItem,
+} from './components/advanced-components/settings-components/settings-list.component';
 export type {
   AnchorOrigin,
   CloseReason,
