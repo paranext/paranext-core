@@ -67,21 +67,21 @@ const createColumns = (
             <Button style={{ margin: 2 }}>
               <CircleCheckIcon
                 onClick={() => {
-                  statusChangeHandler(items, true);
+                  statusChangeHandler(items, 'approved');
                 }}
               />
             </Button>
             <Button style={{ margin: 2 }}>
               <CircleXIcon
                 onClick={() => {
-                  statusChangeHandler(items, false);
+                  statusChangeHandler(items, 'unapproved');
                 }}
               />
             </Button>
             <Button style={{ margin: 2 }}>
               <CircleHelpIcon
                 onClick={() => {
-                  statusChangeHandler(items, undefined);
+                  statusChangeHandler(items, 'unknown');
                 }}
               />
             </Button>
@@ -91,13 +91,15 @@ const createColumns = (
     },
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
-      if (status === true) {
-        return <CircleCheckIcon />;
+      switch (status) {
+        case 'approved':
+          return <CircleCheckIcon />;
+        case 'unapproved':
+          return <CircleXIcon />;
+        case 'unknown':
+        default:
+          return <CircleHelpIcon />;
       }
-      if (status === false) {
-        return <CircleXIcon />;
-      }
-      return <CircleHelpIcon />;
     },
   },
 ];
