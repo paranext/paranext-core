@@ -65,16 +65,19 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
     useMemo(() => '', []),
   );
 
+  const validItemsArray = useMemo(() => validItems.split(' '), [validItems]);
+  const invalidItemsArray = useMemo(() => invalidItems.split(' '), [invalidItems]);
+
   return (
     <InventoryVariant
       scriptureReference={scriptureRef}
       setScriptureReference={setScriptureRef}
       localizedStrings={localizedStrings}
-      approvedItems={validItems.split(' ')}
+      approvedItems={validItemsArray}
       onApprovedItemsChange={(items: string[]) => {
         if (setValidItems) setValidItems(items.join(' '));
       }}
-      unapprovedItems={invalidItems.split(' ')}
+      unapprovedItems={invalidItemsArray}
       onUnapprovedItemsChange={(items: string[]) => {
         if (setInvalidItems) setInvalidItems(items.join(' '));
       }}

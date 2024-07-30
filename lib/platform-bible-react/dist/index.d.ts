@@ -215,9 +215,9 @@ export interface InventoryProps {
 	text: string | undefined;
 	scope: string;
 	onScopeChange: (scope: string) => void;
-	columns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
+	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
 }
-export declare function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;

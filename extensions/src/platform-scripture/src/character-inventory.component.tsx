@@ -9,6 +9,7 @@ import {
   Status,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
+import { useCallback, useMemo } from 'react';
 
 const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_character%',
@@ -17,7 +18,7 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_status%',
 ];
 
-const buildColumns = (
+const createColumns = (
   itemLabel: string,
   unicodeValueLabel: string,
   countLabel: string,
@@ -150,15 +151,28 @@ function CharacterInventory({
   onScopeChange,
 }: CharacterInventoryProps) {
   const [characterInventoryStrings] = useLocalizedStrings(CHARACTER_INVENTORY_STRING_KEYS);
-  const itemLabel = characterInventoryStrings['%webView_inventory_table_header_character%'];
-  const unicodeValueLabel =
-    characterInventoryStrings['%webView_inventory_table_header_unicode_value%'];
-  const countLabel = characterInventoryStrings['%webView_inventory_table_header_count%'];
-  const statusLabel = characterInventoryStrings['%webView_inventory_table_header_status%'];
+  const itemLabel = useMemo(
+    () => characterInventoryStrings['%webView_inventory_table_header_character%'],
+    [characterInventoryStrings],
+  );
+  const unicodeValueLabel = useMemo(
+    () => characterInventoryStrings['%webView_inventory_table_header_unicode_value%'],
+    [characterInventoryStrings],
+  );
+  const countLabel = useMemo(
+    () => characterInventoryStrings['%webView_inventory_table_header_count%'],
+    [characterInventoryStrings],
+  );
+  const statusLabel = useMemo(
+    () => characterInventoryStrings['%webView_inventory_table_header_status%'],
+    [characterInventoryStrings],
+  );
 
-  const columns = (onStatusChange: (changedItems: string[], status: Status) => void) => {
-    return buildColumns(itemLabel, unicodeValueLabel, countLabel, statusLabel, onStatusChange);
-  };
+  const getColumns = useCallback(
+    (onStatusChange: (changedItems: string[], status: Status) => void) =>
+      createColumns(itemLabel, unicodeValueLabel, countLabel, statusLabel, onStatusChange),
+    [itemLabel, unicodeValueLabel, countLabel, statusLabel],
+  );
 
   return (
     <Inventory
@@ -173,7 +187,7 @@ function CharacterInventory({
       text={text}
       scope={scope}
       onScopeChange={onScopeChange}
-      columns={columns}
+      getColumns={getColumns}
     />
   );
 }

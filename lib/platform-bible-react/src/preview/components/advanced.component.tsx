@@ -74,7 +74,7 @@ function Compositions({ direction }: HasDirection) {
             scope=""
             onScopeChange={() => {}}
             text=""
-            columns={() => {
+            getColumns={() => {
               return [];
             }}
             extractItems={() => {

@@ -122,7 +122,9 @@ interface InventoryProps {
   text: string | undefined;
   scope: string;
   onScopeChange: (scope: string) => void;
-  columns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
+  getColumns: (
+    onStatusChange: (newItems: string[], status: Status) => void,
+  ) => ColumnDef<ItemData>[];
 }
 
 function Inventory({
@@ -137,7 +139,7 @@ function Inventory({
   text,
   scope,
   onScopeChange,
-  columns,
+  getColumns,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -153,43 +155,48 @@ function Inventory({
   const [textFilter, setTextFilter] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<string>('');
 
-  const statusChangeHandler = (changedItems: string[], status: Status) => {
-    setItems((prevTableData) => {
-      let tableData: ItemData[] = [];
-      changedItems.forEach((item) => {
-        tableData = prevTableData.map((tableEntry) => {
-          if (tableEntry.item === item && tableEntry.status !== status)
-            return { ...tableEntry, status };
-          return tableEntry;
+  const statusChangeHandler = useCallback(
+    (changedItems: string[], status: Status) => {
+      setItems((prevTableData) => {
+        let tableData: ItemData[] = [];
+        changedItems.forEach((item) => {
+          tableData = prevTableData.map((tableEntry) => {
+            if (tableEntry.item === item && tableEntry.status !== status)
+              return { ...tableEntry, status };
+            return tableEntry;
+          });
         });
+        return tableData;
       });
-      return tableData;
-    });
 
-    let newApprovedItems: string[] = [...approvedItems];
-    changedItems.forEach((item) => {
-      if (status === true) {
-        if (!newApprovedItems.includes(item)) {
-          newApprovedItems.push(item);
+      let newApprovedItems: string[] = [...approvedItems];
+      changedItems.forEach((item) => {
+        if (status === true) {
+          if (!newApprovedItems.includes(item)) {
+            newApprovedItems.push(item);
+          }
+        } else {
+          newApprovedItems = newApprovedItems.filter((validItem) => validItem !== item);
         }
-      } else {
-        newApprovedItems = newApprovedItems.filter((validItem) => validItem !== item);
-      }
-    });
-    onApprovedItemsChange(newApprovedItems);
+      });
+      onApprovedItemsChange(newApprovedItems);
 
-    let newUnapprovedItems: string[] = [...unapprovedItems];
-    changedItems.forEach((item) => {
-      if (status === false) {
-        if (!newUnapprovedItems.includes(item)) {
-          newUnapprovedItems.push(item);
+      let newUnapprovedItems: string[] = [...unapprovedItems];
+      changedItems.forEach((item) => {
+        if (status === false) {
+          if (!newUnapprovedItems.includes(item)) {
+            newUnapprovedItems.push(item);
+          }
+        } else {
+          newUnapprovedItems = newUnapprovedItems.filter(
+            (unapprovedItem) => unapprovedItem !== item,
+          );
         }
-      } else {
-        newUnapprovedItems = newUnapprovedItems.filter((unapprovedItem) => unapprovedItem !== item);
-      }
-    });
-    onUnapprovedItemsChange(newUnapprovedItems);
-  };
+      });
+      onUnapprovedItemsChange(newUnapprovedItems);
+    },
+    [approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange],
+  );
 
   const getStatusForItem = useCallback(
     (item: string): Status => {
@@ -219,6 +226,8 @@ function Inventory({
 
     setSelectedItem(row.getValue('item'));
   };
+
+  const columns = useMemo(() => getColumns(statusChangeHandler), [getColumns, statusChangeHandler]);
 
   return (
     <div className="pr-twp pr-flex pr-h-full pr-flex-col">
@@ -255,7 +264,7 @@ function Inventory({
       </div>
       <div className="pr-m-1 pr-flex-1 pr-overflow-auto pr-rounded-md pr-border">
         <DataTable
-          columns={columns(statusChangeHandler)}
+          columns={columns}
           data={filteredItemData}
           onRowClickHandler={rowClickHandler}
           stickyHeader

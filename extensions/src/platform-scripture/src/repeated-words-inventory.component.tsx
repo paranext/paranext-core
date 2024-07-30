@@ -9,6 +9,7 @@ import {
   Status,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
+import { useCallback, useMemo } from 'react';
 
 const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_repeated_words%',
@@ -16,7 +17,7 @@ const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_status%',
 ];
 
-const buildColumns = (
+const createColumns = (
   itemLabel: string,
   countLabel: string,
   statusLabel: string,
@@ -137,15 +138,24 @@ function RepeatedWordsInventory({
   onScopeChange,
 }: RepeatedWordsInventoryProps) {
   const [repeatedWordsInventoryStrings] = useLocalizedStrings(REPEATED_WORDS_INVENTORY_STRING_KEYS);
+  const itemLabel = useMemo(
+    () => repeatedWordsInventoryStrings['%webView_inventory_table_header_repeated_words%'],
+    [repeatedWordsInventoryStrings],
+  );
+  const countLabel = useMemo(
+    () => repeatedWordsInventoryStrings['%webView_inventory_table_header_count%'],
+    [repeatedWordsInventoryStrings],
+  );
+  const statusLabel = useMemo(
+    () => repeatedWordsInventoryStrings['%webView_inventory_table_header_status%'],
+    [repeatedWordsInventoryStrings],
+  );
 
-  const itemLabel =
-    repeatedWordsInventoryStrings['%webView_inventory_table_header_repeated_words%'];
-  const countLabel = repeatedWordsInventoryStrings['%webView_inventory_table_header_count%'];
-  const statusLabel = repeatedWordsInventoryStrings['%webView_inventory_table_header_status%'];
-
-  const columns = (onStatusChange: (changedItems: string[], status: Status) => void) => {
-    return buildColumns(itemLabel, countLabel, statusLabel, onStatusChange);
-  };
+  const getColumns = useCallback(
+    (onStatusChange: (changedItems: string[], status: Status) => void) =>
+      createColumns(itemLabel, countLabel, statusLabel, onStatusChange),
+    [itemLabel, countLabel, statusLabel],
+  );
 
   return (
     <Inventory
@@ -160,7 +170,7 @@ function RepeatedWordsInventory({
       text={text}
       scope={scope}
       onScopeChange={onScopeChange}
-      columns={columns}
+      getColumns={getColumns}
     />
   );
 }
