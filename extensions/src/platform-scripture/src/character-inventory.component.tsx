@@ -27,24 +27,20 @@ const createColumns = (
 ): ColumnDef<ItemData>[] => [
   {
     accessorKey: 'item',
-    header: ({ column }) => {
-      return (
-        <Button onClick={() => column.toggleSorting(undefined)}>
-          {itemLabel}
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      );
-    },
+    header: ({ column }) => (
+      <Button onClick={() => column.toggleSorting(undefined)}>
+        {itemLabel}
+        {getSortingIcon(column.getIsSorted())}
+      </Button>
+    ),
   },
   {
     accessorKey: 'unicodeValue',
     header: ({ column }) => {
-      return (
-        <Button onClick={() => column.toggleSorting(undefined)}>
-          {unicodeValueLabel}
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      );
+      <Button onClick={() => column.toggleSorting(undefined)}>
+        {unicodeValueLabel}
+        {getSortingIcon(column.getIsSorted())}
+      </Button>;
     },
     cell: ({ row }) => {
       const item: string = row.getValue('item');
@@ -53,14 +49,12 @@ const createColumns = (
   },
   {
     accessorKey: 'count',
-    header: ({ column }) => {
-      return (
-        <Button onClick={() => column.toggleSorting(undefined)}>
-          {countLabel}
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      );
-    },
+    header: ({ column }) => (
+      <Button onClick={() => column.toggleSorting(undefined)}>
+        {countLabel}
+        {getSortingIcon(column.getIsSorted())}
+      </Button>
+    ),
   },
   {
     accessorKey: 'status',
@@ -84,21 +78,21 @@ const createColumns = (
             <Button style={{ margin: 2 }}>
               <CircleCheckIcon
                 onClick={() => {
-                  statusChangeHandler(items, true);
+                  statusChangeHandler(items, 'approved');
                 }}
               />
             </Button>
             <Button style={{ margin: 2 }}>
               <CircleXIcon
                 onClick={() => {
-                  statusChangeHandler(items, false);
+                  statusChangeHandler(items, 'unapproved');
                 }}
               />
             </Button>
             <Button style={{ margin: 2 }}>
               <CircleHelpIcon
                 onClick={() => {
-                  statusChangeHandler(items, undefined);
+                  statusChangeHandler(items, 'unknown');
                 }}
               />
             </Button>
@@ -108,13 +102,15 @@ const createColumns = (
     },
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
-      if (status === true) {
-        return <CircleCheckIcon />;
+      switch (status) {
+        case 'approved':
+          return <CircleCheckIcon />;
+        case 'unapproved':
+          return <CircleXIcon />;
+        case 'unknown':
+        default:
+          return <CircleHelpIcon />;
       }
-      if (status === false) {
-        return <CircleXIcon />;
-      }
-      return <CircleHelpIcon />;
     },
   },
 ];
@@ -125,7 +121,7 @@ const extractItems = (text: string, item: string | undefined = undefined): strin
   return characters;
 };
 
-interface CharacterInventoryProps {
+type CharacterInventoryProps = {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
@@ -136,7 +132,7 @@ interface CharacterInventoryProps {
   text: string | undefined;
   scope: string;
   onScopeChange: (scope: string) => void;
-}
+};
 
 function CharacterInventory({
   scriptureReference,

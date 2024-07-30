@@ -43,25 +43,29 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
   let InventoryVariant;
   let validItemsSetting: keyof ProjectSettingTypes;
   let invalidItemsSetting: keyof ProjectSettingTypes;
-  if (webViewType === 'platformScripture.characterInventory') {
-    InventoryVariant = CharacterInventory;
-    validItemsSetting = 'platformScripture.validCharacters';
-    invalidItemsSetting = 'platformScripture.invalidCharacters';
-  } else if (webViewType === 'platformScripture.repeatedWordsInventory') {
-    InventoryVariant = RepeatedWordsInventory;
-    validItemsSetting = 'platformScripture.repeatableWords';
-    invalidItemsSetting = 'platformScripture.nonRepeatableWords';
-  } else {
-    throw new Error(`${webViewType} is not a valid inventory type`);
+  switch (webViewType) {
+    case 'platformScripture.characterInventory':
+      InventoryVariant = CharacterInventory;
+      validItemsSetting = 'platformScripture.validCharacters';
+      invalidItemsSetting = 'platformScripture.invalidCharacters';
+      break;
+    case 'platformScripture.repeatedWordsInventory':
+      InventoryVariant = RepeatedWordsInventory;
+      validItemsSetting = 'platformScripture.repeatableWords';
+      invalidItemsSetting = 'platformScripture.nonRepeatableWords';
+      break;
+    default:
+      throw new Error(`${webViewType} is not a valid inventory type`);
   }
 
   const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
   const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
   const [scope, setScope] = useState<string>('book');
   const [text] = usePromise(
-    useCallback(async () => {
-      return getText(scope, scriptureRef, projectId);
-    }, [scope, scriptureRef, projectId]),
+    useCallback(
+      async () => getText(scope, scriptureRef, projectId),
+      [scope, scriptureRef, projectId],
+    ),
     useMemo(() => '', []),
   );
 
@@ -74,13 +78,9 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
       setScriptureReference={setScriptureRef}
       localizedStrings={localizedStrings}
       approvedItems={validItemsArray}
-      onApprovedItemsChange={(items: string[]) => {
-        if (setValidItems) setValidItems(items.join(' '));
-      }}
+      onApprovedItemsChange={(items: string[]) => setValidItems?.(items.join(' '))}
       unapprovedItems={invalidItemsArray}
-      onUnapprovedItemsChange={(items: string[]) => {
-        if (setInvalidItems) setInvalidItems(items.join(' '));
-      }}
+      onUnapprovedItemsChange={(items: string[]) => setInvalidItems?.(items.join(' '))}
       text={text}
       scope={scope}
       onScopeChange={(newScope: string) => setScope(newScope)}

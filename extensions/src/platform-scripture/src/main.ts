@@ -141,11 +141,11 @@ export async function activate(context: ExecutionActivationContext) {
     );
 
   const characterInventoryWebViewProvider = new InventoryWebViewProvider(
-    'Character Inventory',
+    '%webView_characterInventory_title%',
     characterInventoryWebViewType,
   );
   const repeatedWordsInventoryWebViewProvider = new InventoryWebViewProvider(
-    'Repeated Words Inventory',
+    'webView_repeatedWordsInventory_title',
     repeatedWordsInventoryWebViewType,
   );
 

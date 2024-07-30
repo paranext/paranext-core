@@ -34,7 +34,7 @@ export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
-export type Status = true | false | undefined;
+export type Status = 'approved' | 'unapproved' | 'unknown';
 
 export type ItemData = {
   item: string;
@@ -62,9 +62,9 @@ const filterItemData = (
   if (statusFilter !== 'all') {
     filteredItemData = filteredItemData.filter(
       (item) =>
-        (statusFilter === 'approved' && item.status === true) ||
-        (statusFilter === 'unapproved' && item.status === false) ||
-        (statusFilter === 'unknown' && item.status === undefined),
+        (statusFilter === 'approved' && item.status === 'approved') ||
+        (statusFilter === 'unapproved' && item.status === 'unapproved') ||
+        (statusFilter === 'unknown' && item.status === 'unknown'),
     );
   }
 
@@ -171,7 +171,7 @@ function Inventory({
 
       let newApprovedItems: string[] = [...approvedItems];
       changedItems.forEach((item) => {
-        if (status === true) {
+        if (status === 'approved') {
           if (!newApprovedItems.includes(item)) {
             newApprovedItems.push(item);
           }
@@ -183,7 +183,7 @@ function Inventory({
 
       let newUnapprovedItems: string[] = [...unapprovedItems];
       changedItems.forEach((item) => {
-        if (status === false) {
+        if (status === 'unapproved') {
           if (!newUnapprovedItems.includes(item)) {
             newUnapprovedItems.push(item);
           }
@@ -200,9 +200,9 @@ function Inventory({
 
   const getStatusForItem = useCallback(
     (item: string): Status => {
-      if (approvedItems.includes(item)) return true;
-      if (unapprovedItems.includes(item)) return false;
-      return undefined;
+      if (approvedItems.includes(item)) return 'approved';
+      if (unapprovedItems.includes(item)) return 'unapproved';
+      return 'unknown';
     },
     [approvedItems, unapprovedItems],
   );

@@ -34,7 +34,7 @@ const extractOccurrences = (
   if (!text || text === '' || item === '') return [];
 
   const results: SearchResult[] = [];
-  const lines = text.split('\n');
+  const lines = text.split(/(\n|\[id|c|v])/);
 
   let currentChapter: number = scriptureRef.chapterNum;
   let currentVerse: number = scriptureRef.verseNum;

@@ -196,7 +196,7 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
-export type Status = true | false | undefined;
+export type Status = "approved" | "unapproved" | "unknown";
 export type ItemData = {
 	item: string;
 	count: number;
