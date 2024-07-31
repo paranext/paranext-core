@@ -14,6 +14,7 @@ import { useState } from 'react';
 import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
 import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
 import { columns, data } from './data-sources/data-table-content';
+import MarketplaceExamples from './advanced/marketplace.example.component';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -37,6 +38,7 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace Buttons">Marketplace Buttons</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Marketplace Components">Marketplace Components</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
         </VerticalTabsList>
@@ -56,6 +58,10 @@ function Compositions({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Marketplace Buttons">
           <MarketplaceButtonExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Marketplace Components">
+          <MarketplaceExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Result List">
