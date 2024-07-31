@@ -8,6 +8,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import { LocalizeKey } from 'platform-bible-utils';
 import ScriptureExtenderProjectDataProviderEngineFactory, {
   SCRIPTURE_EXTENDER_PDPF_ID,
 } from './project-data-provider/platform-scripture-extender-pdpef.model';
@@ -92,11 +93,11 @@ async function openInventory(
 }
 
 class InventoryWebViewProvider implements IWebViewProvider {
-  title: string;
+  titleKey: LocalizeKey;
   webViewType: string;
 
-  constructor(title: string, webViewType: string) {
-    this.title = title;
+  constructor(title: LocalizeKey, webViewType: string) {
+    this.titleKey = title;
     this.webViewType = webViewType;
   }
 
@@ -116,8 +117,12 @@ class InventoryWebViewProvider implements IWebViewProvider {
       (savedWebView.state?.projectId as string) ||
       undefined;
 
+    const title: string = await papi.localization.getLocalizedString({
+      localizeKey: this.titleKey,
+    });
+
     return {
-      title: this.title,
+      title,
       ...savedWebView,
       content: inventoryWebView,
       styles: inventoryWebViewStyles,
@@ -145,7 +150,7 @@ export async function activate(context: ExecutionActivationContext) {
     characterInventoryWebViewType,
   );
   const repeatedWordsInventoryWebViewProvider = new InventoryWebViewProvider(
-    'webView_repeatedWordsInventory_title',
+    '%webView_repeatedWordsInventory_title%',
     repeatedWordsInventoryWebViewType,
   );
 
