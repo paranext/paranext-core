@@ -36,12 +36,12 @@ const createColumns = (
   },
   {
     accessorKey: 'unicodeValue',
-    header: ({ column }) => {
+    header: ({ column }) => (
       <Button onClick={() => column.toggleSorting(undefined)}>
         {unicodeValueLabel}
         {getSortingIcon(column.getIsSorted())}
-      </Button>;
-    },
+      </Button>
+    ),
     cell: ({ row }) => {
       const item: string = row.getValue('item');
       return item.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');

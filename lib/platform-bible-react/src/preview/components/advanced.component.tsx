@@ -6,7 +6,6 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import Inventory from '@/components/advanced/inventory/inventory.component';
 import { HasDirection } from '@/preview/preview-components/direction-toggle';
 import ThemeToggle from '@/preview/preview-components/theme-toggle.component';
 import { ScriptureReference } from 'platform-bible-utils';
@@ -14,6 +13,7 @@ import { useState } from 'react';
 import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
 import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
 import { columns, data } from './data-sources/data-table-content';
+import InventoryExample from './advanced/inventory-example.component';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -63,24 +63,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Inventory">
-          <Inventory
-            scriptureReference={scrRef}
-            setScriptureReference={setScrRef}
-            localizedStrings={{}}
-            approvedItems={[]}
-            onApprovedItemsChange={() => {}}
-            unapprovedItems={[]}
-            onUnapprovedItemsChange={() => {}}
-            scope=""
-            onScopeChange={() => {}}
-            text=""
-            getColumns={() => {
-              return [];
-            }}
-            extractItems={() => {
-              return [];
-            }}
-          />
+          <InventoryExample />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
