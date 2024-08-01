@@ -34,25 +34,21 @@ const createColumns = (
 ): ColumnDef<ItemData>[] => [
   {
     accessorKey: 'item',
-    header: ({ column }) => {
-      return (
-        <Button onClick={() => column.toggleSorting(undefined)}>
-          Item
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      );
-    },
+    header: ({ column }) => (
+      <Button onClick={() => column.toggleSorting(undefined)}>
+        Item
+        {getSortingIcon(column.getIsSorted())}
+      </Button>
+    ),
   },
   {
     accessorKey: 'count',
-    header: ({ column }) => {
-      return (
-        <Button onClick={() => column.toggleSorting(undefined)}>
-          Count
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      );
-    },
+    header: ({ column }) => (
+      <Button onClick={() => column.toggleSorting(undefined)}>
+        Count
+        {getSortingIcon(column.getIsSorted())}
+      </Button>
+    ),
   },
   {
     accessorKey: 'status',
