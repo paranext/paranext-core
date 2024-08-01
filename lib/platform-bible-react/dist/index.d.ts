@@ -1052,6 +1052,9 @@ export type UpdateButtonProps = {
  */
 export function UpdateButton({ isUpdating, handleClick }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
 export interface MarkdownRendererProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The markdown string to render */
 	markdown: string;
 }
 /**
@@ -1059,9 +1062,10 @@ export interface MarkdownRendererProps {
  * the platform.
  *
  * @param markdown The markdown string to render.
+ * @param id Optional unique identifier
  * @returns A div containing the rendered markdown content.
  */
-export function MarkdownRenderer({ markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export function MarkdownRenderer({ id, markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
 export declare enum DropdownMenuItemType {
 	Check = 0,
 	Radio = 1
@@ -1103,6 +1107,92 @@ export function FilterDropdown({ groups }: FilterDropdownProps): import("react/j
  * @returns A button that can be used to filter.
  */
 export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
+export interface NoExtensionsFoundProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The message to display */
+	message: string;
+}
+/**
+ * This component displays a message to the user when no extensions are found in the marketplace.
+ *
+ * @param id Optional unique identifier
+ * @param message The message to display.
+ * @returns {JSX.Element} - Returns the message component that displays the message to the user.
+ */
+declare function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
+/** Interface that stores the parameters passed to the More Info component */
+export interface MoreInfoProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The category of the extension */
+	category: string;
+	/** The number of downloads for the extension */
+	downloads: Record<string, number>;
+	/** The languages supported by the extension */
+	languages: string[];
+	/** The URL to the more info page of the extension */
+	moreInfoUrl: string;
+}
+/**
+ * This component displays the more info section of the extension which includes the category,
+ * number of downloads, languages, and links to the website and support
+ *
+ * @param id Optional unique identifier
+ * @param category The category of the extension
+ * @param downloads The number of downloads for the extension
+ * @param languages The languages supported by the extension
+ * @param moreInfoUrl The URL to the more info page of the extension
+ * @returns {JSX.Element} - Returns the more info component that displays the category, number of
+ *   downloads, languages, and links to the website and support
+ */
+export function MoreInfo({ id, category, downloads, languages, moreInfoUrl, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
+export type VersionInformation = {
+	/** Date the version was published */
+	date: string;
+	/** Description of the changes in the version */
+	description: string;
+};
+/** Type to store the version history information */
+export type VersionHistoryType = Record<string, VersionInformation>;
+/** Interface that stores the parameters passed to the Version History component */
+export interface VersionHistoryProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** Object containing the versions mapped with their information */
+	versionHistory: VersionHistoryType;
+}
+/**
+ * Component to render the version history information shown in the footer component. Lists the 5
+ * most recent versions, with the options to show all versions by pressing a button.
+ *
+ * @param versionHistory Object containing the versions mapped with their information
+ * @param id Optional unique identifier
+ * @returns Rendered version history for the Footer component
+ */
+export function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
+/** Interface to store the parameters passed to the Footer component */
+export interface FooterProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** Name of the publisher */
+	publisherDisplayName: string;
+	/** Size of the extension file in bytes */
+	fileSize: number;
+	/** List of language codes supported by the extension */
+	locales: string[];
+	/** Object containing the version history mapped with their information */
+	versionHistory: VersionHistoryType;
+}
+/**
+ * Component to render the footer for the extension details which contains information on the
+ * publisher, version history, languages, and file size.
+ *
+ * @param extension Instance of the current Extension being shown
+ * @param id Optional unique identifier
+ * @returns The rendered Footer component
+ */
+export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
@@ -1190,6 +1280,7 @@ declare const Slider$1: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.S
 declare const Switch$1: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 
 export {
+	NoExtensionsFound as Message,
 	Slider$1 as ShadCnSlider,
 	Switch$1 as ShadCnSwitch,
 };
