@@ -1,7 +1,9 @@
 import { useState } from 'react';
 
 export type VersionInformation = {
+  /** Date the version was published */
   date: string;
+  /** Description of the changes in the version */
   description: string;
 };
 
@@ -57,17 +59,17 @@ export default function VersionHistory({ versionHistory }: VersionHistoryProps) 
 
   return (
     <div>
-      <h3 className="pr-font-semibold pr-text-md">Version History</h3>{' '}
-      <h5 className="pr-text-xs pr-text-gray-400 pr-ml-2">WHAT`S NEW</h5>
+      <h3 className="pr-text-md pr-font-semibold">Version History</h3>{' '}
+      <h5 className="pr-ml-2 pr-text-xs pr-text-gray-400">WHAT`S NEW</h5>
       <ul className="pr-list-disc pr-pl-5 pr-pr-4 pr-text-xs pr-text-gray-600">
         {(showAllVersions ? sortedEntries : sortedEntries.slice(0, 5)).map((entry) => (
-          <div key={entry[0]} className="pr-flex pr-justify-between pr-mt-3">
+          <div key={entry[0]} className="pr-mt-3 pr-flex pr-justify-between">
             <div className="pr-text-gray-600">
               <li className="pr-prose pr-text-xs">
                 <span>{entry[1].description}</span>
               </li>
             </div>
-            <div className="pr-text-right pr-justify-end">
+            <div className="pr-justify-end pr-text-right">
               <div>Version {entry[0]}</div>
               <div>{formatTimeString(entry[1].date)}</div>
             </div>
@@ -78,7 +80,7 @@ export default function VersionHistory({ versionHistory }: VersionHistoryProps) 
         <button
           type="button"
           onClick={() => setShowAllVersions(!showAllVersions)}
-          className="pr-text-gray-500 pr-text-xs pr-underline"
+          className="pr-text-xs pr-text-gray-500 pr-underline"
         >
           {showAllVersions ? 'Show Less' : 'Show More'}
         </button>

@@ -1,11 +1,15 @@
-import VersionHistory from './version-history.component';
+import VersionHistory, { VersionHistoryType } from './version-history.component';
 
 /** Interface to store the parameters passed to the Footer component */
 interface FooterProps {
+  /** Name of the publisher */
   publisherDisplayName: string;
+  /** Size of the extension file in bytes */
   fileSize: number;
+  /** List of language codes supported by the extension */
   locales: string[];
-  versionHistory: Record<string, { date: string; description: string }>;
+  /** Object containing the version history mapped with their information */
+  versionHistory: VersionHistoryType;
 }
 
 /**
@@ -29,20 +33,20 @@ export default function Footer({
   const languageNames = getLanguageNames(locales);
 
   return (
-    <div className="pr-border-t pr-pt-4 pr-pb-4">
-      <div className="pr-flex pr-flex-col pr-md:flex-row pr-space-x-0 pr-md:space-x-8">
+    <div className="pr-border-t pr-pb-4 pr-pt-4">
+      <div className="pr-md:flex-row pr-md:space-x-8 pr-flex pr-flex-col pr-space-x-0">
         <VersionHistory versionHistory={versionHistory} />
-        <div className="pr-border-t pr-border-gray-300 pr-mt-4 pr-md:border-t-0 pr-md:border-l pr-md-h-auto pr-md-ml-8" />
-        <div className="pr-flex-1 pr-mt-4 pr-md:mt-0 pr-space-y-3">
-          <h2 className="pr-font-semibold pr-text-md">Information</h2>
-          <div className="pr-flex pr-justify-between pr-items-start pr-text-xs pr-text-gray-600 pr-pr-4">
+        <div className="pr-md:border-t-0 pr-md:border-l pr-md-h-auto pr-md-ml-8 pr-mt-4 pr-border-t pr-border-gray-300" />
+        <div className="pr-md:mt-0 pr-mt-4 pr-flex-1 pr-space-y-3">
+          <h2 className="pr-text-md pr-font-semibold">Information</h2>
+          <div className="pr-flex pr-items-start pr-justify-between pr-pr-4 pr-text-xs pr-text-gray-600">
             <p className="pr-flex pr-flex-col pr-justify-start">
               <span className="pr-mb-2">Publisher</span>
               <span className="pr-font-semibold">{publisherDisplayName}</span>
               <span className="pr-mb-2 pr-mt-4">Size</span>
               <span className="pr-font-semibold">{(fileSize / 1000000).toPrecision(3)} MB</span>
             </p>
-            <div className="pr-flex pr-justify-between pr-items-center pr-text-xs pr-text-gray-600 pr-w-3/4">
+            <div className="pr-flex pr-w-3/4 pr-items-center pr-justify-between pr-text-xs pr-text-gray-600">
               <p className="pr-flex pr-flex-col pr-justify-start">
                 <span className="pr-mb-2">Languages</span>
                 <span className="pr-font-semibold">{languageNames.join(', ')}</span>

@@ -89,10 +89,11 @@ export {
 export { default as FilterButton } from './components/advanced-components/extension-marketplace/buttons/filter-button.component';
 export { default as Message } from './components/advanced-components/extension-marketplace/message.component';
 export { default as MoreInfo } from './components/advanced-components/extension-marketplace/more-info.component';
-export { default as VersionHistory,
+export {
+  default as VersionHistory,
   type VersionInformation,
   type VersionHistoryType,
- } from './components/advanced-components/extension-marketplace/version-history.component';
+} from './components/advanced-components/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced-components/extension-marketplace/footer.component';
 
 // Hooks
