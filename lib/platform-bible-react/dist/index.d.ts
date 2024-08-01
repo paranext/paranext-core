@@ -1026,7 +1026,7 @@ export type DisableButtonProps = {
 	isDisabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
-};
+} & ButtonProps;
 /**
  * The DisableButton component is a button designed for initiating disabling of downloads. It
  * includes visuals for active disabling and idle states.
@@ -1035,7 +1035,7 @@ export type DisableButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to disable.
  */
-export function DisableButton({ isDisabling, handleClick }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
+export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
 export type UpdateButtonProps = {
 	/** The updating boolean value determines the state of the button. */
 	isUpdating: boolean;
