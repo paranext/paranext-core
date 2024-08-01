@@ -2,6 +2,8 @@ import { CircleHelp, Link as LucideLink, User } from 'lucide-react';
 
 /** Interface that stores the parameters passed to the More Info component */
 interface MoreInfoProps {
+  /** Optional unique identifier */
+  id?: string;
   /** The category of the extension */
   category: string;
   /** The number of downloads for the extension */
@@ -15,6 +17,7 @@ interface MoreInfoProps {
  * This component displays the more info section of the extension which includes the category,
  * number of downloads, languages, and links to the website and support
  *
+ * @param id Optional unique identifier
  * @param category The category of the extension
  * @param downloads The number of downloads for the extension
  * @param languages The languages supported by the extension
@@ -22,13 +25,22 @@ interface MoreInfoProps {
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */
-export default function MoreInfo({ category, downloads, languages, moreInfoUrl }: MoreInfoProps) {
+export default function MoreInfo({
+  id,
+  category,
+  downloads,
+  languages,
+  moreInfoUrl,
+}: MoreInfoProps) {
   const handleScrollToBottom = () => {
     window.scrollTo(0, document.body.scrollHeight);
   };
 
   return (
-    <div className="pr-flex pr-flex-wrap pr-items-start pr-space-x-4 pr-border-b pr-border-t pr-bg-white pr-pb-4 pr-pt-4">
+    <div
+      id={id}
+      className="pr-flex pr-flex-wrap pr-items-start pr-space-x-4 pr-border-b pr-border-t pr-bg-white pr-pb-4 pr-pt-4"
+    >
       <div className="pr-flex pr-flex-col pr-items-center">
         <div className="pr-flex pr-items-center pr-rounded-md pr-bg-gray-100 pr-px-2 pr-py-1">
           <span className="pr-text-xs pr-font-semibold pr-text-gray-700">{category}</span>

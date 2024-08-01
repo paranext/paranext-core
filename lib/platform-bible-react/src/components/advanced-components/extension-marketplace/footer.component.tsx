@@ -2,6 +2,8 @@ import VersionHistory, { VersionHistoryType } from './version-history.component'
 
 /** Interface to store the parameters passed to the Footer component */
 interface FooterProps {
+  /** Optional unique identifier */
+  id?: string;
   /** Name of the publisher */
   publisherDisplayName: string;
   /** Size of the extension file in bytes */
@@ -17,9 +19,11 @@ interface FooterProps {
  * publisher, version history, languages, and file size.
  *
  * @param extension Instance of the current Extension being shown
+ * @param id Optional unique identifier
  * @returns The rendered Footer component
  */
 export default function Footer({
+  id,
   publisherDisplayName,
   fileSize,
   locales,
@@ -33,7 +37,7 @@ export default function Footer({
   const languageNames = getLanguageNames(locales);
 
   return (
-    <div className="pr-border-t pr-pb-4 pr-pt-4">
+    <div id={id} className="pr-border-t pr-pb-4 pr-pt-4">
       <div className="pr-md:flex-row pr-md:space-x-8 pr-flex pr-flex-col pr-space-x-0">
         <VersionHistory versionHistory={versionHistory} />
         <div className="pr-md:border-t-0 pr-md:border-l pr-md-h-auto pr-md-ml-8 pr-mt-4 pr-border-t pr-border-gray-300" />

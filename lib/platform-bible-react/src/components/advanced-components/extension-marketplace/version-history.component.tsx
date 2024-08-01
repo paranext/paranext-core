@@ -12,6 +12,9 @@ export type VersionHistoryType = Record<string, VersionInformation>;
 
 /** Interface that stores the parameters passed to the Version History component */
 interface VersionHistoryProps {
+  /** Optional unique identifier */
+  id?: string;
+  /** Object containing the versions mapped with their information */
   versionHistory: VersionHistoryType;
 }
 
@@ -20,9 +23,10 @@ interface VersionHistoryProps {
  * most recent versions, with the options to show all versions by pressing a button.
  *
  * @param versionHistory Object containing the versions mapped with their information
+ * @param id Optional unique identifier
  * @returns Rendered version history for the Footer component
  */
-export default function VersionHistory({ versionHistory }: VersionHistoryProps) {
+export default function VersionHistory({ id, versionHistory }: VersionHistoryProps) {
   const [showAllVersions, setShowAllVersions] = useState(false);
   const currentDate = new Date();
 
@@ -58,9 +62,8 @@ export default function VersionHistory({ versionHistory }: VersionHistoryProps) 
   const sortedEntries = Object.entries(versionHistory).sort((a, b) => b[0].localeCompare(a[0]));
 
   return (
-    <div>
-      <h3 className="pr-text-md pr-font-semibold">Version History</h3>{' '}
-      <h5 className="pr-ml-2 pr-text-xs pr-text-gray-400">WHAT`S NEW</h5>
+    <div id={id}>
+      <h3 className="pr-text-md pr-font-semibold">What`s New</h3>
       <ul className="pr-list-disc pr-pl-5 pr-pr-4 pr-text-xs pr-text-gray-600">
         {(showAllVersions ? sortedEntries : sortedEntries.slice(0, 5)).map((entry) => (
           <div key={entry[0]} className="pr-mt-3 pr-flex pr-justify-between">
@@ -82,7 +85,7 @@ export default function VersionHistory({ versionHistory }: VersionHistoryProps) 
           onClick={() => setShowAllVersions(!showAllVersions)}
           className="pr-text-xs pr-text-gray-500 pr-underline"
         >
-          {showAllVersions ? 'Show Less' : 'Show More'}
+          {showAllVersions ? 'Show Less Version History' : 'Show All Version History'}
         </button>
       )}
     </div>
