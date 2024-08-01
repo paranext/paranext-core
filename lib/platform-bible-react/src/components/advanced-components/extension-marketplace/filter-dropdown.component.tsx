@@ -1,5 +1,6 @@
 import {
   DropdownMenu,
+  DropdownMenuContentProps,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuLabel,
@@ -39,7 +40,7 @@ export type FilterDropdownProps = {
   id?: string;
   /** The groups array contains the groups that will be displayed in the dropdown */
   groups: DropdownGroup[];
-};
+} & DropdownMenuContentProps;
 
 /**
  * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
@@ -49,14 +50,15 @@ export type FilterDropdownProps = {
  * @param groups The groups array contains the groups that will be displayed in the dropdown
  * @returns A filter dropdown.
  */
-export default function FilterDropdown({ id, groups }: FilterDropdownProps) {
+export default function FilterDropdown({ id, groups, className, ...props }: FilterDropdownProps) {
   return (
     <div id={id}>
+      {/* TODO: remove this once the DropDown Menu shadcn has an id prop */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <FilterButton />
         </DropdownMenuTrigger>
-        <DropdownMenuContent>
+        <DropdownMenuContent className={className} {...props}>
           {groups.map((group) => (
             <div key={group.label}>
               <DropdownMenuLabel>{group.label}</DropdownMenuLabel>

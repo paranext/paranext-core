@@ -1092,7 +1092,7 @@ export type FilterDropdownProps = {
 	id?: string;
 	/** The groups array contains the groups that will be displayed in the dropdown */
 	groups: DropdownGroup[];
-};
+} & DropdownMenuContentProps;
 /**
  * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
  * items that can be checkboxes or radio items.
@@ -1101,7 +1101,7 @@ export type FilterDropdownProps = {
  * @param groups The groups array contains the groups that will be displayed in the dropdown
  * @returns A filter dropdown.
  */
-export function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
+export function FilterDropdown({ id, groups, className, ...props }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The FilterButton component is a button designed for initiating filtering of data. It is designed
  * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
