@@ -87,7 +87,7 @@ export {
   type DropdownGroup,
 } from './components/advanced-components/extension-marketplace/filter-dropdown.component';
 export { default as FilterButton } from './components/advanced-components/extension-marketplace/buttons/filter-button.component';
-export { default as Message } from './components/advanced-components/extension-marketplace/message.component';
+export { default as Message } from './components/advanced-components/extension-marketplace/no-extensions-found.component';
 export { default as MoreInfo } from './components/advanced-components/extension-marketplace/more-info.component';
 export {
   default as VersionHistory,

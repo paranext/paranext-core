@@ -1,5 +1,5 @@
 import Footer from '@/components/advanced-components/extension-marketplace/footer.component';
-import Message from '@/components/advanced-components/extension-marketplace/message.component';
+import NoExtensionsFound from '@/components/advanced-components/extension-marketplace/no-extensions-found.component';
 import MoreInfo from '@/components/advanced-components/extension-marketplace/more-info.component';
 
 export default function MarketplaceExamples() {
@@ -17,7 +17,7 @@ export default function MarketplaceExamples() {
         locales={['es', 'en', 'fr', 'ur']}
         versionHistory={{ '1.0': { date: '2021-01-01', description: 'Initial release' } }}
       />
-      <Message message="Hello World" />
+      <NoExtensionsFound message="No extensions found" />
     </div>
   );
 }

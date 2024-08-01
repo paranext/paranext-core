@@ -1103,16 +1103,16 @@ export function FilterDropdown({ groups }: FilterDropdownProps): import("react/j
  * @returns A button that can be used to filter.
  */
 export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
-export interface MessageProps {
+export interface NoExtensionsFoundProps {
 	message: string;
 }
 /**
- * This component displays a message to the user.
+ * This component displays a message to the user when no extensions are found in the marketplace.
  *
  * @param message The message to display.
  * @returns {JSX.Element} - Returns the message component that displays the message to the user.
  */
-export function Message({ message }: MessageProps): import("react/jsx-runtime").JSX.Element;
+declare function NoExtensionsFound({ message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
 /** Interface that stores the parameters passed to the More Info component */
 export interface MoreInfoProps {
 	/** The category of the extension */
@@ -1262,6 +1262,7 @@ declare const Slider$1: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.S
 declare const Switch$1: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 
 export {
+	NoExtensionsFound as Message,
 	Slider$1 as ShadCnSlider,
 	Switch$1 as ShadCnSwitch,
 };
