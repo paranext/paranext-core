@@ -1103,6 +1103,78 @@ export function FilterDropdown({ groups }: FilterDropdownProps): import("react/j
  * @returns A button that can be used to filter.
  */
 export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
+export interface MessageProps {
+	message: string;
+}
+/**
+ * This component displays a message to the user.
+ *
+ * @param message The message to display.
+ * @returns {JSX.Element} - Returns the message component that displays the message to the user.
+ */
+export function Message({ message }: MessageProps): import("react/jsx-runtime").JSX.Element;
+/** Interface that stores the parameters passed to the More Info component */
+export interface MoreInfoProps {
+	/** The category of the extension */
+	category: string;
+	/** The number of downloads for the extension */
+	downloads: Record<string, number>;
+	/** The languages supported by the extension */
+	languages: string[];
+	/** The URL to the more info page of the extension */
+	moreInfoUrl: string;
+}
+/**
+ * This component displays the more info section of the extension which includes the category,
+ * number of downloads, languages, and links to the website and support
+ *
+ * @param category The category of the extension
+ * @param downloads The number of downloads for the extension
+ * @param languages The languages supported by the extension
+ * @param moreInfoUrl The URL to the more info page of the extension
+ * @returns {JSX.Element} - Returns the more info component that displays the category, number of
+ *   downloads, languages, and links to the website and support
+ */
+export function MoreInfo({ category, downloads, languages, moreInfoUrl }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
+export type VersionInformation = {
+	/** Date the version was published */
+	date: string;
+	/** Description of the changes in the version */
+	description: string;
+};
+/** Type to store the version history information */
+export type VersionHistoryType = Record<string, VersionInformation>;
+/** Interface that stores the parameters passed to the Version History component */
+export interface VersionHistoryProps {
+	versionHistory: VersionHistoryType;
+}
+/**
+ * Component to render the version history information shown in the footer component. Lists the 5
+ * most recent versions, with the options to show all versions by pressing a button.
+ *
+ * @param versionHistory Object containing the versions mapped with their information
+ * @returns Rendered version history for the Footer component
+ */
+export function VersionHistory({ versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
+/** Interface to store the parameters passed to the Footer component */
+export interface FooterProps {
+	/** Name of the publisher */
+	publisherDisplayName: string;
+	/** Size of the extension file in bytes */
+	fileSize: number;
+	/** List of language codes supported by the extension */
+	locales: string[];
+	/** Object containing the version history mapped with their information */
+	versionHistory: VersionHistoryType;
+}
+/**
+ * Component to render the footer for the extension details which contains information on the
+ * publisher, version history, languages, and file size.
+ *
+ * @param extension Instance of the current Extension being shown
+ * @returns The rendered Footer component
+ */
+export function Footer({ publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
