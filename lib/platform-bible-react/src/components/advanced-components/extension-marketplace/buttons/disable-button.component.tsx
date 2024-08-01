@@ -3,6 +3,8 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { LoaderCircle } from 'lucide-react';
 
 type DisableButtonProps = {
+  /** Object unique identifier */
+  id?: string;
   /** The disabling boolean value determines the state of the button. */
   isDisabling: boolean;
   /** The handleClick function is called when the button is clicked. */
@@ -13,11 +15,13 @@ type DisableButtonProps = {
  * The DisableButton component is a button designed for initiating disabling of downloads. It
  * includes visuals for active disabling and idle states.
  *
+ * @param id Optional unique identifier
  * @param isDisabling The disabling boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to disable.
  */
 export default function DisableButton({
+  id,
   isDisabling,
   handleClick,
   className,
@@ -25,6 +29,7 @@ export default function DisableButton({
 }: DisableButtonProps) {
   return (
     <Button
+      id={id}
       className={cn(
         'pr-h-8 pr-rounded-md pr-bg-gray-300 pr-text-black pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-gray-400',
         {

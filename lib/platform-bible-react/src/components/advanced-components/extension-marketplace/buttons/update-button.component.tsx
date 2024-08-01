@@ -3,6 +3,8 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { LoaderCircle } from 'lucide-react';
 
 type UpdateButtonProps = {
+  /** Object unique identifier */
+  id?: string;
   /** The updating boolean value determines the state of the button. */
   isUpdating: boolean;
   /** The handleClick function is called when the button is clicked. */
@@ -13,11 +15,13 @@ type UpdateButtonProps = {
  * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
  * It includes visuals for active updating and idle states.
  *
+ * @param id Optional unique identifier
  * @param isUpdating The updating boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to update.
  */
 export default function UpdateButton({
+  id,
   isUpdating,
   handleClick,
   className,
@@ -25,6 +29,7 @@ export default function UpdateButton({
 }: UpdateButtonProps) {
   return (
     <Button
+      id={id}
       className={cn(
         'pr-h-8 pr-rounded-md pr-bg-blue-600 pr-px-4 pr-text-white pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-blue-700 hover:pr-text-white',
         {
