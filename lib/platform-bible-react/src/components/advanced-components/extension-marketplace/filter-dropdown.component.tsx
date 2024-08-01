@@ -35,6 +35,8 @@ export type DropdownGroup = {
 };
 
 export type FilterDropdownProps = {
+  /** Optional unique identifier */
+  id?: string;
   /** The groups array contains the groups that will be displayed in the dropdown */
   groups: DropdownGroup[];
 };
@@ -43,38 +45,41 @@ export type FilterDropdownProps = {
  * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
  * items that can be checkboxes or radio items.
  *
+ * @param id Optional unique identifier
  * @param groups The groups array contains the groups that will be displayed in the dropdown
  * @returns A filter dropdown.
  */
-export default function FilterDropdown({ groups }: FilterDropdownProps) {
+export default function FilterDropdown({ id, groups }: FilterDropdownProps) {
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <FilterButton />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent>
-        {groups.map((group) => (
-          <div key={group.label}>
-            <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-            <DropdownMenuGroup>
-              {group.items.map((item) => (
-                <div key={item.label}>
-                  {item.itemType === DropdownMenuItemType.Check ? (
-                    <DropdownMenuCheckboxItem onClick={item.onClick}>
-                      {item.label}
-                    </DropdownMenuCheckboxItem>
-                  ) : (
-                    <DropdownMenuRadioItem onClick={item.onClick} value={item.label}>
-                      {item.label}
-                    </DropdownMenuRadioItem>
-                  )}
-                </div>
-              ))}
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-          </div>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div id={id}>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <FilterButton />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent>
+          {groups.map((group) => (
+            <div key={group.label}>
+              <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
+              <DropdownMenuGroup>
+                {group.items.map((item) => (
+                  <div key={item.label}>
+                    {item.itemType === DropdownMenuItemType.Check ? (
+                      <DropdownMenuCheckboxItem onClick={item.onClick}>
+                        {item.label}
+                      </DropdownMenuCheckboxItem>
+                    ) : (
+                      <DropdownMenuRadioItem onClick={item.onClick} value={item.label}>
+                        {item.label}
+                      </DropdownMenuRadioItem>
+                    )}
+                  </div>
+                ))}
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+            </div>
+          ))}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }
