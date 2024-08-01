@@ -1,4 +1,4 @@
-import { Button } from '@/components/shadcn-ui/button';
+import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Download, LoaderCircle } from 'lucide-react';
 
@@ -9,7 +9,7 @@ type InstallButtonProps = {
   handleClick: () => void;
   /** Optional text for the button. */
   buttonText?: string;
-};
+} & ButtonProps;
 
 /**
  * The InstallButton component is a button designed for initiating installs. It includes visuals for
@@ -24,6 +24,8 @@ export default function InstallButton({
   isInstalling,
   handleClick,
   buttonText,
+  className,
+  ...props
 }: InstallButtonProps) {
   return (
     <Button
@@ -35,8 +37,10 @@ export default function InstallButton({
           'pr-bg-white pr-text-blue-600 hover:pr-text-white': !buttonText,
           'pr-w-20': buttonText,
         },
+        className,
       )}
       onClick={handleClick}
+      {...props}
     >
       {isInstalling ? (
         <LoaderCircle size={15} className="pr-animate-spin" />

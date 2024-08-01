@@ -995,7 +995,7 @@ export type InstallButtonProps = {
 	handleClick: () => void;
 	/** Optional text for the button. */
 	buttonText?: string;
-};
+} & ButtonProps;
 /**
  * The InstallButton component is a button designed for initiating installs. It includes visuals for
  * active installing and idle states.
@@ -1005,13 +1005,13 @@ export type InstallButtonProps = {
  * @param buttonText Optional text for the button.
  * @returns A install button.
  */
-export function InstallButton({ isInstalling, handleClick, buttonText, }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
+export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
 export type EnableButtonProps = {
 	/** The enabling boolean value determines the state of the button. */
 	isEnabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
-};
+} & ButtonProps;
 /**
  * The EnableButton component is a button designed for initiating enabling of downloads. It includes
  * visuals for active enabling and idle states.
@@ -1020,13 +1020,13 @@ export type EnableButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to enable.
  */
-export function EnableButton({ isEnabling, handleClick }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
+export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
 export type DisableButtonProps = {
 	/** The disabling boolean value determines the state of the button. */
 	isDisabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
-};
+} & ButtonProps;
 /**
  * The DisableButton component is a button designed for initiating disabling of downloads. It
  * includes visuals for active disabling and idle states.
@@ -1035,13 +1035,13 @@ export type DisableButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to disable.
  */
-export function DisableButton({ isDisabling, handleClick }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
+export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
 export type UpdateButtonProps = {
 	/** The updating boolean value determines the state of the button. */
 	isUpdating: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
-};
+} & ButtonProps;
 /**
  * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
  * It includes visuals for active updating and idle states.
@@ -1050,7 +1050,7 @@ export type UpdateButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to update.
  */
-export function UpdateButton({ isUpdating, handleClick }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
+export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
 export interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -1120,7 +1120,7 @@ export interface NoExtensionsFoundProps {
  * @param message The message to display.
  * @returns {JSX.Element} - Returns the message component that displays the message to the user.
  */
-declare function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
+export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
 /** Interface that stores the parameters passed to the More Info component */
 export interface MoreInfoProps {
 	/** Optional unique identifier */
@@ -1280,7 +1280,6 @@ declare const Slider$1: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.S
 declare const Switch$1: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 
 export {
-	NoExtensionsFound as Message,
 	Slider$1 as ShadCnSlider,
 	Switch$1 as ShadCnSwitch,
 };
