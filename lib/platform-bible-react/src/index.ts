@@ -95,6 +95,14 @@ export {
   type DropdownGroup,
 } from './components/advanced-components/extension-marketplace/filter-dropdown.component';
 export { default as FilterButton } from './components/advanced-components/extension-marketplace/buttons/filter-button.component';
+export { default as Message } from './components/advanced-components/extension-marketplace/no-extensions-found.component';
+export { default as MoreInfo } from './components/advanced-components/extension-marketplace/more-info.component';
+export {
+  default as VersionHistory,
+  type VersionInformation,
+  type VersionHistoryType,
+} from './components/advanced-components/extension-marketplace/version-history.component';
+export { default as Footer } from './components/advanced-components/extension-marketplace/footer.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

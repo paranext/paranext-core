@@ -13,6 +13,7 @@ import { useState } from 'react';
 import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
 import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
 import { columns, data } from './data-sources/data-table-content';
+import MarketplaceExamples from './advanced/marketplace.example.component';
 import InventoryExample from './advanced/inventory-example.component';
 
 const defaultScrRef: ScriptureReference = {
@@ -36,7 +37,7 @@ function Compositions({ direction }: HasDirection) {
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Marketplace Buttons">Marketplace Buttons</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
         </VerticalTabsList>
@@ -54,8 +55,25 @@ function Compositions({ direction }: HasDirection) {
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Marketplace Buttons">
-          <MarketplaceButtonExamples />
+        <VerticalTabsContent value="Marketplace">
+          <VerticalTabs dir={direction}>
+            <VerticalTabsList>
+              <VerticalTabsTrigger value="Marketplace Buttons">
+                Marketplace Buttons
+              </VerticalTabsTrigger>
+              <VerticalTabsTrigger value="Marketplace Components">
+                Marketplace Components
+              </VerticalTabsTrigger>
+            </VerticalTabsList>
+
+            <VerticalTabsContent value="Marketplace Buttons">
+              <MarketplaceButtonExamples />
+            </VerticalTabsContent>
+
+            <VerticalTabsContent value="Marketplace Components">
+              <MarketplaceExamples />
+            </VerticalTabsContent>
+          </VerticalTabs>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Result List">

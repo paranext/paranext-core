@@ -979,19 +979,18 @@ async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | 
  * @param extensions - Extension info for the extensions we want to deactivate.
  * @returns An array of the deactivation results - `true`, `false`, or `undefined`.
  */
-function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | undefined)[]> {
-  return Promise.all(
-    extensions.map(async (extension) => {
-      try {
-        const isDeactivated = await deactivateExtension(extension);
-        if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
-        return isDeactivated;
-      } catch (e) {
-        logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
-        return false;
-      }
-    }),
-  );
+async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> {
+  // We want to deactivate extensions sequentially in opposite order of which they were activated
+  // eslint-disable-next-line no-restricted-syntax
+  for (const extension of [...extensions].reverse()) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const isDeactivated = await deactivateExtension(extension);
+      if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+    } catch (e) {
+      logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
+    }
+  }
 }
 
 async function resyncContributions(
