@@ -20,6 +20,7 @@ internal static class SerializationOptions
                 WriteIndented = false, // No need to waste bytes with nice formatting
                 IgnoreReadOnlyProperties = false, // Need types to be serialized
             };
+        options.Converters.Add(new VerseRefConverterBetter());
         return options;
     }
 }

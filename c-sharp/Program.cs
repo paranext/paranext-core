@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.NetworkObjects;
@@ -25,7 +26,8 @@ public static class Program
 
             var paratextProjects = new LocalParatextProjects();
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
-            await Task.WhenAll(paratextFactory.Initialize());
+            var checkRunner = new CheckRunner(papi);
+            await Task.WhenAll(paratextFactory.Initialize(), checkRunner.RegisterDataProvider());
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");

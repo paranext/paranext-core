@@ -179,7 +179,7 @@ export async function activate(context: ExecutionActivationContext) {
         logger.debug('Testing out checks: No projects available');
         return;
       }
-      const projectId = projectMetadata[0].id;
+      const projectId = '45eff14875b6fc356a3cadb5306d40c279deec25';
       await Promise.all(
         checks.map(async (checkDetails) => {
           try {
