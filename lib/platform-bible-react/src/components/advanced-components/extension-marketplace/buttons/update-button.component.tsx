@@ -1,4 +1,4 @@
-import { Button } from '@/components/shadcn-ui/button';
+import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui.util';
 import { LoaderCircle } from 'lucide-react';
 
@@ -7,7 +7,7 @@ type UpdateButtonProps = {
   isUpdating: boolean;
   /** The handleClick function is called when the button is clicked. */
   handleClick: () => void;
-};
+} & ButtonProps;
 
 /**
  * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
@@ -17,7 +17,12 @@ type UpdateButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to update.
  */
-export default function UpdateButton({ isUpdating, handleClick }: UpdateButtonProps) {
+export default function UpdateButton({
+  isUpdating,
+  handleClick,
+  className,
+  ...props
+}: UpdateButtonProps) {
   return (
     <Button
       className={cn(
@@ -25,8 +30,10 @@ export default function UpdateButton({ isUpdating, handleClick }: UpdateButtonPr
         {
           'pr-cursor-not-allowed pr-bg-blue-700': isUpdating,
         },
+        className,
       )}
       onClick={handleClick}
+      {...props}
     >
       {isUpdating ? (
         <>

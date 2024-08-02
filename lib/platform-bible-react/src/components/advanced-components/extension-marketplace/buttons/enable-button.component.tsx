@@ -1,4 +1,4 @@
-import { Button } from '@/components/shadcn-ui/button';
+import { Button, ButtonProps } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui.util';
 import { LoaderCircle } from 'lucide-react';
 
@@ -7,7 +7,7 @@ type EnableButtonProps = {
   isEnabling: boolean;
   /** The handleClick function is called when the button is clicked. */
   handleClick: () => void;
-};
+} & ButtonProps;
 
 /**
  * The EnableButton component is a button designed for initiating enabling of downloads. It includes
@@ -17,7 +17,12 @@ type EnableButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to enable.
  */
-export default function EnableButton({ isEnabling, handleClick }: EnableButtonProps) {
+export default function EnableButton({
+  isEnabling,
+  handleClick,
+  className,
+  ...props
+}: EnableButtonProps) {
   return (
     <Button
       className={cn(
@@ -25,8 +30,10 @@ export default function EnableButton({ isEnabling, handleClick }: EnableButtonPr
         {
           'pr-cursor-not-allowed pr-bg-blue-700': isEnabling,
         },
+        className,
       )}
       onClick={handleClick}
+      {...props}
     >
       {isEnabling ? (
         <>
