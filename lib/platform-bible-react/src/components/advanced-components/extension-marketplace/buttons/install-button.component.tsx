@@ -3,8 +3,6 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { Download, LoaderCircle } from 'lucide-react';
 
 type InstallButtonProps = {
-  /** Object unique identifier */
-  id?: string;
   /** The installing boolean value determines the state of the button. */
   isInstalling: boolean;
   /** The handleClick function is called when the button is clicked. */
@@ -17,14 +15,12 @@ type InstallButtonProps = {
  * The InstallButton component is a button designed for initiating installs. It includes visuals for
  * active installing and idle states.
  *
- * @param id Optional unique identifier
  * @param isInstalling The installing boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
  * @param buttonText Optional text for the button.
  * @returns A install button.
  */
 export default function InstallButton({
-  id,
   isInstalling,
   handleClick,
   buttonText,
@@ -33,7 +29,6 @@ export default function InstallButton({
 }: InstallButtonProps) {
   return (
     <Button
-      id={id}
       className={cn(
         'pr-h-8 pr-rounded-md pr-text-white pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-blue-700',
         {

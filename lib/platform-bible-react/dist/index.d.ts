@@ -989,8 +989,6 @@ export interface CharacterInventoryProps {
 }
 export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, projectId, getSetting, setSetting, getText, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
 export type InstallButtonProps = {
-	/** Object unique identifier */
-	id?: string;
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;
 	/** The handleClick function is called when the button is clicked. */
@@ -1002,16 +1000,13 @@ export type InstallButtonProps = {
  * The InstallButton component is a button designed for initiating installs. It includes visuals for
  * active installing and idle states.
  *
- * @param id Optional unique identifier
  * @param isInstalling The installing boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
  * @param buttonText Optional text for the button.
  * @returns A install button.
  */
-export function InstallButton({ id, isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
+export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
 export type EnableButtonProps = {
-	/** Object unique identifier */
-	id?: string;
 	/** The enabling boolean value determines the state of the button. */
 	isEnabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
@@ -1021,15 +1016,12 @@ export type EnableButtonProps = {
  * The EnableButton component is a button designed for initiating enabling of downloads. It includes
  * visuals for active enabling and idle states.
  *
- * @param id Optional unique identifier
  * @param isEnabling The enabling boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to enable.
  */
-export function EnableButton({ id, isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
+export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
 export type DisableButtonProps = {
-	/** Object unique identifier */
-	id?: string;
 	/** The disabling boolean value determines the state of the button. */
 	isDisabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
@@ -1039,15 +1031,12 @@ export type DisableButtonProps = {
  * The DisableButton component is a button designed for initiating disabling of downloads. It
  * includes visuals for active disabling and idle states.
  *
- * @param id Optional unique identifier
  * @param isDisabling The disabling boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to disable.
  */
-export function DisableButton({ id, isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
+export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
 export type UpdateButtonProps = {
-	/** Object unique identifier */
-	id?: string;
 	/** The updating boolean value determines the state of the button. */
 	isUpdating: boolean;
 	/** The handleClick function is called when the button is clicked. */
@@ -1057,12 +1046,11 @@ export type UpdateButtonProps = {
  * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
  * It includes visuals for active updating and idle states.
  *
- * @param id Optional unique identifier
  * @param isUpdating The updating boolean value determines the state of the button.
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to update.
  */
-export function UpdateButton({ id, isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
+export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
 export interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
