@@ -210,7 +210,7 @@ function Inventory({
   useEffect(() => {
     if (!text) return;
     setItems(convertTextToItemData(text, extractItems, getStatusForItem));
-  }, [extractItems, scriptureReference, text, getStatusForItem]);
+  }, [extractItems, text, getStatusForItem]);
 
   const filteredItemData = useMemo(() => {
     return filterItemData(items, statusFilter, textFilter);

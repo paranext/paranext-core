@@ -9,20 +9,15 @@ import {
 import { Canon } from '@sillsdev/scripture';
 import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
 import { useEffect, useState } from 'react';
+import {
+  extractNumber as extractNumberFromUSFM,
+  getUSFMLines as getLinesFromUSFM,
+} from './inventory-utils';
 
 type SearchResult = {
   reference: ScriptureReference;
   snippet: string;
   key: number;
-};
-
-const extractNumber = (text: string): number => {
-  const regex = /^\\[vc]\s+(\d+)/;
-  const match = text.match(regex);
-  if (match) {
-    return +match[1];
-  }
-  return 0;
 };
 
 const extractOccurrences = (
@@ -34,7 +29,7 @@ const extractOccurrences = (
   if (!text || text === '' || item === '') return [];
 
   const results: SearchResult[] = [];
-  const lines = text.split(/(?=\n|\\(?:v|c|id))/g);
+  const lines = getLinesFromUSFM(text);
 
   let currentChapter: number = scriptureRef.chapterNum;
   let currentVerse: number = scriptureRef.verseNum;
@@ -46,11 +41,11 @@ const extractOccurrences = (
       currentVerse = 0;
     }
     if (line.startsWith('\\c')) {
-      currentChapter = extractNumber(line);
+      currentChapter = extractNumberFromUSFM(line);
       currentVerse = 0;
     }
     if (line.startsWith('\\v')) {
-      currentVerse = extractNumber(line);
+      currentVerse = extractNumberFromUSFM(line);
       if (currentChapter === 0) {
         currentChapter = scriptureRef.chapterNum;
       }

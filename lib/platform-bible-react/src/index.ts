@@ -19,6 +19,11 @@ export type {
   ItemData,
   Status,
 } from './components/advanced/inventory/inventory.component';
+export {
+  inventoryItemColumn,
+  inventoryCountColumn,
+  inventoryStatusColumn,
+} from './components/advanced/inventory/inventory-columns';
 
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/mui/chapter-range-selector.component';

@@ -1,15 +1,16 @@
 import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
-import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import {
-  Button,
   ColumnDef,
   Inventory,
-  getSortingIcon,
   ItemData,
   Status,
+  inventoryCountColumn,
+  inventoryItemColumn,
+  inventoryStatusColumn,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { useCallback, useMemo } from 'react';
+import { extractRepeatedWords } from './inventory-utils';
 
 const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_repeated_words%',
@@ -23,96 +24,10 @@ const createColumns = (
   statusLabel: string,
   statusChangeHandler: (items: string[], status: Status) => void,
 ): ColumnDef<ItemData>[] => [
-  {
-    accessorKey: 'item',
-    header: ({ column }) => {
-      return (
-        <Button onClick={() => column.toggleSorting(undefined)}>
-          {itemLabel}
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: 'count',
-    header: ({ column }) => {
-      return (
-        <Button onClick={() => column.toggleSorting(undefined)}>
-          {countLabel}
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
-      );
-    },
-  },
-  {
-    accessorKey: 'status',
-    header: ({ column, table }) => {
-      const selectedRows = table.getSelectedRowModel().rows;
-
-      const items: string[] = [];
-      selectedRows.forEach((row) => {
-        items.push(row.getValue('item'));
-      });
-
-      return (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <Button onClick={() => column.toggleSorting(undefined)}>
-              {statusLabel}
-              {getSortingIcon(column.getIsSorted())}
-            </Button>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <Button style={{ margin: 2 }}>
-              <CircleCheckIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'approved');
-                }}
-              />
-            </Button>
-            <Button style={{ margin: 2 }}>
-              <CircleXIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'unapproved');
-                }}
-              />
-            </Button>
-            <Button style={{ margin: 2 }}>
-              <CircleHelpIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'unknown');
-                }}
-              />
-            </Button>
-          </div>
-        </>
-      );
-    },
-    cell: ({ row }) => {
-      const status: Status = row.getValue('status');
-      switch (status) {
-        case 'approved':
-          return <CircleCheckIcon />;
-        case 'unapproved':
-          return <CircleXIcon />;
-        case 'unknown':
-        default:
-          return <CircleHelpIcon />;
-      }
-    },
-  },
+  inventoryItemColumn(itemLabel),
+  inventoryCountColumn(countLabel),
+  inventoryStatusColumn(statusLabel, statusChangeHandler),
 ];
-
-const extractItems = (text: string, target: string | undefined = undefined): string[] => {
-  const repeatedWords: string[] = [];
-  const words = text.split(/[\s]+/);
-  words.forEach((word, index, allWords) => {
-    if (target && word !== target) return;
-    if (index + 1 < allWords.length && word === allWords[index + 1]) repeatedWords.push(word);
-  });
-  return repeatedWords;
-};
 
 interface RepeatedWordsInventoryProps {
   scriptureReference: ScriptureReference;
@@ -164,7 +79,7 @@ function RepeatedWordsInventory({
       scriptureReference={scriptureReference}
       setScriptureReference={setScriptureReference}
       localizedStrings={localizedStrings}
-      extractItems={extractItems}
+      extractItems={extractRepeatedWords}
       approvedItems={approvedItems}
       onApprovedItemsChange={onApprovedItemsChange}
       unapprovedItems={unapprovedItems}

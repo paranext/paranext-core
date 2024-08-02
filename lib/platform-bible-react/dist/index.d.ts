@@ -218,6 +218,9 @@ export interface InventoryProps {
 	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
 }
 export declare function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryStatusColumn: (statusLabel: string, statusChangeHandler: (items: string[], status: Status) => void) => ColumnDef<ItemData>;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
