@@ -52,7 +52,6 @@ export type FilterDropdownProps = {
 export default function FilterDropdown({ id, groups }: FilterDropdownProps) {
   return (
     <div id={id}>
-      {' '}
       {/* TODO: remove this once the DropDown Menu shadcn has an id prop */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
