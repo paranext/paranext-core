@@ -612,7 +612,7 @@ function getExtensionUri(baseUri: string, extensionName: string, extensionVersio
 function extractExtensionDetailsFromFileNames(fileUris: string[]): ExtensionIdentifier[] {
   return fileUris.map((fileUri: string) => {
     // Splits by either a forward-slash or back-slash to support Windows as well
-    const fileName = fileUri.split(/\\|\//).pop();
+    const fileName = fileUri.split(path.sep).pop();
     if (!fileName?.endsWith('.zip')) throw new Error(`Not a ZIP file: ${fileName}`);
     const lastDashIndex = fileName.lastIndexOf('_');
     const extensionName = fileName.substring(0, lastDashIndex);
