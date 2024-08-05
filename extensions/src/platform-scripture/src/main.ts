@@ -28,30 +28,38 @@ interface InventoryOptions extends GetWebViewOptions {
 // #region Project Setting Validators
 
 // Should be 123 characters long
-const booksPresentValidator: ProjectSettingValidator<'platformScripture.booksPresent'> = async (
-  newValue: string,
-): Promise<boolean> => {
-  return newValue.length === 123 && newValue.replace(/[01]/g, '').length === 0;
-};
+const booksPresentValidator: ProjectSettingValidator<'platformScripture.booksPresent'> =
+  // There's no need for the inner function to be named
+  // eslint-disable-next-line func-names
+  async function (newValue: string): Promise<boolean> {
+    return newValue.length === 123 && newValue.replace(/[01]/g, '').length === 0;
+  };
 
 // There are 7 options in the enum
-const versificationValidator: ProjectSettingValidator<'platformScripture.versification'> = async (
-  newValue: number,
-): Promise<boolean> => {
-  return (
-    typeof newValue === 'number' && newValue >= 0 && newValue <= 6 && Number.isInteger(newValue)
-  );
-};
+const versificationValidator: ProjectSettingValidator<'platformScripture.versification'> =
+  // There's no need for the inner function to be named
+  // eslint-disable-next-line func-names
+  async function (newValue: number): Promise<boolean> {
+    return (
+      typeof newValue === 'number' && newValue >= 0 && newValue <= 6 && Number.isInteger(newValue)
+    );
+  };
 
+// A character can be any string value
 const charactersValidator: ProjectSettingValidator<
   'platformScripture.validCharacters' | 'platformScripture.invalidCharacters'
-> = async (newValue) => {
+  // There's no need for the inner function to be named
+  // eslint-disable-next-line func-names
+> = async function (newValue) {
   return typeof newValue === 'string';
 };
 
+// A word can be any string value
 const repeatableWordsValidator: ProjectSettingValidator<
   'platformScripture.repeatableWords' | 'platformScripture.nonRepeatableWords'
-> = async (newValue) => {
+  // There's no need for the inner function to be named
+  // eslint-disable-next-line func-names
+> = async function (newValue) {
   return typeof newValue === 'string';
 };
 
@@ -93,13 +101,10 @@ async function openInventory(
 }
 
 class InventoryWebViewProvider implements IWebViewProvider {
-  titleKey: LocalizeKey;
-  webViewType: string;
-
-  constructor(title: LocalizeKey, webViewType: string) {
-    this.titleKey = title;
-    this.webViewType = webViewType;
-  }
+  constructor(
+    public titleKey: LocalizeKey,
+    public webViewType: string,
+  ) {}
 
   async getWebView(
     savedWebView: SavedWebViewDefinition,
