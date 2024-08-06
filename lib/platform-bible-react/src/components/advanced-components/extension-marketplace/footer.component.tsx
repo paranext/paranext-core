@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { formatBytes } from 'platform-bible-utils';
 import VersionHistory, { VersionHistoryType } from './version-history.component';
 
 /** Interface to store the parameters passed to the Footer component */
@@ -32,22 +34,8 @@ export default function Footer({
   locales,
   versionHistory,
 }: FooterProps) {
-  /**
-   * This function formats the bytes into a human-readable format. It converts the bytes into KB,
-   * MB, GB, TB, PB, EB, ZB, YB. credit to --> and for more info visit
-   * https://gist.github.com/zentala/1e6f72438796d74531803cc3833c039c
-   *
-   * @param bytes The size of the file in bytes
-   * @param decimals The number of decimal places to round to
-   * @returns The formatted file size
-   */
-  const formatBytes = (bytes: number, decimals = 2) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${parseFloat((bytes / k ** i).toFixed(decimals))} ${sizes[i]}`;
-  };
+  /** Formats the file size into a human-readable format */
+  const formattedFileSize = useMemo(() => formatBytes(fileSize), [fileSize]);
 
   /**
    * This function gets the display names of the languages based on the language codes.
@@ -74,7 +62,7 @@ export default function Footer({
               <span className="pr-mb-2">Publisher</span>
               <span className="pr-font-semibold">{publisherDisplayName}</span>
               <span className="pr-mb-2 pr-mt-4">Size</span>
-              <span className="pr-font-semibold">{formatBytes(fileSize)}</span>
+              <span className="pr-font-semibold">{formattedFileSize}</span>
             </p>
             <div className="pr-flex pr-w-3/4 pr-items-center pr-justify-between pr-text-xs pr-text-gray-600">
               <p className="pr-flex pr-flex-col pr-justify-start">

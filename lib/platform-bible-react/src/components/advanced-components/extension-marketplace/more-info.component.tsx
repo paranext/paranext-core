@@ -1,4 +1,5 @@
 import { CircleHelp, Link as LucideLink, User } from 'lucide-react';
+import { NumberFormat } from 'platform-bible-utils';
 
 /** Interface that stores the parameters passed to the More Info component */
 interface MoreInfoProps {
@@ -41,7 +42,7 @@ export default function MoreInfo({
    *
    * @returns The formatted number of downloads
    */
-  const numberFormatted = new Intl.NumberFormat('en-GB', {
+  const numberFormatted = new NumberFormat('en', {
     notation: 'compact',
     compactDisplay: 'short',
   }).format(Object.values(downloads).reduce((a: number, b: number) => a + b, 0));

@@ -1423,6 +1423,19 @@ export declare const htmlEncode: (str: string) => string;
  *   function returns an empty string.
  */
 export function getCurrentLocale(): string;
+/**
+ * Formats a number according to the locale and formatting options of this NumberFormat object
+ *
+ * @example FormatBytes(1024) => "1 KB"
+ *
+ * @example FormatBytes(1024, 0) => "1 KB"
+ *
+ * @param fileSize Number to format
+ * @param decimals Number of decimal places to round to
+ * @returns String representing the given number formatted according to the locale and formatting
+ *   options of this NumberFormat object
+ */
+export function formatBytes(fileSize: number, decimals?: number): string;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
