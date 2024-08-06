@@ -1125,7 +1125,7 @@ export const initialize = () => {
     if (isInitialized) return;
 
     reloadFinishedEventEmitter = network.createNetworkEventEmitter<boolean>(
-      'extension-services.reloadFinished',
+      'platform.onDidReloadExtensions',
     );
 
     await normalizeExtensionFileNames();
