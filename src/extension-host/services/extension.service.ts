@@ -14,7 +14,7 @@ import * as platformBibleUtils from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { getCommandLineArgumentsGroup, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
-import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import papi, { network, fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
@@ -151,6 +151,12 @@ let initializePromise: Promise<void> | undefined;
  * file to run
  */
 let availableExtensions: ExtensionInfo[];
+
+/**
+ * Event emitter to tell any extension listening that the extensions finished reloading. The boolean
+ * indicates whether it succeeded.
+ */
+let reloadFinishedEventEmitter: platformBibleUtils.PlatformEventEmitter<boolean>;
 
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
@@ -572,7 +578,9 @@ function watchForExtensionChanges(): UnsubscriberAsync {
     try {
       logger.debug('Reload extensions from watching');
       await reloadExtensions(shouldDeactivateExtensions);
+      reloadFinishedEventEmitter.emit(true);
     } catch (e) {
+      reloadFinishedEventEmitter.emit(false);
       throw new LogError(`Reload extensions from watching failed. Investigate: ${e}`);
     }
   });
@@ -1115,6 +1123,10 @@ export const initialize = () => {
 
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
+
+    reloadFinishedEventEmitter = network.createNetworkEventEmitter<boolean>(
+      'platform.onDidReloadExtensions',
+    );
 
     await normalizeExtensionFileNames();
 
