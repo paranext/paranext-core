@@ -34,7 +34,7 @@ export default function MoreInfo({
   moreInfoUrl,
 }: MoreInfoProps) {
   /**
-   * This function formats the downloads number into a human-readable format.
+   * This constant formats the number of downloads into a more readable format.
    *
    * @example 1000 -> 1K
    *
