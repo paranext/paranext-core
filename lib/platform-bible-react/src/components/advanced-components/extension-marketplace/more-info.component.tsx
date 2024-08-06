@@ -32,6 +32,21 @@ export default function MoreInfo({
   languages,
   moreInfoUrl,
 }: MoreInfoProps) {
+  /**
+   * This function formats the downloads number into a human-readable format.
+   *
+   * @example 1000 -> 1K
+   *
+   * @example 1000000 -> 1M
+   *
+   * @returns The formatted number of downloads
+   */
+  const numberFormatted = new Intl.NumberFormat('en-GB', {
+    notation: 'compact',
+    compactDisplay: 'short',
+  }).format(Object.values(downloads).reduce((a: number, b: number) => a + b, 0));
+
+  /** This function scrolls the window to the bottom of the page. */
   const handleScrollToBottom = () => {
     window.scrollTo(0, document.body.scrollHeight);
   };
@@ -51,9 +66,7 @@ export default function MoreInfo({
       <div className="pr-flex pr-flex-col pr-items-center">
         <div className="pr-flex pr-items-center pr-rounded-md pr-bg-gray-100 pr-px-2 pr-py-1">
           <User className="pr-mr-1 pr-h-4 pr-w-4" />
-          <span className="pr-text-xs pr-font-semibold pr-text-gray-700">
-            {Object.values(downloads).reduce((a: number, b: number) => a + b, 0)}
-          </span>
+          <span className="pr-text-xs pr-font-semibold pr-text-gray-700">{numberFormatted}</span>
         </div>
         <span className="pr-text-xs pr-text-gray-500">USERS</span>
       </div>
