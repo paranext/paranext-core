@@ -29,6 +29,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
@@ -37,7 +38,6 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Alert">
@@ -49,11 +49,15 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Card">
-          <CardExamples />
+          <CardExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Checkbox">
           <CheckboxExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="ComboBox">
+          <ComboBoxExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Input">
@@ -65,7 +69,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Select">
-          <SelectExamples />
+          <SelectExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Slider">
@@ -77,7 +81,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
-          <DropdownExamples />
+          <DropdownExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Tabs">
@@ -86,9 +90,6 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Table">
           <TableExamples />
-        </VerticalTabsContent>
-        <VerticalTabsContent value="ComboBox">
-          <ComboBoxExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

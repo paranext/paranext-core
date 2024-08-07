@@ -126,6 +126,10 @@ export const DropdownMenuContent = React.forwardRef<
 ));
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
+/**
+ * TODO: fix: direction is not automatically handled by this component, so that shortcuts are
+ * display always to the right
+ */
 export const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   DropdownMenuItemProps

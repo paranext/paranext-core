@@ -39,7 +39,7 @@ export default function TableExamples() {
           <TableHead className="w-[100px]">Invoice</TableHead>
           <TableHead>Status</TableHead>
           <TableHead>Method</TableHead>
-          <TableHead className="text-right">Amount</TableHead>
+          <TableHead className="pr-text-end">Amount</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -51,14 +51,14 @@ export default function TableExamples() {
             <TableCell className="font-medium">{invoice.invoice}</TableCell>
             <TableCell>{invoice.paymentStatus}</TableCell>
             <TableCell>{invoice.paymentMethod}</TableCell>
-            <TableCell className="text-right">{invoice.totalAmount}</TableCell>
+            <TableCell className="pr-text-end">{invoice.totalAmount}</TableCell>
           </TableRow>
         ))}
       </TableBody>
       <TableFooter>
         <TableRow>
           <TableCell colSpan={3}>Total</TableCell>
-          <TableCell className="text-right">-SUM-</TableCell>
+          <TableCell className="pr-text-end">-SUM-</TableCell>
         </TableRow>
       </TableFooter>
     </Table>
