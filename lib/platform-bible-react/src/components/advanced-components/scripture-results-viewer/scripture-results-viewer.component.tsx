@@ -40,7 +40,7 @@ import {
   scrRefToBBBCCCVVV,
 } from 'platform-bible-utils';
 import { MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something

@@ -41,7 +41,7 @@ export type ComboBoxProps<T> = {
   /** Variant of button */
   buttonVariant?: ButtonProps['variant'];
   /** Text direction ltr or rtl */
-  dir: Direction;
+  dir?: Direction;
 } & PopoverProps;
 
 type Direction = 'ltr' | 'rtl';
@@ -69,11 +69,11 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   value,
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
-  dir,
   buttonPlaceholder = '',
   textPlaceholder = '',
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
+  dir = 'ltr',
   ...props
 }: ComboBoxProps<T>) {
   const [open, setOpen] = useState(false);
