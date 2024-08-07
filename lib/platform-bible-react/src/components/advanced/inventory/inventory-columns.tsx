@@ -7,7 +7,7 @@ export const inventoryItemColumn = (itemLabel: string): ColumnDef<ItemData> => {
   return {
     accessorKey: 'item',
     header: ({ column }) => (
-      <Button onClick={() => column.toggleSorting(undefined)}>
+      <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
         {itemLabel}
         {getSortingIcon(column.getIsSorted())}
       </Button>
@@ -19,7 +19,7 @@ export const inventoryCountColumn = (countLabel: string): ColumnDef<ItemData> =>
   return {
     accessorKey: 'count',
     header: ({ column }) => (
-      <Button onClick={() => column.toggleSorting(undefined)}>
+      <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
         {countLabel}
         {getSortingIcon(column.getIsSorted())}
       </Button>
@@ -44,7 +44,11 @@ export const inventoryStatusColumn = (
       return (
         <div>
           <div className="pr-flex pr-justify-center">
-            <Button className="pr-mt-1" onClick={() => column.toggleSorting(undefined)}>
+            <Button
+              className="pr-mt-1"
+              variant="ghost"
+              onClick={() => column.toggleSorting(undefined)}
+            >
               {statusLabel}
               {getSortingIcon(column.getIsSorted())}
             </Button>
