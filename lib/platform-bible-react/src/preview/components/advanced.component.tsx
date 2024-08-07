@@ -77,7 +77,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Result List">
-          <ScriptureResultsViewerExample />
+          <ScriptureResultsViewerExample direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Inventory">

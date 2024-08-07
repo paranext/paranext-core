@@ -5,10 +5,11 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/shadcn-ui/select';
+import { HasDirection } from '@/preview/preview-components/direction-toggle';
 
-export default function SelectExamples() {
+export default function SelectExamples({ direction }: HasDirection) {
   return (
-    <Select>
+    <Select dir={direction}>
       <SelectTrigger id="framework">
         <SelectValue placeholder="Select" />
       </SelectTrigger>

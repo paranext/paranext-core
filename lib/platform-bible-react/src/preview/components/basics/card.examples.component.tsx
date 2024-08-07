@@ -10,12 +10,13 @@ import {
 import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
 import { Switch } from '@/components/shadcn-ui/switch';
+import { HasDirection } from '@/preview/preview-components/direction-toggle';
 import { BellRing, Check } from 'lucide-react';
 import SelectExamples from './select.examples.component';
 
-export default function CardExamples() {
+export default function CardExamples({ direction }: HasDirection) {
   const cardContent = (
-    <div className="pr-flex pr-items-center pr-space-x-4 pr-rounded-md pr-border pr-p-4">
+    <div className="pr-flex pr-items-center pr-gap-x-4 pr-rounded-md pr-border pr-p-4">
       <BellRing />
       <div className="pr-flex-1 pr-space-y-1">
         <p className="pr-text-sm pr-font-medium pr-leading-none">Push Notifications</p>
@@ -75,7 +76,7 @@ export default function CardExamples() {
               </div>
               <div className="pr-flex pr-flex-col pr-space-y-1.5">
                 <Label htmlFor="framework">Framework</Label>
-                <SelectExamples />
+                <SelectExamples direction={direction} />
               </div>
             </div>
           </form>
