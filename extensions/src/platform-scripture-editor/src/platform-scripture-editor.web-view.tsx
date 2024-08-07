@@ -181,7 +181,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: 'ltr',
+      textDirection: 'rtl',
     }),
     [isReadOnly],
   );
