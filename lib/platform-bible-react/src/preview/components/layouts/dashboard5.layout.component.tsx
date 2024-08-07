@@ -1,4 +1,5 @@
 /* eslint-disable jsx-a11y/anchor-is-valid */
+/* source: mostly copied and adapted from shadcn's blocks > dashboard 5 example */
 import {
   Copy,
   CreditCard,
@@ -49,8 +50,9 @@ import {
 } from '@/components/shadcn-ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { useState } from 'react';
+import { HasDirection } from '@/preview/preview-components/direction-toggle';
 
-export default function Dashboard5Examples() {
+export default function Dashboard5Examples({ direction }: HasDirection) {
   const [progress, setProgress] = useState<number[]>([25]);
   return (
     <div className="pr-flex pr-h-[100%] pr-w-full pr-rounded-md pr-bg-muted/40">
@@ -176,7 +178,7 @@ export default function Dashboard5Examples() {
               className="pr-w-full pr-rounded-lg pr-bg-background pr-pl-8 focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring md:pr-w-[200px] lg:pr-w-[336px]"
             />
           </div>
-          <DropdownMenu>
+          <DropdownMenu dir={direction}>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="pr-overflow-hidden pr-rounded-full">
                 <User />
@@ -219,6 +221,7 @@ export default function Dashboard5Examples() {
                 </CardContent>
                 <CardFooter>
                   <Slider
+                    dir={direction}
                     defaultValue={progress}
                     max={100}
                     step={1}
@@ -239,15 +242,15 @@ export default function Dashboard5Examples() {
                 <CardFooter>Progress value={10}</CardFooter>
               </Card>
             </div>
-            <Tabs defaultValue="week">
+            <Tabs defaultValue="week" dir={direction}>
               <div className="pr-flex pr-items-center">
                 <TabsList>
                   <TabsTrigger value="week">Week</TabsTrigger>
                   <TabsTrigger value="month">Month</TabsTrigger>
                   <TabsTrigger value="year">Year</TabsTrigger>
                 </TabsList>
-                <div className="pr-ml-auto pr-flex pr-items-center pr-gap-2">
-                  <DropdownMenu>
+                <div className="pr-ms-auto pr-flex pr-items-center pr-gap-2">
+                  <DropdownMenu dir={direction}>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" className="pr-h-7 pr-gap-1 pr-text-sm">
                         <ListFilter className="pr-h-3.5 pr-w-3.5" />
@@ -429,7 +432,7 @@ export default function Dashboard5Examples() {
                       Track Order
                     </span>
                   </Button>
-                  <DropdownMenu>
+                  <DropdownMenu dir={direction}>
                     <DropdownMenuTrigger asChild>
                       <Button size="icon" variant="outline" className="pr-h-8 pr-w-8">
                         <MoreVertical className="pr-h-3.5 pr-w-3.5" />

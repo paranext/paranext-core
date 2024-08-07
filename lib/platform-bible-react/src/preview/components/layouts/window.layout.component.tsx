@@ -36,7 +36,7 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
               <TabsTrigger value="b">B</TabsTrigger>
             </TabsList>
           </Tabs>
-          <DropdownMenu>
+          <DropdownMenu dir={direction}>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost">&#x22ee;</Button>
             </DropdownMenuTrigger>

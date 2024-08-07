@@ -31,7 +31,7 @@ function Layouts({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Shadcn Dashboard 5">
           <div className="pr-h-[405px] pr-rounded-md pr-border">
-            <Dashboard5Examples />
+            <Dashboard5Examples direction={direction} />
           </div>
         </VerticalTabsContent>
       </VerticalTabs>
