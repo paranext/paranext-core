@@ -4,8 +4,6 @@ import {
   EditorRef,
   Marginal,
   MarginalRef,
-  getViewOptions,
-  DEFAULT_VIEW_MODE,
 } from '@biblionexus-foundation/platform-editor';
 import { Usj } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
@@ -181,11 +179,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const options = useMemo<EditorOptions>(
     () => ({
-      // We need to provide view options to prevent a bug where the editor re-renders every key
-      // press and loses cursor position
-      view: getViewOptions(DEFAULT_VIEW_MODE),
-      hasSpellCheck: false,
       isReadonly: isReadOnly,
+      hasSpellCheck: false,
+      textDirection: 'ltr',
     }),
     [isReadOnly],
   );
