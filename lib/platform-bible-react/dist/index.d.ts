@@ -162,13 +162,6 @@ export type MultiColumnMenu = {
 export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
-/**
- * Map whose keys are localized string keys and whose values provide information about how to
- * localize strings for the localized string key
- */
-export interface LanguageStrings {
-	[k: LocalizeKey]: LocalizedStringValue;
-}
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -184,9 +177,50 @@ export interface DataTableProps<TData, TValue> {
 	enablePagination?: boolean;
 	showPaginationControls?: boolean;
 	showColumnVisibilityControls?: boolean;
+	stickyHeader?: boolean;
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare const INVENTORY_STRING_KEYS: readonly [
+	"%webView_inventory_all%",
+	"%webView_inventory_approved%",
+	"%webView_inventory_unapproved%",
+	"%webView_inventory_unknown%",
+	"%webView_inventory_scope_book%",
+	"%webView_inventory_scope_chapter%",
+	"%webView_inventory_scope_verse%",
+	"%webView_inventory_filter_text%",
+	"%webView_inventory_occurrences_table_header_reference%",
+	"%webView_inventory_occurrences_table_header_occurrence%"
+];
+export type InventoryLocalizedStrings = {
+	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+export type Status = "approved" | "unapproved" | "unknown";
+export type ItemData = {
+	item: string;
+	count: number;
+	status: Status;
+};
+export declare const getSortingIcon: (sortDirection: false | SortDirection) => React$1.ReactNode;
+export interface InventoryProps {
+	scriptureReference: ScriptureReference;
+	setScriptureReference: (scriptureReference: ScriptureReference) => void;
+	localizedStrings: InventoryLocalizedStrings;
+	extractItems: (text: string, item?: string | undefined) => string[];
+	approvedItems: string[];
+	onApprovedItemsChange: (items: string[]) => void;
+	unapprovedItems: string[];
+	onUnapprovedItemsChange: (items: string[]) => void;
+	text: string | undefined;
+	scope: string;
+	onScopeChange: (scope: string) => void;
+	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
+}
+export declare function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryStatusColumn: (statusLabel: string, statusChangeHandler: (items: string[], status: Status) => void) => ColumnDef<ItemData>;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
@@ -942,8 +976,12 @@ export declare const SelectContent: React$1.ForwardRefExoticComponent<Omit<Selec
 export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
-export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & React$1.RefAttributes<HTMLTableElement>>;
-export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & {
+	stickyHeader?: boolean | undefined;
+} & React$1.RefAttributes<HTMLTableElement>>;
+export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & {
+	stickyHeader?: boolean | undefined;
+} & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
@@ -978,16 +1016,6 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-export interface CharacterInventoryProps {
-	scriptureReference: ScriptureReference;
-	setScriptureReference: (scriptureReference: ScriptureReference) => void;
-	localizedStrings: LanguageStrings;
-	projectId: string;
-	getSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string) => Promise<string[]>;
-	setSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string, characters: string[]) => void;
-	getText: (projectId: string, scriptureRef: ScriptureReference, scope: string) => Promise<string | undefined>;
-}
-export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, projectId, getSetting, setSetting, getText, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
 export type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;

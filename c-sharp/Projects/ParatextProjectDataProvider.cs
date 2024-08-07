@@ -231,7 +231,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public ResponseToRequest GetProjectSetting(string jsonKey)
     {
         var settingName = JToken.Parse(jsonKey).ToString();
-        settingName =
+        var paratextSettingName =
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
             settingName;
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.ID);
@@ -240,12 +240,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // accessing scrText.Settings.Name. So we're copying Paratext's functionality here and using
         // the folder name instead of Settings.Name.
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ProjectSettingsAccess/ProjectSettings.cs#L1438
-        if (settingName == ProjectSettingsNames.PT_NAME)
+        if (paratextSettingName == ProjectSettingsNames.PT_NAME)
             return ResponseToRequest.Succeeded(scrText.Name);
 
-        if (scrText.Settings.ParametersDictionary.TryGetValue(settingName, out string? settingValue)) {
+        if (scrText.Settings.ParametersDictionary.TryGetValue(paratextSettingName, out string? settingValue)) {
             // Paratext project setting value found, so return the value with the appropriate type
-            if (ProjectSettingsNames.IsParatextSettingABoolean(settingName))
+            if (ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName))
             {
                 return settingValue switch
                 {

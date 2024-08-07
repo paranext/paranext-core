@@ -1,12 +1,11 @@
-import BookChapterControl from '@/components/advanced-components/book-chapter-control/book-chapter-control.component';
-import DataTable from '@/components/advanced-components/data-table/data-table.component';
+import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import DataTable from '@/components/advanced/data-table/data-table.component';
 import {
   VerticalTabs,
   VerticalTabsContent,
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import CharacterInventory from '@/components/paratext-10-studio-components/inventory/character-inventory.component';
 import { HasDirection } from '@/preview/preview-components/direction-toggle';
 import ThemeToggle from '@/preview/preview-components/theme-toggle.component';
 import { ScriptureReference } from 'platform-bible-utils';
@@ -15,6 +14,7 @@ import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.co
 import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
 import { columns, data } from './data-sources/data-table-content';
 import MarketplaceExamples from './advanced/marketplace.example.component';
+import InventoryExample from './advanced/inventory-example.component';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -81,19 +81,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Inventory">
-          <CharacterInventory
-            scriptureReference={scrRef}
-            setScriptureReference={setScrRef}
-            localizedStrings={{}}
-            projectId=""
-            setSetting={() => {}}
-            getText={(): Promise<string | undefined> => {
-              throw new Error('getText not implemented.');
-            }}
-            getSetting={(): Promise<string[]> => {
-              throw new Error('getSetting not implemented.');
-            }}
-          />
+          <InventoryExample />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

@@ -1,14 +1,29 @@
 import './index.css';
 
 // Components and Types
-export { default as BookChapterControl } from './components/advanced-components/book-chapter-control/book-chapter-control.component';
-export { default as DataTable } from './components/advanced-components/data-table/data-table.component';
+export { default as BookChapterControl } from './components/advanced/book-chapter-control/book-chapter-control.component';
+export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
   RowContents,
   SortDirection,
   TableContents,
-} from './components/advanced-components/data-table/data-table.component';
+} from './components/advanced/data-table/data-table.component';
+export { default as Inventory } from './components/advanced/inventory/inventory.component';
+export {
+  getSortingIcon,
+  INVENTORY_STRING_KEYS,
+} from './components/advanced/inventory/inventory.component';
+export type {
+  InventoryLocalizedStrings,
+  ItemData,
+  Status,
+} from './components/advanced/inventory/inventory.component';
+export {
+  inventoryItemColumn,
+  inventoryCountColumn,
+  inventoryStatusColumn,
+} from './components/advanced/inventory/inventory-columns';
 
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/mui/chapter-range-selector.component';
@@ -73,8 +88,6 @@ export {
   VerticalTabsTrigger,
 } from './components/basics/tabs-vertical';
 
-// Paratext components
-export { default as CharacterInventory } from './components/paratext-10-studio-components/inventory/character-inventory.component';
 export { default as InstallButton } from './components/advanced-components/extension-marketplace/buttons/install-button.component';
 export { default as EnableButton } from './components/advanced-components/extension-marketplace/buttons/enable-button.component';
 export { default as DisableButton } from './components/advanced-components/extension-marketplace/buttons/disable-button.component';
