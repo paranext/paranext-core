@@ -1,13 +1,12 @@
-import Inventory, {
-  getSortingIcon,
-  ItemData,
-  Status,
-} from '@/components/advanced/inventory/inventory.component';
+import { ColumnDef } from '@/components/advanced/data-table/data-table.component';
+import {
+  inventoryCountColumn,
+  inventoryItemColumn,
+  inventoryStatusColumn,
+} from '@/components/advanced/inventory/inventory-columns';
+import Inventory, { ItemData, Status } from '@/components/advanced/inventory/inventory.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
-import { ColumnDef } from '@/components/advanced/data-table/data-table.component';
-import { Button } from '@/components/shadcn-ui/button';
-import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import scriptureSnippet from './scripture-snippet';
 
 const defaultScrRef: ScriptureReference = {
@@ -32,81 +31,9 @@ const localizedStrings = {
 const createColumns = (
   statusChangeHandler: (items: string[], status: Status) => void,
 ): ColumnDef<ItemData>[] => [
-  {
-    accessorKey: 'item',
-    header: ({ column }) => (
-      <Button onClick={() => column.toggleSorting(undefined)}>
-        Item
-        {getSortingIcon(column.getIsSorted())}
-      </Button>
-    ),
-  },
-  {
-    accessorKey: 'count',
-    header: ({ column }) => (
-      <Button onClick={() => column.toggleSorting(undefined)}>
-        Count
-        {getSortingIcon(column.getIsSorted())}
-      </Button>
-    ),
-  },
-  {
-    accessorKey: 'status',
-    header: ({ column, table }) => {
-      const selectedRows = table.getSelectedRowModel().rows;
-
-      const items: string[] = [];
-      selectedRows.forEach((row) => {
-        items.push(row.getValue('item'));
-      });
-
-      return (
-        <>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <Button onClick={() => column.toggleSorting(undefined)}>
-              Status
-              {getSortingIcon(column.getIsSorted())}
-            </Button>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'center' }}>
-            <Button style={{ margin: 2 }}>
-              <CircleCheckIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'approved');
-                }}
-              />
-            </Button>
-            <Button style={{ margin: 2 }}>
-              <CircleXIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'unapproved');
-                }}
-              />
-            </Button>
-            <Button style={{ margin: 2 }}>
-              <CircleHelpIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'unknown');
-                }}
-              />
-            </Button>
-          </div>
-        </>
-      );
-    },
-    cell: ({ row }) => {
-      const status: Status = row.getValue('status');
-      switch (status) {
-        case 'approved':
-          return <CircleCheckIcon />;
-        case 'unapproved':
-          return <CircleXIcon />;
-        case 'unknown':
-        default:
-          return <CircleHelpIcon />;
-      }
-    },
-  },
+  inventoryItemColumn('Item'),
+  inventoryCountColumn('Count'),
+  inventoryStatusColumn('Status', statusChangeHandler),
 ];
 
 const extractItems = (text: string, target: string | undefined = undefined): string[] => {
