@@ -46,6 +46,46 @@ export default function ThemingGuide() {
           </tr>
         </tbody>
       </table>
+      <h2 className="pr-py-2 pr-font-bold">Overwriting styles</h2>
+      <p>
+        Try to not overwrite styles (colors). In case you need to, use Tailwind classes to apply
+        color variables, in the same way that shadcn does it. Shadcn defines the colors that you can
+        find on the next page.
+      </p>
+      <br />
+      <p>
+        To overwrite styles use Tailwind css classes like{' '}
+        <code>className=&quot;pr-bg-muted&quot;</code> on a header-like component and{' '}
+        <code>className=&quot;pr-text-muted-foreground&quot;</code> for text on this component.
+      </p>
+      <p>
+        You can also use shades of these colors with{' '}
+        <code>className=&quot;pr-bg-muted/50&quot;</code>, but try to stay consistent with how
+        shadcn applies these styles in a very deliberate, rare choice.
+      </p>
+      <br />
+      <p>
+        Descriptions on which colors should be used in which context are still to be added to this
+        preview app. If you are unsure, check out how{' '}
+        <a
+          href="https://ui.shadcn.com/"
+          className="pr-text-blue-600 hover:pr-underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          shadcn
+        </a>{' '}
+        uses a similar thing or talk to the{' '}
+        <a
+          href="https://discord.com/channels/1064938364597436416/1082713526780575845"
+          className="pr-text-blue-600 hover:pr-underline"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Paratext UX team
+        </a>
+        .
+      </p>
     </>
   );
 }
