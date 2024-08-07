@@ -10,7 +10,7 @@
   position: relative;
   line-height: 20px;
   font-weight: 400;
-  text-align: left;
+  text-align: start;
   border-top-left-radius: 10px;
   border-top-right-radius: 10px;
 }
@@ -33,18 +33,29 @@
   flex: auto;
 }
 
+.editor-input > p {
+  direction: inherit;
+}
+
 .editor-placeholder {
   color: #999;
   overflow: hidden;
   position: absolute;
   text-overflow: ellipsis;
   top: 15px;
-  left: 10px;
   font-size: 15px;
   user-select: none;
   display: inline-block;
   pointer-events: none;
   margin-block-start: 1em;
+}
+
+.editor-input[dir="ltr"] ~ .editor-placeholder {
+  left: 10px;
+}
+
+.editor-input[dir="rtl"] ~ .editor-placeholder {
+  right: 10px;
 }
 
 .editor-text-bold {
@@ -94,47 +105,6 @@
   border-bottom-right-radius: 10px;
   overflow: auto;
   line-height: 14px;
-}
-
-.editor-code {
-  background-color: rgb(240, 242, 245);
-  font-family: Menlo, Consolas, Monaco, monospace;
-  display: block;
-  padding: 8px 8px 8px 52px;
-  line-height: 1.53;
-  font-size: 13px;
-  margin: 0;
-  margin-top: 8px;
-  margin-bottom: 8px;
-  tab-size: 2;
-  /* white-space: pre; */
-  overflow-x: auto;
-  position: relative;
-}
-
-.editor-code::before {
-  content: attr(data-gutter);
-  position: absolute;
-  background-color: #eee;
-  left: 0;
-  top: 0;
-  border-right: 1px solid #ccc;
-  padding: 8px;
-  color: #777;
-  white-space: pre-wrap;
-  text-align: right;
-  min-width: 25px;
-}
-
-.editor-code::after {
-  content: attr(data-highlight-language);
-  top: 0;
-  right: 3px;
-  padding: 3px;
-  font-size: 10px;
-  text-transform: uppercase;
-  position: absolute;
-  color: rgba(0, 0, 0, 0.5);
 }
 
 /* stylelint-disable-next-line selector-class-pattern */
@@ -233,56 +203,6 @@
   margin-bottom: 0;
 }
 
-.editor-heading-h1 {
-  font-size: 24px;
-  color: rgb(5, 5, 5);
-  font-weight: 400;
-  margin: 0;
-  margin-bottom: 12px;
-  padding: 0;
-}
-
-.editor-heading-h2 {
-  font-size: 15px;
-  color: rgb(101, 103, 107);
-  font-weight: 700;
-  margin: 0;
-  margin-top: 10px;
-  padding: 0;
-  text-transform: uppercase;
-}
-
-.editor-quote {
-  margin: 0;
-  margin-left: 20px;
-  font-size: 15px;
-  color: rgb(101, 103, 107);
-  border-left-color: rgb(206, 208, 212);
-  border-left-width: 4px;
-  border-left-style: solid;
-  padding-left: 16px;
-}
-
-.editor-list-ol {
-  padding: 0;
-  margin: 0;
-  margin-left: 16px;
-}
-
-.editor-list-ul {
-  padding: 0;
-  margin: 0;
-  margin-left: 16px;
-}
-
-.editor-listitem {
-  margin: 8px 32px;
-}
-
-.editor-nested-listitem {
-  list-style-type: none;
-}
-
 pre::-webkit-scrollbar {
   background: transparent;
   width: 10px;
@@ -331,10 +251,17 @@ pre::-webkit-scrollbar-thumb {
   width: 35px;
   vertical-align: -0.25em;
   position: absolute;
-  right: 0;
   top: 0;
   bottom: 0;
   cursor: pointer;
+}
+
+.link-editor[dir="ltr"] div.link-edit {
+  right: 0;
+}
+
+.link-editor[dir="rtl"] div.link-edit {
+  left: 0;
 }
 
 .link-editor .link-input a {
@@ -343,8 +270,15 @@ pre::-webkit-scrollbar-thumb {
   display: block;
   white-space: nowrap;
   overflow: hidden;
-  margin-right: 30px;
   text-overflow: ellipsis;
+}
+
+.link-editor[dir="ltr"] .link-input a {
+  margin-right: 30px;
+}
+
+.link-editor[dir="rtl"] .link-input a {
+  margin-left: 30px;
 }
 
 .link-editor .link-input a:hover {
@@ -786,7 +720,7 @@ button.toolbar-item.active i {
   text-overflow: ellipsis;
   overflow: hidden;
   height: 20px;
-  text-align: left;
+  text-align: start;
   padding-right: 10px;
 }
 

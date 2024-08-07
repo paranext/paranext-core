@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { formatBytes } from 'platform-bible-utils';
 import VersionHistory, { VersionHistoryType } from './version-history.component';
 
 /** Interface to store the parameters passed to the Footer component */
@@ -18,8 +20,11 @@ interface FooterProps {
  * Component to render the footer for the extension details which contains information on the
  * publisher, version history, languages, and file size.
  *
- * @param extension Instance of the current Extension being shown
  * @param id Optional unique identifier
+ * @param publisherDisplayName Name of the publisher
+ * @param fileSize Size of the extension file in bytes
+ * @param locales List of language codes supported by the extension
+ * @param versionHistory Object containing the version history mapped with their information
  * @returns The rendered Footer component
  */
 export default function Footer({
@@ -29,6 +34,15 @@ export default function Footer({
   locales,
   versionHistory,
 }: FooterProps) {
+  /** Formats the file size into a human-readable format */
+  const formattedFileSize = useMemo(() => formatBytes(fileSize), [fileSize]);
+
+  /**
+   * This function gets the display names of the languages based on the language codes.
+   *
+   * @param codes The list of language codes
+   * @returns The list of language names
+   */
   const getLanguageNames = (codes: string[]) => {
     const displayNames = new Intl.DisplayNames(navigator.language, { type: 'language' });
     return codes.map((code) => displayNames.of(code));
@@ -48,7 +62,7 @@ export default function Footer({
               <span className="pr-mb-2">Publisher</span>
               <span className="pr-font-semibold">{publisherDisplayName}</span>
               <span className="pr-mb-2 pr-mt-4">Size</span>
-              <span className="pr-font-semibold">{(fileSize / 1000000).toPrecision(3)} MB</span>
+              <span className="pr-font-semibold">{formattedFileSize}</span>
             </p>
             <div className="pr-flex pr-w-3/4 pr-items-center pr-justify-between pr-text-xs pr-text-gray-600">
               <p className="pr-flex pr-flex-col pr-justify-start">

@@ -68,6 +68,7 @@ export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
 export { default as getCurrentLocale } from './intl-util';
+export { default as formatBytes } from './number-utils';
 
 // Types
 export type { DeepPartial, ReplaceType, UnionToIntersection } from './util';
