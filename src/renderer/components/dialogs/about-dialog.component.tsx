@@ -1,16 +1,17 @@
-import { useCallback } from 'react';
-import { usePromise } from 'platform-bible-react';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { appService } from '@shared/services/app.service';
+import { AppInfo } from '@shared/services/app.service-model';
+import { usePromise } from 'platform-bible-react';
 import {
   formatReplacementString,
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { appService } from '@shared/services/app.service';
-import { AppInfo } from '@shared/services/app.service-model';
-import packageInfo from '../../../release/app/package.json';
+import { useCallback } from 'react';
+import packageInfo from '../../../../release/app/package.json';
+import { DIALOG_BASE } from './dialog-base.data';
+import { ABOUT_DIALOG_TYPE, DialogDefinition } from './dialog-definition.model';
 
 export const TAB_TYPE_ABOUT = 'about';
 
@@ -34,7 +35,7 @@ const defaultAppInfo: AppInfo = {
   uriScheme: 'ignore',
 };
 
-export function AboutPanel() {
+function AboutDialog() {
   const [
     {
       '%product_name%': productName,
@@ -84,14 +85,15 @@ export function AboutPanel() {
   );
 }
 
-export function loadAboutTab(savedTabInfo: SavedTabInfo): TabInfo {
-  return {
-    ...savedTabInfo,
-    tabTitle: 'About',
-    content: <AboutPanel />,
-    minWidth: 230,
-    minHeight: 230,
-  };
-}
+const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.freeze({
+  ...DIALOG_BASE,
+  tabType: ABOUT_DIALOG_TYPE,
+  defaultTitle: 'About',
+  initialSize: {
+    width: 500,
+    height: 500,
+  },
+  Component: AboutDialog,
+});
 
-export default AboutPanel;
+export default ABOUT_DIALOG;

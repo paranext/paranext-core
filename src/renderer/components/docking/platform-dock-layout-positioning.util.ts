@@ -1,12 +1,12 @@
-import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
-import cloneDeep from 'lodash/cloneDeep';
+import DIALOGS from '@renderer/components/dialogs';
 import {
-  PanelDirection,
-  Layout,
-  SavedTabInfo,
   FloatLayout,
+  Layout,
+  PanelDirection,
+  SavedTabInfo,
 } from '@shared/models/docking-framework.model';
-import { DIALOGS } from '@renderer/components/dialogs';
+import cloneDeep from 'lodash/cloneDeep';
+import { FloatPosition, FloatSize, LayoutSize, TabGroup } from 'rc-dock';
 import { TabType } from './docking-framework-internal.model';
 
 /**
