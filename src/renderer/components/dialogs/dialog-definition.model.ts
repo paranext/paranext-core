@@ -3,12 +3,16 @@ import { DialogDefinitionBase, DialogProps } from '@renderer/components/dialogs/
 import { ReactElement } from 'react';
 import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 
+/** The tabType for the about dialog in `about-dialog.component.tsx` */
+export const ABOUT_DIALOG_TYPE = 'platform.about';
 /** The tabType for the select project dialog in `select-project.dialog.tsx` */
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
 export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
 /** The tabType for the select books dialog in `select-books.dialog.tsx` */
 export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
+
+export type AboutDialogOptions = DialogOptions;
 
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
@@ -35,6 +39,7 @@ export type SelectBooksDialogOptions = DialogOptions & {
  * If you add a dialog here, you must also add it on {@link DIALOGS}
  */
 export interface DialogTypes {
+  [ABOUT_DIALOG_TYPE]: DialogDataTypes<AboutDialogOptions, string>;
   [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
   [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
     SelectMultipleProjectsDialogOptions,
