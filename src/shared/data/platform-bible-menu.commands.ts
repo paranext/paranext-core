@@ -27,8 +27,6 @@ export function handleMenuCommand(command: Command, tabId?: string) {
     case 'platform.visitSupportPage':
       (async () => {
         try {
-          // Assert the more specific type.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
           await commandService.sendCommand('platform.openWindow', 'https://support.bible');
         } catch (e) {
           throw new Error(
@@ -36,9 +34,6 @@ export function handleMenuCommand(command: Command, tabId?: string) {
           );
         }
       })();
-      break;
-    case 'platform.about':
-      logger.info(`TODO: display about. tabId: ${tabId}`);
       break;
     default:
       (async () => {
@@ -48,7 +43,7 @@ export function handleMenuCommand(command: Command, tabId?: string) {
           await commandService.sendCommand(command.command as CommandNames, tabId);
         } catch (e) {
           throw new Error(
-            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${e}`,
+            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${JSON.stringify(e)}`,
           );
         }
       })();

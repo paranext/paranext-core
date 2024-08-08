@@ -159,7 +159,6 @@ export async function activate(context: ExecutionActivationContext) {
   );
 
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
-
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
     booksPresentValidator,
