@@ -24,7 +24,7 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   return (
     <div className="pr-rounded-md pr-border">
-      <div className="pr-flex pr-flex-row pr-bg-muted/50">
+      <div className="pr-flex pr-flex-row pr-rounded-se-md pr-bg-muted/50">
         <div className="pr-m-2">
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
         </div>
@@ -110,7 +110,7 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
           <Button variant="ghost">X</Button>
         </div>
         <Button
-          className="pr-h-14 pr-w-14 pr-rounded-t-none pr-rounded-ee-none pr-rounded-ss-none"
+          className="pr-h-14 pr-w-14 pr-rounded-ee-none pr-rounded-ss-none"
           variant="secondary"
         >
           <p className="pr-text-2xl">+</p>
