@@ -18,7 +18,7 @@ export default function DirectionGuide({
         corner.
       </p>
       <div className="pr-flex pr-items-center pr-gap-2">
-        Try it: change direction to
+        Try it: change direction
         <DirToggle direction={direction} onChangeDirection={setDirection} />
       </div>
       <br />

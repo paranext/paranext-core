@@ -11,7 +11,7 @@ export default function ThemingGuide() {
         and use them accordingly.
       </p>
       <div className="pr-flex pr-items-center pr-gap-2">
-        Try it: change theme to
+        Try it: change theme
         <ThemeButton />
       </div>
       <p>
