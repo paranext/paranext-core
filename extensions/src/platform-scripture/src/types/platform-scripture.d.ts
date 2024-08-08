@@ -868,6 +868,8 @@ declare module 'papi-shared-types' {
   }
 
   export interface CommandHandlers {
+    'platform.about': (projectId?: string | undefined) => Promise<string | undefined>;
+
     /**
      * Register a new check so it is runnable. It will not produce any check results until
      * {@link ICheckRunner.enableCheck} is run by something else.

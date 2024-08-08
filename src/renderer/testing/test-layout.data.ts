@@ -9,8 +9,6 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 // import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/extension-manager/extension-manager-tab.component';
 import { LOREM_IPSUM } from './lorem-ipsum';
 
-export const FIRST_TAB_ID = 'About';
-
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
 export const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
@@ -24,7 +22,6 @@ export const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
             children: [
               {
                 tabs: [
-                  { id: 'About', tabType: TAB_TYPE_ABOUT },
                   { id: 'Test Tab Two', tabType: TAB_TYPE_TEST },
                   { id: 'Test Tab One', tabType: TAB_TYPE_TEST },
                   {
@@ -101,7 +98,7 @@ export const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
             size: 250,
             children: [
               {
-                tabs: [{ id: 'About', tabType: TAB_TYPE_ABOUT }] as SavedTabInfo[],
+                tabs: [] as SavedTabInfo[],
               },
             ],
           },

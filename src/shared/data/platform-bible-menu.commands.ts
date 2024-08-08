@@ -37,9 +37,6 @@ export function handleMenuCommand(command: Command, tabId?: string) {
         }
       })();
       break;
-    case 'platform.about':
-      logger.info(`TODO: display about. tabId: ${tabId}`);
-      break;
     default:
       (async () => {
         try {

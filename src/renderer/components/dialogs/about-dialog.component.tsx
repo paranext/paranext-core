@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { usePromise } from 'platform-bible-react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
 import {
   formatReplacementString,
@@ -34,7 +33,7 @@ const defaultAppInfo: AppInfo = {
   uriScheme: 'ignore',
 };
 
-export function AboutPanel() {
+function AboutDialog() {
   const [
     {
       '%product_name%': productName,
@@ -84,14 +83,15 @@ export function AboutPanel() {
   );
 }
 
-export function loadAboutTab(savedTabInfo: SavedTabInfo): TabInfo {
-  return {
-    ...savedTabInfo,
-    tabTitle: 'About',
-    content: <AboutPanel />,
-    minWidth: 230,
-    minHeight: 230,
-  };
-}
+const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.freeze({
+  ...DIALOG_BASE,
+  tabType: ABOUT_DIALOG_TYPE,
+  defaultTitle: 'About',
+  initialSize: {
+    width: 500,
+    height: 500,
+  },
+  Component: AboutDialog,
+});
 
-export default AboutPanel;
+export default ABOUT_DIALOG;
