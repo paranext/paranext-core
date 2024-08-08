@@ -1,9 +1,10 @@
 import ScriptureResultsViewer from '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
-import { useState } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
+import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { useState } from 'react';
 import generateRandomCheckingData from '../generate-random-checking-data';
 
-export default function ScriptureResultsViewerExample() {
+export default function ScriptureResultsViewerExample({ direction }: HasDirection) {
   const checks = [
     {
       id: 'preview.repeatedWords',
@@ -79,6 +80,7 @@ export default function ScriptureResultsViewerExample() {
         scriptureReferenceColumnName="Scripture Reference"
         typeColumnName="Check Type"
         detailsColumnName="Error Details"
+        direction={direction}
       />
     </div>
   );

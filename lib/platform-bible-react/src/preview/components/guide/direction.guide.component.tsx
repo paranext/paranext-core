@@ -37,8 +37,10 @@ export default function DirectionGuide({
       <table>
         <tbody>
           <tr>
-            <td>Bad example:</td>
-            <td>
+            <td className="pr-text-destructive">
+              Bad example: <code>pr-ml-2</code>, <code>pr-mr-2</code>
+            </td>
+            <td className="pr-text-destructive">
               <div className="pr-flex">
                 <Button className="pr-mr-2">1</Button>
                 <Button className="pr-mr-2">2</Button>
@@ -47,7 +49,21 @@ export default function DirectionGuide({
             </td>
           </tr>
           <tr>
-            <td>Bad example:</td>
+            <td>
+              Good example: <code>pr-ms-2</code>, <code>pr-me-2</code>
+            </td>
+            <td>
+              <div className="pr-flex">
+                <Button className="pr-me-2">1</Button>
+                <Button className="pr-me-2">2</Button>
+                <Button>3</Button>
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td className="pr-text-destructive">
+              Bad example: <code>pr-space-x-2</code>
+            </td>
             <td>
               <div className="pr-flex pr-space-x-2">
                 <Button>1</Button>
@@ -57,7 +73,9 @@ export default function DirectionGuide({
             </td>
           </tr>
           <tr>
-            <td>Good example:</td>
+            <td>
+              Good example: <code>pr-gap-2</code>
+            </td>
             <td>
               <div className="pr-flex pr-gap-2">
                 <Button>1</Button>
@@ -66,19 +84,16 @@ export default function DirectionGuide({
               </div>
             </td>
           </tr>
-          <tr>
-            <td>Good example:</td>
-            <td>
-              <div className="pr-flex">
-                <Button className="pr-me-2">1</Button>
-                <Button className="pr-me-2">2</Button>
-                <Button>3</Button>
-              </div>
-            </td>
-          </tr>
         </tbody>
       </table>
-      <p>Another bad example</p>
+      <h2 className="pr-py-2 pr-font-bold">Other properties</h2>
+      <p className="pr-text-destructive">
+        Bad: <code>pr-text-right</code>
+      </p>
+      <p>
+        Good: <code>pr-text-end</code>
+      </p>
+      <h2 className="pr-py-2 pr-font-bold">Another bad example</h2>
       <div className="pr-flex">
         <div className="pr-relative">
           <Input

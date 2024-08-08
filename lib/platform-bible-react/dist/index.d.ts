@@ -3,6 +3,7 @@
 import { SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
+import { PopoverProps } from '@radix-ui/react-popover';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
@@ -345,14 +346,17 @@ export type ComboBoxProps<T> = {
 	commandEmptyMessage?: string;
 	/** Variant of button */
 	buttonVariant?: ButtonProps["variant"];
-};
+	/** Text direction ltr or rtl */
+	dir?: Direction;
+} & PopoverProps;
+export type Direction = "ltr" | "rtl";
 /**
  * Autocomplete input and command palette with a list of suggestions.
  *
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -635,6 +639,8 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 	showSourceColumn?: boolean;
 	/** Callback function to notify when a row is selected */
 	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
+	/** Text direction ltr or rtl */
+	direction?: "ltr" | "rtl";
 };
 /**
  * Component to display a combined list of detailed items from one or more sources, where the items
@@ -645,7 +651,7 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, direction, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed
@@ -944,6 +950,10 @@ export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit
 	className?: string | undefined;
 	sideOffset?: number | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * TODO: fix: direction is not automatically handled by this component, so that shortcuts are
+ * display always to the right
+ */
 export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	inset?: boolean | undefined;
