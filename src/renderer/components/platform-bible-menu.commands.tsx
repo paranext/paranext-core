@@ -31,9 +31,6 @@ export function handleMenuCommand(command: Command, tabId?: string) {
     case 'platform.visitSupportPage':
       VisitPage('https://support.bible');
       break;
-    case 'platform.about':
-      logger.info(`TODO: display about. tabId: ${tabId}`);
-      break;
     default:
       (async () => {
         try {
