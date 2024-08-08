@@ -652,6 +652,8 @@ declare module 'papi-shared-types' {
   }
 
   export interface CommandHandlers {
+    'platform.about': (projectId?: string | undefined) => Promise<string | undefined>;
+
     /**
      * Toggle the `platformScripture.includeMyParatext9Projects` setting on or off
      *
