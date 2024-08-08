@@ -1,25 +1,27 @@
+import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.component';
+import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
+import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
+import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
+import * as webViewService from '@renderer/services/web-view.service-host';
 import {
   DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS,
   DialogData,
 } from '@shared/models/dialog-options.model';
+import { registerCommand } from '@shared/services/command.service';
 import { CATEGORY_DIALOG } from '@shared/services/dialog.service-model';
+import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
+import { serializeRequestType } from '@shared/utils/util';
 import {
   aggregateUnsubscriberAsyncs,
   isLocalizeKey,
-  serialize,
-  newGuid,
   LocalizeKey,
+  newGuid,
+  serialize,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import * as webViewService from '@renderer/services/web-view.service-host';
-import { serializeRequestType } from '@shared/utils/util';
-import { logger } from '@shared/services/logger.service';
-import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
-import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
-import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
-import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
-import { localizationService } from '@shared/services/localization.service';
 
 /** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
 // TODO: preserve requests between refreshes - save the request id or something?
@@ -236,6 +238,17 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 }
 
 // on the dialogService - see `dialog.service-model.ts` for JSDoc
+async function showAboutDialog(): Promise<void> {
+  (async () => {
+    try {
+      return await showDialog(ABOUT_DIALOG.tabType);
+    } catch (error) {
+      logger.error(`Failed to show about dialog: ${error}`);
+    }
+  })();
+}
+
+// on the dialogService - see `dialog.service-model.ts` for JSDoc
 async function selectProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
 ): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | undefined> {
@@ -367,6 +380,22 @@ export async function startDialogService(): Promise<void> {
       },
     ),
   );
+  unsubPromises.push(
+    networkService.registerRequestHandler(
+      serializeRequestType(CATEGORY_DIALOG, 'showAboutDialog'),
+      showAboutDialog,
+      {
+        method: {
+          summary: 'Shows a dialog with essential information about the application.',
+          params: [],
+          result: {
+            name: 'void',
+            schema: {},
+          },
+        },
+      },
+    ),
+  );
 
   // Wait to successfully register all requests
   const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
@@ -378,6 +407,8 @@ export async function startDialogService(): Promise<void> {
     dialogRequests.forEach((request) => request.reject(`DialogService is shutting down`));
     await unsubscribeRequests();
   });
+
+  registerCommand('platform.about', showAboutDialog);
 }
 
 // Hook up the dialogs' resolve and reject functions immediately because this is only here
