@@ -30,7 +30,7 @@ const createColumns = (
   inventoryItemColumn(itemLabel),
   {
     accessorKey: 'unicodeValue',
-    header: () => <Button>{unicodeValueLabel}</Button>,
+    header: () => <Button variant="ghost">{unicodeValueLabel}</Button>,
     cell: ({ row }) => {
       const item: string = row.getValue('item');
       return item.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
