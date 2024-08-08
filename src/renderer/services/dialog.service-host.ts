@@ -1,25 +1,28 @@
+import { ABOUT_DIALOG } from '@renderer/components/dialogs/about-dialog.component';
+import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
+import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
+import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
+import * as webViewService from '@renderer/services/web-view.service-host';
 import {
   DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS,
   DialogData,
 } from '@shared/models/dialog-options.model';
+import { registerCommand } from '@shared/services/command.service';
 import { CATEGORY_DIALOG } from '@shared/services/dialog.service-model';
+import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
+import { serializeRequestType } from '@shared/utils/util';
+import { CommandNames } from 'papi-shared-types';
 import {
   aggregateUnsubscriberAsyncs,
   isLocalizeKey,
-  serialize,
-  newGuid,
   LocalizeKey,
+  newGuid,
+  serialize,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
-import * as webViewService from '@renderer/services/web-view.service-host';
-import { serializeRequestType } from '@shared/utils/util';
-import { logger } from '@shared/services/logger.service';
-import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
-import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
-import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
-import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
-import { localizationService } from '@shared/services/localization.service';
 
 /** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
 // TODO: preserve requests between refreshes - save the request id or something?
@@ -236,6 +239,11 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 }
 
 // on the dialogService - see `dialog.service-model.ts` for JSDoc
+async function showAboutDialog(): Promise<void> {
+  return showDialog(ABOUT_DIALOG.tabType);
+}
+
+// on the dialogService - see `dialog.service-model.ts` for JSDoc
 async function selectProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
 ): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | undefined> {
@@ -367,6 +375,12 @@ export async function startDialogService(): Promise<void> {
       },
     ),
   );
+  unsubPromises.push(
+    networkService.registerRequestHandler(
+      serializeRequestType(CATEGORY_DIALOG, 'showAboutDialog'),
+      showAboutDialog,
+    ),
+  );
 
   // Wait to successfully register all requests
   const unsubscribeRequests = aggregateUnsubscriberAsyncs(await Promise.all(unsubPromises));
@@ -377,6 +391,18 @@ export async function startDialogService(): Promise<void> {
     // TODO: preserve requests between refreshes - stop rejecting all remaining requests
     dialogRequests.forEach((request) => request.reject(`DialogService is shutting down`));
     await unsubscribeRequests();
+  });
+
+  // This map should allow any functions because commands can be any function type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
+    'platform.about': showAboutDialog,
+  };
+
+  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+    // Re-assert type after passing through `forEach`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    registerCommand(commandName as CommandNames, handler);
   });
 }
 
