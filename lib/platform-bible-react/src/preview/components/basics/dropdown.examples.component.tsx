@@ -26,7 +26,6 @@ export default function DropdownExamples({ direction }: HasDirection) {
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
           <DropdownMenuItem>
-            {/* direction not working, TODO added in component */}
             <span>DropdownMenuItem</span>
             <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
           </DropdownMenuItem>
