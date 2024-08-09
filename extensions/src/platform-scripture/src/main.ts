@@ -49,13 +49,6 @@ const repeatableWordsValidator: ProjectSettingValidator<
 
 // #endregion
 
-async function openAboutTab(): Promise<string | undefined> {
-  return papi.webViews.getWebView(
-    'about', // TAB_TYPE_ABOUT,
-    { type: 'float', floatSize: { width: 700, height: 800 } },
-  );
-}
-
 async function openPlatformCharactersInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
@@ -150,7 +143,9 @@ export async function activate(context: ExecutionActivationContext) {
     repeatedWordsInventoryWebViewType,
   );
 
-  const openAboutTabPromise = papi.commands.registerCommand('platform.about', openAboutTab);
+  const openAboutTabPromise = papi.commands.registerCommand('platform.about', async () =>
+    papi.dialogs.about(),
+  );
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',

@@ -1,13 +1,14 @@
 import icon from '@assets/icon.png';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { LocalizeKey } from 'platform-bible-utils';
+import DIALOG_BASE from './dialog-base.data';
+import { ABOUT_DIALOG_TYPE, DialogDefinition } from './dialog-definition.model';
 
 export const TAB_TYPE_ABOUT = 'about';
 
 const STRING_KEYS: LocalizeKey[] = ['%product_name%'];
 
-export default function AboutPanel() {
+function AboutPanel() {
   const [{ '%product_name%': productName }] = useLocalizedStrings(STRING_KEYS);
 
   return (
@@ -22,12 +23,15 @@ export default function AboutPanel() {
   );
 }
 
-export function loadAboutTab(savedTabInfo: SavedTabInfo): TabInfo {
-  return {
-    ...savedTabInfo,
-    tabTitle: 'About',
-    content: <AboutPanel />,
-    minWidth: 230,
-    minHeight: 230,
-  };
-}
+const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.freeze({
+  ...DIALOG_BASE,
+  tabType: ABOUT_DIALOG_TYPE,
+  defaultTitle: 'About',
+  initialSize: {
+    width: 230,
+    height: 230,
+  },
+  Component: AboutPanel,
+});
+
+export default ABOUT_DIALOG;

@@ -18,6 +18,7 @@ import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.d
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 import localizationService from '@shared/services/localization.service';
+import ABOUT_DIALOG from '@renderer/components/dialogs/about-dialog.component';
 
 /** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
 // TODO: preserve requests between refreshes - save the request id or something?
@@ -234,6 +235,13 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 }
 
 // on the dialogService - see `dialog.service-model.ts` for JSDoc
+async function about(
+  options?: DialogTypes[typeof ABOUT_DIALOG.tabType]['options'],
+): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | undefined> {
+  return showDialog(ABOUT_DIALOG.tabType, options);
+}
+
+// on the dialogService - see `dialog.service-model.ts` for JSDoc
 async function selectProject(
   options?: DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['options'],
 ): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | undefined> {
@@ -242,6 +250,7 @@ async function selectProject(
 
 const dialogService: DialogService = {
   showDialog,
+  about,
   selectProject,
 };
 
