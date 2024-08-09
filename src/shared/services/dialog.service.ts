@@ -17,6 +17,10 @@ const dialogService: DialogService = {
     await initialize();
     return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'showDialog'), ...args);
   },
+  about: async (...args) => {
+    await initialize();
+    return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'showDialog'), ...args);
+  },
   selectProject: async (...args) => {
     await initialize();
     return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'selectProject'), ...args);

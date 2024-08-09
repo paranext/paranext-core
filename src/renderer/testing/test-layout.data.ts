@@ -1,6 +1,5 @@
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';
-import { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
 import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 // import { TAB_TYPE_QUICK_VERSE_HERESY } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
@@ -9,7 +8,7 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 // import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/extension-manager/extension-manager-tab.component';
 import LOREM_IPSUM from './lorem-ipsum';
 
-export const FIRST_TAB_ID = 'About';
+export const FIRST_TAB_ID = 'Test Tab One';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
@@ -24,7 +23,6 @@ const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
             children: [
               {
                 tabs: [
-                  { id: 'About', tabType: TAB_TYPE_ABOUT },
                   { id: 'Test Tab Two', tabType: TAB_TYPE_TEST },
                   { id: 'Test Tab One', tabType: TAB_TYPE_TEST },
                   {
@@ -101,7 +99,7 @@ const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
             size: 250,
             children: [
               {
-                tabs: [{ id: 'About', tabType: TAB_TYPE_ABOUT }] as SavedTabInfo[],
+                tabs: [{ id: 'Test Tab One', tabType: TAB_TYPE_TEST }] as SavedTabInfo[],
               },
             ],
           },
