@@ -105,33 +105,6 @@ async function getDefaultValueForKey<SettingName extends SettingNames>(
   return localizedSettingInfo.default as SettingTypes[SettingName];
 }
 
-async function validateSetting<SettingName extends SettingNames>(
-  key: SettingName,
-  newValue: SettingTypes[SettingName],
-  currentValue: SettingTypes[SettingName],
-  allChanges?: Partial<SettingTypes>,
-): Promise<boolean> {
-  if (key in coreSettingsValidators) {
-    const settingValidator = coreSettingsValidators[key];
-    if (settingValidator) return settingValidator(newValue, currentValue, allChanges ?? {});
-    // If there is no validator just let the change go through
-    return true;
-  }
-  try {
-    return await networkService.request(
-      serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key),
-      newValue,
-      currentValue,
-      allChanges ?? {},
-    );
-  } catch (error) {
-    // If there is no validator just let the change go through
-    const missingValidatorMsg = `No handler was found to process the request of type`;
-    if (includes(`${error}`, missingValidatorMsg)) return true;
-    throw error;
-  }
-}
-
 class SettingDataProviderEngine
   extends DataProviderEngine<
     SettingDataTypes & {
@@ -180,7 +153,7 @@ class SettingDataProviderEngine
     newSetting: SettingTypes[SettingName],
   ): Promise<DataProviderUpdateInstructions<SettingDataTypes>> {
     try {
-      if (!(await validateSetting(key, newSetting, await this.get(key))))
+      if (!(await this.validateSetting(key, newSetting, await this.get(key))))
         throw new Error('validation failed');
 
       this.settingsData[key] = newSetting;
@@ -189,6 +162,34 @@ class SettingDataProviderEngine
       throw new Error(`Error setting value for key '${key}': ${error}`);
     }
     return true;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  async validateSetting<SettingName extends SettingNames>(
+    key: SettingName,
+    newValue: SettingTypes[SettingName],
+    currentValue: SettingTypes[SettingName],
+    allChanges?: Partial<SettingTypes>,
+  ): Promise<boolean> {
+    if (key in coreSettingsValidators) {
+      const settingValidator = coreSettingsValidators[key];
+      if (settingValidator) return settingValidator(newValue, currentValue, allChanges ?? {});
+      // If there is no validator just let the change go through
+      return true;
+    }
+    try {
+      return await networkService.request(
+        serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key),
+        newValue,
+        currentValue,
+        allChanges ?? {},
+      );
+    } catch (error) {
+      // If there is no validator just let the change go through
+      const missingValidatorMsg = `No handler was found to process the request of type`;
+      if (includes(`${error}`, missingValidatorMsg)) return true;
+      throw error;
+    }
   }
 
   async reset<SettingName extends SettingNames>(key: SettingName): Promise<boolean> {

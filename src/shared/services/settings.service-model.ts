@@ -95,6 +95,21 @@ export type ISettingsService = {
   get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
 
   /**
+   * Validates the setting at the given key with the new value provided
+   *
+   * @param key The string id of the setting to validate
+   * @param newValue The value to validate
+   * @param currentValue The value already set to the setting
+   * @param allChanges
+   */
+  validateSetting<SettingName extends SettingNames>(
+    key: SettingName,
+    newValue: SettingTypes[SettingName],
+    currentValue: SettingTypes[SettingName],
+    allChanges?: Partial<SettingTypes>,
+  ): Promise<boolean>;
+
+  /**
    * Sets the value of the specified setting
    *
    * @param key The string id of the setting for which the value is being set

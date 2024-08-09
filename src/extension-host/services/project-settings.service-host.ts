@@ -13,8 +13,16 @@ import {
 } from '@shared/services/project-settings.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-import { includes, isLocalizeKey, isString } from 'platform-bible-utils';
-import ProjectSettingsDocumentCombiner from '@shared/utils/project-settings-document-combiner';
+import {
+  includes,
+  isLocalizeKey,
+  isString,
+  Localized,
+  ProjectSettingsContribution,
+} from 'platform-bible-utils';
+import ProjectSettingsDocumentCombiner, {
+  LocalizedProjectSettingsContributionInfo,
+} from '@shared/utils/project-settings-document-combiner';
 
 /**
  * Object that keeps track of all project settings contributions in the platform. To listen to
@@ -117,11 +125,27 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   return localizedProjectSettingInfo.default as ProjectSettingTypes[ProjectSettingName];
 }
 
+async function getLocalizedContributionInfo(): Promise<
+  LocalizedProjectSettingsContributionInfo | undefined
+> {
+  return projectSettingsDocumentCombiner.getLocalizedProjectSettingsContributionInfo();
+}
+
+async function getLocalizedContributionForExtension(
+  extensionName: string,
+): Promise<Localized<ProjectSettingsContribution> | undefined> {
+  const allContributionInfo =
+    await projectSettingsDocumentCombiner.getLocalizedProjectSettingsContributionInfo();
+  return allContributionInfo?.contributions[extensionName];
+}
+
 const { registerValidator } = projectSettingsServiceObjectToProxy;
 const projectSettingsService: IProjectSettingsService = {
   isValid,
   getDefault,
   registerValidator,
+  getLocalizedContributionInfo,
+  getLocalizedContributionForExtension,
 };
 
 /** This is an internal-only export for testing purposes and should not be used in development */
