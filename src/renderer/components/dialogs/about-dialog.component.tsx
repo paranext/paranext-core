@@ -28,8 +28,8 @@ const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.freeze({
   tabType: ABOUT_DIALOG_TYPE,
   defaultTitle: 'About',
   initialSize: {
-    width: 230,
-    height: 230,
+    width: 500,
+    height: 500,
   },
   Component: AboutPanel,
 });
