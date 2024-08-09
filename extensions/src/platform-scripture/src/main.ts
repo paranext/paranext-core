@@ -143,6 +143,10 @@ export async function activate(context: ExecutionActivationContext) {
     repeatedWordsInventoryWebViewType,
   );
 
+  const openAboutTabPromise = papi.commands.registerCommand('platform.about', async () =>
+    papi.dialogs.about(),
+  );
+
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
     async (shouldInclude) => {
@@ -204,6 +208,7 @@ export async function activate(context: ExecutionActivationContext) {
   await checkAggregatorService.initialize();
 
   context.registrations.add(
+    await openAboutTabPromise,
     await scriptureExtenderPdpefPromise,
     await includeProjectsCommandPromise,
     await includeProjectsValidatorPromise,

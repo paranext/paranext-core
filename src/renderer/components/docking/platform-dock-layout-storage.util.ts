@@ -47,7 +47,6 @@ import {
   updateWebViewTab,
 } from '@renderer/components/web-view.component';
 
-import { TAB_TYPE_ABOUT, loadAboutTab } from '@renderer/testing/about-panel.component';
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
 import {
@@ -64,7 +63,6 @@ import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './er
 let tabLoaderMap: Map<TabType, TabLoader>;
 if (globalThis.isNoisyDevModeEnabled) {
   tabLoaderMap = new Map<TabType, TabLoader>([
-    [TAB_TYPE_ABOUT, loadAboutTab],
     [TAB_TYPE_BUTTONS, loadButtonsTab],
     [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
     [TAB_TYPE_TEST, loadTestTab],
@@ -82,7 +80,6 @@ if (globalThis.isNoisyDevModeEnabled) {
   ]);
 } else {
   tabLoaderMap = new Map<TabType, TabLoader>([
-    [TAB_TYPE_ABOUT, loadAboutTab],
     [TAB_TYPE_BUTTONS, loadButtonsTab],
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
     [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
