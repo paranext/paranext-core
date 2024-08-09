@@ -1,6 +1,6 @@
 import Checkbox from '@/components/shadcn-ui/checkbox';
 import { ColumnDef, SortDirection } from '@/components/advanced/data-table/data-table.component';
-import { Button } from '../../..';
+import { Button } from '../../../..';
 
 type MyDataType = {
   character: string;

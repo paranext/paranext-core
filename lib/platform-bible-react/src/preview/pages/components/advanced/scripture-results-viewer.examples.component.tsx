@@ -1,8 +1,8 @@
-import ScriptureResultsViewer from '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
+import ScriptureResultsViewer from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 import { Button } from '@/components/shadcn-ui/button';
 import { HasDirection } from '@/preview/preview-components/direction-toggle';
 import { useState } from 'react';
-import generateRandomCheckingData from '../generate-random-checking-data';
+import generateRandomCheckingData from '../data-sources/generate-random-checking-data';
 
 export default function ScriptureResultsViewerExample({ direction }: HasDirection) {
   const checks = [

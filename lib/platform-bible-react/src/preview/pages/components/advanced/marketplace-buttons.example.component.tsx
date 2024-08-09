@@ -1,10 +1,10 @@
-import InstallButton from '@/components/advanced-components/extension-marketplace/buttons/install-button.component';
-import DisableButton from '@/components/advanced-components/extension-marketplace/buttons/disable-button.component';
-import UpdateButton from '@/components/advanced-components/extension-marketplace/buttons/update-button.component';
-import EnableButton from '@/components/advanced-components/extension-marketplace/buttons/enable-button.component';
+import InstallButton from '@/components/advanced/extension-marketplace/buttons/install-button.component';
+import DisableButton from '@/components/advanced/extension-marketplace/buttons/disable-button.component';
+import UpdateButton from '@/components/advanced/extension-marketplace/buttons/update-button.component';
+import EnableButton from '@/components/advanced/extension-marketplace/buttons/enable-button.component';
 import FilterDropdown, {
   DropdownMenuItemType,
-} from '@/components/advanced-components/extension-marketplace/filter-dropdown.component';
+} from '@/components/advanced/extension-marketplace/filter-dropdown.component';
 
 export default function MarketplaceButtonExamples() {
   const publisherFilterItems = ['All', 'Verified', 'Experimental'];

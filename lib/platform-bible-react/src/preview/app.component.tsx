@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
-import Compositions from './components/advanced.component';
-import Basics from './components/basics.component';
-import Guide from './components/guide.component';
-import Layouts from './components/layouts.component';
-import Playground from './components/playground.component';
+import Compositions from './pages/components/advanced.component';
+import Basics from './pages/components/basics.component';
+import Guide from './pages/guide.component';
+import Layouts from './pages/layouts.component';
+import Playground from './pages/playground.component';
 import { DirToggle, Direction } from './preview-components/direction-toggle';
 import { ThemeProvider } from './preview-components/theme-provider.component';
 import { ThemeButton } from './preview-components/theme-toggle.component';
