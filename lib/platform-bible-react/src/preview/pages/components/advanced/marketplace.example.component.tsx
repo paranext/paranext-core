@@ -1,6 +1,6 @@
-import Footer from '@/components/advanced-components/extension-marketplace/footer.component';
-import NoExtensionsFound from '@/components/advanced-components/extension-marketplace/no-extensions-found.component';
-import MoreInfo from '@/components/advanced-components/extension-marketplace/more-info.component';
+import Footer from '@/components/advanced/extension-marketplace/footer.component';
+import NoExtensionsFound from '@/components/advanced/extension-marketplace/no-extensions-found.component';
+import MoreInfo from '@/components/advanced/extension-marketplace/more-info.component';
 
 export default function MarketplaceExamples() {
   return (

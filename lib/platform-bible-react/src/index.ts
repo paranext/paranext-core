@@ -48,7 +48,7 @@ export type { IconButtonProps } from './components/mui/icon-button.component';
 export { default as LabelPosition } from './components/mui/label-position.model';
 export { default as MenuItem } from './components/mui/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/mui/menu-item.component';
-export { default as ScriptureResultsViewer } from './components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
+export { default as ScriptureResultsViewer } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export type {
   ResultsSet,
   ResultsSource,
@@ -56,7 +56,7 @@ export type {
   ScriptureResultsViewerColumnInfo,
   ScriptureResultsViewerProps,
   ScriptureSrcItemDetail,
-} from './components/advanced-components/scripture-results-viewer/scripture-results-viewer.component';
+} from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Slider } from './components/mui/slider.component';
@@ -88,26 +88,26 @@ export {
   VerticalTabsTrigger,
 } from './components/basics/tabs-vertical';
 
-export { default as InstallButton } from './components/advanced-components/extension-marketplace/buttons/install-button.component';
-export { default as EnableButton } from './components/advanced-components/extension-marketplace/buttons/enable-button.component';
-export { default as DisableButton } from './components/advanced-components/extension-marketplace/buttons/disable-button.component';
-export { default as UpdateButton } from './components/advanced-components/extension-marketplace/buttons/update-button.component';
-export { default as MarkdownRenderer } from './components/advanced-components/extension-marketplace/markdown-renderer.component';
+export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
+export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
+export { default as DisableButton } from './components/advanced/extension-marketplace/buttons/disable-button.component';
+export { default as UpdateButton } from './components/advanced/extension-marketplace/buttons/update-button.component';
+export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {
   default as FilterDropdown,
   DropdownMenuItemType,
   type DropdownItem,
   type DropdownGroup,
-} from './components/advanced-components/extension-marketplace/filter-dropdown.component';
-export { default as FilterButton } from './components/advanced-components/extension-marketplace/buttons/filter-button.component';
-export { default as NoExtensionsFound } from './components/advanced-components/extension-marketplace/no-extensions-found.component';
-export { default as MoreInfo } from './components/advanced-components/extension-marketplace/more-info.component';
+} from './components/advanced/extension-marketplace/filter-dropdown.component';
+export { default as FilterButton } from './components/advanced/extension-marketplace/buttons/filter-button.component';
+export { default as NoExtensionsFound } from './components/advanced/extension-marketplace/no-extensions-found.component';
+export { default as MoreInfo } from './components/advanced/extension-marketplace/more-info.component';
 export {
   default as VersionHistory,
   type VersionInformation,
   type VersionHistoryType,
-} from './components/advanced-components/extension-marketplace/version-history.component';
-export { default as Footer } from './components/advanced-components/extension-marketplace/footer.component';
+} from './components/advanced/extension-marketplace/version-history.component';
+export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
