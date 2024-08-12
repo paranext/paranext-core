@@ -10,6 +10,7 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/shadcn-ui/command';
+import { PopoverProps } from '@radix-ui/react-popover';
 
 export type ComboBoxLabelOption = { label: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
@@ -39,7 +40,11 @@ export type ComboBoxProps<T> = {
   commandEmptyMessage?: string;
   /** Variant of button */
   buttonVariant?: ButtonProps['variant'];
-};
+  /** Text direction ltr or rtl */
+  dir?: Direction;
+} & PopoverProps;
+
+type Direction = 'ltr' | 'rtl';
 
 function getOptionLabelDefault(option: ComboBoxOption): string {
   if (typeof option === 'string') {
@@ -68,11 +73,13 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   textPlaceholder = '',
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
+  dir = 'ltr',
+  ...props
 }: ComboBoxProps<T>) {
   const [open, setOpen] = useState(false);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} {...props}>
       <PopoverTrigger asChild>
         <Button
           variant={buttonVariant}
@@ -82,12 +89,12 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           className={cn('pr-w-[200px] pr-justify-between', className)}
         >
           {value ? getOptionLabel(value) : buttonPlaceholder}
-          <ChevronsUpDown className="pr-ml-2 pr-h-4 pr-w-4 pr-shrink-0 pr-opacity-50" />
+          <ChevronsUpDown className="pr-ms-2 pr-h-4 pr-w-4 pr-shrink-0 pr-opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="pr-w-[200px] pr-p-0">
+      <PopoverContent className="pr-w-[200px] pr-p-0" dir={dir}>
         <Command>
-          <CommandInput placeholder={textPlaceholder} className="pr-text-inherit" />
+          <CommandInput dir={dir} placeholder={textPlaceholder} className="pr-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
             {options.map((option) => (
@@ -100,7 +107,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
                 }}
               >
                 <Check
-                  className={cn('pr-mr-2 pr-h-4 pr-w-4', {
+                  className={cn('pr-me-2 pr-h-4 pr-w-4', {
                     'pr-opacity-0': !value || getOptionLabel(value) !== getOptionLabel(option),
                   })}
                 />

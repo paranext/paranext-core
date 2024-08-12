@@ -681,6 +681,10 @@ declare module 'papi-shared-types' {
     'platformScripture.openCharactersInventory': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    'platformScripture.openRepeatedWordsInventory': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface SettingTypes {
@@ -716,5 +720,9 @@ declare module 'papi-shared-types' {
     'platformScripture.validCharacters': string;
 
     'platformScripture.invalidCharacters': string;
+
+    'platformScripture.repeatableWords': string;
+
+    'platformScripture.nonRepeatableWords': string;
   }
 }

@@ -3,6 +3,7 @@
 import { SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
+import { PopoverProps } from '@radix-ui/react-popover';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
@@ -162,13 +163,6 @@ export type MultiColumnMenu = {
 export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
-/**
- * Map whose keys are localized string keys and whose values provide information about how to
- * localize strings for the localized string key
- */
-export interface LanguageStrings {
-	[k: LocalizeKey]: LocalizedStringValue;
-}
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -184,9 +178,50 @@ export interface DataTableProps<TData, TValue> {
 	enablePagination?: boolean;
 	showPaginationControls?: boolean;
 	showColumnVisibilityControls?: boolean;
+	stickyHeader?: boolean;
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
-export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export declare const INVENTORY_STRING_KEYS: readonly [
+	"%webView_inventory_all%",
+	"%webView_inventory_approved%",
+	"%webView_inventory_unapproved%",
+	"%webView_inventory_unknown%",
+	"%webView_inventory_scope_book%",
+	"%webView_inventory_scope_chapter%",
+	"%webView_inventory_scope_verse%",
+	"%webView_inventory_filter_text%",
+	"%webView_inventory_occurrences_table_header_reference%",
+	"%webView_inventory_occurrences_table_header_occurrence%"
+];
+export type InventoryLocalizedStrings = {
+	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+export type Status = "approved" | "unapproved" | "unknown";
+export type ItemData = {
+	item: string;
+	count: number;
+	status: Status;
+};
+export declare const getSortingIcon: (sortDirection: false | SortDirection) => React$1.ReactNode;
+export interface InventoryProps {
+	scriptureReference: ScriptureReference;
+	setScriptureReference: (scriptureReference: ScriptureReference) => void;
+	localizedStrings: InventoryLocalizedStrings;
+	extractItems: (text: string, item?: string | undefined) => string[];
+	approvedItems: string[];
+	onApprovedItemsChange: (items: string[]) => void;
+	unapprovedItems: string[];
+	onUnapprovedItemsChange: (items: string[]) => void;
+	text: string | undefined;
+	scope: string;
+	onScopeChange: (scope: string) => void;
+	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
+}
+export declare function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryStatusColumn: (statusLabel: string, statusChangeHandler: (items: string[], status: Status) => void) => ColumnDef<ItemData>;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
@@ -311,14 +346,17 @@ export type ComboBoxProps<T> = {
 	commandEmptyMessage?: string;
 	/** Variant of button */
 	buttonVariant?: ButtonProps["variant"];
-};
+	/** Text direction ltr or rtl */
+	dir?: Direction;
+} & PopoverProps;
+export type Direction = "ltr" | "rtl";
 /**
  * Autocomplete input and command palette with a list of suggestions.
  *
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -601,6 +639,8 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 	showSourceColumn?: boolean;
 	/** Callback function to notify when a row is selected */
 	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
+	/** Text direction ltr or rtl */
+	direction?: "ltr" | "rtl";
 };
 /**
  * Component to display a combined list of detailed items from one or more sources, where the items
@@ -611,7 +651,7 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, direction, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed
@@ -985,6 +1025,10 @@ export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit
 	className?: string | undefined;
 	sideOffset?: number | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * TODO: fix: direction is not automatically handled by this component, so that shortcuts are
+ * display always to the right
+ */
 export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	inset?: boolean | undefined;
@@ -1017,8 +1061,12 @@ export declare const SelectContent: React$1.ForwardRefExoticComponent<Omit<Selec
 export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
-export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & React$1.RefAttributes<HTMLTableElement>>;
-export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & {
+	stickyHeader?: boolean | undefined;
+} & React$1.RefAttributes<HTMLTableElement>>;
+export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & {
+	stickyHeader?: boolean | undefined;
+} & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
@@ -1053,16 +1101,6 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-export interface CharacterInventoryProps {
-	scriptureReference: ScriptureReference;
-	setScriptureReference: (scriptureReference: ScriptureReference) => void;
-	localizedStrings: LanguageStrings;
-	projectId: string;
-	getSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string) => Promise<string[]>;
-	setSetting: (characterSet: "validCharacters" | "invalidCharacters", projectId: string, characters: string[]) => void;
-	getText: (projectId: string, scriptureRef: ScriptureReference, scope: string) => Promise<string | undefined>;
-}
-export declare function CharacterInventory({ scriptureReference, setScriptureReference, localizedStrings, projectId, getSetting, setSetting, getText, }: CharacterInventoryProps): import("react/jsx-runtime").JSX.Element;
 export type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;
@@ -1070,7 +1108,7 @@ export type InstallButtonProps = {
 	handleClick: () => void;
 	/** Optional text for the button. */
 	buttonText?: string;
-};
+} & ButtonProps;
 /**
  * The InstallButton component is a button designed for initiating installs. It includes visuals for
  * active installing and idle states.
@@ -1080,13 +1118,13 @@ export type InstallButtonProps = {
  * @param buttonText Optional text for the button.
  * @returns A install button.
  */
-export function InstallButton({ isInstalling, handleClick, buttonText, }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
+export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
 export type EnableButtonProps = {
 	/** The enabling boolean value determines the state of the button. */
 	isEnabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
-};
+} & ButtonProps;
 /**
  * The EnableButton component is a button designed for initiating enabling of downloads. It includes
  * visuals for active enabling and idle states.
@@ -1095,13 +1133,13 @@ export type EnableButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to enable.
  */
-export function EnableButton({ isEnabling, handleClick }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
+export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
 export type DisableButtonProps = {
 	/** The disabling boolean value determines the state of the button. */
 	isDisabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
-};
+} & ButtonProps;
 /**
  * The DisableButton component is a button designed for initiating disabling of downloads. It
  * includes visuals for active disabling and idle states.
@@ -1110,13 +1148,13 @@ export type DisableButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to disable.
  */
-export function DisableButton({ isDisabling, handleClick }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
+export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
 export type UpdateButtonProps = {
 	/** The updating boolean value determines the state of the button. */
 	isUpdating: boolean;
 	/** The handleClick function is called when the button is clicked. */
 	handleClick: () => void;
-};
+} & ButtonProps;
 /**
  * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
  * It includes visuals for active updating and idle states.
@@ -1125,8 +1163,11 @@ export type UpdateButtonProps = {
  * @param handleClick The handleClick function is called when the button is clicked.
  * @returns A button that can be used to update.
  */
-export function UpdateButton({ isUpdating, handleClick }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
+export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
 export interface MarkdownRendererProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The markdown string to render */
 	markdown: string;
 }
 /**
@@ -1134,9 +1175,143 @@ export interface MarkdownRendererProps {
  * the platform.
  *
  * @param markdown The markdown string to render.
+ * @param id Optional unique identifier
  * @returns A div containing the rendered markdown content.
  */
-export function MarkdownRenderer({ markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export function MarkdownRenderer({ id, markdown }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export declare enum DropdownMenuItemType {
+	Check = 0,
+	Radio = 1
+}
+export type DropdownItem = {
+	/** The label is the text that will be displayed on the dropdown item. */
+	label: string;
+	/** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
+	itemType: DropdownMenuItemType;
+	/** The onClick function is called when the item is clicked. */
+	onClick: () => void;
+};
+export type DropdownGroup = {
+	/**
+	 * The label is the text that will be displayed on the dropdown group. It is used to categorize
+	 * the items in the group.
+	 */
+	label: string;
+	/** The items array contains the items that will be displayed in the dropdown group */
+	items: DropdownItem[];
+};
+export type FilterDropdownProps = {
+	/** Object unique identifier */
+	id?: string;
+	/** The groups array contains the groups that will be displayed in the dropdown */
+	groups: DropdownGroup[];
+};
+/**
+ * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
+ * items that can be checkboxes or radio items.
+ *
+ * @param id Optional unique identifier
+ * @param groups The groups array contains the groups that will be displayed in the dropdown
+ * @returns A filter dropdown.
+ */
+export function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The FilterButton component is a button designed for initiating filtering of data. It is designed
+ * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
+ * asChild.
+ *
+ * @returns A button that can be used to filter.
+ */
+export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
+export interface NoExtensionsFoundProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The message to display */
+	message: string;
+}
+/**
+ * This component displays a message to the user when no extensions are found in the marketplace.
+ *
+ * @param id Optional unique identifier
+ * @param message The message to display.
+ * @returns {JSX.Element} - Returns the message component that displays the message to the user.
+ */
+export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
+/** Interface that stores the parameters passed to the More Info component */
+export interface MoreInfoProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The category of the extension */
+	category: string;
+	/** The number of downloads for the extension */
+	downloads: Record<string, number>;
+	/** The languages supported by the extension */
+	languages: string[];
+	/** The URL to the more info page of the extension */
+	moreInfoUrl: string;
+}
+/**
+ * This component displays the more info section of the extension which includes the category,
+ * number of downloads, languages, and links to the website and support
+ *
+ * @param id Optional unique identifier
+ * @param category The category of the extension
+ * @param downloads The number of downloads for the extension
+ * @param languages The languages supported by the extension
+ * @param moreInfoUrl The URL to the more info page of the extension
+ * @returns {JSX.Element} - Returns the more info component that displays the category, number of
+ *   downloads, languages, and links to the website and support
+ */
+export function MoreInfo({ id, category, downloads, languages, moreInfoUrl, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
+export type VersionInformation = {
+	/** Date the version was published */
+	date: string;
+	/** Description of the changes in the version */
+	description: string;
+};
+/** Type to store the version history information */
+export type VersionHistoryType = Record<string, VersionInformation>;
+/** Interface that stores the parameters passed to the Version History component */
+export interface VersionHistoryProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** Object containing the versions mapped with their information */
+	versionHistory: VersionHistoryType;
+}
+/**
+ * Component to render the version history information shown in the footer component. Lists the 5
+ * most recent versions, with the options to show all versions by pressing a button.
+ *
+ * @param versionHistory Object containing the versions mapped with their information
+ * @param id Optional unique identifier
+ * @returns Rendered version history for the Footer component
+ */
+export function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
+/** Interface to store the parameters passed to the Footer component */
+export interface FooterProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** Name of the publisher */
+	publisherDisplayName: string;
+	/** Size of the extension file in bytes */
+	fileSize: number;
+	/** List of language codes supported by the extension */
+	locales: string[];
+	/** Object containing the version history mapped with their information */
+	versionHistory: VersionHistoryType;
+}
+/**
+ * Component to render the footer for the extension details which contains information on the
+ * publisher, version history, languages, and file size.
+ *
+ * @param id Optional unique identifier
+ * @param publisherDisplayName Name of the publisher
+ * @param fileSize Size of the extension file in bytes
+ * @param locales List of language codes supported by the extension
+ * @param versionHistory Object containing the version history mapped with their information
+ * @returns The rendered Footer component
+ */
+export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
