@@ -717,9 +717,9 @@ export type MenuItemContainingSubmenu = MenuItemBase & {
 export type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
-	/** Path to the icon to display after the menu text */
+	/** Uri path to the icon to display after the menu text. Ex: `papi-extension://helloWorld/assets/icon.png` */
 	iconPathAfter?: string;
-	/** Path to the icon to display before the menu text */
+	/** Uri path to the icon to display before the menu text. Ex: `papi-extension://helloWorld/assets/icon.png` */
 	iconPathBefore?: string;
 };
 /**
@@ -1098,21 +1098,38 @@ export declare function codePointAt(string: string, index: number): number | und
  */
 export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
 /**
- * Formats a string, replacing {localization key} with the localization (or multiple localizations
- * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
- * escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like
- * `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
+ * Formats a string, replacing `{replacer key}` with the value in the `replacers` at that replacer
+ * key (or multiple replacer values if there are multiple in the string). Will also remove \ before
+ * curly braces if curly braces are escaped with a backslash in order to preserve the curly braces.
+ * E.g. 'Hi, this is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly
+ * braces}!
  *
- * If the key in unescaped braces is not found, just return the key without the braces. Empty
- * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {
- * 'name': 'Jim'}) would return 'I am Nemo'.
+ * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
+ * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
+ * would return 'I am Nemo'.
+ *
+ * @example
+ *
+ * ```typescript
+ * formatReplacementString(
+ *   'Hi, this is {name}! I like \{curly braces\}! I have a {carColor} car. My favorite food is {food}.',
+ *   { name: 'Bill', carColor: 'blue' }
+ * );
+ *
+ * =>
+ *
+ * 'Hi, this is Bill! I like {curly braces}! I have a blue car. My favorite food is food.'
+ * ```
  *
  * @param str String to format
+ * @param replacers Object whose keys are replacer keys and whose values are the values with which
+ *   to replace `{replacer key}`s found in the string to format. Will be coerced to strings using
+ *   `${replacerValue}`
  * @returns Formatted string
  */
 export declare function formatReplacementString(str: string, replacers: {
-	[key: string]: string;
-}): string;
+	[key: string | number]: string | unknown;
+} | object): string;
 /**
  * This function mirrors the `includes` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
@@ -1460,6 +1477,9 @@ export interface StringMetadata {
 	 * Localized string key from which to get this value if one does not exist in the specified
 	 * language. If a new key/value pair needs to be made to replace an existing one, this could help
 	 * smooth over the transition if the meanings are close enough
+	 *
+	 * You can use Paratext 9 Localized String Keys here. Be sure to escape any % signs with a
+	 * backslash `\`.
 	 */
 	fallbackKey?: LocalizeKey;
 	/**
@@ -1523,7 +1543,9 @@ export declare const localizedStringsDocumentSchema: {
 			properties: {
 				fallbackKey: {
 					description: string;
-					$ref: string;
+					type: string;
+					pattern: string;
+					tsType: string;
 				};
 				notes: {
 					description: string;

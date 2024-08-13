@@ -27,6 +27,7 @@ import {
   stringLength,
   startsWith,
   slice,
+  JsonDocumentLike,
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -1010,67 +1011,106 @@ async function resyncContributions(
   projectSettingsDocumentCombiner.deleteAllContributions();
   localizedStringsDocumentCombiner.deleteAllContributions();
 
-  await Promise.all(
+  // Load up all the extension contributions asynchronously
+  const extensionsContributions = await Promise.all(
     extensionsToAdd.map(async (extension) => {
+      let localizedStringsDocument: JsonDocumentLike | undefined;
       if (extension.localizedStrings) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
           const localizedStringsJson = await nodeFS.readFileText(
             joinUriPaths(extension.dirUri, extension.localizedStrings),
           );
-          const localizedStringsDocument = JSON.parse(localizedStringsJson);
-          localizedStringsDocumentCombiner.addOrUpdateContribution(
-            extension.name,
-            localizedStringsDocument,
-          );
+          localizedStringsDocument = JSON.parse(localizedStringsJson);
         } catch (error) {
           logger.warn(
-            `Could not add localized strings contribution for ${extension.name}: ${error}`,
+            `Could not load localized strings contribution for ${extension.name}: ${error}`,
           );
         }
       }
+      let menuDocument: JsonDocumentLike | undefined;
       if (extension.menus) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
           const menuJson = await nodeFS.readFileText(
             joinUriPaths(extension.dirUri, extension.menus),
           );
-          const menuDocument = JSON.parse(menuJson);
-          menuDocumentCombiner.addOrUpdateContribution(extension.name, menuDocument);
+          menuDocument = JSON.parse(menuJson);
         } catch (error) {
-          logger.warn(`Could not add menu contribution for ${extension.name}: ${error}`);
+          logger.warn(`Could not load menu contribution for ${extension.name}: ${error}`);
         }
       }
+      let settingsDocument: JsonDocumentLike | undefined;
       if (extension.settings) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
           const settingsJson = await nodeFS.readFileText(
             joinUriPaths(extension.dirUri, extension.settings),
           );
-          const settingsDocument = JSON.parse(settingsJson);
-          settingsDocumentCombiner.addOrUpdateContribution(extension.name, settingsDocument);
+          settingsDocument = JSON.parse(settingsJson);
         } catch (error) {
-          logger.warn(`Could not add settings contribution for ${extension.name}: ${error}`);
+          logger.warn(`Could not load settings contribution for ${extension.name}: ${error}`);
         }
       }
+      let projectSettingsDocument: JsonDocumentLike | undefined;
       if (extension.projectSettings) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
           const projectSettingsJson = await nodeFS.readFileText(
             joinUriPaths(extension.dirUri, extension.projectSettings),
           );
-          const projectSettingsDocument = JSON.parse(projectSettingsJson);
-          projectSettingsDocumentCombiner.addOrUpdateContribution(
-            extension.name,
-            projectSettingsDocument,
-          );
+          projectSettingsDocument = JSON.parse(projectSettingsJson);
         } catch (error) {
           logger.warn(
-            `Could not add project settings contribution for ${extension.name}: ${error}`,
+            `Could not load project settings contribution for ${extension.name}: ${error}`,
           );
         }
       }
+
+      return {
+        name: extension.name,
+        localizedStringsDocument,
+        menuDocument,
+        settingsDocument,
+        projectSettingsDocument,
+      };
     }),
+  );
+
+  // Load contributions in the order in which the extensions are loaded
+  extensionsContributions.forEach(
+    ({
+      name,
+      localizedStringsDocument,
+      menuDocument,
+      settingsDocument,
+      projectSettingsDocument,
+    }) => {
+      if (localizedStringsDocument)
+        try {
+          localizedStringsDocumentCombiner.addOrUpdateContribution(name, localizedStringsDocument);
+        } catch (error) {
+          logger.warn(`Could not add localized strings contribution for ${name}: ${error}`);
+        }
+      if (menuDocument)
+        try {
+          menuDocumentCombiner.addOrUpdateContribution(name, menuDocument);
+        } catch (error) {
+          logger.warn(`Could not add menu contribution for ${name}: ${error}`);
+        }
+      if (settingsDocument)
+        try {
+          settingsDocumentCombiner.addOrUpdateContribution(name, settingsDocument);
+        } catch (error) {
+          logger.warn(`Could not add settings contribution for ${name}: ${error}`);
+        }
+      if (projectSettingsDocument)
+        try {
+          projectSettingsDocumentCombiner.addOrUpdateContribution(name, projectSettingsDocument);
+        } catch (error) {
+          logger.warn(`Could not add project settings contribution for ${name}: ${error}`);
+        }
+    },
   );
 
   await menuDataService.rebuildMenus();

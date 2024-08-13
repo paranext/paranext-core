@@ -362,6 +362,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #endregion
 
+    #region Scripture-related methods
+
+    /// <summary>
+    /// Send an event on the PAPI announcing that all the Scripture data has changed. This is used
+    /// for reloading all the Scripture, settings, etc. after a project has been S/Red.
+    /// </summary>
+    public void SendFullProjectUpdateEvent()
+    {
+        SendDataUpdateEvent("*");
+    }
+
+    #endregion
+
     #region USFM
 
     public ResponseToRequest GetBookUsfm(string jsonString)

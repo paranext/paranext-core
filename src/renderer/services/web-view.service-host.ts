@@ -83,6 +83,15 @@ export const IFRAME_SANDBOX_ALLOW_SCRIPTS = 'allow-scripts';
 export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
 
 /**
+ * The iframe [sandbox attribute]
+ * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if an
+ * iframe is allowed to open separate windows with window.open and anchor tags with
+ * `target="_blank"`. Note that we have a `setWindowOpenHandler` in `main.ts` that causes these to
+ * be opened in the default browser
+ */
+export const IFRAME_SANDBOX_ALLOW_POPUPS = 'allow-popups';
+
+/**
  * The only `sandbox` attribute values we allow iframes with `src` to have including URL WebView
  * iframes. These are separate than iframes with `srcdoc` for a few reasons:
  *
@@ -108,6 +117,9 @@ export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
  * - `allow-scripts` so the iframe can actually do things. Defaults to not present since src iframes
  *   can get scripts from anywhere. Extension developers should only enable this if needed as this
  *   increases the possibility of a security threat occurring. Defaults to false
+ * - `allow-popups` so the iframe can open separate windows with window.open and anchor tags with
+ *   `target="_blank"`. Note that we have a `setWindowOpenHandler` in `main.ts` that causes these to
+ *   be opened in the default browser
  *
  * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
  *
@@ -125,6 +137,7 @@ export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
 const ALLOWED_IFRAME_SRC_SANDBOX_VALUES = [
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
   IFRAME_SANDBOX_ALLOW_SCRIPTS,
+  IFRAME_SANDBOX_ALLOW_POPUPS,
 ];
 
 /**
@@ -136,7 +149,10 @@ const ALLOWED_IFRAME_SRC_SANDBOX_VALUES = [
  * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
  */
 export const WEBVIEW_IFRAME_SRC_SANDBOX = ALLOWED_IFRAME_SRC_SANDBOX_VALUES.filter(
-  (value) => value !== IFRAME_SANDBOX_ALLOW_SCRIPTS && value !== IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
+  (value) =>
+    value !== IFRAME_SANDBOX_ALLOW_SCRIPTS &&
+    value !== IFRAME_SANDBOX_ALLOW_SAME_ORIGIN &&
+    value !== IFRAME_SANDBOX_ALLOW_POPUPS,
 ).join(' ');
 
 /**
@@ -160,6 +176,9 @@ export const WEBVIEW_IFRAME_SRC_SANDBOX = ALLOWED_IFRAME_SRC_SANDBOX_VALUES.filt
  *
  * - `allow-same-origin` so the iframe can get papi and communicate and such
  * - `allow-scripts` so the iframe can actually do things
+ * - `allow-popups` so the iframe can open separate windows with window.open and anchor tags with
+ *   `target="_blank"`. Note that we have a `setWindowOpenHandler` in `main.ts` that causes these to
+ *   be opened in the default browser
  *
  * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
  *
@@ -185,7 +204,10 @@ export const ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES = [...ALLOWED_IFRAME_SRC_SANDB
  * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
  */
 export const WEBVIEW_IFRAME_SRCDOC_SANDBOX = ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES.filter(
-  (value) => value !== IFRAME_SANDBOX_ALLOW_SCRIPTS && value !== IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
+  (value) =>
+    value !== IFRAME_SANDBOX_ALLOW_SCRIPTS &&
+    value !== IFRAME_SANDBOX_ALLOW_SAME_ORIGIN &&
+    value !== IFRAME_SANDBOX_ALLOW_POPUPS,
 ).join(' ');
 
 /**

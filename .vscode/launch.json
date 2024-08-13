@@ -28,7 +28,8 @@
       "processName": "ParanextDataProvider",
       "windows": {
         "processName": "ParanextDataProvider.exe"
-      }
+      },
+      "justMyCode": false
     },
     {
       "name": "Debug Platform Backend",

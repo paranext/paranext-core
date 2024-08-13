@@ -6,7 +6,7 @@ const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement> & { stickyHeader?: boolean }
 >(({ className, stickyHeader, ...props }, ref) => (
-  <div className={cn('pr-relative pr-w-full', { 'pr-overflow-auto': !stickyHeader })}>
+  <div className={cn('pr-twp pr-relative pr-w-full', { 'pr-overflow-auto': !stickyHeader })}>
     <table
       ref={ref}
       className={cn('pr-w-full pr-caption-bottom pr-text-sm', className)}

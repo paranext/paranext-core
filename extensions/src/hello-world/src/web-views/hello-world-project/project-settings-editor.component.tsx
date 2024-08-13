@@ -35,8 +35,7 @@ function ProjectSettingsEditor({
           options={HTML_COLOR_NAMES}
           // The value is one of the options, and all options are HTMLColorNames
           // eslint-disable-next-line no-type-assertion/no-type-assertion
-          onChange={(_, value) => setHeaderColor?.(value as HTMLColorNames)}
-          width={200}
+          onChange={(value) => setHeaderColor?.(value as HTMLColorNames)}
         />
         <button type="button" onClick={resetHeaderColor}>
           Reset
