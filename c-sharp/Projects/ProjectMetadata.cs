@@ -1,5 +1,3 @@
-using Newtonsoft.Json;
-
 namespace Paranext.DataProvider.Projects;
 
 /// <summary>
@@ -14,17 +12,15 @@ public class ProjectMetadata(string id, List<string> projectInterfaces)
     /// <summary>
     /// ID of the project (must be unique and case-insensitive)
     /// </summary>
-    [JsonProperty("id")]
-    public string ID { get; } = id.ToUpperInvariant();
+    public string Id { get; } = id.ToUpperInvariant();
 
     /// <summary>
     /// Indicates what sort of project this is which implies its data shape (e.g., what data streams should be available)
     /// </summary>
-    [JsonProperty("projectInterfaces")]
     public List<string> ProjectInterfaces { get; } = projectInterfaces;
 
     public override string ToString()
     {
-        return $"[({ID}): {string.Join(',', ProjectInterfaces)}]";
+        return $"[({Id}): {string.Join(',', ProjectInterfaces)}]";
     }
 }

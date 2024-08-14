@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
@@ -13,6 +14,9 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 {
+    protected static readonly JsonSerializerOptions s_serializerOptions =
+        SerializationOptions.CreateSerializationOptions();
+
     protected ProjectDataProvider(string name, PapiClient papiClient, ProjectDetails projectDetails)
         : base(name + "-pdp", papiClient, NetworkObjectType.PROJECT_DATA_PROVIDER)
     {
@@ -36,19 +40,10 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 
     private ProjectDataScope ExtractDataScope(string jsonString)
     {
-        if (
-            !ProjectDataScopeConverter.TryGetProjectDataScope(
-                jsonString,
-                out ProjectDataScope? dataScope,
-                out string errorMessage
-            )
-        )
-            throw new Exception(errorMessage);
-
-        if (dataScope == null)
-            throw new Exception("No data scope provided");
-
-        dataScope.ProjectID = ProjectDetails.Metadata.ID;
+        ProjectDataScope? dataScope =
+            JsonSerializer.Deserialize<ProjectDataScope>(jsonString, s_serializerOptions)
+            ?? throw new InvalidDataException("No data scope provided");
+        dataScope.ProjectID = ProjectDetails.Metadata.Id;
         dataScope.ProjectName = ProjectDetails.Name;
         return dataScope;
     }
@@ -68,7 +63,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         return new MessageEventProjectDataProviderCreated(
             DataProviderName,
             functionNames.ToArray(),
-            ProjectDetails.Metadata.ID,
+            ProjectDetails.Metadata.Id,
             ProjectDetails.Metadata.ProjectInterfaces
         );
     }
