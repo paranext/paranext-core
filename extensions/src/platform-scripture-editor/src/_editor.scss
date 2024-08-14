@@ -48,14 +48,8 @@
   display: inline-block;
   pointer-events: none;
   margin-block-start: 1em;
-}
-
-.editor-input[dir="ltr"] ~ .editor-placeholder {
-  left: 10px;
-}
-
-.editor-input[dir="rtl"] ~ .editor-placeholder {
-  right: 10px;
+  margin-inline-start: calc(10px + 2.5vw);
+  width: fill-available;
 }
 
 .editor-text-bold {
@@ -712,13 +706,15 @@ button.toolbar-item.active i {
 }
 
 .toolbar .toolbar-item .text {
-  display: flex;
   line-height: 20px;
   vertical-align: middle;
   font-size: 14px;
   color: #777;
   text-overflow: ellipsis;
   overflow: hidden;
+  width: 170px;
+  white-space: nowrap;
+  display: inline-block;
   height: 20px;
   text-align: start;
   padding-right: 10px;
