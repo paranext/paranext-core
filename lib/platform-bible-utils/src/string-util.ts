@@ -116,19 +116,39 @@ function indexOfClosestClosingCurlyBrace(str: string, index: number, escaped: bo
 }
 
 /**
- * Formats a string, replacing {localization key} with the localization (or multiple localizations
- * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
- * escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like
- * `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
+ * Formats a string, replacing `{replacer key}` with the value in the `replacers` at that replacer
+ * key (or multiple replacer values if there are multiple in the string). Will also remove \ before
+ * curly braces if curly braces are escaped with a backslash in order to preserve the curly braces.
+ * E.g. 'Hi, this is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly
+ * braces}!
  *
- * If the key in unescaped braces is not found, just return the key without the braces. Empty
- * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {
- * 'name': 'Jim'}) would return 'I am Nemo'.
+ * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
+ * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
+ * would return 'I am Nemo'.
+ *
+ * @example
+ *
+ * ```typescript
+ * formatReplacementString(
+ *   'Hi, this is {name}! I like \{curly braces\}! I have a {carColor} car. My favorite food is {food}.',
+ *   { name: 'Bill', carColor: 'blue' }
+ * );
+ *
+ * =>
+ *
+ * 'Hi, this is Bill! I like {curly braces}! I have a blue car. My favorite food is food.'
+ * ```
  *
  * @param str String to format
+ * @param replacers Object whose keys are replacer keys and whose values are the values with which
+ *   to replace `{replacer key}`s found in the string to format. Will be coerced to strings using
+ *   `${replacerValue}`
  * @returns Formatted string
  */
-export function formatReplacementString(str: string, replacers: { [key: string]: string }): string {
+export function formatReplacementString(
+  str: string,
+  replacers: { [key: string | number]: string | unknown } | object,
+): string {
   let updatedStr = str;
 
   let i = 0;
@@ -142,7 +162,13 @@ export function formatReplacementString(str: string, replacers: { [key: string]:
             // We have matching open and close indices. Try to replace the contents
             const replacerKey = substring(updatedStr, i + 1, closeCurlyBraceIndex);
             // Replace with the replacer string or just remove the curly braces
-            const replacerString = replacerKey in replacers ? replacers[replacerKey] : replacerKey;
+            const replacerString =
+              replacerKey in replacers
+                ? // We're getting a value.toString() with any type from an object with any keys
+                  // here. TypeScript doesn't need to carefully and precisely track the exact type.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  `${replacers[replacerKey as keyof typeof replacers]}`
+                : replacerKey;
 
             updatedStr = `${substring(updatedStr, 0, i)}${replacerString}${substring(updatedStr, closeCurlyBraceIndex + 1)}`;
             // Put our index at the closing brace adjusted for the new string length minus two

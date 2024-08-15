@@ -271,6 +271,23 @@ describe('formatReplacementString', () => {
       'Hi, this is Jim! I like {curly braces}!Hi, this is Jim! I like {curly braces}!',
     );
   });
+
+  test('with interesting types as keys and values', () => {
+    const result = formatReplacementString(
+      'Hi, this is {name}! I use {0} weights when I curl {weightLbs}lb weights. I do {1} reps {interval}. I have a weakness level of {weakness}.',
+      {
+        name: 'Chad',
+        0: 'lead',
+        weightLbs: 9000,
+        1: 1000,
+        interval: 'every second of every day',
+        weakness: undefined,
+      },
+    );
+    expect(result).toEqual(
+      'Hi, this is Chad! I use lead weights when I curl 9000lb weights. I do 1000 reps every second of every day. I have a weakness level of undefined.',
+    );
+  });
 });
 
 describe('includes', () => {

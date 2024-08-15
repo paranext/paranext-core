@@ -31,6 +31,9 @@ export interface StringMetadata {
    * Localized string key from which to get this value if one does not exist in the specified
    * language. If a new key/value pair needs to be made to replace an existing one, this could help
    * smooth over the transition if the meanings are close enough
+   *
+   * You can use Paratext 9 Localized String Keys here. Be sure to escape any % signs with a
+   * backslash `\`.
    */
   fallbackKey?: LocalizeKey;
   /**
@@ -84,8 +87,10 @@ const localizedStringsDefs = {
     properties: {
       fallbackKey: {
         description:
-          'Localized string key from which to get this value if one does not exist in the specified language. If a new key/value pair needs to be made to replace an existing one, this could help smooth over the transition if the meanings are close enough',
-        $ref: '#/$defs/localizeKey',
+          'Localized string key from which to get this value if one does not exist in the specified language. If a new key/value pair needs to be made to replace an existing one, this could help smooth over the transition if the meanings are close enough.\nYou can use Paratext 9 Localized String Keys here. Be sure to escape any % signs with a backslash `\\`.',
+        type: 'string',
+        pattern: "^%[\\w\\-\\.;&,' (){}#:/\\\\?%⋮|[\\]“”‘’!~*\u00A0+=•`…\u200B↑↓]+%$",
+        tsType: 'LocalizeKey',
       },
       notes: {
         description:

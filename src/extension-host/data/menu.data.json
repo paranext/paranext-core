@@ -82,7 +82,7 @@
       "platform.edit": { "label": "%webView_edit%", "order": 2, "isExtensible": true }
     },
     "groups": {
-      "platform.projectTop": { "column": "platform.project", "order": 1 },
+      "platform.projectTop": { "column": "platform.project", "order": 1, "isExtensible": true },
       "platform.manageBooks": { "column": "platform.project", "order": 2 },
       "platform.deleteProject": { "column": "platform.project", "order": 3 },
       "platform.projectDetails": { "column": "platform.project", "order": 4, "isExtensible": true },
@@ -90,13 +90,6 @@
       "platform.cutCopyPaste": { "column": "platform.edit", "order": 2 }
     },
     "items": [
-      {
-        "label": "%webView_projectSendReceive%",
-        "localizeNotes": "Web view main menu > Project > Send/Receive this project",
-        "group": "platform.projectTop",
-        "order": 1,
-        "command": "platform.sendReceiveProject"
-      },
       {
         "label": "%webView_projectAssignmentsAndProgress%",
         "localizeNotes": "Web view main menu > Project > Assignments and progress...",

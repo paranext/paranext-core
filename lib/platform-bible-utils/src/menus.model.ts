@@ -62,9 +62,15 @@ export type MenuItemContainingSubmenu = MenuItemBase & {
 export type MenuItemContainingCommand = MenuItemBase & {
   /** Name of the PAPI command to run when this menu item is selected. */
   command: ReferencedItem;
-  /** Path to the icon to display after the menu text */
+  /**
+   * Uri path to the icon to display after the menu text. Ex:
+   * `papi-extension://helloWorld/assets/icon.png`
+   */
   iconPathAfter?: string;
-  /** Path to the icon to display before the menu text */
+  /**
+   * Uri path to the icon to display before the menu text. Ex:
+   * `papi-extension://helloWorld/assets/icon.png`
+   */
   iconPathBefore?: string;
 };
 
@@ -309,11 +315,13 @@ export const menuDocumentSchema = {
               $ref: '#/$defs/referencedItem',
             },
             iconPathBefore: {
-              description: 'Path to the icon to display before the menu text',
+              description:
+                'Uri path to the icon to display before the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
               type: 'string',
             },
             iconPathAfter: {
-              description: 'Path to the icon to display after the menu text',
+              description:
+                'Uri path to the icon to display after the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
               type: 'string',
             },
           },

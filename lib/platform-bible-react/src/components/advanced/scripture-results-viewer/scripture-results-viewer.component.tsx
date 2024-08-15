@@ -31,7 +31,7 @@ import {
   SortingState,
   useReactTable,
 } from '@tanstack/react-table';
-import '@/components/advanced-components/scripture-results-viewer/scripture-results-viewer.component.css';
+import '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component.css';
 import {
   compareScrRefs,
   formatScrRef,

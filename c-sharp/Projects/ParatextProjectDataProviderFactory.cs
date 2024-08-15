@@ -49,6 +49,8 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
 
     protected override ResponseToRequest GetProjectDataProviderID(string projectID)
     {
+        projectID = projectID.ToUpperInvariant();
+
         // If we already have a PDP for this project, just return it
         if (_pdpMap.TryGetValue(projectID, out var existingPdp))
             return ResponseToRequest.Succeeded(existingPdp.DataProviderName);
@@ -90,5 +92,19 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
             newPdp.RegisterDataProvider().Wait();
             return ResponseToRequest.Succeeded(newPdp.DataProviderName);
         }
+    }
+
+    /// <summary>
+    /// Get an existing PDP if it exists for a project id
+    /// </summary>
+    /// <param name="projectID"></param>
+    /// <returns></returns>
+    public ParatextProjectDataProvider? GetExistingProjectDataProvider(string projectID)
+    {
+        projectID = projectID.ToUpperInvariant();
+
+        if (_pdpMap.TryGetValue(projectID, out var existingPdp))
+            return existingPdp;
+        return null;
     }
 }

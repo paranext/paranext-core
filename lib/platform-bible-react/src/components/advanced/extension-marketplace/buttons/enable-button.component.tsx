@@ -1,6 +1,6 @@
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
+import Spinner from '@/components/basics/spinner.component';
 import { cn } from '@/utils/shadcn-ui.util';
-import { LoaderCircle } from 'lucide-react';
 
 type EnableButtonProps = {
   /** The enabling boolean value determines the state of the button. */
@@ -37,7 +37,7 @@ export default function EnableButton({
     >
       {isEnabling ? (
         <>
-          <LoaderCircle size={15} className="pr-mr-1 pr-animate-spin pr-text-white" />
+          <Spinner size={15} className="pr-mr-1 pr-text-white" />
           Enabling...
         </>
       ) : (

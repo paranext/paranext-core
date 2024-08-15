@@ -10,6 +10,7 @@ import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { VariantProps } from 'class-variance-authority';
+import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
 
@@ -796,6 +797,8 @@ export type SnackbarProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Snackbar({ autoHideDuration, id, isOpen, className, onClose, anchorOrigin, ContentProps, children, }: SnackbarProps): import("react/jsx-runtime").JSX.Element;
+export type SpinnerProps = LucideProps;
+export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type SwitchProps = {
 	/** Optional unique identifier */
 	id?: string;

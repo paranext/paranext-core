@@ -18,6 +18,7 @@ import SliderExamples from './basics/slider.examples.component';
 import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
+import SpinnerExamples from './basics/spinner.examples.component';
 
 function Basics({ direction }: HasDirection) {
   return (
@@ -35,6 +36,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Spinner">Spinner</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
@@ -74,6 +76,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Slider">
           <SliderExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Spinner">
+          <SpinnerExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Switch">
