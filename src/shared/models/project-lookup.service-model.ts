@@ -544,6 +544,26 @@ function isProjectIdIncluded(
   return true;
 }
 
+/**
+ * Determines whether the given project interfaces are included based on specified inclusion and
+ * exclusion rules.
+ *
+ * This function checks if a set of project interfaces meets the criteria defined by regular
+ * expressions for inclusion and exclusion.
+ *
+ * - A project interface is excluded if it matches any of the provided exclusion patterns.
+ * - A project interface is included only if it matches at least one of the provided inclusion
+ *   patterns.
+ *
+ * @param projectInterfaces - An array of project interfaces to evaluate against the inclusion and
+ *   exclusion patterns.
+ * @param includeProjectInterfaces - An array of regular expressions or arrays of regular
+ *   expressions defining which interfaces should be included.
+ * @param excludeProjectInterfaces - An array of regular expressions or arrays of regular
+ *   expressions defining which interfaces should be excluded.
+ * @returns A boolean value indicating whether the project interfaces satisfy the inclusion and
+ *   exclusion criteria.
+ */
 export function areProjectInterfacesIncluded(
   projectInterfaces: ProjectInterfaces[],
   includeProjectInterfaces: (RegExp | RegExp[])[],

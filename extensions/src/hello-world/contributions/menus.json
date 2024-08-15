@@ -85,7 +85,7 @@
             "command": "helloWorld.openViewerByWebViewId"
           },
           {
-            "label": "%helloWorld_webViewMenu_openProjectSettings%",
+            "label": "%webView_openProjectSettings%",
             "group": "helloWorld.projectGroup",
             "order": 3,
             "command": "platform.openProjectSettings"
