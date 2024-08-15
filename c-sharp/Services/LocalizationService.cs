@@ -1,7 +1,5 @@
 using System.Diagnostics;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using Newtonsoft.Json;
 using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.Services;
@@ -68,7 +66,5 @@ public class LocalizationSelector(string localizeKey)
     /// <summary>
     /// ID of the project (must be unique and case-insensitive)
     /// </summary>
-    [JsonProperty("localizeKey")]
-    [JsonPropertyName("localizeKey")]
     public string LocalizeKey { get; } = localizeKey;
 }

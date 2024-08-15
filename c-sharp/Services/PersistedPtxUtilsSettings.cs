@@ -5,16 +5,10 @@ namespace Paranext.DataProvider.Services;
 
 internal class PersistedPtxUtilsSettings(PapiClient papiClient) : IPtxUtilsSettings
 {
-    private SerializableStringDictionary _mementoData = SettingsService.GetSettingObject<SerializableStringDictionary>(
-            papiClient,
-            Settings.PTX_UTILS_MEMENTO_DATA
-        ) ?? [];
-
-    public SerializableStringDictionary MementoData
-    {
-        get => _mementoData;
-        set => _mementoData = value;
-    }
+    public SerializableStringDictionary MementoData { get; set;} = SettingsService.GetSettingObject<SerializableStringDictionary>(
+        papiClient,
+        Settings.PTX_UTILS_MEMENTO_DATA
+    ) ?? [];
 
     public bool UpgradeNeeded
     {
@@ -30,6 +24,6 @@ internal class PersistedPtxUtilsSettings(PapiClient papiClient) : IPtxUtilsSetti
 
     public void SafeSave()
     {
-        SettingsService.SetSetting(papiClient, Settings.PTX_UTILS_MEMENTO_DATA, _mementoData);
+        SettingsService.SetSetting(papiClient, Settings.PTX_UTILS_MEMENTO_DATA, MementoData);
     }
 }

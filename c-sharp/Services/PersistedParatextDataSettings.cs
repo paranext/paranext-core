@@ -6,23 +6,17 @@ namespace Paranext.DataProvider.Services;
 
 internal class PersistedParatextDataSettings(PapiClient papiClient) : IParatextDataSettings
 {
-    private SerializableStringDictionary _lastRegistryDataCachedTimes = SettingsService.GetSettingObject<SerializableStringDictionary>(
-            papiClient,
-            Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
-        ) ?? [];
-
-    public SerializableStringDictionary LastRegistryDataCachedTimes
-    {
-        get => _lastRegistryDataCachedTimes;
-        set => _lastRegistryDataCachedTimes = value;
-    }
+    public SerializableStringDictionary LastRegistryDataCachedTimes { get; set; } = SettingsService.GetSettingObject<SerializableStringDictionary>(
+        papiClient,
+        Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES
+    ) ?? [];
 
     public void SafeSave()
     {
         SettingsService.SetSetting(
             papiClient,
             Settings.PARATEXT_DATA_LAST_REGISTRY_DATA_CACHED_TIMES,
-            _lastRegistryDataCachedTimes
+            LastRegistryDataCachedTimes
         );
     }
 }

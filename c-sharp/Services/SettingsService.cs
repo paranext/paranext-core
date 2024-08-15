@@ -54,7 +54,7 @@ internal static class SettingsService
         return GetSettingRaw(papiClient, key)?.Deserialize<T>();
     }
 
-    public static bool SetSetting(PapiClient papiClient, string key, object? value)
+    public static bool SetSetting(PapiClient papiClient, string key, object? settingData)
     {
         TaskCompletionSource taskSource = new();
         using var getSettingTask = taskSource.Task;
@@ -63,7 +63,7 @@ internal static class SettingsService
 
         papiClient.SendRequest(
             SETTINGS_SERVICE_REQUEST,
-            new object?[] { "set", key, value },
+            new object?[] { "set", key, settingData },
             (bool success, object? returnValue) =>
             {
                 try
@@ -84,6 +84,8 @@ internal static class SettingsService
                             {
                                 // If they sent a string data type name or an array of them, it will
                                 // fail to deserialize. Interpret that as `didChangeData` true
+                                // because pretty much anything but `false` means the data changed.
+                                // See `DataProviderUpdateInstructions` for more info
                                 didChangeData = true;
                             }
                         }
