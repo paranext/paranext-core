@@ -27,7 +27,7 @@ namespace TestParanextDataProvider.Projects
         [TestCase("12345", "System.ArgumentException: Input must have even number of characters")]
         [TestCase(
             "abcdefgh",
-            "System.ArgumentException: String must contain only hexadecimal characters: abcdefgh"
+            "System.ArgumentException: String must contain only hexadecimal characters: ABCDEFGH"
         )]
         public async Task InvalidProjectId_ReturnsError(string projectId, string startOfError)
         {

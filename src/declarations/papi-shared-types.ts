@@ -93,6 +93,16 @@ declare module 'papi-shared-types' {
   export interface SettingTypes {
     'platform.verseRef': ScriptureReference;
     'platform.interfaceLanguage': string[];
+    /**
+     * Mementos managed in the dotnet process and used for interacting with PtxUtils. Mementos are
+     * persisted objects containing some data. They are stored as xml strings.
+     */
+    'platform.ptxUtilsMementoData': { [key: string]: string };
+    /**
+     * Tracking last S/R registry data cache time managed in the dotnet process and used for
+     * interacting with ParatextData.
+     */
+    'platform.paratextDataLastRegistryDataCachedTimes': { [key: string]: string };
   }
 
   /**

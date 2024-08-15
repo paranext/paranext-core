@@ -10,6 +10,7 @@ import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { VariantProps } from 'class-variance-authority';
+import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
 import { ChangeEvent, ChangeEventHandler, FocusEventHandler, JSX as JSX$1, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
 
@@ -112,9 +113,9 @@ export type MenuItemContainingSubmenu = MenuItemBase & {
 export type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
-	/** Path to the icon to display after the menu text */
+	/** Uri path to the icon to display after the menu text. Ex: `papi-extension://helloWorld/assets/icon.png` */
 	iconPathAfter?: string;
-	/** Path to the icon to display before the menu text */
+	/** Uri path to the icon to display before the menu text. Ex: `papi-extension://helloWorld/assets/icon.png` */
 	iconPathBefore?: string;
 };
 /**
@@ -871,6 +872,8 @@ export type SettingsListHeaderProps = {
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
+export type SpinnerProps = LucideProps;
+export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type SwitchProps = {
 	/** Optional unique identifier */
 	id?: string;

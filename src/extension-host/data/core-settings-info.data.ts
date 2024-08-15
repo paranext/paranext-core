@@ -1,5 +1,5 @@
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
-import { ScriptureReference, SettingsContribution } from 'platform-bible-utils';
+import { isString, ScriptureReference, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = {
@@ -13,6 +13,14 @@ export const platformSettings: SettingsContribution = {
     'platform.interfaceLanguage': {
       label: '%settings_platform_interfaceLanguage_label%',
       default: ['eng'],
+    },
+    'platform.ptxUtilsMementoData': {
+      label: '%settings_platform_ptxUtilsMementoData_label%',
+      default: {},
+    },
+    'platform.paratextDataLastRegistryDataCachedTimes': {
+      label: '%settings_platform_paratextDataLastRegistryDataCachedTimes_label%',
+      default: {},
     },
   },
 };
@@ -46,8 +54,17 @@ const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'>
   );
 };
 
+// TODO: validate that the values are xml strings. Maybe move this validator to dotnet?
+const serializableStringDictionarySettingValidator: SettingValidator<
+  'platform.ptxUtilsMementoData' | 'platform.paratextDataLastRegistryDataCachedTimes'
+> = async (newValue) => {
+  return typeof newValue === 'object' && Object.values(newValue).every((value) => isString(value));
+};
+
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
+  'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
+  'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
 };

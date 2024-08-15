@@ -53,4 +53,55 @@ internal static class SettingsService
     {
         return GetSettingRaw(papiClient, key)?.Deserialize<T>();
     }
+
+    public static bool SetSetting(PapiClient papiClient, string key, object? settingData)
+    {
+        TaskCompletionSource taskSource = new();
+        using var getSettingTask = taskSource.Task;
+
+        var didChangeData = false;
+
+        papiClient.SendRequest(
+            SETTINGS_SERVICE_REQUEST,
+            new object?[] { "set", key, settingData },
+            (bool success, object? returnValue) =>
+            {
+                try
+                {
+                    if (success)
+                    {
+                        var result = (JsonElement?)returnValue;
+                        if (result.HasValue)
+                        {
+                            try
+                            {
+                                if (result.Value.Deserialize<bool>())
+                                    didChangeData = true;
+                                else
+                                    didChangeData = false;
+                            }
+                            catch (JsonException)
+                            {
+                                // If they sent a string data type name or an array of them, it will
+                                // fail to deserialize. Interpret that as `didChangeData` true
+                                // because pretty much anything but `false` means the data changed.
+                                // See `DataProviderUpdateInstructions` for more info
+                                didChangeData = true;
+                            }
+                        }
+                    }
+
+                    taskSource.TrySetResult();
+                }
+                catch (Exception ex)
+                {
+                    taskSource.TrySetException(ex);
+                }
+            }
+        );
+
+        using var cts = new CancellationTokenSource();
+        getSettingTask.Wait(cts.Token);
+        return didChangeData;
+    }
 }

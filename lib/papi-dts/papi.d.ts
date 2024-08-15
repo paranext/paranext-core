@@ -134,6 +134,13 @@ declare module 'shared/models/web-view.model' {
      * to function. The more you list, the higher the theoretical security risks.
      */
     allowedFrameSources?: string[];
+    /**
+     * Whether to allow this iframe to open separate windows with window.open and anchor tags with
+     * `target="_blank"`. Setting this to true adds `allow-popups` to the WebView iframe's [sandbox
+     * attribute] (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+     * to `false`
+     */
+    allowPopups?: boolean;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -171,6 +178,7 @@ declare module 'shared/models/web-view.model' {
     'allowScripts',
     'allowSameOrigin',
     'allowedFrameSources',
+    'allowPopups',
   ];
   /**
    * The keys of properties on a WebViewDefinition that are omitted when converting to a
@@ -2381,6 +2389,20 @@ declare module 'papi-shared-types' {
   interface SettingTypes {
     'platform.verseRef': ScriptureReference;
     'platform.interfaceLanguage': string[];
+    /**
+     * Mementos managed in the dotnet process and used for interacting with PtxUtils. Mementos are
+     * persisted objects containing some data. They are stored as xml strings.
+     */
+    'platform.ptxUtilsMementoData': {
+      [key: string]: string;
+    };
+    /**
+     * Tracking last S/R registry data cache time managed in the dotnet process and used for
+     * interacting with ParatextData.
+     */
+    'platform.paratextDataLastRegistryDataCachedTimes': {
+      [key: string]: string;
+    };
   }
   /**
    * Names for each user setting available on the papi.

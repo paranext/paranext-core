@@ -77,6 +77,8 @@ export type {
   SnackbarContentProps,
   SnackbarProps,
 } from './components/mui/snackbar.component';
+export { default as Spinner } from './components/basics/spinner.component';
+export type { SpinnerProps } from './components/basics/spinner.component';
 export { default as Switch } from './components/mui/switch.component';
 export type { SwitchProps } from './components/mui/switch.component';
 export { default as TextField } from './components/basics/text-field.component';
