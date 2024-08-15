@@ -1,26 +1,23 @@
 import { ReactNode, useCallback, useState } from 'react';
-// import { Layout } from '@shared/models/docking-framework.model';
 import { NavigationContentSearch, TabKeyValueContent } from 'platform-bible-react';
-import {
-  Localized,
-  ProjectSettingsContribution,
-  ProjectSettingsGroup,
-  SettingsGroup,
-} from 'platform-bible-utils';
+import { Localized, ProjectSettingsGroup, SettingsGroup } from 'platform-bible-utils';
 import './project-settings-tab.component.scss';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
+import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import ProjectOrUserSettingsList from '../settings-components/project-or-user-settings-list.component';
 
 export const TAB_TYPE_PROJECT_SETTINGS_DIALOG = 'project-settings-dialog';
 
 type ProjectSettingsDialogProps = {
   projectId: string;
-  projectSettingsContribution: Localized<ProjectSettingsContribution>;
+  projectSettingsContributions:
+    | Localized<ProjectSettingsContributionInfo['contributions']>
+    | undefined;
 };
 
 export default function ProjectSettingsDialog({
   projectId,
-  projectSettingsContribution,
+  projectSettingsContributions,
 }: ProjectSettingsDialogProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -46,30 +43,32 @@ export default function ProjectSettingsDialog({
   const generateTabList = useCallback(() => {
     const tabList: TabKeyValueContent[] = [];
 
-    if (Array.isArray(projectSettingsContribution)) {
-      projectSettingsContribution.map(
-        (settingsGroup: Localized<ProjectSettingsGroup> | Localized<SettingsGroup>) =>
+    if (!projectSettingsContributions) return undefined;
+
+    Object.entries(projectSettingsContributions).map(
+      ([, settingsGroups]) =>
+        settingsGroups &&
+        Object.entries(settingsGroups).map(([, settingsGroup]) =>
           tabList.push({
             key: settingsGroup.label,
             value: settingsGroup.label,
             content: generateFilteredTabContent(settingsGroup),
           }),
-      );
-    } else {
-      tabList.push({
-        key: projectSettingsContribution.label,
-        value: projectSettingsContribution.label,
-        content: generateFilteredTabContent(projectSettingsContribution),
-      });
-    }
+        ),
+    );
 
     return tabList;
-  }, [generateFilteredTabContent, projectSettingsContribution]);
+  }, [generateFilteredTabContent, projectSettingsContributions]);
+
+  if (!projectSettingsContributions)
+    return <div className="project-settings-tab">No project Settings</div>;
 
   return (
     <div className="project-settings-tab">
       <NavigationContentSearch
-        tabList={generateTabList()}
+        // We know projectSettingsContributions is not undefined here
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        tabList={generateTabList() as TabKeyValueContent[]}
         onSearch={handleSearchInput}
         searchPlaceholder="Search Project Settings..."
         isSearchBarFullWidth
@@ -78,50 +77,24 @@ export default function ProjectSettingsDialog({
   );
 }
 
-// export async function openProjectSettingsTab(
-//   projectId: string | undefined,
-// ): Promise<Layout | undefined> {
-//   let projectIdForWebView = projectId;
-//   if (!projectIdForWebView) {
-//     projectIdForWebView = await dialogService.selectProject({
-//       title: 'Open Project',
-//       prompt: 'Choose the project to view the settings for:',
-//     });
-//   }
-//   if (!projectIdForWebView) return undefined;
+export type ProjectSettingsTabData = ProjectSettingsDialogProps;
 
-//   const projectSettingsContribution =
-//     await projectSettingsService.getLocalizedContributionForExtension(projectIdForWebView);
+export const loadProjectSettingsDialog = (savedTabInfo: SavedTabInfo): TabInfo => {
+  const typedSavedTabInfo = {
+    id: savedTabInfo.id,
+    tabType: savedTabInfo.tabType,
+    // We use this type in the addTab function, but it doesn't know what data is here
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    data: savedTabInfo.data as ProjectSettingsTabData,
+  };
 
-//   if (!projectSettingsContribution) return undefined;
-
-//   const layout: Layout = { type: 'float' };
-//   const savedTabInfo = {
-//     id: TAB_TYPE_PROJECT_SETTINGS_DIALOG,
-//     tabType: TAB_TYPE_PROJECT_SETTINGS_DIALOG,
-//     tabTitle: `${projectId} Settings`,
-//     content: (
-//       <ProjectSettingsDialog
-//         projectId={projectIdForWebView}
-//         projectSettingsContribution={projectSettingsContribution}
-//       />
-//     ),
-//   };
-//   return addTab(savedTabInfo, layout);
-// }
-
-export const loadProjectSettingsDialog = (
-  savedTabInfo: SavedTabInfo,
-  projectId: string,
-  projectSettingsContribution: Localized<ProjectSettingsContribution>,
-): TabInfo => {
   return {
     ...savedTabInfo,
     tabTitle: 'Project Settings',
     content: (
       <ProjectSettingsDialog
-        projectId={projectId}
-        projectSettingsContribution={projectSettingsContribution}
+        projectId={typedSavedTabInfo.data.projectId}
+        projectSettingsContributions={typedSavedTabInfo.data.projectSettingsContributions}
       />
     ),
   };

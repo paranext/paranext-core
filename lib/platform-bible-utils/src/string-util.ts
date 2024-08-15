@@ -7,6 +7,7 @@ import {
   limit as stringzLimit,
   substr as stringzSubstr,
 } from 'stringz';
+import ensureArray from './array-util';
 
 /**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
@@ -541,6 +542,34 @@ export function escapeStringRegexp(string: string): string {
   // Escape characters with special meaning either inside or outside character sets.
   // Use a simple backslash escape when it’s always valid, and a `\xnn` escape when the simpler form would be disallowed by Unicode patterns’ stricter grammar.
   return string.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
+}
+
+export function transformAndEnsureRegExpRegExpArray(
+  stringStringMaybeArray: string | (string | string[])[] | undefined,
+): (RegExp | RegExp[])[] {
+  if (!stringStringMaybeArray) return [];
+
+  const stringStringArray = ensureArray(stringStringMaybeArray);
+
+  const regExpRegExpArray = stringStringArray.map((stringMaybeStringArray: string | string[]) =>
+    Array.isArray(stringMaybeStringArray)
+      ? stringMaybeStringArray.map((str) => new RegExp(str))
+      : new RegExp(stringMaybeStringArray),
+  );
+
+  return regExpRegExpArray;
+}
+
+export function transformAndEnsureRegExpArray(
+  stringMaybeArray: string | string[] | undefined,
+): RegExp[] {
+  if (!stringMaybeArray) return [];
+
+  const stringArray = ensureArray(stringMaybeArray);
+
+  const regExpArray = stringArray.map((str: string) => new RegExp(str));
+
+  return regExpArray;
 }
 
 /** This is an internal-only export for testing purposes and should not be used in development */

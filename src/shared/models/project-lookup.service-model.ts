@@ -11,7 +11,15 @@ import IProjectDataProviderFactory, {
   PDP_FACTORY_OBJECT_TYPE,
   ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
-import { deepClone, endsWith, escapeStringRegexp, slice } from 'platform-bible-utils';
+import {
+  deepClone,
+  endsWith,
+  ensureArray,
+  escapeStringRegexp,
+  slice,
+  transformAndEnsureRegExpArray,
+  transformAndEnsureRegExpRegExpArray,
+} from 'platform-bible-utils';
 
 export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
 
@@ -470,38 +478,6 @@ function transformGetMetadataForProjectParametersToFilter(
 
 // #region Smaller project utilities
 
-function ensureArray<T>(maybeArray: T | T[] | undefined): T[] {
-  if (!maybeArray) return [];
-
-  return Array.isArray(maybeArray) ? maybeArray : [maybeArray];
-}
-
-function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[] {
-  if (!stringMaybeArray) return [];
-
-  const stringArray = ensureArray(stringMaybeArray);
-
-  const regExpArray = stringArray.map((str) => new RegExp(str));
-
-  return regExpArray;
-}
-
-function transformAndEnsureRegExpRegExpArray(
-  stringStringMaybeArray: string | (string | string[])[] | undefined,
-): (RegExp | RegExp[])[] {
-  if (!stringStringMaybeArray) return [];
-
-  const stringStringArray = ensureArray(stringStringMaybeArray);
-
-  const regExpRegExpArray = stringStringArray.map((stringMaybeStringArray) =>
-    Array.isArray(stringMaybeStringArray)
-      ? stringMaybeStringArray.map((str) => new RegExp(str))
-      : new RegExp(stringMaybeStringArray),
-  );
-
-  return regExpRegExpArray;
-}
-
 function ensurePopulatedMetadataFilter(options: ProjectMetadataFilterOptions) {
   const {
     excludeProjectIds,
@@ -568,7 +544,7 @@ function isProjectIdIncluded(
   return true;
 }
 
-function areProjectInterfacesIncluded(
+export function areProjectInterfacesIncluded(
   projectInterfaces: ProjectInterfaces[],
   includeProjectInterfaces: (RegExp | RegExp[])[],
   excludeProjectInterfaces: (RegExp | RegExp[])[],

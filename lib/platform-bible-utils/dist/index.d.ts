@@ -1302,6 +1302,8 @@ export declare function isLocalizeKey(str: string): str is LocalizeKey;
  *     new RegExp(escapedString);
  */
 export declare function escapeStringRegexp(string: string): string;
+export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArray: string | (string | string[])[] | undefined): (RegExp | RegExp[])[];
+export declare function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[];
 /**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
@@ -1436,6 +1438,7 @@ export function getCurrentLocale(): string;
  *   options of this NumberFormat object
  */
 export function formatBytes(fileSize: number, decimals?: number): string;
+export function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /** The data an extension provides to inform Platform.Bible of the localized strings it provides. */

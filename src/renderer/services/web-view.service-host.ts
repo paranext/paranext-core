@@ -16,6 +16,9 @@ import {
   substring,
   startsWith,
   split,
+  Localized,
+  ReferencedItem,
+  transformAndEnsureRegExpRegExpArray,
 } from 'platform-bible-utils';
 import { newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
@@ -56,6 +59,17 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { registerCommand } from '@shared/services/command.service';
+import { CommandNames, ProjectDataProviderInterfaces } from 'papi-shared-types';
+import {
+  type ProjectSettingsTabData,
+  TAB_TYPE_PROJECT_SETTINGS_DIALOG,
+} from '@renderer/components/project-settings-dialog/project-settings-tab.component';
+import projectSettingsService from '@shared/services/project-settings.service';
+import projectLookupService from '@shared/services/project-lookup.service';
+import { ProjectMetadata } from '@shared/models/project-metadata.model';
+import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
+import { areProjectInterfacesIncluded } from '@shared/models/project-lookup.service-model';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -1224,6 +1238,167 @@ const papiWebViewService: WebViewServiceType = {
   getSavedWebViewDefinition,
 };
 
+// TODO: Where should this function live?
+/**
+ * Filters the metadata of all projects by the interfaces of a specific project identified by its
+ * `projectId`.
+ *
+ * This function retrieves metadata for all projects and the specific project identified by
+ * `projectId`. It then filters out projects whose interfaces do not match any of the interfaces of
+ * the specified project.
+ *
+ * @param projectId - The ID of the project whose interfaces are used to filter other projects'
+ *   metadata.
+ * @returns A promise that resolves to an array of `ProjectMetadata` objects that match the
+ *   interfaces of the specified project, or `undefined` if the specified project is not found.
+ */
+async function filterProjectMetadataByInterface(
+  projectId: string,
+): Promise<ProjectMetadata[] | undefined> {
+  const allProjectsMetadata = await projectLookupService.getMetadataForAllProjects();
+  const projectMetadataFromProjectId = await projectLookupService.getMetadataForProject(projectId);
+
+  if (!projectMetadataFromProjectId) return undefined;
+
+  // TODO Do I need to check with the excluded interfaces, or is included enough?
+  const excludeProjectInterfaces = allProjectsMetadata
+    .filter(
+      (metadata: ProjectMetadata) =>
+        !projectMetadataFromProjectId.projectInterfaces.some((projectInterface) =>
+          metadata.projectInterfaces.includes(projectInterface),
+        ),
+    )
+    .map((metadata: ProjectMetadata) => metadata.projectInterfaces);
+
+  const filteredProjectsMetadata = projectLookupService.filterProjectsMetadata(
+    allProjectsMetadata,
+    {
+      includeProjectInterfaces: projectMetadataFromProjectId.projectInterfaces,
+      // TODO remove? See above comment
+      excludeProjectInterfaces: excludeProjectInterfaces.flat(),
+    },
+  );
+
+  return filteredProjectsMetadata;
+}
+
+// TODO: Where should this function live?
+/**
+ * Filters project settings contributions based on the provided project interfaces.
+ *
+ * This function iterates over a set of project settings contributions and filters their properties
+ * based on whether the project's interfaces match the specified inclusion and exclusion criteria.
+ *
+ * @param contributions - An object containing project settings contributions, which may be
+ *   localized.
+ * @param projectInterfaces - An array of keys representing the project interfaces to filter the
+ *   contributions by.
+ * @returns A filtered set of contributions, or `undefined` if no contributions match the project
+ *   interfaces.
+ */
+function filterContributionsByProjectInterfaces(
+  contributions: Localized<ProjectSettingsContributionInfo['contributions']> | undefined,
+  projectInterfaces: (keyof ProjectDataProviderInterfaces)[],
+): Localized<ProjectSettingsContributionInfo['contributions']> | undefined {
+  if (!contributions) return undefined;
+
+  const resultingContributions: Localized<ProjectSettingsContributionInfo['contributions']> = {};
+
+  // Map is not being used to return an array
+  // eslint-disable-next-line array-callback-return
+  Object.entries(contributions).map(([extensionName, contributionArray]) => {
+    if (!contributionArray) return;
+
+    const filteredContributions = contributionArray
+      .map((contribution) => {
+        const filteredProperties: (typeof contribution)['properties'] = {};
+
+        // Map is not being used to return an array
+        // eslint-disable-next-line array-callback-return
+        Object.entries(contribution.properties).map(([key, property]) => {
+          const { includeProjectInterfaces, excludeProjectInterfaces } = property;
+
+          if (includeProjectInterfaces && excludeProjectInterfaces) {
+            if (
+              areProjectInterfacesIncluded(
+                projectInterfaces,
+                transformAndEnsureRegExpRegExpArray(includeProjectInterfaces),
+                transformAndEnsureRegExpRegExpArray(excludeProjectInterfaces),
+              )
+            ) {
+              // map turns this into a string, but it needs to be ReferencedItem
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              filteredProperties[key as ReferencedItem] = property;
+            }
+          } else {
+            // map turns this into a string, but it needs to be ReferencedItem
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            filteredProperties[key as ReferencedItem] = property;
+          }
+        });
+
+        return {
+          ...contribution,
+          properties: filteredProperties,
+        };
+      })
+      .filter((contribution) => Object.keys(contribution.properties).length > 0);
+
+    if (filteredContributions.length > 0) {
+      resultingContributions[extensionName] = filteredContributions;
+    }
+  });
+
+  return Object.keys(resultingContributions).length > 0 ? resultingContributions : undefined;
+}
+
+// TODO: Where should this function live?
+async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
+  const settingsTabId = newGuid();
+  const projectIdFromWebView = (await getDockLayout()).getWebViewDefinition(webViewId)?.projectId;
+  const allProjectSettingsContributionInfo = (
+    await projectSettingsService.getLocalizedContributionInfo()
+  )?.contributions;
+
+  const filteredProjectsMetadata = projectIdFromWebView
+    ? await filterProjectMetadataByInterface(projectIdFromWebView)
+    : undefined;
+
+  if (!filteredProjectsMetadata) return undefined;
+
+  // Get the interfaces out of the metadata, so we can compare to the contributions interfaces
+  const filteredProjectInterfaces: (keyof ProjectDataProviderInterfaces)[] =
+    filteredProjectsMetadata.reduce(
+      (projectInterfaces: (keyof ProjectDataProviderInterfaces)[], metadata) => {
+        return projectInterfaces.concat(metadata.projectInterfaces);
+      },
+      [],
+    );
+  // Filter all project settings contribution info by filtered interfaces
+  const filteredProjectSettingsContribution = await filterContributionsByProjectInterfaces(
+    allProjectSettingsContributionInfo,
+    filteredProjectInterfaces,
+  );
+
+  return addTab<ProjectSettingsTabData>(
+    {
+      id: settingsTabId,
+      tabType: TAB_TYPE_PROJECT_SETTINGS_DIALOG,
+      data: {
+        // Wouldn't enter this conditional if projectMetadataFromWebView is undefined and it relies on projectIdFromWebView
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        projectId: projectIdFromWebView as string,
+        projectSettingsContributions: filteredProjectSettingsContribution,
+      },
+    },
+    {
+      type: 'float',
+      position: 'center',
+      floatSize: { height: 300, width: 300 },
+    },
+  );
+}
+
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewService(): Promise<void> {
@@ -1232,4 +1407,16 @@ export async function startWebViewService(): Promise<void> {
     NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
     papiWebViewService,
   );
+
+  // This map should allow any functions because commands can be any function type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
+    'platform.openProjectSettings': openProjectSettingsTab,
+  };
+
+  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+    // Re-assert type after passing through `forEach`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    registerCommand(commandName as CommandNames, handler);
+  });
 }
