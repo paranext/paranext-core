@@ -1,7 +1,7 @@
 import { serializeRequestType } from '@shared/utils/util';
 import * as networkService from '@shared/services/network.service';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-import { Localized, ProjectSettingsContribution, UnsubscriberAsync } from 'platform-bible-utils';
+import { UnsubscriberAsync } from 'platform-bible-utils';
 import { LocalizedProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 
 /** Name prefix for registered commands that call project settings validators */
@@ -83,15 +83,6 @@ export interface IProjectSettingsService {
    * @returns Localized project settings contribution info
    */
   getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
-  /**
-   * Get the current localized settings contribution for a given extension.
-   *
-   * @param extensionName The name of the extension to retrieve settings for
-   * @returns Localized project settings contribution for given extension
-   */
-  getLocalizedContributionForExtension(
-    extensionName: string,
-  ): Promise<Localized<ProjectSettingsContribution> | undefined>;
 }
 
 /**

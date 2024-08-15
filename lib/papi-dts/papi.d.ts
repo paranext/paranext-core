@@ -5460,7 +5460,7 @@ declare module 'shared/utils/project-settings-document-combiner' {
 }
 declare module 'shared/services/project-settings.service-model' {
   import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-  import { Localized, ProjectSettingsContribution, UnsubscriberAsync } from 'platform-bible-utils';
+  import { UnsubscriberAsync } from 'platform-bible-utils';
   import { LocalizedProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
   /** Name prefix for registered commands that call project settings validators */
   export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
@@ -5539,15 +5539,6 @@ declare module 'shared/services/project-settings.service-model' {
      * @returns Localized project settings contribution info
      */
     getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
-    /**
-     * Get the current localized settings contribution for a given extension.
-     *
-     * @param extensionName The name of the extension to retrieve settings for
-     * @returns Localized project settings contribution for given extension
-     */
-    getLocalizedContributionForExtension(
-      extensionName: string,
-    ): Promise<Localized<ProjectSettingsContribution> | undefined>;
   }
   /**
    * All project settings changes being set in one batch
