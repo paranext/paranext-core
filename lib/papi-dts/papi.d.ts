@@ -2344,6 +2344,7 @@ declare module 'papi-shared-types' {
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
+    'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -3809,6 +3810,11 @@ declare module 'shared/models/project-lookup.service-model' {
     includeProjectInterfaces: string | undefined;
     includePdpFactoryIds: string | undefined;
   };
+  export function areProjectInterfacesIncluded(
+    projectInterfaces: ProjectInterfaces[],
+    includeProjectInterfaces: (RegExp | RegExp[])[],
+    excludeProjectInterfaces: (RegExp | RegExp[])[],
+  ): boolean;
   /**
    * Compare function (for array sorting and such) that compares two PDPF Metadata infos by most
    * minimal match to the `projectInterface` in question.
