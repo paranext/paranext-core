@@ -1302,7 +1302,28 @@ export declare function isLocalizeKey(str: string): str is LocalizeKey;
  *     new RegExp(escapedString);
  */
 export declare function escapeStringRegexp(string: string): string;
+/**
+ * Transforms a string or an array of strings into an array of regular expressions, ensuring that the result is always an array.
+ *
+ * This function accepts a value that may be a single string, an array of strings, or `undefined`. It then:
+ * - Converts each string into a `RegExp` object.
+ * - If the input is an array containing nested arrays, it converts each string in the nested arrays into `RegExp` objects.
+ * - Ensures that the result is always an array of `RegExp` objects or arrays of `RegExp` objects.
+ *
+ * @param stringStringMaybeArray - The value to be transformed, which can be a single string, an array of strings or arrays of strings, or `undefined`.
+ * @returns An array of `RegExp` objects or arrays of `RegExp` objects. If the input is `undefined`, an empty array is returned.
+ */
 export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArray: string | (string | string[])[] | undefined): (RegExp | RegExp[])[];
+/**
+ * Transforms a string or an array of strings into an array of regular expressions.
+ *
+ * This function accepts a value that may be a single string, an array of strings, or `undefined`. It then:
+ * - Converts each string into a `RegExp` object.
+ * - Ensures that the result is always an array of `RegExp` objects.
+ *
+ * @param stringMaybeArray - The value to be transformed, which can be a single string, an array of strings, or `undefined`.
+ * @returns An array of `RegExp` objects. If the input is `undefined`, an empty array is returned.
+ */
 export declare function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[];
 /**
  * Check that two objects are deeply equal, comparing members of each object and such
@@ -1438,6 +1459,18 @@ export function getCurrentLocale(): string;
  *   options of this NumberFormat object
  */
 export function formatBytes(fileSize: number, decimals?: number): string;
+/**
+ * Ensures that the given input is returned as an array.
+ *
+ * This function takes a value that might be a single item, an array, or `undefined` and returns it as an array:
+ * - If the input is `undefined`, an empty array is returned.
+ * - If the input is already an array, it is returned as-is.
+ * - If the input is a single item, it is wrapped in an array.
+ *
+ * @typeParam T - The type of the elements in the array.
+ * @param maybeArray - The value that may be a single item, an array, or `undefined`.
+ * @returns An array containing the input value(s). If the input is `undefined`, an empty array is returned.
+ */
 export function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;

@@ -5,6 +5,7 @@ import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
 import { debounce } from 'platform-bible-utils';
 import settingsService from '@shared/services/settings.service';
 
+/** Values of SettingTypes */
 export type SettingValues = SettingTypes[keyof SettingTypes];
 
 type SettingProps = {
@@ -36,24 +37,29 @@ export default function Setting({ settingKey, label, description, defaultSetting
   };
 
   const handleChangeSetting = async (event: ChangeEvent<HTMLInputElement>) => {
-    const newValue: SettingValues =
+    // TODO: SettingValues does not currently contain number, so setting newValue on line 50 fails
+    let newValue: SettingValues | number =
       event.target.type === 'checkbox' ? event.target.checked : event.target.value;
 
-    // if (typeof setting === 'number') {
-    //   // eslint-disable-next-line no-type-assertion/no-type-assertion
-    //   const numericValue = parseInt(newValue as string, 10);
-    //   if (Number.isNaN(numericValue)) {
-    //     setErrorMessage('Invalid number');
-    //     return;
-    //   }
-    //   newValue = numericValue;
-    // }
+    if (typeof setting === 'number') {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const numericValue = parseInt(newValue as string, 10);
+      if (Number.isNaN(numericValue)) {
+        setErrorMessage('Invalid number');
+        return;
+      }
+      newValue = numericValue;
+    }
 
-    const isValid = await validateSettingValue(settingKey, newValue, settingKey);
+    // See line 39, when SettingValues contains a number, remove this
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const isValid = await validateSettingValue(settingKey, newValue as SettingValues, settingKey);
 
     if (isValid) {
       setErrorMessage(undefined);
-      if (setSetting) setSetting(newValue);
+      // See line 39, when SettingValues contains a number, remove this
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      if (setSetting) setSetting(newValue as SettingValues);
     } else {
       setErrorMessage('Invalid value');
     }
@@ -76,12 +82,6 @@ export default function Setting({ settingKey, label, description, defaultSetting
           isDefaultChecked={setting}
         />
       );
-    // else if (Array.isArray(setting))
-    //   component = (
-    //     <DropdownMenu>
-    //       <DropdownMenuItem />
-    //     </DropdownMenu>
-    //   );
     else if (typeof setting === 'object')
       component = (
         <Input

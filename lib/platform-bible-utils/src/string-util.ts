@@ -544,6 +544,23 @@ export function escapeStringRegexp(string: string): string {
   return string.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
 }
 
+/**
+ * Transforms a string or an array of strings into an array of regular expressions, ensuring that
+ * the result is always an array.
+ *
+ * This function accepts a value that may be a single string, an array of strings, or `undefined`.
+ * It then:
+ *
+ * - Converts each string into a `RegExp` object.
+ * - If the input is an array containing nested arrays, it converts each string in the nested arrays
+ *   into `RegExp` objects.
+ * - Ensures that the result is always an array of `RegExp` objects or arrays of `RegExp` objects.
+ *
+ * @param stringStringMaybeArray - The value to be transformed, which can be a single string, an
+ *   array of strings or arrays of strings, or `undefined`.
+ * @returns An array of `RegExp` objects or arrays of `RegExp` objects. If the input is `undefined`,
+ *   an empty array is returned.
+ */
 export function transformAndEnsureRegExpRegExpArray(
   stringStringMaybeArray: string | (string | string[])[] | undefined,
 ): (RegExp | RegExp[])[] {
@@ -560,6 +577,19 @@ export function transformAndEnsureRegExpRegExpArray(
   return regExpRegExpArray;
 }
 
+/**
+ * Transforms a string or an array of strings into an array of regular expressions.
+ *
+ * This function accepts a value that may be a single string, an array of strings, or `undefined`.
+ * It then:
+ *
+ * - Converts each string into a `RegExp` object.
+ * - Ensures that the result is always an array of `RegExp` objects.
+ *
+ * @param stringMaybeArray - The value to be transformed, which can be a single string, an array of
+ *   strings, or `undefined`.
+ * @returns An array of `RegExp` objects. If the input is `undefined`, an empty array is returned.
+ */
 export function transformAndEnsureRegExpArray(
   stringMaybeArray: string | string[] | undefined,
 ): RegExp[] {

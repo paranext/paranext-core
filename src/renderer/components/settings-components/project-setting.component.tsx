@@ -5,6 +5,7 @@ import projectSettingsService from '@shared/services/project-settings.service';
 import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
 import { debounce } from 'platform-bible-utils';
 
+/** Values of the ProjectSettingTypes */
 export type ProjectSettingValues = ProjectSettingTypes[keyof ProjectSettingTypes];
 
 type ProjectSettingProps = {
@@ -44,6 +45,8 @@ export default function ProjectSetting({
       event.target.type === 'checkbox' ? event.target.checked : event.target.value;
 
     if (typeof setting === 'number') {
+      // If setting is a number the response will be a string, but newValue is
+      // ProjectSettingValues so TS doesn't know that
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const numericValue = parseInt(newValue as string, 10);
       if (Number.isNaN(numericValue)) {
@@ -80,12 +83,6 @@ export default function ProjectSetting({
           isDefaultChecked={setting}
         />
       );
-    // else if (Array.isArray(setting))
-    //   component = (
-    //     <DropdownMenu>
-    //       <DropdownMenuItem />
-    //     </DropdownMenu>
-    //   );
     else if (typeof setting === 'object')
       component = (
         <Input
