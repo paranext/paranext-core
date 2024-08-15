@@ -58,6 +58,7 @@ class CheckDataProviderEngine
       [...this.checkRunners.values()].map(async (checkRunner) => {
         const checksAvailable = await checkRunner.getAvailableChecks(undefined);
         if (checksAvailable.length === 0) return;
+        logger.debug(`Checks available ${JSON.stringify(checksAvailable)}`);
         retVal.push(...checksAvailable);
       }),
     );
@@ -110,7 +111,10 @@ class CheckDataProviderEngine
       Object.getOwnPropertyNames(allNetworkObjects).map(async (propertyName) => {
         const checkRunnerDetails = allNetworkObjects[propertyName];
         if (this.checkRunners.has(checkRunnerDetails.id)) return;
-        const checkRunner = await papi.networkObjects.get<ICheckRunner>(checkRunnerDetails.id);
+        // We dynamically filtered down to just check runners above, so we know this is a check runner
+        // @ts-expect-error 2344
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const checkRunner = (await papi.dataProviders.get(checkRunnerDetails.id)) as ICheckRunner;
         if (!checkRunner) return;
         // Check the map a second time to avoid race conditions after the previous `await`
         if (this.checkRunners.has(checkRunnerDetails.id)) return;

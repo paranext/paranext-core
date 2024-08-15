@@ -41,7 +41,7 @@ public class LocalParatextProjectsTests
         // ScrText always prioritizes the folder name over the Name setting as the "name" even when
         // accessing scrText.Settings.Name. So basically name here doesn't get set to anything.
         Assert.That(details.Name, Is.EqualTo(folder));
-        Assert.That(details.Metadata.ID.Equals(id, StringComparison.OrdinalIgnoreCase));
+        Assert.That(details.Metadata.Id.Equals(id, StringComparison.OrdinalIgnoreCase));
     }
 
     private void CreateTempProject(string folder, ProjectDetails details)

@@ -26,7 +26,7 @@ namespace TestParanextDataProvider
                 RegistrationInfo.DefaultUser
             )
         {
-            _id = HexId.FromStr(projectDetails.Metadata.ID);
+            _id = HexId.FromStr(projectDetails.Metadata.Id);
             projectName = new ProjectName
             {
                 ShortName = projectDetails.Name + _id,

@@ -32,7 +32,7 @@ namespace TestParanextDataProvider.Projects
             var settings = new MinimalParatextProjectSettings
             {
                 Name = projectDetails.Name,
-                Guid = projectDetails.Metadata.ID,
+                Guid = projectDetails.Metadata.Id,
                 // Baked-in functional language code. Just needed something that worked for ScrText
                 // to load. Feel free to change this for testing purposes
                 LanguageIsoCode = "en:::",
