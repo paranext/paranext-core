@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
@@ -673,8 +674,8 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             var result = provider.SetProjectSetting(
-                JsonSerializer.Serialize(VisibilitySettingName),
-                JsonSerializer.Serialize(ProjectVisibility.Public.ToString())
+                VisibilitySettingName.SerializeToJson(),
+                ProjectVisibility.Public.ToString().SerializeToJson()
             );
 
             Assert.That(result.Success, Is.True);
@@ -693,8 +694,8 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             var result = provider.SetProjectSetting(
-                JsonSerializer.Serialize(VisibilitySettingName),
-                JsonSerializer.Serialize(89)
+                VisibilitySettingName.SerializeToJson(),
+                89.SerializeToJson()
             );
 
             Assert.That(result.Success, Is.False);

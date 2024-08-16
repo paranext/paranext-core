@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
@@ -14,9 +13,6 @@ namespace Paranext.DataProvider.Projects;
 /// </summary>
 internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 {
-    protected static readonly JsonSerializerOptions s_serializerOptions =
-        SerializationOptions.CreateSerializationOptions();
-
     protected ProjectDataProvider(string name, PapiClient papiClient, ProjectDetails projectDetails)
         : base(name + "-pdp", papiClient, NetworkObjectType.PROJECT_DATA_PROVIDER)
     {
@@ -41,7 +37,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     private ProjectDataScope ExtractDataScope(string jsonString)
     {
         ProjectDataScope? dataScope =
-            JsonSerializer.Deserialize<ProjectDataScope>(jsonString, s_serializerOptions)
+            jsonString.DeserializeFromJson<ProjectDataScope>()
             ?? throw new InvalidDataException("No data scope provided");
         dataScope.ProjectID = ProjectDetails.Metadata.Id;
         dataScope.ProjectName = ProjectDetails.Name;

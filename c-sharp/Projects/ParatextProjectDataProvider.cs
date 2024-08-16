@@ -1,9 +1,9 @@
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Services;
@@ -197,12 +197,14 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectSettingsService.RegisterValidator(PapiClient, VisibilitySettingName,
             VisibilityValidator);
 
-        (bool result, string? error) VisibilityValidator((string newValueJson, string currentValueJson,
+        (bool result, string? error) VisibilityValidator((
+            string newValueJson,
+            string currentValueJson,
             string allChangesJson) data)
         {
             try
             {
-                var value = JsonSerializer.Deserialize<string>(data.newValueJson, s_serializerOptions);
+                var value = data.newValueJson.DeserializeFromJson<string>();
                 var result = true;
                 string? error = null;
                 if (value == null)
@@ -226,7 +228,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public ResponseToRequest GetProjectSetting(string jsonKey)
     {
-        var settingName = JsonSerializer.Deserialize<string>(jsonKey, s_serializerOptions)
+        var settingName = jsonKey.DeserializeFromJson<string>()
             ?? throw new InvalidDataException($"No project setting provided: {jsonKey}");
         var paratextSettingName =
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName) ??
@@ -267,7 +269,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public ResponseToRequest SetProjectSetting(string jsonKey, string value)
     {
-        var settingName = JsonSerializer.Deserialize<string>(jsonKey, s_serializerOptions)
+        var settingName = jsonKey.DeserializeFromJson<string>()
             ?? throw new InvalidDataException($"No project setting provided: {jsonKey}");
 
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -277,7 +279,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // Make sure the value we're planning to set is valid
         var currentValueJson = currentValueResponse.Success
-            ? JsonSerializer.Serialize(currentValueResponse.Contents, s_serializerOptions)
+            ? currentValueResponse.Contents.SerializeToJson()
             : "";
         if (!ProjectSettingsService.IsValid(
                 PapiClient,
@@ -346,7 +348,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     // store here, though, we want to keep all properties filled in inside of Settings.xml files
     public ResponseToRequest ResetProjectSetting(string jsonKey)
     {
-        string settingName = JsonSerializer.Deserialize<string>(jsonKey, s_serializerOptions)
+        string settingName = jsonKey.DeserializeFromJson<string>()
             ?? throw new InvalidDataException($"No setting name provided: {jsonKey}");
         string? defaultValue = ProjectSettingsService.GetDefault(
             PapiClient,
@@ -396,7 +398,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public ResponseToRequest SetBookUsfm(string jsonString, string data)
     {
-        var verseRef = JsonSerializer.Deserialize<VerseRef>(jsonString, s_serializerOptions);
+        var verseRef = jsonString.DeserializeFromJson<VerseRef>();
         verseRef.ChapterNum = 0;
         try
         {
@@ -432,7 +434,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public ResponseToRequest SetChapterUsfm(string jsonString, string data)
     {
-        var verseRef = JsonSerializer.Deserialize<VerseRef>(jsonString, s_serializerOptions);
+        var verseRef = jsonString.DeserializeFromJson<VerseRef>();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -482,7 +484,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public ResponseToRequest SetBookUsx(string jsonString, string data)
     {
-        var verseRef = JsonSerializer.Deserialize<VerseRef>(jsonString, s_serializerOptions);
+        var verseRef = jsonString.DeserializeFromJson<VerseRef>();
         try
         {
             // Don't need to take a write lock in this function because SetBookUsfm will do it
@@ -498,7 +500,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     public ResponseToRequest SetChapterUsx(string jsonString, string data)
     {
-        var verseRef = JsonSerializer.Deserialize<VerseRef>(jsonString, s_serializerOptions);
+        var verseRef = jsonString.DeserializeFromJson<VerseRef>();
         string? failedMessage = null;
         try
         {
@@ -527,7 +529,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private ResponseToRequest GetFromScrText(string verseRefJson, Func<ScrText, VerseRef, string> getTextFromScrText)
     {
-        var verseRef = JsonSerializer.Deserialize<VerseRef>(verseRefJson, s_serializerOptions);
+        var verseRef = verseRefJson.DeserializeFromJson<VerseRef>();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);

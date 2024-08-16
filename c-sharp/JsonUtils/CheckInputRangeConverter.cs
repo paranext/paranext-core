@@ -7,9 +7,6 @@ namespace Paranext.DataProvider.JsonUtils;
 
 internal static class CheckInputRangeConverter
 {
-    private static readonly JsonSerializerOptions s_serializerOptions =
-        SerializationOptions.CreateSerializationOptions();
-
     public static CheckInputRange[] CreateCheckInputRangeArray(JsonNode? inputNode)
     {
         ArgumentNullException.ThrowIfNull(inputNode);
@@ -27,10 +24,10 @@ internal static class CheckInputRangeConverter
             if (string.IsNullOrEmpty(projectId) || string.IsNullOrEmpty(startJson))
                 throw new ArgumentException("projectId and start must not be null");
 
-            VerseRef start = JsonSerializer.Deserialize<VerseRef>(startJson, s_serializerOptions);
+            VerseRef start = startJson.DeserializeFromJson<VerseRef>();
             VerseRef? end = string.IsNullOrEmpty(endJson)
                 ? null
-                : JsonSerializer.Deserialize<VerseRef>(endJson, s_serializerOptions);
+                : endJson.DeserializeFromJson<VerseRef>();
             retVal.Add(new CheckInputRange(projectId, start, end));
         }
         return [.. retVal];

@@ -11,9 +11,8 @@ public class ParatextCheckDetailsTests
     {
         var checkDetails = new ParatextCheckDetails(CheckType.Capitalization);
         checkDetails.EnabledProjectIds.Add("testProjectId");
-        var serializationOptions = SerializationOptions.CreateSerializationOptions();
         Assert.That(
-            System.Text.Json.JsonSerializer.Serialize(checkDetails, serializationOptions),
+            checkDetails.SerializeToJson(),
             Is.EqualTo(
                 """{"checkName":"Capitalization","checkDescription":"Capitalization","checkId":"Capitalization","enabledProjectIds":["testProjectId"]}"""
             )

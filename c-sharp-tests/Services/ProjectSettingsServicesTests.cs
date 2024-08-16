@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using Paranext.DataProvider.JsonUtils;
 using TestParanextDataProvider;
 
 namespace Paranext.DataProvider.Services.Tests
@@ -11,8 +12,8 @@ namespace Paranext.DataProvider.Services.Tests
         public void IsValid_ValidLanguage_ReturnsTrue()
         {
             DummyPapiClient papiClient = new();
-            var newValueJson = JsonSerializer.Serialize("Spanish");
-            var currentValueJson = JsonSerializer.Serialize("German");
+            var newValueJson = "Spanish".SerializeToJson();
+            var currentValueJson = "German".SerializeToJson();
             papiClient.AddSettingValueToTreatAsValid(
                 ProjectSettingsNames.PB_LANGUAGE,
                 newValueJson,
@@ -33,8 +34,8 @@ namespace Paranext.DataProvider.Services.Tests
         public void IsValid_InvalidSetting_ReturnsFalse()
         {
             DummyPapiClient papiClient = new DummyPapiClient();
-            var newValueJson = JsonSerializer.Serialize("Spanish");
-            var currentValueJson = JsonSerializer.Serialize("German");
+            var newValueJson = "Spanish".SerializeToJson();
+            var currentValueJson = "German".SerializeToJson();
             var result = ProjectSettingsService.IsValid(
                 papiClient,
                 newValueJson,
@@ -80,7 +81,7 @@ namespace Paranext.DataProvider.Services.Tests
             {
                 try
                 {
-                    var value = JsonSerializer.Deserialize<int?>(data.newValueJson);
+                    var value = data.newValueJson.DeserializeFromJson<int?>();
                     var result = true;
                     string? error = null;
                     if (value == null)
@@ -109,8 +110,8 @@ namespace Paranext.DataProvider.Services.Tests
             Assert.That(
                 ProjectSettingsService.IsValid(
                     papiClient,
-                    JsonSerializer.Serialize(2),
-                    JsonSerializer.Serialize(5),
+                    2.SerializeToJson(),
+                    5.SerializeToJson(),
                     settingKey,
                     ""
                 ),
@@ -128,8 +129,8 @@ namespace Paranext.DataProvider.Services.Tests
             Assert.That(
                 ProjectSettingsService.IsValid(
                     papiClient,
-                    JsonSerializer.Serialize(1),
-                    JsonSerializer.Serialize(5),
+                    1.SerializeToJson(),
+                    5.SerializeToJson(),
                     settingKey,
                     ""
                 ),
@@ -138,8 +139,8 @@ namespace Paranext.DataProvider.Services.Tests
             Assert.That(
                 ProjectSettingsService.IsValid(
                     papiClient,
-                    JsonSerializer.Serialize(6),
-                    JsonSerializer.Serialize(5),
+                    6.SerializeToJson(),
+                    5.SerializeToJson(),
                     settingKey,
                     ""
                 ),
