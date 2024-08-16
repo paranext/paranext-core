@@ -48,6 +48,7 @@ declare module 'papi-shared-types' {
     'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
+    'platform.openUserSettings': () => Promise<void>;
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
     // `extension-host.ts`

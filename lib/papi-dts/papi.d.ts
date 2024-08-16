@@ -2353,6 +2353,7 @@ declare module 'papi-shared-types' {
     'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
+    'platform.openUserSettings': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -5202,6 +5203,93 @@ declare module 'shared/services/localization.service-model' {
       getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
     } & IDataProvider<LocalizationDataDataTypes>;
 }
+declare module 'shared/data/platform.data' {
+  /**
+   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
+   * Platform.Bible core
+   */
+  export const PLATFORM_NAMESPACE = 'platform';
+  /** Query string passed to the renderer when starting if it should enable noisy dev mode */
+  export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
+}
+declare module 'shared/log-error.model' {
+  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
+  export default class LogError extends Error {
+    constructor(message?: string);
+  }
+}
+declare module 'shared/services/localization.service' {
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  const localizationService: ILocalizationService;
+  export default localizationService;
+}
+declare module 'shared/utils/settings-document-combiner-base' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import {
+    DocumentCombiner,
+    JsonDocumentLike,
+    Localized,
+    Setting,
+    SettingsGroup,
+  } from 'platform-bible-utils';
+  /**
+   * Information about one specific setting. Basically just {@link Setting} but with specific default
+   * type info
+   */
+  type SettingInfo<SettingName extends SettingNames> = Setting & {
+    default: SettingTypes[SettingName];
+  };
+  /** Information about all settings. Keys are setting keys, values are information for that setting */
+  type AllSettingsInfo = {
+    [SettingName in SettingNames]: SettingInfo<SettingName>;
+  };
+  export type SettingsContributionInfo = {
+    /** Map of extension name to that extension's provided settings groups if provided */
+    contributions: {
+      [extensionName: string]: SettingsGroup[] | undefined;
+    };
+    /**
+     * Map of setting name to setting definition. For type specificity and ease of accessing settings
+     * since they're a bit hard to find in `contributions`
+     */
+    settings: Partial<AllSettingsInfo>;
+  };
+  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
+  export default abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
+    /** Name for type of setting to use in error messages */
+    protected readonly settingTypeName: string;
+    /** Cached promise for getting the localized output */
+    private localizedOutputPromise;
+    constructor(baseDocument: JsonDocumentLike);
+    /**
+     * This method is intended to be layered over by a child class to expose the localized setting
+     * info.
+     *
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * NOTE: If the input documents might have changed since the last time the settings contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of settings contributions. If all the input documents are static, then there is
+     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
+    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
+    protected transformBaseDocumentAfterValidation(
+      baseDocument: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
+    protected transformContributionAfterValidation(
+      documentName: string,
+      document: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateOutput(): void;
+    /** Validate the base and contribution documents against the JSON schema */
+    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
+  }
+}
 declare module 'shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
   import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
@@ -5210,6 +5298,7 @@ declare module 'shared/services/settings.service-model' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
+  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
   /** Name prefix for registered commands that call settings validators */
   export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
   /**
@@ -5345,96 +5434,16 @@ declare module 'shared/services/settings.service-model' {
       key: SettingName,
       validator: SettingValidator<SettingName>,
     ): Promise<UnsubscriberAsync>;
-  } & OnDidDispose &
-    IDataProvider<SettingDataTypes> &
-    typeof settingsServiceObjectToProxy;
-}
-declare module 'shared/data/platform.data' {
-  /**
-   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
-   * Platform.Bible core
-   */
-  export const PLATFORM_NAMESPACE = 'platform';
-  /** Query string passed to the renderer when starting if it should enable noisy dev mode */
-  export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
-}
-declare module 'shared/log-error.model' {
-  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
-  export default class LogError extends Error {
-    constructor(message?: string);
-  }
-}
-declare module 'shared/services/localization.service' {
-  import { ILocalizationService } from 'shared/services/localization.service-model';
-  const localizationService: ILocalizationService;
-  export default localizationService;
-}
-declare module 'shared/utils/settings-document-combiner-base' {
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import {
-    DocumentCombiner,
-    JsonDocumentLike,
-    Localized,
-    Setting,
-    SettingsGroup,
-  } from 'platform-bible-utils';
-  /**
-   * Information about one specific setting. Basically just {@link Setting} but with specific default
-   * type info
-   */
-  type SettingInfo<SettingName extends SettingNames> = Setting & {
-    default: SettingTypes[SettingName];
-  };
-  /** Information about all settings. Keys are setting keys, values are information for that setting */
-  type AllSettingsInfo = {
-    [SettingName in SettingNames]: SettingInfo<SettingName>;
-  };
-  export type SettingsContributionInfo = {
-    /** Map of extension name to that extension's provided settings groups if provided */
-    contributions: {
-      [extensionName: string]: SettingsGroup[] | undefined;
-    };
     /**
-     * Map of setting name to setting definition. For type specificity and ease of accessing settings
-     * since they're a bit hard to find in `contributions`
-     */
-    settings: Partial<AllSettingsInfo>;
-  };
-  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
-  export default abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
-    /** Name for type of setting to use in error messages */
-    protected readonly settingTypeName: string;
-    /** Cached promise for getting the localized output */
-    private localizedOutputPromise;
-    constructor(baseDocument: JsonDocumentLike);
-    /**
-     * This method is intended to be layered over by a child class to expose the localized setting
-     * info.
-     *
      * Get the current set of settings contribution info given all the input documents with all
      * localized string keys localized properly.
      *
-     * NOTE: If the input documents might have changed since the last time the settings contributions
-     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
-     * this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of settings contributions. If all the input documents are static, then there is
-     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     * @returns Localized project settings contribution info or undefined
      */
-    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
-    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
-    protected transformBaseDocumentAfterValidation(
-      baseDocument: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
-    protected transformContributionAfterValidation(
-      documentName: string,
-      document: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateOutput(): void;
-    /** Validate the base and contribution documents against the JSON schema */
-    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
-  }
+    returnLocalizedContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
+  } & OnDidDispose &
+    IDataProvider<SettingDataTypes> &
+    typeof settingsServiceObjectToProxy;
 }
 declare module 'shared/utils/project-settings-document-combiner' {
   import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
@@ -5575,10 +5584,10 @@ declare module 'shared/services/project-settings.service-model' {
       validatorCallback: ProjectSettingValidator<ProjectSettingName>,
     ): Promise<UnsubscriberAsync>;
     /**
-     * Get the current set of settings contribution info given all the input documents with all
-     * localized string keys localized properly.
+     * Get the current set of project settings contribution info given all the input documents with
+     * all localized string keys localized properly.
      *
-     * @returns Localized project settings contribution info
+     * @returns Localized project settings contribution info or undefined
      */
     getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
   }

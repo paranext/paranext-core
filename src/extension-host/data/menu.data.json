@@ -51,7 +51,7 @@
         "localizeNotes": "Application main menu > Project > Settings",
         "group": "platform.projectSettings",
         "order": 1,
-        "command": "platform.settings"
+        "command": "platform.openUserSettings"
       },
       {
         "label": "%mainMenu_exit%",

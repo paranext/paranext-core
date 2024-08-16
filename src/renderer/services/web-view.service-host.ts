@@ -59,13 +59,15 @@ import {
 import { registerCommand } from '@shared/services/command.service';
 import { CommandNames } from 'papi-shared-types';
 import {
-  type ProjectSettingsTabData,
-  TAB_TYPE_PROJECT_SETTINGS_DIALOG,
-} from '@renderer/components/project-settings-dialog/project-settings-tab.component';
+  type SettingsTabData,
+  TAB_TYPE_PROJECT_SETTINGS_TAB,
+  TAB_TYPE_USER_SETTINGS_TAB,
+} from '@renderer/components/settings-tabs/settings-tab.component';
 import projectSettingsService, {
   filterProjectSettingsContributionsByProjectInterfaces,
 } from '@shared/services/project-settings.service';
 import projectLookupService from '@shared/services/project-lookup.service';
+import settingsService from '@shared/services/settings.service';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -1275,13 +1277,35 @@ async function openProjectSettingsTab(webViewId: string): Promise<Layout | undef
       projectInterfacesFromProjectId,
     );
 
-  return addTab<ProjectSettingsTabData>(
+  return addTab<SettingsTabData>(
     {
       id: settingsTabId,
-      tabType: TAB_TYPE_PROJECT_SETTINGS_DIALOG,
+      tabType: TAB_TYPE_PROJECT_SETTINGS_TAB,
       data: {
         projectId: projectIdFromWebView,
-        projectSettingsContributions: filteredProjectSettingsContribution,
+        settingsContributions: filteredProjectSettingsContribution,
+      },
+    },
+    {
+      type: 'float',
+      position: 'center',
+      floatSize: { height: 400, width: 500 },
+    },
+  );
+}
+
+async function openUserSettingsTab(): Promise<Layout | undefined> {
+  const settingsTabId = newGuid();
+
+  const settingsContributions = (await settingsService.returnLocalizedContributionInfo())
+    ?.contributions;
+
+  return addTab<SettingsTabData>(
+    {
+      id: settingsTabId,
+      tabType: TAB_TYPE_USER_SETTINGS_TAB,
+      data: {
+        settingsContributions,
       },
     },
     {
@@ -1305,6 +1329,7 @@ export async function startWebViewService(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
     'platform.openProjectSettings': openProjectSettingsTab,
+    'platform.openUserSettings': openUserSettingsTab,
   };
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {

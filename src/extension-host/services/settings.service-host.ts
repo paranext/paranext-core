@@ -32,6 +32,7 @@ import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
 import { serializeRequestType } from '@shared/utils/util';
 import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
+import { LocalizedSettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 
 const SETTINGS_FILE_URI = joinUriPaths('data://', 'settings.json');
 
@@ -213,6 +214,11 @@ class SettingDataProviderEngine
       return success;
     }
     return true;
+  }
+
+  // eslint-disable-next-line class-methods-use-this
+  async returnLocalizedContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined> {
+    return settingsDocumentCombiner.getLocalizedSettingsContributionInfo();
   }
 }
 

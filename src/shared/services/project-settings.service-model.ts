@@ -77,10 +77,10 @@ export interface IProjectSettingsService {
     validatorCallback: ProjectSettingValidator<ProjectSettingName>,
   ): Promise<UnsubscriberAsync>;
   /**
-   * Get the current set of settings contribution info given all the input documents with all
-   * localized string keys localized properly.
+   * Get the current set of project settings contribution info given all the input documents with
+   * all localized string keys localized properly.
    *
-   * @returns Localized project settings contribution info
+   * @returns Localized project settings contribution info or undefined
    */
   getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
 }
