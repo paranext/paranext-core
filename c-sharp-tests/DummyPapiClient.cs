@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
@@ -221,7 +222,7 @@ namespace TestParanextDataProvider
                     // failure. Can keep the original values
 
                     await Task.Run(
-                        () => responseCallback(success, JsonSerializer.SerializeToElement(result))
+                        () => responseCallback(success, result.SerializeToJsonElement())
                     );
                 });
         }

@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
-using Newtonsoft.Json;
+using System.Text.Json;
+using Paranext.DataProvider.JsonUtils;
 using TestParanextDataProvider;
 
 namespace Paranext.DataProvider.Services.Tests
@@ -10,9 +11,9 @@ namespace Paranext.DataProvider.Services.Tests
         [Test]
         public void IsValid_ValidLanguage_ReturnsTrue()
         {
-            DummyPapiClient papiClient = new DummyPapiClient();
-            var newValueJson = JsonConvert.SerializeObject("Spanish");
-            var currentValueJson = JsonConvert.SerializeObject("German");
+            DummyPapiClient papiClient = new();
+            var newValueJson = "Spanish".SerializeToJson();
+            var currentValueJson = "German".SerializeToJson();
             papiClient.AddSettingValueToTreatAsValid(
                 ProjectSettingsNames.PB_LANGUAGE,
                 newValueJson,
@@ -33,8 +34,8 @@ namespace Paranext.DataProvider.Services.Tests
         public void IsValid_InvalidSetting_ReturnsFalse()
         {
             DummyPapiClient papiClient = new DummyPapiClient();
-            var newValueJson = JsonConvert.SerializeObject("Spanish");
-            var currentValueJson = JsonConvert.SerializeObject("German");
+            var newValueJson = "Spanish".SerializeToJson();
+            var currentValueJson = "German".SerializeToJson();
             var result = ProjectSettingsService.IsValid(
                 papiClient,
                 newValueJson,
@@ -50,9 +51,15 @@ namespace Paranext.DataProvider.Services.Tests
         public void GetDefault_KnownProperty_ReturnsDefaultValue()
         {
             DummyPapiClient papiClient = new DummyPapiClient();
-            var result = ProjectSettingsService.GetDefault(papiClient, ProjectSettingsNames.PT_LANGUAGE);
+            var result = ProjectSettingsService.GetDefault(
+                papiClient,
+                ProjectSettingsNames.PT_LANGUAGE
+            );
 
-            Assert.That(result, Is.EqualTo($"default value for {ProjectSettingsNames.PB_LANGUAGE}"));
+            Assert.That(
+                result,
+                Is.EqualTo($"default value for {ProjectSettingsNames.PB_LANGUAGE}")
+            );
         }
 
         [Test]
@@ -74,7 +81,7 @@ namespace Paranext.DataProvider.Services.Tests
             {
                 try
                 {
-                    var value = JsonConvert.DeserializeObject(data.newValueJson);
+                    var value = data.newValueJson.DeserializeFromJson<int?>();
                     var result = true;
                     string? error = null;
                     if (value == null)
@@ -82,7 +89,7 @@ namespace Paranext.DataProvider.Services.Tests
                         result = false;
                         error = "New value must be an integer. It cannot be null";
                     }
-                    else if ((long)value <= 4)
+                    else if (value <= 4)
                     {
                         result = false;
                         error =
@@ -103,8 +110,8 @@ namespace Paranext.DataProvider.Services.Tests
             Assert.That(
                 ProjectSettingsService.IsValid(
                     papiClient,
-                    JsonConvert.SerializeObject(2),
-                    JsonConvert.SerializeObject(5),
+                    2.SerializeToJson(),
+                    5.SerializeToJson(),
                     settingKey,
                     ""
                 ),
@@ -122,8 +129,8 @@ namespace Paranext.DataProvider.Services.Tests
             Assert.That(
                 ProjectSettingsService.IsValid(
                     papiClient,
-                    JsonConvert.SerializeObject(1),
-                    JsonConvert.SerializeObject(5),
+                    1.SerializeToJson(),
+                    5.SerializeToJson(),
                     settingKey,
                     ""
                 ),
@@ -132,8 +139,8 @@ namespace Paranext.DataProvider.Services.Tests
             Assert.That(
                 ProjectSettingsService.IsValid(
                     papiClient,
-                    JsonConvert.SerializeObject(6),
-                    JsonConvert.SerializeObject(5),
+                    6.SerializeToJson(),
+                    5.SerializeToJson(),
                     settingKey,
                     ""
                 ),

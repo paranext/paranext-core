@@ -36,19 +36,10 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
 
     private ProjectDataScope ExtractDataScope(string jsonString)
     {
-        if (
-            !ProjectDataScopeConverter.TryGetProjectDataScope(
-                jsonString,
-                out ProjectDataScope? dataScope,
-                out string errorMessage
-            )
-        )
-            throw new Exception(errorMessage);
-
-        if (dataScope == null)
-            throw new Exception("No data scope provided");
-
-        dataScope.ProjectID = ProjectDetails.Metadata.ID;
+        ProjectDataScope? dataScope =
+            jsonString.DeserializeFromJson<ProjectDataScope>()
+            ?? throw new InvalidDataException("No data scope provided");
+        dataScope.ProjectID = ProjectDetails.Metadata.Id;
         dataScope.ProjectName = ProjectDetails.Name;
         return dataScope;
     }
@@ -68,7 +59,7 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         return new MessageEventProjectDataProviderCreated(
             DataProviderName,
             functionNames.ToArray(),
-            ProjectDetails.Metadata.ID,
+            ProjectDetails.Metadata.Id,
             ProjectDetails.Metadata.ProjectInterfaces
         );
     }
