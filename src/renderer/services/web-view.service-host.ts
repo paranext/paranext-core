@@ -63,11 +63,6 @@ import {
   TAB_TYPE_PROJECT_SETTINGS_TAB,
   TAB_TYPE_USER_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import projectSettingsService, {
-  filterProjectSettingsContributionsByProjectInterfaces,
-} from '@shared/services/project-settings.service';
-import projectLookupService from '@shared/services/project-lookup.service';
-import settingsService from '@shared/services/settings.service';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -1260,22 +1255,9 @@ const papiWebViewService: WebViewServiceType = {
 
 async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
-  const projectIdFromWebView = (await getDockLayout()).getWebViewDefinition(webViewId)?.projectId;
-  const allProjectSettingsContributionInfo = (
-    await projectSettingsService.getLocalizedContributionInfo()
-  )?.contributions;
+  const projectIdFromWebView = (await getSavedWebViewDefinition(webViewId))?.projectId;
 
   if (!projectIdFromWebView) return undefined;
-
-  const projectInterfacesFromProjectId = (
-    await projectLookupService.getMetadataForProject(projectIdFromWebView)
-  ).projectInterfaces;
-
-  const filteredProjectSettingsContribution =
-    await filterProjectSettingsContributionsByProjectInterfaces(
-      allProjectSettingsContributionInfo,
-      projectInterfacesFromProjectId,
-    );
 
   return addTab<SettingsTabData>(
     {
@@ -1283,7 +1265,6 @@ async function openProjectSettingsTab(webViewId: string): Promise<Layout | undef
       tabType: TAB_TYPE_PROJECT_SETTINGS_TAB,
       data: {
         projectId: projectIdFromWebView,
-        settingsContributions: filteredProjectSettingsContribution,
       },
     },
     {
@@ -1297,16 +1278,11 @@ async function openProjectSettingsTab(webViewId: string): Promise<Layout | undef
 async function openUserSettingsTab(): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
 
-  const settingsContributions = (await settingsService.returnLocalizedContributionInfo())
-    ?.contributions;
-
   return addTab<SettingsTabData>(
     {
       id: settingsTabId,
       tabType: TAB_TYPE_USER_SETTINGS_TAB,
-      data: {
-        settingsContributions,
-      },
+      data: {},
     },
     {
       type: 'float',

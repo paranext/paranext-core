@@ -2,7 +2,7 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
-      "%settings_platformScripture_paratext_group_label%": "Scripture Settings",
+      "%settings_platformScripture_paratext_group_label%": "Paratext 9-related Settings",
       "%settings_platformScripture_paratext_group_description%": "Settings related to how Platform.Bible should interact with older Paratext installations",
       "%settings_platformScripture_includeMyParatext9Projects_label%": "Include My Paratext 9 Projects",
       "%settings_platformScripture_includeMyParatext9Projects_description%": "Whether to look in the Paratext 9 project storage folder for Paratext projects to load (Windows only). Located at \"C:\\My Paratext 9 Projects\". Note: you must restart Platform.Bible in order for a change in this setting to take effect.",

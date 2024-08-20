@@ -1,9 +1,12 @@
-import { ReactNode, useCallback, useState } from 'react';
-import { NavigationContentSearch, TabKeyValueContent } from 'platform-bible-react';
+import { ReactNode, useCallback, useMemo, useState } from 'react';
+import { NavigationContentSearch, TabKeyValueContent, usePromise } from 'platform-bible-react';
 import { Localized, ProjectSettingsGroup, SettingsGroup } from 'platform-bible-utils';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
-import { LocalizedSettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
+import projectSettingsService, {
+  filterProjectSettingsContributionsByProjectInterfaces,
+} from '@shared/services/project-settings.service';
+import projectLookupService from '@shared/services/project-lookup.service';
+import settingsService from '@shared/services/settings.service';
 import ProjectOrUserSettingsList from './settings-components/project-or-user-settings-list.component';
 import './settings-tab.component.scss';
 
@@ -12,13 +15,33 @@ export const TAB_TYPE_USER_SETTINGS_TAB = 'user-settings-tab';
 
 type SettingsTabProps = {
   projectId?: string;
-  settingsContributions:
-    | Localized<ProjectSettingsContributionInfo['contributions']>
-    | LocalizedSettingsContributionInfo['contributions']
-    | undefined;
 };
 
-export default function SettingsTab({ projectId, settingsContributions }: SettingsTabProps) {
+export default function SettingsTab({ projectId }: SettingsTabProps) {
+  const [settingsContributions, isLoadingSettingsContributions] = usePromise(
+    useCallback(async () => {
+      if (projectId) {
+        const allProjectSettingsContributionInfo = (
+          await projectSettingsService.getLocalizedContributionInfo()
+        )?.contributions;
+
+        const projectInterfacesFromProjectId = (
+          await projectLookupService.getMetadataForProject(projectId)
+        ).projectInterfaces;
+
+        const filteredContributions = await filterProjectSettingsContributionsByProjectInterfaces(
+          allProjectSettingsContributionInfo,
+          projectInterfacesFromProjectId,
+        );
+        return filteredContributions;
+      }
+      return (await settingsService.getLocalizedSettingsContributionInfo())?.contributions;
+    }, [projectId]),
+    useMemo(() => {
+      return undefined;
+    }, []),
+  );
+
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const handleSearchInput = (newSearchTerm: string) => {
@@ -61,6 +84,7 @@ export default function SettingsTab({ projectId, settingsContributions }: Settin
   }, [generateFilteredTabContent, settingsContributions]);
 
   if (!settingsContributions) return <div className="settings-tab">No Settings</div>;
+  if (isLoadingSettingsContributions) return <div className="settings-tab">Loading Settings</div>;
 
   return (
     <div className="settings-tab">
@@ -78,7 +102,7 @@ export default function SettingsTab({ projectId, settingsContributions }: Settin
 
 export type SettingsTabData = SettingsTabProps;
 
-export const loadProjectSettingsDialog = (savedTabInfo: SavedTabInfo): TabInfo => {
+export const loadProjectSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   const typedSavedTabInfo = {
     id: savedTabInfo.id,
     tabType: savedTabInfo.tabType,
@@ -90,27 +114,14 @@ export const loadProjectSettingsDialog = (savedTabInfo: SavedTabInfo): TabInfo =
   return {
     ...savedTabInfo,
     tabTitle: 'Project Settings',
-    content: (
-      <SettingsTab
-        projectId={typedSavedTabInfo.data.projectId}
-        settingsContributions={typedSavedTabInfo.data.settingsContributions}
-      />
-    ),
+    content: <SettingsTab projectId={typedSavedTabInfo.data.projectId} />,
   };
 };
 
-export const loadUserSettingsDialog = (savedTabInfo: SavedTabInfo): TabInfo => {
-  const typedSavedTabInfo = {
-    id: savedTabInfo.id,
-    tabType: savedTabInfo.tabType,
-    // We use this type in the addTab function, but it doesn't know what data is here
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    data: savedTabInfo.data as SettingsTabData,
-  };
-
+export const loadUserSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
     tabTitle: 'User Settings',
-    content: <SettingsTab settingsContributions={typedSavedTabInfo.data.settingsContributions} />,
+    content: <SettingsTab />,
   };
 };

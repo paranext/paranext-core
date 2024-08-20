@@ -159,7 +159,7 @@ export type ISettingsService = {
    *
    * @returns Localized project settings contribution info or undefined
    */
-  returnLocalizedContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
+  getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
 } & OnDidDispose &
   IDataProvider<SettingDataTypes> &
   typeof settingsServiceObjectToProxy;

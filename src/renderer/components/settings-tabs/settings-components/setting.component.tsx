@@ -103,9 +103,10 @@ export default function Setting({ settingKey, label, description, defaultSetting
     <SettingsListItem
       primary={label}
       secondary={description}
-      generateActionComponent={generateComponent}
       isLoading={isLoading}
       loadingMessage="Loading setting"
-    />
+    >
+      {generateComponent()}
+    </SettingsListItem>
   );
 }

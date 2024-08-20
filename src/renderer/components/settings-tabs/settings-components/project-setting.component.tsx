@@ -31,15 +31,6 @@ export default function ProjectSetting({
 
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
-  const validateProjectSettingValue = async (
-    currentSettingKey: ProjectSettingNames,
-    newValue: ProjectSettingValues,
-    currentValue: ProjectSettingValues,
-  ) => {
-    const isValid = await projectSettingsService.isValid(currentSettingKey, newValue, currentValue);
-    return isValid;
-  };
-
   const handleChangeSetting = async (event: ChangeEvent<HTMLInputElement>) => {
     let newValue: ProjectSettingValues =
       event.target.type === 'checkbox' ? event.target.checked : event.target.value;
@@ -56,13 +47,17 @@ export default function ProjectSetting({
       newValue = numericValue;
     }
 
-    const isValid = await validateProjectSettingValue(settingKey, newValue, setting);
-
-    if (isValid) {
-      setErrorMessage(undefined);
-      if (setSetting) setSetting(newValue);
-    } else {
-      setErrorMessage('Invalid value');
+    try {
+      if (await projectSettingsService.isValid(settingKey, newValue, setting)) {
+        setErrorMessage(undefined);
+        if (setSetting) setSetting(newValue);
+      } else {
+        setErrorMessage('Invalid value');
+      }
+    } catch (error) {
+      // Error is type unknown and if I type it as string it says it must be any or unknown
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      setErrorMessage(error as string);
     }
   };
 
@@ -104,9 +99,10 @@ export default function ProjectSetting({
     <SettingsListItem
       primary={label}
       secondary={description}
-      generateActionComponent={generateComponent}
       isLoading={isLoading}
       loadingMessage="Loading setting"
-    />
+    >
+      {generateComponent()}
+    </SettingsListItem>
   );
 }

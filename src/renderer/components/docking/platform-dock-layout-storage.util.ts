@@ -38,9 +38,9 @@ import {
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
 import {
   TAB_TYPE_PROJECT_SETTINGS_TAB,
-  loadProjectSettingsDialog,
+  loadProjectSettingsTab,
   TAB_TYPE_USER_SETTINGS_TAB,
-  loadUserSettingsDialog,
+  loadUserSettingsTab,
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import {
   TAB_TYPE_WEBVIEW,
@@ -73,8 +73,8 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
     [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
-    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsDialog],
-    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsDialog],
+    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
+    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
     [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
     [TAB_TYPE_CHECKING_RESULTS_LIST, loadCheckingResultsListTab],
     ...Object.entries(DIALOGS).map(

@@ -24,24 +24,27 @@ export default function SettingsListExamples() {
       <SettingsListItem
         primary="Header color"
         secondary="The color of the header"
-        generateActionComponent={() => generateComponent('Red')}
         isLoading={false}
         loadingMessage="Loading setting"
-      />
+      >
+        {generateComponent('Red')}
+      </SettingsListItem>
       <SettingsListItem
         primary="Header size"
         secondary="The size of the header"
-        generateActionComponent={() => generateComponent('56')}
         isLoading
         loadingMessage="Loading setting"
-      />
+      >
+        {generateComponent('56')}
+      </SettingsListItem>
       <SettingsListItem
         primary="Header bold"
         secondary="Wether or not the header is bold"
-        generateActionComponent={() => generateComponent('color')}
         isLoading={false}
         loadingMessage="Loading setting"
-      />
+      >
+        {generateComponent('color')}
+      </SettingsListItem>
     </SettingsList>
   );
 }

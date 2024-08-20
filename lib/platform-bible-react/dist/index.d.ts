@@ -5,6 +5,7 @@ import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import { PopoverProps } from '@radix-ui/react-popover';
 import * as SelectPrimitive from '@radix-ui/react-select';
+import * as SeparatorPrimitive from '@radix-ui/react-separator';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
@@ -12,7 +13,7 @@ import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirectio
 import { VariantProps } from 'class-variance-authority';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
-import { ChangeEvent, ChangeEventHandler, FocusEventHandler, JSX as JSX$1, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
+import { ChangeEvent, ChangeEventHandler, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
 
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
@@ -113,9 +114,15 @@ export type MenuItemContainingSubmenu = MenuItemBase & {
 export type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
-	/** Uri path to the icon to display after the menu text. Ex: `papi-extension://helloWorld/assets/icon.png` */
+	/**
+	 * Uri path to the icon to display after the menu text. Ex:
+	 * `papi-extension://helloWorld/assets/icon.png`
+	 */
 	iconPathAfter?: string;
-	/** Uri path to the icon to display before the menu text. Ex: `papi-extension://helloWorld/assets/icon.png` */
+	/**
+	 * Uri path to the icon to display before the menu text. Ex:
+	 * `papi-extension://helloWorld/assets/icon.png`
+	 */
 	iconPathBefore?: string;
 };
 /**
@@ -825,17 +832,12 @@ export type SettingsListProps = React$1.PropsWithChildren;
  */
 export declare function SettingsList({ children }: SettingsListProps): import("react/jsx-runtime").JSX.Element;
 /** Props for SettingsListItem component */
-export type SettingsListItemProps = {
+export type SettingsListItemProps = React$1.PropsWithChildren & {
 	/** Primary text of the list item */
 	primary: string;
 	/** Optional text of the list item */
 	secondary?: string | undefined;
-	/** Handler for the caller to generate the action component for the list item */
-	generateActionComponent: () => React$1.JSX.Element;
-	/**
-	 * Optional boolean to display a message if the action component isn't generated yet. Defaults to
-	 * false
-	 */
+	/** Optional boolean to display a message if the children aren't loaded yet. Defaults to false */
 	isLoading?: boolean;
 	/** Optional message to display if isLoading */
 	loadingMessage?: string;
@@ -845,14 +847,13 @@ export type SettingsListItemProps = {
  *
  * @param primary Primary text of the list item
  * @param secondary Optional secondary text of the list item
- * @param generateActionComponent Handler for the caller to generate the action component for the
- *   list item
  * @param isLoading Optional, to display a message if the action component isn't generated yet,
  *   defaults to false
+ * @param children The action component(s) to provide for this item
  * @param loadingMessage Optional, message to display if isLoading
  * @returns Formatted div encompassing the list item content
  */
-export declare function SettingsListItem({ primary, secondary, generateActionComponent, isLoading, loadingMessage, }: SettingsListItemProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsListItem({ primary, secondary, children, isLoading, loadingMessage, }: SettingsListItemProps): import("react/jsx-runtime").JSX.Element;
 /** Props for SettingsListHeader component */
 export type SettingsListHeaderProps = {
 	/** The primary text of the list header */
@@ -1104,6 +1105,7 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;

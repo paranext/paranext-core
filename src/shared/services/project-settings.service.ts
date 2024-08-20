@@ -35,18 +35,14 @@ export function filterProjectSettingsContributionsByProjectInterfaces(
 
   const resultingContributions: Localized<ProjectSettingsContributionInfo['contributions']> = {};
 
-  // Map is not being used to return an array
-  // eslint-disable-next-line array-callback-return
-  Object.entries(contributions).map(([extensionName, contributionArray]) => {
+  Object.entries(contributions).forEach(([extensionName, contributionArray]) => {
     if (!contributionArray) return;
 
     const filteredContributions = contributionArray
       .map((contribution) => {
         const filteredProperties: (typeof contribution)['properties'] = {};
 
-        // Map is not being used to return an array
-        // eslint-disable-next-line array-callback-return
-        Object.entries(contribution.properties).map(([key, property]) => {
+        Object.entries(contribution.properties).forEach(([key, property]) => {
           const { includeProjectInterfaces, excludeProjectInterfaces } = property;
 
           if (includeProjectInterfaces && excludeProjectInterfaces) {

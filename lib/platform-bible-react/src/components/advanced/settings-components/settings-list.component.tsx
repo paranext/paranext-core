@@ -1,4 +1,4 @@
-import { PropsWithChildren, JSX } from 'react';
+import { PropsWithChildren } from 'react';
 import { Separator } from '@/components/shadcn-ui/separator';
 
 /** Props for the SettingsList component, currently just children */
@@ -15,20 +15,14 @@ export function SettingsList({ children }: SettingsListProps) {
 }
 
 /** Props for SettingsListItem component */
-type SettingsListItemProps = {
+type SettingsListItemProps = PropsWithChildren & {
   /** Primary text of the list item */
   primary: string;
 
   /** Optional text of the list item */
   secondary?: string | undefined;
 
-  /** Handler for the caller to generate the action component for the list item */
-  generateActionComponent: () => JSX.Element;
-
-  /**
-   * Optional boolean to display a message if the action component isn't generated yet. Defaults to
-   * false
-   */
+  /** Optional boolean to display a message if the children aren't loaded yet. Defaults to false */
   isLoading?: boolean;
 
   /** Optional message to display if isLoading */
@@ -40,17 +34,16 @@ type SettingsListItemProps = {
  *
  * @param primary Primary text of the list item
  * @param secondary Optional secondary text of the list item
- * @param generateActionComponent Handler for the caller to generate the action component for the
- *   list item
  * @param isLoading Optional, to display a message if the action component isn't generated yet,
  *   defaults to false
+ * @param children The action component(s) to provide for this item
  * @param loadingMessage Optional, message to display if isLoading
  * @returns Formatted div encompassing the list item content
  */
 export function SettingsListItem({
   primary,
   secondary,
-  generateActionComponent,
+  children,
   isLoading = false,
   loadingMessage,
 }: SettingsListItemProps) {
@@ -64,7 +57,7 @@ export function SettingsListItem({
       {isLoading ? (
         <p className="pr-text-sm pr-text-muted-foreground">{loadingMessage}</p>
       ) : (
-        generateActionComponent()
+        <div>{children}</div>
       )}
     </div>
   );
