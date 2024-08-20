@@ -43,6 +43,8 @@ function deepEqualAcrossIframes(a: unknown, b: unknown) {
 }
 
 function scrollToScrRef(scrRef: ScriptureReference) {
+  if (!scrRef || typeof scrRef.verseNum !== 'number') return undefined;
+
   const verseElement = document.querySelector<HTMLElement>(
     `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
   );
