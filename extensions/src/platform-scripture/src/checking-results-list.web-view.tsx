@@ -1,6 +1,4 @@
-import './checking-results-list.component.css';
-import { badLeftoversCheck, engineProblemsCheck } from '@renderer/testing/test-layout.data';
-import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
+import { WebViewProps } from '@papi/core';
 import {
   Button,
   Label,
@@ -8,7 +6,8 @@ import {
   ScriptureResultsViewer,
   ScriptureResultsViewerProps,
 } from 'platform-bible-react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { badLeftoversCheck, engineProblemsCheck } from './testing/test-scripture-checks';
 
 export type CheckingResultsListProps = ScriptureResultsViewerProps & {
   project?: string;
@@ -34,8 +33,18 @@ const getLabel = (
   return result;
 };
 
-export default function CheckingResultsList(props: CheckingResultsListProps) {
-  const { sources, project, onRerun } = props;
+global.webViewComponent = function CheckingResultsListWebView({ useWebViewState }: WebViewProps) {
+  const [project] = useWebViewState('projectName', '') ?? 'Dummy project';
+
+  // This is stub code to get some dummy checking results.
+  // TODO (#994): Replace this with calls to get actual check results and subscribe to updates.
+  const onRerun = useCallback(() => {
+    badLeftoversCheck.reRun();
+    engineProblemsCheck.reRun();
+  }, []);
+
+  const sources = useMemo(() => [badLeftoversCheck, engineProblemsCheck], []);
+
   const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<string | undefined>(undefined);
   const [currentSources, setCurrentSources] = useState(sources);
 
@@ -61,33 +70,9 @@ export default function CheckingResultsList(props: CheckingResultsListProps) {
 
   return (
     <div className="checking-results-list">
-      {onRerun && <Button onClick={reRunChecks}>Rerun</Button>}
-      {label && <Label>{label}</Label>}
+      <Button onClick={reRunChecks}>Rerun</Button>
+      {label && <Label className="checking-results-list-label">{label}</Label>}
       <ScriptureResultsViewer sources={currentSources} />
     </div>
   );
-}
-
-export function loadCheckingResultsListTab(savedTabInfo: SavedTabInfo): TabInfo {
-  if (!savedTabInfo.id) throw new Error('Tab creation "id" is missing');
-
-  // This is stub code to get some dummy checking results.
-  // TODO (#994): Replace this with calls to get actual check results and subscribe to updates.
-  const data = {
-    sources: [badLeftoversCheck, engineProblemsCheck],
-    // TODO (#993): Get real project name.
-    project: 'Dummy project',
-    onRerun: () => {
-      badLeftoversCheck.reRun();
-      engineProblemsCheck.reRun();
-    },
-  };
-
-  return {
-    ...savedTabInfo,
-    tabTitle: savedTabInfo.id || 'Checking Results List',
-    content: (
-      <CheckingResultsList sources={data.sources} project={data.project} onRerun={data.onRerun} />
-    ),
-  };
-}
+};

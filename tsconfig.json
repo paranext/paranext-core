@@ -38,7 +38,12 @@
     "resolveJsonModule": true,
     "outDir": ".erb/dll"
   },
-  "include": ["src", "assets"],
+  "include": [
+    "src",
+    "assets",
+    "extensions/src/platform-scripture/src/checking-results-list.web-view.tsx",
+    "extensions/src/platform-scripture/src/checking-results-list.constants.tsx"
+  ],
   "exclude": [
     "node_modules",
     "test",

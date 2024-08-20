@@ -21,6 +21,7 @@
       "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
       "%webView_characterInventory_title%": "Character Inventory",
       "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory",
+      "%webView_checkResultsList_title%": "Check Results",
       "%webView_inventory_all%": "All items",
       "%webView_inventory_approved%": "Approved items",
       "%webView_inventory_unapproved%": "Unapproved items",
