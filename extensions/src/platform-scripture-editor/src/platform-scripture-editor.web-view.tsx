@@ -45,9 +45,10 @@ function deepEqualAcrossIframes(a: unknown, b: unknown) {
 function scrollToScrRef(scrRef: ScriptureReference) {
   if (!scrRef || typeof scrRef.verseNum !== 'number') return undefined;
 
-  const verseElement = document.querySelector<HTMLElement>(
-    `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
-  );
+  const verseElement =
+    document.querySelector<HTMLElement>(
+      `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
+    ) ?? undefined;
 
   // Scroll if we find the verse or we're at the start of the chapter
   if (verseElement || scrRef.verseNum === 1) {
@@ -155,9 +156,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return () => {};
     }
 
-    // Using react's ref api which uses null, so we must use null
-    // eslint-disable-next-line no-null/no-null
-    let highlightedVerseElement: HTMLElement | null;
+    let highlightedVerseElement: HTMLElement | undefined;
 
     // Wait before scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
