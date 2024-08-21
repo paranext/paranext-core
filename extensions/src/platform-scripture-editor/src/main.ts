@@ -6,16 +6,31 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import { LanguageStrings } from 'platform-bible-utils';
+// TODO: Remove this as soon as you get to the other computer
+// eslint-disable-next-line import/no-unresolved
+import localizationService from '@shared/services/localization.service';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 
 logger.info('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
+const editable = '%webView_platformScriptureEditor_editable%';
+const resourceViewer = '%webView_platformScriptureEditor_resourceViewer%';
+const scriptureEditor = '%webView_platformScriptureEditor_scriptureEditor%';
 
 interface PlatformScriptureEditorOptions extends GetWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
+}
+
+async function getLocalizations(): Promise<LanguageStrings> {
+  const localizationData = await localizationService.getLocalizedStrings({
+    localizeKeys: [editable, resourceViewer, scriptureEditor],
+    locales: ['en'],
+  });
+  return localizationData;
 }
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
@@ -103,6 +118,11 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
         `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
+    const localizedStrings = await getLocalizations();
+    const localizedEditable = localizedStrings[editable];
+    const localizedResourceViewer = localizedStrings[resourceViewer];
+    const localizedScriptureEditor = localizedStrings[scriptureEditor];
+
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
@@ -112,8 +132,8 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
         (await (
           await papi.projectDataProviders.get('platform.base', projectId)
         ).getSetting('platform.name')) ?? projectId
-      }${isReadOnly ? '' : ' (Editable)'}`;
-    } else title = isReadOnly ? 'Resource Viewer' : 'Scripture Editor';
+      }${isReadOnly ? '' : ` ${localizedEditable}`}`;
+    } else title = isReadOnly ? `${localizedResourceViewer}` : `${localizedScriptureEditor}`;
 
     return {
       title,

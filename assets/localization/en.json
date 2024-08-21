@@ -1,5 +1,13 @@
 {
   "%product_name%": "Platform.Bible",
+  "%basicList_basicList%": "Basic List",
+  "%basicList_Chapter%": "Chapter",
+  "%basicList_Description%": "Description",
+  "%basicList_issueDescription%": "Basic check issue description",
+  "%basicList_issue%": "Issue",
+  "%basicList_issues%": "issues",
+  "%basicList_scriptureReference%": "Scripture reference",
+  "%basicList_Verse%": "Verse",
   "%insertNote%": "Insert Note",
   "%mainMenu_aboutPlatformBible%": "About Platform.Bible",
   "%mainMenu_downloadSlashInstallResources%": "Download/Install Resources",
