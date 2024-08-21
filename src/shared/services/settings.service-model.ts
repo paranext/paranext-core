@@ -7,6 +7,7 @@ import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
+import { LocalizedSettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 
 /** Name prefix for registered commands that call settings validators */
 export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
@@ -95,6 +96,21 @@ export type ISettingsService = {
   get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
 
   /**
+   * Validates the setting at the given key with the new value provided
+   *
+   * @param key The string id of the setting to validate
+   * @param newValue The value to validate
+   * @param currentValue The value already set to the setting
+   * @param allChanges
+   */
+  validateSetting<SettingName extends SettingNames>(
+    key: SettingName,
+    newValue: SettingTypes[SettingName],
+    currentValue: SettingTypes[SettingName],
+    allChanges?: Partial<SettingTypes>,
+  ): Promise<boolean>;
+
+  /**
    * Sets the value of the specified setting
    *
    * @param key The string id of the setting for which the value is being set
@@ -136,6 +152,14 @@ export type ISettingsService = {
     key: SettingName,
     validator: SettingValidator<SettingName>,
   ): Promise<UnsubscriberAsync>;
+
+  /**
+   * Get the current set of settings contribution info given all the input documents with all
+   * localized string keys localized properly.
+   *
+   * @returns Localized project settings contribution info or undefined
+   */
+  getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
 } & OnDidDispose &
   IDataProvider<SettingDataTypes> &
   typeof settingsServiceObjectToProxy;

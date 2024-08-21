@@ -14,7 +14,9 @@ import {
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
 import { includes, isLocalizeKey, isString } from 'platform-bible-utils';
-import ProjectSettingsDocumentCombiner from '@shared/utils/project-settings-document-combiner';
+import ProjectSettingsDocumentCombiner, {
+  LocalizedProjectSettingsContributionInfo,
+} from '@shared/utils/project-settings-document-combiner';
 
 /**
  * Object that keeps track of all project settings contributions in the platform. To listen to
@@ -117,11 +119,18 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   return localizedProjectSettingInfo.default as ProjectSettingTypes[ProjectSettingName];
 }
 
+async function getLocalizedContributionInfo(): Promise<
+  LocalizedProjectSettingsContributionInfo | undefined
+> {
+  return projectSettingsDocumentCombiner.getLocalizedProjectSettingsContributionInfo();
+}
+
 const { registerValidator } = projectSettingsServiceObjectToProxy;
 const projectSettingsService: IProjectSettingsService = {
   isValid,
   getDefault,
   registerValidator,
+  getLocalizedContributionInfo,
 };
 
 /** This is an internal-only export for testing purposes and should not be used in development */

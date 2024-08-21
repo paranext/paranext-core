@@ -97,13 +97,17 @@ export default function MoreInfo({
       <div className="pr-ml-auto pr-flex pr-flex-col pr-space-y-2">
         <a
           href={moreInfoUrl}
+          target="_blank"
+          rel="noreferrer"
           className="pr-flex pr-items-center pr-text-xs pr-font-semibold pr-text-gray-500 pr-underline"
         >
           Website
           <LucideLink className="pr-ml-1 pr-inline pr-h-4 pr-w-4" />
         </a>
         <a
-          href="https://placeholder.com"
+          href="https://example.com"
+          target="_blank"
+          rel="noreferrer"
           className="pr-flex pr-items-center pr-text-xs pr-font-semibold pr-text-gray-500 pr-underline"
         >
           Support

@@ -11,7 +11,15 @@ import IProjectDataProviderFactory, {
   PDP_FACTORY_OBJECT_TYPE,
   ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
-import { deepClone, endsWith, escapeStringRegexp, slice } from 'platform-bible-utils';
+import {
+  deepClone,
+  endsWith,
+  ensureArray,
+  escapeStringRegexp,
+  slice,
+  transformAndEnsureRegExpArray,
+  transformAndEnsureRegExpRegExpArray,
+} from 'platform-bible-utils';
 
 export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
 
@@ -470,38 +478,6 @@ function transformGetMetadataForProjectParametersToFilter(
 
 // #region Smaller project utilities
 
-function ensureArray<T>(maybeArray: T | T[] | undefined): T[] {
-  if (!maybeArray) return [];
-
-  return Array.isArray(maybeArray) ? maybeArray : [maybeArray];
-}
-
-function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[] {
-  if (!stringMaybeArray) return [];
-
-  const stringArray = ensureArray(stringMaybeArray);
-
-  const regExpArray = stringArray.map((str) => new RegExp(str));
-
-  return regExpArray;
-}
-
-function transformAndEnsureRegExpRegExpArray(
-  stringStringMaybeArray: string | (string | string[])[] | undefined,
-): (RegExp | RegExp[])[] {
-  if (!stringStringMaybeArray) return [];
-
-  const stringStringArray = ensureArray(stringStringMaybeArray);
-
-  const regExpRegExpArray = stringStringArray.map((stringMaybeStringArray) =>
-    Array.isArray(stringMaybeStringArray)
-      ? stringMaybeStringArray.map((str) => new RegExp(str))
-      : new RegExp(stringMaybeStringArray),
-  );
-
-  return regExpRegExpArray;
-}
-
 function ensurePopulatedMetadataFilter(options: ProjectMetadataFilterOptions) {
   const {
     excludeProjectIds,
@@ -568,7 +544,27 @@ function isProjectIdIncluded(
   return true;
 }
 
-function areProjectInterfacesIncluded(
+/**
+ * Determines whether the given project interfaces are included based on specified inclusion and
+ * exclusion rules.
+ *
+ * This function checks if a set of project interfaces meets the criteria defined by regular
+ * expressions for inclusion and exclusion.
+ *
+ * - A project interface is excluded if it matches any of the provided exclusion patterns.
+ * - A project interface is included only if it matches at least one of the provided inclusion
+ *   patterns.
+ *
+ * @param projectInterfaces - An array of project interfaces to evaluate against the inclusion and
+ *   exclusion patterns.
+ * @param includeProjectInterfaces - An array of regular expressions or arrays of regular
+ *   expressions defining which interfaces should be included.
+ * @param excludeProjectInterfaces - An array of regular expressions or arrays of regular
+ *   expressions defining which interfaces should be excluded.
+ * @returns A boolean value indicating whether the project interfaces satisfy the inclusion and
+ *   exclusion criteria.
+ */
+export function areProjectInterfacesIncluded(
   projectInterfaces: ProjectInterfaces[],
   includeProjectInterfaces: (RegExp | RegExp[])[],
   excludeProjectInterfaces: (RegExp | RegExp[])[],
