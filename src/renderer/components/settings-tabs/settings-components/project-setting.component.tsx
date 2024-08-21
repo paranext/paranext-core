@@ -1,21 +1,12 @@
-import { ChangeEvent, useCallback, useState } from 'react';
 import { useProjectSetting } from '@renderer/hooks/papi-hooks';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
 import projectSettingsService from '@shared/services/project-settings.service';
-import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
-import { debounce } from 'platform-bible-utils';
+import Setting, { ProjectSettingProps, ProjectSettingValues } from './setting.component';
 
-/** Values of the ProjectSettingTypes */
-export type ProjectSettingValues = ProjectSettingTypes[keyof ProjectSettingTypes];
-
-type ProjectSettingProps = {
-  settingKey: ProjectSettingNames;
-  label: string;
-  description?: string;
-  projectId: string;
-  defaultSetting: ProjectSettingValues;
-};
-
+/**
+ * Provides a project-specific setting component by using the `Setting` component with
+ * project-specific validation
+ */
 export default function ProjectSetting({
   settingKey,
   label,
@@ -29,80 +20,23 @@ export default function ProjectSetting({
     defaultSetting,
   );
 
-  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
-
-  const handleChangeSetting = async (event: ChangeEvent<HTMLInputElement>) => {
-    let newValue: ProjectSettingValues =
-      event.target.type === 'checkbox' ? event.target.checked : event.target.value;
-
-    if (typeof setting === 'number') {
-      // If setting is a number the response will be a string, but newValue is
-      // ProjectSettingValues so TS doesn't know that
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const numericValue = parseInt(newValue as string, 10);
-      if (Number.isNaN(numericValue)) {
-        setErrorMessage('Invalid number');
-        return;
-      }
-      newValue = numericValue;
-    }
-
-    try {
-      if (await projectSettingsService.isValid(settingKey, newValue, setting)) {
-        setErrorMessage(undefined);
-        if (setSetting) setSetting(newValue);
-      } else {
-        setErrorMessage('Invalid value');
-      }
-    } catch (error) {
-      // Error is type unknown and if I type it as string it says it must be any or unknown
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      setErrorMessage(error as string);
-    }
+  const validateProjectSetting = async (
+    currentSettingKey: ProjectSettingNames,
+    newValue: ProjectSettingValues,
+    currentValue: ProjectSettingValues,
+  ) => {
+    return projectSettingsService.isValid(currentSettingKey, newValue, currentValue);
   };
 
-  const debouncedHandleChange = debounce(handleChangeSetting, 500);
-
-  const generateComponent = useCallback(() => {
-    let component = <p>No setting component</p>;
-
-    if (typeof setting === 'string' || typeof setting === 'number')
-      component = (
-        <Input key={settingKey} onChange={debouncedHandleChange} defaultValue={setting} />
-      );
-    else if (typeof setting === 'boolean')
-      component = (
-        <Checkbox
-          key={settingKey}
-          onChange={() => debouncedHandleChange}
-          isDefaultChecked={setting}
-        />
-      );
-    else if (typeof setting === 'object')
-      component = (
-        <Input
-          key={settingKey}
-          onChange={debouncedHandleChange}
-          defaultValue={JSON.stringify(setting, undefined, 2)}
-        />
-      );
-
-    return (
-      <div>
-        {component}
-        {errorMessage && <div style={{ color: 'red' }}>{errorMessage}</div>}
-      </div>
-    );
-  }, [setting, settingKey, debouncedHandleChange, errorMessage]);
-
   return (
-    <SettingsListItem
-      primary={label}
-      secondary={description}
+    <Setting
+      settingKey={settingKey}
+      setting={setting}
+      setSetting={setSetting}
       isLoading={isLoading}
-      loadingMessage="Loading setting"
-    >
-      {generateComponent()}
-    </SettingsListItem>
+      validateProjectSetting={validateProjectSetting}
+      label={label}
+      description={description}
+    />
   );
 }
