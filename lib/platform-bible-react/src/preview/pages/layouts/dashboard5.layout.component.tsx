@@ -226,7 +226,7 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                     max={100}
                     step={1}
                     disabled
-                    onValueChange={(value) => setProgress(value)}
+                    onValueChange={(value: number[]) => setProgress(value)}
                     aria-label={`${progress[0]}% increase`}
                   />
                 </CardFooter>

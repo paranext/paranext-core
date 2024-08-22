@@ -56,6 +56,13 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { registerCommand } from '@shared/services/command.service';
+import { CommandNames } from 'papi-shared-types';
+import {
+  type SettingsTabData,
+  TAB_TYPE_PROJECT_SETTINGS_TAB,
+  TAB_TYPE_USER_SETTINGS_TAB,
+} from '@renderer/components/settings-tabs/settings-tab.component';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -1246,6 +1253,45 @@ const papiWebViewService: WebViewServiceType = {
   getSavedWebViewDefinition,
 };
 
+async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
+  const settingsTabId = newGuid();
+  const projectIdFromWebView = (await getSavedWebViewDefinition(webViewId))?.projectId;
+
+  if (!projectIdFromWebView) return undefined;
+
+  return addTab<SettingsTabData>(
+    {
+      id: settingsTabId,
+      tabType: TAB_TYPE_PROJECT_SETTINGS_TAB,
+      data: {
+        projectId: projectIdFromWebView,
+      },
+    },
+    {
+      type: 'float',
+      position: 'center',
+      floatSize: { height: 400, width: 500 },
+    },
+  );
+}
+
+async function openUserSettingsTab(): Promise<Layout | undefined> {
+  const settingsTabId = newGuid();
+
+  return addTab<SettingsTabData>(
+    {
+      id: settingsTabId,
+      tabType: TAB_TYPE_USER_SETTINGS_TAB,
+      data: {},
+    },
+    {
+      type: 'float',
+      position: 'center',
+      floatSize: { height: 400, width: 500 },
+    },
+  );
+}
+
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewService(): Promise<void> {
@@ -1254,4 +1300,17 @@ export async function startWebViewService(): Promise<void> {
     NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
     papiWebViewService,
   );
+
+  // This map should allow any functions because commands can be any function type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
+    'platform.openProjectSettings': openProjectSettingsTab,
+    'platform.openUserSettings': openUserSettingsTab,
+  };
+
+  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+    // Re-assert type after passing through `forEach`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    registerCommand(commandName as CommandNames, handler);
+  });
 }

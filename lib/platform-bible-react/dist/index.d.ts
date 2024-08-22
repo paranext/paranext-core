@@ -5,6 +5,7 @@ import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import { PopoverProps } from '@radix-ui/react-popover';
 import * as SelectPrimitive from '@radix-ui/react-select';
+import * as SeparatorPrimitive from '@radix-ui/react-separator';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
@@ -113,9 +114,15 @@ export type MenuItemContainingSubmenu = MenuItemBase & {
 export type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
-	/** Path to the icon to display after the menu text */
+	/**
+	 * Uri path to the icon to display after the menu text. Ex:
+	 * `papi-extension://helloWorld/assets/icon.png`
+	 */
 	iconPathAfter?: string;
-	/** Path to the icon to display before the menu text */
+	/**
+	 * Uri path to the icon to display before the menu text. Ex:
+	 * `papi-extension://helloWorld/assets/icon.png`
+	 */
 	iconPathBefore?: string;
 };
 /**
@@ -797,6 +804,75 @@ export type SnackbarProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Snackbar({ autoHideDuration, id, isOpen, className, onClose, anchorOrigin, ContentProps, children, }: SnackbarProps): import("react/jsx-runtime").JSX.Element;
+export type TabKeyValueContent = {
+	key: string;
+	value: string;
+	content: React$1.ReactNode;
+};
+export type NavigationContentSearchProps = {
+	/** List of values and keys for each tab this component should provide */
+	tabList: TabKeyValueContent[];
+	/** Handler to run when the value of the search bar changes */
+	onSearch: (searchQuery: string) => void;
+	/** Optional placeholder for the search bar */
+	searchPlaceholder?: string;
+	/** Optional title to include in the header */
+	headerTitle?: string;
+	/** Optional flag to make the search bar appear full width */
+	isSearchBarFullWidth?: boolean;
+};
+export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+/** Props for the SettingsList component, currently just children */
+export type SettingsListProps = React$1.PropsWithChildren;
+/**
+ * SettingsList component is a wrapper for list items. Rendered with a formatted div
+ *
+ * @param children To populate the list with
+ * @returns Formatted div encompassing the children
+ */
+export declare function SettingsList({ children }: SettingsListProps): import("react/jsx-runtime").JSX.Element;
+/** Props for SettingsListItem component */
+export type SettingsListItemProps = React$1.PropsWithChildren & {
+	/** Primary text of the list item */
+	primary: string;
+	/** Optional text of the list item */
+	secondary?: string | undefined;
+	/** Optional boolean to display a message if the children aren't loaded yet. Defaults to false */
+	isLoading?: boolean;
+	/** Optional message to display if isLoading */
+	loadingMessage?: string;
+};
+/**
+ * SettingsListItem component is a common list item. Rendered with a formatted div
+ *
+ * @param primary Primary text of the list item
+ * @param secondary Optional secondary text of the list item
+ * @param isLoading Optional, to display a message if the action component isn't generated yet,
+ *   defaults to false
+ * @param children The action component(s) to provide for this item
+ * @param loadingMessage Optional, message to display if isLoading
+ * @returns Formatted div encompassing the list item content
+ */
+export declare function SettingsListItem({ primary, secondary, children, isLoading, loadingMessage, }: SettingsListItemProps): import("react/jsx-runtime").JSX.Element;
+/** Props for SettingsListHeader component */
+export type SettingsListHeaderProps = {
+	/** The primary text of the list header */
+	primary: string;
+	/** Optional secondary text of the list header */
+	secondary?: string | undefined;
+	/** Optional boolean to include a separator underneath the secondary text. Defaults to false */
+	includeSeparator?: boolean;
+};
+/**
+ * SettingsListHeader component displays text above the list
+ *
+ * @param primary The primary text of the list header
+ * @param secondary Optional secondary text of the list header
+ * @param includeSeparator Optional boolean to include a separator underneath the secondary text.
+ *   Defaults to false
+ * @returns Formatted div with list header content
+ */
+export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type SwitchProps = {
@@ -1029,6 +1105,7 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;

@@ -63,12 +63,15 @@ export {
   substring,
   toArray,
   ordinalCompare,
+  transformAndEnsureRegExpRegExpArray,
+  transformAndEnsureRegExpArray,
 } from './string-util';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
 export { default as getCurrentLocale } from './intl-util';
 export { default as formatBytes } from './number-utils';
+export { default as ensureArray } from './array-util';
 
 // Types
 export type { DeepPartial, ReplaceType, UnionToIntersection } from './util';

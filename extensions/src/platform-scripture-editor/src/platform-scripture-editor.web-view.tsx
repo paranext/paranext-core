@@ -42,10 +42,11 @@ function deepEqualAcrossIframes(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function scrollToScrRef(scrRef: ScriptureReference) {
-  const verseElement = document.querySelector<HTMLElement>(
-    `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
-  );
+function scrollToScrRef(scrRef: ScriptureReference): HTMLElement | undefined {
+  const verseElement =
+    document.querySelector<HTMLElement>(
+      `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
+    ) ?? undefined;
 
   // Scroll if we find the verse or we're at the start of the chapter
   if (verseElement || scrRef.verseNum === 1) {
@@ -153,16 +154,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return () => {};
     }
 
-    // Using react's ref api which uses null, so we must use null
-    // eslint-disable-next-line no-null/no-null
-    let highlightedVerseElement: HTMLElement | null;
+    let highlightedVerseElement: HTMLElement | undefined;
 
     // Wait before scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
       // Scroll to and add a highlight to the current verse element
       highlightedVerseElement = scrollToScrRef(scrRef);
-      if (highlightedVerseElement) highlightedVerseElement.classList.add('highlighted');
+      highlightedVerseElement?.classList.add('highlighted');
 
       internallySetScrRefRef.current = undefined;
     }, EDITOR_LOAD_DELAY_TIME);
@@ -173,7 +172,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       clearTimeout(scrollTimeout);
 
       // Remove highlight from the current verse element
-      if (highlightedVerseElement) highlightedVerseElement.classList.remove('highlighted');
+      highlightedVerseElement?.classList.remove('highlighted');
     };
   }, [scrRef]);
 
