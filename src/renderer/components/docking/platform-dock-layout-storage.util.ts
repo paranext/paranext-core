@@ -90,6 +90,8 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
     [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
+    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
+    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition

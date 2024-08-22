@@ -39,7 +39,7 @@ export default function NavigationContentSearch({
 }: NavigationContentSearchProps) {
   return (
     <div className="pr-twp">
-      <div className="pr-space-y-2 pr-pb-2">
+      <div className="pr-sticky pr-top-0 pr-space-y-2 pr-pb-2">
         {headerTitle ? <h1>{headerTitle}</h1> : ''}
         <SearchBar
           isFullWidth={isSearchBarFullWidth}
