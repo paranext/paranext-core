@@ -9,9 +9,6 @@ namespace Paranext.DataProvider.Messages;
 [JsonMessageDeserialization(MessageField.MESSAGE_TYPE, MessageType.REQUEST)]
 public sealed class MessageRequest : Message
 {
-    private static readonly JsonSerializerOptions s_serializerOptions =
-        SerializationOptions.CreateSerializationOptions();
-
     /// <summary>
     /// ONLY FOR DESERIALIZATION
     /// </summary>
@@ -27,7 +24,7 @@ public sealed class MessageRequest : Message
     {
         RequestType = requestType;
         RequestId = requestId;
-        Contents = JsonSerializer.SerializeToElement(contents, s_serializerOptions);
+        Contents = contents.SerializeToJsonElement();
     }
 
     public MessageRequest(string requestType, int requestId, JsonElement contents)

@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Newtonsoft.Json;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
@@ -80,21 +80,21 @@ namespace TestParanextDataProvider.Projects
             0,
             1,
             0,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":0,\"_chapterNum\":1,\"_verseNum\":0}): BookNum must be greater than zero and less than or equal to last book"
+            "SIL.Scripture.VerseRefException: BookNum must be greater than zero and less than or equal to last book"
         )]
         [TestCase(
             "getChapterUSFM",
             2,
             -1,
             0,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":2,\"_chapterNum\":-1,\"_verseNum\":0}): ChapterNum can not be negative"
+            "SIL.Scripture.VerseRefException: ChapterNum can not be negative"
         )]
         [TestCase(
             "getVerseUSFM",
             2,
             1,
             -1,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":2,\"_chapterNum\":1,\"_verseNum\":-1}): VerseNum can not be negative"
+            "SIL.Scripture.VerseRefException: VerseNum can not be negative"
         )]
         public async Task GetFunctions_InvalidParameters(
             string function,
@@ -130,7 +130,7 @@ namespace TestParanextDataProvider.Projects
             "***", // bookNum: 0
             1,
             0,
-            "Invalid VerseRef ({\"book\":\"***\",\"chapterNum\":1,\"verseNum\":0,\"versificationStr\":\"English\"}): BookNum must be greater than zero and less than or equal to last book"
+            "SIL.Scripture.VerseRefException: BookNum must be greater than zero and less than or equal to last book"
         )]
         public async Task GetFunctions_FullSerialization_InvalidParameters(
             string function,
@@ -165,7 +165,7 @@ namespace TestParanextDataProvider.Projects
             "***", // bookNum: 0
             1,
             0,
-            "Invalid VerseRef ({\"book\":\"***\",\"chapterNum\":1,\"verse\":null,\"verseNum\":0,\"versificationStr\":\"English\"}): BookNum must be greater than zero and less than or equal to last book"
+            "SIL.Scripture.VerseRefException: BookNum must be greater than zero and less than or equal to last book"
         )]
         public async Task GetFunctions_FullSerializationv2_0_0_InvalidParameters(
             string function,
@@ -674,8 +674,8 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             var result = provider.SetProjectSetting(
-                JsonConvert.SerializeObject(VisibilitySettingName),
-                JsonConvert.SerializeObject(ProjectVisibility.Public.ToString())
+                VisibilitySettingName.SerializeToJson(),
+                ProjectVisibility.Public.ToString().SerializeToJson()
             );
 
             Assert.That(result.Success, Is.True);
@@ -694,8 +694,8 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             var result = provider.SetProjectSetting(
-                JsonConvert.SerializeObject(VisibilitySettingName),
-                JsonConvert.SerializeObject(89)
+                VisibilitySettingName.SerializeToJson(),
+                89.SerializeToJson()
             );
 
             Assert.That(result.Success, Is.False);

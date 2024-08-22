@@ -1,7 +1,6 @@
+using System.Diagnostics.CodeAnalysis;
 using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.Messages;
-using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 
 namespace TestParanextDataProvider.JsonUtils;
 
@@ -62,14 +61,12 @@ public class MessageConverterTests
     private static MessageType DeserializeMessageEvent<MessageType>(string messageToDecode)
         where MessageType : MessageEvent
     {
-        JsonSerializerOptions so = JsonSerializerOptionsForTesting;
-
-        var msg = JsonSerializer.Deserialize<MessageType>(messageToDecode, so);
+        var msg = messageToDecode.DeserializeFromJson<MessageType>();
         Assert.That(msg, Is.Not.Null);
         Assert.That(msg!.Event, Is.Not.Null);
 
-        string reserializedMessage = JsonSerializer.Serialize(msg, so);
-        var msg2 = JsonSerializer.Deserialize<MessageType>(reserializedMessage, so);
+        string reserializedMessage = msg.SerializeToJson();
+        var msg2 = reserializedMessage.DeserializeFromJson<MessageType>();
         Assert.That(msg2, Is.Not.Null);
         Assert.That(msg2!.Event, Is.Not.Null);
 
@@ -81,15 +78,5 @@ public class MessageConverterTests
             Assert.That(msg.Event, Is.EqualTo(msg2.Event));
 
         return msg;
-    }
-
-    private static JsonSerializerOptions JsonSerializerOptionsForTesting
-    {
-        get
-        {
-            JsonSerializerOptions so = SerializationOptions.CreateSerializationOptions();
-            so.Converters.Add(new MessageConverter());
-            return so;
-        }
     }
 }

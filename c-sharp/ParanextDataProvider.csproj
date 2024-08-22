@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <PackageReference Include="ParatextData" Version="9.5.0.6" />
+    <PackageReference Include="ParatextChecks" Version="9.5.0.6" />
     <PackageReference Include="SIL.Core" Version="14.2.0-beta0009" />
     <PackageReference Include="SIL.Scripture" Version="14.2.0-beta0009" />
     <PackageReference Include="SIL.WritingSystems" Version="14.2.0-beta0009" />

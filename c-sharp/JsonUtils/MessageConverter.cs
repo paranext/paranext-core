@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Paranext.DataProvider.Messages;
+using SIL.Extensions;
 
 namespace Paranext.DataProvider.JsonUtils;
 
@@ -20,6 +21,9 @@ internal sealed class MessageConverter : JsonConverter<Message>
 
     static MessageConverter()
     {
+        // Eliminate recursion where this converter calls itself
+        s_jsonOptions.Converters.RemoveAll(converter => converter is MessageConverter);
+
         foreach (var type in Assembly.GetExecutingAssembly().GetTypes())
         {
             var attribute = type.GetCustomAttribute<JsonMessageDeserializationAttribute>(false);
@@ -52,6 +56,9 @@ internal sealed class MessageConverter : JsonConverter<Message>
         // If we want to be picky, we could look for more matching types and throw/warn if any are seen.
         // That would mean the protocol itself is busted, though, which is really a design problem.
         var messageType = s_deserializationRules.FindAllResults(propertyNamesAndValues).First();
+
+        // Technically we should copy the options given to us and remove any MessageConverters
+        // Practically speaking using these static options does the exact same thing but faster
         return (Message)JsonSerializer.Deserialize(ref reader, messageType, s_jsonOptions)!;
     }
 
