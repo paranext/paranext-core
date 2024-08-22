@@ -51,7 +51,9 @@ export function SettingsListItem({
     <div className="pr-flex pr-items-center pr-justify-between pr-space-x-4 pr-py-2">
       <div>
         <p className="pr-text-sm pr-font-medium pr-leading-none">{primary}</p>
-        <p className="pr-text-sm pr-text-muted-foreground">{secondary}</p>
+        <p className="pr-whitespace-normal pr-break-words pr-text-sm pr-text-muted-foreground">
+          {secondary}
+        </p>
       </div>
 
       {isLoading ? (
