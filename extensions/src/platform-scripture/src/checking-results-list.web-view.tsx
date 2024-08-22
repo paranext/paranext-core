@@ -1,40 +1,30 @@
 import { WebViewProps } from '@papi/core';
-import {
-  Button,
-  Label,
-  ResultsSet,
-  ScriptureResultsViewer,
-  ScriptureResultsViewerProps,
-} from 'platform-bible-react';
+import { Button, Label, ResultsSet, ScriptureResultsViewer } from 'platform-bible-react';
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { badLeftoversCheck, engineProblemsCheck } from './testing/test-scripture-checks';
 
-export type CheckingResultsListProps = ScriptureResultsViewerProps & {
-  project?: string;
-
-  onRerun?: () => void;
-};
-
 const getLabel = (
-  project: string | undefined,
+  projectName: string | undefined,
   datetime: string | undefined,
   sources: ResultsSet[],
 ): string => {
   let result = '';
-  if (project) {
-    result = project;
-    if (sources.length > 0) result += '; ';
+  if (projectName) {
+    result = projectName;
   }
-  if (datetime) result += `${datetime}; `;
-  result += sources
-    .map((s) => s.source.displayName)
-    .filter(Boolean)
-    .join(', ');
+  if (datetime) result += `; ${datetime}`;
+  if (sources.length > 0) {
+    result += '; ';
+    result += sources
+      .map((s) => s.source.displayName)
+      .filter(Boolean)
+      .join(', ');
+  }
   return result;
 };
 
 global.webViewComponent = function CheckingResultsListWebView({ useWebViewState }: WebViewProps) {
-  const [project] = useWebViewState('projectName', '') ?? 'Dummy project';
+  const [projectName] = useWebViewState('projectName', 'Dummy project');
 
   // This is stub code to get some dummy checking results.
   // TODO (#994): Replace this with calls to get actual check results and subscribe to updates.
@@ -66,7 +56,7 @@ global.webViewComponent = function CheckingResultsListWebView({ useWebViewState 
     }
   }, [onRerun, sources, handleResultsUpdated]);
 
-  const label = getLabel(project, lastUpdateTimestamp, sources);
+  const label = getLabel(projectName, lastUpdateTimestamp, sources);
 
   return (
     <div className="checking-results-list">
