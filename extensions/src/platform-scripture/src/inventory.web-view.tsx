@@ -11,7 +11,20 @@ import RepeatedWordsInventory from './repeated-words-inventory.component';
 
 const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
 
-const getText = async (scope: string, scriptureRef: ScriptureReference, projectId: string) => {
+/**
+ * Get scripture text for the provided scope and reference for the specified projectId
+ *
+ * @param scope Scope of text. Can be 'book', 'chapter' or 'verse'.
+ * @param scriptureRef Reference to requested part of scripture
+ * @param projectId Id of the project from which the scripture is requested
+ * @returns Promise of scripture text, that can either resolve to a string or undefined
+ * @throws If the provided scope does not match any of the allowed values
+ */
+const getText = async (
+  scope: string,
+  scriptureRef: ScriptureReference,
+  projectId: string,
+): Promise<string | undefined> => {
   const verseRef = new VerseRef(
     scriptureRef.bookNum,
     scriptureRef.chapterNum,

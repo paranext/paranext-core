@@ -17,6 +17,12 @@ import DataTable, {
 import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
 import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
 
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in Platform.Bible extension, you can pass it into the useLocalizedStrings hook to
+ * easily obtain the localized strings and pass them into the localizedStrings prop of the
+ * Inventory component
+ */
 export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_all%',
   '%webView_inventory_approved%',
@@ -42,6 +48,12 @@ export type ItemData = {
   status: Status;
 };
 
+/**
+ * Gets an icon that indicates the current sorting direction based on the provided input
+ * @param sortDirection Sorting direction. Can be ascending ('asc'), descending ('desc') or false (
+ * i.e. not sorted)
+ * @returns The appropriate sorting icon for the provided sorting direction
+ */
 export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
   if (sortDirection === 'asc') {
     return <ArrowUpIcon className="pr-ms-2 pr-h-4 pr-w-4" />;
@@ -52,6 +64,15 @@ export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode 
   return <ArrowUpDownIcon className="pr-ms-2 pr-h-4 pr-w-4" />;
 };
 
+/**
+ * Filters data that is shown in the DataTable section of the inventory
+ * @param items All items and their related information
+ * @param statusFilter Allows filtering by status (i.e. show all items, or only items that are
+ * 'approved', 'unapproved' or 'unknown')
+ * @param textFilter Allows filtering by text. All items that include the filter text will be
+ * selected.
+ * @returns Array of items and their related information that are matched by the specified filters
+ */
 const filterItemData = (
   items: ItemData[],
   statusFilter: string,
@@ -74,6 +95,14 @@ const filterItemData = (
   return filteredItemData;
 };
 
+/**
+ * Turns scripture text into array of inventory items, along with their count and status
+ * @param text Scripture text from which the inventory items are extracted
+ * @param getInventoryItems Function that provides logic for extracting inventory items from text
+ * @param getStatusForItem Function that gets status for inventory item from related project
+ * settings
+ * @returns Array of inventory items, along with their count and status
+ */
 const convertTextToItemData = (
   text: string,
   getInventoryItems: (text: string) => string[],
@@ -103,6 +132,13 @@ const convertTextToItemData = (
   return itemData;
 };
 
+/**
+ * Gets the localized value for the provided key
+ * @param strings Object containing localized string
+ * @param key Key for a localized string
+ * @returns The localized value for the provided key, if available. Returns the key if no localized
+ * value is available
+ */
 const localizeString = (
   strings: InventoryLocalizedStrings,
   key: keyof InventoryLocalizedStrings,
@@ -110,7 +146,7 @@ const localizeString = (
   return strings[key] ?? key;
 };
 
-interface InventoryProps {
+type InventoryProps = {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: InventoryLocalizedStrings;
@@ -127,6 +163,9 @@ interface InventoryProps {
   ) => ColumnDef<ItemData>[];
 }
 
+/**
+ * Inventory component that is used to view and control the status of provided project settings
+ */
 function Inventory({
   scriptureReference,
   setScriptureReference,

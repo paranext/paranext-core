@@ -64,7 +64,7 @@ const extractOccurrences = (
   return results;
 };
 
-interface OccurrencesTableProps {
+type OccurrencesTableProps = {
   selectedItem: string;
   text: string | undefined;
   extractItems: (text: string, item?: string | undefined) => string[];
