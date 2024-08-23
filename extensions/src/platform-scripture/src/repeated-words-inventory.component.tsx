@@ -18,6 +18,15 @@ const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_status%',
 ];
 
+/**
+ * Function that constructs the column for the inventory component
+ *
+ * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
+ * @param countLabel Localized label for the count column
+ * @param statusLabel Localized label for the status column
+ * @param statusChangeHandler Callback function that handles status updates to selected item(s)
+ * @returns
+ */
 const createColumns = (
   itemLabel: string,
   countLabel: string,

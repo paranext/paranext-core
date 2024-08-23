@@ -43,6 +43,10 @@ interface DataTableProps<TData, TValue> {
   onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
 
+/**
+ * Feature-rich table component that infuses our basic shadcn-based Table component with features
+ * from TanStack's React Table library
+ */
 function DataTable<TData, TValue>({
   columns,
   data,
