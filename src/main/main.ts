@@ -153,8 +153,12 @@ async function main() {
     mainWindow.setMenu(null);
 
     // Open urls in the user's browser
+    // Note that webviews can get to this handler with window.open and anchor tags with
+    // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
     mainWindow.webContents.setWindowOpenHandler((handlerDetails) => {
-      shell.openExternal(handlerDetails.url);
+      // Only allow https urls
+      if (handlerDetails.url?.startsWith('https://')) shell.openExternal(handlerDetails.url);
+
       return { action: 'deny' };
     });
 
@@ -368,7 +372,9 @@ async function main() {
 }
 
 async function restartExtensionHost() {
+  logger.info('Restarting extension host');
   await extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT);
+  logger.debug('Extension host closed, restarting now');
   await extensionHostService.start();
 }
 

@@ -19,7 +19,6 @@ internal class PapiClient : IDisposable
     private const int MAX_OUTGOING_MESSAGES = 10;
     private static readonly Encoding s_utf8WithoutBom = new UTF8Encoding();
     private static readonly Uri s_connectionUri = new("ws://localhost:8876");
-    private static readonly JsonSerializerOptions s_serializationOptions;
 
     protected readonly Dictionary<string, IMessageHandler> _messageHandlersByMessageType = new();
     protected readonly ConcurrentDictionary<int, IMessageHandler> _messageHandlersForMyRequests =
@@ -40,12 +39,6 @@ internal class PapiClient : IDisposable
     #endregion
 
     #region Constructors
-
-    static PapiClient()
-    {
-        s_serializationOptions = SerializationOptions.CreateSerializationOptions();
-        s_serializationOptions.Converters.Add(new MessageConverter());
-    }
 
     public PapiClient()
     {
@@ -430,7 +423,7 @@ internal class PapiClient : IDisposable
     private async Task SendOutgoingMessageAsync(Message message)
     {
         message.SenderId = _clientId;
-        string jsonData = JsonSerializer.Serialize(message, s_serializationOptions);
+        string jsonData = message.SerializeToJson();
         /* Helpful for debugging
         Console.WriteLine(
             "Sending message over websocket: {0}",
@@ -519,7 +512,7 @@ internal class PapiClient : IDisposable
             StringUtils.LimitLength(jsonData, 180)
         );
         */
-        return JsonSerializer.Deserialize<Message>(jsonData, s_serializationOptions);
+        return jsonData.DeserializeFromJson<Message>();
     }
 
     #endregion

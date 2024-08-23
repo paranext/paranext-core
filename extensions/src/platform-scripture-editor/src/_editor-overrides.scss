@@ -8,6 +8,7 @@
 
   // remove rounded top corners to look better in tabs
   .toolbar {
+    border-bottom: 1px solid rgb(226, 232, 240);
     border-top-left-radius: 0;
     border-top-right-radius: 0;
   }
@@ -25,12 +26,6 @@
   .chevron-down {
     min-width: 16px;
   }
-}
-
-// work around https://github.com/BiblioNexus-Foundation/scripture-editors/issues/124
-/* stylelint-disable-next-line selector-class-pattern */
-.CommentPlugin_CommentsPanel_Heading {
-  width: auto;
 }
 
 // work around https://github.com/BiblioNexus-Foundation/scripture-editors/issues/127

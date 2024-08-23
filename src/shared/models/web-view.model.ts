@@ -133,6 +133,13 @@ type WebViewDefinitionBase = {
    * to function. The more you list, the higher the theoretical security risks.
    */
   allowedFrameSources?: string[];
+  /**
+   * Whether to allow this iframe to open separate windows with window.open and anchor tags with
+   * `target="_blank"`. Setting this to true adds `allow-popups` to the WebView iframe's [sandbox
+   * attribute] (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+   * to `false`
+   */
+  allowPopups?: boolean;
 };
 
 /** WebView representation using React */
@@ -183,6 +190,7 @@ export const SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS = [
   'allowScripts',
   'allowSameOrigin',
   'allowedFrameSources',
+  'allowPopups',
 ] as const;
 
 /**

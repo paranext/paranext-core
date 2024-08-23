@@ -164,7 +164,7 @@ class CheckRunnerEngine
   async disableCheck(checkId: string, projectId?: string): Promise<void> {
     const lock = this.mutexesPerCheck.get(checkId);
     await lock.runExclusive(async () => {
-      const checkDisposalList = new UnsubscriberAsyncList();
+      const checksToDispose: Check[] = [];
 
       this.enabledChecksByProjectId.forEach((enabledChecks, enabledProjectId) => {
         const relevantCheckIndex = enabledChecks.findIndex(
@@ -173,14 +173,18 @@ class CheckRunnerEngine
         );
         if (relevantCheckIndex < 0) return;
 
-        // Remove the check from the list of enabled checks
+        // Remove the check from the list of enabled checks and prepare to dispose of it
         const relevantCheck = enabledChecks.splice(relevantCheckIndex, 1)[0];
-
-        // Prepare to tear down the check
-        checkDisposalList.add(relevantCheck.check.dispose);
+        checksToDispose.push(relevantCheck.check);
       });
 
-      await checkDisposalList.runAllUnsubscribers();
+      await Promise.all(
+        checksToDispose.map(async (check) => {
+          // The check object might be gone already if an extension was unloaded that contained it
+          if (check) await check.dispose();
+        }),
+      );
+
       this.notifyUpdate(['AvailableChecks', 'CheckResults']);
     });
   }
@@ -308,6 +312,7 @@ const registerCheck = async (
 // #region Initialize the check runner
 
 let initializationPromise: Promise<void> | undefined;
+const unsubscribers = new UnsubscriberAsyncList();
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -318,7 +323,10 @@ async function initialize(): Promise<void> {
             checkRunnerEngine,
             CHECK_RUNNER_NETWORK_OBJECT_TYPE,
           );
-          await papi.commands.registerCommand('platformScripture.registerCheck', registerCheck);
+          unsubscribers.add(dataProvider.dispose);
+          unsubscribers.add(
+            await papi.commands.registerCommand('platformScripture.registerCheck', registerCheck),
+          );
           resolve();
         } catch (error) {
           reject(error);
@@ -334,7 +342,7 @@ async function initialize(): Promise<void> {
 
 const checkHostingService: ICheckHostingService = {
   initialize,
-  dispose: async () => dataProvider.dispose(),
+  dispose: async () => unsubscribers.runAllUnsubscribers(),
   getCheckRunner: async () => {
     await initialize();
     return dataProvider;

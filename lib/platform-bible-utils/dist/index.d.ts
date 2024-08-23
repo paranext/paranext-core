@@ -472,6 +472,25 @@ export interface BookInfo {
 	fullNames: string[];
 	chapters: number;
 }
+/**
+ * Represents a "node" in the JSON used to present Scripture in the editor, with a path that is
+ * relative to the start of a verse.
+ */
+export type ScriptureNode = ScriptureReference & {
+	jsonPath: string;
+};
+/** Represents a specific character offset in the text of a textual Scripture node (in the editor.) */
+export type ScriptureTextAnchor = ScriptureNode & {
+	offset: number;
+};
+/**
+ * Represents a range of text in the Scripture editor. The start and end node are expected to be in
+ * the same book.
+ */
+export type ScriptureSelection = {
+	start: ScriptureNode | ScriptureTextAnchor;
+	end?: ScriptureNode | ScriptureTextAnchor;
+};
 export declare const FIRST_SCR_BOOK_NUM = 1;
 export declare const LAST_SCR_BOOK_NUM: number;
 export declare const FIRST_SCR_CHAPTER_NUM = 1;
@@ -498,6 +517,39 @@ export declare function getLocalizedIdFromBookNumber(bookNumber: number, localiz
 	localizeKey: string;
 	languagesToSearch?: string[];
 }) => Promise<string>): Promise<string>;
+/**
+ * Get the Scripture reference as an easily comparable/sortable integer.
+ *
+ * @param scrRef The Scripture reference.
+ * @returns An integer where the first three digits represent the book, the next three represent the
+ *   chapter and the last three represent the verse.
+ */
+export declare function scrRefToBBBCCCVVV(scrRef: ScriptureReference): number;
+/**
+ * Compares two Scripture references canonically.
+ *
+ * @param scrRef1 The first Scripture reference to compare.
+ * @param scrRef2 The second Scripture reference to compare.
+ * @returns A number indicating the result of the comparison: - Negative value if scrRef1 precedes
+ *   scrRef2 in sorting order. - Zero if scrRef1 and scrRef2 are equivalent in sorting order. -
+ *   Positive value if scrRef1 follows scrRef2 in sorting order.
+ */
+export declare function compareScrRefs(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number;
+/**
+ * Formats a Scripture reference.
+ *
+ * @param scrRef The Scripture reference to format.
+ * @param optionOrLocalizedBookName Either 'id' (the default) to format using the "standard" (as
+ *   defined by SIL/UBS) 3-letter book ID, 'English' to format using the English book name spelled
+ *   out, or some other string (e.g., a localized book name, vernacular abbreviation, FCBH book id,
+ *   etc.) to use.
+ * @param chapterVerseSeparator The character used to separate the chapter number from the verse
+ *   number. Default is a colon (:). Note: More than one character is allowed.
+ * @param bookChapterSeparator The character used to separate the book from the chapter number.
+ *   Default is a single space. Note: More than one character is allowed.
+ * @returns The formatted reference.
+ */
+export declare function formatScrRef(scrRef: ScriptureReference, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
 /** Collection of functions, objects, and types that are used as helpers in other services. */
 export declare function newGuid(): string;
 /**
@@ -665,9 +717,15 @@ export type MenuItemContainingSubmenu = MenuItemBase & {
 export type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
-	/** Path to the icon to display after the menu text */
+	/**
+	 * Uri path to the icon to display after the menu text. Ex:
+	 * `papi-extension://helloWorld/assets/icon.png`
+	 */
 	iconPathAfter?: string;
-	/** Path to the icon to display before the menu text */
+	/**
+	 * Uri path to the icon to display before the menu text. Ex:
+	 * `papi-extension://helloWorld/assets/icon.png`
+	 */
 	iconPathBefore?: string;
 };
 /**
@@ -1046,21 +1104,38 @@ export declare function codePointAt(string: string, index: number): number | und
  */
 export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
 /**
- * Formats a string, replacing {localization key} with the localization (or multiple localizations
- * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
- * escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like
- * `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
+ * Formats a string, replacing `{replacer key}` with the value in the `replacers` at that replacer
+ * key (or multiple replacer values if there are multiple in the string). Will also remove \ before
+ * curly braces if curly braces are escaped with a backslash in order to preserve the curly braces.
+ * E.g. 'Hi, this is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly
+ * braces}!
  *
- * If the key in unescaped braces is not found, just return the key without the braces. Empty
- * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {
- * 'name': 'Jim'}) would return 'I am Nemo'.
+ * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
+ * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
+ * would return 'I am Nemo'.
+ *
+ * @example
+ *
+ * ```typescript
+ * formatReplacementString(
+ *   'Hi, this is {name}! I like \{curly braces\}! I have a {carColor} car. My favorite food is {food}.',
+ *   { name: 'Bill', carColor: 'blue' }
+ * );
+ *
+ * =>
+ *
+ * 'Hi, this is Bill! I like {curly braces}! I have a blue car. My favorite food is food.'
+ * ```
  *
  * @param str String to format
+ * @param replacers Object whose keys are replacer keys and whose values are the values with which
+ *   to replace `{replacer key}`s found in the string to format. Will be coerced to strings using
+ *   `${replacerValue}`
  * @returns Formatted string
  */
 export declare function formatReplacementString(str: string, replacers: {
-	[key: string]: string;
-}): string;
+	[key: string | number]: string | unknown;
+} | object): string;
 /**
  * This function mirrors the `includes` function from the JavaScript Standard String object. It
  * handles Unicode code points instead of UTF-16 character codes.
@@ -1251,6 +1326,38 @@ export declare function isLocalizeKey(str: string): str is LocalizeKey;
  */
 export declare function escapeStringRegexp(string: string): string;
 /**
+ * Transforms a string or an array of strings into an array of regular expressions, ensuring that
+ * the result is always an array.
+ *
+ * This function accepts a value that may be a single string, an array of strings, or `undefined`.
+ * It then:
+ *
+ * - Converts each string into a `RegExp` object.
+ * - If the input is an array containing nested arrays, it converts each string in the nested arrays
+ *   into `RegExp` objects.
+ * - Ensures that the result is always an array of `RegExp` objects or arrays of `RegExp` objects.
+ *
+ * @param stringStringMaybeArray - The value to be transformed, which can be a single string, an
+ *   array of strings or arrays of strings, or `undefined`.
+ * @returns An array of `RegExp` objects or arrays of `RegExp` objects. If the input is `undefined`,
+ *   an empty array is returned.
+ */
+export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArray: string | (string | string[])[] | undefined): (RegExp | RegExp[])[];
+/**
+ * Transforms a string or an array of strings into an array of regular expressions.
+ *
+ * This function accepts a value that may be a single string, an array of strings, or `undefined`.
+ * It then:
+ *
+ * - Converts each string into a `RegExp` object.
+ * - Ensures that the result is always an array of `RegExp` objects.
+ *
+ * @param stringMaybeArray - The value to be transformed, which can be a single string, an array of
+ *   strings, or `undefined`.
+ * @returns An array of `RegExp` objects. If the input is `undefined`, an empty array is returned.
+ */
+export declare function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[];
+/**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
  * @param a The first object to compare
@@ -1371,6 +1478,35 @@ export declare const htmlEncode: (str: string) => string;
  *   function returns an empty string.
  */
 export function getCurrentLocale(): string;
+/**
+ * Formats a number according to the locale and formatting options of this NumberFormat object
+ *
+ * @example FormatBytes(1024) => "1 KB"
+ *
+ * @example FormatBytes(1024, 0) => "1 KB"
+ *
+ * @param fileSize Number to format
+ * @param decimals Number of decimal places to round to
+ * @returns String representing the given number formatted according to the locale and formatting
+ *   options of this NumberFormat object
+ */
+export function formatBytes(fileSize: number, decimals?: number): string;
+/**
+ * Ensures that the given input is returned as an array.
+ *
+ * This function takes a value that might be a single item, an array, or `undefined` and returns it
+ * as an array:
+ *
+ * - If the input is `undefined`, an empty array is returned.
+ * - If the input is already an array, it is returned as-is.
+ * - If the input is a single item, it is wrapped in an array.
+ *
+ * @typeParam T - The type of the elements in the array.
+ * @param maybeArray - The value that may be a single item, an array, or `undefined`.
+ * @returns An array containing the input value(s). If the input is `undefined`, an empty array is
+ *   returned.
+ */
+export function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
@@ -1395,6 +1531,9 @@ export interface StringMetadata {
 	 * Localized string key from which to get this value if one does not exist in the specified
 	 * language. If a new key/value pair needs to be made to replace an existing one, this could help
 	 * smooth over the transition if the meanings are close enough
+	 *
+	 * You can use Paratext 9 Localized String Keys here. Be sure to escape any % signs with a
+	 * backslash `\`.
 	 */
 	fallbackKey?: LocalizeKey;
 	/**
@@ -1458,7 +1597,9 @@ export declare const localizedStringsDocumentSchema: {
 			properties: {
 				fallbackKey: {
 					description: string;
-					$ref: string;
+					type: string;
+					pattern: string;
+					tsType: string;
 				};
 				notes: {
 					description: string;

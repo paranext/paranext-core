@@ -9,6 +9,12 @@
     src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
   }
 
+  /* Adding the preflight selector (pr-twp) to components was not changing the font as desired.
+  So this piece of code adds pr-font-sans everywhere we include preflight. */
+  .pr-twp {
+    @apply pr-font-sans;
+  }
+
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -111,6 +117,10 @@
     .hover\:pr-bg-muted\/50:hover {
       background-color: hsl(33.9, 32.4%, 86.1%, 0.5);
     }
+
+    .pr-bg-muted\/40 {
+      background-color: hsl(33.9, 32.4%, 86.1%, 0.4);
+    }
   }
 
   .paratext-dark {
@@ -120,10 +130,10 @@
     --muted-foreground: 33.9, 32.4%, 86.1%;
     --popover: 180, 71.4%, 5%;
     --popover-foreground: 0, 0%, 100%;
-    --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
-    --border: 220 13% 91%;
-    --input: 161.3, 26.7%, 88.2%;
+    --card: 0 0% 0%;
+    --card-foreground: 0, 0%, 100%;
+    --border: 220 13% 20%;
+    --input: 220 13% 20%;
     --primary: 161.3, 26.7%, 88.2%;
     --primary-foreground: 173.4, 82.1%, 15.3%;
     --secondary: 180, 71.4%, 11%;
@@ -150,6 +160,10 @@
     .pr-bg-muted\/50,
     .hover\:pr-bg-muted\/50:hover {
       background-color: hsl(15.5, 13.2%, 53.9%, 0.5);
+    }
+
+    .pr-bg-muted\/40 {
+      background-color: hsl(15.5, 13.2%, 53.9%, 0.4);
     }
   }
 }

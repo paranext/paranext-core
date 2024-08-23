@@ -21,10 +21,8 @@ import {
   mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
 } from '@renderer/services/web-view.service-host';
-import {
-  TAB_TYPE_BASIC_LIST,
-  loadBasicListTab,
-} from '@renderer/components/basic-list/basic-list.component';
+import { loadCheckingResultsListTab } from '@renderer/components/checking-results-list/checking-results-list.component';
+import TAB_TYPE_CHECKING_RESULTS_LIST from '@renderer/components/checking-results-list/checking-results-list.constants';
 import DIALOGS from '@renderer/components/dialogs';
 import {
   TAB_TYPE_EXTENSION_MANAGER,
@@ -39,9 +37,11 @@ import {
   loadRunBasicChecksTab,
 } from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
 import {
-  TAB_TYPE_SETTINGS_DIALOG,
-  loadSettingsDialog,
-} from '@renderer/components/settings-dialog/settings-tab.component';
+  TAB_TYPE_PROJECT_SETTINGS_TAB,
+  loadProjectSettingsTab,
+  TAB_TYPE_USER_SETTINGS_TAB,
+  loadUserSettingsTab,
+} from '@renderer/components/settings-tabs/settings-tab.component';
 import {
   TAB_TYPE_WEBVIEW,
   loadWebViewTab,
@@ -73,9 +73,10 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
     [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
-    [TAB_TYPE_SETTINGS_DIALOG, loadSettingsDialog],
+    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
+    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
     [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
-    [TAB_TYPE_BASIC_LIST, loadBasicListTab],
+    [TAB_TYPE_CHECKING_RESULTS_LIST, loadCheckingResultsListTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition
@@ -89,6 +90,8 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
     [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
+    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
+    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition

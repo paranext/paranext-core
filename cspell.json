@@ -17,6 +17,7 @@
     "appdata",
     "asyncs",
     "autodocs",
+    "BBBCCCVVV",
     "biblionexus",
     "camelcase",
     "consts",
@@ -30,6 +31,7 @@
     "hopkinson",
     "iframes",
     "iife",
+    "interprocess",
     "iusfm",
     "iusj",
     "iusx",
@@ -72,7 +74,8 @@
     "unsubscribers",
     "usfm",
     "verseref",
-    "versification"
+    "versification",
+    "vref"
   ],
   "ignoreWords": [],
   "import": []

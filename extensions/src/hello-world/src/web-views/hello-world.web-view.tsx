@@ -9,44 +9,25 @@ import {
   useLocalizedStrings,
 } from '@papi/frontend/react';
 import {
+  BookChapterControl,
   Button,
   Checkbox,
   ComboBox,
-  RefSelector,
   Slider,
   Switch,
   TextField,
-  Table,
-  ScriptureReference,
   useEvent,
 } from 'platform-bible-react';
 import type { WebViewProps } from '@papi/core';
-import { Key, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
-import { debounce } from 'platform-bible-utils';
+import { debounce, ScriptureReference } from 'platform-bible-utils';
 import Clock from './components/clock.component';
 import Logo from '../../assets/offline.svg';
 import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
 import useHelloWorldProjectSettings from './hello-world-project/use-hello-world-project-settings.hook';
 
-type Row = {
-  id: string;
-  title: string;
-  subtitle: string;
-};
-
 const NAME = 'Hello World React WebView';
-
-const initializeRows = (): Row[] => {
-  return [
-    { id: '0', title: 'Norem ipsum dolor sit amet', subtitle: 'Subtitle1' },
-    { id: '1', title: 'Consectetur adipiscing elit', subtitle: 'Subtitle2' },
-    { id: '2', title: 'Pellentesque suscipit tortor est', subtitle: 'Subtitle3' },
-    { id: '3', title: 'Ut egestas massa aliquam a', subtitle: 'Subtitle4' },
-    { id: '4', title: 'Nulla egestas vestibulum felis a venenatis', subtitle: 'Subtitle5' },
-    { id: '5', title: 'Sed aliquet pulvinar neque', subtitle: 'Subtitle6' },
-  ];
-};
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -66,8 +47,6 @@ globalThis.webViewComponent = function HelloWorld({
   updateWebViewDefinition,
 }: WebViewProps) {
   const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
-  const [rows, setRows] = useState(initializeRows());
-  const [selectedRows, setSelectedRows] = useState(new Set<Key>());
   const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
   const verseRef = useMemo(
     () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
@@ -96,9 +75,6 @@ globalThis.webViewComponent = function HelloWorld({
   const selectProjectsTitle = '%selectProjects_title%';
   const selectProjectTitle = '%selectProject_title%';
   const submit = '%submitButton%';
-  const tableId = '%helloWorld_table_id%';
-  const tableSubtitle = '%helloWorld_table_subtitle%';
-  const tableTitle = '%helloWorld_table_title%';
   const testException = '%helloWorld_throw_test_exception%';
   const testMe = '%helloWorld_testMe%';
 
@@ -127,9 +103,6 @@ globalThis.webViewComponent = function HelloWorld({
         selectProjectsTitle,
         selectProjectTitle,
         submit,
-        tableId,
-        tableSubtitle,
-        tableTitle,
         testException,
         testMe,
       ],
@@ -160,9 +133,6 @@ globalThis.webViewComponent = function HelloWorld({
   const localizedSelectProjectsTitle = localizedStrings[selectProjectsTitle];
   const localizedSelectProjectTitle = localizedStrings[selectProjectTitle];
   const localizedSubmit = localizedStrings[submit];
-  const localizedTableId: string = localizedStrings[tableId];
-  const localizedTableSubtitle = localizedStrings[tableSubtitle];
-  const localizedTableTitle = localizedStrings[tableTitle];
   const localizedTestException = localizedStrings[testException];
   const localizedTestMe = localizedStrings[testMe];
 
@@ -379,38 +349,7 @@ globalThis.webViewComponent = function HelloWorld({
         <Switch /> {/* no label available */}
         <ComboBox title={localizedTestMe} options={genericComboBoxOptions} />
         <Slider /> {/* no label available */}
-        <RefSelector scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
-        <Table<Row>
-          columns={[
-            {
-              key: 'id',
-              name: localizedTableId,
-            },
-            {
-              key: 'title',
-              name: localizedTableTitle,
-              editable: true,
-            },
-            {
-              key: 'subtitle',
-              name: localizedTableSubtitle,
-              editable: true,
-            },
-          ]}
-          rows={rows}
-          rowKeyGetter={(row: Row) => {
-            return row.id;
-          }}
-          selectedRows={selectedRows}
-          onSelectedRowsChange={(currentlySelectedRows: Set<Key>) =>
-            setSelectedRows(currentlySelectedRows)
-          }
-          onRowsChange={(changedRows: Row[]) => setRows(changedRows)}
-          enableSelectColumn
-          selectColumnWidth={60}
-          rowHeight={60}
-          headerRowHeight={50}
-        />
+        <BookChapterControl scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
       </div>
       <div>
         <h3>{localizedFrenchLocalizationSubmit}:</h3>

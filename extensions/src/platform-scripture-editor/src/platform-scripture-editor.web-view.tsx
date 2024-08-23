@@ -30,10 +30,23 @@ const defaultScrRef: ScriptureReference = {
 
 const usjDocumentDefault: Usj = { type: 'USJ', version: '0.2.1', content: [] };
 
-function scrollToScrRef(scrRef: ScriptureReference) {
-  const verseElement = document.querySelector<HTMLElement>(
-    `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
-  );
+/**
+ * Check deep equality of two values such that two equal objects or arrays created in two different
+ * iframes successfully test as equal
+ *
+ * @param a
+ * @param b
+ * @returns
+ */
+function deepEqualAcrossIframes(a: unknown, b: unknown) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function scrollToScrRef(scrRef: ScriptureReference): HTMLElement | undefined {
+  const verseElement =
+    document.querySelector<HTMLElement>(
+      `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
+    ) ?? undefined;
 
   // Scroll if we find the verse or we're at the start of the chapter
   if (verseElement || scrRef.verseNum === 1) {
@@ -90,13 +103,35 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const debouncedSetUsj = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
 
-  // TODO: remove debounce when issue #826 is done.
-  const onChange = useCallback(debouncedSetUsj, [debouncedSetUsj]);
+  // Editor's current usj state
+  const editorUsj = useRef(usj);
 
+  // TODO: remove debounce when issue #826 is done.
+  const onChange = useCallback(
+    (newUsj: Usj) => {
+      // There is a bug where the editor's onChange runs when the state is externally set, so let's
+      // not run onChange if the change came externally (our tracked editorUsj.current editor state
+      // will already be up-to-date)
+      if (deepEqualAcrossIframes(newUsj, editorUsj.current)) return;
+
+      editorUsj.current = newUsj;
+      debouncedSetUsj(newUsj);
+    },
+    [debouncedSetUsj],
+  );
+
+  // Update the editor if a change comes in
   useEffect(() => {
-    if (usj) editorRef.current?.setUsj(usj);
+    // Deep compare the old and current state of the usj to make sure we don't change the editor's
+    // state without a need. Note that it already does that internally using a different algorithm,
+    // but we need to compare in such a way that the same object across iframes works fine
+    if (usj && !deepEqualAcrossIframes(usj, editorUsj.current)) {
+      editorUsj.current = usj;
+      editorRef.current?.setUsj(usj);
+    }
   }, [usj]);
 
+  // On loading the first time, scroll the selected verse into view
   useEffect(() => {
     if (usj && !hasFirstRetrievedScripture.current) {
       hasFirstRetrievedScripture.current = true;
@@ -119,16 +154,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       return () => {};
     }
 
-    // Using react's ref api which uses null, so we must use null
-    // eslint-disable-next-line no-null/no-null
-    let highlightedVerseElement: HTMLElement | null;
+    let highlightedVerseElement: HTMLElement | undefined;
 
     // Wait before scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
       // Scroll to and add a highlight to the current verse element
       highlightedVerseElement = scrollToScrRef(scrRef);
-      if (highlightedVerseElement) highlightedVerseElement.classList.add('highlighted');
+      highlightedVerseElement?.classList.add('highlighted');
 
       internallySetScrRefRef.current = undefined;
     }, EDITOR_LOAD_DELAY_TIME);
@@ -139,11 +172,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       clearTimeout(scrollTimeout);
 
       // Remove highlight from the current verse element
-      if (highlightedVerseElement) highlightedVerseElement.classList.remove('highlighted');
+      highlightedVerseElement?.classList.remove('highlighted');
     };
   }, [scrRef]);
 
-  const options: EditorOptions = { hasSpellCheck: false, isReadonly: isReadOnly };
+  const options = useMemo<EditorOptions>(
+    () => ({
+      isReadonly: isReadOnly,
+      hasSpellCheck: false,
+      textDirection: 'ltr',
+    }),
+    [isReadOnly],
+  );
 
   return (
     <Editor

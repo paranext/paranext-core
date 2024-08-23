@@ -19,6 +19,8 @@ import {
   toArray,
   ordinalCompare,
   testingStringUtils,
+  transformAndEnsureRegExpRegExpArray,
+  transformAndEnsureRegExpArray,
 } from './string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
@@ -269,6 +271,23 @@ describe('formatReplacementString', () => {
     );
     expect(result).toEqual(
       'Hi, this is Jim! I like {curly braces}!Hi, this is Jim! I like {curly braces}!',
+    );
+  });
+
+  test('with interesting types as keys and values', () => {
+    const result = formatReplacementString(
+      'Hi, this is {name}! I use {0} weights when I curl {weightLbs}lb weights. I do {1} reps {interval}. I have a weakness level of {weakness}.',
+      {
+        name: 'Chad',
+        0: 'lead',
+        weightLbs: 9000,
+        1: 1000,
+        interval: 'every second of every day',
+        weakness: undefined,
+      },
+    );
+    expect(result).toEqual(
+      'Hi, this is Chad! I use lead weights when I curl 9000lb weights. I do 1000 reps every second of every day. I have a weakness level of undefined.',
     );
   });
 });
@@ -593,5 +612,63 @@ describe('escapeStringRegexp', () => {
   test('properly escapes stuff', () => {
     const result = escapeStringRegexp('How much $ for a 🦄?');
     expect(result).toEqual('How much \\$ for a 🦄\\?');
+  });
+});
+
+describe('transformAndEnsureRegExpRegExpArray', () => {
+  test('should return an empty array when input is undefined', () => {
+    expect(transformAndEnsureRegExpRegExpArray(undefined)).toEqual([]);
+  });
+
+  test('should convert a single string to an array with one RegExp', () => {
+    const input = 'test';
+    const result = transformAndEnsureRegExpRegExpArray(input);
+    expect(result).toEqual([new RegExp('test')]);
+  });
+
+  test('should convert an array of strings to an array of RegExp objects', () => {
+    const input = ['test1', 'test2', 'test3'];
+    const result = transformAndEnsureRegExpRegExpArray(input);
+    expect(result).toEqual([new RegExp('test1'), new RegExp('test2'), new RegExp('test3')]);
+  });
+
+  test('should convert nested arrays of strings to arrays of RegExp arrays', () => {
+    const input = ['test1', ['nested1', 'nested2'], 'test2'];
+    const result = transformAndEnsureRegExpRegExpArray(input);
+    expect(result).toEqual([
+      new RegExp('test1'),
+      [new RegExp('nested1'), new RegExp('nested2')],
+      new RegExp('test2'),
+    ]);
+  });
+
+  test('should handle an array of single strings and nested arrays', () => {
+    const input = ['a', ['b', 'c'], 'd'];
+    const result = transformAndEnsureRegExpRegExpArray(input);
+    expect(result).toEqual([new RegExp('a'), [new RegExp('b'), new RegExp('c')], new RegExp('d')]);
+  });
+});
+
+describe('transformAndEnsureRegExpArray', () => {
+  test('should return an empty array when input is undefined', () => {
+    expect(transformAndEnsureRegExpArray(undefined)).toEqual([]);
+  });
+
+  test('should convert a single string to an array with one RegExp', () => {
+    const input = 'test';
+    const result = transformAndEnsureRegExpArray(input);
+    expect(result).toEqual([new RegExp('test')]);
+  });
+
+  test('should convert an array of strings to an array of RegExp objects', () => {
+    const input = ['test1', 'test2', 'test3'];
+    const result = transformAndEnsureRegExpArray(input);
+    expect(result).toEqual([new RegExp('test1'), new RegExp('test2'), new RegExp('test3')]);
+  });
+
+  test('should handle empty strings in the input array', () => {
+    const input = ['', 'a', ''];
+    const result = transformAndEnsureRegExpArray(input);
+    expect(result).toEqual([new RegExp(''), new RegExp('a'), new RegExp('')]);
   });
 });

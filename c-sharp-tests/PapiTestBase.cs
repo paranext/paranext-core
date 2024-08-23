@@ -134,6 +134,30 @@ namespace TestParanextDataProvider
         }
 
         /// <summary>
+        /// Creates JSON that represents a verse reference having the specified parameters in full
+        /// serialization.
+        ///
+        /// Includes the `verse: undefined` property from @sillsdev/scripture v2.0.0
+        /// https://github.com/sillsdev/scripture/blob/209054a89652ba9f6aec6bd142aba439cd952bc5/src/verse-ref.ts#L491
+        /// </summary>
+        protected static JsonNode CreateFullSerializationVerseRefNodev2_0_0(
+            string book,
+            int chapterNum,
+            int verseNum
+        )
+        {
+            var jsonObject = new JsonObject
+            {
+                ["book"] = book,
+                ["chapterNum"] = chapterNum,
+                ["verse"] = null,
+                ["verseNum"] = verseNum,
+                ["versificationStr"] = "English",
+            };
+            return jsonObject;
+        }
+
+        /// <summary>
         /// Creates a JSON string node with the specified data
         /// </summary>
         protected static JsonNode CreateJsonString(string data)

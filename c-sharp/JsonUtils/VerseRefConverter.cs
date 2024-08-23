@@ -1,119 +1,118 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using SIL.Scripture;
-using Newtonsoft.Json.Linq;
 
-namespace Paranext.DataProvider.JsonUtils
+namespace Paranext.DataProvider.JsonUtils;
+
+public class VerseRefConverter : JsonConverter<VerseRef>
 {
-    internal class VerseRefConverter
+    private const string BOOK_NUM = "bookNum";
+    private const string UNDERSCORE_BOOK_NUM = "_bookNum";
+    private const string CHAPTER_NUM = "chapterNum";
+    private const string UNDERSCORE_CHAPTER_NUM = "_chapterNum";
+    private const string VERSE_NUM = "verseNum";
+    private const string UNDERSCORE_VERSE_NUM = "_verseNum";
+
+    private const string BOOK = "book";
+    private const string VERSE = "verse";
+    private const string VERSIFICATION = "versification";
+    private const string VERSIFICATION_STR = "versificationStr";
+
+    public override VerseRef Read(
+        ref Utf8JsonReader reader,
+        Type typeToConvert,
+        JsonSerializerOptions options
+    )
     {
-        /// <summary>
-        /// Attempts to convert a string containing JSON to a VerseRef object
-        /// </summary>
-        /// <returns>true if the conversion was successful, false otherwise</returns>
-        public static bool TryCreateVerseRef(
-            string jsonString,
-            out VerseRef verseRef,
-            out string errorMessage
-        )
+        int? bookNum = null;
+        int? chapterNum = null;
+        int? verseNum = null;
+        string? bookName = null;
+        string? verse = null;
+        string? versification = null;
+        string? lastPropertyName = null;
+        while (reader.Read())
         {
-            try
+            switch (reader.TokenType)
             {
-                return TryCreateVerseRefInternal(jsonString, out verseRef, out errorMessage);
-            }
-            catch (Exception e)
-            {
-                verseRef = new VerseRef();
-                errorMessage = $"Invalid VerseRef ({jsonString}): {e.Message}";
-                return false;
+                case JsonTokenType.StartObject:
+                case JsonTokenType.EndObject:
+                case JsonTokenType.StartArray:
+                case JsonTokenType.EndArray:
+                    break;
+                case JsonTokenType.PropertyName:
+                    lastPropertyName = reader.GetString();
+                    break;
+                case JsonTokenType.True:
+                case JsonTokenType.False:
+                    lastPropertyName = null;
+                    break;
+                case JsonTokenType.Number:
+                    switch (lastPropertyName)
+                    {
+                        case BOOK_NUM:
+                        case UNDERSCORE_BOOK_NUM:
+                            bookNum = reader.GetInt32();
+                            break;
+                        case CHAPTER_NUM:
+                        case UNDERSCORE_CHAPTER_NUM:
+                            chapterNum = reader.GetInt32();
+                            break;
+                        case VERSE_NUM:
+                        case UNDERSCORE_VERSE_NUM:
+                            verseNum = reader.GetInt32();
+                            break;
+                    }
+                    lastPropertyName = null;
+                    break;
+                case JsonTokenType.String:
+                    switch (lastPropertyName)
+                    {
+                        case BOOK:
+                            bookName = reader.GetString();
+                            break;
+                        case VERSE:
+                            verse = reader.GetString();
+                            break;
+                        case VERSIFICATION:
+                        case VERSIFICATION_STR:
+                            versification = reader.GetString();
+                            break;
+                    }
+                    lastPropertyName = null;
+                    break;
             }
         }
 
-        private static bool TryCreateVerseRefInternal(
-            string jsonString,
-            out VerseRef verseRef,
-            out string errorMessage
-        )
-        {
-            // Default values for out parameters
-            verseRef = new VerseRef();
-            errorMessage = string.Empty;
+        if (!chapterNum.HasValue)
+            throw new JsonException("VerseRef missing chapterNum");
 
-            JObject parsedArgs = JObject.Parse(jsonString);
+        if (!verseNum.HasValue && string.IsNullOrEmpty(verse))
+            throw new JsonException("VerseRef missing verseNum and verse");
 
-            ScrVers? versification = null;
-            if (parsedArgs.TryGetValue("versification", out var versificationText))
-                if (versificationText is JObject versificationObject)
-                {
-                    if (versificationObject.TryGetValue("_type", out var versificationType))
-                        versification = new ScrVers((ScrVersType)versificationType.Value<int>());
-                    else if (versificationObject.TryGetValue("name", out var versificationName))
-                        versification = new ScrVers(versificationName.Value<string>());
-                }
-                else
-                    versification = new ScrVers(versificationText.Value<string>());
-            else if (parsedArgs.TryGetValue("versificationStr", out versificationText))
-                if (versificationText is not JObject)
-                    versification = new ScrVers(versificationText.Value<string>());
+        if (!bookNum.HasValue && string.IsNullOrEmpty(bookName))
+            throw new JsonException("VerseRef missing bookNum and bookName");
 
-            if (
-                !parsedArgs.ContainsKey("book")
-                && !parsedArgs.ContainsKey("chapterNum")
-                && !parsedArgs.ContainsKey("_bookNum")
-            )
-            {
-                errorMessage = $"Invalid VerseRef ({jsonString}): No recognized properties";
-                return false;
-            }
+        return string.IsNullOrEmpty(bookName)
+            ? new VerseRef(bookNum!.Value, chapterNum.Value, verseNum ?? 0)
+            : new VerseRef(
+                bookName,
+                chapterNum.Value.ToString(),
+                verse ?? verseNum!.Value.ToString(),
+                new ScrVers(versification)
+            );
+    }
 
-            if (parsedArgs.ContainsKey("_bookNum"))
-            {
-                verseRef =
-                    (versification != null)
-                        ? new VerseRef(
-                            parsedArgs["_bookNum"]!.Value<int>(),
-                            parsedArgs["_chapterNum"]!.Value<int>(),
-                            parsedArgs["_verseNum"]!.Value<int>(),
-                            versification
-                        )
-                        : new VerseRef(
-                            parsedArgs["_bookNum"]!.Value<int>(),
-                            parsedArgs["_chapterNum"]!.Value<int>(),
-                            parsedArgs["_verseNum"]!.Value<int>()
-                        );
-            }
-            else if (parsedArgs.ContainsKey("chapterNum"))
-            {
-                var verse = parsedArgs.ContainsKey("verse")
-                    ? parsedArgs["verse"]!.Value<string>()
-                    : parsedArgs["verseNum"]!.Value<int>().ToString();
-                verseRef =
-                    (versification != null)
-                        ? new VerseRef(
-                            parsedArgs["book"]!.Value<string>(),
-                            parsedArgs["chapterNum"]!.Value<int>().ToString(),
-                            verse,
-                            versification
-                        )
-                        : new VerseRef(
-                            Canon.BookIdToNumber(parsedArgs["book"]!.Value<string>()),
-                            parsedArgs["chapterNum"]!.Value<int>(),
-                            parsedArgs["verseNum"]!.Value<int>()
-                        );
-            }
-            else
-            {
-                if (versification == null)
-                    throw new Exception(
-                        "Versification required with book, chapter, and verse strings"
-                    );
-                verseRef = new VerseRef(
-                    parsedArgs["book"]!.Value<string>(),
-                    parsedArgs["chapter"]!.Value<string>(),
-                    parsedArgs["verse"]!.Value<string>(),
-                    versification
-                );
-            }
-
-            return true;
-        }
+    public override void Write(Utf8JsonWriter writer, VerseRef value, JsonSerializerOptions options)
+    {
+        writer.WriteStartObject();
+        writer.WriteString(BOOK, value.Book);
+        writer.WriteNumber(CHAPTER_NUM, value.ChapterNum);
+        writer.WriteNumber(VERSE_NUM, value.VerseNum);
+        if (!string.IsNullOrEmpty(value.Verse))
+            writer.WriteString(VERSE, value.Verse);
+        if (value.Versification.Type != ScrVersType.Unknown)
+            writer.WriteString(VERSIFICATION_STR, value.VersificationStr);
+        writer.WriteEndObject();
     }
 }

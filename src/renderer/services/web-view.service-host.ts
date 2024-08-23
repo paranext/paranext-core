@@ -56,6 +56,13 @@ import {
   getFullWebViewStateById,
   setFullWebViewStateById,
 } from '@renderer/services/web-view-state.service';
+import { registerCommand } from '@shared/services/command.service';
+import { CommandNames } from 'papi-shared-types';
+import {
+  type SettingsTabData,
+  TAB_TYPE_PROJECT_SETTINGS_TAB,
+  TAB_TYPE_USER_SETTINGS_TAB,
+} from '@renderer/components/settings-tabs/settings-tab.component';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -83,6 +90,15 @@ export const IFRAME_SANDBOX_ALLOW_SCRIPTS = 'allow-scripts';
 export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
 
 /**
+ * The iframe [sandbox attribute]
+ * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox) that determines if an
+ * iframe is allowed to open separate windows with window.open and anchor tags with
+ * `target="_blank"`. Note that we have a `setWindowOpenHandler` in `main.ts` that causes these to
+ * be opened in the default browser
+ */
+export const IFRAME_SANDBOX_ALLOW_POPUPS = 'allow-popups';
+
+/**
  * The only `sandbox` attribute values we allow iframes with `src` to have including URL WebView
  * iframes. These are separate than iframes with `srcdoc` for a few reasons:
  *
@@ -108,6 +124,9 @@ export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
  * - `allow-scripts` so the iframe can actually do things. Defaults to not present since src iframes
  *   can get scripts from anywhere. Extension developers should only enable this if needed as this
  *   increases the possibility of a security threat occurring. Defaults to false
+ * - `allow-popups` so the iframe can open separate windows with window.open and anchor tags with
+ *   `target="_blank"`. Note that we have a `setWindowOpenHandler` in `main.ts` that causes these to
+ *   be opened in the default browser
  *
  * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
  *
@@ -125,6 +144,7 @@ export const IFRAME_SANDBOX_ALLOW_SAME_ORIGIN = 'allow-same-origin';
 const ALLOWED_IFRAME_SRC_SANDBOX_VALUES = [
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
   IFRAME_SANDBOX_ALLOW_SCRIPTS,
+  IFRAME_SANDBOX_ALLOW_POPUPS,
 ];
 
 /**
@@ -136,7 +156,10 @@ const ALLOWED_IFRAME_SRC_SANDBOX_VALUES = [
  * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
  */
 export const WEBVIEW_IFRAME_SRC_SANDBOX = ALLOWED_IFRAME_SRC_SANDBOX_VALUES.filter(
-  (value) => value !== IFRAME_SANDBOX_ALLOW_SCRIPTS && value !== IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
+  (value) =>
+    value !== IFRAME_SANDBOX_ALLOW_SCRIPTS &&
+    value !== IFRAME_SANDBOX_ALLOW_SAME_ORIGIN &&
+    value !== IFRAME_SANDBOX_ALLOW_POPUPS,
 ).join(' ');
 
 /**
@@ -160,6 +183,9 @@ export const WEBVIEW_IFRAME_SRC_SANDBOX = ALLOWED_IFRAME_SRC_SANDBOX_VALUES.filt
  *
  * - `allow-same-origin` so the iframe can get papi and communicate and such
  * - `allow-scripts` so the iframe can actually do things
+ * - `allow-popups` so the iframe can open separate windows with window.open and anchor tags with
+ *   `target="_blank"`. Note that we have a `setWindowOpenHandler` in `main.ts` that causes these to
+ *   be opened in the default browser
  *
  * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
  *
@@ -185,7 +211,10 @@ export const ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES = [...ALLOWED_IFRAME_SRC_SANDB
  * conditionally depending on the WebViewDefinition in `web-view.component.tsx`
  */
 export const WEBVIEW_IFRAME_SRCDOC_SANDBOX = ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES.filter(
-  (value) => value !== IFRAME_SANDBOX_ALLOW_SCRIPTS && value !== IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
+  (value) =>
+    value !== IFRAME_SANDBOX_ALLOW_SCRIPTS &&
+    value !== IFRAME_SANDBOX_ALLOW_SAME_ORIGIN &&
+    value !== IFRAME_SANDBOX_ALLOW_POPUPS,
 ).join(' ');
 
 /**
@@ -1224,6 +1253,45 @@ const papiWebViewService: WebViewServiceType = {
   getSavedWebViewDefinition,
 };
 
+async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
+  const settingsTabId = newGuid();
+  const projectIdFromWebView = (await getSavedWebViewDefinition(webViewId))?.projectId;
+
+  if (!projectIdFromWebView) return undefined;
+
+  return addTab<SettingsTabData>(
+    {
+      id: settingsTabId,
+      tabType: TAB_TYPE_PROJECT_SETTINGS_TAB,
+      data: {
+        projectId: projectIdFromWebView,
+      },
+    },
+    {
+      type: 'float',
+      position: 'center',
+      floatSize: { height: 400, width: 500 },
+    },
+  );
+}
+
+async function openUserSettingsTab(): Promise<Layout | undefined> {
+  const settingsTabId = newGuid();
+
+  return addTab<SettingsTabData>(
+    {
+      id: settingsTabId,
+      tabType: TAB_TYPE_USER_SETTINGS_TAB,
+      data: {},
+    },
+    {
+      type: 'float',
+      position: 'center',
+      floatSize: { height: 400, width: 500 },
+    },
+  );
+}
+
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewService(): Promise<void> {
@@ -1232,4 +1300,17 @@ export async function startWebViewService(): Promise<void> {
     NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
     papiWebViewService,
   );
+
+  // This map should allow any functions because commands can be any function type
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
+    'platform.openProjectSettings': openProjectSettingsTab,
+    'platform.openUserSettings': openUserSettingsTab,
+  };
+
+  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
+    // Re-assert type after passing through `forEach`.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    registerCommand(commandName as CommandNames, handler);
+  });
 }

@@ -7,6 +7,7 @@ import {
   limit as stringzLimit,
   substr as stringzSubstr,
 } from 'stringz';
+import ensureArray from './array-util';
 
 /**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
@@ -116,19 +117,39 @@ function indexOfClosestClosingCurlyBrace(str: string, index: number, escaped: bo
 }
 
 /**
- * Formats a string, replacing {localization key} with the localization (or multiple localizations
- * if there are multiple in the string). Will also remove \ before curly braces if curly braces are
- * escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this is {name}! I like
- * `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
+ * Formats a string, replacing `{replacer key}` with the value in the `replacers` at that replacer
+ * key (or multiple replacer values if there are multiple in the string). Will also remove \ before
+ * curly braces if curly braces are escaped with a backslash in order to preserve the curly braces.
+ * E.g. 'Hi, this is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly
+ * braces}!
  *
- * If the key in unescaped braces is not found, just return the key without the braces. Empty
- * unescaped curly braces will just return a string without the braces e.g. ('I am {Nemo}', {
- * 'name': 'Jim'}) would return 'I am Nemo'.
+ * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
+ * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
+ * would return 'I am Nemo'.
+ *
+ * @example
+ *
+ * ```typescript
+ * formatReplacementString(
+ *   'Hi, this is {name}! I like \{curly braces\}! I have a {carColor} car. My favorite food is {food}.',
+ *   { name: 'Bill', carColor: 'blue' }
+ * );
+ *
+ * =>
+ *
+ * 'Hi, this is Bill! I like {curly braces}! I have a blue car. My favorite food is food.'
+ * ```
  *
  * @param str String to format
+ * @param replacers Object whose keys are replacer keys and whose values are the values with which
+ *   to replace `{replacer key}`s found in the string to format. Will be coerced to strings using
+ *   `${replacerValue}`
  * @returns Formatted string
  */
-export function formatReplacementString(str: string, replacers: { [key: string]: string }): string {
+export function formatReplacementString(
+  str: string,
+  replacers: { [key: string | number]: string | unknown } | object,
+): string {
   let updatedStr = str;
 
   let i = 0;
@@ -142,7 +163,13 @@ export function formatReplacementString(str: string, replacers: { [key: string]:
             // We have matching open and close indices. Try to replace the contents
             const replacerKey = substring(updatedStr, i + 1, closeCurlyBraceIndex);
             // Replace with the replacer string or just remove the curly braces
-            const replacerString = replacerKey in replacers ? replacers[replacerKey] : replacerKey;
+            const replacerString =
+              replacerKey in replacers
+                ? // We're getting a value.toString() with any type from an object with any keys
+                  // here. TypeScript doesn't need to carefully and precisely track the exact type.
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion
+                  `${replacers[replacerKey as keyof typeof replacers]}`
+                : replacerKey;
 
             updatedStr = `${substring(updatedStr, 0, i)}${replacerString}${substring(updatedStr, closeCurlyBraceIndex + 1)}`;
             // Put our index at the closing brace adjusted for the new string length minus two
@@ -541,6 +568,64 @@ export function escapeStringRegexp(string: string): string {
   // Escape characters with special meaning either inside or outside character sets.
   // Use a simple backslash escape when it’s always valid, and a `\xnn` escape when the simpler form would be disallowed by Unicode patterns’ stricter grammar.
   return string.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&').replace(/-/g, '\\x2d');
+}
+
+/**
+ * Transforms a string or an array of strings into an array of regular expressions, ensuring that
+ * the result is always an array.
+ *
+ * This function accepts a value that may be a single string, an array of strings, or `undefined`.
+ * It then:
+ *
+ * - Converts each string into a `RegExp` object.
+ * - If the input is an array containing nested arrays, it converts each string in the nested arrays
+ *   into `RegExp` objects.
+ * - Ensures that the result is always an array of `RegExp` objects or arrays of `RegExp` objects.
+ *
+ * @param stringStringMaybeArray - The value to be transformed, which can be a single string, an
+ *   array of strings or arrays of strings, or `undefined`.
+ * @returns An array of `RegExp` objects or arrays of `RegExp` objects. If the input is `undefined`,
+ *   an empty array is returned.
+ */
+export function transformAndEnsureRegExpRegExpArray(
+  stringStringMaybeArray: string | (string | string[])[] | undefined,
+): (RegExp | RegExp[])[] {
+  if (!stringStringMaybeArray) return [];
+
+  const stringStringArray = ensureArray(stringStringMaybeArray);
+
+  const regExpRegExpArray = stringStringArray.map((stringMaybeStringArray: string | string[]) =>
+    Array.isArray(stringMaybeStringArray)
+      ? stringMaybeStringArray.map((str) => new RegExp(str))
+      : new RegExp(stringMaybeStringArray),
+  );
+
+  return regExpRegExpArray;
+}
+
+/**
+ * Transforms a string or an array of strings into an array of regular expressions.
+ *
+ * This function accepts a value that may be a single string, an array of strings, or `undefined`.
+ * It then:
+ *
+ * - Converts each string into a `RegExp` object.
+ * - Ensures that the result is always an array of `RegExp` objects.
+ *
+ * @param stringMaybeArray - The value to be transformed, which can be a single string, an array of
+ *   strings, or `undefined`.
+ * @returns An array of `RegExp` objects. If the input is `undefined`, an empty array is returned.
+ */
+export function transformAndEnsureRegExpArray(
+  stringMaybeArray: string | string[] | undefined,
+): RegExp[] {
+  if (!stringMaybeArray) return [];
+
+  const stringArray = ensureArray(stringMaybeArray);
+
+  const regExpArray = stringArray.map((str: string) => new RegExp(str));
+
+  return regExpArray;
 }
 
 /** This is an internal-only export for testing purposes and should not be used in development */

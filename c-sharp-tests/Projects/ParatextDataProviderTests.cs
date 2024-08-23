@@ -1,7 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using Newtonsoft.Json;
+using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
@@ -80,21 +80,21 @@ namespace TestParanextDataProvider.Projects
             0,
             1,
             0,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":0,\"_chapterNum\":1,\"_verseNum\":0}): BookNum must be greater than zero and less than or equal to last book"
+            "SIL.Scripture.VerseRefException: BookNum must be greater than zero and less than or equal to last book"
         )]
         [TestCase(
             "getChapterUSFM",
             2,
             -1,
             0,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":2,\"_chapterNum\":-1,\"_verseNum\":0}): ChapterNum can not be negative"
+            "SIL.Scripture.VerseRefException: ChapterNum can not be negative"
         )]
         [TestCase(
             "getVerseUSFM",
             2,
             1,
             -1,
-            "Invalid VerseRef ({\"versification\":\"English\",\"_bookNum\":2,\"_chapterNum\":1,\"_verseNum\":-1}): VerseNum can not be negative"
+            "SIL.Scripture.VerseRefException: VerseNum can not be negative"
         )]
         public async Task GetFunctions_InvalidParameters(
             string function,
@@ -130,7 +130,7 @@ namespace TestParanextDataProvider.Projects
             "***", // bookNum: 0
             1,
             0,
-            "Invalid VerseRef ({\"book\":\"***\",\"chapterNum\":1,\"verseNum\":0,\"versificationStr\":\"English\"}): BookNum must be greater than zero and less than or equal to last book"
+            "SIL.Scripture.VerseRefException: BookNum must be greater than zero and less than or equal to last book"
         )]
         public async Task GetFunctions_FullSerialization_InvalidParameters(
             string function,
@@ -150,6 +150,41 @@ namespace TestParanextDataProvider.Projects
             JsonElement serverMessage = CreateRequestMessage(
                 function,
                 CreateFullSerializationVerseRefNode(book, chapterNum, verseNum)
+            );
+
+            string requestType = PdpDataRequest;
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
+
+            VerifyResponse(result, expectedError, requestType, requesterId, null);
+        }
+
+        [TestCase(
+            "getBookUSFM",
+            "***", // bookNum: 0
+            1,
+            0,
+            "SIL.Scripture.VerseRefException: BookNum must be greater than zero and less than or equal to last book"
+        )]
+        public async Task GetFunctions_FullSerializationv2_0_0_InvalidParameters(
+            string function,
+            string book,
+            int chapterNum,
+            int verseNum,
+            string expectedError
+        )
+        {
+            Random random = new();
+            int requesterId = random.Next();
+
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            await provider.RegisterDataProvider();
+
+            JsonElement serverMessage = CreateRequestMessage(
+                function,
+                CreateFullSerializationVerseRefNodev2_0_0(book, chapterNum, verseNum)
             );
 
             string requestType = PdpDataRequest;
@@ -274,6 +309,69 @@ namespace TestParanextDataProvider.Projects
             JsonElement serverMessage = CreateRequestMessage(
                 function,
                 CreateFullSerializationVerseRefNode(book, chapterNum, verseNum)
+            );
+
+            string requestType = PdpDataRequest;
+            Message result = Client
+                .FakeMessageFromServer(new MessageRequest(requestType, requesterId, serverMessage))
+                .First();
+
+            VerifyResponseExceptContents(result, null, requestType, requesterId);
+            string? stringContents = (string?)((MessageResponse)result).Contents;
+            VerifyUsfmSame(stringContents!, expectedResult, _scrText, 1);
+        }
+
+        [TestCase("getVerseUSFM", "GEN", 1, 0, @"\id GEN \ip intro \c 1 ")]
+        [TestCase("getVerseUSFM", "GEN", 2, 1, @"\v 1 verse one ")]
+        [TestCase("getVerseUSFM", "GEN", 2, 6, @"\v 6 verse six ")]
+        [TestCase("getVerseUSFM", "GEN", 2, 10, "")] // Missing verse
+        [TestCase("getVerseUSFM", "GEN", 6, 1, "")] // Missing chapter
+        [TestCase("getVerseUSFM", "LEV", 5, 3, "")] // Missing book
+        [TestCase("getChapterUSFM", "GEN", 1, 0, @"\id GEN \ip intro \c 1 \v 1 some text")]
+        [TestCase(
+            "getChapterUSFM",
+            "GEN",
+            2,
+            0,
+            @"\c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven"
+        )]
+        [TestCase("getChapterUSFM", "GEN", 3, 0, @"\c 3 \p \v 1 bla")]
+        [TestCase("getChapterUSFM", "GEN", 5, 0, "")] // Missing chapter
+        [TestCase("getChapterUSFM", "LEV", 5, 0, "")] // Missing book
+        [TestCase(
+            "getBookUSFM",
+            "GEN",
+            2,
+            0,
+            @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla"
+        )]
+        [TestCase("getBookUSFM", "LEV", 2, 0, "")] // Missing book
+        public async Task GetFunctions_FullSerializationv2_0_0_ValidResults(
+            string function,
+            string book,
+            int chapterNum,
+            int verseNum,
+            string expectedResult
+        )
+        {
+            Random random = new();
+            int requesterId = random.Next();
+
+            _scrText.PutText(
+                1,
+                0,
+                false,
+                @"\id GEN \ip intro \c 1 \v 1 some text \c 2 \p \v 1 verse one \v 6 verse six \v 7 verse seven \c 3 \p \v 1 bla",
+                null
+            );
+
+            DummyParatextProjectDataProvider provider =
+                new(PdpName, Client, _projectDetails, ParatextProjects);
+            await provider.RegisterDataProvider();
+
+            JsonElement serverMessage = CreateRequestMessage(
+                function,
+                CreateFullSerializationVerseRefNodev2_0_0(book, chapterNum, verseNum)
             );
 
             string requestType = PdpDataRequest;
@@ -576,8 +674,8 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             var result = provider.SetProjectSetting(
-                JsonConvert.SerializeObject(VisibilitySettingName),
-                JsonConvert.SerializeObject(ProjectVisibility.Public.ToString())
+                VisibilitySettingName.SerializeToJson(),
+                ProjectVisibility.Public.ToString().SerializeToJson()
             );
 
             Assert.That(result.Success, Is.True);
@@ -596,8 +694,8 @@ namespace TestParanextDataProvider.Projects
             await provider.RegisterDataProvider();
 
             var result = provider.SetProjectSetting(
-                JsonConvert.SerializeObject(VisibilitySettingName),
-                JsonConvert.SerializeObject(89)
+                VisibilitySettingName.SerializeToJson(),
+                89.SerializeToJson()
             );
 
             Assert.That(result.Success, Is.False);

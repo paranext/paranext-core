@@ -14,7 +14,7 @@ import * as platformBibleUtils from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { getCommandLineArgumentsGroup, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
-import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import papi, { network, fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
@@ -27,6 +27,7 @@ import {
   stringLength,
   startsWith,
   slice,
+  JsonDocumentLike,
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -36,6 +37,17 @@ import { localizedStringsDocumentCombiner } from '@extension-host/services/local
 import { settingsDocumentCombiner } from '@extension-host/services/settings.service-host';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import { projectSettingsDocumentCombiner } from '@extension-host/services/project-settings.service-host';
+import {
+  ElevatedPrivilegeNames,
+  ElevatedPrivileges,
+} from '@shared/models/elevated-privileges.model';
+import { generateHashFromBuffer } from '@node/utils/crypto-util';
+import {
+  ExtensionIdentifier,
+  HashValues,
+  InstalledExtensions,
+  ManageExtensions,
+} from '@shared/models/manage-extensions-privilege.model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -110,6 +122,13 @@ const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 const installedExtensionsUri: Uri = `app://installed-extensions`;
 nodeFS.createDir(installedExtensionsUri);
 
+/**
+ * The location where installed extensions may be moved if they are disabled. Created if it does not
+ * exist for ease of use
+ */
+const disabledExtensionsUri: Uri = `app://disabled-extensions`;
+nodeFS.createDir(disabledExtensionsUri);
+
 /** The location where we will store decompressed extension ZIP files */
 const userUnzippedExtensionsCacheUri: Uri = 'cache://extensions';
 
@@ -134,6 +153,12 @@ let initializePromise: Promise<void> | undefined;
  */
 let availableExtensions: ExtensionInfo[];
 
+/**
+ * Event emitter to tell any extension listening that the extensions finished reloading. The boolean
+ * indicates whether it succeeded.
+ */
+let reloadFinishedEventEmitter: platformBibleUtils.PlatformEventEmitter<boolean>;
+
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest: ExtensionManifest = deserialize(extensionManifestJson);
@@ -143,7 +168,7 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
   if (FORBIDDEN_EXTENSION_NAMES.some((forbiddenName) => forbiddenName === extensionManifest.name))
     throw new Error(`Extension name '${extensionManifest.name}' forbidden!`);
 
-  if (extensionManifest.main && extensionManifest.main.toLowerCase().endsWith('.ts'))
+  if (extensionManifest.main?.toLowerCase().endsWith('.ts'))
     // Replace ts with js so people can list their source code ts name but run the transpiled js
     extensionManifest.main = `${extensionManifest.main.slice(0, -3)}.js`;
 
@@ -468,7 +493,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
       if (extensionInfo.types) {
         const providedDtsUri = joinUriPaths(extensionInfo.dirUri, extensionInfo.types);
         const providedDtsStats = await nodeFS.getStats(providedDtsUri);
-        if (providedDtsStats && providedDtsStats.isFile()) {
+        if (providedDtsStats?.isFile()) {
           // The extension's specified dts exists, so use it
           extensionDtsInfo = createDtsInfoFromUri(providedDtsUri);
         } else
@@ -554,7 +579,9 @@ function watchForExtensionChanges(): UnsubscriberAsync {
     try {
       logger.debug('Reload extensions from watching');
       await reloadExtensions(shouldDeactivateExtensions);
+      reloadFinishedEventEmitter.emit(true);
     } catch (e) {
+      reloadFinishedEventEmitter.emit(false);
       throw new LogError(`Reload extensions from watching failed. Investigate: ${e}`);
     }
   });
@@ -576,6 +603,204 @@ function watchForExtensionChanges(): UnsubscriberAsync {
     watcher.close();
     return true;
   };
+}
+
+/**
+ * Returns a URI we can use with `nodeFS` calls that is an expected filename given a base URI,
+ * extension name, and extension version. This is not that useful for packaged extensions but is
+ * important for all other extensions, both enabled and disabled.
+ */
+function getExtensionUri(baseUri: string, extensionName: string, extensionVersion: string): string {
+  return `${baseUri}/${extensionName}_${extensionVersion}.zip`;
+}
+
+/**
+ * Provides extension identifier information based on extension ZIP files names given the naming
+ * convention used in {@link getExtensionUri}
+ */
+function extractExtensionDetailsFromFileNames(fileUris: string[]): ExtensionIdentifier[] {
+  return fileUris.map((fileUri: string) => {
+    // Splits by either a forward-slash or back-slash to support Windows as well
+    const fileName = fileUri.split(path.sep).pop();
+    if (!fileName?.endsWith('.zip')) throw new Error(`Not a ZIP file: ${fileName}`);
+    const lastDashIndex = fileName.lastIndexOf('_');
+    const extensionName = fileName.substring(0, lastDashIndex);
+    const extensionVersion = fileName.substring(lastDashIndex + 1, fileName.length - 4);
+    return { extensionName, extensionVersion };
+  });
+}
+
+/** Extracts extension identifier information from a buffer containing an extension ZIP file */
+async function extractExtensionDetailsFromZip(zipData: Buffer): Promise<ExtensionIdentifier> {
+  const zip: JSZip = await JSZip.loadAsync(zipData);
+  const zippedManifest = zip.file(MANIFEST_FILE_NAME);
+  if (!zippedManifest) throw new Error('no manifest file found in ZIP data');
+  // Assert the extracted manifest.json data as the associated type
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const manifest = JSON.parse(await zippedManifest.async('string')) as ExtensionManifest;
+  return { extensionName: manifest.name, extensionVersion: manifest.version };
+}
+
+/**
+ * IMPORTANT: ONLY RUN THIS BEFORE EXTENSIONS ARE ACTIVATED
+ *
+ * Ensures extension file names match the extension names and versions in their manifest files. This
+ * only looks at locations where downloaded extensions reside. Packaged extensions and those pointed
+ * to directly from the command line are unaffected.
+ */
+async function normalizeExtensionFileNames(): Promise<void> {
+  const enabledExtensionZipUris = (
+    await nodeFS.readDir(installedExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
+  ).file;
+  const enabledExtensionPromises = enabledExtensionZipUris.map(async (enabledZipUri) => {
+    await normalizeExtensionFileName(installedExtensionsUri, enabledZipUri);
+  });
+
+  const disabledExtensionZipUris = (
+    await nodeFS.readDir(disabledExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
+  ).file;
+  const disabledExtensionPromises = disabledExtensionZipUris.map(async (disabledZipUri) => {
+    await normalizeExtensionFileName(disabledExtensionsUri, disabledZipUri);
+  });
+
+  await Promise.all(enabledExtensionPromises.concat(disabledExtensionPromises));
+}
+
+async function normalizeExtensionFileName(baseUri: string, zipUri: string) {
+  try {
+    const zipBuffer = await nodeFS.readFileBinary(zipUri);
+    const { extensionName, extensionVersion } = await extractExtensionDetailsFromZip(zipBuffer);
+    const expectedUri = getExtensionUri(baseUri, extensionName, extensionVersion);
+    if (zipUri !== expectedUri) {
+      await nodeFS.moveFile(zipUri, expectedUri);
+      logger.info(`Renamed '${extensionName}' ZIP file from ${zipUri} to ${expectedUri}`);
+    }
+  } catch (error) {
+    logger.warn(`Failed to normalize extension file for ${zipUri}: ${error}`);
+  }
+}
+
+// #region Extension management privileges
+
+async function installExtension(
+  extensionUrlToDownload: string,
+  fileSize: number,
+  fileHashes: HashValues,
+): Promise<void> {
+  // Make sure a supported hash value was provided
+  let hashAlgo: string;
+  let expectedHashValue: string;
+  if (fileHashes.sha512) {
+    hashAlgo = 'sha512';
+    expectedHashValue = fileHashes.sha512;
+  } else if (fileHashes.sha256) {
+    hashAlgo = 'sha256';
+    expectedHashValue = fileHashes.sha256;
+  } else throw new Error(`Missing known hash algorithms from ${JSON.stringify(fileHashes)}`);
+
+  // Download the file and make sure the size and hash values match
+  const response = await fetch(extensionUrlToDownload);
+  const extensionBuffer = Buffer.from(await response.arrayBuffer());
+  if (extensionBuffer.byteLength !== fileSize)
+    throw new Error(
+      `file size mismatch, expected ${JSON.stringify(fileSize)}, actual ${JSON.stringify(extensionBuffer.byteLength)}`,
+    );
+  const hashValue = generateHashFromBuffer(hashAlgo, 'base64', extensionBuffer);
+  if (expectedHashValue !== hashValue)
+    throw new Error(`file hash mismatch, expected ${expectedHashValue}, actual ${hashValue}`);
+
+  // Extract information needed from the extension
+  const { extensionName, extensionVersion } = await extractExtensionDetailsFromZip(extensionBuffer);
+  if (FORBIDDEN_EXTENSION_NAMES.find((forbiddenName) => extensionName === forbiddenName))
+    throw new Error(`Forbidden extension name: ${extensionName}`);
+
+  // Save the extension file in a location where it will be automatically installed
+  const extensionUri = getExtensionUri(installedExtensionsUri, extensionName, extensionVersion);
+  if (await nodeFS.getStats(extensionUri))
+    logger.warn(`Attempting to overwrite extension ZIP file: ${extensionUri}`);
+  await nodeFS.writeFile(extensionUri, extensionBuffer);
+  logger.info(`Installed ${extensionName} ${extensionVersion} from ${extensionUrlToDownload}`);
+}
+
+async function enableExtension(extensionId: ExtensionIdentifier) {
+  const { extensionName, extensionVersion } = extensionId;
+  const sourceUri = getExtensionUri(disabledExtensionsUri, extensionName, extensionVersion);
+  if (!(await nodeFS.getStats(sourceUri)))
+    throw new Error(`'${extensionName} ${extensionVersion}' is not disabled`);
+  const destinationUri = getExtensionUri(installedExtensionsUri, extensionName, extensionVersion);
+  if (await nodeFS.getStats(destinationUri))
+    throw new Error(`'${extensionName} ${extensionVersion}' is already enabled`);
+  await nodeFS.moveFile(sourceUri, destinationUri);
+  logger.info(`Enabled ${extensionName} ${extensionVersion}`);
+}
+
+async function disableExtension(extensionId: ExtensionIdentifier) {
+  const { extensionName, extensionVersion } = extensionId;
+  const sourceUri = getExtensionUri(installedExtensionsUri, extensionName, extensionVersion);
+  if (!(await nodeFS.getStats(sourceUri)))
+    throw new Error(`'${extensionName} ${extensionVersion}' does not exist or is not enabled`);
+  const destinationUri = getExtensionUri(disabledExtensionsUri, extensionName, extensionVersion);
+  if (await nodeFS.getStats(destinationUri))
+    logger.warn(`Attempting to overwrite extension ZIP file: ${destinationUri}`);
+  await nodeFS.moveFile(sourceUri, destinationUri);
+  logger.info(`Disabled ${extensionName} ${extensionVersion}`);
+}
+
+async function getInstalledExtensions(): Promise<InstalledExtensions> {
+  // "Enabled" extensions are all the ones in the "installed" directory
+  const installedExtensionZips = (
+    await nodeFS.readDir(installedExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
+  ).file;
+  const enabled = extractExtensionDetailsFromFileNames(installedExtensionZips);
+
+  // "Disabled" extensions are all the ones in the "disabled" directory that aren't also "enabled"
+  const disabledExtensionZips = (
+    await nodeFS.readDir(disabledExtensionsUri, (uri) => uri?.toLowerCase().endsWith('zip'))
+  ).file;
+  const disabled = extractExtensionDetailsFromFileNames(disabledExtensionZips).filter(
+    (disabledId) =>
+      !enabled.find((enabledId) => enabledId.extensionName === disabledId.extensionName),
+  );
+
+  // "Packaged" extensions are all the running extensions that aren't "enabled"
+  const packaged = [...activeExtensions.values()]
+    .map((active) => {
+      const packagedId: ExtensionIdentifier = {
+        extensionName: active.info.name,
+        extensionVersion: active.info.version,
+      };
+
+      return enabled.find((enabledId) => enabledId.extensionName === packagedId.extensionName)
+        ? undefined
+        : packagedId;
+    })
+    .filter((identifier) => !!identifier);
+
+  return {
+    enabled,
+    disabled,
+    packaged,
+  };
+}
+
+// #endregion
+
+function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<ElevatedPrivileges> {
+  const retVal: ElevatedPrivileges = {
+    manageExtensions: undefined,
+  };
+  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.manageExtensions)) {
+    const manageExtensions: ManageExtensions = {
+      installExtension,
+      enableExtension,
+      disableExtension,
+      getInstalledExtensions,
+    };
+    Object.freeze(manageExtensions);
+    retVal.manageExtensions = manageExtensions;
+  }
+  Object.freeze(retVal);
+  return retVal;
 }
 
 /**
@@ -613,6 +838,7 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   // Build up the context for this particular extension
   const context: ExecutionActivationContext = {
     name: extension.name,
+    elevatedPrivileges: prepareElevatedPrivileges(extension),
     executionToken,
     registrations: new UnsubscriberAsyncList(extension.name),
   };
@@ -746,18 +972,13 @@ async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | 
     );
 
   const isUnsubscribed = await activeExtension?.registrations?.runAllUnsubscribers();
-
   if (!isUnsubscribed)
     logger.error(`Extension '${extension.name}' was not successfully unsubscribed!`);
 
   // Delete the extension module from Node's module cache if we previously loaded it.
   const moduleKey = systemRequire.resolve(getPathFromUri(extension.dirUri));
-  if (!(moduleKey in systemRequire.cache)) {
-    logger.warn(`Extension '${extension.name}' was not found in the module cache to be removed!`);
-    return isUnsubscribed;
-  }
-
-  delete systemRequire.cache[moduleKey];
+  if (moduleKey in systemRequire.cache) delete systemRequire.cache[moduleKey];
+  else logger.warn(`Extension '${extension.name}' not found in the module cache to be removed!`);
 
   return isUnsubscribed;
 }
@@ -768,19 +989,18 @@ async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | 
  * @param extensions - Extension info for the extensions we want to deactivate.
  * @returns An array of the deactivation results - `true`, `false`, or `undefined`.
  */
-function deactivateExtensions(extensions: ExtensionInfo[]): Promise<(boolean | undefined)[]> {
-  return Promise.all(
-    extensions.map(async (extension) => {
-      try {
-        const isDeactivated = await deactivateExtension(extension);
-        if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
-        return isDeactivated;
-      } catch (e) {
-        logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
-        return false;
-      }
-    }),
-  );
+async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> {
+  // We want to deactivate extensions sequentially in opposite order of which they were activated
+  // eslint-disable-next-line no-restricted-syntax
+  for (const extension of [...extensions].reverse()) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      const isDeactivated = await deactivateExtension(extension);
+      if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+    } catch (e) {
+      logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
+    }
+  }
 }
 
 async function resyncContributions(
@@ -791,67 +1011,106 @@ async function resyncContributions(
   projectSettingsDocumentCombiner.deleteAllContributions();
   localizedStringsDocumentCombiner.deleteAllContributions();
 
-  await Promise.all(
+  // Load up all the extension contributions asynchronously
+  const extensionsContributions = await Promise.all(
     extensionsToAdd.map(async (extension) => {
+      let localizedStringsDocument: JsonDocumentLike | undefined;
       if (extension.localizedStrings) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
           const localizedStringsJson = await nodeFS.readFileText(
             joinUriPaths(extension.dirUri, extension.localizedStrings),
           );
-          const localizedStringsDocument = JSON.parse(localizedStringsJson);
-          localizedStringsDocumentCombiner.addOrUpdateContribution(
-            extension.name,
-            localizedStringsDocument,
-          );
+          localizedStringsDocument = JSON.parse(localizedStringsJson);
         } catch (error) {
           logger.warn(
-            `Could not add localized strings contribution for ${extension.name}: ${error}`,
+            `Could not load localized strings contribution for ${extension.name}: ${error}`,
           );
         }
       }
+      let menuDocument: JsonDocumentLike | undefined;
       if (extension.menus) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
           const menuJson = await nodeFS.readFileText(
             joinUriPaths(extension.dirUri, extension.menus),
           );
-          const menuDocument = JSON.parse(menuJson);
-          menuDocumentCombiner.addOrUpdateContribution(extension.name, menuDocument);
+          menuDocument = JSON.parse(menuJson);
         } catch (error) {
-          logger.warn(`Could not add menu contribution for ${extension.name}: ${error}`);
+          logger.warn(`Could not load menu contribution for ${extension.name}: ${error}`);
         }
       }
+      let settingsDocument: JsonDocumentLike | undefined;
       if (extension.settings) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
           const settingsJson = await nodeFS.readFileText(
             joinUriPaths(extension.dirUri, extension.settings),
           );
-          const settingsDocument = JSON.parse(settingsJson);
-          settingsDocumentCombiner.addOrUpdateContribution(extension.name, settingsDocument);
+          settingsDocument = JSON.parse(settingsJson);
         } catch (error) {
-          logger.warn(`Could not add settings contribution for ${extension.name}: ${error}`);
+          logger.warn(`Could not load settings contribution for ${extension.name}: ${error}`);
         }
       }
+      let projectSettingsDocument: JsonDocumentLike | undefined;
       if (extension.projectSettings) {
         try {
           // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
           const projectSettingsJson = await nodeFS.readFileText(
             joinUriPaths(extension.dirUri, extension.projectSettings),
           );
-          const projectSettingsDocument = JSON.parse(projectSettingsJson);
-          projectSettingsDocumentCombiner.addOrUpdateContribution(
-            extension.name,
-            projectSettingsDocument,
-          );
+          projectSettingsDocument = JSON.parse(projectSettingsJson);
         } catch (error) {
           logger.warn(
-            `Could not add project settings contribution for ${extension.name}: ${error}`,
+            `Could not load project settings contribution for ${extension.name}: ${error}`,
           );
         }
       }
+
+      return {
+        name: extension.name,
+        localizedStringsDocument,
+        menuDocument,
+        settingsDocument,
+        projectSettingsDocument,
+      };
     }),
+  );
+
+  // Load contributions in the order in which the extensions are loaded
+  extensionsContributions.forEach(
+    ({
+      name,
+      localizedStringsDocument,
+      menuDocument,
+      settingsDocument,
+      projectSettingsDocument,
+    }) => {
+      if (localizedStringsDocument)
+        try {
+          localizedStringsDocumentCombiner.addOrUpdateContribution(name, localizedStringsDocument);
+        } catch (error) {
+          logger.warn(`Could not add localized strings contribution for ${name}: ${error}`);
+        }
+      if (menuDocument)
+        try {
+          menuDocumentCombiner.addOrUpdateContribution(name, menuDocument);
+        } catch (error) {
+          logger.warn(`Could not add menu contribution for ${name}: ${error}`);
+        }
+      if (settingsDocument)
+        try {
+          settingsDocumentCombiner.addOrUpdateContribution(name, settingsDocument);
+        } catch (error) {
+          logger.warn(`Could not add settings contribution for ${name}: ${error}`);
+        }
+      if (projectSettingsDocument)
+        try {
+          projectSettingsDocumentCombiner.addOrUpdateContribution(name, projectSettingsDocument);
+        } catch (error) {
+          logger.warn(`Could not add project settings contribution for ${name}: ${error}`);
+        }
+    },
   );
 
   await menuDataService.rebuildMenus();
@@ -904,6 +1163,12 @@ export const initialize = () => {
 
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
+
+    reloadFinishedEventEmitter = network.createNetworkEventEmitter<boolean>(
+      'platform.onDidReloadExtensions',
+    );
+
+    await normalizeExtensionFileNames();
 
     await reloadExtensions(false);
 

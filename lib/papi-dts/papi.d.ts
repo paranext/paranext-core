@@ -134,6 +134,13 @@ declare module 'shared/models/web-view.model' {
      * to function. The more you list, the higher the theoretical security risks.
      */
     allowedFrameSources?: string[];
+    /**
+     * Whether to allow this iframe to open separate windows with window.open and anchor tags with
+     * `target="_blank"`. Setting this to true adds `allow-popups` to the WebView iframe's [sandbox
+     * attribute] (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+     * to `false`
+     */
+    allowPopups?: boolean;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
@@ -171,6 +178,7 @@ declare module 'shared/models/web-view.model' {
     'allowScripts',
     'allowSameOrigin',
     'allowedFrameSources',
+    'allowPopups',
   ];
   /**
    * The keys of properties on a WebViewDefinition that are omitted when converting to a
@@ -2344,6 +2352,8 @@ declare module 'papi-shared-types' {
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
+    'platform.openProjectSettings': (webViewId: string) => Promise<void>;
+    'platform.openUserSettings': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -2380,6 +2390,20 @@ declare module 'papi-shared-types' {
   interface SettingTypes {
     'platform.verseRef': ScriptureReference;
     'platform.interfaceLanguage': string[];
+    /**
+     * Mementos managed in the dotnet process and used for interacting with PtxUtils. Mementos are
+     * persisted objects containing some data. They are stored as xml strings.
+     */
+    'platform.ptxUtilsMementoData': {
+      [key: string]: string;
+    };
+    /**
+     * Tracking last S/R registry data cache time managed in the dotnet process and used for
+     * interacting with ParatextData.
+     */
+    'platform.paratextDataLastRegistryDataCachedTimes': {
+      [key: string]: string;
+    };
   }
   /**
    * Names for each user setting available on the papi.
@@ -3810,6 +3834,31 @@ declare module 'shared/models/project-lookup.service-model' {
     includePdpFactoryIds: string | undefined;
   };
   /**
+   * Determines whether the given project interfaces are included based on specified inclusion and
+   * exclusion rules.
+   *
+   * This function checks if a set of project interfaces meets the criteria defined by regular
+   * expressions for inclusion and exclusion.
+   *
+   * - A project interface is excluded if it matches any of the provided exclusion patterns.
+   * - A project interface is included only if it matches at least one of the provided inclusion
+   *   patterns.
+   *
+   * @param projectInterfaces - An array of project interfaces to evaluate against the inclusion and
+   *   exclusion patterns.
+   * @param includeProjectInterfaces - An array of regular expressions or arrays of regular
+   *   expressions defining which interfaces should be included.
+   * @param excludeProjectInterfaces - An array of regular expressions or arrays of regular
+   *   expressions defining which interfaces should be excluded.
+   * @returns A boolean value indicating whether the project interfaces satisfy the inclusion and
+   *   exclusion criteria.
+   */
+  export function areProjectInterfacesIncluded(
+    projectInterfaces: ProjectInterfaces[],
+    includeProjectInterfaces: (RegExp | RegExp[])[],
+    excludeProjectInterfaces: (RegExp | RegExp[])[],
+  ): boolean;
+  /**
    * Compare function (for array sorting and such) that compares two PDPF Metadata infos by most
    * minimal match to the `projectInterface` in question.
    *
@@ -4334,6 +4383,13 @@ declare module 'node/services/node-file-system.service' {
     mode?: Parameters<typeof fs.promises.copyFile>[2],
   ): Promise<void>;
   /**
+   * Moves a file from one location to another
+   *
+   * @param sourceUri The location of the file to move
+   * @param destinationUri The uri where the file should be moved
+   */
+  export function moveFile(sourceUri: Uri, destinationUri: Uri): Promise<void>;
+  /**
    * Delete a file if it exists
    *
    * @param uri URI of file
@@ -4405,6 +4461,19 @@ declare module 'node/utils/crypto-util' {
    * @returns Cryptographically secure, pseudo-randomly generated value encoded as a string
    */
   export function createNonce(encoding: 'base64url' | 'hex', numberOfBytes?: number): string;
+  /**
+   * Calculates the hash of a given data buffer
+   *
+   * @param hashAlgorithm Name of the hash algorithm to use, such as "sha512"
+   * @param encodingType String encoding to use for returning the binary hash value that is calculated
+   * @param buffer Raw data to be fed into the hash algorithm
+   * @returns String encoded value of the digest (https://csrc.nist.gov/glossary/term/hash_digest)
+   */
+  export function generateHashFromBuffer(
+    hashAlgorithm: string,
+    encodingType: 'base64' | 'base64url' | 'hex' | 'binary',
+    buffer: Buffer,
+  ): string;
 }
 declare module 'node/models/execution-token.model' {
   /** For now this is just for extensions, but maybe we will want to expand this in the future */
@@ -4762,15 +4831,120 @@ declare module 'shared/services/dialog.service' {
   const dialogService: DialogService;
   export default dialogService;
 }
+declare module 'shared/models/manage-extensions-privilege.model' {
+  /** Base64 encoded hash values */
+  export type HashValues = Partial<{
+    sha256: string;
+    sha512: string;
+  }>;
+  /** Represents an extension that can be enabled or disabled */
+  export type ExtensionIdentifier = {
+    extensionName: string;
+    extensionVersion: string;
+  };
+  /**
+   * Represents all extensions that are installed. Note that packaged extensions cannot be disabled,
+   * so they are implied to always be enabled.
+   */
+  export type InstalledExtensions = {
+    /**
+     * Extensions that are explicitly bundled to be part of the application. They cannot be disabled.
+     * At runtime no extensions can be added or removed from the set of packaged extensions.
+     */
+    packaged: ExtensionIdentifier[];
+    /**
+     * Extensions that are running but can be dynamically disabled. At runtime extensions can be added
+     * or removed from the set of enabled extensions.
+     */
+    enabled: ExtensionIdentifier[];
+    /**
+     * Extensions that are not running but can be dynamically enabled. At runtime extensions can be
+     * added or removed from the set of disabled extensions.
+     *
+     * The only difference between a disabled extension and an extension that isn't installed is that
+     * disabled extensions do not need to be downloaded again to run them.
+     */
+    disabled: ExtensionIdentifier[];
+  };
+  /**
+   * Download an extension from a given URL and enable it
+   *
+   * @param extensionUrlToDownload URL to the extension ZIP file to download
+   * @param fileSize Expected size of the file
+   * @param fileHashes Hash value(s) of the file to download. Note that only one hash value may be
+   *   validated, but multiple hash values may be provided so the installer can choose any of them for
+   *   validation. For example, if you provide a sha256 hash value and a sha512 hash value, the
+   *   installer may only use the sha512 hash value for validation.
+   * @returns Promise that resolves when the extension has been installed
+   */
+  export type InstallExtensionFunction = (
+    extensionUrlToDownload: string,
+    fileSize: number,
+    fileHashes: HashValues,
+  ) => Promise<void>;
+  /**
+   * Start running an extension that had been previously downloaded and disabled
+   *
+   * @param extensionIdentifier Details of the extension to enable
+   * @returns Promise that resolves when the extension has been enabled, throws if enabling fails
+   */
+  export type EnableExtensionFunction = (extensionIdentifier: ExtensionIdentifier) => Promise<void>;
+  /**
+   * Stop running an extension that had been previously downloaded and enabled
+   *
+   * @param extensionIdentifier Details of the extension to disable
+   * @returns Promise that resolves when the extension has been enabled, throws if enabling fails
+   */
+  export type DisableExtensionFunction = (
+    extensionIdentifier: ExtensionIdentifier,
+  ) => Promise<void>;
+  /** Get extension identifiers of all extensions on the system */
+  export type GetInstalledExtensionsFunction = () => Promise<InstalledExtensions>;
+  /** Functions needed to manage extensions */
+  export type ManageExtensions = {
+    /** Function to download an extension and enable it */
+    installExtension: InstallExtensionFunction;
+    /** Function to start running an extension that had been previously downloaded and disabled */
+    enableExtension: EnableExtensionFunction;
+    /** Function to stop running an extension that had been previously downloaded and enabled */
+    disableExtension: DisableExtensionFunction;
+    /** Function to retrieve details about all installed extensions */
+    getInstalledExtensions: GetInstalledExtensionsFunction;
+  };
+}
+declare module 'shared/models/elevated-privileges.model' {
+  import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  /** String constants that are listed in an extension's manifest.json to state needed privileges */
+  export enum ElevatedPrivilegeNames {
+    manageExtensions = 'manageExtensions',
+  }
+  /** Object that contains properties with special capabilities for extensions that required them */
+  export type ElevatedPrivileges = {
+    /** Functions that can be run to manage what extensions are running */
+    manageExtensions: ManageExtensions | undefined;
+  };
+}
 declare module 'extension-host/extension-types/extension-activation-context.model' {
   import { ExecutionToken } from 'node/models/execution-token.model';
   import { UnsubscriberAsyncList } from 'platform-bible-utils';
+  import { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
     /** Canonical name of the extension */
     name: string;
-    /** Used to save and load data from the storage service. */
+    /** Used to save and load data by the storage service. */
     executionToken: ExecutionToken;
+    /**
+     * Objects that provide special capabilities required by an extension based on the
+     * `elevatedPrivileges` values listed in its manifest. For example, if an extension needs to be
+     * able to manage other extensions, then it should include `manageExtensions` in the
+     * `elevatedPrivileges` array in `manifest.json`. Then when the extension is activated this
+     * {@link ElevatedPrivileges} object will have the `manageExtensions` property set to an object
+     * with functions used to manage extensions.
+     *
+     * See {@link ElevatedPrivilegeNames} for the full list of elevated privileges available.
+     */
+    elevatedPrivileges: ElevatedPrivileges;
     /** Tracks all registrations made by an extension so they can be cleaned up when it is unloaded */
     registrations: UnsubscriberAsyncList;
   };
@@ -5029,6 +5203,93 @@ declare module 'shared/services/localization.service-model' {
       getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
     } & IDataProvider<LocalizationDataDataTypes>;
 }
+declare module 'shared/data/platform.data' {
+  /**
+   * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
+   * Platform.Bible core
+   */
+  export const PLATFORM_NAMESPACE = 'platform';
+  /** Query string passed to the renderer when starting if it should enable noisy dev mode */
+  export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
+}
+declare module 'shared/log-error.model' {
+  /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
+  export default class LogError extends Error {
+    constructor(message?: string);
+  }
+}
+declare module 'shared/services/localization.service' {
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  const localizationService: ILocalizationService;
+  export default localizationService;
+}
+declare module 'shared/utils/settings-document-combiner-base' {
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import {
+    DocumentCombiner,
+    JsonDocumentLike,
+    Localized,
+    Setting,
+    SettingsGroup,
+  } from 'platform-bible-utils';
+  /**
+   * Information about one specific setting. Basically just {@link Setting} but with specific default
+   * type info
+   */
+  type SettingInfo<SettingName extends SettingNames> = Setting & {
+    default: SettingTypes[SettingName];
+  };
+  /** Information about all settings. Keys are setting keys, values are information for that setting */
+  type AllSettingsInfo = {
+    [SettingName in SettingNames]: SettingInfo<SettingName>;
+  };
+  export type SettingsContributionInfo = {
+    /** Map of extension name to that extension's provided settings groups if provided */
+    contributions: {
+      [extensionName: string]: SettingsGroup[] | undefined;
+    };
+    /**
+     * Map of setting name to setting definition. For type specificity and ease of accessing settings
+     * since they're a bit hard to find in `contributions`
+     */
+    settings: Partial<AllSettingsInfo>;
+  };
+  export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
+  export default abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
+    /** Name for type of setting to use in error messages */
+    protected readonly settingTypeName: string;
+    /** Cached promise for getting the localized output */
+    private localizedOutputPromise;
+    constructor(baseDocument: JsonDocumentLike);
+    /**
+     * This method is intended to be layered over by a child class to expose the localized setting
+     * info.
+     *
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * NOTE: If the input documents might have changed since the last time the settings contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of settings contributions. If all the input documents are static, then there is
+     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    protected getLocalizedOutput(): Promise<LocalizedSettingsContributionInfo | undefined>;
+    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
+    protected transformBaseDocumentAfterValidation(
+      baseDocument: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
+    protected transformContributionAfterValidation(
+      documentName: string,
+      document: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateOutput(): void;
+    /** Validate the base and contribution documents against the JSON schema */
+    protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
+  }
+}
 declare module 'shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
   import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
@@ -5037,6 +5298,7 @@ declare module 'shared/services/settings.service-model' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
+  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
   /** Name prefix for registered commands that call settings validators */
   export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
   /**
@@ -5113,6 +5375,20 @@ declare module 'shared/services/settings.service-model' {
      */
     get<SettingName extends SettingNames>(key: SettingName): Promise<SettingTypes[SettingName]>;
     /**
+     * Validates the setting at the given key with the new value provided
+     *
+     * @param key The string id of the setting to validate
+     * @param newValue The value to validate
+     * @param currentValue The value already set to the setting
+     * @param allChanges
+     */
+    validateSetting<SettingName extends SettingNames>(
+      key: SettingName,
+      newValue: SettingTypes[SettingName],
+      currentValue: SettingTypes[SettingName],
+      allChanges?: Partial<SettingTypes>,
+    ): Promise<boolean>;
+    /**
      * Sets the value of the specified setting
      *
      * @param key The string id of the setting for which the value is being set
@@ -5158,13 +5434,85 @@ declare module 'shared/services/settings.service-model' {
       key: SettingName,
       validator: SettingValidator<SettingName>,
     ): Promise<UnsubscriberAsync>;
+    /**
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * @returns Localized project settings contribution info or undefined
+     */
+    getLocalizedSettingsContributionInfo(): Promise<LocalizedSettingsContributionInfo | undefined>;
   } & OnDidDispose &
     IDataProvider<SettingDataTypes> &
     typeof settingsServiceObjectToProxy;
 }
+declare module 'shared/utils/project-settings-document-combiner' {
+  import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
+  import {
+    JsonDocumentLike,
+    Localized,
+    ProjectSetting,
+    ProjectSettingsGroup,
+  } from 'platform-bible-utils';
+  import SettingsDocumentCombinerBase from 'shared/utils/settings-document-combiner-base';
+  /**
+   * Information about one specific setting. Basically just {@link Setting} but with specific default
+   * type info
+   */
+  type ProjectSettingInfo<ProjectSettingName extends ProjectSettingNames> = ProjectSetting & {
+    default: ProjectSettingTypes[ProjectSettingName];
+  };
+  /** Information about all settings. Keys are setting keys, values are information for that setting */
+  type AllProjectSettingsInfo = {
+    [ProjectSettingName in ProjectSettingNames]: ProjectSettingInfo<ProjectSettingName>;
+  };
+  export type ProjectSettingsContributionInfo = {
+    /** Map of extension name to that extension's provided settings groups if provided */
+    contributions: {
+      [extensionName: string]: ProjectSettingsGroup[] | undefined;
+    };
+    /**
+     * Map of setting name to setting definition. For type specificity and ease of accessing settings
+     * since they're a bit hard to find in `contributions`
+     */
+    settings: Partial<AllProjectSettingsInfo>;
+  };
+  export type LocalizedProjectSettingsContributionInfo = Localized<ProjectSettingsContributionInfo>;
+  export default class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
+    protected readonly settingTypeName = 'Project Setting';
+    /**
+     * Get the current set of project settings contribution info given all the input documents.
+     * Localized string keys have not been localized to corresponding strings.
+     *
+     * NOTE: If the input documents might have changed since the last time the project settings
+     * contributions were retrieved, you can call `rebuild` to incorporate those document changes
+     * before calling this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of project settings contributions. If all the input documents are static, then
+     * there is no need to ever rebuild once all the documents have been contributed to this
+     * combiner.
+     */
+    getProjectSettingsContributionInfo(): ProjectSettingsContributionInfo | undefined;
+    /**
+     * Get the current set of settings contribution info given all the input documents with all
+     * localized string keys localized properly.
+     *
+     * NOTE: If the input documents might have changed since the last time the settings contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of settings contributions. If all the input documents are static, then there is
+     * no need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    getLocalizedProjectSettingsContributionInfo(): Promise<
+      LocalizedProjectSettingsContributionInfo | undefined
+    >;
+    protected performSchemaValidation(document: JsonDocumentLike, docType: string): void;
+  }
+}
 declare module 'shared/services/project-settings.service-model' {
   import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
+  import { LocalizedProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
   /** Name prefix for registered commands that call project settings validators */
   export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
   export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
@@ -5235,6 +5583,13 @@ declare module 'shared/services/project-settings.service-model' {
       key: ProjectSettingName,
       validatorCallback: ProjectSettingValidator<ProjectSettingName>,
     ): Promise<UnsubscriberAsync>;
+    /**
+     * Get the current set of project settings contribution info given all the input documents with
+     * all localized string keys localized properly.
+     *
+     * @returns Localized project settings contribution info or undefined
+     */
+    getLocalizedContributionInfo(): Promise<LocalizedProjectSettingsContributionInfo | undefined>;
   }
   /**
    * All project settings changes being set in one batch
@@ -5276,6 +5631,8 @@ declare module '@papi/core' {
   export default core;
   export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
   export type { ExecutionToken } from 'node/models/execution-token.model';
+  export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
+  export type { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
@@ -5452,11 +5809,6 @@ declare module 'shared/services/menu-data.service' {
   const menuDataService: IMenuDataService;
   export default menuDataService;
 }
-declare module 'shared/services/localization.service' {
-  import { ILocalizationService } from 'shared/services/localization.service-model';
-  const localizationService: ILocalizationService;
-  export default localizationService;
-}
 declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   const settingsService: ISettingsService;
@@ -5464,6 +5816,26 @@ declare module 'shared/services/settings.service' {
 }
 declare module 'shared/services/project-settings.service' {
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
+  import { Localized } from 'platform-bible-utils';
+  import { ProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
+  import { ProjectDataProviderInterfaces } from 'papi-shared-types';
+  /**
+   * Filters project settings contributions based on the provided project interfaces.
+   *
+   * This function iterates over a set of project settings contributions and filters their properties
+   * based on whether the project's interfaces match the specified inclusion and exclusion criteria.
+   *
+   * @param contributions - An object containing project settings contributions, which may be
+   *   localized.
+   * @param projectInterfaces - An array of keys representing the project interfaces to filter the
+   *   contributions by.
+   * @returns A filtered set of contributions, or `undefined` if no contributions match the project
+   *   interfaces.
+   */
+  export function filterProjectSettingsContributionsByProjectInterfaces(
+    contributions: Localized<ProjectSettingsContributionInfo['contributions']> | undefined,
+    projectInterfaces: (keyof ProjectDataProviderInterfaces)[],
+  ): Localized<ProjectSettingsContributionInfo['contributions']> | undefined;
   const projectSettingsService: IProjectSettingsService;
   export default projectSettingsService;
 }
@@ -5867,6 +6239,7 @@ declare module 'extension-host/extension-types/extension.interface' {
   }
 }
 declare module 'extension-host/extension-types/extension-manifest.model' {
+  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges.model';
   /** Information about an extension provided by the extension developer. */
   export type ExtensionManifest = {
     /** Name of the extension */
@@ -5884,6 +6257,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
      */
     main: string;
+    /** List of special permissions required by the extension to work as intended */
+    elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
     /**
      * Path to the TypeScript type declaration file that describes this extension and its interactions
      * on the PAPI. Relative to the extension's root folder.

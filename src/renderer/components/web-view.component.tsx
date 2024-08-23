@@ -13,6 +13,7 @@ import {
   IFRAME_SANDBOX_ALLOW_SCRIPTS,
   WEBVIEW_IFRAME_SRC_SANDBOX,
   WEBVIEW_IFRAME_SRCDOC_SANDBOX,
+  IFRAME_SANDBOX_ALLOW_POPUPS,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 import { serialize } from 'platform-bible-utils';
@@ -30,6 +31,7 @@ export default function WebView({
   contentType,
   allowScripts,
   allowSameOrigin,
+  allowPopups,
 }: WebViewTabProps) {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -63,7 +65,7 @@ export default function WebView({
        */
       sandbox={`${shouldUseSrc ? WEBVIEW_IFRAME_SRC_SANDBOX : WEBVIEW_IFRAME_SRCDOC_SANDBOX}${
         allowSameOrigin ? ` ${IFRAME_SANDBOX_ALLOW_SAME_ORIGIN}` : ''
-      }${allowScripts ? ` ${IFRAME_SANDBOX_ALLOW_SCRIPTS}` : ''}`}
+      }${allowScripts ? ` ${IFRAME_SANDBOX_ALLOW_SCRIPTS}` : ''}${allowPopups ? ` ${IFRAME_SANDBOX_ALLOW_POPUPS}` : ''}`}
       // TODO: csp?
       // TODO: credentialless?
       // TODO: referrerpolicy?

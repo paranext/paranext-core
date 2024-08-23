@@ -28,9 +28,6 @@ export function handleMenuCommand(command: Command, tabId?: string) {
     case 'platform.openTextCollection':
       logger.info(`TODO: display text collection modal. tabId: ${tabId}`);
       break;
-    case 'platform.settings':
-      logger.info(`TODO: display settings. tabId: ${tabId}`);
-      break;
     case 'platform.visitSupportPage':
       VisitPage('https://support.bible');
       break;

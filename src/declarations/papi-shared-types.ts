@@ -47,6 +47,8 @@ declare module 'papi-shared-types' {
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
     'platform.quit': () => Promise<void>;
+    'platform.openProjectSettings': (webViewId: string) => Promise<void>;
+    'platform.openUserSettings': () => Promise<void>;
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
     // `extension-host.ts`
@@ -92,6 +94,16 @@ declare module 'papi-shared-types' {
   export interface SettingTypes {
     'platform.verseRef': ScriptureReference;
     'platform.interfaceLanguage': string[];
+    /**
+     * Mementos managed in the dotnet process and used for interacting with PtxUtils. Mementos are
+     * persisted objects containing some data. They are stored as xml strings.
+     */
+    'platform.ptxUtilsMementoData': { [key: string]: string };
+    /**
+     * Tracking last S/R registry data cache time managed in the dotnet process and used for
+     * interacting with ParatextData.
+     */
+    'platform.paratextDataLastRegistryDataCachedTimes': { [key: string]: string };
   }
 
   /**

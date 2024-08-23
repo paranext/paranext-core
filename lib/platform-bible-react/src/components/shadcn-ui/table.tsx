@@ -2,24 +2,33 @@ import React from 'react';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
-const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
-  ({ className, ...props }, ref) => (
-    <div className="pr-relative pr-w-full pr-overflow-auto">
-      <table
-        ref={ref}
-        className={cn('pr-w-full pr-caption-bottom pr-text-sm', className)}
-        {...props}
-      />
-    </div>
-  ),
-);
+const Table = React.forwardRef<
+  HTMLTableElement,
+  React.HTMLAttributes<HTMLTableElement> & { stickyHeader?: boolean }
+>(({ className, stickyHeader, ...props }, ref) => (
+  <div className={cn('pr-twp pr-relative pr-w-full', { 'pr-overflow-auto': !stickyHeader })}>
+    <table
+      ref={ref}
+      className={cn('pr-w-full pr-caption-bottom pr-text-sm', className)}
+      {...props}
+    />
+  </div>
+));
 Table.displayName = 'Table';
 
 const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
-  React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <thead ref={ref} className={cn('[&_tr]:pr-border-b', className)} {...props} />
+  React.HTMLAttributes<HTMLTableSectionElement> & { stickyHeader?: boolean }
+>(({ className, stickyHeader, ...props }, ref) => (
+  <thead
+    ref={ref}
+    className={cn(
+      { 'pr-sticky pr-top-0 pr-bg-muted': stickyHeader },
+      '[&_tr]:pr-border-b',
+      className,
+    )}
+    {...props}
+  />
 ));
 TableHeader.displayName = 'TableHeader';
 
@@ -64,7 +73,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      'pr-h-12 pr-px-4 pr-text-left pr-align-middle pr-font-medium pr-text-muted-foreground [&:has([role=checkbox])]:pr-pr-0',
+      'pr-h-12 pr-px-4 pr-text-start pr-align-middle pr-font-medium pr-text-muted-foreground [&:has([role=checkbox])]:pr-pe-0',
       className,
     )}
     {...props}
@@ -78,7 +87,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn('pr-p-4 pr-align-middle [&:has([role=checkbox])]:pr-pr-0', className)}
+    className={cn('pr-p-4 pr-align-middle [&:has([role=checkbox])]:pr-pe-0', className)}
     {...props}
   />
 ));
