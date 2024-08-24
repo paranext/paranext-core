@@ -61,21 +61,31 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
 
       // We successfully pulled this subtree, so it is based on the template
       extensionsBasedOnTemplate.push(ext);
-    } catch (e) {
-      if (
-        includes(
-          e.toString().toLowerCase(),
-          ERROR_STRINGS.subtreeNeverAdded.replace('{0}', ext.dirPathOSIndependent).toLowerCase(),
-        )
-      )
-        // If this folder isn't a subtree, it may be intentionally not based on the template. Continue
-        console.warn(
-          `${ext.dirName} was never added as a subtree of ${SINGLE_TEMPLATE_NAME}. Feel free to ignore this if this folder is not supposed to be based on ${SINGLE_TEMPLATE_NAME}.\nIf this folder is supposed to be based on ${SINGLE_TEMPLATE_NAME}, move the folder elsewhere, run \`npm run create-extension -- ${ext.dirName}\`, drop the folder back in, and evaluate all working changes before committing.\n`,
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        const errorMessage = error.message.toLowerCase();
+        if (
+          includes(
+            errorMessage,
+            ERROR_STRINGS.subtreeNeverAdded.replace('{0}', ext.dirPathOSIndependent).toLowerCase(),
+          )
+        ) {
+          // If this folder isn't a subtree, it may be intentionally not based on the template. Continue
+          console.warn(
+            `${ext.dirName} was never added as a subtree of ${SINGLE_TEMPLATE_NAME}. Feel free to ignore this if this folder is not supposed to be based on ${SINGLE_TEMPLATE_NAME}.\nIf this folder is supposed to be based on ${SINGLE_TEMPLATE_NAME}, move the folder elsewhere, run \`npm run create-extension -- ${ext.dirName}\`, drop the folder back in, and evaluate all working changes before committing.\n`,
+          );
+        } else {
+          console.error(
+            `Error pulling from ${SINGLE_TEMPLATE_NAME} to ${ext.dirName}: ${error.message}`,
+          );
+          // You can only fix merge conflicts on one subtree at a time, so stop
+          // if we hit an error like merge conflicts
+          return 1;
+        }
+      } else {
+        console.error(
+          `An unknown error occurred while pulling from ${SINGLE_TEMPLATE_NAME} to ${ext.dirName}`,
         );
-      else {
-        console.error(`Error pulling from ${SINGLE_TEMPLATE_NAME} to ${ext.dirName}: ${e}`);
-        // You can only fix merge conflicts on one subtree at a time, so stop
-        // if we hit an error like merge conflicts
         return 1;
       }
     }

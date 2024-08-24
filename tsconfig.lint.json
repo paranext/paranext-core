@@ -1,7 +1,11 @@
 {
   "extends": "./tsconfig",
+  "compilerOptions": {
+    "skipLibCheck": true
+  },
   "include": [
     ".eslintrc.js",
+    ".eslintrc.cjs",
     "*.ts",
     ".erb/configs",
     ".erb/mocks",

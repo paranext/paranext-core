@@ -2,7 +2,6 @@
   "extends": "../../tsconfig",
   "compilerOptions": {
     "baseUrl": "./src",
-    "rootDir": "./src",
     "target": "ESNext",
     "module": "ESNext",
     // Running npm i removes packages that are in common between the current directory's

@@ -261,7 +261,7 @@ globalThis.webViewComponent = function HelloWorld({
         <TextField label="Test Me" />
         <Checkbox labelText="Test Me" />
         <Switch /> {/* no label available */}
-        <ComboBox title="Test Me" options={['option 1', 'option 2']} />
+        <ComboBox options={['option 1', 'option 2']} />
         <Slider /> {/* no label available */}
         <BookChapterControl scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
       </div>

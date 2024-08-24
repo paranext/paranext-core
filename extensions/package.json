@@ -25,6 +25,7 @@
     "lint:staged": "lint-staged -q",
     "postinstall": "tsx ./lib/add-remotes.ts",
     "create-extension": "tsx ./lib/create-extension.ts",
+    "typecheck": "tsc -p ./tsconfig.lint.json",
     "update-from-templates": "tsx ./lib/update-from-templates.ts"
   },
   "lint-staged": {

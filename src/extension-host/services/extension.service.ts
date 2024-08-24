@@ -762,7 +762,9 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
       !enabled.find((enabledId) => enabledId.extensionName === disabledId.extensionName),
   );
 
-  // "Packaged" extensions are all the running extensions that aren't "enabled"
+  // "Packaged" extensions are all the running extensions that aren't "enabled".
+  // `undefined` items are filtered out so can assert here.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const packaged = [...activeExtensions.values()]
     .map((active) => {
       const packagedId: ExtensionIdentifier = {
@@ -774,7 +776,7 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
         ? undefined
         : packagedId;
     })
-    .filter((identifier) => !!identifier);
+    .filter((identifier) => !!identifier) as ExtensionIdentifier[];
 
   return {
     enabled,

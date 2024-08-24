@@ -45,8 +45,8 @@ type LocalizedContextMenu = LocalizedMenus['defaultWebViewContextMenu'];
 function GetMenuDefinition(): Partial<MenuPropsBase> {
   const contextMenuDefinition: LocalizedContextMenu = {
     groups: {
-      'group.2': { order: 2, column: 'TODO: this should not be required' },
-      'group.1': { order: 1, column: 'TODO: this should not be required' },
+      'group.2': { order: 2, menuItem: 'TODO: this should not be required' },
+      'group.1': { order: 1, menuItem: 'TODO: this should not be required' },
       'group.submenu': { order: 1, menuItem: 'submenu.root' },
     },
     items: [

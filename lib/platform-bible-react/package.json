@@ -2,7 +2,7 @@
   "name": "platform-bible-react",
   "version": "0.0.1",
   "type": "module",
-  "description": "React components and hooks to use in Paranext - packaged to include styles sheets.",
+  "description": "React components and hooks to use in Platform - packaged to include styles sheets.",
   "license": "MIT",
   "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-react",
   "bugs": {
@@ -39,7 +39,8 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
-    "test": "jest --silent"
+    "test": "jest --silent",
+    "typecheck": "tsc -p ./tsconfig.lint.json"
   },
   "peerDependencies": {
     "react": ">=18.2.0",

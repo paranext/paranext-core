@@ -1,4 +1,7 @@
 {
   "extends": "./tsconfig",
+  "compilerOptions": {
+    "skipLibCheck": true
+  },
   "include": [".eslintrc.cjs", "*.ts", "src"]
 }
