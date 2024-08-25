@@ -15,7 +15,7 @@
     "incremental": false,
     "isolatedModules": true,
     "noEmit": true,
-    "noImplicitReturns": false,
+    "noImplicitReturns": true,
     "skipLibCheck": false,
     "useDefineForClassFields": true,
     "outDir": "",
