@@ -29,7 +29,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
     {
         var chapterVerse = token.ScrRefString.Split(":");
         int chapterNumber = int.Parse(chapterVerse[0]);
-        int verseNumber = int.Parse(chapterVerse[1]);
+        int verseNumber = GetVerseNumber(chapterVerse[1]);
         VerseRef verseRef = new (CurrentBookNumber, chapterNumber, verseNumber);
         CheckRunResults.Add(new CheckRunResult(
             checkId,
@@ -58,4 +58,25 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
     }
 
     public List<CheckRunResult> CheckRunResults { get; } = [];
+
+    private static int GetVerseNumber(string verseNumber)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(verseNumber);
+        if (!IsDigit(verseNumber[0]))
+            throw new ArgumentException($"verseNumber must start with an integer: {verseNumber}");
+
+        int lastIndex = 1;
+        while (lastIndex < verseNumber.Length)
+        {
+            if (!IsDigit(verseNumber[lastIndex]))
+                break;
+            lastIndex++;
+        }
+        return int.Parse(verseNumber[..lastIndex]);
+    }
+
+    private static bool IsDigit(char c)
+    {
+        return c >= '0' && c <= '9';
+    }
 }
