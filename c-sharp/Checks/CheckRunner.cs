@@ -149,6 +149,13 @@ internal class CheckRunner(PapiClient papiClient)
         var retVal = new List<CheckRunResult>();
         foreach (var check in _checksByIds.Values)
             retVal.AddRange(check.ResultsRecorder.CheckRunResults);
+        if (retVal.Count > 1000)
+        {
+            var fullCount = retVal.Count;
+            retVal.RemoveRange(1000, fullCount - 1000);
+            retVal.TrimExcess();
+            Console.WriteLine($"Trimming {fullCount} check results to 1000");
+        }
         Console.WriteLine($"Returning {retVal.Count} check results");
         return ResponseToRequest.Succeeded(retVal);
     }
