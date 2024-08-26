@@ -1,4 +1,4 @@
-import { extractNumberFromUSFM, getLinesFromUSFM } from './inventory-util';
+import { extractNumberFromUSFM, getLinesFromUSFM } from './inventory-utils';
 
 test('Extract lines from USFM string', async () => {
   const input: string = `Input text line 1\nThis is line 2\\v This is line 3\\c This is line 4\\id This is line 5\nThis is line 6
