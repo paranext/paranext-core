@@ -9,7 +9,7 @@ import {
 import { Canon } from '@sillsdev/scripture';
 import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
 import { useEffect, useState } from 'react';
-import { extractNumberFromUSFM, getLinesFromUSFM } from './inventory-util';
+import { extractNumberFromUSFM, getLinesFromUSFM } from './inventory-utils';
 
 type SearchResult = {
   reference: ScriptureReference;
