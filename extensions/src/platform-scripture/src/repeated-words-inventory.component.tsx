@@ -3,6 +3,7 @@ import {
   ColumnDef,
   Inventory,
   ItemData,
+  Scope,
   Status,
   inventoryCountColumn,
   inventoryItemColumn,
@@ -47,8 +48,8 @@ interface RepeatedWordsInventoryProps {
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
   text: string | undefined;
-  scope: 'book' | 'chapter' | 'verse';
-  onScopeChange: (scope: 'book' | 'chapter' | 'verse') => void;
+  scope: Scope;
+  onScopeChange: (scope: Scope) => void;
 }
 
 function RepeatedWordsInventory({

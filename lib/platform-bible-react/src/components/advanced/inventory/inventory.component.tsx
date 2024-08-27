@@ -40,7 +40,11 @@ export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
+export type Scope = 'book' | 'chapter' | 'verse';
+
 export type Status = 'approved' | 'unapproved' | 'unknown';
+
+export type StatusFilter = Status | 'all';
 
 export type ItemData = {
   item: string;
@@ -77,7 +81,7 @@ export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode 
  */
 const filterItemData = (
   items: ItemData[],
-  statusFilter: 'all' | 'approved' | 'unapproved' | 'unknown',
+  statusFilter: StatusFilter,
   textFilter: string,
 ): ItemData[] => {
   let filteredItemData: ItemData[] = items;
@@ -160,8 +164,8 @@ type InventoryProps = {
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
   text: string | undefined;
-  scope: 'book' | 'chapter' | 'verse';
-  onScopeChange: (scope: 'book' | 'chapter' | 'verse') => void;
+  scope: Scope;
+  onScopeChange: (scope: Scope) => void;
   getColumns: (
     onStatusChange: (newItems: string[], status: Status) => void,
   ) => ColumnDef<ItemData>[];
@@ -192,9 +196,7 @@ export default function Inventory({
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
 
   const [items, setItems] = useState<ItemData[]>([]);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'approved' | 'unapproved' | 'unknown'>(
-    'all',
-  );
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<string>('');
 

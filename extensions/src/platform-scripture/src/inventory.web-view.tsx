@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings, useProjectSetting, useSetting } from '@papi/frontend/react';
-import { usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
+import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
@@ -21,7 +21,7 @@ const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNu
  * @throws If the provided scope does not match any of the allowed values
  */
 const getText = async (
-  scope: 'book' | 'chapter' | 'verse',
+  scope: Scope,
   scriptureRef: ScriptureReference,
   projectId: string,
 ): Promise<string | undefined> => {
@@ -77,7 +77,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
 
   const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
   const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
-  const [scope, setScope] = useState<'book' | 'chapter' | 'verse'>('book');
+  const [scope, setScope] = useState<Scope>('book');
   const [text] = usePromise(
     useCallback(
       async () => getText(scope, scriptureRef, projectId),
@@ -100,7 +100,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
       onUnapprovedItemsChange={(items: string[]) => setInvalidItems?.(items.join(' '))}
       text={text}
       scope={scope}
-      onScopeChange={(newScope: 'book' | 'chapter' | 'verse') => setScope(newScope)}
+      onScopeChange={(newScope: Scope) => setScope(newScope)}
     />
   );
 };

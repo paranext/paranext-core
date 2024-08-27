@@ -215,6 +215,7 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
+export type Scope = "book" | "chapter" | "verse";
 export type Status = "approved" | "unapproved" | "unknown";
 export type ItemData = {
 	item: string;
@@ -239,8 +240,8 @@ export type InventoryProps = {
 	unapprovedItems: string[];
 	onUnapprovedItemsChange: (items: string[]) => void;
 	text: string | undefined;
-	scope: "book" | "chapter" | "verse";
-	onScopeChange: (scope: "book" | "chapter" | "verse") => void;
+	scope: Scope;
+	onScopeChange: (scope: Scope) => void;
 	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -253,14 +254,16 @@ export function Inventory({ scriptureReference, setScriptureReference, localized
  */
 export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemData>;
 /**
- * Function that creates the count column for inventories. Should be used with the DataTable component.
+ * Function that creates the count column for inventories. Should be used with the DataTable
+ * component.
  *
  * @param itemLabel Localized label for the count column
  * @returns Column that shows the number of occurrences of the related inventory items
  */
 export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<ItemData>;
 /**
- * Function that creates the status column for inventories. Should be used with the DataTable component.
+ * Function that creates the status column for inventories. Should be used with the DataTable
+ * component.
  *
  * @param itemLabel Localized label for the status column
  * @param statusChangeHandler Callback function that handles status updates to selected item(s)

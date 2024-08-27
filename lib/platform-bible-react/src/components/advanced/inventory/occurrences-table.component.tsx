@@ -54,8 +54,8 @@ const extractOccurrences = (
       const result: SearchResult = {
         reference: {
           ...scriptureRef,
-          chapterNum: currentChapter ? +currentChapter : -1,
-          verseNum: currentVerse ? +currentVerse : -1,
+          chapterNum: currentChapter !== undefined ? +currentChapter : -1,
+          verseNum: currentVerse !== undefined ? +currentVerse : -1,
         },
         snippet: line,
         key,

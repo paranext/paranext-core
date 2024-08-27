@@ -4,7 +4,11 @@ import {
   inventoryItemColumn,
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
-import Inventory, { ItemData, Status } from '@/components/advanced/inventory/inventory.component';
+import Inventory, {
+  ItemData,
+  Scope,
+  Status,
+} from '@/components/advanced/inventory/inventory.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
@@ -50,7 +54,7 @@ function InventoryExample() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [approvedItems, setApprovedItems] = useState<string[]>(['well', 'he']);
   const [unapprovedItems, setUnapprovedItems] = useState<string[]>(['for', 'of']);
-  const [scope, setScope] = useState<'book' | 'chapter' | 'verse'>('book');
+  const [scope, setScope] = useState<Scope>('book');
 
   return (
     <div>
