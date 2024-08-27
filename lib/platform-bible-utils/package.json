@@ -2,7 +2,7 @@
   "name": "platform-bible-utils",
   "version": "0.0.1",
   "type": "module",
-  "description": "Utilities to use in Platform.",
+  "description": "Utilities to use in Paranext.",
   "license": "MIT",
   "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/platform-bible-utils",
   "bugs": {

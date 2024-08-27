@@ -47,7 +47,8 @@
     ".erb/dll",
     "extensions",
     "lib/platform-bible-react",
-    "lib/platform-bible-utils"
+    "lib/platform-bible-utils",
+    "lib/papi-dts"
   ],
   "ts-node": {
     "require": ["tsconfig-paths/register"]

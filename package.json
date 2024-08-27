@@ -87,9 +87,10 @@
     "storybook:build": "storybook build",
     "test": "npm run test:core && npm run test --workspaces --if-present",
     "test:core": "jest --silent",
-    "typecheck": "npm run typecheck:core && npm run typecheck:extensions && npm run typecheck:platform-bible-utils && npm run typecheck:platform-bible-react",
+    "typecheck": "npm run typecheck:core && npm run typecheck:extensions && npm run typecheck:papi-dts && npm run typecheck:platform-bible-utils && npm run typecheck:platform-bible-react",
     "typecheck:core": "tsc -p ./tsconfig.lint.json",
     "typecheck:extensions": "cd extensions && npm run typecheck",
+    "typecheck:papi-dts": "cd lib/papi-dts && npm run typecheck",
     "typecheck:platform-bible-react": "cd lib/platform-bible-react && npm run typecheck",
     "typecheck:platform-bible-utils": "cd lib/platform-bible-utils && npm run typecheck"
   },
