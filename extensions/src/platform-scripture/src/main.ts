@@ -101,9 +101,9 @@ class InventoryWebViewProvider implements IWebViewProvider {
 
     // We know that the projectId (if present in the state) will be a string.
     const projectId =
-      getWebViewOptions.projectId ||
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      (savedWebView.state?.projectId as string) ||
+      (getWebViewOptions.projectId ??
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        (savedWebView.state?.projectId as string)) ||
       undefined;
 
     const title: string = await papi.localization.getLocalizedString({

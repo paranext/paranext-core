@@ -48,6 +48,9 @@ import {
   InstalledExtensions,
   ManageExtensions,
 } from '@shared/models/manage-extensions-privilege.model';
+import { CreateProcess } from '@shared/models/create-process-privilege.model';
+import { wrappedFork, wrappedSpawn } from '@extension-host/services/create-process.service';
+import os from 'os';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -787,8 +790,22 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
 
 function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<ElevatedPrivileges> {
   const retVal: ElevatedPrivileges = {
+    createProcess: undefined,
     manageExtensions: undefined,
   };
+  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.createProcess)) {
+    const createProcess: CreateProcess = {
+      fork: wrappedFork,
+      spawn: wrappedSpawn,
+      osData: {
+        platform: os.platform(),
+        type: os.type(),
+        release: os.release(),
+      },
+    };
+    Object.freeze(createProcess);
+    retVal.createProcess = createProcess;
+  }
   if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.manageExtensions)) {
     const manageExtensions: ManageExtensions = {
       installExtension,
