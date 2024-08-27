@@ -1,12 +1,13 @@
 import crypto from 'crypto';
 import { createNonce } from '@node/utils/crypto-util';
 import { stringLength } from 'platform-bible-utils';
+import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
 
 /** For now this is just for extensions, but maybe we will want to expand this in the future */
 export type ExecutionTokenType = 'extension';
 
 /** Execution tokens can be passed into API calls to provide context about their identity */
-export class ExecutionToken {
+export class ExecutionToken implements ExtensionBasicData {
   readonly type: ExecutionTokenType;
   readonly name: string;
   readonly nonce: string;

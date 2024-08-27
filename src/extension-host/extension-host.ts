@@ -15,6 +15,7 @@ import { initialize as initializeSettingsService } from '@extension-host/service
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
+import { killChildProcessesFromExtensions } from './services/create-process.service';
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
@@ -27,6 +28,11 @@ process.on('message', (message) => {
     logger.info('Shutting down process due to graceful shutdown message');
     process.exit();
   }
+});
+
+// Try to kill child processes that extensions created
+process.on('exit', () => {
+  killChildProcessesFromExtensions();
 });
 
 // #region Services setup
