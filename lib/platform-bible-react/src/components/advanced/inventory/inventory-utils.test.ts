@@ -19,19 +19,31 @@ This is line 7\rThis is line 8`;
 test('Extract number from USFM verse string', async () => {
   const input: string =
     '\\v 1 Dis letta from Peter. Jesus Christ wen sen me all ova da place fo tell peopo da Good Stuff from him.';
-  const number: number = extractNumberFromUSFM(input);
+  const number: number | undefined = extractNumberFromUSFM(input);
   expect(number).toEqual(1);
 });
 
 test('Extract number from USFM chapter string', async () => {
   const input: string = '\\c 3';
-  const number: number = extractNumberFromUSFM(input);
+  const number: number | undefined = extractNumberFromUSFM(input);
   expect(number).toEqual(3);
 });
 
-test('Unsuccessfully trying to extract number from string', async () => {
+test('Extract number from USFM chapter string with value of 0', async () => {
+  const input: string = '\\c 0';
+  const number: number | undefined = extractNumberFromUSFM(input);
+  expect(number).toEqual(0);
+});
+
+test('Unsuccessfully trying to extract number from USFM string', async () => {
+  const input: string = '\\c There is no number here';
+  const number: number | undefined = extractNumberFromUSFM(input);
+  expect(number).toEqual(undefined);
+});
+
+test('Unsuccessfully trying to extract number from random string', async () => {
   const input: string =
     'This string does not contain a chapter or verse marker followed by a number';
-  const number: number = extractNumberFromUSFM(input);
-  expect(number).toEqual(0);
+  const number: number | undefined = extractNumberFromUSFM(input);
+  expect(number).toEqual(undefined);
 });

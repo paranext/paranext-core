@@ -21,7 +21,7 @@ const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNu
  * @throws If the provided scope does not match any of the allowed values
  */
 const getText = async (
-  scope: string,
+  scope: 'book' | 'chapter' | 'verse',
   scriptureRef: ScriptureReference,
   projectId: string,
 ): Promise<string | undefined> => {
@@ -77,7 +77,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
 
   const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
   const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
-  const [scope, setScope] = useState<string>('book');
+  const [scope, setScope] = useState<'book' | 'chapter' | 'verse'>('book');
   const [text] = usePromise(
     useCallback(
       async () => getText(scope, scriptureRef, projectId),
@@ -100,7 +100,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
       onUnapprovedItemsChange={(items: string[]) => setInvalidItems?.(items.join(' '))}
       text={text}
       scope={scope}
-      onScopeChange={(newScope: string) => setScope(newScope)}
+      onScopeChange={(newScope: 'book' | 'chapter' | 'verse') => setScope(newScope)}
     />
   );
 };

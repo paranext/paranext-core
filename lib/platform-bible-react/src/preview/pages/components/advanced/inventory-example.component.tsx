@@ -50,7 +50,7 @@ function InventoryExample() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [approvedItems, setApprovedItems] = useState<string[]>(['well', 'he']);
   const [unapprovedItems, setUnapprovedItems] = useState<string[]>(['for', 'of']);
-  const [scope, setScope] = useState('book');
+  const [scope, setScope] = useState<'book' | 'chapter' | 'verse'>('book');
 
   return (
     <div>
