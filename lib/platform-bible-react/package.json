@@ -40,7 +40,7 @@
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
     "test": "jest --silent",
-    "typecheck": "tsc -p ./tsconfig.lint.json"
+    "typecheck": "tsc -p ./tsconfig.json"
   },
   "peerDependencies": {
     "react": ">=18.2.0",
