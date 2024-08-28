@@ -1,4 +1,3 @@
-import { includes } from 'platform-bible-utils';
 import {
   ERROR_STRINGS,
   MULTI_TEMPLATE_BRANCH,
@@ -10,7 +9,7 @@ import {
   fetchFromSingleTemplate,
   formatExtensionFolder,
 } from './git.util';
-import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webpack.util';
+import { ExtensionInfo, getExtensions } from '../webpack/webpack.util';
 
 (async () => {
   // Make sure there are not working changes as this will not work with working changes
@@ -27,7 +26,7 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
   // Merge changes from MULTI_TEMPLATE_REMOTE_NAME into this repo
   try {
     await execGitCommand(
-      `git subtree pull --prefix ${subtreeRootFolder} ${MULTI_TEMPLATE_NAME} ${MULTI_TEMPLATE_BRANCH} --squash`,
+      `git merge ${MULTI_TEMPLATE_NAME}/${MULTI_TEMPLATE_BRANCH} --allow-unrelated-histories`,
     );
   } catch (e) {
     console.error(`Error merging from ${MULTI_TEMPLATE_NAME}: ${e}`);
@@ -61,31 +60,23 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
 
       // We successfully pulled this subtree, so it is based on the template
       extensionsBasedOnTemplate.push(ext);
-    } catch (error: unknown) {
-      if (error instanceof Error) {
-        const errorMessage = error.message.toLowerCase();
-        if (
-          includes(
-            errorMessage,
+    } catch (e) {
+      if (
+        e
+          .toString()
+          .toLowerCase()
+          .includes(
             ERROR_STRINGS.subtreeNeverAdded.replace('{0}', ext.dirPathOSIndependent).toLowerCase(),
           )
-        ) {
-          // If this folder isn't a subtree, it may be intentionally not based on the template. Continue
-          console.warn(
-            `${ext.dirName} was never added as a subtree of ${SINGLE_TEMPLATE_NAME}. Feel free to ignore this if this folder is not supposed to be based on ${SINGLE_TEMPLATE_NAME}.\nIf this folder is supposed to be based on ${SINGLE_TEMPLATE_NAME}, move the folder elsewhere, run \`npm run create-extension -- ${ext.dirName}\`, drop the folder back in, and evaluate all working changes before committing.\n`,
-          );
-        } else {
-          console.error(
-            `Error pulling from ${SINGLE_TEMPLATE_NAME} to ${ext.dirName}: ${error.message}`,
-          );
-          // You can only fix merge conflicts on one subtree at a time, so stop
-          // if we hit an error like merge conflicts
-          return 1;
-        }
-      } else {
-        console.error(
-          `An unknown error occurred while pulling from ${SINGLE_TEMPLATE_NAME} to ${ext.dirName}`,
+      )
+        // If this folder isn't a subtree, it may be intentionally not based on the template. Continue
+        console.warn(
+          `${ext.dirName} was never added as a subtree of ${SINGLE_TEMPLATE_NAME}. Feel free to ignore this if this folder is not supposed to be based on ${SINGLE_TEMPLATE_NAME}.\nIf this folder is supposed to be based on ${SINGLE_TEMPLATE_NAME}, move the folder elsewhere, run \`npm run create-extension -- ${ext.dirName}\`, drop the folder back in, and evaluate all working changes before committing.\n`,
         );
+      else {
+        console.error(`Error pulling from ${SINGLE_TEMPLATE_NAME} to ${ext.dirName}: ${e}`);
+        // You can only fix merge conflicts on one subtree at a time, so stop
+        // if we hit an error like merge conflicts
         return 1;
       }
     }

@@ -1,8 +1,7 @@
-import { exec, ExecException, ExecOptions } from 'child_process';
+import { exec, ExecOptions } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import replaceInFile from 'replace-in-file';
-import { subtreeRootFolder } from '../webpack/webpack.util';
 
 const execAsync = promisify(exec);
 
@@ -43,19 +42,19 @@ const GIT_CONSTANTS = Object.freeze({
   SINGLE_TEMPLATE_BRANCH,
 });
 
-type GitConstantKeys = keyof typeof GIT_CONSTANTS;
-
 /**
  * Formats a string, replacing `GIT_CONSTANTS` values in brackets like `{MULTI_TEMPLATE_NAME}` and
  * such with their equivalent actual values
  *
  * @param str String to format
+ * @param args Rest args of strings to replace `{x}` with, where x is the arg index - 1
  * @returns Formatted string
  */
 function formatGitErrorTemplate(str: string): string {
-  return str.replace(/{([^}]+)}/g, (match, key: GitConstantKeys) =>
-    key in GIT_CONSTANTS ? GIT_CONSTANTS[key] : match,
-  );
+  return str.replace(/{([^}]+)}/g, function replaceTemplateNumber(match) {
+    const matchingGitConstant = GIT_CONSTANTS[match.slice(1, -1)];
+    return matchingGitConstant !== undefined ? matchingGitConstant : match;
+  });
 }
 
 /** Error strings to be checked for in git output for various reasons */
@@ -84,25 +83,16 @@ export async function execGitCommand(
   if (!quiet) console.log(`\n> ${command}`);
   try {
     const result = await execAsync(command, {
-      cwd: path.resolve(path.join(__dirname, '..', '..')),
+      cwd: path.resolve(path.join(__dirname, '..')),
       ...execOptions,
     });
     if (!quiet && result.stdout) console.log(result.stdout);
     if (!quiet && result.stderr) console.log(result.stderr);
     return result;
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      // Use the more specific type for `exec`.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const execError = error as ExecException;
-      throw new Error(
-        `code ${execError.code}!${execError.stderr ? `\n${execError.stderr}` : ''}${
-          execError.stdout ? `\n${execError.stdout}` : ''
-        }`,
-      );
-    } else {
-      throw new Error('An unknown error occurred while executing git command');
-    }
+  } catch (e) {
+    throw new Error(
+      `code ${e.code}!${e.stderr ? `\n${e.stderr}` : ''}${e.stdout ? `\n${e.stdout}` : ''}`,
+    );
   }
 }
 
@@ -139,30 +129,12 @@ export async function fetchFromSingleTemplate() {
   // Fetch latest SINGLE_TEMPLATE_REMOTE_NAME branch
   try {
     await execGitCommand(`git fetch ${SINGLE_TEMPLATE_NAME} ${SINGLE_TEMPLATE_BRANCH}`);
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error(`Error on git fetch on ${SINGLE_TEMPLATE_NAME}: ${error.message}`);
-    } else {
-      console.error(`An unknown error occurred while fetching from ${SINGLE_TEMPLATE_NAME}`);
-    }
+  } catch (e) {
+    console.error(`Error on git fetch on ${SINGLE_TEMPLATE_NAME}: ${e}`);
     return false;
   }
   return true;
 }
-
-/** Globs to ignore when replacing stuff while formatting extensions */
-const replaceInFileIgnoreGlobs = [
-  '**/node_modules/**/*',
-  '**/temp-build/**/*',
-  '**/logs/**/*',
-  '**/*.log',
-  '**/.eslintcache',
-  '**/dist/**/*',
-  '**/release/**/*',
-  // With npm workspaces, child workspace package-lock.json files are not used. Let's not format
-  // them so they can stay the same as how they were in the template to avoid merge conflicts
-  '**/package-lock.json',
-];
 
 /**
  * Format an extension folder to make the extension template folder work as a subfolder of this repo
@@ -173,41 +145,26 @@ const replaceInFileIgnoreGlobs = [
  * @param extensionFolderPath Path to the extension to format relative to root
  */
 export async function formatExtensionFolder(extensionFolderPath: string) {
-  /**
-   * Path to the extension to format relative to the extensions folder (where the npm script is
-   * running).
-   *
-   * We need to take out the path from root to where npm is running its script because replaceInFile
-   * works relative to the npm folder. Setting `cwd` and `glob.cwd` did not work because
-   * replaceInFile was not properly offsetting the path before passing to fs
-   */
-  const extensionFolderPathFromExtensions = extensionFolderPath.replace(
-    `${subtreeRootFolder}/`,
-    '',
-  );
-  const results =
-    // Replace ../paranext-core with ../../../paranext-core to fix ts-config and package.json and such
-    (
-      await replaceInFile({
-        files: `${extensionFolderPathFromExtensions}/**/*`,
-        ignore: replaceInFileIgnoreGlobs,
-        from: /([^/])\.\.\/paranext-core/g,
-        to: '$1../../..',
-        countMatches: true,
-        allowEmptyPaths: true,
-      })
-    ).concat(
-      // Remove the type reference to external extensions since bundled extensions shouldn't use them
-      await replaceInFile({
-        files: `${extensionFolderPathFromExtensions}/tsconfig.json`,
-        ignore: replaceInFileIgnoreGlobs,
-        from: /("src\/types"),\n\n[\w\W]+dev-appdata\/cache\/extension-types"/g,
-        to: '$1',
-        countMatches: true,
-        allowEmptyPaths: true,
-      }),
-    );
-
+  // Replace ../paranext-core with ../../../paranext-core to fix ts-config and package.json and such
+  const results = await replaceInFile({
+    files: `${extensionFolderPath}/**/*`,
+    ignore: [
+      '**/node_modules/**/*',
+      '**/temp-build/**/*',
+      '**/logs/**/*',
+      '**/*.log',
+      '**/.eslintcache',
+      '**/dist/**/*',
+      '**/release/**/*',
+      // With npm workspaces, child workspace package-lock.json files are not used. Let's not format
+      // them so they can stay the same as how they were in the template to avoid merge conflicts
+      '**/package-lock.json',
+    ],
+    from: /([^/])\.\.\/paranext-core/g,
+    to: '$1../../../paranext-core',
+    countMatches: true,
+    allowEmptyPaths: true,
+  });
   const replaceStats = results.reduce(
     (replacements, replaceResult) => ({
       totalReplacements: replacements.totalReplacements + (replaceResult.numReplacements ?? 0),

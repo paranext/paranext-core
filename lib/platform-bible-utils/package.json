@@ -37,7 +37,7 @@
     "lint-fix": "npm run lint-fix:scripts",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
     "test": "jest --silent",
-    "typecheck": "tsc -p ./tsconfig.lint.json"
+    "typecheck": "tsc -p ./tsconfig.json"
   },
   "peerDependencies": {},
   "dependencies": {

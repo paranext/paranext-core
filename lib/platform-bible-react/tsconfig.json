@@ -9,7 +9,7 @@
     // directories looking for node_modules/@types folders by default.
     // We needed to remove react from here below because having two copies was causing problems in
     // the jest tests. But we need the types in both places.
-    "typeRoots": ["./node_modules/@types", "../../node_modules/@types", "./@types"],
+    "typeRoots": ["./node_modules/@types", "../../node_modules/@types"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "forceConsistentCasingInFileNames": true,
     "incremental": false,
