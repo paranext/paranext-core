@@ -29,13 +29,9 @@ export const extractRepeatedWords = (
   text: string,
   target: string | undefined = undefined,
 ): string[] => {
-  const repeatedWords: string[] = [];
-  // Extract all complete words from text
-  const words = text.match(/\b[\p{L}\p{M}]+(?:['’`-][\p{L}\p{M}]+)*\b/gu);
-  if (words)
-    words.forEach((word, index, allWords) => {
-      if (target && word !== target) return;
-      if (index + 1 < allWords.length && word === allWords[index + 1]) repeatedWords.push(word);
-    });
+  const repeatedWords = text.match(/\b(\p{L}+)\b \b\1\b/gu) || [];
+
+  if (target) return repeatedWords?.filter((word) => word === target);
+
   return repeatedWords;
 };
