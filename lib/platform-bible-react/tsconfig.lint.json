@@ -1,7 +1,4 @@
 {
   "extends": "./tsconfig",
-  "compilerOptions": {
-    "skipLibCheck": true
-  },
-  "include": [".eslintrc.cjs", "postcss.config.js", "*.ts", "src", "@types"]
+  "include": [".eslintrc.cjs", "postcss.config.js", "*.ts", "src"]
 }
