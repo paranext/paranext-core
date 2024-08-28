@@ -29,7 +29,8 @@ export const extractRepeatedWords = (
   text: string,
   target: string | undefined = undefined,
 ): string[] => {
-  const repeatedWords = text.match(/\b(\p{L}+)\b \b\1\b/gu) || [];
+  // Finds repeated words, and captures the first occurrence of the word
+  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
 
   if (target) return repeatedWords?.filter((word) => word === target);
 
