@@ -372,6 +372,7 @@ declare module 'shared/models/web-view.model' {
     createNewIfNotFound?: boolean;
   };
 }
+
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';

@@ -685,6 +685,10 @@ declare module 'papi-shared-types' {
     'platformScripture.openRepeatedWordsInventory': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    'platformScripture.runBasicChecks': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface SettingTypes {
