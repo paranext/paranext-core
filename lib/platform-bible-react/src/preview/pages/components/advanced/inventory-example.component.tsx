@@ -9,7 +9,7 @@ import Inventory, {
   Scope,
   Status,
 } from '@/components/advanced/inventory/inventory.component';
-import { ScriptureReference } from 'platform-bible-utils';
+import { ScriptureReference, split } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
 
@@ -41,13 +41,9 @@ const createColumns = (
 ];
 
 const extractItems = (text: string, target: string | undefined = undefined): string[] => {
-  const repeatedWords: string[] = [];
-  const words = text.split(/[\s]+/);
-  words.forEach((word, index, allWords) => {
-    if (target && word !== target) return;
-    if (index + 1 < allWords.length && word === allWords[index + 1]) repeatedWords.push(word);
-  });
-  return repeatedWords;
+  let characters: string[] = split(text, '');
+  if (target) characters = characters.filter((character) => character === target);
+  return characters;
 };
 
 function InventoryExample() {

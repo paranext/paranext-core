@@ -30,10 +30,12 @@ export const extractRepeatedWords = (
   target: string | undefined = undefined,
 ): string[] => {
   const repeatedWords: string[] = [];
-  const words = split(text, /[\s]+/);
-  words.forEach((word, index, allWords) => {
-    if (target && word !== target) return;
-    if (index + 1 < allWords.length && word === allWords[index + 1]) repeatedWords.push(word);
-  });
+  // Extract all complete words from text
+  const words = text.match(/\b[\p{L}\p{M}]+(?:['’`-][\p{L}\p{M}]+)*\b/gu);
+  if (words)
+    words.forEach((word, index, allWords) => {
+      if (target && word !== target) return;
+      if (index + 1 < allWords.length && word === allWords[index + 1]) repeatedWords.push(word);
+    });
   return repeatedWords;
 };
