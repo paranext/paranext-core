@@ -70,24 +70,6 @@ export function fetchChecks(): BasicCheck[] {
     {
       name: 'Numbers',
     },
-    {
-      name: 'Another Example 1',
-    },
-    {
-      name: 'Another Example 2',
-    },
-    {
-      name: 'Another Example 3',
-    },
-    {
-      name: 'Another Example 4',
-    },
-    {
-      name: 'Another Example 5',
-    },
-    {
-      name: 'Another Example 6',
-    },
   ];
 }
 
