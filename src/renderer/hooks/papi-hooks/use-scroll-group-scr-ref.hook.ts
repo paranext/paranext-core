@@ -3,12 +3,12 @@ import {
   onDidUpdateScrRef,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
-import { ScrollGroup, ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { ScrollGroupId, ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { useEvent } from 'platform-bible-react';
 import { compareScrRefs, ScriptureReference } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-function extractScrollGroup(scrollGroupScrRef: ScrollGroupScrRef): ScrollGroup | undefined {
+function extractScrollGroupId(scrollGroupScrRef: ScrollGroupScrRef): ScrollGroupId | undefined {
   return typeof scrollGroupScrRef === 'number' ? scrollGroupScrRef : undefined;
 }
 function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): ScriptureReference {
@@ -19,7 +19,7 @@ function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): ScriptureReference
 
 /**
  * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
- * value for both the {@link ScriptureReference} and the {@link ScrollGroup} for the provided
+ * value for both the {@link ScriptureReference} and the {@link ScrollGroupId} for the provided
  * `scrollGroupScrRef`. Use similarly to `useState`.
  *
  * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
@@ -35,15 +35,15 @@ function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): ScriptureReference
  *   callback to be returned. However, because this is just used when needed and doesn't have any
  *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
  *   always set using the latest value of this callback
- * @returns `[scrRef, setScrRef, scrollGroup, setScrollGroup]`
+ * @returns `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
  *
  *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents
  *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
  *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
- *   - `scrollGroup`: The current value for the scroll group this `scrollGroupScrRef` is synced with. If
- *       not synced to a scroll group, this is `undefined`
- *   - `setScrollGroup`: Function to use to update the scroll group with which this `scrollGroupScrRef`
- *       is synced
+ *   - `scrollGroupId`: The current value for the scroll group this `scrollGroupScrRef` is synced with.
+ *       If not synced to a scroll group, this is `undefined`
+ *   - `setScrollGroupId`: Function to use to update the scroll group with which this
+ *       `scrollGroupScrRef` is synced
  */
 export default function useScrollGroupScrRef(
   scrollGroupScrRef: ScrollGroupScrRef | undefined,
@@ -51,8 +51,8 @@ export default function useScrollGroupScrRef(
 ): [
   scrRef: ScriptureReference,
   setScrRef: (newScrRef: ScriptureReference) => void,
-  scrollGroup: ScrollGroup | undefined,
-  setScrollGroup: (newScrollGroup: ScrollGroup | undefined) => void,
+  scrollGroupId: ScrollGroupId | undefined,
+  setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
 ] {
   // Default scroll group is 0
   const scrollGroupScrRefDefaulted = scrollGroupScrRef ?? 0;
@@ -61,8 +61,8 @@ export default function useScrollGroupScrRef(
   const setScrollGroupScrRefRef = useRef(setScrollGroupScrRef);
   setScrollGroupScrRefRef.current = setScrollGroupScrRef;
 
-  const scrollGroupRef = useRef(extractScrollGroup(scrollGroupScrRefDefaulted));
-  const [scrollGroup, setScrollGroupLocal] = useState(scrollGroupRef.current);
+  const scrollGroupIdLocalRef = useRef(extractScrollGroupId(scrollGroupScrRefDefaulted));
+  const [scrollGroupIdLocal, setScrollGroupIdLocal] = useState(scrollGroupIdLocalRef.current);
   const [scrRefLocal, setScrRefLocal] = useState(() => extractScrRef(scrollGroupScrRefDefaulted));
   const setScrRefLocalIfDifferent = useCallback((updatedScrRef: ScriptureReference) => {
     setScrRefLocal((currentScrRef) => {
@@ -73,11 +73,11 @@ export default function useScrollGroupScrRef(
 
   // If the prop changes meaning the scroll group changes or the independent scrRef changes, update
   useEffect(() => {
-    const updatedScrollGroup = extractScrollGroup(scrollGroupScrRefDefaulted);
+    const updatedScrollGroupId = extractScrollGroupId(scrollGroupScrRefDefaulted);
     const updatedScrRef = extractScrRef(scrollGroupScrRefDefaulted);
 
-    scrollGroupRef.current = updatedScrollGroup;
-    setScrollGroupLocal(updatedScrollGroup);
+    scrollGroupIdLocalRef.current = updatedScrollGroupId;
+    setScrollGroupIdLocal(updatedScrollGroupId);
 
     setScrRefLocalIfDifferent(updatedScrRef);
   }, [scrollGroupScrRefDefaulted, setScrRefLocalIfDifferent]);
@@ -86,8 +86,8 @@ export default function useScrollGroupScrRef(
   useEvent(
     onDidUpdateScrRef,
     useCallback(
-      ({ scrRef: updatedScrRef, scrollGroup: scrollGroupToUpdate }) => {
-        if (scrollGroupToUpdate === scrollGroupRef.current)
+      ({ scrRef: updatedScrRef, scrollGroupId: scrollGroupToUpdate }) => {
+        if (scrollGroupToUpdate === scrollGroupIdLocalRef.current)
           setScrRefLocalIfDifferent(updatedScrRef);
       },
       [setScrRefLocalIfDifferent],
@@ -98,31 +98,34 @@ export default function useScrollGroupScrRef(
   const setScrRef = useCallback(
     (newScrRef: ScriptureReference) => {
       // If we are synced to a scroll group, set it. If it didn't change, return
-      if (scrollGroupRef.current !== undefined && !setScrRefSync(scrollGroupRef.current, newScrRef))
+      if (
+        scrollGroupIdLocalRef.current !== undefined &&
+        !setScrRefSync(scrollGroupIdLocalRef.current, newScrRef)
+      )
         return;
 
       // If we aren't synced with a scroll group, update the web view definition with the new scrRef
       // Otherwise, manually update our scr ref
-      if (scrollGroupRef.current === undefined) setScrollGroupScrRefRef.current(newScrRef);
+      if (scrollGroupIdLocalRef.current === undefined) setScrollGroupScrRefRef.current(newScrRef);
       else setScrRefLocalIfDifferent(newScrRef);
     },
     [setScrRefLocalIfDifferent],
   );
 
   // Change the scroll group and update ours if successful
-  const setScrollGroup = useCallback(
-    (newScrollGroup: ScrollGroup | undefined) => {
+  const setScrollGroupId = useCallback(
+    (newScrollGroupId: ScrollGroupId | undefined) => {
       if (
         !setScrollGroupScrRefRef.current(
-          newScrollGroup === undefined ? scrRefLocal : newScrollGroup,
+          newScrollGroupId === undefined ? scrRefLocal : newScrollGroupId,
         )
       )
         return;
 
-      scrollGroupRef.current = newScrollGroup;
+      scrollGroupIdLocalRef.current = newScrollGroupId;
     },
     [scrRefLocal],
   );
 
-  return [scrRefLocal, setScrRef, scrollGroup, setScrollGroup];
+  return [scrRefLocal, setScrRef, scrollGroupIdLocal, setScrollGroupId];
 }

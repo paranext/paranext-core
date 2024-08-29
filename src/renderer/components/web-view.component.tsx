@@ -28,7 +28,7 @@ import {
 } from 'platform-bible-react';
 import './web-view.component.css';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
-import { ScrollGroup } from '@shared/services/scroll-group.service-model';
+import { ScrollGroupId } from '@shared/services/scroll-group.service-model';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -36,10 +36,10 @@ export function getTitle({ webViewType, title, contentType }: Partial<WebViewTab
   return title || `${webViewType || contentType} Web View`;
 }
 
-const SCROLL_GROUPS: (ScrollGroup | 'undefined')[] = [...Array(5).keys()];
-SCROLL_GROUPS.unshift('undefined');
-const SCROLL_GROUP_LOCALIZED_STRING_KEYS = SCROLL_GROUPS.map((scrollGroup) =>
-  getScrollGroupKey(scrollGroup),
+const SCROLL_GROUP_IDS: (ScrollGroupId | 'undefined')[] = [...Array(5).keys()];
+SCROLL_GROUP_IDS.unshift('undefined');
+const SCROLL_GROUP_LOCALIZED_STRING_KEYS = SCROLL_GROUP_IDS.map((scrollGroupId) =>
+  getScrollGroupKey(scrollGroupId),
 );
 const SCROLL_GROUP_DEFAULT_LOCALIZED_STRINGS = {
   [getScrollGroupKey('undefined')]: 'Ø',
@@ -50,8 +50,8 @@ const SCROLL_GROUP_DEFAULT_LOCALIZED_STRINGS = {
   [getScrollGroupKey(4)]: 'E',
 };
 
-function getScrollGroupKey(scrollGroup: ScrollGroup | string): LocalizeKey {
-  return `%scrollGroup_${scrollGroup}%`;
+function getScrollGroupKey(scrollGroupId: ScrollGroupId | string): LocalizeKey {
+  return `%scrollGroup_${scrollGroupId}%`;
 }
 
 export default function WebView({
@@ -78,7 +78,7 @@ export default function WebView({
   // situation, though. We just don't want to leak memory by leaving an event handler on an iframe
   // when it gets removed (if that does leak memory).
 
-  const [scrRef, setScrRef, scrollGroup, setScrollGroup] = useScrollGroupScrRef(
+  const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useScrollGroupScrRef(
     scrollGroupScrRef,
     useCallback(
       (newScrollGroupScrRef) =>
@@ -98,9 +98,9 @@ export default function WebView({
       <div className="web-view-tab-nav">
         <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
         <Select
-          value={`${scrollGroup}`}
+          value={`${scrollGroupId}`}
           onValueChange={(newScrollGroupString) =>
-            setScrollGroup(
+            setScrollGroupId(
               newScrollGroupString === 'undefined' ? undefined : parseInt(newScrollGroupString, 10),
             )
           }
@@ -112,9 +112,9 @@ export default function WebView({
             // Need to get over the floating web view z-index 200
             style={{ zIndex: 250 }}
           >
-            {SCROLL_GROUPS.map((scrollGroupOption) => (
-              <SelectItem key={scrollGroupOption} value={scrollGroupOption.toString()}>
-                {scrollGroupLocalizedStrings[getScrollGroupKey(scrollGroupOption)]}
+            {SCROLL_GROUP_IDS.map((scrollGroupOptionId) => (
+              <SelectItem key={scrollGroupOptionId} value={scrollGroupOptionId.toString()}>
+                {scrollGroupLocalizedStrings[getScrollGroupKey(scrollGroupOptionId)]}
               </SelectItem>
             ))}
           </SelectContent>

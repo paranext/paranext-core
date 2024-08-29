@@ -6,7 +6,7 @@ import {
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
-  ScrollGroup,
+  ScrollGroupId,
 } from '@shared/services/scroll-group.service-model';
 import settingsService from '@shared/services/settings.service';
 import {
@@ -28,9 +28,8 @@ const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
 /** FOR LOADING ONLY! DO NOT USE */
 const scrRefsSerialized = localStorage.getItem(SCR_REFS_STORAGE_KEY);
 /** Object that maps scroll group ids to the scripture reference at each of those scroll group ids */
-const scrRefs: { [scrollGroup: ScrollGroup]: ScriptureReference | undefined } = scrRefsSerialized
-  ? deserialize(scrRefsSerialized) ?? {}
-  : {};
+const scrRefs: { [scrollGroupId: ScrollGroupId]: ScriptureReference | undefined } =
+  scrRefsSerialized ? deserialize(scrRefsSerialized) ?? {} : {};
 
 function saveScrRefs() {
   localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
@@ -45,11 +44,11 @@ const onDidUpdateScrRefEmitter = createNetworkEventEmitter<ScrollGroupUpdateInfo
 export const onDidUpdateScrRef = onDidUpdateScrRefEmitter.event;
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
-export function getScrRefSync(scrollGroup: ScrollGroup = 0): ScriptureReference {
-  return scrRefs[scrollGroup] ?? DEFAULT_SCR_REF;
+export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): ScriptureReference {
+  return scrRefs[scrollGroupId] ?? DEFAULT_SCR_REF;
 }
 
-async function getScrRef(scrollGroupScrRef: ScrollGroup = 0): Promise<ScriptureReference> {
+async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<ScriptureReference> {
   return getScrRefSync(scrollGroupScrRef);
 }
 
@@ -61,31 +60,32 @@ async function getScrRef(scrollGroupScrRef: ScrollGroup = 0): Promise<ScriptureR
  *   Only set to `false` when running this from subscription to updates to the setting
  */
 export function setScrRefSync(
-  newScrollGroup: ScrollGroup | undefined,
-  newScrRef: ScriptureReference,
+  scrollGroupId: ScrollGroupId | undefined,
+  scrRef: ScriptureReference,
   shouldSetVerseRefSetting = true,
 ): boolean {
-  if (!newScrRef || !newScrRef.bookNum || !newScrRef.chapterNum || !newScrRef.verseNum)
+  if (!scrRef || !scrRef.bookNum || !scrRef.chapterNum || !scrRef.verseNum)
     throw new Error('Must provide scrRef in proper format!');
 
-  const scrollGroup = newScrollGroup ?? 0;
-  const scrRef = deepClone(newScrRef);
+  const scrollGroupIdDefaulted = scrollGroupId ?? 0;
+  const scrRefClone = deepClone(scrRef);
 
   // Don't update if the scr refs are the same
-  if (compareScrRefs(scrRefs[scrollGroup] ?? DEFAULT_SCR_REF, scrRef) === 0) return false;
+  if (compareScrRefs(scrRefs[scrollGroupIdDefaulted] ?? DEFAULT_SCR_REF, scrRefClone) === 0)
+    return false;
 
   // Update the scr ref and send out an event
-  scrRefs[scrollGroup] = scrRef;
+  scrRefs[scrollGroupIdDefaulted] = scrRefClone;
   saveScrRefs();
-  onDidUpdateScrRefEmitter.emit({ scrollGroup, scrRef });
+  onDidUpdateScrRefEmitter.emit({ scrollGroupId: scrollGroupIdDefaulted, scrRef: scrRefClone });
 
-  if (shouldSetVerseRefSetting && scrollGroup === 0)
+  if (shouldSetVerseRefSetting && scrollGroupIdDefaulted === 0)
     (async () => {
       try {
-        settingsService.set('platform.verseRef', scrRef);
+        settingsService.set('platform.verseRef', scrRefClone);
       } catch (e) {
         logger.warn(
-          `Failed to update platform.verseRef to ${serialize(scrRef)} to keep in sync with scroll group 0! ${e}`,
+          `Failed to update platform.verseRef to ${serialize(scrRefClone)} to keep in sync with scroll group 0! ${e}`,
         );
       }
     })();
@@ -94,10 +94,10 @@ export function setScrRefSync(
 }
 
 async function setScrRef(
-  scrollGroup: ScrollGroup | undefined,
+  scrollGroupId: ScrollGroupId | undefined,
   scrRef: ScriptureReference,
 ): Promise<boolean> {
-  return setScrRefSync(scrollGroup, scrRef);
+  return setScrRefSync(scrollGroupId, scrRef);
 }
 
 const scrollGroupService: IScrollGroupRemoteService = {
