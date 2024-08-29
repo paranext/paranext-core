@@ -29,11 +29,10 @@ export const extractRepeatedWords = (
   text: string,
   target: string | undefined = undefined,
 ): string[] => {
-  const repeatedWords: string[] = [];
-  const words = split(text, /[\s]+/);
-  words.forEach((word, index, allWords) => {
-    if (target && word !== target) return;
-    if (index + 1 < allWords.length && word === allWords[index + 1]) repeatedWords.push(word);
-  });
+  // Finds repeated words, and captures the first occurrence of the word
+  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
+
+  if (target) return repeatedWords?.filter((word) => word === target);
+
   return repeatedWords;
 };
