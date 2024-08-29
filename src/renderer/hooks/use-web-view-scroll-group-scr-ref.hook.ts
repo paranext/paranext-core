@@ -2,7 +2,7 @@ import {
   GetSavedWebViewDefinition,
   WebViewDefinitionUpdateInfo,
 } from '@shared/models/web-view.model';
-import { ScrollGroup } from '@shared/services/scroll-group.service-model';
+import { ScrollGroupId } from '@shared/services/scroll-group.service-model';
 import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { useEvent } from 'platform-bible-react';
 import { PlatformEvent, ScriptureReference } from 'platform-bible-utils';
@@ -22,8 +22,8 @@ export default function useWebViewScrollGroupScrRef(this: {
 }): [
   scrRef: ScriptureReference,
   setScrRef: (newScrRef: ScriptureReference) => void,
-  scrollGroup: ScrollGroup | undefined,
-  setScrollGroup: (newScrollGroup: ScrollGroup | undefined) => void,
+  scrollGroupId: ScrollGroupId | undefined,
+  setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
 ] {
   // Get the saved web view definition's id and scrollGroupScrRef and stay up to date
   const [savedWebViewDefinition, setSavedWebViewDefinition] = useState(() => {

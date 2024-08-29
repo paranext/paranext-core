@@ -1,4 +1,4 @@
-import type { ScrollGroup, ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import type { ScrollGroupId, ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 // Used in JSDoc link
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { ScriptureReference } from 'platform-bible-utils';
@@ -316,31 +316,31 @@ export type UseWebViewStateHook = <T>(
  *
  * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
  * value and a function to set the value for both the {@link ScriptureReference} and the
- * {@link ScrollGroup} with which this web view is synced (using this web view's `scrollGroupScrRef`
- * property). Use similarly to `useState`.
+ * {@link ScrollGroupId} with which this web view is synced (using this web view's
+ * `scrollGroupScrRef` property). Use similarly to `useState`.
  *
  * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
  *
- * _＠returns_ `[scrRef, setScrRef, scrollGroup, setScrollGroup]`
+ * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
  *
  * - `scrRef`: The current value for the Scripture reference this web view is on
  * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
  *   synced to a scroll group, sets the scroll group's Scripture reference
- * - `scrollGroup`: The current value for the scroll group this web view is synced with. If not synced
- *   to a scroll group, this is `undefined`
- * - `setScrollGroup`: Function to use to update the scroll group with which this web view is synced
+ * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
+ *   synced to a scroll group, this is `undefined`
+ * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
  *
  * _＠example_
  *
  * ```typescript
- * const [scrRef, setScrRef, scrollGroup, setScrollGroup] = useWebViewScrollGroupScrRef();
+ * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
  * ```
  */
 export type UseWebViewScrollGroupScrRefHook = () => [
   scrRef: ScriptureReference,
   setScrRef: (newScrRef: ScriptureReference) => void,
-  scrollGroup: ScrollGroup | undefined,
-  setScrollGroup: (newScrollGroup: ScrollGroup | undefined) => void,
+  scrollGroupId: ScrollGroupId | undefined,
+  setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
 ];
 
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
