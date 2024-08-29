@@ -9,7 +9,7 @@ import Inventory, {
   Scope,
   Status,
 } from '@/components/advanced/inventory/inventory.component';
-import { ScriptureReference, split } from 'platform-bible-utils';
+import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
 
@@ -41,9 +41,12 @@ const createColumns = (
 ];
 
 const extractItems = (text: string, target: string | undefined = undefined): string[] => {
-  let characters: string[] = split(text, '');
-  if (target) characters = characters.filter((character) => character === target);
-  return characters;
+  // Finds repeated words, and captures the first occurrence of the word
+  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
+
+  if (target) return repeatedWords?.filter((word) => word === target);
+
+  return repeatedWords;
 };
 
 function InventoryExample() {
