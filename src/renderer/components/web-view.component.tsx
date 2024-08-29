@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   WebViewContentType,
   WebViewDefinition,
@@ -14,9 +14,21 @@ import {
   WEBVIEW_IFRAME_SRC_SANDBOX,
   WEBVIEW_IFRAME_SRCDOC_SANDBOX,
   IFRAME_SANDBOX_ALLOW_POPUPS,
+  updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
-import { serialize } from 'platform-bible-utils';
+import { LocalizeKey, serialize } from 'platform-bible-utils';
+import {
+  BookChapterControl,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from 'platform-bible-react';
+import './web-view.component.css';
+import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
+import { ScrollGroup } from '@shared/services/scroll-group.service-model';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -24,7 +36,26 @@ export function getTitle({ webViewType, title, contentType }: Partial<WebViewTab
   return title || `${webViewType || contentType} Web View`;
 }
 
+const SCROLL_GROUPS: (ScrollGroup | 'undefined')[] = [...Array(5).keys()];
+SCROLL_GROUPS.unshift('undefined');
+const SCROLL_GROUP_LOCALIZED_STRING_KEYS = SCROLL_GROUPS.map((scrollGroup) =>
+  getScrollGroupKey(scrollGroup),
+);
+const SCROLL_GROUP_DEFAULT_LOCALIZED_STRINGS = {
+  [getScrollGroupKey('undefined')]: 'Ø',
+  [getScrollGroupKey(0)]: 'A',
+  [getScrollGroupKey(1)]: 'B',
+  [getScrollGroupKey(2)]: 'C',
+  [getScrollGroupKey(3)]: 'D',
+  [getScrollGroupKey(4)]: 'E',
+};
+
+function getScrollGroupKey(scrollGroup: ScrollGroup | string): LocalizeKey {
+  return `%scrollGroup_${scrollGroup}%`;
+}
+
 export default function WebView({
+  id,
   webViewType,
   content,
   title,
@@ -32,6 +63,7 @@ export default function WebView({
   allowScripts,
   allowSameOrigin,
   allowPopups,
+  scrollGroupScrRef,
 }: WebViewTabProps) {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -46,34 +78,77 @@ export default function WebView({
   // situation, though. We just don't want to leak memory by leaving an event handler on an iframe
   // when it gets removed (if that does leak memory).
 
+  const [scrRef, setScrRef, scrollGroup, setScrollGroup] = useScrollGroupScrRef(
+    scrollGroupScrRef,
+    useCallback(
+      (newScrollGroupScrRef) =>
+        updateWebViewDefinitionSync(id, { scrollGroupScrRef: newScrollGroupScrRef }),
+      [id],
+    ),
+  );
+
+  const [scrollGroupLocalizedStringsTemp] = useLocalizedStrings(SCROLL_GROUP_LOCALIZED_STRING_KEYS);
+  const scrollGroupLocalizedStrings =
+    scrollGroupLocalizedStringsTemp[getScrollGroupKey(0)] === getScrollGroupKey(0)
+      ? { ...scrollGroupLocalizedStringsTemp, ...SCROLL_GROUP_DEFAULT_LOCALIZED_STRINGS }
+      : scrollGroupLocalizedStringsTemp;
+
   return (
-    <iframe
-      ref={iframeRef}
-      title={getTitle({ webViewType, title, contentType })}
-      /**
-       * Sandbox attribute for the webview - controls what resources scripts and other things can
-       * access. See `ALLOWED_IFRAME_SRC_SANDBOX_VALUES` in `web-view.service.ts` for more info.
-       *
-       * Note that this does NOT change after the iframe is first added to the dom. We are relying
-       * on the `MutationObserver` in `web-view.service.ts` to catch if an extension tries to change
-       * its WebViewContentType and src/srcdoc to some combination that is forbidden (unless
-       * changing src or srcdoc re-adds the iframe to the dom, in which case it is fine)
-       *
-       * TODO: test this sometime to see what happens
-       *
-       * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
-       */
-      sandbox={`${shouldUseSrc ? WEBVIEW_IFRAME_SRC_SANDBOX : WEBVIEW_IFRAME_SRCDOC_SANDBOX}${
-        allowSameOrigin ? ` ${IFRAME_SANDBOX_ALLOW_SAME_ORIGIN}` : ''
-      }${allowScripts ? ` ${IFRAME_SANDBOX_ALLOW_SCRIPTS}` : ''}${allowPopups ? ` ${IFRAME_SANDBOX_ALLOW_POPUPS}` : ''}`}
-      // TODO: csp?
-      // TODO: credentialless?
-      // TODO: referrerpolicy?
-      src={shouldUseSrc ? content : undefined}
-      srcDoc={shouldUseSrc ? undefined : content}
-      // Allow WebViews to go fullscreen because why not (fullscreen YouTube video of Psalms LBL)
-      allow="fullscreen;"
-    />
+    <div className="web-view-parent">
+      <div className="web-view-tab-nav">
+        <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+        <Select
+          value={`${scrollGroup}`}
+          onValueChange={(newScrollGroupString) =>
+            setScrollGroup(
+              newScrollGroupString === 'undefined' ? undefined : parseInt(newScrollGroupString, 10),
+            )
+          }
+        >
+          <SelectTrigger className="web-view-scroll-group-selector">
+            <SelectValue placeholder="A" />
+          </SelectTrigger>
+          <SelectContent
+            // Need to get over the floating web view z-index 200
+            style={{ zIndex: 250 }}
+          >
+            {SCROLL_GROUPS.map((scrollGroupOption) => (
+              <SelectItem key={scrollGroupOption} value={scrollGroupOption.toString()}>
+                {scrollGroupLocalizedStrings[getScrollGroupKey(scrollGroupOption)]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <iframe
+        className="web-view"
+        ref={iframeRef}
+        title={getTitle({ webViewType, title, contentType })}
+        /**
+         * Sandbox attribute for the webview - controls what resources scripts and other things can
+         * access. See `ALLOWED_IFRAME_SRC_SANDBOX_VALUES` in `web-view.service.ts` for more info.
+         *
+         * Note that this does NOT change after the iframe is first added to the dom. We are relying
+         * on the `MutationObserver` in `web-view.service.ts` to catch if an extension tries to
+         * change its WebViewContentType and src/srcdoc to some combination that is forbidden
+         * (unless changing src or srcdoc re-adds the iframe to the dom, in which case it is fine)
+         *
+         * TODO: test this sometime to see what happens
+         *
+         * DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+         */
+        sandbox={`${shouldUseSrc ? WEBVIEW_IFRAME_SRC_SANDBOX : WEBVIEW_IFRAME_SRCDOC_SANDBOX}${
+          allowSameOrigin ? ` ${IFRAME_SANDBOX_ALLOW_SAME_ORIGIN}` : ''
+        }${allowScripts ? ` ${IFRAME_SANDBOX_ALLOW_SCRIPTS}` : ''}${allowPopups ? ` ${IFRAME_SANDBOX_ALLOW_POPUPS}` : ''}`}
+        // TODO: csp?
+        // TODO: credentialless?
+        // TODO: referrerpolicy?
+        src={shouldUseSrc ? content : undefined}
+        srcDoc={shouldUseSrc ? undefined : content}
+        // Allow WebViews to go fullscreen because why not (fullscreen YouTube video of Psalms LBL)
+        allow="fullscreen;"
+      />
+    </div>
   );
 }
 

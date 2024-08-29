@@ -32,6 +32,8 @@ import { DialogService } from '@shared/services/dialog.service-model';
 import dialogService from '@shared/services/dialog.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import menuDataService from '@shared/services/menu-data.service';
+import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
+import scrollGroupService from '@shared/services/scroll-group.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
 import localizationService from '@shared/services/localization.service';
 import {
@@ -102,6 +104,8 @@ const papi = {
   settings: settingsService as ISettingsService,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
+  /** JSDOC DESTINATION scrollGroupService */
+  scrollGroups: scrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
   localization: localizationService as ILocalizationService,
 };
@@ -177,6 +181,9 @@ Object.freeze(papi.settings);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);
+/** JSDOC DESTINATION scrollGroupService */
+export const { scrollGroups } = papi;
+Object.freeze(papi.scrollGroups);
 /** JSDOC DESTINATION localizationDataService */
 export const { localization } = papi;
 Object.freeze(papi.localization);
