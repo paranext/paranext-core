@@ -8,6 +8,7 @@ export const platformSettings: SettingsContribution = {
   properties: {
     'platform.verseRef': {
       label: '%settings_platform_verseRef_label%',
+      description: '%settings_platform_verseRef_description%',
       default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {

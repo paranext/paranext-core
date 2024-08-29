@@ -1,6 +1,6 @@
 /** Module to set up globalThis and polyfills in the renderer */
 
-import React from 'react';
+import ReactModule from 'react';
 import * as ReactJsxRuntime from 'react/jsx-runtime';
 import * as ReactDOM from 'react-dom';
 import * as ReactDOMClient from 'react-dom/client';
@@ -15,6 +15,7 @@ import {
   resetWebViewStateById,
 } from '@renderer/services/web-view-state.service';
 import useWebViewState from '@renderer/hooks/use-web-view-state.hook';
+import useWebViewScrollGroupScrRef from '@renderer/hooks/use-web-view-scroll-group-scr-ref.hook';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import * as platformBibleReact from 'platform-bible-react';
 import * as platformBibleUtils from 'platform-bible-utils';
@@ -36,7 +37,7 @@ const moduleMap = new Map<string, any>();
 moduleMap.set('@papi/core', papiCore);
 moduleMap.set('@papi/frontend', papiFrontend);
 moduleMap.set('@papi/frontend/react', papiReact);
-moduleMap.set('react', React);
+moduleMap.set('react', ReactModule);
 moduleMap.set('react/jsx-runtime', ReactJsxRuntime);
 moduleMap.set('react-dom', ReactDOM);
 moduleMap.set('react-dom/client', ReactDOMClient);
@@ -71,7 +72,9 @@ type WebViewRequire = typeof webViewRequire;
 /* eslint-disable vars-on-top, no-var */
 declare global {
   var papi: Papi;
-  var React: typeof React;
+  // @ts-expect-error ts(2300) we're declaring React here because it may not always be available in
+  // all contexts
+  var React: typeof ReactModule;
   var ReactJsxRuntime: ReactJsxRuntimeType;
   // For some reason, TypeScript throws an index signature error on assignment to
   // globalThis.ReactDOM, so this is ReactDom, not ReactDOM
@@ -101,7 +104,7 @@ globalThis.logLevel = globalThis.isPackaged ? 'error' : 'info';
 // Note: these items are used in `@shared\services\web-view.service.ts`. Putting them here breaks
 // the circular dependency since `papi` uses the webview service.
 globalThis.papi = papiFrontend;
-globalThis.React = React;
+globalThis.React = ReactModule;
 globalThis.ReactJsxRuntime = ReactJsxRuntime;
 globalThis.ReactDom = ReactDOM;
 globalThis.ReactDOMClient = ReactDOMClient;
@@ -114,6 +117,7 @@ globalThis.setWebViewStateById = setWebViewStateById;
 globalThis.resetWebViewStateById = resetWebViewStateById;
 // We store the hook reference because we need it to bind it to the webview's iframe 'window' context
 globalThis.useWebViewState = useWebViewState;
+globalThis.useWebViewScrollGroupScrRef = useWebViewScrollGroupScrRef;
 // Check if the main process indicated noisy dev mode is enabled
 globalThis.isNoisyDevModeEnabled = global.location.search === DEV_MODE_RENDERER_INDICATOR;
 

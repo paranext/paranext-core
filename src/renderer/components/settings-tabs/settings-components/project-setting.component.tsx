@@ -1,4 +1,4 @@
-import { useProjectSetting } from '@renderer/hooks/papi-hooks';
+import useProjectSetting from '@renderer/hooks/papi-hooks/use-project-setting.hook';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
 import projectSettingsService from '@shared/services/project-settings.service';
 import Setting, { ProjectSettingProps, ProjectSettingValues } from './setting.component';

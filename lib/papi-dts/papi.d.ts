@@ -3,7 +3,66 @@
 /// <reference types="node" />
 /// <reference types="node" />
 /// <reference types="node" />
+declare module 'shared/services/scroll-group.service-model' {
+  import { PlatformEvent, ScriptureReference } from 'platform-bible-utils';
+  export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
+  /** Name to use when creating a network event that is fired when webViews are updated */
+  export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: `${string}:${string}`;
+  /**
+   * An identifier corresponding to a Scripture reference shared by a group of Scripture reference
+   * consumers.
+   *
+   * For example, a few web views that share a Scroll Group would all change Scripture Reference
+   * together.
+   *
+   * These are generally expected to be non-negative numbers (starting at 0).
+   */
+  export type ScrollGroup = number;
+  /**
+   * Combination of a {@link ScrollGroup} and a {@link ScriptureReference}. If this value is a number,
+   * that means this should be synced with the scroll group sharing that number. If this value is an
+   * object, that means it is an independent Scripture reference and should not be synced with any
+   * scroll group.
+   */
+  export type ScrollGroupScrRef = ScrollGroup | ScriptureReference;
+  /**
+   * Information about an update to a scroll group. Informs about the new {@link ScriptureReference} at
+   * a {@link ScrollGroup}
+   */
+  export type ScrollGroupUpdateInfo = {
+    scrRef: ScriptureReference;
+    scrollGroup: ScrollGroup;
+  };
+  /** Parts of the Scroll Group Service that are exposed through the network object */
+  export interface IScrollGroupRemoteService {
+    /**
+     * Get the {@link ScriptureReference} associated with the provided scroll group
+     *
+     * @param scrollGroup Scroll group whose Scripture reference to get. Defaults to 0
+     * @returns Scripture reference associated with the provided scroll group
+     */
+    getScrRef(scrollGroup?: ScrollGroup): Promise<ScriptureReference>;
+    /**
+     * Sets the {@link ScriptureReference} associated with the provided scroll group
+     *
+     * @param scrollGroup Scroll group whose Scripture reference to get. If `undefined`, defaults to 0
+     * @param scrRef Scripture reference to which to set the scroll group
+     * @returns `true` if the Scripture reference changed. `false` otherwise
+     */
+    setScrRef(scrollGroup: ScrollGroup | undefined, scrRef: ScriptureReference): Promise<boolean>;
+  }
+  /**
+   *
+   * Provides functions related to scroll groups and Scripture references at those scroll groups
+   */
+  export interface IScrollGroupService extends IScrollGroupRemoteService {
+    /** Event that emits with information about a changed Scripture Reference for a scroll group */
+    onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
+  }
+}
 declare module 'shared/models/web-view.model' {
+  import type { ScrollGroup, ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  import { ScriptureReference } from 'platform-bible-utils';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -49,6 +108,11 @@ declare module 'shared/models/web-view.model' {
      * operations related to this web view.
      */
     projectId?: string;
+    /**
+     * With which scroll group this web view is synced or the {@link ScriptureReference} this web view
+     * is focusing independently of a scroll group
+     */
+    scrollGroupScrRef?: ScrollGroupScrRef;
     /**
      * General object to store unique state for this webview.
      *
@@ -208,6 +272,7 @@ declare module 'shared/models/web-view.model' {
     'title',
     'tooltip',
     'projectId',
+    'scrollGroupScrRef',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -263,6 +328,36 @@ declare module 'shared/models/web-view.model' {
     webViewStateValue: T,
     setWebViewState: (stateValue: T) => void,
     resetWebViewState: () => void,
+  ];
+  /**
+   *
+   * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
+   * value and a function to set the value for both the {@link ScriptureReference} and the
+   * {@link ScrollGroup} with which this web view is synced (using this web view's `scrollGroupScrRef`
+   * property). Use similarly to `useState`.
+   *
+   * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
+   *
+   * _＠returns_ `[scrRef, setScrRef, scrollGroup, setScrollGroup]`
+   *
+   * - `scrRef`: The current value for the Scripture reference this web view is on
+   * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
+   *   synced to a scroll group, sets the scroll group's Scripture reference
+   * - `scrollGroup`: The current value for the scroll group this web view is synced with. If not synced
+   *   to a scroll group, this is `undefined`
+   * - `setScrollGroup`: Function to use to update the scroll group with which this web view is synced
+   *
+   * _＠example_
+   *
+   * ```typescript
+   * const [scrRef, setScrRef, scrollGroup, setScrollGroup] = useWebViewScrollGroupScrRef();
+   * ```
+   */
+  export type UseWebViewScrollGroupScrRefHook = () => [
+    scrRef: ScriptureReference,
+    setScrRef: (newScrRef: ScriptureReference) => void,
+    scrollGroup: ScrollGroup | undefined,
+    setScrollGroup: (newScrollGroup: ScrollGroup | undefined) => void,
   ];
   /**
    *
@@ -331,6 +426,31 @@ declare module 'shared/models/web-view.model' {
     useWebViewState: UseWebViewStateHook;
     /**
      *
+     * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
+     * value and a function to set the value for both the {@link ScriptureReference} and the
+     * {@link ScrollGroup} with which this web view is synced (using this web view's `scrollGroupScrRef`
+     * property). Use similarly to `useState`.
+     *
+     * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
+     *
+     * _＠returns_ `[scrRef, setScrRef, scrollGroup, setScrollGroup]`
+     *
+     * - `scrRef`: The current value for the Scripture reference this web view is on
+     * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
+     *   synced to a scroll group, sets the scroll group's Scripture reference
+     * - `scrollGroup`: The current value for the scroll group this web view is synced with. If not synced
+     *   to a scroll group, this is `undefined`
+     * - `setScrollGroup`: Function to use to update the scroll group with which this web view is synced
+     *
+     * _＠example_
+     *
+     * ```typescript
+     * const [scrRef, setScrRef, scrollGroup, setScrollGroup] = useWebViewScrollGroupScrRef();
+     * ```
+     */
+    useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
+    /**
+     *
      * Updates this WebView with the specified properties
      *
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
@@ -379,6 +499,7 @@ declare module 'shared/global-this.model' {
     GetSavedWebViewDefinition,
     SavedWebViewDefinition,
     UpdateWebViewDefinition,
+    UseWebViewScrollGroupScrRefHook,
     UseWebViewStateHook,
     WebViewDefinitionUpdateInfo,
     WebViewProps,
@@ -442,6 +563,31 @@ declare module 'shared/global-this.model' {
      * ```
      */
     var useWebViewState: UseWebViewStateHook;
+    /**
+     *
+     * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
+     * value and a function to set the value for both the {@link ScriptureReference} and the
+     * {@link ScrollGroup} with which this web view is synced (using this web view's `scrollGroupScrRef`
+     * property). Use similarly to `useState`.
+     *
+     * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
+     *
+     * _＠returns_ `[scrRef, setScrRef, scrollGroup, setScrollGroup]`
+     *
+     * - `scrRef`: The current value for the Scripture reference this web view is on
+     * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
+     *   synced to a scroll group, sets the scroll group's Scripture reference
+     * - `scrollGroup`: The current value for the scroll group this web view is synced with. If not synced
+     *   to a scroll group, this is `undefined`
+     * - `setScrollGroup`: Function to use to update the scroll group with which this web view is synced
+     *
+     * _＠example_
+     *
+     * ```typescript
+     * const [scrRef, setScrRef, scrollGroup, setScrollGroup] = useWebViewScrollGroupScrRef();
+     * ```
+     */
+    var useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
     /**
      * Retrieve the value from web view state with the given 'stateKey', if it exists. Otherwise
      * return default value
@@ -2847,11 +2993,7 @@ declare module 'shared/services/command.service' {
 declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
   import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
-  import {
-    SavedWebViewDefinition,
-    WebViewDefinition,
-    WebViewDefinitionUpdateInfo,
-  } from 'shared/models/web-view.model';
+  import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
   /**
    * Saved information used to recreate a tab.
    *
@@ -2953,11 +3095,6 @@ declare module 'shared/models/docking-framework.model' {
   }
   /** Information about how a Paranext tab fits into the dock layout */
   export type Layout = TabLayout | FloatLayout | PanelLayout;
-  /** Event emitted when webViews are created */
-  export type AddWebViewEvent = {
-    webView: SavedWebViewDefinition;
-    layout: Layout;
-  };
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /** Rc-dock's onLayoutChange prop made asynchronous - resolves */
@@ -3036,7 +3173,7 @@ declare module 'shared/services/web-view.service-model' {
     WebViewId,
     WebViewType,
   } from 'shared/models/web-view.model';
-  import { AddWebViewEvent, Layout } from 'shared/models/docking-framework.model';
+  import { Layout } from 'shared/models/docking-framework.model';
   import { PlatformEvent } from 'platform-bible-utils';
   /**
    *
@@ -3048,6 +3185,8 @@ declare module 'shared/services/web-view.service-model' {
   export interface WebViewServiceType {
     /** Event that emits with webView info when a webView is added */
     onDidAddWebView: PlatformEvent<AddWebViewEvent>;
+    /** Event that emits with webView info when a webView is updated */
+    onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
     /**
      * Creates a new web view or gets an existing one depending on if you request an existing one and
      * if the web view provider decides to give that existing one to you (it is up to the provider).
@@ -3082,6 +3221,17 @@ declare module 'shared/services/web-view.service-model' {
   }
   /** Name to use when creating a network event that is fired when webViews are created */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
+  /** Event emitted when webViews are created */
+  export type AddWebViewEvent = {
+    webView: SavedWebViewDefinition;
+    layout: Layout;
+  };
+  /** Name to use when creating a network event that is fired when webViews are updated */
+  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: `${string}:${string}`;
+  /** Event emitted when webViews are updated */
+  export type UpdateWebViewEvent = {
+    webView: SavedWebViewDefinition;
+  };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
 }
 declare module 'shared/models/network-object-status.service-model' {
@@ -5781,10 +5931,12 @@ declare module '@papi/core' {
   } from 'shared/services/localization.service-model';
   export type { NetworkObjectDetails } from 'shared/models/network-object.model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
+  export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
   export type {
     GetWebViewOptions,
     SavedWebViewDefinition,
     UseWebViewStateHook,
+    UseWebViewScrollGroupScrRefHook,
     WebViewContentType,
     WebViewDefinition,
     WebViewProps,
@@ -5920,6 +6072,15 @@ declare module 'shared/services/menu-data.service' {
   const menuDataService: IMenuDataService;
   export default menuDataService;
 }
+declare module 'shared/services/scroll-group.service' {
+  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
+  /**
+   *
+   * Provides functions related to scroll groups and Scripture references at those scroll groups
+   */
+  const scrollGroupService: IScrollGroupService;
+  export default scrollGroupService;
+}
 declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   const settingsService: ISettingsService;
@@ -5971,6 +6132,7 @@ declare module '@papi/backend' {
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
   import { MinimalNetworkObjectService } from 'shared/services/network-object.service';
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
@@ -6148,6 +6310,11 @@ declare module '@papi/backend' {
     menuData: IMenuDataService;
     /**
      *
+     * Provides functions related to scroll groups and Scripture references at those scroll groups
+     */
+    scrollGroups: IScrollGroupService;
+    /**
+     *
      * Service that allows to get and store localizations
      */
     localization: ILocalizationService;
@@ -6322,6 +6489,11 @@ declare module '@papi/backend' {
    * Service that allows to get and store menu data
    */
   export const menuData: IMenuDataService;
+  /**
+   *
+   * Provides functions related to scroll groups and Scripture references at those scroll groups
+   */
+  export const scrollGroups: IScrollGroupService;
   /**
    *
    * Service that allows to get and store localizations
@@ -6609,6 +6781,69 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    */
   const useData: UseDataHook;
   export default useData;
+}
+declare module 'renderer/services/scroll-group.service-host' {
+  import { ScrollGroupUpdateInfo, ScrollGroup } from 'shared/services/scroll-group.service-model';
+  import { ScriptureReference } from 'platform-bible-utils';
+  /** Event that emits with information about a changed Scripture Reference for a scroll group */
+  export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
+  /** See {@link IScrollGroupRemoteService.getScrRef} */
+  export function getScrRefSync(scrollGroup?: ScrollGroup): ScriptureReference;
+  /**
+   * See {@link IScrollGroupRemoteService.setScrRef}
+   *
+   * @param shouldSetVerseRefSetting If `true`: if scroll group 0's reference changes, update the
+   *   `platform.verseRef` setting to keep it in sync for backwards compatibility. Defaults to `true`.
+   *   Only set to `false` when running this from subscription to updates to the setting
+   */
+  export function setScrRefSync(
+    newScrollGroup: ScrollGroup | undefined,
+    newScrRef: ScriptureReference,
+    shouldSetVerseRefSetting?: boolean,
+  ): boolean;
+  /** Register the network object that backs the scroll group service */
+  export function startScrollGroupService(): Promise<void>;
+}
+declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
+  import { ScrollGroup, ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  import { ScriptureReference } from 'platform-bible-utils';
+  /**
+   * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
+   * value for both the {@link ScriptureReference} and the {@link ScrollGroup} for the provided
+   * `scrollGroupScrRef`. Use similarly to `useState`.
+   *
+   * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
+   *   reference. Defaults to 0 meaning synced with scroll group 0 (A in English)
+   *
+   *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
+   *   updated every render
+   * @param setScrollGroupScrRef Function to run to set `scrollGroupScrRef`. Should return `true` if
+   *   actually updated any properties; `false` otherwise
+   *
+   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
+   *   to re-run with its new value. This means that updating this parameter will not cause a new
+   *   callback to be returned. However, because this is just used when needed and doesn't have any
+   *   reason to render changes, this has no adverse effect on the functionality of this hook. It will
+   *   always set using the latest value of this callback
+   * @returns `[scrRef, setScrRef, scrollGroup, setScrollGroup]`
+   *
+   *   - `scrRef`: The current value for the Scripture reference this `scrollGroupScrRef` represents
+   *   - `setScrRef`: Function to use to update the Scripture reference this `scrollGroupScrRef`
+   *       represents. If it is synced to a scroll group, sets the scroll group's Scripture reference
+   *   - `scrollGroup`: The current value for the scroll group this `scrollGroupScrRef` is synced with. If
+   *       not synced to a scroll group, this is `undefined`
+   *   - `setScrollGroup`: Function to use to update the scroll group with which this `scrollGroupScrRef`
+   *       is synced
+   */
+  export default function useScrollGroupScrRef(
+    scrollGroupScrRef: ScrollGroupScrRef | undefined,
+    setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
+  ): [
+    scrRef: ScriptureReference,
+    setScrRef: (newScrRef: ScriptureReference) => void,
+    scrollGroup: ScrollGroup | undefined,
+    setScrollGroup: (newScrollGroup: ScrollGroup | undefined) => void,
+  ];
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { SettingTypes } from 'papi-shared-types';
@@ -6930,6 +7165,7 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
+  export { default as useScrollGroupScrRef } from 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
   export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
   export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
   export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
@@ -7018,6 +7254,7 @@ declare module '@papi/frontend' {
   import * as papiReact from '@papi/frontend/react';
   import PapiRendererWebSocket from 'renderer/services/renderer-web-socket.service';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
   import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
@@ -7105,6 +7342,11 @@ declare module '@papi/frontend' {
      * Service that allows to get and store menu data
      */
     menuData: IMenuDataService;
+    /**
+     *
+     * Provides functions related to scroll groups and Scripture references at those scroll groups
+     */
+    scrollGroups: IScrollGroupService;
     /**
      *
      * Service that allows to get and store localizations
@@ -7196,6 +7438,11 @@ declare module '@papi/frontend' {
    * Service that allows to get and store menu data
    */
   export const menuData: IMenuDataService;
+  /**
+   *
+   * Provides functions related to scroll groups and Scripture references at those scroll groups
+   */
+  export const scrollGroups: IScrollGroupService;
   /**
    *
    * Service that allows to get and store localizations

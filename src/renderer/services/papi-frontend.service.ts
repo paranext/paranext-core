@@ -25,6 +25,8 @@ import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import PapiRendererWebSocket from '@renderer/services/renderer-web-socket.service';
 import menuDataService from '@shared/services/menu-data.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
+import scrollGroupService from '@shared/services/scroll-group.service';
+import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
 import localizationService from '@shared/services/localization.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
 import PapiRendererXMLHttpRequest from './renderer-xml-http-request.service';
@@ -78,6 +80,8 @@ const papi = {
   settings: settingsService as ISettingsService,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
+  /** JSDOC DESTINATION scrollGroupService */
+  scrollGroups: scrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
   localization: localizationService as ILocalizationService,
 };
@@ -135,6 +139,9 @@ Object.freeze(papi.settings);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);
+/** JSDOC DESTINATION scrollGroupService */
+export const { scrollGroups } = papi;
+Object.freeze(papi.scrollGroups);
 /** JSDOC DESTINATION localizationDataService */
 export const { localization } = papi;
 Object.freeze(papi.localization);

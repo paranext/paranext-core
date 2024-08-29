@@ -21,19 +21,13 @@ import {
 import type { WebViewProps } from '@papi/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
-import { debounce, ScriptureReference } from 'platform-bible-utils';
+import { debounce } from 'platform-bible-utils';
 import Clock from './components/clock.component';
 import Logo from '../../assets/offline.svg';
 import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
 import useHelloWorldProjectSettings from './hello-world-project/use-hello-world-project-settings.hook';
 
 const NAME = 'Hello World React WebView';
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
 
 // Test fetching
 papi
@@ -45,9 +39,10 @@ globalThis.webViewComponent = function HelloWorld({
   projectId,
   useWebViewState,
   updateWebViewDefinition,
+  useWebViewScrollGroupScrRef,
 }: WebViewProps) {
   const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
-  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
+  const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
   const verseRef = useMemo(
     () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
     [scrRef],
