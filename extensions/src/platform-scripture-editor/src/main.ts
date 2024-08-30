@@ -7,9 +7,6 @@ import type {
   WebViewDefinition,
 } from '@papi/core';
 import { LanguageStrings } from 'platform-bible-utils';
-// TODO: Remove this as soon as you get to the other computer
-// eslint-disable-next-line import/no-unresolved
-import localizationService from '@shared/services/localization.service';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 
@@ -26,7 +23,7 @@ interface PlatformScriptureEditorOptions extends GetWebViewOptions {
 }
 
 async function getLocalizations(): Promise<LanguageStrings> {
-  const localizationData = await localizationService.getLocalizedStrings({
+  const localizationData = await papi.localization.getLocalizedStrings({
     localizeKeys: [editable, resourceViewer, scriptureEditor],
     locales: ['en'],
   });

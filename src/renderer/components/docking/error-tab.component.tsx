@@ -1,5 +1,5 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import { newGuid } from 'platform-bible-utils';
+import { LocalizeKey, newGuid } from 'platform-bible-utils';
 
 export type ErrorTabData = { errorMessage: string };
 
@@ -16,12 +16,14 @@ export default function ErrorTab({ errorMessage }: { errorMessage: string }) {
   );
 }
 
+const localizeError: LocalizeKey = '%tab_error%';
+
 /** Creates a new error message tab with the specified error message */
 export const createErrorTab = (errorMessage: string): TabInfo => {
   return {
     id: newGuid(),
     tabType: 'error',
-    tabTitle: 'Error',
+    tabTitle: localizeError,
     content: <ErrorTab errorMessage={errorMessage} />,
     minWidth: 150,
     minHeight: 150,

@@ -1,6 +1,6 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { Button, ScriptureReference, usePromise, Checklist } from 'platform-bible-react';
-import { getChaptersForBook } from 'platform-bible-utils';
+import { getChaptersForBook, isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
 import { useState, useMemo, useCallback, useEffect } from 'react';
@@ -11,6 +11,7 @@ import './run-basic-checks-tab.component.scss';
 import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
 
@@ -29,46 +30,58 @@ export type BookSelectionStatus = {
 };
 
 type BasicCheck = {
-  name: string;
+  name: string | LocalizeKey;
 };
 
 export function fetchChecks(): BasicCheck[] {
+  const chapterVerseNumbersKey = '%checks_chapterSlashVerseNumbers%';
+  const markersKey = '%checks_markers%';
+  const charactersCombinationsKey = '%checks_charactersParenthesesCombinations%';
+  const punctuationSequencesKey = '%checks_punctuationParenthesesSequences%';
+  const referencesKey = '%checks_references%';
+  const footnoteQuotesKey = '%checks_footnoteQuotes%';
+  const capitalizationKey = '%checks_Capitalization%';
+  const repeatedWordsKey = '%checks_repeatedWords%';
+  const unmatchedPairsOfPunctuationKey = '%checks_unmatchedPairsOfPunctuation%';
+  const quotationsKey = '%checks_quotations%';
+  const quotationTypes = '%checks_quotationTypes%';
+  const numbersKey = '%checks_numbers%';
   return [
     {
-      name: 'Chapter/Verse Numbers',
+      name: chapterVerseNumbersKey,
     },
     {
-      name: 'Markers',
+      name: markersKey,
     },
     {
-      name: 'Characters (Combinations)',
+      name: charactersCombinationsKey,
     },
     {
-      name: 'Punctuation (Sequences)',
+      name: punctuationSequencesKey,
     },
     {
-      name: 'References',
+      name: referencesKey,
     },
     {
-      name: 'Footnote Quotes',
+      name: footnoteQuotesKey,
     },
     {
-      name: 'Capitalization',
+      name: capitalizationKey,
     },
     {
-      name: 'Repeated Words',
+      name: repeatedWordsKey,
     },
     {
-      name: 'Unmatched Pairs of Punctuation',
+      name: unmatchedPairsOfPunctuationKey,
     },
     {
-      name: 'Quotations',
+      name: quotationsKey,
     },
     {
-      name: 'Quotation types',
+      name: quotationTypes,
     },
     {
-      name: 'Numbers',
+      name: numbersKey,
     },
     {
       name: 'Another Example 1',
@@ -91,8 +104,17 @@ export function fetchChecks(): BasicCheck[] {
   ];
 }
 
+function getLocalizedChecks(basicChecks: BasicCheck[]): BasicCheck[] {
+  basicChecks.forEach((c) => {
+    const [localizedStrings] = useLocalizedStrings(isLocalizeKey(c.name) ? [c.name] : []);
+    c.name = isLocalizeKey(c.name) ? localizedStrings[c.name] : c.name;
+  });
+  return basicChecks;
+}
+
 export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTabProps) {
   const basicChecks = fetchChecks();
+  const localizedBasicChecks = getLocalizedChecks(basicChecks);
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
@@ -101,6 +123,24 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
   const [startChapter, setStartChapter] = useState<number>(1);
   const [endChapter, setEndChapter] = useState<number>(chapterCount);
   const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef]);
+
+  const noCurrentProjectKey = '%checks_noCurrentProject%';
+  const loadingKey = '%general_loading%';
+  const checksKey = '%checks_checks%';
+  const runKey = '%general_run%';
+  const cancelKey = '%general_cancel%';
+  const [localizedStrings] = useLocalizedStrings([
+    noCurrentProjectKey,
+    loadingKey,
+    checksKey,
+    runKey,
+    cancelKey,
+  ]);
+  const localizedNoCurrentProject = localizedStrings[noCurrentProjectKey];
+  const localizedLoading = localizedStrings[loadingKey];
+  const localizedChecks = localizedStrings[checksKey];
+  const localizedRun = localizedStrings[runKey];
+  const localizedCancel = localizedStrings[cancelKey];
 
   // Current book true, rest of the books false
   const getInitialBookSelectionStatus = useCallback(() => {
@@ -176,10 +216,10 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
     useMemo(() => {
       return async () =>
         project === undefined
-          ? 'No current project'
+          ? { localizedNoCurrentProject }
           : project.getVerseUSFM(new VerseRef('MAT 4:1'));
-    }, [project]),
-    'Loading',
+    }, [project, localizedNoCurrentProject]),
+    { localizedLoading },
   );
 
   return (
@@ -187,8 +227,8 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
       <Typography variant="h5">{`Run basic checks: ${currentProjectId}, ${projectString}`}</Typography>
       <Checklist
         className="run-basic-checks-check-names"
-        legend="Checks"
-        listItems={basicChecks.map((check) => check.name)}
+        legend={localizedChecks}
+        listItems={localizedBasicChecks.map((check) => check.name)}
         selectedListItems={selectedChecks}
         handleSelectListItem={handleSelectCheck}
       />
@@ -204,8 +244,8 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
         />
       </fieldset>
       <div className="basic-checks-dialog-actions">
-        <Button onClick={() => handleSubmit()}>Run</Button>
-        <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
+        <Button onClick={() => handleSubmit()}>{localizedRun}</Button>
+        <Button onClick={() => logger.info(`Canceled`)}>{localizedCancel}</Button>
       </div>
     </div>
   );
@@ -214,7 +254,7 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
 export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
-    tabTitle: 'Run Basic Checks',
+    tabTitle: '%checks_runBasicChecks%',
     content: (
       <RunBasicChecksTab
         // #region Test a .NET data provider

@@ -1,3 +1,5 @@
+import { LocalizeKey } from 'platform-bible-utils';
+
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {
   /**
@@ -36,7 +38,7 @@ type WebViewDefinitionBase = {
    */
   iconUrl?: string;
   /** Name of the tab for the WebView */
-  title?: string;
+  title?: string | LocalizeKey;
   /** Tooltip that is shown when hovering over the webview title */
   tooltip?: string;
   /**

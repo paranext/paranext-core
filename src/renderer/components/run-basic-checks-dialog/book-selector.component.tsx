@@ -3,7 +3,7 @@ import { Canon } from '@sillsdev/scripture';
 import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
 import './book-selector.component.scss';
-import { useDialogCallback } from '@renderer/hooks/papi-hooks';
+import { useDialogCallback, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 export enum BookSelectionMode {
   CURRENT_BOOK = 'current book',
@@ -30,6 +30,24 @@ export default function BookSelector({
     BookSelectionMode.CURRENT_BOOK,
   );
 
+  const selectBooksPromptKey = '%bookSelector_selectOneOrMoreBooksToRunBasicChecksOn%';
+  const selectBooksKey = '%bookSelector_selectBooks%';
+  const currentBooksKey = '%bookSelector_currentBook%';
+  const chooseBooksKey = '%bookSelector_chooseBooks%';
+  const chooseKey = '%bookSelector_chooseEllipsis%';
+  const [localizedStrings] = useLocalizedStrings([
+    selectBooksPromptKey,
+    selectBooksKey,
+    currentBooksKey,
+    chooseBooksKey,
+    chooseKey,
+  ]);
+  const localizedBookSelectorPrompt = localizedStrings[selectBooksPromptKey];
+  const localizedSelectBooks = localizedStrings[selectBooksKey];
+  const localizedCurrentBooks = localizedStrings[currentBooksKey];
+  const localizedChooseBooks = localizedStrings[chooseBooksKey];
+  const localizedChoose = localizedStrings[chooseKey];
+
   const onSelectionModeChange = (newMode: BookSelectionMode) => {
     setBookSelectionMode(newMode);
     handleBookSelectionModeChange(newMode);
@@ -39,11 +57,11 @@ export default function BookSelector({
     'platform.selectBooks',
     useMemo(
       () => ({
-        prompt: 'Select one or more books to run basic checks on',
-        title: 'Select Books',
+        prompt: localizedBookSelectorPrompt,
+        title: localizedSelectBooks,
         selectedBookIds,
       }),
-      [selectedBookIds],
+      [localizedBookSelectorPrompt, localizedSelectBooks, selectedBookIds],
     ),
     useCallback(
       (newSelectedBooks) => {
@@ -62,7 +80,7 @@ export default function BookSelector({
     >
       <div className="book-selection-radio">
         <Radio value={BookSelectionMode.CURRENT_BOOK} />
-        <Typography className="book-selection-radio-label">Current Book</Typography>
+        <Typography className="book-selection-radio-label">{localizedCurrentBooks}</Typography>
         <div className="book-selection-radio-content">
           <div className="book-typography">
             <Typography padding={0.5} border={1}>
@@ -81,7 +99,7 @@ export default function BookSelector({
       </div>
       <div className="book-selection-radio">
         <Radio value={BookSelectionMode.CHOOSE_BOOKS} />
-        <Typography className="book-selection-radio-label">Choose Books</Typography>
+        <Typography className="book-selection-radio-label">{localizedChooseBooks}</Typography>
         <div className="book-selection-radio-content">
           <div className="book-typography">
             <Typography padding={0.5} border={1}>
@@ -95,7 +113,7 @@ export default function BookSelector({
               disabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
               onClick={() => selectBooks()}
             >
-              Choose...
+              {localizedChoose}
             </Button>
           </div>
         </div>

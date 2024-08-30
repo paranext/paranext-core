@@ -2,6 +2,7 @@
 /// <reference types="node" />
 /// <reference types="node" />
 declare module 'shared/models/web-view.model' {
+  import { LocalizeKey } from 'platform-bible-utils';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -37,7 +38,7 @@ declare module 'shared/models/web-view.model' {
      */
     iconUrl?: string;
     /** Name of the tab for the WebView */
-    title?: string;
+    title?: string | LocalizeKey;
     /** Tooltip that is shown when hovering over the webview title */
     tooltip?: string;
     /**
@@ -2850,6 +2851,7 @@ declare module 'shared/models/docking-framework.model' {
     WebViewDefinition,
     WebViewDefinitionUpdateInfo,
   } from 'shared/models/web-view.model';
+  import { LocalizeKey } from 'platform-bible-utils';
   /**
    * Saved information used to recreate a tab.
    *
@@ -2881,7 +2883,7 @@ declare module 'shared/models/docking-framework.model' {
      */
     tabIconUrl?: string;
     /** Text to show on the title bar of the tab */
-    tabTitle: string;
+    tabTitle: string | LocalizeKey;
     /** Text to show when hovering over the title bar of the tab */
     tabTooltip?: string;
     /** Content to show inside the tab. */

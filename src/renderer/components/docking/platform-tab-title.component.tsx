@@ -2,8 +2,9 @@ import { Tooltip } from '@mui/material';
 import { CommandHandler, HamburgerMenuButton } from 'platform-bible-react';
 import './platform-tab-title.component.scss';
 import menuDataService from '@shared/services/menu-data.service';
-import { useData } from '@renderer/hooks/papi-hooks';
+import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useCallback, useRef } from 'react';
+import { isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
 
 type PlatformTabTitleProps = {
@@ -14,7 +15,7 @@ type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to Platform.Bible logo */
   iconUrl?: string;
   /** Text to show on the tab */
-  text: string;
+  text: string | LocalizeKey;
   /** Text to show when hovering over the tab. Defaults to empty string */
   tooltip?: string;
 };
@@ -34,6 +35,11 @@ export default function PlatformTabTitle({
   tooltip,
 }: PlatformTabTitleProps) {
   const menuSelector = webViewType ?? 'invalid.invalid';
+
+  const tabAria: LocalizeKey = '%tabAria_tab%';
+  const [localizedStrings] = useLocalizedStrings(isLocalizeKey(text) ? [text, tabAria] : [tabAria]);
+  const title = isLocalizeKey(text) ? localizedStrings[text] : text;
+  const tabLabel = localizedStrings[tabAria];
 
   const menuInfo = useData(webViewType ? menuDataService.dataProviderName : undefined).WebViewMenu(
     menuSelector,
@@ -82,13 +88,13 @@ export default function PlatformTabTitle({
             commandHandler={commandHandler}
             normalMenu={webViewMenu?.topMenu}
             className="tab-menu-button"
-            aria-label="Tab"
+            aria-label={tabLabel}
             containerRef={containerRef}
           >
             {icon}
           </HamburgerMenuButton>
         )}
-        <span>{text}</span>
+        <span>{title}</span>
       </div>
     </Tooltip>
   );

@@ -16,13 +16,10 @@ import {
   IFRAME_SANDBOX_ALLOW_POPUPS,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
-import { serialize } from 'platform-bible-utils';
+import { isLocalizeKey, serialize } from 'platform-bible-utils';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
-
-export function getTitle({ webViewType, title, contentType }: Partial<WebViewTabProps>): string {
-  return title || `${webViewType || contentType} Web View`;
-}
 
 export default function WebView({
   webViewType,
@@ -37,6 +34,15 @@ export default function WebView({
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const iframeRef = useRef<HTMLIFrameElement>(undefined!);
 
+  const webViewKey = '%webView_defaultTitle_webView%';
+  const [localizedStrings] = useLocalizedStrings(
+    title && isLocalizeKey(title) ? [title] : [webViewKey],
+  );
+  const defaultTitle = !title
+    ? title
+    : `${webViewType || contentType} ${localizedStrings[webViewKey]}`;
+  const localizedTitle = title && isLocalizeKey(title) ? localizedStrings[title] : defaultTitle;
+
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WebViewContentType.URL;
 
@@ -49,7 +55,7 @@ export default function WebView({
   return (
     <iframe
       ref={iframeRef}
-      title={getTitle({ webViewType, title, contentType })}
+      title={localizedTitle}
       /**
        * Sandbox attribute for the webview - controls what resources scripts and other things can
        * access. See `ALLOWED_IFRAME_SRC_SANDBOX_VALUES` in `web-view.service.ts` for more info.
@@ -98,7 +104,7 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
     ...savedTabInfo,
     data,
     tabIconUrl: data.iconUrl,
-    tabTitle: data.title ?? 'Unknown',
+    tabTitle: data.title ?? '%tab_unknown%',
     tabTooltip: data.tooltip ?? '',
     content: <WebView {...data} />,
   };
@@ -136,7 +142,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
     data = {
       id: savedTabInfo.id,
       webViewType: 'Unknown',
-      title: 'Unknown',
+      title: '%tab_unknown%',
       content: '',
       contentType: WebViewContentType.HTML,
     };

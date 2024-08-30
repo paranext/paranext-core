@@ -2,6 +2,7 @@ import DoneIcon from '@mui/icons-material/Done';
 import { Button, Checklist } from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
+import { LocalizeKey } from 'platform-bible-utils';
 import DIALOG_BASE from './dialog-base.data';
 import { DialogDefinition, DialogTypes, SELECT_BOOKS_DIALOG_TYPE } from './dialog-definition.model';
 import './select-books-dialog.component.scss';
@@ -48,10 +49,12 @@ function SelectBooksDialog({
   );
 }
 
+const localizeSelectBooksKey: LocalizeKey = `%selectBooks_selectBooks%`;
+
 const SELECT_BOOKS_DIALOG: DialogDefinition<typeof SELECT_BOOKS_DIALOG_TYPE> = Object.freeze({
   ...DIALOG_BASE,
   tabType: SELECT_BOOKS_DIALOG_TYPE,
-  defaultTitle: 'Select Books',
+  defaultTitle: localizeSelectBooksKey,
   initialSize: {
     width: 500,
     height: 400,

@@ -9,6 +9,7 @@ import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
 import { debounce, getErrorMessage } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -182,12 +183,16 @@ export default function Setting({
     );
   }, [setting, settingKey, debouncedHandleChange, errorMessage]);
 
+  const loadingSettingKey = '%settings_loadingSetting%';
+  const [localizedStrings] = useLocalizedStrings([loadingSettingKey]);
+  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
+
   return (
     <SettingsListItem
       primary={label}
       secondary={description}
       isLoading={isLoading}
-      loadingMessage="Loading setting"
+      loadingMessage={localizedLoadingSetting}
     >
       {generateComponent()}
     </SettingsListItem>
