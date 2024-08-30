@@ -4,6 +4,7 @@ import {
   GetSavedWebViewDefinition,
   SavedWebViewDefinition,
   UpdateWebViewDefinition,
+  UseWebViewScrollGroupScrRefHook,
   UseWebViewStateHook,
   WebViewDefinitionUpdateInfo,
   WebViewProps,
@@ -34,6 +35,8 @@ declare global {
   var webViewComponent: FunctionComponent<WebViewProps>;
   /** JSDOC DESTINATION UseWebViewStateHook */
   var useWebViewState: UseWebViewStateHook;
+  /** JSDOC DESTINATION UseWebViewScrollGroupScrRefHook */
+  var useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
   /**
    * Retrieve the value from web view state with the given 'stateKey', if it exists. Otherwise
    * return default value

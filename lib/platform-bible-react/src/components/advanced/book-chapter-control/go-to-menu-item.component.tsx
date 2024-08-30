@@ -14,15 +14,15 @@ function GoToMenuItem({ handleSort, handleLocationHistory, handleBookmarks }: Go
       <div className="pr-flex pr-items-center">
         <ArrowDownWideNarrow
           onClick={handleSort}
-          className="pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2 pr-p-2"
+          className="pr-m-2 pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2"
         />
         <Clock
           onClick={handleLocationHistory}
-          className="pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2 pr-p-2"
+          className="pr-m-2 pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2"
         />
         <Bookmark
           onClick={handleBookmarks}
-          className="pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2 pr-p-2"
+          className="pr-m-2 pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2"
         />
       </div>
     </ShadDropdownMenuLabel>

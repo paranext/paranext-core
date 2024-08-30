@@ -10,7 +10,7 @@ import { VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
-import { useProjectData, useSetting } from '@papi/frontend/react';
+import { useProjectData } from '@papi/frontend/react';
 import { ScriptureReference, debounce } from 'platform-bible-utils';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
@@ -21,12 +21,6 @@ const VERSE_NUMBER_SCROLL_OFFSET = 80;
  * to listen for the editor to finish loading
  */
 const EDITOR_LOAD_DELAY_TIME = 100;
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
 
 const usjDocumentDefault: Usj = { type: 'USJ', version: '0.2.1', content: [] };
 
@@ -67,6 +61,7 @@ function scrollToScrRef(scrRef: ScriptureReference): HTMLElement | undefined {
 globalThis.webViewComponent = function PlatformScriptureEditor({
   projectId,
   useWebViewState,
+  useWebViewScrollGroupScrRef,
 }: WebViewProps): JSX.Element {
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const Editor = isReadOnly ? Editorial : Marginal;
@@ -74,7 +69,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
-  const [scrRef, setScrRefInternal] = useSetting('platform.verseRef', defaultScrRef);
+  const [scrRef, setScrRefInternal] = useWebViewScrollGroupScrRef();
 
   /**
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
