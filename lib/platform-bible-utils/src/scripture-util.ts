@@ -1,6 +1,7 @@
 import { Canon, VerseRef } from '@sillsdev/scripture';
-import { BookInfo, ScriptureReference } from './scripture.model';
+import { BookInfo, ScriptureReference, ScrollGroupId } from './scripture.model';
 import { split, startsWith } from './string-util';
+import { LocalizeKey } from './menus.model';
 
 const scrBookData: BookInfo[] = [
   { shortName: 'ERR', fullNames: ['ERROR'], chapters: -1 },
@@ -167,6 +168,31 @@ export function compareScrRefs(scrRef1: ScriptureReference, scrRef2: ScriptureRe
   // TODO: consider edge cases for invalid references (current implementation should suffice for
   // all but the most extreme cases)
   return scrRefToBBBCCCVVV(scrRef1) - scrRefToBBBCCCVVV(scrRef2);
+}
+
+/** Get the localized string key for a given scroll group Id (or no scroll group if `undefined`) */
+export function getLocalizeKeyForScrollGroupId(
+  scrollGroupId: ScrollGroupId | undefined | 'undefined',
+): LocalizeKey {
+  return `%scrollGroup_${scrollGroupId}%`;
+}
+
+/**
+ * Gets a list of localized string keys for provided scroll group Ids. Uses
+ * {@link getLocalizeKeyForScrollGroupId} internally
+ *
+ * @example
+ *
+ * ```typescript
+ * getLocalizeKeysForScrollGroupIds([undefined, 0, 1, 2, 3, 4]);
+ * // Gives localized string keys for the provided scroll group ids in an array
+ * ```
+ *
+ * @param scrollGroupIds Scroll group ids to include
+ * @returns List of localized string keys for scroll group Ids
+ */
+export function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (ScrollGroupId | undefined)[]) {
+  return scrollGroupIds.map((scrollGroupId) => getLocalizeKeyForScrollGroupId(scrollGroupId));
 }
 
 /**

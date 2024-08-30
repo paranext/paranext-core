@@ -20,6 +20,8 @@ export {
   LAST_SCR_BOOK_NUM,
   FIRST_SCR_CHAPTER_NUM,
   FIRST_SCR_VERSE_NUM,
+  getLocalizeKeyForScrollGroupId,
+  getLocalizeKeysForScrollGroupIds,
 } from './scripture-util';
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
 
@@ -85,6 +87,7 @@ export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './
 export type {
   BookInfo,
   ScriptureReference,
+  ScrollGroupId,
   ScriptureNode,
   ScriptureSelection,
   ScriptureTextAnchor,
