@@ -53,6 +53,10 @@
           "platformScriptureEditor.inventory": {
             "column": "platformScriptureEditor.tools",
             "order": 2
+          },
+          "platformScriptureEditor.checks": {
+            "column": "platformScriptureEditor.tools",
+            "order": 3
           }
         },
         "items": [
@@ -79,6 +83,12 @@
             "group": "platformScriptureEditor.inventory",
             "order": 2,
             "command": "platformScripture.openRepeatedWordsInventory"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_runBasicChecks%",
+            "group": "platformScriptureEditor.checks",
+            "order": 1,
+            "command": "platformScripture.runBasicChecks"
           },
           {
             "label": "%webView_platformScriptureEditor_thickBorders%",
