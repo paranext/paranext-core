@@ -29,9 +29,20 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
       (savedWebView.state?.projectId as string) ||
       undefined;
 
-    const title: string = await papi.localization.getLocalizedString({
+    let title: string = await papi.localization.getLocalizedString({
       localizeKey: this.titleKey,
     });
+
+    let projectName: string | undefined;
+
+    if (projectId) {
+      projectName =
+        (await (
+          await papi.projectDataProviders.get('platform.base', projectId)
+        ).getSetting('platform.name')) ?? projectId;
+
+      title += ` - ${projectName}`;
+    }
 
     return {
       title,
@@ -39,8 +50,9 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
       content: configureChecksWebView,
       styles: configureChecksWebViewStyles,
       state: {
-        ...savedWebView.state,
+        projectName,
         projectId,
+        ...savedWebView.state,
       },
     };
   }

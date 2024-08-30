@@ -3,6 +3,7 @@ import ConfigureChecks from './checks/configure-checks/configure-checks.componen
 
 global.webViewComponent = function InventoryWebView({ useWebViewState }: WebViewProps) {
   const [projectId] = useWebViewState('projectId', '');
+  const [projectName] = useWebViewState('projectName', '');
 
-  return <ConfigureChecks currentProjectId={projectId} />;
+  return <ConfigureChecks projectId={projectId} projectName={projectName} />;
 };

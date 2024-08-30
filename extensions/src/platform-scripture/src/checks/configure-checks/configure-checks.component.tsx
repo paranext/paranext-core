@@ -8,7 +8,8 @@ import { logger } from '@papi/frontend';
 import BookSelector, { BookSelectionMode } from './book-selector.component';
 
 type ConfigureChecksProps = {
-  currentProjectId: string | undefined;
+  projectId: string | undefined;
+  projectName: string | undefined;
 };
 
 const defaultScrRef: ScriptureReference = {
@@ -66,7 +67,7 @@ export function fetchChecks(): BasicCheck[] {
   ];
 }
 
-export default function ConfigureChecks({ currentProjectId }: ConfigureChecksProps) {
+export default function ConfigureChecks({ projectId, projectName }: ConfigureChecksProps) {
   const basicChecks = fetchChecks();
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
@@ -145,7 +146,7 @@ export default function ConfigureChecks({ currentProjectId }: ConfigureChecksPro
     );
   };
 
-  const project = useProjectDataProvider('platformScripture.USFM_Verse', currentProjectId);
+  const project = useProjectDataProvider('platformScripture.USFM_Verse', projectId);
 
   const [projectString] = usePromise(
     useMemo(() => {
@@ -158,16 +159,17 @@ export default function ConfigureChecks({ currentProjectId }: ConfigureChecksPro
   );
 
   return (
-    <div className="run-basic-checks-dialog">
-      <Typography variant="h5">{`Run basic checks: ${currentProjectId}, ${projectString}`}</Typography>
+    <div className="configure-checks-dialog">
+      <Typography variant="h5">{`Run basic checks: ${projectName}`}</Typography>
+      {projectString}
       <Checklist
-        className="run-basic-checks-check-names"
+        className="configure-checks-check-names"
         legend="Checks"
         listItems={basicChecks.map((check) => check.name)}
         selectedListItems={selectedChecks}
         handleSelectListItem={handleSelectCheck}
       />
-      <fieldset className="run-basic-checks-books">
+      <fieldset className="configure-checks-books">
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}
           currentBookName={Canon.bookIdToEnglishName(currentBookId)}
