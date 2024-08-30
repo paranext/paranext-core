@@ -2,8 +2,8 @@ import { RadioGroup, Radio, Typography } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
 import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
-import './book-selector.component.scss';
-import { useDialogCallback } from '@renderer/hooks/papi-hooks';
+// import './book-selector.component.scss';
+import { useDialogCallback } from '@papi/frontend/react';
 
 export enum BookSelectionMode {
   CURRENT_BOOK = 'current book',
@@ -60,16 +60,21 @@ export default function BookSelector({
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       onChange={(e) => onSelectionModeChange(e.target.value as BookSelectionMode)}
     >
-      <div className="book-selection-radio">
+      {/* <div className="book-selection-radio"> */}
+      <div>
         <Radio value={BookSelectionMode.CURRENT_BOOK} />
-        <Typography className="book-selection-radio-label">Current Book</Typography>
-        <div className="book-selection-radio-content">
-          <div className="book-typography">
+        {/* <Typography className="book-selection-radio-label">Current Book</Typography> */}
+        <Typography>Current Book</Typography>
+        {/* <div className="book-selection-radio-content"> */}
+        <div>
+          {/* <div className="book-typography"> */}
+          <div>
             <Typography padding={0.5} border={1}>
               {currentBookName}
             </Typography>
           </div>
-          <div className="book-selection-radio-action">
+          {/* <div className="book-selection-radio-action"> */}
+          <div>
             <ChapterRangeSelector
               isDisabled={bookSelectionMode === BookSelectionMode.CHOOSE_BOOKS}
               handleSelectStartChapter={handleSelectStartChapter}
@@ -79,18 +84,23 @@ export default function BookSelector({
           </div>
         </div>
       </div>
-      <div className="book-selection-radio">
+      {/* <div className="book-selection-radio"> */}
+      <div>
         <Radio value={BookSelectionMode.CHOOSE_BOOKS} />
-        <Typography className="book-selection-radio-label">Choose Books</Typography>
-        <div className="book-selection-radio-content">
-          <div className="book-typography">
+        {/* <Typography className="book-selection-radio-label">Choose Books</Typography> */}
+        <Typography>Choose Books</Typography>
+        {/* <div className="book-selection-radio-content"> */}
+        <div>
+          {/* <div className="book-typography"> */}
+          <div>
             <Typography padding={0.5} border={1}>
               {selectedBookIds
                 .map((bookId: string) => Canon.bookIdToEnglishName(bookId))
                 .join(', ')}
             </Typography>
           </div>
-          <div className="book-selection-radio-action">
+          {/* <div className="book-selection-radio-action"> */}
+          <div>
             <Button
               disabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
               onClick={() => selectBooks()}

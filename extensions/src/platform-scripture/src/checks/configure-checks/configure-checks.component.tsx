@@ -1,20 +1,14 @@
-import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { Button, ScriptureReference, usePromise, Checklist } from 'platform-bible-react';
 import { getChaptersForBook } from 'platform-bible-utils';
-import logger from '@shared/services/logger.service';
 import { Typography } from '@mui/material';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-import BookSelector, {
-  BookSelectionMode,
-} from '@renderer/components/run-basic-checks-dialog/book-selector.component';
-import './run-basic-checks-tab.component.scss';
-import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
+// import './configure-checks.component.scss';
 import { Canon, VerseRef } from '@sillsdev/scripture';
-import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
+import { useProjectDataProvider, useSetting } from '@papi/frontend/react';
+import { logger } from '@papi/frontend';
+import BookSelector, { BookSelectionMode } from './book-selector.component';
 
-export const TAB_TYPE_RUN_BASIC_CHECKS = 'run-basic-checks';
-
-type RunBasicChecksTabProps = {
+type ConfigureChecksProps = {
   currentProjectId: string | undefined;
 };
 
@@ -73,7 +67,7 @@ export function fetchChecks(): BasicCheck[] {
   ];
 }
 
-export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTabProps) {
+export default function ConfigureChecks({ currentProjectId }: ConfigureChecksProps) {
   const basicChecks = fetchChecks();
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
@@ -165,16 +159,18 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
   );
 
   return (
-    <div className="run-basic-checks-dialog">
+    // <div className="run-basic-checks-dialog">
+    <div>
       <Typography variant="h5">{`Run basic checks: ${currentProjectId}, ${projectString}`}</Typography>
       <Checklist
-        className="run-basic-checks-check-names"
+        // className="run-basic-checks-check-names"
         legend="Checks"
         listItems={basicChecks.map((check) => check.name)}
         selectedListItems={selectedChecks}
         handleSelectListItem={handleSelectCheck}
       />
-      <fieldset className="run-basic-checks-books">
+      {/* <fieldset className="run-basic-checks-books"> */}
+      <fieldset>
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}
           currentBookName={Canon.bookIdToEnglishName(currentBookId)}
@@ -185,23 +181,11 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
           handleSelectEndChapter={handleSelectEnd}
         />
       </fieldset>
-      <div className="basic-checks-dialog-actions">
+      {/* <div className="basic-checks-dialog-actions"> */}
+      <div>
         <Button onClick={() => handleSubmit()}>Run</Button>
         <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
       </div>
     </div>
   );
 }
-
-export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
-  return {
-    ...savedTabInfo,
-    tabTitle: 'Run Basic Checks',
-    content: (
-      <RunBasicChecksTab
-        // #region Test a .NET data provider
-        currentProjectId="32664dc3288a28df2e2bb75ded887fc8f17a15fb"
-      />
-    ),
-  };
-};

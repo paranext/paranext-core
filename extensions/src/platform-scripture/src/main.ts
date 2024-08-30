@@ -8,10 +8,14 @@ import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/p
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
 import InventoryWebViewProvider, { InventoryWebViewOptions } from './inventory.web-view-provider';
+import ConfigureChecksWebViewProvider, {
+  configureChecksWebViewType,
+  ConfigureChecksWebViewOptions,
+} from './configure-checks.web-view-provider';
 import CheckResultsWebViewProvider, {
   checkResultsListWebViewType,
   CheckResultsWebViewOptions,
-} from './checking-results.web-view-provider';
+} from './checking-results-list.web-view-provider';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -75,7 +79,26 @@ async function openInventory(
   );
 }
 
-async function runPlatformBasicChecks(webViewId: string | undefined): Promise<string | undefined> {
+async function configureChecks(webViewId: string | undefined): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  logger.debug('Configuring checks');
+
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  if (!projectId) {
+    logger.debug('No project!');
+    return undefined;
+  }
+
+  const options: ConfigureChecksWebViewOptions = { projectId };
+  return papi.webViews.getWebView(configureChecksWebViewType, { type: 'tab' }, options);
+}
+
+async function showCheckResults(webViewId: string | undefined): Promise<string | undefined> {
   let projectId: string | undefined;
 
   logger.debug('Running checks');
@@ -113,6 +136,9 @@ export async function activate(context: ExecutionActivationContext) {
     repeatedWordsInventoryWebViewType,
   );
   const checkResultsWebViewProvider = new CheckResultsWebViewProvider();
+  const configureChecksWebViewProvider = new ConfigureChecksWebViewProvider(
+    '%webView_configureChecks_title%',
+  );
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
@@ -170,11 +196,19 @@ export async function activate(context: ExecutionActivationContext) {
     repeatedWordsInventoryWebViewType,
     repeatedWordsInventoryWebViewProvider,
   );
-  const runBasicChecksPromise = papi.commands.registerCommand(
-    'platformScripture.runBasicChecks',
-    runPlatformBasicChecks,
+  const configureChecksPromise = papi.commands.registerCommand(
+    'platformScripture.openConfigureChecks',
+    configureChecks,
   );
-  const checkResultsWebViewProviderPromise = papi.webViewProviders.register(
+  const configureChecksWebViewProviderPromise = papi.webViewProviders.register(
+    configureChecksWebViewType,
+    configureChecksWebViewProvider,
+  );
+  const showCheckResultsPromise = papi.commands.registerCommand(
+    'platformScripture.showCheckResults',
+    showCheckResults,
+  );
+  const showCheckResultsWebViewProviderPromise = papi.webViewProviders.register(
     checkResultsListWebViewType,
     checkResultsWebViewProvider,
   );
@@ -196,8 +230,10 @@ export async function activate(context: ExecutionActivationContext) {
     await nonRepeatableWordsPromise,
     await openRepeatedWordsInventoryPromise,
     await repeatableWordsInventoryWebViewProviderPromise,
-    await runBasicChecksPromise,
-    await checkResultsWebViewProviderPromise,
+    await configureChecksPromise,
+    await configureChecksWebViewProviderPromise,
+    await showCheckResultsPromise,
+    await showCheckResultsWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

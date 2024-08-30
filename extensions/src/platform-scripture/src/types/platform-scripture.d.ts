@@ -684,7 +684,11 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.runBasicChecks': (
+    'platformScripture.openConfigureChecks': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    'platformScripture.showCheckResults': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
   }
