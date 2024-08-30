@@ -28,8 +28,8 @@ const extractOccurrences = (
   const results: SearchResult[] = [];
   const lines = getLinesFromUSFM(text);
 
-  let currentChapter: number = scriptureRef.chapterNum;
-  let currentVerse: number = scriptureRef.verseNum;
+  let currentChapter: number | undefined = scriptureRef.chapterNum;
+  let currentVerse: number | undefined = scriptureRef.verseNum;
   let key: number = 0;
 
   lines.forEach((line) => {
@@ -52,7 +52,11 @@ const extractOccurrences = (
 
     for (let i = 0; i < items.length; i++) {
       const result: SearchResult = {
-        reference: { ...scriptureRef, chapterNum: +currentChapter, verseNum: +currentVerse },
+        reference: {
+          ...scriptureRef,
+          chapterNum: currentChapter !== undefined ? +currentChapter : -1,
+          verseNum: currentVerse !== undefined ? +currentVerse : -1,
+        },
         snippet: line,
         key,
       };
@@ -64,14 +68,14 @@ const extractOccurrences = (
   return results;
 };
 
-interface OccurrencesTableProps {
+type OccurrencesTableProps = {
   selectedItem: string;
   text: string | undefined;
   extractItems: (text: string, item?: string | undefined) => string[];
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
-}
+};
 
 function OccurrencesTable({
   selectedItem,

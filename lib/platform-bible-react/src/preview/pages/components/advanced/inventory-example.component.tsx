@@ -4,7 +4,11 @@ import {
   inventoryItemColumn,
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
-import Inventory, { ItemData, Status } from '@/components/advanced/inventory/inventory.component';
+import Inventory, {
+  ItemData,
+  Scope,
+  Status,
+} from '@/components/advanced/inventory/inventory.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
@@ -37,12 +41,11 @@ const createColumns = (
 ];
 
 const extractItems = (text: string, target: string | undefined = undefined): string[] => {
-  const repeatedWords: string[] = [];
-  const words = text.split(/[\s]+/);
-  words.forEach((word, index, allWords) => {
-    if (target && word !== target) return;
-    if (index + 1 < allWords.length && word === allWords[index + 1]) repeatedWords.push(word);
-  });
+  // Finds repeated words, and captures the first occurrence of the word
+  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
+
+  if (target) return repeatedWords?.filter((word) => word === target);
+
   return repeatedWords;
 };
 
@@ -50,7 +53,7 @@ function InventoryExample() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [approvedItems, setApprovedItems] = useState<string[]>(['well', 'he']);
   const [unapprovedItems, setUnapprovedItems] = useState<string[]>(['for', 'of']);
-  const [scope, setScope] = useState('book');
+  const [scope, setScope] = useState<Scope>('book');
 
   return (
     <div>

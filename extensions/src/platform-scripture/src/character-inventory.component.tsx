@@ -4,6 +4,7 @@ import {
   ColumnDef,
   Inventory,
   ItemData,
+  Scope,
   Status,
   inventoryCountColumn,
   inventoryItemColumn,
@@ -20,6 +21,16 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_status%',
 ];
 
+/**
+ * Function that constructs the column for the inventory component
+ *
+ * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
+ * @param unicodeValueLabel Localized label for the Unicode Value column
+ * @param countLabel Localized label for the count column
+ * @param statusLabel Localized label for the status column
+ * @param statusChangeHandler Callback function that handles status updates to selected item(s)
+ * @returns An array of columns that can be passed into the inventory component
+ */
 const createColumns = (
   itemLabel: string,
   unicodeValueLabel: string,
@@ -49,8 +60,8 @@ type CharacterInventoryProps = {
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
   text: string | undefined;
-  scope: string;
-  onScopeChange: (scope: string) => void;
+  scope: Scope;
+  onScopeChange: (scope: Scope) => void;
 };
 
 function CharacterInventory({
