@@ -2,7 +2,6 @@ import { Button, ScriptureReference, usePromise, Checklist } from 'platform-bibl
 import { getChaptersForBook } from 'platform-bible-utils';
 import { Typography } from '@mui/material';
 import { useState, useMemo, useCallback, useEffect } from 'react';
-// import './configure-checks.component.scss';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import { useProjectDataProvider, useSetting } from '@papi/frontend/react';
 import { logger } from '@papi/frontend';
@@ -159,18 +158,16 @@ export default function ConfigureChecks({ currentProjectId }: ConfigureChecksPro
   );
 
   return (
-    // <div className="run-basic-checks-dialog">
-    <div>
+    <div className="run-basic-checks-dialog">
       <Typography variant="h5">{`Run basic checks: ${currentProjectId}, ${projectString}`}</Typography>
       <Checklist
-        // className="run-basic-checks-check-names"
+        className="run-basic-checks-check-names"
         legend="Checks"
         listItems={basicChecks.map((check) => check.name)}
         selectedListItems={selectedChecks}
         handleSelectListItem={handleSelectCheck}
       />
-      {/* <fieldset className="run-basic-checks-books"> */}
-      <fieldset>
+      <fieldset className="run-basic-checks-books">
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}
           currentBookName={Canon.bookIdToEnglishName(currentBookId)}
@@ -181,8 +178,7 @@ export default function ConfigureChecks({ currentProjectId }: ConfigureChecksPro
           handleSelectEndChapter={handleSelectEnd}
         />
       </fieldset>
-      {/* <div className="basic-checks-dialog-actions"> */}
-      <div>
+      <div className="basic-checks-dialog-actions">
         <Button onClick={() => handleSubmit()}>Run</Button>
         <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
       </div>
