@@ -4,20 +4,10 @@
 /// <reference types="node" />
 /// <reference types="node" />
 declare module 'shared/services/scroll-group.service-model' {
-  import { PlatformEvent, ScriptureReference } from 'platform-bible-utils';
+  import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
   /** Name to use when creating a network event that is fired when webViews are updated */
   export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: `${string}:${string}`;
-  /**
-   * An identifier corresponding to a Scripture reference shared by a group of Scripture reference
-   * consumers.
-   *
-   * For example, a few web views that share a Scroll Group Id would all change Scripture Reference
-   * together.
-   *
-   * These are generally expected to be non-negative numbers (starting at 0).
-   */
-  export type ScrollGroupId = number;
   /**
    * Combination of a {@link ScrollGroupId} and a {@link ScriptureReference}. If this value is a number,
    * that means this should be synced with the scroll group sharing that number. If this value is an
@@ -65,11 +55,8 @@ declare module 'shared/services/scroll-group.service-model' {
   }
 }
 declare module 'shared/models/web-view.model' {
-  import type {
-    ScrollGroupId,
-    ScrollGroupScrRef,
-  } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference } from 'platform-bible-utils';
+  import type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -2543,7 +2530,16 @@ declare module 'papi-shared-types' {
    * ```
    */
   interface SettingTypes {
+    /**
+     * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
+     * `useWebViewScrollGroupScrRef`
+     */
     'platform.verseRef': ScriptureReference;
+    /**
+     * List of locales to use when localizing the interface. First in the list receives highest
+     * priority. Please always add 'en' (English) at the end when using this setting so everything
+     * localizes to English if it does not have a localization in a higher-priority locale.
+     */
     'platform.interfaceLanguage': string[];
     /**
      * Mementos managed in the dotnet process and used for interacting with PtxUtils. Mementos are
@@ -6790,8 +6786,14 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   export default useData;
 }
 declare module 'renderer/services/scroll-group.service-host' {
-  import { ScrollGroupUpdateInfo, ScrollGroupId } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference } from 'platform-bible-utils';
+  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+  import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+  /**
+   * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
+   * placeholder and will be refactored significantly in
+   * https://github.com/paranext/paranext-core/issues/788
+   */
+  export const availableScrollGroupIds: (number | undefined)[];
   /** Event that emits with information about a changed Scripture Reference for a scroll group */
   export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
@@ -6812,8 +6814,8 @@ declare module 'renderer/services/scroll-group.service-host' {
   export function startScrollGroupService(): Promise<void>;
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
-  import { ScrollGroupId, ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference } from 'platform-bible-utils';
+  import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
   /**
    * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
    * value for both the {@link ScriptureReference} and the {@link ScrollGroupId} for the provided

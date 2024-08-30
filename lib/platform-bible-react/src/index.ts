@@ -25,6 +25,10 @@ export {
   inventoryCountColumn,
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
+export {
+  default as ScrollGroupSelector,
+  type ScrollGroupSelectorProps,
+} from './components/advanced/scroll-group-selector.component';
 
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/mui/chapter-range-selector.component';

@@ -3,9 +3,9 @@ import {
   onDidUpdateScrRef,
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
-import { ScrollGroupId, ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { useEvent } from 'platform-bible-react';
-import { compareScrRefs, ScriptureReference } from 'platform-bible-utils';
+import { compareScrRefs, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 function extractScrollGroupId(scrollGroupScrRef: ScrollGroupScrRef): ScrollGroupId | undefined {

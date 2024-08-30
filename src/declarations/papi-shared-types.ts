@@ -92,7 +92,16 @@ declare module 'papi-shared-types' {
    * ```
    */
   export interface SettingTypes {
+    /**
+     * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
+     * `useWebViewScrollGroupScrRef`
+     */
     'platform.verseRef': ScriptureReference;
+    /**
+     * List of locales to use when localizing the interface. First in the list receives highest
+     * priority. Please always add 'en' (English) at the end when using this setting so everything
+     * localizes to English if it does not have a localization in a higher-priority locale.
+     */
     'platform.interfaceLanguage': string[];
     /**
      * Mementos managed in the dotnet process and used for interacting with PtxUtils. Mementos are

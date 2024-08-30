@@ -13,6 +13,7 @@ export const platformSettings: SettingsContribution = {
     },
     'platform.interfaceLanguage': {
       label: '%settings_platform_interfaceLanguage_label%',
+      description: '%settings_platform_interfaceLanguage_description%',
       default: ['eng'],
     },
     'platform.ptxUtilsMementoData': {

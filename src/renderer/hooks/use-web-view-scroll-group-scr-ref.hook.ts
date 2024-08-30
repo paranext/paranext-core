@@ -2,10 +2,9 @@ import {
   GetSavedWebViewDefinition,
   WebViewDefinitionUpdateInfo,
 } from '@shared/models/web-view.model';
-import { ScrollGroupId } from '@shared/services/scroll-group.service-model';
 import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { useEvent } from 'platform-bible-react';
-import { PlatformEvent, ScriptureReference } from 'platform-bible-utils';
+import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
 import { useState, useCallback } from 'react';
 import useScrollGroupScrRef from '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
 

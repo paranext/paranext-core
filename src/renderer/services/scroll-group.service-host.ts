@@ -6,7 +6,6 @@ import {
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
-  ScrollGroupId,
 } from '@shared/services/scroll-group.service-model';
 import settingsService from '@shared/services/settings.service';
 import {
@@ -15,6 +14,7 @@ import {
   compareScrRefs,
   deserialize,
   serialize,
+  ScrollGroupId,
 } from 'platform-bible-utils';
 
 const DEFAULT_SCR_REF: ScriptureReference = Object.freeze({
@@ -39,6 +39,13 @@ function saveScrRefs() {
 const onDidUpdateScrRefEmitter = createNetworkEventEmitter<ScrollGroupUpdateInfo>(
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
 );
+
+/**
+ * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
+ * placeholder and will be refactored significantly in
+ * https://github.com/paranext/paranext-core/issues/788
+ */
+export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 
 /** Event that emits with information about a changed Scripture Reference for a scroll group */
 export const onDidUpdateScrRef = onDidUpdateScrRefEmitter.event;

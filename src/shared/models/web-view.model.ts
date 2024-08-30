@@ -1,7 +1,7 @@
-import type { ScrollGroupId, ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 // Used in JSDoc link
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ScriptureReference } from 'platform-bible-utils';
+import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
 
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {

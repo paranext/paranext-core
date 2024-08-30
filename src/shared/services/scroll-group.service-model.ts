@@ -1,4 +1,4 @@
-import { PlatformEvent, ScriptureReference } from 'platform-bible-utils';
+import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
 
 export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
@@ -11,17 +11,6 @@ export const EVENT_NAME_ON_DID_UPDATE_SCR_REF = serializeRequestType(
   CATEGORY_SCROLL_GROUP,
   'onDidUpdateScrRef',
 );
-
-/**
- * An identifier corresponding to a Scripture reference shared by a group of Scripture reference
- * consumers.
- *
- * For example, a few web views that share a Scroll Group Id would all change Scripture Reference
- * together.
- *
- * These are generally expected to be non-negative numbers (starting at 0).
- */
-export type ScrollGroupId = number;
 
 /**
  * Combination of a {@link ScrollGroupId} and a {@link ScriptureReference}. If this value is a number,

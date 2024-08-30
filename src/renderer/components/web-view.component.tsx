@@ -17,18 +17,11 @@ import {
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
-import { LocalizeKey, serialize } from 'platform-bible-utils';
-import {
-  BookChapterControl,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from 'platform-bible-react';
+import { getLocalizeKeysForScrollGroupIds, serialize } from 'platform-bible-utils';
+import { BookChapterControl, ScrollGroupSelector } from 'platform-bible-react';
 import './web-view.component.css';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
-import { ScrollGroupId } from '@shared/services/scroll-group.service-model';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -36,23 +29,7 @@ export function getTitle({ webViewType, title, contentType }: Partial<WebViewTab
   return title || `${webViewType || contentType} Web View`;
 }
 
-const SCROLL_GROUP_IDS: (ScrollGroupId | 'undefined')[] = [...Array(5).keys()];
-SCROLL_GROUP_IDS.unshift('undefined');
-const SCROLL_GROUP_LOCALIZED_STRING_KEYS = SCROLL_GROUP_IDS.map((scrollGroupId) =>
-  getScrollGroupKey(scrollGroupId),
-);
-const SCROLL_GROUP_DEFAULT_LOCALIZED_STRINGS = {
-  [getScrollGroupKey('undefined')]: 'Ø',
-  [getScrollGroupKey(0)]: 'A',
-  [getScrollGroupKey(1)]: 'B',
-  [getScrollGroupKey(2)]: 'C',
-  [getScrollGroupKey(3)]: 'D',
-  [getScrollGroupKey(4)]: 'E',
-};
-
-function getScrollGroupKey(scrollGroupId: ScrollGroupId | string): LocalizeKey {
-  return `%scrollGroup_${scrollGroupId}%`;
-}
+const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
 export default function WebView({
   id,
@@ -87,38 +64,18 @@ export default function WebView({
     ),
   );
 
-  const [scrollGroupLocalizedStringsTemp] = useLocalizedStrings(SCROLL_GROUP_LOCALIZED_STRING_KEYS);
-  const scrollGroupLocalizedStrings =
-    scrollGroupLocalizedStringsTemp[getScrollGroupKey(0)] === getScrollGroupKey(0)
-      ? { ...scrollGroupLocalizedStringsTemp, ...SCROLL_GROUP_DEFAULT_LOCALIZED_STRINGS }
-      : scrollGroupLocalizedStringsTemp;
+  const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   return (
     <div className="web-view-parent">
       <div className="web-view-tab-nav">
         <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
-        <Select
-          value={`${scrollGroupId}`}
-          onValueChange={(newScrollGroupString) =>
-            setScrollGroupId(
-              newScrollGroupString === 'undefined' ? undefined : parseInt(newScrollGroupString, 10),
-            )
-          }
-        >
-          <SelectTrigger className="web-view-scroll-group-selector">
-            <SelectValue placeholder="A" />
-          </SelectTrigger>
-          <SelectContent
-            // Need to get over the floating web view z-index 200
-            style={{ zIndex: 250 }}
-          >
-            {SCROLL_GROUP_IDS.map((scrollGroupOptionId) => (
-              <SelectItem key={scrollGroupOptionId} value={scrollGroupOptionId.toString()}>
-                {scrollGroupLocalizedStrings[getScrollGroupKey(scrollGroupOptionId)]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <ScrollGroupSelector
+          availableScrollGroupIds={availableScrollGroupIds}
+          scrollGroupId={scrollGroupId}
+          onChangeScrollGroupId={setScrollGroupId}
+          localizedStrings={scrollGroupLocalizedStrings}
+        />
       </div>
       <iframe
         className="web-view"
