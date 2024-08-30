@@ -63,40 +63,36 @@ export const inventoryStatusColumn = (
       });
 
       return (
-        <div>
-          <div className="pr-flex pr-justify-center">
-            <Button
-              className="pr-mt-1"
-              variant="ghost"
-              onClick={() => column.toggleSorting(undefined)}
-            >
-              {statusLabel}
-              {getSortingIcon(column.getIsSorted())}
-            </Button>
-          </div>
-          <div className="pr-flex pr-justify-center">
-            <Button className="pr-m-1">
-              <CircleCheckIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'approved');
-                }}
-              />
-            </Button>
-            <Button className="pr-m-1">
-              <CircleXIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'unapproved');
-                }}
-              />
-            </Button>
-            <Button className="pr-m-1">
-              <CircleHelpIcon
-                onClick={() => {
-                  statusChangeHandler(items, 'unknown');
-                }}
-              />
-            </Button>
-          </div>
+        <div className="pr-flex pr-justify-start">
+          <Button
+            className="pr-mt-1"
+            variant="ghost"
+            onClick={() => column.toggleSorting(undefined)}
+          >
+            {statusLabel}
+            {getSortingIcon(column.getIsSorted())}
+          </Button>
+          <Button className="pr-m-1">
+            <CircleCheckIcon
+              onClick={() => {
+                statusChangeHandler(items, 'approved');
+              }}
+            />
+          </Button>
+          <Button className="pr-m-1">
+            <CircleXIcon
+              onClick={() => {
+                statusChangeHandler(items, 'unapproved');
+              }}
+            />
+          </Button>
+          <Button className="pr-m-1">
+            <CircleHelpIcon
+              onClick={() => {
+                statusChangeHandler(items, 'unknown');
+              }}
+            />
+          </Button>
         </div>
       );
     },
