@@ -5,11 +5,13 @@ import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import { useProjectDataProvider, useSetting } from '@papi/frontend/react';
 import { logger } from '@papi/frontend';
+import { CheckRunnerCheckDetails } from 'platform-scripture';
 import BookSelector, { BookSelectionMode } from './book-selector.component';
 
 type ConfigureChecksProps = {
   projectId: string | undefined;
   projectName: string | undefined;
+  availableChecks: CheckRunnerCheckDetails[];
 };
 
 const defaultScrRef: ScriptureReference = {
@@ -22,53 +24,11 @@ export type BookSelectionStatus = {
   [bookId: string]: boolean;
 };
 
-type BasicCheck = {
-  name: string;
-};
-
-export function fetchChecks(): BasicCheck[] {
-  return [
-    {
-      name: 'Chapter/Verse Numbers',
-    },
-    {
-      name: 'Markers',
-    },
-    {
-      name: 'Characters (Combinations)',
-    },
-    {
-      name: 'Punctuation (Sequences)',
-    },
-    {
-      name: 'References',
-    },
-    {
-      name: 'Footnote Quotes',
-    },
-    {
-      name: 'Capitalization',
-    },
-    {
-      name: 'Repeated Words',
-    },
-    {
-      name: 'Unmatched Pairs of Punctuation',
-    },
-    {
-      name: 'Quotations',
-    },
-    {
-      name: 'Quotation types',
-    },
-    {
-      name: 'Numbers',
-    },
-  ];
-}
-
-export default function ConfigureChecks({ projectId, projectName }: ConfigureChecksProps) {
-  const basicChecks = fetchChecks();
+export default function ConfigureChecks({
+  projectId,
+  projectName,
+  availableChecks,
+}: ConfigureChecksProps) {
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
@@ -165,7 +125,7 @@ export default function ConfigureChecks({ projectId, projectName }: ConfigureChe
       <Checklist
         className="configure-checks-check-names"
         legend="Checks"
-        listItems={basicChecks.map((check) => check.name)}
+        listItems={availableChecks.map((check) => check.checkDescription)}
         selectedListItems={selectedChecks}
         handleSelectListItem={handleSelectCheck}
       />

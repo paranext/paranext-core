@@ -80,6 +80,9 @@ async function openInventory(
 }
 
 async function configureChecks(webViewId: string | undefined): Promise<string | undefined> {
+  const checkSvc = checkAggregatorService.serviceObject;
+  const availableChecks = await checkSvc.getAvailableChecks(undefined);
+
   let projectId: string | undefined;
 
   logger.debug('Configuring checks');
@@ -94,7 +97,7 @@ async function configureChecks(webViewId: string | undefined): Promise<string | 
     return undefined;
   }
 
-  const options: ConfigureChecksWebViewOptions = { projectId };
+  const options: ConfigureChecksWebViewOptions = { projectId, availableChecks };
   return papi.webViews.getWebView(configureChecksWebViewType, { type: 'tab' }, options);
 }
 

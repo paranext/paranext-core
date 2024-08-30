@@ -6,6 +6,7 @@ import {
   WebViewDefinition,
 } from '@papi/core';
 import { LocalizeKey } from 'platform-bible-utils';
+import { CheckRunnerCheckDetails } from 'platform-scripture';
 import configureChecksWebView from './configure-checks.web-view?inline';
 import configureChecksWebViewStyles from './configure-checks.web-view.scss?inline';
 
@@ -13,6 +14,7 @@ export const configureChecksWebViewType = 'platformScripture.configureChecks';
 
 export interface ConfigureChecksWebViewOptions extends GetWebViewOptions {
   projectId: string | undefined;
+  availableChecks: CheckRunnerCheckDetails[];
 }
 
 export default class ConfigureChecksWebViewProvider implements IWebViewProvider {
@@ -44,6 +46,8 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
       title += ` - ${projectName}`;
     }
 
+    const { availableChecks } = getWebViewOptions;
+
     return {
       title,
       ...savedWebView,
@@ -52,6 +56,7 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
       state: {
         projectName,
         projectId,
+        availableChecks,
         ...savedWebView.state,
       },
     };
