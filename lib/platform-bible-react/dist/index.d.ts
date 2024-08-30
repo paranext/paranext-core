@@ -189,7 +189,17 @@ export interface DataTableProps<TData, TValue> {
 	stickyHeader?: boolean;
 	onRowClickHandler?: (row: RowContents<TData>, table: TableContents<TData>) => void;
 }
+/**
+ * Feature-rich table component that infuses our basic shadcn-based Table component with features
+ * from TanStack's React Table library
+ */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in Platform.Bible extension, you can pass it into the useLocalizedStrings hook to
+ * easily obtain the localized strings and pass them into the localizedStrings prop of the Inventory
+ * component
+ */
 export declare const INVENTORY_STRING_KEYS: readonly [
 	"%webView_inventory_all%",
 	"%webView_inventory_approved%",
@@ -205,14 +215,22 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
+export type Scope = "book" | "chapter" | "verse";
 export type Status = "approved" | "unapproved" | "unknown";
 export type ItemData = {
 	item: string;
 	count: number;
 	status: Status;
 };
+/**
+ * Gets an icon that indicates the current sorting direction based on the provided input
+ *
+ * @param sortDirection Sorting direction. Can be ascending ('asc'), descending ('desc') or false (
+ *   i.e. not sorted)
+ * @returns The appropriate sorting icon for the provided sorting direction
+ */
 export declare const getSortingIcon: (sortDirection: false | SortDirection) => React$1.ReactNode;
-export interface InventoryProps {
+export type InventoryProps = {
 	scriptureReference: ScriptureReference;
 	setScriptureReference: (scriptureReference: ScriptureReference) => void;
 	localizedStrings: InventoryLocalizedStrings;
@@ -222,13 +240,35 @@ export interface InventoryProps {
 	unapprovedItems: string[];
 	onUnapprovedItemsChange: (items: string[]) => void;
 	text: string | undefined;
-	scope: string;
-	onScopeChange: (scope: string) => void;
+	scope: Scope;
+	onScopeChange: (scope: Scope) => void;
 	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
-}
-export declare function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+};
+/** Inventory component that is used to view and control the status of provided project settings */
+export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Function that creates the item column for inventories
+ *
+ * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
+ * @returns Column that shows the inventory items. Should be used with the DataTable component
+ */
 export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemData>;
+/**
+ * Function that creates the count column for inventories. Should be used with the DataTable
+ * component.
+ *
+ * @param itemLabel Localized label for the count column
+ * @returns Column that shows the number of occurrences of the related inventory items
+ */
 export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<ItemData>;
+/**
+ * Function that creates the status column for inventories. Should be used with the DataTable
+ * component.
+ *
+ * @param itemLabel Localized label for the status column
+ * @param statusChangeHandler Callback function that handles status updates to selected item(s)
+ * @returns Column that shows the status of the related inventory items.
+ */
 export declare const inventoryStatusColumn: (statusLabel: string, statusChangeHandler: (items: string[], status: Status) => void) => ColumnDef<ItemData>;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
