@@ -38,10 +38,8 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
     let projectName: string | undefined;
 
     if (projectId) {
-      projectName =
-        (await (
-          await papi.projectDataProviders.get('platform.base', projectId)
-        ).getSetting('platform.name')) ?? projectId;
+      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+      projectName = (await pdp.getSetting('platform.name')) ?? projectId;
 
       title += ` - ${projectName}`;
     }
