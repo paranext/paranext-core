@@ -31,8 +31,8 @@ export {
 } from './components/advanced/scroll-group-selector.component';
 
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
-export { default as ChapterRangeSelector } from './components/mui/chapter-range-selector.component';
-export type { ChapterRangeSelectorProps } from './components/mui/chapter-range-selector.component';
+export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
+export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
 export { default as Checkbox } from './components/mui/checkbox.component';
 export type { CheckboxProps } from './components/mui/checkbox.component';
 export { default as Checklist } from './components/mui/checklist.component';

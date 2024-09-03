@@ -42,6 +42,8 @@ export type ComboBoxProps<T> = {
   buttonVariant?: ButtonProps['variant'];
   /** Text direction ltr or rtl */
   dir?: Direction;
+  /** Optional boolean to set if trigger should be disabled */
+  isDisabled?: boolean;
 } & PopoverProps;
 
 type Direction = 'ltr' | 'rtl';
@@ -74,6 +76,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
   dir = 'ltr',
+  isDisabled = false,
   ...props
 }: ComboBoxProps<T>) {
   const [open, setOpen] = useState(false);
@@ -87,6 +90,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           aria-expanded={open}
           id={id}
           className={cn('pr-w-[200px] pr-justify-between', className)}
+          disabled={isDisabled}
         >
           {value ? getOptionLabel(value) : buttonPlaceholder}
           <ChevronsUpDown className="pr-ms-2 pr-h-4 pr-w-4 pr-shrink-0 pr-opacity-50" />

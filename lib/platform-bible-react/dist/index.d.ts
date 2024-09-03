@@ -349,12 +349,14 @@ export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElem
 }
 export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type ChapterRangeSelectorProps = {
+	startChapter: number;
+	endChapter: number;
 	handleSelectStartChapter: (chapter: number) => void;
 	handleSelectEndChapter: (chapter: number) => void;
 	isDisabled?: boolean;
 	chapterCount: number;
 };
-export function ChapterRangeSelector({ handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export declare enum LabelPosition {
 	After = "after",
 	Before = "before",
@@ -466,6 +468,8 @@ export type ComboBoxProps<T> = {
 	buttonVariant?: ButtonProps["variant"];
 	/** Text direction ltr or rtl */
 	dir?: Direction;
+	/** Optional boolean to set if trigger should be disabled */
+	isDisabled?: boolean;
 } & PopoverProps;
 export type Direction = "ltr" | "rtl";
 /**
@@ -474,7 +478,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;

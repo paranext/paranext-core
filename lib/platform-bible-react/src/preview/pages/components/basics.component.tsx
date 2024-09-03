@@ -19,6 +19,7 @@ import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
 import SpinnerExamples from './basics/spinner.examples.component';
+import ChapterRangeSelectorExample from './basics/chapter-range-example.component';
 
 function Basics({ direction }: HasDirection) {
   return (
@@ -40,6 +41,9 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Chapter Range Selector">
+            Chapter Range Selector
+          </VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Alert">
@@ -96,6 +100,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Table">
           <TableExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Chapter Range Selector">
+          <ChapterRangeSelectorExample />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
