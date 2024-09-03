@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
-import { useLocalizedStrings, useProjectSetting, useSetting } from '@papi/frontend/react';
-import { usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
+import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
+import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
@@ -9,9 +9,20 @@ import papi from '@papi/frontend';
 import CharacterInventory from './character-inventory.component';
 import RepeatedWordsInventory from './repeated-words-inventory.component';
 
-const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
-
-const getText = async (scope: string, scriptureRef: ScriptureReference, projectId: string) => {
+/**
+ * Get scripture text for the provided scope and reference for the specified projectId
+ *
+ * @param scope Scope of text. Can be 'book', 'chapter' or 'verse'.
+ * @param scriptureRef Reference to requested part of scripture
+ * @param projectId Id of the project from which the scripture is requested
+ * @returns Promise of scripture text, that can either resolve to a string or undefined
+ * @throws If the provided scope does not match any of the allowed values
+ */
+const getText = async (
+  scope: Scope,
+  scriptureRef: ScriptureReference,
+  projectId: string,
+): Promise<string | undefined> => {
   const verseRef = new VerseRef(
     scriptureRef.bookNum,
     scriptureRef.chapterNum,
@@ -34,7 +45,10 @@ const getText = async (scope: string, scriptureRef: ScriptureReference, projectI
   throw new Error('Cannot get scripture for unknown scope');
 };
 
-global.webViewComponent = function InventoryWebView({ useWebViewState }: WebViewProps) {
+global.webViewComponent = function InventoryWebView({
+  useWebViewState,
+  useWebViewScrollGroupScrRef,
+}: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
       return Array.from(INVENTORY_STRING_KEYS);
@@ -42,7 +56,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
   );
   const [projectId] = useWebViewState('projectId', '');
   const [webViewType] = useWebViewState('webViewType', '');
-  const [scriptureRef, setScriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
+  const [scriptureRef, setScriptureRef] = useWebViewScrollGroupScrRef();
 
   let InventoryVariant;
   let validItemsSetting: keyof ProjectSettingTypes;
@@ -64,7 +78,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
 
   const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
   const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
-  const [scope, setScope] = useState<string>('book');
+  const [scope, setScope] = useState<Scope>('book');
   const [text] = usePromise(
     useCallback(
       async () => getText(scope, scriptureRef, projectId),
@@ -87,7 +101,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
       onUnapprovedItemsChange={(items: string[]) => setInvalidItems?.(items.join(' '))}
       text={text}
       scope={scope}
-      onScopeChange={(newScope: string) => setScope(newScope)}
+      onScopeChange={(newScope: Scope) => setScope(newScope)}
     />
   );
 };

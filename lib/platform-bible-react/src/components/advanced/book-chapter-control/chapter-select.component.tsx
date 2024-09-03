@@ -44,7 +44,7 @@ function ChapterSelect({
         <div
           key={chapter}
           className={cn(
-            'pr-flex pr-h-4 pr-w-4 pr-cursor-pointer pr-items-center pr-justify-end pr-rounded-md pr-p-2 pr-text-amber-800',
+            'pr-box-content pr-flex pr-h-4 pr-w-4 pr-cursor-pointer pr-items-center pr-justify-end pr-rounded-md pr-p-2 pr-text-amber-800',
             {
               'pr-font-semibold pr-text-amber-900': chapter === activeChapter,
               'pr-bg-amber-200': chapter === highlightedChapter,

@@ -1,29 +1,20 @@
 import papi, { logger, projectLookup } from '@papi/backend';
 import { VerseRef } from '@sillsdev/scripture';
-import {
-  ExecutionActivationContext,
-  GetWebViewOptions,
-  IWebViewProvider,
-  ProjectSettingValidator,
-  SavedWebViewDefinition,
-  WebViewDefinition,
-} from '@papi/core';
-import { LocalizeKey } from 'platform-bible-utils';
+import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
 import ScriptureExtenderProjectDataProviderEngineFactory, {
   SCRIPTURE_EXTENDER_PDPF_ID,
 } from './project-data-provider/platform-scripture-extender-pdpef.model';
 import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
-import inventoryWebView from './inventory.web-view?inline';
-import inventoryWebViewStyles from './inventory.web-view.scss?inline';
+import InventoryWebViewProvider, { InventoryWebViewOptions } from './inventory.web-view-provider';
+import CheckResultsWebViewProvider, {
+  checkResultsListWebViewType,
+  CheckResultsWebViewOptions,
+} from './checking-results.web-view-provider';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
-
-interface InventoryOptions extends GetWebViewOptions {
-  projectId: string | undefined;
-}
 
 // #region Project Setting Validators
 
@@ -76,7 +67,7 @@ async function openInventory(
     return undefined;
   }
 
-  const options: InventoryOptions = { projectId };
+  const options: InventoryWebViewOptions = { projectId };
   return papi.webViews.getWebView(
     webViewType,
     { type: 'float', floatSize: { width: 700, height: 800 } },
@@ -84,44 +75,23 @@ async function openInventory(
   );
 }
 
-class InventoryWebViewProvider implements IWebViewProvider {
-  constructor(
-    public titleKey: LocalizeKey,
-    public webViewType: string,
-  ) {}
+async function runPlatformBasicChecks(webViewId: string | undefined): Promise<string | undefined> {
+  let projectId: string | undefined;
 
-  async getWebView(
-    savedWebView: SavedWebViewDefinition,
-    getWebViewOptions: InventoryOptions,
-  ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== this.webViewType)
-      throw new Error(
-        `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
-      );
+  logger.debug('Running checks');
 
-    // We know that the projectId (if present in the state) will be a string.
-    const projectId =
-      getWebViewOptions.projectId ||
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      (savedWebView.state?.projectId as string) ||
-      undefined;
-
-    const title: string = await papi.localization.getLocalizedString({
-      localizeKey: this.titleKey,
-    });
-
-    return {
-      title,
-      ...savedWebView,
-      content: inventoryWebView,
-      styles: inventoryWebViewStyles,
-      state: {
-        ...savedWebView.state,
-        projectId,
-        webViewType: this.webViewType,
-      },
-    };
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
   }
+
+  if (!projectId) {
+    logger.debug('No project!');
+    return undefined;
+  }
+
+  const options: CheckResultsWebViewOptions = { projectId };
+  return papi.webViews.getWebView(checkResultsListWebViewType, { type: 'tab' }, options);
 }
 
 export async function activate(context: ExecutionActivationContext) {
@@ -142,6 +112,7 @@ export async function activate(context: ExecutionActivationContext) {
     '%webView_repeatedWordsInventory_title%',
     repeatedWordsInventoryWebViewType,
   );
+  const checkResultsWebViewProvider = new CheckResultsWebViewProvider();
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
@@ -199,6 +170,14 @@ export async function activate(context: ExecutionActivationContext) {
     repeatedWordsInventoryWebViewType,
     repeatedWordsInventoryWebViewProvider,
   );
+  const runBasicChecksPromise = papi.commands.registerCommand(
+    'platformScripture.runBasicChecks',
+    runPlatformBasicChecks,
+  );
+  const checkResultsWebViewProviderPromise = papi.webViewProviders.register(
+    checkResultsListWebViewType,
+    checkResultsWebViewProvider,
+  );
 
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
@@ -217,6 +196,8 @@ export async function activate(context: ExecutionActivationContext) {
     await nonRepeatableWordsPromise,
     await openRepeatedWordsInventoryPromise,
     await repeatableWordsInventoryWebViewProviderPromise,
+    await runBasicChecksPromise,
+    await checkResultsWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

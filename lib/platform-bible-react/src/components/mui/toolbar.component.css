@@ -20,5 +20,6 @@
 
 .papi-toolbar-children {
   padding: 10px;
-  position: relative;
+  display: flex;
+  gap: 8px;
 }

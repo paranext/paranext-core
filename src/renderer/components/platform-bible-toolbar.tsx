@@ -1,15 +1,19 @@
-import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
 import logger from '@shared/services/logger.service';
-import { Toolbar, BookChapterControl, ScriptureReference } from 'platform-bible-react';
-import { Localized, MultiColumnMenu } from 'platform-bible-utils';
+import { Toolbar, BookChapterControl, ScrollGroupSelector } from 'platform-bible-react';
+import {
+  getLocalizeKeysForScrollGroupIds,
+  Localized,
+  MultiColumnMenu,
+  ScrollGroupId,
+} from 'platform-bible-utils';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
+import { useCallback, useState } from 'react';
+import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
 
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
+const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
 
 /**
  * Providing empty menu data if the software fails to load fully so we can shift click the menu and
@@ -27,16 +31,45 @@ async function getMenuData(isSupportAndDevelopment: boolean): Promise<Localized<
   }
 }
 
-export default function PlatformBibleToolbar() {
-  const [scrRef, setScrRef] = useSetting('platform.verseRef', defaultScrRef);
+// Exclude no scroll group in the top selector because it would be pointless otherwise
+const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
+  (scrollGroupId) => scrollGroupId !== undefined,
+);
 
-  const handleReferenceChanged = (newScrRef: ScriptureReference) => {
-    setScrRef(newScrRef);
-  };
+const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIdsTop);
+
+export default function PlatformBibleToolbar() {
+  // Internal state tracker for scroll group in local storage
+  const [scrollGroupIdInternal, setScrollGroupIdInternal] = useState<ScrollGroupId>(() =>
+    JSON.parse(localStorage.getItem(scrollGroupIdLocalStorageKey) ?? '0'),
+  );
+  const updateScrollGroupIdInternal = useCallback((newScrollGroupId: ScrollGroupScrRef) => {
+    if (typeof newScrollGroupId !== 'number')
+      throw new Error(
+        `Top Scroll Group ID cannot be anything but a number! Trying to set to ${newScrollGroupId}`,
+      );
+    setScrollGroupIdInternal(newScrollGroupId);
+    localStorage.setItem(scrollGroupIdLocalStorageKey, JSON.stringify(newScrollGroupId));
+
+    return true;
+  }, []);
+
+  const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useScrollGroupScrRef(
+    scrollGroupIdInternal,
+    updateScrollGroupIdInternal,
+  );
+
+  const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   return (
     <Toolbar className="toolbar" menuProvider={getMenuData} commandHandler={handleMenuCommand}>
-      <BookChapterControl scrRef={scrRef} handleSubmit={handleReferenceChanged} />
+      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+      <ScrollGroupSelector
+        availableScrollGroupIds={availableScrollGroupIdsTop}
+        scrollGroupId={scrollGroupId}
+        onChangeScrollGroupId={setScrollGroupId}
+        localizedStrings={scrollGroupLocalizedStrings}
+      />
     </Toolbar>
   );
 }

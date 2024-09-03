@@ -8,9 +8,10 @@ import {
 } from '@/components/basics/tabs-vertical';
 import { HasDirection } from '@/preview/preview-components/direction-toggle';
 import ThemeToggle from '@/preview/preview-components/theme-toggle.component';
-import { ScriptureReference } from 'platform-bible-utils';
+import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
 import NavigationContentSearch from '@/components/advanced/navigation-content-search.component';
+import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
 import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
 import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
 import { columns, data } from './data-sources/data-table-content';
@@ -26,6 +27,7 @@ const defaultScrRef: ScriptureReference = {
 
 function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
+  const [scrollGroupId, setScrollGroupId] = useState<ScrollGroupId | undefined>(0);
   const [searchValue, setSearchValue] = useState<string>('');
 
   const tabList = [
@@ -72,6 +74,9 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Book Chapter Control">
             Book Chapter Control
           </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Scroll Group Selector">
+            Scroll Group Selector
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
@@ -86,6 +91,15 @@ function Compositions({ direction }: HasDirection) {
         <VerticalTabsContent value="Book Chapter Control">
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
           <div>{JSON.stringify(scrRef)}</div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Scroll Group Selector">
+          <ScrollGroupSelector
+            availableScrollGroupIds={[undefined, ...Array(5).keys()]}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+          />
+          <div>Scroll Group Id: {`${scrollGroupId}`}</div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Theme Toggle">

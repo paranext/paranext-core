@@ -1,4 +1,4 @@
-import { useSetting } from '@renderer/hooks/papi-hooks';
+import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import settingsService from '@shared/services/settings.service';
 import Setting, { UserSettingProps, UserSettingValues } from './setting.component';
