@@ -820,8 +820,10 @@ export type NavigationContentSearchProps = {
 	headerTitle?: string;
 	/** Optional flag to make the search bar appear full width */
 	isSearchBarFullWidth?: boolean;
+	/** Text direction ltr or rtl */
+	direction?: "ltr" | "rtl";
 };
-export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SettingsList component, currently just children */
 export type SettingsListProps = React$1.PropsWithChildren;
 /**

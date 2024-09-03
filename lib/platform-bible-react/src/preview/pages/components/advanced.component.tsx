@@ -132,6 +132,7 @@ function Compositions({ direction }: HasDirection) {
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
             isSearchBarFullWidth
+            direction={direction}
           />
         </VerticalTabsContent>
 
