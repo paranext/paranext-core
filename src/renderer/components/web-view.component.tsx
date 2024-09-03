@@ -38,9 +38,7 @@ export default function WebView({
   const [localizedStrings] = useLocalizedStrings(
     title && isLocalizeKey(title) ? [title] : [webViewKey],
   );
-  const defaultTitle = !title
-    ? title
-    : `${webViewType || contentType} ${localizedStrings[webViewKey]}`;
+  const defaultTitle = title || `${webViewType || contentType} ${localizedStrings[webViewKey]}`;
   const localizedTitle = title && isLocalizeKey(title) ? localizedStrings[title] : defaultTitle;
 
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */

@@ -130,7 +130,7 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
           await papi.projectDataProviders.get('platform.base', projectId)
         ).getSetting('platform.name')) ?? projectId
       }${isReadOnly ? '' : ` ${localizedEditable}`}`;
-    } else title = isReadOnly ? `${localizedResourceViewer}` : `${localizedScriptureEditor}`;
+    } else title = isReadOnly ? localizedResourceViewer : localizedScriptureEditor;
 
     return {
       title,

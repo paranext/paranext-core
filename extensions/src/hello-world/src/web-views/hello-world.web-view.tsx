@@ -208,7 +208,7 @@ globalThis.webViewComponent = function HelloWorld({
     'platform.selectMultipleProjects',
     useMemo(
       () => ({
-        prompt: `${localizedSelectProjectsPrompt}`,
+        prompt: localizedSelectProjectsPrompt,
         iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
         title: localizedSelectProjectsTitle,
         selectedProjectIds: projects,
