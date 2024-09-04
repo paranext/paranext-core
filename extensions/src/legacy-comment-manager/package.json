@@ -1,9 +1,9 @@
 {
-  "name": "paranext-extension-template",
+  "name": "legacy-comment-manager",
   "private": true,
   "version": "0.0.1",
   "main": "src/main.js",
-  "types": "src/types/paranext-extension-template.d.ts",
+  "types": "src/types/legacy-comment-manager.d.ts",
   "author": "Paranext",
   "license": "MIT",
   "scripts": {
@@ -16,7 +16,7 @@
     "zip": "zip-build dist release --template '%NAME%_%VERSION%.%EXT%' --override",
     "package": "npm run build:production && npm run zip",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
-    "start:core": "cd ../paranext-core && npm run start",
+    "start:core": "cd ../../.. && npm run start",
     "start": "cross-env MAIN_ARGS=\"--extensions $INIT_CWD/dist\" concurrently \"npm:watch\" \"npm:start:core\"",
     "start:production": "cross-env MAIN_ARGS=\"--extensions $INIT_CWD/dist\" concurrently \"npm:watch:production\" \"npm:start:core\"",
     "lint": "npm run lint:scripts && npm run lint:styles",
@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.1",
-    "platform-bible-utils": "file:../paranext-core/lib/platform-bible-utils"
+    "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
     "@swc/core": "^1.4.11",
@@ -61,8 +61,8 @@
     "eslint-plugin-react": "^7.34.1",
     "eslint-plugin-react-hooks": "^4.6.0",
     "glob": "^10.3.12",
-    "papi-dts": "file:../paranext-core/lib/papi-dts",
-    "platform-bible-react": "file:../paranext-core/lib/platform-bible-react",
+    "papi-dts": "file:../../../lib/papi-dts",
+    "platform-bible-react": "file:../../../lib/platform-bible-react",
     "prettier": "^3.2.5",
     "prettier-plugin-jsdoc": "^1.3.0",
     "sass": "^1.72.0",
