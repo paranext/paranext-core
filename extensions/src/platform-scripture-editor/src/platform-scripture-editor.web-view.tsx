@@ -102,7 +102,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const editorUsj = useRef(usj);
 
   // TODO: remove debounce when issue #826 is done.
-  const onChange = useCallback(
+  const onUsjChange = useCallback(
     (newUsj: Usj) => {
       // There is a bug where the editor's onChange runs when the state is externally set, so let's
       // not run onChange if the change came externally (our tracked editorUsj.current editor state
@@ -184,9 +184,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     <Editor
       ref={editorRef}
       scrRef={scrRef}
-      setScrRef={setScrRef}
+      onScrRefChange={setScrRef}
       options={options}
-      onChange={isReadOnly ? undefined : onChange}
+      onUsjChange={isReadOnly ? undefined : onUsjChange}
       logger={logger}
     />
   );
