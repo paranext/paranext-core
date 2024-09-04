@@ -13,7 +13,7 @@ export type ChecklistProps = {
   /** Array of strings representing items to be displayed as checkboxes in the checklist */
   selectedListItems: string[];
   /** Function that takes a string param and is called when a checkbox item is selected or deselected */
-  handleSelectListItem: (item: string) => void;
+  handleSelectListItem: (item: string, selected: boolean) => void;
   /**
    * Optional function that takes a string param and returns a string representing the label text
    * for the checkbox associated with that item
@@ -43,7 +43,7 @@ export default function Checklist({
           className="check-item"
           isChecked={selectedListItems.includes(item)}
           labelText={createLabel ? createLabel(item) : item}
-          onChange={() => handleSelectListItem(item)}
+          onChange={(event) => handleSelectListItem(item, event.target.checked)}
         />
       ))}
     </fieldset>

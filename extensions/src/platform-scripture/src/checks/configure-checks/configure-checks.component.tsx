@@ -1,18 +1,11 @@
-import { Button, ScriptureReference, usePromise, Checklist } from 'platform-bible-react';
+import { Button, ScriptureReference, Checklist } from 'platform-bible-react';
 import { getChaptersForBook } from 'platform-bible-utils';
 import { Typography } from '@mui/material';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Canon, VerseRef } from '@sillsdev/scripture';
-import { useProjectDataProvider, useSetting } from '@papi/frontend/react';
-import { logger } from '@papi/frontend';
-import { CheckRunnerCheckDetails } from 'platform-scripture';
+import { useSetting } from '@papi/frontend/react';
+import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
 import BookSelector, { BookSelectionMode } from './book-selector.component';
-
-type ConfigureChecksProps = {
-  projectId: string | undefined;
-  projectName: string | undefined;
-  availableChecks: CheckRunnerCheckDetails[];
-};
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -24,43 +17,34 @@ export type BookSelectionStatus = {
   [bookId: string]: boolean;
 };
 
+type ConfigureChecksProps = {
+  projectId: string | undefined;
+  projectName: string | undefined;
+  availableChecks: CheckRunnerCheckDetails[];
+  handleSelectCheck: (checkLabel: string, selected: boolean) => void;
+  selectedChecks: string[];
+  activeRanges: CheckInputRange[];
+  handleActiveRangesChange: (newActiveRanges: CheckInputRange[]) => void;
+  handlePrintResults: () => void;
+};
+
 export default function ConfigureChecks({
   projectId,
   projectName,
   availableChecks,
+  handleSelectCheck,
+  selectedChecks,
+  activeRanges,
+  handleActiveRangesChange,
+  handlePrintResults,
 }: ConfigureChecksProps) {
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
-  const [useCurrentBook, setUseCurrentBook] = useState<boolean>(true);
+  const [useCurrentBook, setUseCurrentBook] = useState<boolean>(false);
   const chapterCount = useMemo(() => getChaptersForBook(scrRef.bookNum), [scrRef]);
   const [startChapter, setStartChapter] = useState<number>(1);
   const [endChapter, setEndChapter] = useState<number>(chapterCount);
   const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef]);
-
-  // Current book true, rest of the books false
-  const getInitialBookSelectionStatus = useCallback(() => {
-    return Canon.allBookIds.reduce<BookSelectionStatus>((acc, bookId) => {
-      if (bookId === currentBookId) acc[bookId] = true;
-      else acc[bookId] = false;
-      return acc;
-    }, {});
-  }, [currentBookId]);
-
-  const [bookIdsSelectionStatus, setBookIdsSelectionStatus] = useState<BookSelectionStatus>(
-    getInitialBookSelectionStatus(),
-  );
-
-  // Needed so that the currentBook is correct and not the default.
-  useEffect(() => {
-    setBookIdsSelectionStatus(getInitialBookSelectionStatus());
-  }, [getInitialBookSelectionStatus]);
-
-  // Only used in handleSubmit
-  const selectedBookIds = useMemo(
-    () => Object.keys(bookIdsSelectionStatus).filter((bookId) => bookIdsSelectionStatus[bookId]),
-    [bookIdsSelectionStatus],
-  );
 
   const toggleShouldUseCurrentBook = (newMode: string) => {
     if (newMode === BookSelectionMode.CURRENT_BOOK) {
@@ -70,58 +54,59 @@ export default function ConfigureChecks({
     }
   };
 
-  const handleSelectStart = (chapter: number) => {
-    setStartChapter(chapter);
-  };
+  // Ensure activeRanges is never empty
+  useEffect(() => {
+    if (activeRanges.length === 0 && projectId) {
+      handleActiveRangesChange([
+        {
+          projectId,
+          start: new VerseRef(scrRef.bookNum, 1, 1),
+        },
+      ]);
+    }
+  }, [activeRanges.length, handleActiveRangesChange, projectId, scrRef.bookNum]);
 
-  const handleSelectEnd = (chapter: number) => {
-    setEndChapter(chapter);
-  };
+  useEffect(() => {
+    if (!useCurrentBook || !projectId) return;
 
-  const handleSelectBooks = (bookIds: string[]) => {
-    setBookIdsSelectionStatus((prevStatus) => {
-      const newStatus = { ...prevStatus };
-      Object.keys(newStatus).forEach((bookId) => {
-        newStatus[bookId] = false;
-      });
-      bookIds.forEach((bookId) => {
-        newStatus[bookId] = true;
-      });
-      return newStatus;
-    });
-  };
+    const newCheckInputRange: CheckInputRange = {
+      projectId,
+      start: new VerseRef(scrRef.bookNum, startChapter, 1),
+      end: new VerseRef(scrRef.bookNum, endChapter, 1),
+    };
+    handleActiveRangesChange([newCheckInputRange]);
+  }, [
+    useCurrentBook,
+    startChapter,
+    endChapter,
+    scrRef.bookNum,
+    projectId,
+    handleActiveRangesChange,
+  ]);
 
-  const handleSelectCheck = (label: string) => {
-    if (selectedChecks.includes(label))
-      setSelectedChecks(selectedChecks.filter((check) => check !== label));
-    else setSelectedChecks((prevSelectedChecks) => [...prevSelectedChecks, label]);
-  };
+  const handleSelectBooks = useCallback(
+    (bookIds: string[]) => {
+      if (useCurrentBook || !projectId) return;
 
-  const handleSubmit = () => {
-    const joinedSelectedCheckNames = selectedChecks.join(', ');
-    logger.info(
-      `Selected checks: ${joinedSelectedCheckNames || 'NONE SELECTED'}\n Selected Books: ${selectedBookIds}\n start chapter: ${
-        useCurrentBook ? startChapter : 'IRRELEVANT-Choose books selected'
-      }\n end chapter: ${useCurrentBook ? endChapter : 'IRRELEVANT-Choose books selected'}`,
-    );
-  };
-
-  const project = useProjectDataProvider('platformScripture.USFM_Verse', projectId);
-
-  const [projectString] = usePromise(
-    useMemo(() => {
-      return async () =>
-        project === undefined
-          ? 'No current project'
-          : project.getVerseUSFM(new VerseRef('MAT 4:1'));
-    }, [project]),
-    'Loading',
+      handleActiveRangesChange(
+        bookIds.map((bookId): CheckInputRange => {
+          return { projectId, start: new VerseRef(Canon.bookIdToNumber(bookId), 1, 1) };
+        }),
+      );
+    },
+    [handleActiveRangesChange, projectId, useCurrentBook],
   );
+
+  const selectedBookIds = useMemo(() => {
+    const Ids = activeRanges.map((range) =>
+      range.start.bookNum ? Canon.bookNumberToId(range.start.bookNum) : range.start.book,
+    );
+    return Ids;
+  }, [activeRanges]);
 
   return (
     <div className="configure-checks-dialog">
-      <Typography variant="h5">{`Run basic checks: ${projectName}`}</Typography>
-      {projectString}
+      <Typography variant="h5">{`Configure checks for project ${projectName}`}</Typography>
       <Checklist
         className="configure-checks-check-names"
         legend="Checks"
@@ -136,13 +121,12 @@ export default function ConfigureChecks({
           selectedBookIds={selectedBookIds}
           handleSelectBooks={handleSelectBooks}
           chapterCount={chapterCount}
-          handleSelectStartChapter={handleSelectStart}
-          handleSelectEndChapter={handleSelectEnd}
+          handleSelectStartChapter={setStartChapter}
+          handleSelectEndChapter={setEndChapter}
         />
       </fieldset>
       <div className="basic-checks-dialog-actions">
-        <Button onClick={() => handleSubmit()}>Run</Button>
-        <Button onClick={() => logger.info(`Canceled`)}>Cancel</Button>
+        <Button onClick={() => handlePrintResults()}>Print results to console</Button>
       </div>
     </div>
   );

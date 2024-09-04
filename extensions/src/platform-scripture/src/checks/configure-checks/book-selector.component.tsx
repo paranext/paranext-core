@@ -12,7 +12,7 @@ export enum BookSelectionMode {
 type BookSelectorProps = ChapterRangeSelectorProps & {
   handleBookSelectionModeChange: (newMode: BookSelectionMode) => void;
   currentBookName: string;
-  selectedBookIds: string[];
+  selectedBookIds: string[] | undefined;
   handleSelectBooks: (bookIds: string[]) => void;
 };
 
@@ -84,9 +84,11 @@ export default function BookSelector({
         <div className="book-selection-radio-content">
           <div className="book-typography">
             <Typography padding={0.5} border={1}>
-              {selectedBookIds
-                .map((bookId: string) => Canon.bookIdToEnglishName(bookId))
-                .join(', ')}
+              {selectedBookIds && selectedBookIds.length > 0
+                ? selectedBookIds
+                    .map((bookId: string) => Canon.bookIdToEnglishName(bookId))
+                    .join(', ')
+                : 'No books are selected'}
             </Typography>
           </div>
           <div className="book-selection-radio-action">

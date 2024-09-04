@@ -1,5 +1,4 @@
-import papi, { logger, projectLookup } from '@papi/backend';
-import { VerseRef } from '@sillsdev/scripture';
+import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
 import ScriptureExtenderProjectDataProviderEngineFactory, {
   SCRIPTURE_EXTENDER_PDPF_ID,
@@ -80,9 +79,6 @@ async function openInventory(
 }
 
 async function configureChecks(webViewId: string | undefined): Promise<string | undefined> {
-  const checkSvc = checkAggregatorService.serviceObject;
-  const availableChecks = await checkSvc.getAvailableChecks(undefined);
-
   let projectId: string | undefined;
 
   logger.debug('Configuring checks');
@@ -97,8 +93,12 @@ async function configureChecks(webViewId: string | undefined): Promise<string | 
     return undefined;
   }
 
-  const options: ConfigureChecksWebViewOptions = { projectId, availableChecks };
-  return papi.webViews.getWebView(configureChecksWebViewType, { type: 'tab' }, options);
+  const options: ConfigureChecksWebViewOptions = { projectId };
+  return papi.webViews.getWebView(
+    configureChecksWebViewType,
+    { type: 'float', floatSize: { width: 700, height: 800 } },
+    options,
+  );
 }
 
 async function showCheckResults(webViewId: string | undefined): Promise<string | undefined> {
@@ -240,43 +240,6 @@ export async function activate(context: ExecutionActivationContext) {
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
-
-  if (globalThis.isNoisyDevModeEnabled) {
-    setTimeout(async () => {
-      const checkSvc = checkAggregatorService.serviceObject;
-      const checks = await checkSvc.getAvailableChecks(undefined);
-      if (checks.length === 0) {
-        logger.debug('Testing out checks: No checks registered');
-        return;
-      }
-      const projectMetadata = await projectLookup.getMetadataForAllProjects();
-      if (projectMetadata.length === 0) {
-        logger.debug('Testing out checks: No projects available');
-        return;
-      }
-      const projectId = projectMetadata[0].id;
-      await Promise.all(
-        checks.map(async (checkDetails) => {
-          try {
-            const problems = await checkSvc.enableCheck(checkDetails.checkId, projectId);
-            logger.debug(
-              `Testing out checks: enabled ${checkDetails.checkId} - ${JSON.stringify(problems)}`,
-            );
-          } catch (error) {
-            logger.debug(`Testing out checks: threw enabling check: ${error}`);
-          }
-        }),
-      );
-
-      try {
-        await checkSvc.setActiveRanges(undefined, [{ projectId, start: new VerseRef('JHN 1:1') }]);
-        const results = await checkSvc.getCheckResults(undefined);
-        logger.debug(`Testing out checks: results = ${JSON.stringify(results)}`);
-      } catch (error) {
-        logger.debug(`Error running checks: ${error}`);
-      }
-    }, 20000);
-  }
 
   logger.info('platformScripture is finished activating!');
 }

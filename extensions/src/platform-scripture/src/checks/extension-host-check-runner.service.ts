@@ -201,6 +201,7 @@ class CheckRunnerEngine
     _: undefined,
     ranges: CheckInputRange[],
   ): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
+    logger.error('setActiveRanges:', JSON.stringify(ranges));
     this.activeRanges = ranges;
     await this.rebuildResults();
     return 'ActiveRanges';
