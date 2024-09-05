@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import { useData, useDataProvider } from '@papi/frontend/react';
-import { CheckInputRange, CheckRunnerCheckDetails, ICheckRunner } from 'platform-scripture';
+import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
 import { VerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { logger } from '@papi/frontend';
@@ -32,10 +32,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
   const [checkFeedback, setCheckFeedback] = useState<string[]>([]);
 
-  // This is temporary code that allows us to access `enableCheck` and `disableCheck`, since they
-  // are not exposed as part of `CheckRunnerDataTypes`
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const checkRunner = useDataProvider('platformScripture.checkAggregator') as ICheckRunner;
+  const checkRunner = useDataProvider('platformScripture.checkAggregator');
 
   const [availableChecks] = useData('platformScripture.checkAggregator').AvailableChecks(
     undefined,
@@ -60,6 +57,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
     async (checkLabel: string, selected: boolean) => {
       const checkId = findCheckId(availableChecks, checkLabel);
       if (!checkId) throw new Error(`No available check found with checkLabel ${checkLabel}`);
+      if (!checkRunner) return;
 
       if (selected) {
         setCheckFeedback(await checkRunner.enableCheck(checkId, projectId));
