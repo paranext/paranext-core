@@ -1,5 +1,4 @@
-import papi, { logger, projectLookup } from '@papi/backend';
-import { VerseRef } from '@sillsdev/scripture';
+import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
 import ScriptureExtenderProjectDataProviderEngineFactory, {
   SCRIPTURE_EXTENDER_PDPF_ID,
@@ -8,10 +7,14 @@ import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/p
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
 import InventoryWebViewProvider, { InventoryWebViewOptions } from './inventory.web-view-provider';
+import ConfigureChecksWebViewProvider, {
+  configureChecksWebViewType,
+  ConfigureChecksWebViewOptions,
+} from './configure-checks.web-view-provider';
 import CheckResultsWebViewProvider, {
   checkResultsListWebViewType,
   CheckResultsWebViewOptions,
-} from './checking-results.web-view-provider';
+} from './checking-results-list.web-view-provider';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -75,7 +78,30 @@ async function openInventory(
   );
 }
 
-async function runPlatformBasicChecks(webViewId: string | undefined): Promise<string | undefined> {
+async function configureChecks(webViewId: string | undefined): Promise<string | undefined> {
+  let projectId: string | undefined;
+
+  logger.debug('Configuring checks');
+
+  if (webViewId) {
+    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    projectId = webViewDefinition?.projectId;
+  }
+
+  if (!projectId) {
+    logger.debug('No project!');
+    return undefined;
+  }
+
+  const options: ConfigureChecksWebViewOptions = { projectId };
+  return papi.webViews.getWebView(
+    configureChecksWebViewType,
+    { type: 'float', floatSize: { width: 700, height: 800 } },
+    options,
+  );
+}
+
+async function showCheckResults(webViewId: string | undefined): Promise<string | undefined> {
   let projectId: string | undefined;
 
   logger.debug('Running checks');
@@ -113,6 +139,9 @@ export async function activate(context: ExecutionActivationContext) {
     repeatedWordsInventoryWebViewType,
   );
   const checkResultsWebViewProvider = new CheckResultsWebViewProvider();
+  const configureChecksWebViewProvider = new ConfigureChecksWebViewProvider(
+    '%webView_configureChecks_title%',
+  );
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
@@ -170,11 +199,19 @@ export async function activate(context: ExecutionActivationContext) {
     repeatedWordsInventoryWebViewType,
     repeatedWordsInventoryWebViewProvider,
   );
-  const runBasicChecksPromise = papi.commands.registerCommand(
-    'platformScripture.runBasicChecks',
-    runPlatformBasicChecks,
+  const configureChecksPromise = papi.commands.registerCommand(
+    'platformScripture.openConfigureChecks',
+    configureChecks,
   );
-  const checkResultsWebViewProviderPromise = papi.webViewProviders.register(
+  const configureChecksWebViewProviderPromise = papi.webViewProviders.register(
+    configureChecksWebViewType,
+    configureChecksWebViewProvider,
+  );
+  const showCheckResultsPromise = papi.commands.registerCommand(
+    'platformScripture.showCheckResults',
+    showCheckResults,
+  );
+  const showCheckResultsWebViewProviderPromise = papi.webViewProviders.register(
     checkResultsListWebViewType,
     checkResultsWebViewProvider,
   );
@@ -196,48 +233,13 @@ export async function activate(context: ExecutionActivationContext) {
     await nonRepeatableWordsPromise,
     await openRepeatedWordsInventoryPromise,
     await repeatableWordsInventoryWebViewProviderPromise,
-    await runBasicChecksPromise,
-    await checkResultsWebViewProviderPromise,
+    await configureChecksPromise,
+    await configureChecksWebViewProviderPromise,
+    await showCheckResultsPromise,
+    await showCheckResultsWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
-
-  if (globalThis.isNoisyDevModeEnabled) {
-    setTimeout(async () => {
-      const checkSvc = checkAggregatorService.serviceObject;
-      const checks = await checkSvc.getAvailableChecks(undefined);
-      if (checks.length === 0) {
-        logger.debug('Testing out checks: No checks registered');
-        return;
-      }
-      const projectMetadata = await projectLookup.getMetadataForAllProjects();
-      if (projectMetadata.length === 0) {
-        logger.debug('Testing out checks: No projects available');
-        return;
-      }
-      const projectId = projectMetadata[0].id;
-      await Promise.all(
-        checks.map(async (checkDetails) => {
-          try {
-            const problems = await checkSvc.enableCheck(checkDetails.checkId, projectId);
-            logger.debug(
-              `Testing out checks: enabled ${checkDetails.checkId} - ${JSON.stringify(problems)}`,
-            );
-          } catch (error) {
-            logger.debug(`Testing out checks: threw enabling check: ${error}`);
-          }
-        }),
-      );
-
-      try {
-        await checkSvc.setActiveRanges(undefined, [{ projectId, start: new VerseRef('JHN 1:1') }]);
-        const results = await checkSvc.getCheckResults(undefined);
-        logger.debug(`Testing out checks: results = ${JSON.stringify(results)}`);
-      } catch (error) {
-        logger.debug(`Error running checks: ${error}`);
-      }
-    }, 20000);
-  }
 
   logger.info('platformScripture is finished activating!');
 }

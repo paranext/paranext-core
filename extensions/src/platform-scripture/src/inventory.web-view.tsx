@@ -6,8 +6,8 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { VerseRef } from '@sillsdev/scripture';
 import papi from '@papi/frontend';
-import CharacterInventory from './character-inventory.component';
-import RepeatedWordsInventory from './repeated-words-inventory.component';
+import CharacterInventory from './checks/inventories/character-inventory.component';
+import RepeatedWordsInventory from './checks/inventories/repeated-words-inventory.component';
 
 /**
  * Get scripture text for the provided scope and reference for the specified projectId

@@ -430,8 +430,6 @@ declare module 'platform-scripture' {
   };
 
   /** Defines the functions that all checks registered within the extension host must implement. */
-  // We don't know what sort of data types the check will require for certain
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type Check = Dispose & {
     /**
      * Prepare a check to generate results
@@ -686,7 +684,11 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.runBasicChecks': (
+    'platformScripture.openConfigureChecks': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    'platformScripture.showCheckResults': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
   }

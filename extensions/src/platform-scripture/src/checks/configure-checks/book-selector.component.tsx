@@ -2,8 +2,7 @@ import { RadioGroup, Radio, Typography } from '@mui/material';
 import { Canon } from '@sillsdev/scripture';
 import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
-import './book-selector.component.scss';
-import { useDialogCallback } from '@renderer/hooks/papi-hooks';
+import { useDialogCallback } from '@papi/frontend/react';
 
 export enum BookSelectionMode {
   CURRENT_BOOK = 'current book',

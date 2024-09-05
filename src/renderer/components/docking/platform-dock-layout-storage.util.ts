@@ -31,10 +31,6 @@ import {
   loadDownloadUpdateProjectTab,
 } from '@renderer/components/projects/download-update-project-tab.component';
 import {
-  TAB_TYPE_RUN_BASIC_CHECKS,
-  loadRunBasicChecksTab,
-} from '@renderer/components/run-basic-checks-dialog/run-basic-checks-tab.component';
-import {
   TAB_TYPE_PROJECT_SETTINGS_TAB,
   loadProjectSettingsTab,
   TAB_TYPE_USER_SETTINGS_TAB,
@@ -73,7 +69,6 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
     [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
     [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
-    [TAB_TYPE_RUN_BASIC_CHECKS, loadRunBasicChecksTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition

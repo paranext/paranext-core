@@ -1,4 +1,4 @@
-.run-basic-checks-dialog {
+.configure-checks-dialog {
   padding: 5% 5% 0;
   overflow-y: auto;
   overflow-x: hidden;
@@ -9,7 +9,7 @@
 }
 
 // Places checkboxes in their given order, but does not shrink to one column when window is only wide enough for one
-.run-basic-checks-check-names {
+.configure-checks-check-names {
   columns: 2;
   column-fill: balance;
   height: 50%;
@@ -17,7 +17,7 @@
   overflow-y: auto;
 }
 
-.run-basic-checks-books {
+.configure-checks-books {
   width: 100%;
 }
 
