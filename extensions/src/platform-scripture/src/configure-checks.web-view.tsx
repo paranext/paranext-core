@@ -13,11 +13,26 @@ const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   enabledProjectIds: [''],
 };
 
+const findCheckId = (
+  availableChecks: CheckRunnerCheckDetails[],
+  checkLabel: string,
+): string | undefined => {
+  const checksWithMatchingLabel: CheckRunnerCheckDetails[] = availableChecks.filter(
+    (check) => check.checkDescription === checkLabel,
+  );
+  if (checksWithMatchingLabel.length === 1) {
+    const [check] = checksWithMatchingLabel;
+    return check.checkId;
+  }
+  return undefined;
+};
+
 global.webViewComponent = function InventoryWebView({ useWebViewState }: WebViewProps) {
   const [projectId] = useWebViewState('projectId', '');
-  const [projectName] = useWebViewState('projectName', '');
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
 
+  // This is temporary code that allows us to access `enableCheck` and `disableCheck`, since they
+  // are not exposed as part of `CheckRunnerDataTypes`
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const checkRunner = useDataProvider('platformScripture.checkAggregator') as ICheckRunner;
 
@@ -38,29 +53,22 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
     [defaultScriptureRange],
   );
 
-  const findCheckId = (checkLabel: string): string | undefined => {
-    const checksWithMatchingLabel: CheckRunnerCheckDetails[] = availableChecks.filter(
-      (check) => check.checkDescription === checkLabel,
-    );
-    if (checksWithMatchingLabel.length === 1) {
-      const [check] = checksWithMatchingLabel;
-      return check.checkId;
-    }
-    return undefined;
-  };
+  const updateSelectedChecks = useCallback(
+    (checkLabel: string, selected: boolean) => {
+      const checkId = findCheckId(availableChecks, checkLabel);
+      if (!checkId) throw new Error(`No available check found with checkLabel ${checkLabel}`);
 
-  const updateSelectedChecks = (checkLabel: string, selected: boolean) => {
-    const checkId = findCheckId(checkLabel);
-    if (!checkId) throw new Error(`No available check found with checkLabel ${checkLabel}`);
-    if (selected) {
-      checkRunner.enableCheck(checkId, projectId);
-      const newSelectedChecks = [...selectedChecks, checkLabel];
-      setSelectedChecks(newSelectedChecks);
-    } else {
-      checkRunner.disableCheck(checkId, projectId);
-      setSelectedChecks(selectedChecks.filter((check) => check !== checkLabel));
-    }
-  };
+      if (selected) {
+        checkRunner.enableCheck(checkId, projectId);
+        const newSelectedChecks = [...selectedChecks, checkLabel];
+        setSelectedChecks(newSelectedChecks);
+      } else {
+        checkRunner.disableCheck(checkId, projectId);
+        setSelectedChecks(selectedChecks.filter((check) => check !== checkLabel));
+      }
+    },
+    [availableChecks, checkRunner, projectId, selectedChecks],
+  );
 
   const updateActiveRanges = useCallback(
     (newActiveRanges: CheckInputRange[]) => {
@@ -77,7 +85,6 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
   return (
     <ConfigureChecks
       projectId={projectId}
-      projectName={projectName}
       availableChecks={availableChecks}
       handleSelectCheck={updateSelectedChecks}
       selectedChecks={selectedChecks}

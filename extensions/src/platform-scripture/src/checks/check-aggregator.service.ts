@@ -35,7 +35,6 @@ class CheckDataProviderEngine
     _ignore: undefined,
     ranges: CheckInputRange[],
   ): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
-    logger.error('setActiveRanges on Aggregator:', JSON.stringify(ranges));
     this.lastRangesSet = ranges;
     await this.refreshCheckRunners();
     await Promise.all(

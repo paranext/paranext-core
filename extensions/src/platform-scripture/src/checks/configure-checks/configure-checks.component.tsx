@@ -1,17 +1,10 @@
 import { Button, ScriptureReference, Checklist } from 'platform-bible-react';
 import { getChaptersForBook } from 'platform-bible-utils';
-import { Typography } from '@mui/material';
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import { useSetting } from '@papi/frontend/react';
 import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
 import BookSelector, { BookSelectionMode } from './book-selector.component';
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
 
 export type BookSelectionStatus = {
   [bookId: string]: boolean;
@@ -19,7 +12,6 @@ export type BookSelectionStatus = {
 
 type ConfigureChecksProps = {
   projectId: string | undefined;
-  projectName: string | undefined;
   availableChecks: CheckRunnerCheckDetails[];
   handleSelectCheck: (checkLabel: string, selected: boolean) => void;
   selectedChecks: string[];
@@ -28,9 +20,14 @@ type ConfigureChecksProps = {
   handlePrintResults: () => void;
 };
 
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
+
 export default function ConfigureChecks({
   projectId,
-  projectName,
   availableChecks,
   handleSelectCheck,
   selectedChecks,
@@ -40,7 +37,7 @@ export default function ConfigureChecks({
 }: ConfigureChecksProps) {
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const [useCurrentBook, setUseCurrentBook] = useState<boolean>(false);
+  const [rangeIsCurrentBook, setRangeIsCurrentBook] = useState<boolean>(false);
   const chapterCount = useMemo(() => getChaptersForBook(scrRef.bookNum), [scrRef]);
   const [startChapter, setStartChapter] = useState<number>(1);
   const [endChapter, setEndChapter] = useState<number>(chapterCount);
@@ -48,9 +45,9 @@ export default function ConfigureChecks({
 
   const toggleShouldUseCurrentBook = (newMode: string) => {
     if (newMode === BookSelectionMode.CURRENT_BOOK) {
-      setUseCurrentBook(true);
+      setRangeIsCurrentBook(true);
     } else {
-      setUseCurrentBook(false);
+      setRangeIsCurrentBook(false);
     }
   };
 
@@ -67,7 +64,7 @@ export default function ConfigureChecks({
   }, [activeRanges.length, handleActiveRangesChange, projectId, scrRef.bookNum]);
 
   useEffect(() => {
-    if (!useCurrentBook || !projectId) return;
+    if (!rangeIsCurrentBook || !projectId) return;
 
     const newCheckInputRange: CheckInputRange = {
       projectId,
@@ -76,7 +73,7 @@ export default function ConfigureChecks({
     };
     handleActiveRangesChange([newCheckInputRange]);
   }, [
-    useCurrentBook,
+    rangeIsCurrentBook,
     startChapter,
     endChapter,
     scrRef.bookNum,
@@ -86,7 +83,7 @@ export default function ConfigureChecks({
 
   const handleSelectBooks = useCallback(
     (bookIds: string[]) => {
-      if (useCurrentBook || !projectId) return;
+      if (rangeIsCurrentBook || !projectId) return;
 
       handleActiveRangesChange(
         bookIds.map((bookId): CheckInputRange => {
@@ -94,19 +91,17 @@ export default function ConfigureChecks({
         }),
       );
     },
-    [handleActiveRangesChange, projectId, useCurrentBook],
+    [handleActiveRangesChange, projectId, rangeIsCurrentBook],
   );
 
   const selectedBookIds = useMemo(() => {
-    const Ids = activeRanges.map((range) =>
+    return activeRanges.map((range) =>
       range.start.bookNum ? Canon.bookNumberToId(range.start.bookNum) : range.start.book,
     );
-    return Ids;
   }, [activeRanges]);
 
   return (
     <div className="configure-checks-dialog">
-      <Typography variant="h5">{`Configure checks for project ${projectName}`}</Typography>
       <Checklist
         className="configure-checks-check-names"
         legend="Checks"

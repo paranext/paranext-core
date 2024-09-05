@@ -48,7 +48,6 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
       content: configureChecksWebView,
       styles: configureChecksWebViewStyles,
       state: {
-        projectName,
         projectId,
         ...savedWebView.state,
       },
