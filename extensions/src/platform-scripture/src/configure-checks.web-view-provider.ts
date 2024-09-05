@@ -5,7 +5,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import configureChecksWebView from './configure-checks.web-view?inline';
 import configureChecksWebViewStyles from './configure-checks.web-view.scss?inline';
 
@@ -29,18 +29,21 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
       (savedWebView.state?.projectId as string) ||
       undefined;
 
-    let title: string = await papi.localization.getLocalizedString({
-      localizeKey: this.titleKey,
-    });
-
     let projectName: string | undefined;
 
     if (projectId) {
       const pdp = await papi.projectDataProviders.get('platform.base', projectId);
       projectName = (await pdp.getSetting('platform.name')) ?? projectId;
-
-      title += ` - ${projectName}`;
     }
+
+    const title = formatReplacementString(
+      await papi.localization.getLocalizedString({
+        localizeKey: this.titleKey,
+      }),
+      {
+        projectName,
+      },
+    );
 
     return {
       title,
@@ -48,8 +51,8 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
       content: configureChecksWebView,
       styles: configureChecksWebViewStyles,
       state: {
-        projectId,
         ...savedWebView.state,
+        projectId,
       },
     };
   }

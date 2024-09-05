@@ -2,7 +2,7 @@ import { WebViewProps } from '@papi/core';
 import { useData, useDataProvider } from '@papi/frontend/react';
 import { CheckInputRange, CheckRunnerCheckDetails, ICheckRunner } from 'platform-scripture';
 import { VerseRef } from '@sillsdev/scripture';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { logger } from '@papi/frontend';
 import ConfigureChecks from './checks/configure-checks/configure-checks.component';
 
@@ -30,6 +30,7 @@ const findCheckId = (
 global.webViewComponent = function InventoryWebView({ useWebViewState }: WebViewProps) {
   const [projectId] = useWebViewState('projectId', '');
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
+  const [checkFeedback, setCheckFeedback] = useState<string[]>([]);
 
   // This is temporary code that allows us to access `enableCheck` and `disableCheck`, since they
   // are not exposed as part of `CheckRunnerDataTypes`
@@ -41,6 +42,8 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
     [defaultCheckRunnerCheckDetails],
   );
 
+  const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(undefined, []);
+
   const defaultScriptureRange: CheckInputRange = useMemo(() => {
     return {
       projectId,
@@ -50,16 +53,16 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
 
   const [activeRanges, setActiveRanges] = useData('platformScripture.checkAggregator').ActiveRanges(
     undefined,
-    [defaultScriptureRange],
+    useMemo(() => [defaultScriptureRange], [defaultScriptureRange]),
   );
 
   const updateSelectedChecks = useCallback(
-    (checkLabel: string, selected: boolean) => {
+    async (checkLabel: string, selected: boolean) => {
       const checkId = findCheckId(availableChecks, checkLabel);
       if (!checkId) throw new Error(`No available check found with checkLabel ${checkLabel}`);
 
       if (selected) {
-        checkRunner.enableCheck(checkId, projectId);
+        setCheckFeedback(await checkRunner.enableCheck(checkId, projectId));
         const newSelectedChecks = [...selectedChecks, checkLabel];
         setSelectedChecks(newSelectedChecks);
       } else {
@@ -78,9 +81,9 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
   );
 
   // Temporary function to show results
-  const printResults = async () => {
-    logger.log('Checks results:', await checkRunner.getCheckResults(undefined));
-  };
+  useEffect(() => {
+    logger.log('Checks results:', checkResults);
+  }, [checkResults]);
 
   return (
     <ConfigureChecks
@@ -88,9 +91,9 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
       availableChecks={availableChecks}
       handleSelectCheck={updateSelectedChecks}
       selectedChecks={selectedChecks}
+      checkFeedback={checkFeedback}
       activeRanges={activeRanges}
       handleActiveRangesChange={updateActiveRanges}
-      handlePrintResults={printResults}
     />
   );
 };
