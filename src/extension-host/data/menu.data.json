@@ -68,8 +68,8 @@
         "command": "platform.visitSupportPage"
       },
       {
-        "label": "%mainMenu_aboutPlatformBible%",
-        "localizeNotes": "Application main menu > Help > About Platform.Bible",
+        "label": "%mainMenu_aboutPlatform%",
+        "localizeNotes": "Application main menu > Help > About Platform",
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.about"

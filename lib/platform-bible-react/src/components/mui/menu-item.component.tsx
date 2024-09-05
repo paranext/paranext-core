@@ -33,7 +33,7 @@ export interface CommandHandler {
 export type MenuPropsBase = {
   /*
    * The JSON defining the menu whose items are to be rendered. This will typically be one of the
-   * menus in the "defs" in a Platform.Bible menu (see PlatformMenus). The schema for this is
+   * menus in the "defs" in a Platform menu (see PlatformMenus). The schema for this is
    * menuDocumentSchema (at the end of menus.model.ts). Note that while this is a
    * "SingleColumnMenu", somewhat bizarrely, a MultiColumnMenu is a SingleColumnMenu, so it really
    * could be a MultiColumnMenu, in which case, column had better be defined so it can be used
