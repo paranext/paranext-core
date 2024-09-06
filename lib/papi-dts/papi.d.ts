@@ -39,7 +39,10 @@ declare module 'shared/models/web-view.model' {
      * Defaults to Platform.Bible logo
      */
     iconUrl?: string;
-    /** Name of the tab for the WebView */
+    /**
+     * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
+     * WebView
+     */
     title?: string | LocalizeKey;
     /** Tooltip that is shown when hovering over the webview title */
     tooltip?: string;
@@ -2884,7 +2887,10 @@ declare module 'shared/models/docking-framework.model' {
      * Defaults to Platform.Bible logo
      */
     tabIconUrl?: string;
-    /** Text to show on the title bar of the tab */
+    /**
+     * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
+     * tab
+     */
     tabTitle: string | LocalizeKey;
     /** Text to show when hovering over the title bar of the tab */
     tabTooltip?: string;
