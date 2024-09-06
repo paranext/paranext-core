@@ -4,7 +4,7 @@
 {
   productName: 'Platform',
   appId: 'org.paranext.PlatformBible',
-  copyright: 'Copyright (c) 2022-2024 SIL International',
+  copyright: 'Copyright © 2022-2024 SIL International',
   asar: true,
   asarUnpack: '**\\*.{node,dll}',
   files: ['dist', 'node_modules', 'package.json'],
