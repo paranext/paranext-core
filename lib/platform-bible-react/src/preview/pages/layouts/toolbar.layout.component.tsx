@@ -3,12 +3,13 @@ import Toolbar from '@/components/mui/toolbar.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
 
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
+
 export default function ToolbarExamples() {
-  const defaultScrRef: ScriptureReference = {
-    bookNum: 1,
-    chapterNum: 1,
-    verseNum: 1,
-  };
   const [scrRef] = useState(defaultScrRef);
   return (
     <Toolbar className="toolbar" menuProvider={undefined} commandHandler={() => {}}>
