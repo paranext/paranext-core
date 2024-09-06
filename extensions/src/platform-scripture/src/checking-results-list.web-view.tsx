@@ -2,7 +2,7 @@ import { WebViewProps } from '@papi/core';
 import { Label, ResultsSet, ScriptureResultsViewer } from 'platform-bible-react';
 import { useEffect, useMemo } from 'react';
 import { useData } from '@papi/frontend/react';
-import { CheckRunResult } from 'platform-scripture';
+import { CheckRunnerCheckDetails, CheckRunResult } from 'platform-scripture';
 import { Canon } from '@sillsdev/scripture';
 import { formatReplacementString } from 'platform-bible-utils';
 import papi, { logger } from '@papi/frontend';
@@ -27,15 +27,22 @@ const getLabel = (
   return result;
 };
 
-const parseResults = (checkResults: CheckRunResult[]): ResultsSet[] => {
+const parseResults = (
+  checkResults: CheckRunResult[],
+  availableChecks: CheckRunnerCheckDetails[],
+): ResultsSet[] => {
   const resultsSets: ResultsSet[] = [];
   checkResults.forEach((checkResult) => {
     let resultsSet = resultsSets.find((newSource) => newSource.source.id === checkResult.checkId);
     if (!resultsSet) {
+      const checkId = checkResult.checkId ?? 'Unspecified Source ID';
+      const checkDescription =
+        availableChecks.find((check) => check.checkId === checkResult.checkId)?.checkDescription ??
+        'Unspecified Source Name';
       resultsSet = {
         source: {
-          id: checkResult.checkId ?? 'Unspecified Source ID',
-          displayName: checkResult.checkId ?? 'Unspecified Source Name',
+          id: checkId,
+          displayName: checkDescription,
         },
         data: [],
       };
@@ -71,8 +78,15 @@ global.webViewComponent = function CheckingResultsListWebView({
   const [projectName] = useWebViewState('projectName', 'Dummy project');
 
   const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(undefined, []);
+  const [availableChecks] = useData('platformScripture.checkAggregator').AvailableChecks(
+    undefined,
+    [],
+  );
 
-  const viewableResults = useMemo(() => parseResults(checkResults), [checkResults]);
+  const viewableResults = useMemo(
+    () => parseResults(checkResults, availableChecks),
+    [availableChecks, checkResults],
+  );
 
   const label = useMemo(
     () => getLabel(projectName, new Date().toLocaleString(), viewableResults),
