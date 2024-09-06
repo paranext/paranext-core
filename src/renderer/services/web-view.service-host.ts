@@ -65,6 +65,7 @@ import {
   TAB_TYPE_PROJECT_SETTINGS_TAB,
   TAB_TYPE_USER_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
+import THEME, { SCROLLBAR_STYLES } from '@renderer/theme';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -943,7 +944,7 @@ export const getWebView = async (
       // Add wrapping to turn a plain string into an iframe
       webViewContent = webView.content.includes('<html')
         ? webView.content
-        : `<html><head></head><body>${webView.content}</body></html>`;
+        : `<html><head><style>${SCROLLBAR_STYLES}</style></head><body>${webView.content}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
@@ -971,8 +972,11 @@ export const getWebView = async (
             </style>`
                 : ''
             }
+            <style>
+              ${SCROLLBAR_STYLES}
+            </style>
           </head>
-          <body>
+          <body class="${THEME}">
             <div id="root">
             </div>
             <script nonce="${srcNonce}">${reactWebView.content}

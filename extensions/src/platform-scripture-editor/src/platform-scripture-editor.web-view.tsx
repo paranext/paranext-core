@@ -12,6 +12,7 @@ import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData } from '@papi/frontend/react';
 import { ScriptureReference, debounce } from 'platform-bible-utils';
+import { Button } from 'platform-bible-react';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -181,13 +182,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   return (
-    <Editor
-      ref={editorRef}
-      scrRef={scrRef}
-      onScrRefChange={setScrRef}
-      options={options}
-      onUsjChange={isReadOnly ? undefined : onUsjChange}
-      logger={logger}
-    />
+    <>
+      {/* Workaround to pull in platform-bible-react styles into the editor */}
+      <Button className="pr-hidden" />
+      <Editor
+        ref={editorRef}
+        scrRef={scrRef}
+        onScrRefChange={setScrRef}
+        options={options}
+        onUsjChange={isReadOnly ? undefined : onUsjChange}
+        logger={logger}
+      />
+    </>
   );
 };
