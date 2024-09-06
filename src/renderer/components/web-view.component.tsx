@@ -16,7 +16,7 @@ import {
   IFRAME_SANDBOX_ALLOW_POPUPS,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
-import { isLocalizeKey, serialize } from 'platform-bible-utils';
+import { formatReplacementString, isLocalizeKey, serialize } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
@@ -35,10 +35,19 @@ export default function WebView({
   const iframeRef = useRef<HTMLIFrameElement>(undefined!);
 
   const webViewKey = '%webView_defaultTitle_webView%';
+  const webViewTitleTypeFormatStr = '%webView_title_type_formatString%';
   const [localizedStrings] = useLocalizedStrings(
-    title && isLocalizeKey(title) ? [title] : [webViewKey],
+    title && isLocalizeKey(title)
+      ? [title, webViewTitleTypeFormatStr]
+      : [webViewKey, webViewTitleTypeFormatStr],
   );
-  const defaultTitle = title || `${webViewType || contentType} ${localizedStrings[webViewKey]}`;
+  const localizedWebViewTitleFormatStr = localizedStrings[webViewTitleTypeFormatStr];
+  const defaultTitle =
+    title ??
+    formatReplacementString(localizedWebViewTitleFormatStr, {
+      type: webViewType || contentType,
+      defaultTitle: localizedStrings[webViewKey],
+    });
   const localizedTitle = title && isLocalizeKey(title) ? localizedStrings[title] : defaultTitle;
 
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
@@ -102,7 +111,7 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
     ...savedTabInfo,
     data,
     tabIconUrl: data.iconUrl,
-    tabTitle: data.title ?? '%tab_unknown%',
+    tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',
     content: <WebView {...data} />,
   };
@@ -140,7 +149,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
     data = {
       id: savedTabInfo.id,
       webViewType: 'Unknown',
-      title: '%tab_unknown%',
+      title: '%tab_title_unknown%',
       content: '',
       contentType: WebViewContentType.HTML,
     };

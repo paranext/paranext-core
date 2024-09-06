@@ -183,7 +183,7 @@ export default function Setting({
     );
   }, [setting, settingKey, debouncedHandleChange, errorMessage]);
 
-  const loadingSettingKey = '%settings_loadingSetting%';
+  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
   const [localizedStrings] = useLocalizedStrings([loadingSettingKey]);
   const localizedLoadingSetting = localizedStrings[loadingSettingKey];
 

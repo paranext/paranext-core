@@ -24,11 +24,11 @@ const platformSettings: SettingsContribution = {
   description: '%platform_group1_description%',
   properties: {
     'platform.verseRef': {
-      label: '%settings_platform_verseRef_label%',
+      label: '%settings_platform_settingName_verseRef%',
       default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
-      label: '%settings_platform_interfaceLanguage_label%',
+      label: '%settings_platform_settingName_interfaceLanguage%',
       default: ['eng'],
     },
   },

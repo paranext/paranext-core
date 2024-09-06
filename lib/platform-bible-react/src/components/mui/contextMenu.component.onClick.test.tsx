@@ -34,7 +34,7 @@ describe('ContextMenu', () => {
     const contextMenuTarget = screen.getByText('click me');
     fireEvent.contextMenu(contextMenuTarget);
 
-    const insertNoteItem = screen.getByRole('menuitem', { name: '%insertNote%' });
+    const insertNoteItem = screen.getByRole('menuitem', { name: '%general_insertNote%' });
 
     fireEvent.click(insertNoteItem);
 

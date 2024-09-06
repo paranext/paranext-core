@@ -6,13 +6,14 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { LanguageStrings } from 'platform-bible-utils';
+import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 
 logger.info('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
+const projectIdTitleFormatStr = '%webView_title_projectId_formatString%';
 const editable = '%webView_platformScriptureEditor_editable%';
 const resourceViewer = '%webView_platformScriptureEditor_resourceViewer%';
 const scriptureEditor = '%webView_platformScriptureEditor_scriptureEditor%';
@@ -24,7 +25,7 @@ interface PlatformScriptureEditorOptions extends GetWebViewOptions {
 
 async function getLocalizations(): Promise<LanguageStrings> {
   const localizationData = await papi.localization.getLocalizedStrings({
-    localizeKeys: [editable, resourceViewer, scriptureEditor],
+    localizeKeys: [editable, projectIdTitleFormatStr, resourceViewer, scriptureEditor],
     locales: ['en'],
   });
   return localizationData;
@@ -116,6 +117,7 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
       );
 
     const localizedStrings = await getLocalizations();
+    const localizedProjectIdTitleFormatStr = localizedStrings[projectIdTitleFormatStr];
     const localizedEditable = localizedStrings[editable];
     const localizedResourceViewer = localizedStrings[resourceViewer];
     const localizedScriptureEditor = localizedStrings[scriptureEditor];
@@ -125,11 +127,13 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
     let title = '';
     if (projectId) {
-      title = `${
-        (await (
-          await papi.projectDataProviders.get('platform.base', projectId)
-        ).getSetting('platform.name')) ?? projectId
-      }${isReadOnly ? '' : ` ${localizedEditable}`}`;
+      title = formatReplacementString(localizedProjectIdTitleFormatStr, {
+        projectId:
+          (await (
+            await papi.projectDataProviders.get('platform.base', projectId)
+          ).getSetting('platform.name')) ?? projectId,
+        editable: isReadOnly ? '' : localizedEditable,
+      });
     } else title = isReadOnly ? localizedResourceViewer : localizedScriptureEditor;
 
     return {

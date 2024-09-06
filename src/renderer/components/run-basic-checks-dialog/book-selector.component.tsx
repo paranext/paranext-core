@@ -30,11 +30,11 @@ export default function BookSelector({
     BookSelectionMode.CURRENT_BOOK,
   );
 
-  const selectBooksPromptKey = '%bookSelector_selectOneOrMoreBooksToRunBasicChecksOn%';
-  const selectBooksKey = '%bookSelector_selectBooks%';
-  const currentBooksKey = '%bookSelector_currentBook%';
-  const chooseBooksKey = '%bookSelector_chooseBooks%';
-  const chooseKey = '%bookSelector_chooseEllipsis%';
+  const selectBooksPromptKey = '%bookSelector_dialogPrompt_selectOneOrMoreBooksToRunBasicChecksOn%';
+  const selectBooksKey = '%bookSelector_title_selectBooks%';
+  const currentBooksKey = '%bookSelector_selectionMode_currentBook%';
+  const chooseBooksKey = '%bookSelector_selectionMode_chooseBooks%';
+  const chooseKey = '%bookSelector_submitButton_chooseEllipsis%';
   const [localizedStrings] = useLocalizedStrings([
     selectBooksPromptKey,
     selectBooksKey,

@@ -74,7 +74,7 @@ globalThis.webViewComponent = function HelloWorld({
   const selectProjectsPrompt = '%selectProjects_prompt%';
   const selectProjectsTitle = '%selectProjects_title%';
   const selectProjectTitle = '%selectProject_title%';
-  const submit = '%submitButton%';
+  const submit = '%general_button_submit%';
   const testException = '%helloWorld_throw_test_exception%';
   const testMe = '%helloWorld_testMe%';
 

@@ -38,7 +38,10 @@ export type TabInfo = SavedTabInfo & {
    * Defaults to Platform.Bible logo
    */
   tabIconUrl?: string;
-  /** Text to show on the title bar of the tab */
+  /**
+   * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
+   * tab
+   */
   tabTitle: string | LocalizeKey;
   /** Text to show when hovering over the title bar of the tab */
   tabTooltip?: string;

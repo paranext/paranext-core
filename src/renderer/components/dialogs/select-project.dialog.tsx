@@ -79,7 +79,7 @@ function SelectProjectDialog({
   );
 }
 
-const localizeSelectProject: LocalizeKey = '%selectProject_selectProject%';
+const localizeSelectProject: LocalizeKey = '%selectProject_title_selectProject%';
 
 const SELECT_PROJECT_DIALOG: DialogDefinition<typeof SELECT_PROJECT_DIALOG_TYPE> = Object.freeze({
   ...DIALOG_BASE,

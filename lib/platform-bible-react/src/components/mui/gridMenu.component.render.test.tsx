@@ -47,9 +47,9 @@ describe('GridMenu renders', () => {
         html: screen.getByRole('menu', { name: 'paratext.paratext' }),
         label: '%mainMenu_Paratext%',
       },
-      { html: screen.getByRole('menu', { name: 'platform.window' }), label: '%mainMenu_Window%' },
-      { html: screen.getByRole('menu', { name: 'platform.layout' }), label: '%mainMenu_Layout%' },
-      { html: screen.getByRole('menu', { name: 'platform.help' }), label: '%mainMenu_Help%' },
+      { html: screen.getByRole('menu', { name: 'platform.window' }), label: '%mainMenu_menuItemName_window%' },
+      { html: screen.getByRole('menu', { name: 'platform.layout' }), label: '%mainMenu_menuItemName_layout%' },
+      { html: screen.getByRole('menu', { name: 'platform.help' }), label: '%mainMenu_menuItemName_help%' },
     ];
 
     expectedColumns.forEach((column) => {

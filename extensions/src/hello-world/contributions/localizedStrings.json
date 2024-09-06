@@ -1,10 +1,10 @@
 {
   "metadata": {
     "%helloWorld_webViewMenu_project%": {
-      "fallbackKey": "%mainMenu_project%"
+      "fallbackKey": "%mainMenu_menuItemName_project%"
     },
     "%mainMenu_openHelloWorldProject%": {
-      "fallbackKey": "%mainMenu_openProject%"
+      "fallbackKey": "%mainMenu_menuItemName_openProject%"
     }
   },
   "localizedStrings": {

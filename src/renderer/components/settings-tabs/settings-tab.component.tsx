@@ -19,8 +19,8 @@ type SettingsTabProps = {
 };
 
 export default function SettingsTab({ projectId }: SettingsTabProps) {
-  const searchProjectSettingsKey = '%settings_searchProjectSettingsEllipsis%';
-  const searchUserSettingsKey = '%settings_searchUserSettingsEllipsis%';
+  const searchProjectSettingsKey = '%settings_defaultSearchText_searchProjectSettingsEllipsis%';
+  const searchUserSettingsKey = '%settings_defaultSearchText_searchUserSettingsEllipsis%';
   const [localizedStrings] = useLocalizedStrings([searchProjectSettingsKey, searchUserSettingsKey]);
   const localizedSearchProjectSettings = localizedStrings[searchProjectSettingsKey];
   const localizedSearchUserSettings = localizedStrings[searchUserSettingsKey];
@@ -120,7 +120,7 @@ export const loadProjectSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
 
   return {
     ...savedTabInfo,
-    tabTitle: '%settings_projectSettings%',
+    tabTitle: '%settings_title_projectSettings%',
     content: <SettingsTab projectId={typedSavedTabInfo.data.projectId} />,
   };
 };
@@ -128,7 +128,7 @@ export const loadProjectSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
 export const loadUserSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
-    tabTitle: '%settings_userSettings%',
+    tabTitle: '%settings_title_userSettings%',
     content: <SettingsTab />,
   };
 };

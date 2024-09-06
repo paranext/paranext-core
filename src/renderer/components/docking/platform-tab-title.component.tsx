@@ -36,7 +36,7 @@ export default function PlatformTabTitle({
 }: PlatformTabTitleProps) {
   const menuSelector = webViewType ?? 'invalid.invalid';
 
-  const tabAria: LocalizeKey = '%tabAria_tab%';
+  const tabAria: LocalizeKey = '%tab_aria_tab%';
   const [localizedStrings] = useLocalizedStrings(isLocalizeKey(text) ? [text, tabAria] : [tabAria]);
   const title = isLocalizeKey(text) ? localizedStrings[text] : text;
   const tabLabel = localizedStrings[tabAria];

@@ -3,23 +3,23 @@ import { isString, ScriptureReference, SettingsContribution } from 'platform-bib
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = {
-  label: '%settings_platform_group1_label%',
+  label: '%settings_platform_settingName_group1%',
   description: '%settings_platform_group1_description%',
   properties: {
     'platform.verseRef': {
-      label: '%settings_platform_verseRef_label%',
+      label: '%settings_platform_settingName_verseRef%',
       default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
-      label: '%settings_platform_interfaceLanguage_label%',
+      label: '%settings_platform_settingName_interfaceLanguage%',
       default: ['eng'],
     },
     'platform.ptxUtilsMementoData': {
-      label: '%settings_platform_ptxUtilsMementoData_label%',
+      label: '%settings_platform_settingName_ptxUtilsMementoData%',
       default: {},
     },
     'platform.paratextDataLastRegistryDataCachedTimes': {
-      label: '%settings_platform_paratextDataLastRegistryDataCachedTimes_label%',
+      label: '%settings_platform_settingName_paratextDataLastRegistryDataCachedTimes%',
       default: {},
     },
   },

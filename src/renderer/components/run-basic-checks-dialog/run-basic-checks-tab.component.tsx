@@ -34,18 +34,18 @@ type BasicCheck = {
 };
 
 export function fetchChecks(): BasicCheck[] {
-  const chapterVerseNumbersKey = '%checks_chapterSlashVerseNumbers%';
-  const markersKey = '%checks_markers%';
-  const charactersCombinationsKey = '%checks_charactersParenthesesCombinations%';
-  const punctuationSequencesKey = '%checks_punctuationParenthesesSequences%';
-  const referencesKey = '%checks_references%';
-  const footnoteQuotesKey = '%checks_footnoteQuotes%';
-  const capitalizationKey = '%checks_Capitalization%';
-  const repeatedWordsKey = '%checks_repeatedWords%';
-  const unmatchedPairsOfPunctuationKey = '%checks_unmatchedPairsOfPunctuation%';
-  const quotationsKey = '%checks_quotations%';
-  const quotationTypes = '%checks_quotationTypes%';
-  const numbersKey = '%checks_numbers%';
+  const chapterVerseNumbersKey = '%checks_checkName_chapterSlashVerseNumbers%';
+  const markersKey = '%checks_checkName_markers%';
+  const charactersCombinationsKey = '%checks_checkName_charactersParenthesesCombinations%';
+  const punctuationSequencesKey = '%checks_checkName_punctuationParenthesesSequences%';
+  const referencesKey = '%checks_checkName_references%';
+  const footnoteQuotesKey = '%checks_checkName_footnoteQuotes%';
+  const capitalizationKey = '%checks_checkName_capitalization%';
+  const repeatedWordsKey = '%checks_checkName_repeatedWords%';
+  const unmatchedPairsOfPunctuationKey = '%checks_checkName_unmatchedPairsOfPunctuation%';
+  const quotationsKey = '%checks_checkName_quotations%';
+  const quotationTypes = '%checks_checkName_quotationTypes%';
+  const numbersKey = '%checks_checkName_numbers%';
   return [
     {
       name: chapterVerseNumbersKey,
@@ -104,17 +104,14 @@ export function fetchChecks(): BasicCheck[] {
   ];
 }
 
-function getLocalizedChecks(basicChecks: BasicCheck[]): BasicCheck[] {
-  basicChecks.forEach((c) => {
-    const [localizedStrings] = useLocalizedStrings(isLocalizeKey(c.name) ? [c.name] : []);
-    c.name = isLocalizeKey(c.name) ? localizedStrings[c.name] : c.name;
-  });
-  return basicChecks;
-}
-
 export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTabProps) {
   const basicChecks = fetchChecks();
-  const localizedBasicChecks = getLocalizedChecks(basicChecks);
+  const localizationKeys: LocalizeKey[] = [];
+  basicChecks.forEach((c) => {
+    if (isLocalizeKey(c.name)) {
+      localizationKeys.push(c.name);
+    }
+  });
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
@@ -124,18 +121,22 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
   const [endChapter, setEndChapter] = useState<number>(chapterCount);
   const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef]);
 
-  const noCurrentProjectKey = '%checks_noCurrentProject%';
+  const noCurrentProjectKey = '%checks_defaultNoProject_noCurrentProject%';
   const loadingKey = '%general_loading%';
-  const checksKey = '%checks_checks%';
+  const checksKey = '%checks_checkName_checks%';
   const runKey = '%general_run%';
   const cancelKey = '%general_cancel%';
   const [localizedStrings] = useLocalizedStrings([
+    ...localizationKeys,
     noCurrentProjectKey,
     loadingKey,
     checksKey,
     runKey,
     cancelKey,
   ]);
+  const localizedBasicChecks = basicChecks.map((c) => ({
+    name: isLocalizeKey(c.name) ? localizedStrings[c.name] : c.name,
+  }));
   const localizedNoCurrentProject = localizedStrings[noCurrentProjectKey];
   const localizedLoading = localizedStrings[loadingKey];
   const localizedChecks = localizedStrings[checksKey];
@@ -254,7 +255,7 @@ export default function RunBasicChecksTab({ currentProjectId }: RunBasicChecksTa
 export const loadRunBasicChecksTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
-    tabTitle: '%checks_runBasicChecks%',
+    tabTitle: '%checks_title_runBasicChecks%',
     content: (
       <RunBasicChecksTab
         // #region Test a .NET data provider

@@ -49,7 +49,7 @@ function SelectBooksDialog({
   );
 }
 
-const localizeSelectBooksKey: LocalizeKey = `%selectBooks_selectBooks%`;
+const localizeSelectBooksKey: LocalizeKey = `%selectBooks_title_selectBooks%`;
 
 const SELECT_BOOKS_DIALOG: DialogDefinition<typeof SELECT_BOOKS_DIALOG_TYPE> = Object.freeze({
   ...DIALOG_BASE,

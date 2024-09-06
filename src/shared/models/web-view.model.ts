@@ -37,7 +37,10 @@ type WebViewDefinitionBase = {
    * Defaults to Platform.Bible logo
    */
   iconUrl?: string;
-  /** Name of the tab for the WebView */
+  /**
+   * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
+   * WebView
+   */
   title?: string | LocalizeKey;
   /** Tooltip that is shown when hovering over the webview title */
   tooltip?: string;

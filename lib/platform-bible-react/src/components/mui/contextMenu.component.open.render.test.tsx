@@ -67,7 +67,7 @@ describe('ContextMenu renders', () => {
   it('the last group in a column without a final separator', () => {
     const htmlForWordListItem = allMenuItems
       .map((i) => i.outerHTML)
-      .find((html) => html && /%wordList%/.test(html));
+      .find((html) => html && /%menuItemName_wordList%/.test(html));
 
     expect(htmlForWordListItem).toBeDefined();
     expect(htmlForWordListItem).not.toMatch('hasDivider');

@@ -16,7 +16,7 @@ export default function ErrorTab({ errorMessage }: { errorMessage: string }) {
   );
 }
 
-const localizeError: LocalizeKey = '%tab_error%';
+const localizeError: LocalizeKey = '%tab_title_error%';
 
 /** Creates a new error message tab with the specified error message */
 export const createErrorTab = (errorMessage: string): TabInfo => {
