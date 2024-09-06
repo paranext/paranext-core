@@ -221,30 +221,18 @@ export default function ScriptureResultsViewer({
 }: ScriptureResultsViewerProps) {
   const [grouping, setGrouping] = useState<GroupingState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: scrBookColId, desc: false }]);
-  const [data, setData] = useState<ScriptureSrcItemDetail[]>(() => {
-    // Initial data extraction from sources
-    return sources.flatMap((source) => {
-      const src = source.source;
-      return source.data.map((item) => ({
-        ...item,
-        source: src,
-      }));
-    });
-  });
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-  useEffect(() => {
-    // Update data whenever sources change
-    setData(() => {
-      return sources.flatMap((source) => {
-        const src = source.source;
+  const scriptureResults = useMemo(
+    () =>
+      sources.flatMap((source) => {
         return source.data.map((item) => ({
           ...item,
-          source: src,
+          source: source.source,
         }));
-      });
-    });
-  }, [sources]);
+      }),
+    [sources],
+  );
 
   const columns = useMemo(
     () =>
@@ -286,7 +274,7 @@ export default function ScriptureResultsViewer({
   );
 
   const table = useReactTable({
-    data,
+    data: scriptureResults,
     columns,
     state: {
       grouping,
@@ -311,11 +299,11 @@ export default function ScriptureResultsViewer({
       const selectedRows = table.getSelectedRowModel().rowsById;
       const keys = Object.keys(selectedRows);
       if (keys.length === 1) {
-        const selectedRow = data.find((row) => getRowKey(row) === keys[0]) || undefined;
+        const selectedRow = scriptureResults.find((row) => getRowKey(row) === keys[0]) || undefined;
         if (selectedRow) onRowSelected(selectedRow);
       }
     }
-  }, [rowSelection, data, getRowKey, onRowSelected, table]);
+  }, [rowSelection, scriptureResults, getRowKey, onRowSelected, table]);
 
   // Define possible grouping options
   const scrBookGroupName = scriptureBookGroupName ?? defaultScrBookGroupName;

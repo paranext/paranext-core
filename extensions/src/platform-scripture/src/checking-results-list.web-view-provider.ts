@@ -46,6 +46,7 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
         localizeKey: '%webView_checkResultsList_title%',
       }),
       {
+        resultsCount: '0',
         projectName,
       },
     );

@@ -2,8 +2,7 @@ import { WebViewProps } from '@papi/core';
 import { useData, useDataProvider } from '@papi/frontend/react';
 import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
 import { VerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { logger } from '@papi/frontend';
+import { useCallback, useMemo, useState } from 'react';
 import ConfigureChecks from './checks/configure-checks/configure-checks.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
@@ -38,8 +37,6 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
     undefined,
     [defaultCheckRunnerCheckDetails],
   );
-
-  const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(undefined, []);
 
   const defaultScriptureRange: CheckInputRange = useMemo(() => {
     return {
@@ -77,11 +74,6 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
     },
     [setActiveRanges],
   );
-
-  // Temporary function to show results
-  useEffect(() => {
-    logger.log('Checks results:', checkResults);
-  }, [checkResults]);
 
   return (
     <ConfigureChecks

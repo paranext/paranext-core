@@ -1,9 +1,11 @@
 import { WebViewProps } from '@papi/core';
 import { Label, ResultsSet, ScriptureResultsViewer } from 'platform-bible-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useData } from '@papi/frontend/react';
 import { CheckRunResult } from 'platform-scripture';
 import { Canon } from '@sillsdev/scripture';
+import { formatReplacementString } from 'platform-bible-utils';
+import papi, { logger } from '@papi/frontend';
 
 const getLabel = (
   projectName: string | undefined,
@@ -47,13 +49,13 @@ const parseResults = (checkResults: CheckRunResult[]): ResultsSet[] => {
               bookNum: Canon.bookIdToNumber(checkResult.start.verseRef.book),
               chapterNum: checkResult.start.verseRef.chapterNum,
               verseNum: checkResult.start.verseRef.verseNum,
-              offset: checkResult.start.offset,
               jsonPath: '',
+              offset: checkResult.start.offset,
             }
           : {
-              bookNum: 1,
-              chapterNum: 1,
-              verseNum: 1,
+              bookNum: 0,
+              chapterNum: 0,
+              verseNum: 0,
               jsonPath: checkResult.start.jsonPath,
               offset: checkResult.start.offset,
             },
@@ -62,7 +64,10 @@ const parseResults = (checkResults: CheckRunResult[]): ResultsSet[] => {
   return resultsSets;
 };
 
-global.webViewComponent = function CheckingResultsListWebView({ useWebViewState }: WebViewProps) {
+global.webViewComponent = function CheckingResultsListWebView({
+  useWebViewState,
+  updateWebViewDefinition,
+}: WebViewProps) {
   const [projectName] = useWebViewState('projectName', 'Dummy project');
 
   const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(undefined, []);
@@ -73,6 +78,28 @@ global.webViewComponent = function CheckingResultsListWebView({ useWebViewState 
     () => getLabel(projectName, new Date().toLocaleString(), viewableResults),
     [projectName, viewableResults],
   );
+
+  useEffect(() => {
+    const updateTitle = async () => {
+      const newTitle = formatReplacementString(
+        await papi.localization.getLocalizedString({
+          localizeKey: '%webView_checkResultsList_title%',
+        }),
+        {
+          resultsCount: checkResults.length,
+          projectName,
+        },
+      );
+
+      updateWebViewDefinition({
+        title: newTitle,
+      });
+    };
+
+    updateTitle().catch((error) =>
+      logger.error('Error updating Check Results title! Reason:', error),
+    );
+  }, [updateWebViewDefinition, checkResults.length, projectName]);
 
   return (
     <div className="checking-results-list">
