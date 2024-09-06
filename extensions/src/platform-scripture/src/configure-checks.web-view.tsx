@@ -13,7 +13,7 @@ const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   enabledProjectIds: [''],
 };
 
-const findCheckId = (
+const findCheckIdFromDescription = (
   availableChecks: CheckRunnerCheckDetails[],
   checkLabel: string,
 ): string | undefined => {
@@ -54,18 +54,18 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
   );
 
   const updateSelectedChecks = useCallback(
-    async (checkLabel: string, selected: boolean) => {
-      const checkId = findCheckId(availableChecks, checkLabel);
-      if (!checkId) throw new Error(`No available check found with checkLabel ${checkLabel}`);
+    async (checkDescription: string, selected: boolean) => {
       if (!checkRunner) return;
+      const checkId = findCheckIdFromDescription(availableChecks, checkDescription);
+      if (!checkId) throw new Error(`No available check found with checkLabel ${checkDescription}`);
 
       if (selected) {
         setCheckFeedback(await checkRunner.enableCheck(checkId, projectId));
-        const newSelectedChecks = [...selectedChecks, checkLabel];
+        const newSelectedChecks = [...selectedChecks, checkDescription];
         setSelectedChecks(newSelectedChecks);
       } else {
         checkRunner.disableCheck(checkId, projectId);
-        setSelectedChecks(selectedChecks.filter((check) => check !== checkLabel));
+        setSelectedChecks(selectedChecks.filter((check) => check !== checkDescription));
       }
     },
     [availableChecks, checkRunner, projectId, selectedChecks],

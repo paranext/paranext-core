@@ -5,6 +5,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import { formatReplacementString } from 'platform-bible-utils';
 import checkingResultsListWebView from './checking-results-list.web-view?inline';
 import checkingResultsListStyles from './checking-results-list.web-view.scss?inline';
 
@@ -33,18 +34,21 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
       (savedWebView.state?.projectId as string) ||
       undefined;
 
-    let title = await papi.localization.getLocalizedString({
-      localizeKey: '%webView_checkResultsList_title%',
-    });
-
     let projectName: string | undefined;
 
     if (projectId) {
       const pdp = await papi.projectDataProviders.get('platform.base', projectId);
       projectName = (await pdp.getSetting('platform.name')) ?? projectId;
-
-      title += ` - ${projectName}`;
     }
+
+    const title = formatReplacementString(
+      await papi.localization.getLocalizedString({
+        localizeKey: '%webView_checkResultsList_title%',
+      }),
+      {
+        projectName,
+      },
+    );
 
     if (!projectId && globalThis.isNoisyDevModeEnabled) {
       logger.debug(`${title} web view did not get a project passed in. Choosing a random one...`);
@@ -65,9 +69,9 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
       content: checkingResultsListWebView,
       styles: checkingResultsListStyles,
       state: {
+        ...savedWebView.state,
         projectName,
         projectId,
-        ...savedWebView.state,
         webViewType: this.webViewType,
       },
     };

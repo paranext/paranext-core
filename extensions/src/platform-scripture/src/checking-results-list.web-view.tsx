@@ -1,7 +1,9 @@
 import { WebViewProps } from '@papi/core';
-import { Button, Label, ResultsSet, ScriptureResultsViewer } from 'platform-bible-react';
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { badLeftoversCheck, engineProblemsCheck } from './testing/test-scripture-checks';
+import { Label, ResultsSet, ScriptureResultsViewer } from 'platform-bible-react';
+import { useMemo } from 'react';
+import { useData } from '@papi/frontend/react';
+import { CheckRunResult } from 'platform-scripture';
+import { Canon } from '@sillsdev/scripture';
 
 const getLabel = (
   projectName: string | undefined,
@@ -23,46 +25,59 @@ const getLabel = (
   return result;
 };
 
+const parseResults = (checkResults: CheckRunResult[]): ResultsSet[] => {
+  const resultsSets: ResultsSet[] = [];
+  checkResults.forEach((checkResult) => {
+    let resultsSet = resultsSets.find((newSource) => newSource.source.id === checkResult.checkId);
+    if (!resultsSet) {
+      resultsSet = {
+        source: {
+          id: checkResult.checkId ?? 'Unspecified Source ID',
+          displayName: checkResult.checkId ?? 'Unspecified Source Name',
+        },
+        data: [],
+      };
+      resultsSets.push(resultsSet);
+    }
+    resultsSet.data.push({
+      detail: checkResult.messageFormatString,
+      start:
+        'verseRef' in checkResult.start
+          ? {
+              bookNum: Canon.bookIdToNumber(checkResult.start.verseRef.book),
+              chapterNum: checkResult.start.verseRef.chapterNum,
+              verseNum: checkResult.start.verseRef.verseNum,
+              offset: checkResult.start.offset,
+              jsonPath: '',
+            }
+          : {
+              bookNum: 1,
+              chapterNum: 1,
+              verseNum: 1,
+              jsonPath: checkResult.start.jsonPath,
+              offset: checkResult.start.offset,
+            },
+    });
+  });
+  return resultsSets;
+};
+
 global.webViewComponent = function CheckingResultsListWebView({ useWebViewState }: WebViewProps) {
   const [projectName] = useWebViewState('projectName', 'Dummy project');
 
-  // This is stub code to get some dummy checking results.
-  // TODO (#994): Replace this with calls to get actual check results and subscribe to updates.
-  const onRerun = useCallback(() => {
-    badLeftoversCheck.reRun();
-    engineProblemsCheck.reRun();
-  }, []);
+  const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(undefined, []);
 
-  const sources = useMemo(() => [badLeftoversCheck, engineProblemsCheck], []);
+  const viewableResults = useMemo(() => parseResults(checkResults), [checkResults]);
 
-  const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<string | undefined>(undefined);
-  const [currentSources, setCurrentSources] = useState(sources);
-
-  useEffect(() => {
-    setCurrentSources(sources);
-  }, [sources]);
-
-  const handleResultsUpdated = useCallback(() => {
-    const currentTimestamp = new Date().toLocaleString();
-    setLastUpdateTimestamp(currentTimestamp);
-  }, []);
-
-  const reRunChecks = useCallback(() => {
-    if (onRerun) {
-      onRerun();
-      // Since onRerun modifies the sources directly, we need to trigger a state update
-      setCurrentSources([...sources]);
-      handleResultsUpdated();
-    }
-  }, [onRerun, sources, handleResultsUpdated]);
-
-  const label = getLabel(projectName, lastUpdateTimestamp, sources);
+  const label = useMemo(
+    () => getLabel(projectName, new Date().toLocaleString(), viewableResults),
+    [projectName, viewableResults],
+  );
 
   return (
     <div className="checking-results-list">
-      <Button onClick={reRunChecks}>Rerun</Button>
       {label && <Label className="checking-results-list-label">{label}</Label>}
-      <ScriptureResultsViewer sources={currentSources} />
+      <ScriptureResultsViewer sources={viewableResults} />
     </div>
   );
 };
