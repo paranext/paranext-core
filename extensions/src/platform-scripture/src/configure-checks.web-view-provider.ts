@@ -22,12 +22,7 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: ConfigureChecksWebViewOptions,
   ): Promise<WebViewDefinition | undefined> {
-    // We know that the projectId (if present in the state) will be a string.
-    const projectId =
-      getWebViewOptions.projectId ||
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      (savedWebView.state?.projectId as string) ||
-      undefined;
+    const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
     let projectName: string | undefined;
 
