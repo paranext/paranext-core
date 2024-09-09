@@ -61,9 +61,9 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
     logger.info(`${title} web view opening with ${projectId}`);
 
     return {
+      ...savedWebView,
       title,
       projectId,
-      ...savedWebView,
       content: checkingResultsListWebView,
       styles: checkingResultsListStyles,
       state: {

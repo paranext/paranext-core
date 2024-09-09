@@ -26,7 +26,7 @@ const findCheckIdFromDescription = (
   return undefined;
 };
 
-global.webViewComponent = function InventoryWebView({ projectId }: WebViewProps) {
+global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebViewProps) {
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
   const [checkFeedback, setCheckFeedback] = useState<string[]>([]);
 

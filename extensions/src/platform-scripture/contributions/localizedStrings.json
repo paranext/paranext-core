@@ -20,6 +20,8 @@
       "%project_settings_platformScripture_nonRepeatableWords_label%": "Non-repeatable Words",
       "%project_settings_platformScripture_nonRepeatableWords_description%": "List of words that are not allowed to be repeated in this project.",
       "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
+      "%webView_platformScripture_tools%": "Tools",
+      "%webView_platformScripture_showCheckResults%": "Show Check Results...",
       "%webView_characterInventory_title%": "Character Inventory",
       "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory",
       "%webView_configureChecks_title%": "Configure Checks: {projectName}",
