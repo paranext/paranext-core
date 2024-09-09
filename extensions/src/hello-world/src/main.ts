@@ -105,7 +105,6 @@ const helloWorldProjectWebViewProvider: IWebViewProviderWithType = {
         `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
-    // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     return {
       title: projectId

@@ -1,7 +1,11 @@
 import { WebViewProps } from '@papi/core';
-import { Button, Label, ResultsSet, ScriptureResultsViewer } from 'platform-bible-react';
-import { useState, useCallback, useEffect, useMemo } from 'react';
-import { badLeftoversCheck, engineProblemsCheck } from './testing/test-scripture-checks';
+import { Label, ResultsSet, ScriptureResultsViewer, usePromise } from 'platform-bible-react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useData, useLocalizedStrings } from '@papi/frontend/react';
+import { CheckRunnerCheckDetails, CheckRunResult } from 'platform-scripture';
+import { Canon } from '@sillsdev/scripture';
+import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
+import papi, { logger } from '@papi/frontend';
 
 const getLabel = (
   projectName: string | undefined,
@@ -23,46 +27,135 @@ const getLabel = (
   return result;
 };
 
-global.webViewComponent = function CheckingResultsListWebView({ useWebViewState }: WebViewProps) {
-  const [projectName] = useWebViewState('projectName', 'Dummy project');
+const parseResults = (
+  checkResults: CheckRunResult[],
+  availableChecks: CheckRunnerCheckDetails[],
+  projectId: string | undefined,
+  localizedStrings: LanguageStrings,
+): ResultsSet[] => {
+  const unspecifiedCheckId = localizedStrings['%webView_checkResultsList_unspecifiedCheckId%'];
+  const unspecifiedCheckDescription =
+    localizedStrings['%webView_checkResultsList_unspecifiedCheckDescription%'];
 
-  // This is stub code to get some dummy checking results.
-  // TODO (#994): Replace this with calls to get actual check results and subscribe to updates.
-  const onRerun = useCallback(() => {
-    badLeftoversCheck.reRun();
-    engineProblemsCheck.reRun();
-  }, []);
+  const resultsSets: ResultsSet[] = [];
 
-  const sources = useMemo(() => [badLeftoversCheck, engineProblemsCheck], []);
+  const checkResultsForProject = checkResults.filter(
+    (checkResult) => checkResult.projectId === projectId,
+  );
+  checkResultsForProject.forEach((checkResult) => {
+    let resultsSet = resultsSets.find((newSource) => newSource.source.id === checkResult.checkId);
+    if (!resultsSet) {
+      const checkId = checkResult.checkId ?? unspecifiedCheckId;
+      const checkDescription =
+        availableChecks.find((check) => check.checkId === checkResult.checkId)?.checkDescription ??
+        unspecifiedCheckDescription;
+      resultsSet = {
+        source: {
+          id: checkId,
+          displayName: checkDescription,
+        },
+        data: [],
+      };
+      resultsSets.push(resultsSet);
+    }
+    resultsSet.data.push({
+      detail: checkResult.messageFormatString,
+      start:
+        'verseRef' in checkResult.start
+          ? {
+              bookNum: Canon.bookIdToNumber(checkResult.start.verseRef.book),
+              chapterNum: checkResult.start.verseRef.chapterNum,
+              verseNum: checkResult.start.verseRef.verseNum,
+              jsonPath: '',
+              offset: checkResult.start.offset,
+            }
+          : {
+              bookNum: 0,
+              chapterNum: 0,
+              verseNum: 0,
+              jsonPath: checkResult.start.jsonPath,
+              offset: checkResult.start.offset,
+            },
+    });
+  });
+  return resultsSets;
+};
 
-  const [lastUpdateTimestamp, setLastUpdateTimestamp] = useState<string | undefined>(undefined);
-  const [currentSources, setCurrentSources] = useState(sources);
+global.webViewComponent = function CheckingResultsListWebView({
+  projectId,
+  updateWebViewDefinition,
+}: WebViewProps) {
+  const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(undefined, []);
+  const [availableChecks] = useData('platformScripture.checkAggregator').AvailableChecks(
+    undefined,
+    [],
+  );
+
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(
+      () => [
+        '%webView_checkResultsList_unspecifiedCheckId%',
+        '%webView_checkResultsList_unspecifiedCheckDescription%',
+      ],
+      [],
+    ),
+  );
+
+  const viewableResults = useMemo(
+    () => parseResults(checkResults, availableChecks, projectId, localizedStrings),
+    [availableChecks, checkResults, localizedStrings, projectId],
+  );
+
+  const [projectName] = usePromise(
+    useCallback(async () => {
+      if (!projectId) return '';
+      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+      const name = await pdp.getSetting('platform.name');
+      return name;
+    }, [projectId]),
+    useMemo(() => '', []),
+  );
+
+  const label = useMemo(
+    () => getLabel(projectName, new Date().toLocaleString(), viewableResults),
+    [projectName, viewableResults],
+  );
 
   useEffect(() => {
-    setCurrentSources(sources);
-  }, [sources]);
+    let promiseIsCurrent = true;
+    const updateTitle = async () => {
+      try {
+        const newTitle = formatReplacementString(
+          await papi.localization.getLocalizedString({
+            localizeKey: '%webView_checkResultsList_title%',
+          }),
+          {
+            resultsCount: checkResults.filter((checkResult) => checkResult.projectId === projectId)
+              .length,
+            projectName,
+          },
+        );
 
-  const handleResultsUpdated = useCallback(() => {
-    const currentTimestamp = new Date().toLocaleString();
-    setLastUpdateTimestamp(currentTimestamp);
-  }, []);
+        if (promiseIsCurrent)
+          updateWebViewDefinition({
+            title: newTitle,
+          });
+      } catch (error) {
+        logger.error('Error updating Check Results title! Reason:', error);
+      }
+    };
 
-  const reRunChecks = useCallback(() => {
-    if (onRerun) {
-      onRerun();
-      // Since onRerun modifies the sources directly, we need to trigger a state update
-      setCurrentSources([...sources]);
-      handleResultsUpdated();
-    }
-  }, [onRerun, sources, handleResultsUpdated]);
+    updateTitle();
 
-  const label = getLabel(projectName, lastUpdateTimestamp, sources);
+    return () => {
+      promiseIsCurrent = false;
+    };
+  }, [updateWebViewDefinition, checkResults.length, projectName, checkResults, projectId]);
 
   return (
     <div className="checking-results-list">
-      <Button onClick={reRunChecks}>Rerun</Button>
       {label && <Label className="checking-results-list-label">{label}</Label>}
-      <ScriptureResultsViewer sources={currentSources} />
+      <ScriptureResultsViewer sources={viewableResults} />
     </div>
   );
 };

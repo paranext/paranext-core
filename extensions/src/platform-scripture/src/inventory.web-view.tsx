@@ -46,6 +46,7 @@ const getText = async (
 };
 
 global.webViewComponent = function InventoryWebView({
+  projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
@@ -54,7 +55,6 @@ global.webViewComponent = function InventoryWebView({
       return Array.from(INVENTORY_STRING_KEYS);
     }, []),
   );
-  const [projectId] = useWebViewState('projectId', '');
   const [webViewType] = useWebViewState('webViewType', '');
   const [scriptureRef, setScriptureRef] = useWebViewScrollGroupScrRef();
 
@@ -81,7 +81,7 @@ global.webViewComponent = function InventoryWebView({
   const [scope, setScope] = useState<Scope>('book');
   const [text] = usePromise(
     useCallback(
-      async () => getText(scope, scriptureRef, projectId),
+      async () => (projectId ? getText(scope, scriptureRef, projectId) : ''),
       [scope, scriptureRef, projectId],
     ),
     useMemo(() => '', []),
