@@ -66,6 +66,7 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
 
     return {
       title,
+      projectId,
       ...savedWebView,
       content: checkingResultsListWebView,
       styles: checkingResultsListStyles,

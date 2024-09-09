@@ -41,10 +41,10 @@ export default class InventoryWebViewProvider implements IWebViewProvider {
 
     return {
       title,
+      projectId,
       ...savedWebView,
       content: inventoryWebView,
       styles: inventoryWebViewStyles,
-      projectId,
       state: {
         ...savedWebView.state,
         webViewType: this.webViewType,
