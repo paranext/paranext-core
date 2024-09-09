@@ -109,7 +109,11 @@ export default function ConfigureChecks({
         selectedListItems={selectedChecks}
         handleSelectListItem={handleSelectCheck}
       />
-      <ul>{checkFeedback.length > 0 && checkFeedback.map((feedback) => <li>{feedback}</li>)}</ul>
+      <ul>
+        {checkFeedback &&
+          checkFeedback.length > 0 &&
+          checkFeedback.map((feedback) => <li>{feedback}</li>)}
+      </ul>
       <fieldset className="configure-checks-books">
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}
