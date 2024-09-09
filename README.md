@@ -3,7 +3,7 @@
 Extensible Bible translation software
 
 <div align="center">
-  <img src="doc-meta/doc-icon.png" />
+  <img src="./assets/icon.svg" width="256" alt="Platform icon" />
 </div>
 
 <div align="center">
@@ -16,15 +16,15 @@ Extensible Bible translation software
 
 ## Summary
 
-Platform is extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
+Platform.Bible is extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
 
-This repository contains the core Platform software (Electron client, extension host including "PAPI", and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional Platform extensions.
+This repository contains the core Platform.Bible software (Electron client, extension host including "PAPI", and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional Platform extensions.
 
 ## Users
 
 This software is not yet ready for users. We'll update here with where you can install it when it is ready.
 
-If you would still like to try Platform, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
+If you would still like to try it, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
 
 ### Linux Users
 
@@ -38,13 +38,13 @@ Then simply [execute/run](https://github.com/AppImage/AppImageKit/wiki) the `.Ap
 
 ### Mac Users
 
-If you download and run the ARM release of Platform from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is damaged and can't be opened. You should move it to the Trash." or something very similar:
+If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is damaged and can't be opened. You should move it to the Trash." or something very similar:
 
 ![mac-arm-damaged-warning](doc-meta/mac-arm-damaged-warning.png)
 
-Unfortunately, this is the message Apple chose to display for ARM applications that are not signed (including Platform since we have not yet set up application code signing on Mac).
+Unfortunately, this is the message Apple chose to display for ARM applications that are not signed (including Platform.Bible, since we have not yet set up application code signing on Mac).
 
-If you trust Platform and would like to run it even though it is not code signed, you will need to run the following terminal command every time you install a new version of Platform:
+If you trust Platform.Bible and would like to run it even though it is not code signed, you will need to run the following terminal command every time you install a new version of it:
 
 `xattr -c /Applications/Platform.Bible.app`
 
@@ -62,7 +62,7 @@ Add the system libraries needed for Electron, [Build Instructions (Linux)](https
 
 macOS doesn't come preinstalled with all the
 [icu4c](https://unicode-org.github.io/icu/userguide/icu4c/) libraries. They must be
-installed separately to provide Unicode support to our .NET code. Platform is
+installed separately to provide Unicode support to our .NET code. Platform.Bible is
 configured to expect those libraries to be installed using
 [MacPorts](https://www.macports.org/). The
 [icu package on MacPorts](https://ports.macports.org/port/icu/) has the icu4c
@@ -130,15 +130,15 @@ Please see the [Extension Template wiki](https://github.com/paranext/paranext-ex
 
 ## GitHub Pages
 
-**[Platform API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
+**[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
 
 - Explore the declarations of types available on the PAPI.
 
-**[Platform React Components and Hooks Documentation](https://paranext.github.io/paranext-core/platform-bible-react)**
+**[Platform.Bible React Components and Hooks Documentation](https://paranext.github.io/paranext-core/platform-bible-react)**
 
 - Check out the React components and hooks available to use.
 
-**[Platform Utilities Documentation](https://paranext.github.io/paranext-core/platform-bible-utils)**
+**[Platform.Bible Utilities Documentation](https://paranext.github.io/paranext-core/platform-bible-utils)**
 
 - Check out the utility functions, types, and classes available to use.
 

@@ -1,6 +1,7 @@
 {
+  "%product_name%": "Platform.Bible",
   "%insertNote%": "Insert Note",
-  "%mainMenu_aboutPlatform%": "About Platform",
+  "%mainMenu_about%": "About Platform.Bible",
   "%mainMenu_downloadSlashInstallResources%": "Download/Install Resources",
   "%mainMenu_downloadSlashUpdateProject%": "Download/Update Project",
   "%mainMenu_exit%": "Exit",

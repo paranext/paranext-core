@@ -9,7 +9,7 @@ export default function AboutPanel() {
     <div className="about-panel">
       <div className="hello">
         <LockupInlinePlatformIcon />
-        <p>Copyright © 2022-2024 SIL</p>
+        <p>Copyright © 2022-2024 SIL International</p>
         <p>Version: {PackageInfo.version}</p>
         <p>License: {PackageInfo.license}</p>
         <p>{PackageInfo.description}</p>
