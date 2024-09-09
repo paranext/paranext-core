@@ -1,10 +1,10 @@
 import { WebViewProps } from '@papi/core';
-import { Label, ResultsSet, ScriptureResultsViewer } from 'platform-bible-react';
-import { useEffect, useMemo } from 'react';
-import { useData } from '@papi/frontend/react';
+import { Label, ResultsSet, ScriptureResultsViewer, usePromise } from 'platform-bible-react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { useData, useLocalizedStrings } from '@papi/frontend/react';
 import { CheckRunnerCheckDetails, CheckRunResult } from 'platform-scripture';
 import { Canon } from '@sillsdev/scripture';
-import { formatReplacementString } from 'platform-bible-utils';
+import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import papi, { logger } from '@papi/frontend';
 
 const getLabel = (
@@ -30,15 +30,25 @@ const getLabel = (
 const parseResults = (
   checkResults: CheckRunResult[],
   availableChecks: CheckRunnerCheckDetails[],
+  projectId: string | undefined,
+  localizedStrings: LanguageStrings,
 ): ResultsSet[] => {
+  const unspecifiedCheckId = localizedStrings['%webView_checkResultsList_unspecifiedCheckId%'];
+  const unspecifiedCheckDescription =
+    localizedStrings['%webView_checkResultsList_unspecifiedCheckDescription%'];
+
   const resultsSets: ResultsSet[] = [];
-  checkResults.forEach((checkResult) => {
+
+  const checkResultsForProject = checkResults.filter(
+    (checkResult) => checkResult.projectId === projectId,
+  );
+  checkResultsForProject.forEach((checkResult) => {
     let resultsSet = resultsSets.find((newSource) => newSource.source.id === checkResult.checkId);
     if (!resultsSet) {
-      const checkId = checkResult.checkId ?? 'Unspecified Source ID';
+      const checkId = checkResult.checkId ?? unspecifiedCheckId;
       const checkDescription =
         availableChecks.find((check) => check.checkId === checkResult.checkId)?.checkDescription ??
-        'Unspecified Source Name';
+        unspecifiedCheckDescription;
       resultsSet = {
         source: {
           id: checkId,
@@ -72,20 +82,38 @@ const parseResults = (
 };
 
 global.webViewComponent = function CheckingResultsListWebView({
-  useWebViewState,
+  projectId,
   updateWebViewDefinition,
 }: WebViewProps) {
-  const [projectName] = useWebViewState('projectName', 'Dummy project');
-
   const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(undefined, []);
   const [availableChecks] = useData('platformScripture.checkAggregator').AvailableChecks(
     undefined,
     [],
   );
 
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(
+      () => [
+        '%webView_checkResultsList_unspecifiedCheckId%',
+        '%webView_checkResultsList_unspecifiedCheckDescription%',
+      ],
+      [],
+    ),
+  );
+
   const viewableResults = useMemo(
-    () => parseResults(checkResults, availableChecks),
-    [availableChecks, checkResults],
+    () => parseResults(checkResults, availableChecks, projectId, localizedStrings),
+    [availableChecks, checkResults, localizedStrings, projectId],
+  );
+
+  const [projectName] = usePromise(
+    useCallback(async () => {
+      if (!projectId) return '';
+      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+      const name = await pdp.getSetting('platform.name');
+      return name;
+    }, [projectId]),
+    useMemo(() => '', []),
   );
 
   const label = useMemo(
@@ -94,26 +122,35 @@ global.webViewComponent = function CheckingResultsListWebView({
   );
 
   useEffect(() => {
+    let promiseIsCurrent = true;
     const updateTitle = async () => {
-      const newTitle = formatReplacementString(
-        await papi.localization.getLocalizedString({
-          localizeKey: '%webView_checkResultsList_title%',
-        }),
-        {
-          resultsCount: checkResults.length,
-          projectName,
-        },
-      );
+      try {
+        const newTitle = formatReplacementString(
+          await papi.localization.getLocalizedString({
+            localizeKey: '%webView_checkResultsList_title%',
+          }),
+          {
+            resultsCount: checkResults.filter((checkResult) => checkResult.projectId === projectId)
+              .length,
+            projectName,
+          },
+        );
 
-      updateWebViewDefinition({
-        title: newTitle,
-      });
+        if (promiseIsCurrent)
+          updateWebViewDefinition({
+            title: newTitle,
+          });
+      } catch (error) {
+        logger.error('Error updating Check Results title! Reason:', error);
+      }
     };
 
-    updateTitle().catch((error) =>
-      logger.error('Error updating Check Results title! Reason:', error),
-    );
-  }, [updateWebViewDefinition, checkResults.length, projectName]);
+    updateTitle();
+
+    return () => {
+      promiseIsCurrent = false;
+    };
+  }, [updateWebViewDefinition, checkResults.length, projectName, checkResults, projectId]);
 
   return (
     <div className="checking-results-list">

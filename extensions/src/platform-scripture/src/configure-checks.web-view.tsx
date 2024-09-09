@@ -26,8 +26,7 @@ const findCheckIdFromDescription = (
   return undefined;
 };
 
-global.webViewComponent = function InventoryWebView({ useWebViewState }: WebViewProps) {
-  const [projectId] = useWebViewState('projectId', '');
+global.webViewComponent = function InventoryWebView({ projectId }: WebViewProps) {
   const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
   const [checkFeedback, setCheckFeedback] = useState<string[]>([]);
 
@@ -40,7 +39,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
 
   const defaultScriptureRange: CheckInputRange = useMemo(() => {
     return {
-      projectId,
+      projectId: projectId ?? '',
       start: new VerseRef(1, 1, 1),
     };
   }, [projectId]);
@@ -52,7 +51,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
 
   const updateSelectedChecks = useCallback(
     async (checkDescription: string, selected: boolean) => {
-      if (!checkRunner) return;
+      if (!checkRunner || !projectId) return;
       const checkId = findCheckIdFromDescription(availableChecks, checkDescription);
       if (!checkId) throw new Error(`No available check found with checkLabel ${checkDescription}`);
 

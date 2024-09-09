@@ -24,6 +24,8 @@
       "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory",
       "%webView_configureChecks_title%": "Configure Checks: {projectName}",
       "%webView_checkResultsList_title%": "Check Results ({resultsCount}): {projectName}",
+      "%webView_checkResultsList_unspecifiedCheckId%": "Unspecified check ID",
+      "%webView_checkResultsList_unspecifiedCheckDescription%": "Unspecified check description",
       "%webView_inventory_all%": "All items",
       "%webView_inventory_approved%": "Approved items",
       "%webView_inventory_unapproved%": "Unapproved items",

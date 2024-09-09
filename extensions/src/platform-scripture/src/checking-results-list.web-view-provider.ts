@@ -71,8 +71,6 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
       styles: checkingResultsListStyles,
       state: {
         ...savedWebView.state,
-        projectName,
-        projectId,
         webViewType: this.webViewType,
       },
     };

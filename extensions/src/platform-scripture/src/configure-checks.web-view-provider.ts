@@ -47,12 +47,12 @@ export default class ConfigureChecksWebViewProvider implements IWebViewProvider 
 
     return {
       title,
+      projectId,
       ...savedWebView,
       content: configureChecksWebView,
       styles: configureChecksWebViewStyles,
       state: {
         ...savedWebView.state,
-        projectId,
       },
     };
   }
