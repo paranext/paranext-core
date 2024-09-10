@@ -6,8 +6,7 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
-import ThemeToggle from '@/preview/preview-components/theme-toggle.component';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
 import NavigationContentSearch from '@/components/advanced/navigation-content-search.component';
