@@ -34,7 +34,6 @@
 // focus ring
 :focus-visible,
 .CommentPlugin_CommentInputBox_Editor:focus {
-  /* outline: 1px solid hsl(var(--ring)); */
   outline: 2px solid transparent;
   outline-offset: 2px;
   --tw-ring-offset-width: 2px;
@@ -252,8 +251,6 @@ button {
 
 i.add-comment {
   // could be replaced with lucid icon message-square-text
-  // scss-lint:disable vendorPrefix
-  // scss-lint:disable vendor-prefix
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-left-text.svg');
 }
 
