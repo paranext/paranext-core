@@ -1,6 +1,6 @@
 {
-  "%about_versionLabel%": "Versión: ",
-  "%about_licenseLabel%": "Licencia: ",
+  "%about_versionLabel_format%": "Versión: {version}",
+  "%about_licenseLabel_format%": "Licencia: {license}",
   "%insertNote%": "Insertar Nota",
   "%mainMenu_aboutPlatformBible%": "Acerca de Platform.Bible",
   "%mainMenu_downloadSlashInstallResources%": "Descargar/instalar recursos",

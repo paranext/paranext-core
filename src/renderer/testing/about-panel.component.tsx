@@ -1,32 +1,36 @@
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
-import { LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import PackageInfo from '../../../release/app/package.json';
 
 export const TAB_TYPE_ABOUT = 'about';
 
-const STRING_KEYS: LocalizeKey[] = ['%product_name%'];
+const STRING_KEYS: LocalizeKey[] = [
+  '%product_name%',
+  '%about_versionLabel_format%',
+  '%about_licenseLabel_format%',
+];
 
 export default function AboutPanel() {
-  const [{ '%product_name%': productName }] = useLocalizedStrings(STRING_KEYS);
-  const [{ '%about_versionLabel%': versionLabel }] = useLocalizedStrings(STRING_KEYS);
-  const [{ '%about_licenseLabel%': licenseLabel }] = useLocalizedStrings(STRING_KEYS);
+  const [
+    {
+      '%product_name%': productName,
+      '%about_versionLabel_format%': versionLabelFormat,
+      '%about_licenseLabel_format%': licenseLabelFormat,
+    },
+  ] = useLocalizedStrings(STRING_KEYS);
+
+  // logger.info());
+
   return (
     <div className="about-panel">
-      <div className="hello">
+      <div className="about">
         <InlineLogoAndName />
         <h1>{productName}</h1>
-        <p>License: {PackageInfo.license}</p>
         <p>Copyright © 2022-2024 SIL International</p>
-        <p>
-          {versionLabel}
-          {PackageInfo.version}
-        </p>
-        <p>
-          {licenseLabel}
-          {PackageInfo.license}
-        </p>
+        <p>{formatReplacementString(versionLabelFormat, PackageInfo)}</p>
+        <p>{formatReplacementString(licenseLabelFormat, PackageInfo)}</p>
         <p>{PackageInfo.description}</p>
       </div>
     </div>
