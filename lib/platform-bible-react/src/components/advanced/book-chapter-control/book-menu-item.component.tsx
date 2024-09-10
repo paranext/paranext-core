@@ -45,7 +45,7 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
         ref={ref}
         key={bookId}
         textValue={bookId}
-        className={cn('pr-mx-1 pr-px-1 pr-font-normal pr-text-slate-700', {
+        className={cn('pr-mx-1 pr-px-1 pr-font-normal pr-text-foreground/80', {
           // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
           'pr-bg-amber-50 pr-text-yellow-900 data-[highlighted]:pr-bg-amber-100': isSelected,
         })}
