@@ -67,7 +67,10 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Search Bar">
-          <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} /> &larr; type here
+          <div className="pr-flex pr-gap-2">
+            <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} />{' '}
+            {direction === 'rtl' ? <>&rarr;</> : <>&larr;</>} type here
+          </div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Select">
