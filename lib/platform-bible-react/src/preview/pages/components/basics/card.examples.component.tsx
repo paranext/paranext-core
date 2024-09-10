@@ -10,7 +10,7 @@ import {
 import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
 import { Switch } from '@/components/shadcn-ui/switch';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { BellRing, Check } from 'lucide-react';
 import SelectExamples from './select.examples.component';
 

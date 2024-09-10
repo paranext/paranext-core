@@ -4,7 +4,7 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import WindowOrTabExample from './layouts/window.layout.component';
 import Dashboard5Examples from './layouts/dashboard5.layout.component';
 
