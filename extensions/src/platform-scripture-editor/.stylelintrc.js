@@ -14,6 +14,7 @@ module.exports = {
     'no-descending-specificity': null,
     'selector-max-compound-selectors': 4,
     'selector-max-id': 1,
+    'property-no-vendor-prefix': [true, { ignoreProperties: [/mask-.*/] }],
   },
 };
 
