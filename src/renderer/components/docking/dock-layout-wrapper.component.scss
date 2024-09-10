@@ -17,6 +17,7 @@
 }
 
 .dock-tab-close-btn:hover,
+.dock-tab:hover .dock-tab-close-btn,
 .dock-tab-close-btn:focus {
   color: hsl(var(--foreground));
 }
@@ -208,6 +209,12 @@ $tab-bottom-rounding: $space--s;
 .dock-tab-close-btn {
   font-family: $font-family;
   color: transparent;
+}
+
+.dock-tab.dock-tab-active {
+  .dock-tab-close-btn {
+    color: hsl(var(--foreground));
+  }
 }
 
 /* maximize - minimize control */
