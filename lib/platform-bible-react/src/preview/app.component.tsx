@@ -21,7 +21,6 @@ function App() {
           <DirToggle direction={direction} onChangeDirection={changeDirectionHandler} />
           <ThemeButton />
         </div>
-        {/* </div><div className="pr-fixed pr-right-4 pr-top-16 pr-flex pr-gap-2"> */}
         <div className="pr-fixed pr-bottom-2 pr-right-4 pr-flex pr-gap-2">
           <ContactButtons />
         </div>
