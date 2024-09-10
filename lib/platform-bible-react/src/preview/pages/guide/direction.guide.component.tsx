@@ -94,10 +94,11 @@ export default function DirectionGuide({
         Good: <code>pr-text-end</code>
       </p>
       <h2 className="pr-py-2 pr-font-bold">Another bad example</h2>
+      <p>In left-to-right the icon should appear at the left</p>
       <div className="pr-flex">
         <div className="pr-relative">
           <Input
-            value="icon not to stay right"
+            value=""
             className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none"
           />
           <History className="pr-absolute pr-right-3 pr-top-1/2 pr-h-4 pr-w-4 pr--translate-y-1/2 pr-transform pr-cursor-pointer pr-text-gray-500" />

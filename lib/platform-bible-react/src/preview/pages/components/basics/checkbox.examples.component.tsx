@@ -3,9 +3,8 @@ import { Label } from '@/components/shadcn-ui/label';
 
 export default function CheckboxExamples() {
   return (
-    <>
+    <div className="pr-flex pr-flex-col pr-gap-2">
       <p>Note: that the bug of checkboxes jumping up and down is already coming from Shadcn</p>
-      <br />
       <div>
         <Checkbox id="selectable" />
         <Label htmlFor="selectable" className="pr-ms-2">
@@ -30,6 +29,6 @@ export default function CheckboxExamples() {
           disabled
         </Label>
       </div>
-    </>
+    </div>
   );
 }

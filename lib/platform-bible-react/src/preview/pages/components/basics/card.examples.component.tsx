@@ -27,7 +27,7 @@ export default function CardExamples({ direction }: HasDirection) {
   );
 
   return (
-    <>
+    <div className="pr-flex pr-flex-col pr-gap-2">
       <Card>Card only</Card>
 
       <Card>
@@ -99,6 +99,6 @@ export default function CardExamples({ direction }: HasDirection) {
           </Button>
         </CardFooter>
       </Card>
-    </>
+    </div>
   );
 }
