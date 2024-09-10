@@ -5,7 +5,7 @@ import {
   SelectContent,
   SelectItem,
 } from '@/components/shadcn-ui/select';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 
 export default function SelectExamples({ direction }: HasDirection) {
   return (

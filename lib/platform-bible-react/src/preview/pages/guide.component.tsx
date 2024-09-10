@@ -5,7 +5,7 @@ import {
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
 
-import { DirectionProps } from '@/preview/preview-components/direction-toggle';
+import { DirectionProps } from '@/preview/preview-components/direction-toggle.component';
 import DirectionGuide from './guide/direction.guide.component';
 import ThemeColorDisplay from './guide/theme-color-display.component';
 import ThemingGuide from './guide/theming.guide.component';
