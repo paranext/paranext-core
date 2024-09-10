@@ -74,18 +74,17 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Book Chapter Control">
             Book Chapter Control
           </VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Scroll Group Selector">
-            Scroll Group Selector
-          </VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Theme Toggle">Theme Toggle</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Navigation Content Search">
             Navigation Content Search
           </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Settings List">Settings Components</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Scroll Group Selector">
+            Scroll Group Selector
+          </VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
@@ -100,10 +99,6 @@ function Compositions({ direction }: HasDirection) {
             onChangeScrollGroupId={setScrollGroupId}
           />
           <div>Scroll Group Id: {`${scrollGroupId}`}</div>
-        </VerticalTabsContent>
-
-        <VerticalTabsContent value="Theme Toggle">
-          <ThemeToggle />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Data Table">

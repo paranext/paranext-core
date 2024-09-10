@@ -57,6 +57,7 @@ export const ThemeButton = React.forwardRef<
         <Button
           variant="outline"
           size="icon"
+          title="Toggle theme"
           onClick={() =>
             setTheme(
               // string replacement should always end up with a value of 'Theme', but ESLint cannot know or guarantee it
@@ -74,6 +75,7 @@ export const ThemeButton = React.forwardRef<
         <Button
           variant="outline"
           size="icon"
+          title="Toggle dark/light mode"
           onClick={() =>
             setTheme(
               // string replacement should always end up with a value of 'Theme', but ESLint cannot know or guarantee it
