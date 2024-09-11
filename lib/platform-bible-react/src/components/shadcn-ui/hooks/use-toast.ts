@@ -135,9 +135,10 @@ function dispatch(action: Action) {
   });
 }
 
-type Toast = Omit<ToasterToast, 'id'>;
+// Renamed from Toast to ToastInternal to prevent name collision with the Toast component
+type ToastInternal = Omit<ToasterToast, 'id'>;
 
-function toast({ ...props }: Toast) {
+function toast({ ...props }: ToastInternal) {
   const id = genId();
 
   const update = (updateToast: ToasterToast) =>

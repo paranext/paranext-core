@@ -1531,8 +1531,8 @@ export type ToasterToast = ToastProps & {
 	description?: React$1.ReactNode;
 	action?: ToastActionElement;
 };
-type Toast$1 = Omit<ToasterToast, "id">;
-declare function toast({ ...props }: Toast$1): {
+export type ToastInternal = Omit<ToasterToast, "id">;
+declare function toast({ ...props }: ToastInternal): {
 	id: string;
 	dismiss: () => void;
 	update: (updateToast: ToasterToast) => void;
