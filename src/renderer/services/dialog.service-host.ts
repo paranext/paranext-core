@@ -235,7 +235,7 @@ async function showDialog<DialogTabType extends DialogTabTypes>(
 }
 
 // on the dialogService - see `dialog.service-model.ts` for JSDoc
-async function about(
+async function showAboutDialog(
   options?: DialogTypes[typeof ABOUT_DIALOG.tabType]['options'],
 ): Promise<DialogTypes[typeof SELECT_PROJECT_DIALOG.tabType]['responseType'] | undefined> {
   return showDialog(ABOUT_DIALOG.tabType, options);
@@ -250,7 +250,7 @@ async function selectProject(
 
 const dialogService: DialogService = {
   showDialog,
-  about,
+  showAboutDialog,
   selectProject,
 };
 

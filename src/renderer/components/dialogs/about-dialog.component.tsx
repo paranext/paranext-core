@@ -8,7 +8,7 @@ export const TAB_TYPE_ABOUT = 'about';
 
 const STRING_KEYS: LocalizeKey[] = ['%product_name%'];
 
-function AboutPanel() {
+function AboutDialog() {
   const [{ '%product_name%': productName }] = useLocalizedStrings(STRING_KEYS);
 
   return (
@@ -31,7 +31,7 @@ const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.freeze({
     width: 500,
     height: 500,
   },
-  Component: AboutPanel,
+  Component: AboutDialog,
 });
 
 export default ABOUT_DIALOG;

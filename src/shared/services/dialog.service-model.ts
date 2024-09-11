@@ -36,7 +36,7 @@ export interface DialogService {
    * @param options Various options for configuring the dialog that shows
    * @returns Returns the user's selected project id or `undefined` if the user cancels
    */
-  about(options?: AboutDialogOptions): Promise<string | undefined>;
+  showAboutDialog(options?: AboutDialogOptions): Promise<string | undefined>;
 }
 
 /** Prefix on requests that indicates that the request is related to dialog operations */
