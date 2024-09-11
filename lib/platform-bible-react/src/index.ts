@@ -105,6 +105,7 @@ export { Input } from './components/shadcn-ui/input';
 export { Label } from '@/components/shadcn-ui/label';
 export * from './components/shadcn-ui/select';
 export { Separator } from '@/components/shadcn-ui/separator';
+export * from './components/shadcn-ui/sonner';
 export { Slider as ShadCnSlider } from './components/shadcn-ui/slider';
 export { Switch as ShadCnSwitch } from './components/shadcn-ui/switch';
 export * from './components/shadcn-ui/table';

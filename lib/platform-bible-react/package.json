@@ -67,8 +67,10 @@
     "clsx": "^2.1.0",
     "cmdk": "^1.0.0",
     "lucide-react": "^0.367.0",
+    "next-themes": "^0.3.0",
     "platform-bible-utils": "file:../platform-bible-utils",
     "react-data-grid": ">=7.0.0-beta.34",
+    "sonner": "^1.5.0",
     "tailwind-merge": "^2.2.2",
     "tailwindcss-animate": "^1.0.7"
   },

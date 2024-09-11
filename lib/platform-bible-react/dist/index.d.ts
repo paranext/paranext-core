@@ -14,7 +14,8 @@ import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirectio
 import { VariantProps } from 'class-variance-authority';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
-import { ChangeEvent, ChangeEventHandler, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
+import { ChangeEvent, ChangeEventHandler, ComponentProps, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode, SyntheticEvent } from 'react';
+import { Toaster, toast as sonner } from 'sonner';
 
 /** Function to run to dispose of something. Returns true if successfully unsubscribed */
 export type Unsubscriber = () => boolean;
@@ -1191,6 +1192,8 @@ export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectP
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export type SonnerProps = React$1.ComponentProps<typeof Toaster>;
+export declare function Sonner({ ...props }: SonnerProps): import("react/jsx-runtime").JSX.Element;
 declare const Slider$1: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.SliderProps & React$1.RefAttributes<HTMLSpanElement>, "ref"> & React$1.RefAttributes<HTMLSpanElement>>;
 declare const Switch$1: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & {
@@ -1232,7 +1235,7 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-export declare function Toaster(): import("react/jsx-runtime").JSX.Element;
+declare function Toaster$1(): import("react/jsx-runtime").JSX.Element;
 export type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;
@@ -1543,6 +1546,8 @@ export declare function useToast(): {
 export {
 	Slider$1 as ShadCnSlider,
 	Switch$1 as ShadCnSwitch,
+	Toaster$1 as Toaster,
+	sonner,
 };
 
 export {};
