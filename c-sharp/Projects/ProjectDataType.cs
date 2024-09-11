@@ -9,4 +9,5 @@ public sealed class ProjectDataType
     public const string SETTING = "Setting";
     public const string VERSE_USFM = "VerseUSFM";
     public const string VERSE_USX = "VerseUSX";
+    public const string VERSE_PLAIN_TEXT = "VersePlainText";
 }

@@ -69,7 +69,7 @@ declare module 'platform-scripture' {
     ChapterUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
   };
 
-  /** Provides Scripture data in USJ format by chapter */
+  /** Provides Scripture data in USJ format by verse */
   export type USJVerseProjectInterfaceDataTypes = {
     /**
      * Gets the data in USJ form for the specified verse
@@ -77,6 +77,18 @@ declare module 'platform-scripture' {
      * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
      */
     VerseUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
+  };
+
+  /**
+   * Provides Scripture data in plain text format by verse. Plain text does not include notes,
+   * figures, and other things that are not considered "verse text"
+   */
+  export type PlainTextVerseProjectInterfaceDataTypes = {
+    /**
+     * Gets the data in plain text form for the specified verse. Plain text does not include notes,
+     * figures, and other things that are not considered "verse text".
+     */
+    VersePlainText: DataProviderDataType<VerseRef, string | undefined, string>;
   };
 
   /**
@@ -411,6 +423,41 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
     };
 
+  /**
+   * Provides Scripture data in plain text format by verse. Plain text does not include notes,
+   * figures, and other things that are not considered "verse text"
+   */
+  export type IPlainTextVerseProjectDataProvider =
+    IProjectDataProvider<PlainTextVerseProjectInterfaceDataTypes> & {
+      /**
+       * Gets the data in plain text form for the specified verse. Plain text does not include
+       * notes, figures, and other things that are not considered "verse text"
+       */
+      getVersePlainText(verseRef: VerseRef): Promise<Usj | undefined>;
+      /**
+       * Sets the data in plain text form for the specified verse. Plain text does not include
+       * notes, figures, and other things that are not considered "verse text"
+       */
+      setVersePlainText(
+        verseRef: VerseRef,
+        data: string,
+      ): Promise<DataProviderUpdateInstructions<PlainTextVerseProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the plain text data is changed. Plain text does
+       * not include notes, figures, and other things that are not considered "verse text"
+       *
+       * @param verseRef Tells the provider what changes to listen for
+       * @param callback Function to run with the updated USJ for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeVersePlainText(
+        verseRef: VerseRef,
+        callback: (usj: Usj | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
   // #endregion
 
   // #region Check Data Types
@@ -624,6 +671,7 @@ declare module 'papi-shared-types' {
     IUSJBookProjectDataProvider,
     IUSJChapterProjectDataProvider,
     IUSJVerseProjectDataProvider,
+    IPlainTextVerseProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     CheckDetails,
@@ -640,6 +688,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Book': IUSJBookProjectDataProvider;
     'platformScripture.USJ_Chapter': IUSJChapterProjectDataProvider;
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
+    'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
   }
 
   export interface DataProviders {
