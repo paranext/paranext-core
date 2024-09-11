@@ -164,7 +164,7 @@ export default function TestButtonsPanel() {
 
   return (
     <div className="buttons-panel">
-      <div className="hello">
+      <div className="test-panel">
         <TextField
           label="Verse Ref"
           value={verseRefIntermediate}
@@ -297,7 +297,7 @@ export default function TestButtonsPanel() {
           Test
         </Button>
       </div>
-      <div className="hello">
+      <div className="test-panel">
         <div>{promiseReturn}</div>
       </div>
     </div>

@@ -10,6 +10,22 @@
     "package-lock.json",
     "vscode-extension"
   ],
+  "overrides": [
+    {
+      "filename": "**/fr.json",
+      "language": "fr",
+      "ignoreRegExpList": [
+        "\"%?[a-zA-Z0-9_]+%?\"\\s*:" // Do not spell-check JSON keys
+      ]
+    },
+    {
+      "filename": "**/es.json",
+      "language": "es",
+      "ignoreRegExpList": [
+        "\"%?[a-zA-Z0-9_]+%?\"\\s*:" // Do not spell-check JSON keys
+      ]
+    }
+  ],
   "dictionaryDefinitions": [],
   "dictionaries": [],
   "words": [
