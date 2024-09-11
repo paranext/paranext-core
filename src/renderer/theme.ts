@@ -85,6 +85,15 @@ export const SCROLLBAR_STYLES = `
   ::-webkit-scrollbar-button:horizontal:increment:hover {
     border-color: transparent transparent transparent hsl(var(--foreground) / 0.7);
   }
+
+  /* Disable the "double button" on flex divs https://stackoverflow.com/a/67476494 */
+  ::-webkit-scrollbar-button:vertical:start:increment,
+  ::-webkit-scrollbar-button:vertical:end:decrement,
+  ::-webkit-scrollbar-button:horizontal:start:increment,
+  ::-webkit-scrollbar-button:horizontal:end:decrement
+  {
+      display: none;
+  }
   `;
 
 export const MUI_OVERRIDES = `
