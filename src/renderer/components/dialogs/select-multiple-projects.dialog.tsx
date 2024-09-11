@@ -1,7 +1,7 @@
 import { ListItemIcon } from '@mui/material';
 import { useCallback, useMemo, useState } from 'react';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import DoneIcon from '@mui/icons-material/Done';
+import { Check } from 'lucide-react';
 import ProjectList, {
   ProjectMetadataDisplay,
 } from '@renderer/components/projects/project-list.component';
@@ -96,7 +96,7 @@ function SelectMultipleProjectsDialog({
       )}
       <div className="select-multiple-projects-submit-button">
         <Button onClick={() => submitDialog(selectedProjectIds)}>
-          <DoneIcon />
+          <Check />
         </Button>
       </div>
     </div>

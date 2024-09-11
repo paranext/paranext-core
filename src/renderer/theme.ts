@@ -1,4 +1,4 @@
-const THEME = 'dark'; // currently available: '', 'dark', 'paratext-light', 'paratext-dark'
+const THEME = ''; // currently available: '', 'dark', 'paratext-light', 'paratext-dark'
 
 export const SCROLLBAR_STYLES = `
   ::-webkit-scrollbar {
@@ -86,5 +86,19 @@ export const SCROLLBAR_STYLES = `
     border-color: transparent transparent transparent hsl(var(--foreground) / 0.7);
   }
   `;
+
+export const MUI_OVERRIDES = `
+  .MuiSvgIcon-root,
+  .MuiFormLabel-root.MuiFormLabel-colorPrimary,
+  .MuiCheckbox-root.MuiCheckbox-colorPrimary,
+  .MuiRadio-root.MuiRadio-colorPrimary,
+  .MuiFormLabel-root.MuiFormLabel-colorPrimary {
+    color: hsl(var(--foreground));
+  }
+
+  .MuiTypography-root.MuiTypography-body1.MuiFormControlLabel-label.Mui-disabled {
+    color: hsl(var(--foreground) / 0.5);
+  }
+`;
 
 export default THEME;
