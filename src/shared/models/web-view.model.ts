@@ -37,7 +37,7 @@ type WebViewDefinitionBase = {
   /**
    * Url of image to show on the title bar of the tab
    *
-   * Defaults to Platform.Bible logo
+   * Defaults to the software's standard logo.
    */
   iconUrl?: string;
   /** Name of the tab for the WebView */
