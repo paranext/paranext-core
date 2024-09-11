@@ -24,9 +24,9 @@ export default function AboutPanel() {
   // logger.info());
 
   return (
-    <div className="about-panel">
+    <div className="about-panel dark">
       <div className="about">
-        <InlineLogoAndName />
+        <InlineLogoAndName width="80%" />
         <h1>{productName}</h1>
         <p>Copyright © 2022-2024 SIL International</p>
         <p>{formatReplacementString(versionLabelFormat, PackageInfo)}</p>

@@ -57,13 +57,9 @@ a:hover {
 .about-panel {
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    200.96deg,
-    $color--pt9-lightgreen -10%,
-    $color--pt9-darkgreen 60%,
-    $color--pt9-darkgray 110%
-  );
+  background: #0a403a;
   overflow-y: auto;
+  color: hsl(var(--foreground));
 }
 
 .about-panel .test-panel {
