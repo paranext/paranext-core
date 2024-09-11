@@ -83,6 +83,12 @@ const onDidUpdateWebViewEmitter = createNetworkEventEmitter<UpdateWebViewEvent>(
 /** Event that emits with webView info when a webView is added */
 export const onDidUpdateWebView = onDidUpdateWebViewEmitter.event;
 
+/**
+ * Alias for `window.open` because `window.open` is deleted to prevent web views from accessing it.
+ * Do not give web views access to this function
+ */
+export const openWindow = window.open.bind(window);
+
 // #region Security
 
 /**

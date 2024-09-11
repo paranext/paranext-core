@@ -146,7 +146,7 @@ type WebViewDefinitionBase = {
   /**
    * Whether to allow this iframe to open separate windows with window.open and anchor tags with
    * `target="_blank"`. Setting this to true adds `allow-popups` to the WebView iframe's [sandbox
-   * attribute] (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+   * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
    * to `false`
    */
   allowPopups?: boolean;
