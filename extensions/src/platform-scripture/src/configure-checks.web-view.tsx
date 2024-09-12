@@ -1,8 +1,9 @@
 import { WebViewProps } from '@papi/core';
 import { useData, useDataProvider } from '@papi/frontend/react';
 import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
-import { VerseRef } from '@sillsdev/scripture';
-import { useCallback, useMemo, useState } from 'react';
+import { Canon, VerseRef } from '@sillsdev/scripture';
+import { useCallback, useEffect, useMemo } from 'react';
+import { Sonner, sonner } from 'platform-bible-react';
 import ConfigureChecks from './checks/configure-checks/configure-checks.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
@@ -26,16 +27,24 @@ const findCheckIdFromDescription = (
   return undefined;
 };
 
-global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebViewProps) {
-  const [selectedChecks, setSelectedChecks] = useState<string[]>([]);
-  const [checkFeedback, setCheckFeedback] = useState<string[]>([]);
+const prettyPrintVerseRef = (verseRef: VerseRef): string => {
+  return `${verseRef.book ? Canon.bookIdToEnglishName(verseRef.book) : Canon.bookNumberToEnglishName(verseRef.bookNum)} ${verseRef.chapterNum}:${verseRef.verseNum}`;
+};
 
+global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebViewProps) {
   const checkRunner = useDataProvider('platformScripture.checkAggregator');
 
-  const [availableChecks] = useData('platformScripture.checkAggregator').AvailableChecks(
-    undefined,
-    [defaultCheckRunnerCheckDetails],
-  );
+  const [availableChecks, , availableChecksIsLoading] = useData(
+    'platformScripture.checkAggregator',
+  ).AvailableChecks(undefined, [defaultCheckRunnerCheckDetails]);
+
+  const selectedChecks = useMemo((): string[] => {
+    if (!projectId) return [];
+    const enabledChecks = availableChecks.filter((check) =>
+      check.enabledProjectIds.includes(projectId),
+    );
+    return enabledChecks.map((check) => check.checkDescription);
+  }, [availableChecks, projectId]);
 
   const defaultScriptureRange: CheckInputRange = useMemo(() => {
     return {
@@ -52,19 +61,35 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
   const updateSelectedChecks = useCallback(
     async (checkDescription: string, selected: boolean) => {
       if (!checkRunner || !projectId) return;
+      if (availableChecksIsLoading) {
+        sonner.warning(`${selected ? 'Enabling' : 'Disabling'} check failed.`, {
+          description: 'Please try again later.',
+        });
+      }
       const checkId = findCheckIdFromDescription(availableChecks, checkDescription);
       if (!checkId) throw new Error(`No available check found with checkLabel ${checkDescription}`);
 
       if (selected) {
-        setCheckFeedback(await checkRunner.enableCheck(checkId, projectId));
-        const newSelectedChecks = [...selectedChecks, checkDescription];
-        setSelectedChecks(newSelectedChecks);
+        const newCheckFeedback = await checkRunner.enableCheck(checkId, projectId);
+        if (newCheckFeedback) {
+          sonner.warning(`Warnings/errors occurred when trying to enable the ${checkDescription} check.
+            Enabling may or may not have been successful.
+            The following warning/errors have been encountered:${(
+              <ul>
+                {newCheckFeedback.map((feedback) => (
+                  <li>{feedback}</li>
+                ))}
+              </ul>
+            )}`);
+        } else {
+          sonner.success(`Successfully enabled ${checkDescription} check`);
+        }
       } else {
         checkRunner.disableCheck(checkId, projectId);
-        setSelectedChecks(selectedChecks.filter((check) => check !== checkDescription));
+        sonner.success(`Successfully disabled ${checkDescription} check`);
       }
     },
-    [availableChecks, checkRunner, projectId, selectedChecks],
+    [availableChecks, availableChecksIsLoading, checkRunner, projectId],
   );
 
   const updateActiveRanges = useCallback(
@@ -74,15 +99,29 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
     [setActiveRanges],
   );
 
+  useEffect(() => {
+    sonner(`Active range${activeRanges.length > 1 ? 's' : ''} updated.`, {
+      description: `${activeRanges
+        .filter((activeRange) => activeRange.projectId === projectId)
+        .map(
+          (range) =>
+            `${range.end ? `${prettyPrintVerseRef(range.start)} - ${prettyPrintVerseRef(range.end)}` : ` ${Canon.bookIdToEnglishName(range.start.book)}`}`,
+        )}`,
+    });
+  }, [activeRanges, projectId]);
+
   return (
-    <ConfigureChecks
-      projectId={projectId}
-      availableChecks={availableChecks}
-      handleSelectCheck={updateSelectedChecks}
-      selectedChecks={selectedChecks}
-      checkFeedback={checkFeedback}
-      activeRanges={activeRanges}
-      handleActiveRangesChange={updateActiveRanges}
-    />
+    <>
+      <ConfigureChecks
+        projectId={projectId}
+        availableChecks={availableChecks}
+        handleSelectCheck={updateSelectedChecks}
+        selectedChecks={selectedChecks}
+        activeRanges={activeRanges}
+        handleActiveRangesChange={updateActiveRanges}
+        checkFeedback={[]}
+      />
+      <Sonner />
+    </>
   );
 };
