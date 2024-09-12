@@ -15,7 +15,6 @@ type ConfigureChecksProps = {
   availableChecks: CheckRunnerCheckDetails[];
   handleSelectCheck: (checkLabel: string, selected: boolean) => void;
   selectedChecks: string[];
-  checkFeedback: string[];
   activeRanges: CheckInputRange[];
   handleActiveRangesChange: (newActiveRanges: CheckInputRange[]) => void;
 };
@@ -31,7 +30,6 @@ export default function ConfigureChecks({
   availableChecks,
   handleSelectCheck,
   selectedChecks,
-  checkFeedback,
   activeRanges,
   handleActiveRangesChange,
 }: ConfigureChecksProps) {
@@ -109,11 +107,6 @@ export default function ConfigureChecks({
         selectedListItems={selectedChecks}
         handleSelectListItem={handleSelectCheck}
       />
-      <ul>
-        {checkFeedback &&
-          checkFeedback.length > 0 &&
-          checkFeedback.map((feedback) => <li>{feedback}</li>)}
-      </ul>
       <fieldset className="configure-checks-books">
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}

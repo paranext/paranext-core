@@ -119,7 +119,6 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
         selectedChecks={selectedChecks}
         activeRanges={activeRanges}
         handleActiveRangesChange={updateActiveRanges}
-        checkFeedback={[]}
       />
       <Sonner />
     </>
