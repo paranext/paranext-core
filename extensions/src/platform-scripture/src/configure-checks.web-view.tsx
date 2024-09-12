@@ -72,15 +72,14 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
       if (selected) {
         const newCheckFeedback = await checkRunner.enableCheck(checkId, projectId);
         if (newCheckFeedback) {
-          sonner.warning(`Warnings/errors occurred when trying to enable the ${checkDescription} check.
+          sonner.warning(
+            `Warnings/errors occurred when trying to enable the ${checkDescription} check.
             Enabling may or may not have been successful.
-            The following warning/errors have been encountered:${(
-              <ul>
-                {newCheckFeedback.map((feedback) => (
-                  <li>{feedback}</li>
-                ))}
-              </ul>
-            )}`);
+            The following warning/errors have been encountered:`,
+            {
+              description: `${newCheckFeedback.map((feedback) => ` ${feedback}`)}`,
+            },
+          );
         } else {
           sonner.success(`Successfully enabled ${checkDescription} check`);
         }
