@@ -200,8 +200,10 @@ function getColumns(
 }
 
 const toRefOrRange = (scriptureSelection: ScriptureSelection) => {
-  if (!('offset' in scriptureSelection.start)) throw new Error('BOOOM');
-  if (scriptureSelection.end && !('offset' in scriptureSelection.end)) throw new Error('BOOOM');
+  if (!('offset' in scriptureSelection.start))
+    throw new Error('No offset available in range start');
+  if (scriptureSelection.end && !('offset' in scriptureSelection.end))
+    throw new Error('No offset available in range end');
   const { offset: offsetStart } = scriptureSelection.start;
   let offsetEnd: number = 0;
   if (scriptureSelection.end) ({ offset: offsetEnd } = scriptureSelection.end);
