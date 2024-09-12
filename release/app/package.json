@@ -4,7 +4,7 @@
   "description": "Extensible Bible translation software",
   "license": "MIT",
   "author": {
-    "name": "Platform.Bible",
+    "name": "Platform",
     "url": "https://github.com/paranext/"
   },
   "main": "./dist/main/main.js",

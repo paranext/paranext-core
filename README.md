@@ -3,7 +3,7 @@
 Extensible Bible translation software
 
 <div align="center">
-  <img src="doc-meta/doc-icon.png" />
+  <img src="./assets/icon.svg" width="256" alt="Platform icon" />
 </div>
 
 <div align="center">
@@ -16,15 +16,15 @@ Extensible Bible translation software
 
 ## Summary
 
-Platform.Bible is an extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
+Platform.Bible is extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
 
-This repository contains the core Platform.Bible software (Electron client, extension host including "PAPI", and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional Platform.Bible extensions.
+This repository contains the core Platform.Bible software (Electron client, extension host including "PAPI", and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional extensions.
 
 ## Users
 
 This software is not yet ready for users. We'll update here with where you can install it when it is ready.
 
-If you would still like to try Platform.Bible, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
+If you would still like to try it, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
 
 ### Linux Users
 
@@ -42,9 +42,9 @@ If you download and run the ARM release of Platform.Bible from [a computer runni
 
 ![mac-arm-damaged-warning](doc-meta/mac-arm-damaged-warning.png)
 
-Unfortunately, this is the message Apple chose to display for ARM applications that are not signed (including Platform.Bible since we have not yet set up application code signing on Mac).
+Unfortunately, this is the message Apple chose to display for ARM applications that are not signed (including Platform.Bible, since we have not yet set up application code signing on Mac).
 
-If you trust Platform.Bible and would like to run it even though it is not code signed, you will need to run the following terminal command every time you install a new version of Platform.Bible:
+If you trust Platform.Bible and would like to run it even though it is not code signed, you will need to run the following terminal command every time you install a new version of it:
 
 `xattr -c /Applications/Platform.Bible.app`
 

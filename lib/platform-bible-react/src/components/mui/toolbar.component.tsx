@@ -3,6 +3,7 @@ import HamburgerMenuButton, {
 } from '@/components/mui/hamburger-menu-button.component';
 import { CommandHandler } from '@/components/mui/menu-item.component';
 import '@/components/mui/toolbar.component.css';
+import { cn } from '@/utils/shadcn-ui.util';
 import { AppBar, Toolbar as MuiToolbar } from '@mui/material';
 import { PropsWithChildren, useRef } from 'react';
 
@@ -37,7 +38,10 @@ export default function Toolbar({
   return (
     <div ref={containerRef} style={{ position: 'relative' }}>
       <AppBar position="static" id={id}>
-        <MuiToolbar className={`papi-toolbar ${className ?? ''}`} variant="dense">
+        <MuiToolbar
+          className={cn('pr-bg-muted pr-text-muted-foreground', className)}
+          variant="dense"
+        >
           {menuProvider ? (
             <HamburgerMenuButton
               commandHandler={commandHandler}

@@ -26,20 +26,6 @@
     },
     "items": [
       {
-        "label": "%mainMenu_openProject%",
-        "localizeNotes": "Application main menu > Project > Open Project",
-        "group": "platform.projectProjects",
-        "order": 1,
-        "command": "platform.openProjectDialog"
-      },
-      {
-        "label": "%mainMenu_downloadSlashUpdateProject%",
-        "localizeNotes": "Application main menu > Project > Download/Update Project",
-        "group": "platform.projectProjects",
-        "order": 2,
-        "command": "platform.openDownloadUpdateProjectDialog"
-      },
-      {
         "label": "%mainMenu_downloadSlashInstallResources%",
         "localizeNotes": "Application main menu > Project > Download/Install Resources",
         "group": "platform.projectResources",
@@ -68,8 +54,8 @@
         "command": "platform.visitSupportPage"
       },
       {
-        "label": "%mainMenu_aboutPlatformBible%",
-        "localizeNotes": "Application main menu > Help > About Platform.Bible",
+        "label": "%mainMenu_about%",
+        "localizeNotes": "Application main menu > Help > About (Platform.Bible or Software white-label name)",
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.about"

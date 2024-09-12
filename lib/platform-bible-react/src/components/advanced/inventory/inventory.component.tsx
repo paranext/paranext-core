@@ -19,9 +19,8 @@ import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
- * component in Platform.Bible extension, you can pass it into the useLocalizedStrings hook to
- * easily obtain the localized strings and pass them into the localizedStrings prop of the Inventory
- * component
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of the Inventory component
  */
 export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_all%',

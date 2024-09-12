@@ -26,7 +26,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         ProjectDataType.VERSE_USFM,
         ProjectDataType.BOOK_USX,
         ProjectDataType.CHAPTER_USX,
-        ProjectDataType.VERSE_USX
+        ProjectDataType.VERSE_USX,
+        ProjectDataType.VERSE_PLAIN_TEXT,
     ];
 
     private readonly LocalParatextProjects _paratextProjects;
@@ -55,6 +56,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         Getters.Add("getChapterUSX", GetChapterUsx);
         Setters.Add("setChapterUSX", SetChapterUsx);
         Getters.Add("getVerseUSX", GetVerseUsx);
+
+        Getters.Add("getVersePlainText", GetVersePlainText);
 
         Getters.Add("getSetting", GetProjectSetting);
         Setters.Add("setSetting", SetProjectSetting);
@@ -525,6 +528,16 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #endregion
 
+    #region Plain Text
+
+    public ResponseToRequest GetVersePlainText(string jsonString)
+    {
+        return GetFromScrText(jsonString,
+            (ScrText scrText, VerseRef verseRef) => scrText.GetVerseText(verseRef));
+    }
+
+    #endregion
+
     #region Private helper methods
 
     private ResponseToRequest GetFromScrText(string verseRefJson, Func<ScrText, VerseRef, string> getTextFromScrText)
@@ -598,7 +611,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             ? allXmlData.Length
             : allXmlData.IndexOf(nextVerseNode.OuterXml, chapterIndex,
                 StringComparison.InvariantCulture);
-        return allXmlData.Substring(verseIndex, nextVerseIndex - verseIndex);
+
+        // Wrap the verse text in a usx element so it is a whole valid usx document
+        return $"<usx version=\"{scrText.Settings.UsfmVersion}\">{allXmlData.Substring(verseIndex, nextVerseIndex - verseIndex)}</usx>";
     }
 
     private static string VerseXPath(int chapterNum, int verseNum)

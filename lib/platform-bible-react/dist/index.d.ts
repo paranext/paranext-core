@@ -214,9 +214,8 @@ export interface DataTableProps<TData, TValue> {
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 /**
  * Object containing all keys used for localization in this component. If you're using this
- * component in Platform.Bible extension, you can pass it into the useLocalizedStrings hook to
- * easily obtain the localized strings and pass them into the localizedStrings prop of the Inventory
- * component
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of the Inventory component
  */
 export declare const INVENTORY_STRING_KEYS: readonly [
 	"%webView_inventory_all%",

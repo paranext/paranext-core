@@ -1,16 +1,136 @@
 /* Platform.Bible image protocol overrides */
 /* stylelint-disable selector-no-qualifying-type */
+// this is required for many overwrites
+/* stylelint-disable selector-class-pattern */
 
 // Platform.Bible modifications
 
 .editor-container {
   max-width: none;
+  color: hsl(var(--foreground));
 
   // remove rounded top corners to look better in tabs
   .toolbar {
-    border-bottom: 1px solid rgb(226, 232, 240);
+    border-bottom: 1px solid hsl(var(--border));
     border-top-left-radius: 0;
     border-top-right-radius: 0;
+
+    background-color: hsl(var(--background));
+    color: hsl(var(--color));
+  }
+}
+
+// text selection
+:focus ::selection {
+  color: hsl(var(--primary-foreground));
+  background-color: hsl(var(--primary));
+}
+
+::selection {
+  color: hsl(var(--secondary-foreground));
+  background-color: hsl(var(--secondary));
+}
+
+// focus ring
+:focus-visible,
+.CommentPlugin_CommentInputBox_Editor:focus {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  --tw-ring-offset-width: 2px;
+  --tw-ring-color: hsl(var(--ring));
+  --tw-ring-offset-shadow: var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width)
+    var(--tw-ring-offset-color);
+  --tw-ring-shadow: var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width))
+    var(--tw-ring-color);
+  --tw-ring-offset-color: hsl(var(--background));
+  box-shadow: var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000);
+}
+
+// buttons
+
+// icon button variant "ghost"
+.Button__root,
+button.toolbar-item {
+  color: hsl(var(--foreground));
+
+  i,
+  i.format {
+    opacity: unset;
+  }
+
+  &:disabled i,
+  &:disabled i.format {
+    opacity: 0.5;
+  }
+}
+
+// hover button, input button
+.CommentPlugin_CommentsPanel_SendButton,
+.CommentPlugin_CommentsPanel_List_DeleteButton {
+  color: hsl(var(--accent-foreground));
+}
+
+// text button variant "ghost" on popover
+.Modal__closeButton {
+  color: hsl(var(--popover-foreground));
+  background-color: hsl(var(--popover));
+}
+
+// toggle button
+.CommentPlugin_ShowCommentsButton.active {
+  background-color: hsl(var(--accent));
+}
+
+// hover and active states
+.toolbar-item:hover:not([disabled]),
+.toolbar-item:active:not([disabled]),
+.CommentPlugin_ShowCommentsButton.Button__root:hover:not([disabled]),
+.CommentPlugin_AddCommentBox_button.Button__root:hover:not([disabled]), // needs to be overwritten
+.CommentPlugin_AddCommentBox:hover:not([disabled]),                     // fills until the border
+.CommentPlugin_CommentsPanel_SendButton:hover:not([disabled]),
+.CommentPlugin_CommentsPanel_SendButton:active:not([disabled]),
+.CommentPlugin_CommentsPanel_List_DeleteButton:hover:not([disabled]),
+.CommentPlugin_CommentsPanel_List_DeleteButton:active:not([disabled]),
+.Modal__closeButton:hover:not([disabled]) {
+  color: hsl(var(--accent-foreground));
+  background-color: hsl(var(--accent));
+}
+
+.CommentPlugin_CommentsPanel_List_DeleteButton:hover,
+.CommentPlugin_CommentsPanel_SendButton:hover i.send,
+.CommentPlugin_CommentsPanel_DeletedComment,
+.CommentPlugin_CommentsPanel_List_Comment:hover .CommentPlugin_CommentsPanel_List_DeleteButton,
+.CommentPlugin_CommentsPanel_List_Thread_QuoteBox:hover
+  .CommentPlugin_CommentsPanel_List_DeleteButton {
+  filter: unset;
+  opacity: unset;
+}
+
+// toolbar
+
+.toolbar .toolbar-item .text {
+  color: hsl(var(--foreground));
+}
+
+.toolbar .divider {
+  background-color: hsl(var(--border));
+}
+
+.dropdown {
+  background-color: hsl(var(--popover));
+
+  .item {
+    color: hsl(var(--popover-foreground));
+    background-color: hsl(var(--popover));
+  }
+
+  .item:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+  }
+
+  .divider {
+    background-color: hsl(var(--muted));
   }
 }
 
@@ -28,154 +148,288 @@
   }
 }
 
-// work around https://github.com/BiblioNexus-Foundation/scripture-editors/issues/127
-/* stylelint-disable-next-line selector-class-pattern */
-.CommentPlugin_AddCommentBox {
-  left: unset !important;
-  right: 0 !important;
+.toolbar .toolbar-item .icon {
+  min-width: 20px;
 }
 
-/* stylelint-disable-next-line selector-class-pattern */
+// _commenting.scss
+
+.CommentPlugin_CommentInputBox,
+.Modal__modal {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+
+  &::before {
+    background-color: hsl(var(--popover));
+    border-color: transparent transparent hsl(var(--popover)) hsl(var(--popover));
+  }
+
+  .Button__root {
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+  }
+
+  .Button__root.primary {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+
+  .Button__root:hover:not([disabled]) {
+    opacity: 0.8;
+  }
+}
+
+.CommentPlugin_CommentInputBox_Editor,
+.CommentPlugin_CommentsPanel_Editor {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border-color: hsl(var(--border));
+  caret-color: hsl(var(--foreground));
+}
+
+.CommentPlugin_CommentsPanel_Heading,
+.CommentPlugin_CommentsPanel_List_Thread {
+  border-color: hsl(var(--border));
+}
+
 .CommentPlugin_ShowCommentsButton {
   z-index: 10;
   right: 26px;
 }
 
-// _commenting.scss
+// work around https://github.com/BiblioNexus-Foundation/scripture-editors/issues/127
+.CommentPlugin_AddCommentBox {
+  left: unset !important;
+  right: 0 !important;
+
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+  border: 1px solid hsl(var(--border));
+}
+
+.CommentPlugin_AddCommentBox_button {
+  color: hsl(var(--popover-foreground));
+
+  &:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+  }
+}
+
+.CommentPlugin_CommentsPanel {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+}
+
+.CommentPlugin_CommentsPanel_SendButton {
+  margin: 10px;
+  top: 0;
+  right: 0;
+}
+
+// inside the editor
+
+.editor-inner {
+  background: hsl(var(--background));
+}
+
+.formatted-font .verse {
+  background-color: hsl(var(--secondary));
+}
+
+// icons
+
+button {
+  i,
+  i.chevron-down,
+  .icon {
+    -webkit-mask-size: contain;
+    -webkit-mask-position: center;
+    background-color: currentColor;
+  }
+}
 
 i.add-comment {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-left-text.svg');
+  // could be replaced with lucid icon message-square-text
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-left-text.svg');
+  background-image: none;
 }
 
 i.comments {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/comments.svg');
+  // could be replaced with lucid icon messages-square
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/comments.svg');
+  background-image: none;
 }
 
 i.send {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/send.svg');
+  // could be replaced with lucid icon send
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/send.svg');
+  background-image: none;
 }
 
-/* stylelint-disable-next-line selector-class-pattern */
 .CommentPlugin_CommentsPanel_List_DeleteButton i.delete {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/trash3.svg');
+  // could be replaced with lucid icon trash-2
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/trash3.svg');
+  background-image: none;
+  // linting does not like a duplicate rule, therefore putting it in here.
+  // overwriting requires this exact selector (or a more specific one)
+  left: 8px;
+  top: 8px;
 }
 
 // _editor.scss
 
 .link-editor div.link-edit {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/pencil-fill.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/pencil-fill.svg');
+  background-image: none;
 }
 
 i.undo {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/arrow-counterclockwise.svg');
+  // could be replaced with lucid icon rotate-ccw
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/arrow-counterclockwise.svg');
+  background-image: none;
 }
 
 i.redo {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/arrow-clockwise.svg');
+  // could be replaced with lucid icon rotate-cw
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/arrow-clockwise.svg');
+  background-image: none;
 }
 
 %paragraph {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-paragraph.svg');
+  // could be replaced with lucid icon text
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-paragraph.svg');
+  background-image: none;
 }
 
 %h-one {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h1.svg');
+  // could be replaced with lucid icon heading-1
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h1.svg');
+  background-image: none;
 }
 
 %h-two {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h2.svg');
+  // could be replaced with lucid icon heading-2
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h2.svg');
+  background-image: none;
 }
 
 %h-three {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h3.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h3.svg');
+  background-image: none;
 }
 
 %square-one {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/1-square.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/1-square.svg');
+  background-image: none;
 }
 
 %square-two {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/2-square.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/2-square.svg');
+  background-image: none;
 }
 
 %square-three {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/3-square.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/3-square.svg');
+  background-image: none;
 }
 
 %square-four {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/4-square.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/4-square.svg');
+  background-image: none;
 }
 
 %bookmark {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/bookmark.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/bookmark.svg');
+  background-image: none;
 }
 
 %file-earmark {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/file-earmark.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/file-earmark.svg');
+  background-image: none;
 }
 
 .icon.bullet-list,
 .icon.ul {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/list-ul.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/list-ul.svg');
+  background-image: none;
 }
 
 .icon.numbered-list,
 .icon.ol {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/list-ol.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/list-ol.svg');
+  background-image: none;
 }
 
 %quote {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-square-quote.svg');
+  // could be replaced with lucid icon message-square-quote
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-square-quote.svg');
+  background-image: none;
 }
 
 .icon.ban {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/ban.svg');
+  // could be replaced with lucid icon lucide-ban
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/ban.svg');
+  background-image: none;
 }
 
 .icon.code {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/code.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/code.svg');
+  background-image: none;
 }
 
 i.bold {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-bold.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-bold.svg');
+  background-image: none;
 }
 
 i.italic {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-italic.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-italic.svg');
+  background-image: none;
 }
 
 i.underline {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-underline.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-underline.svg');
+  background-image: none;
 }
 
 i.strikethrough {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-strikethrough.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-strikethrough.svg');
+  background-image: none;
 }
 
 i.code {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/code.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/code.svg');
+  background-image: none;
 }
 
 i.link {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/link.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/link.svg');
+  background-image: none;
 }
 
 i.left-align {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-left.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-left.svg');
+  background-image: none;
 }
 
 i.center-align {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-center.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-center.svg');
+  background-image: none;
 }
 
 i.right-align {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-right.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-right.svg');
+  background-image: none;
 }
 
 i.justify-align {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/justify.svg');
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/justify.svg');
+  background-image: none;
 }
 
 i.chevron-down {
-  background-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chevron-down.svg');
+  // could be replaced with lucid icon chevron-down
+  -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chevron-down.svg');
+  background-image: none;
 }
