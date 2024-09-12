@@ -9,7 +9,6 @@ import * as SeparatorPrimitive from '@radix-ui/react-separator';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
-import * as ToastPrimitives from '@radix-ui/react-toast';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { VariantProps } from 'class-variance-authority';
 import { LucideProps } from 'lucide-react';
@@ -1235,7 +1234,6 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-declare function Toaster$1(): import("react/jsx-runtime").JSX.Element;
 export type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;
@@ -1519,34 +1517,10 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
-declare const Toast: React$1.ForwardRefExoticComponent<Omit<ToastPrimitives.ToastProps & React$1.RefAttributes<HTMLLIElement>, "ref"> & VariantProps<(props?: ({
-	variant?: "default" | "destructive" | null | undefined;
-} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLLIElement>>;
-declare const ToastAction: React$1.ForwardRefExoticComponent<Omit<ToastPrimitives.ToastActionProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
-export type ToastProps = React$1.ComponentPropsWithoutRef<typeof Toast>;
-export type ToastActionElement = React$1.ReactElement<typeof ToastAction>;
-export type ToasterToast = ToastProps & {
-	id: string;
-	title?: React$1.ReactNode;
-	description?: React$1.ReactNode;
-	action?: ToastActionElement;
-};
-export type ToastInternal = Omit<ToasterToast, "id">;
-declare function toast({ ...props }: ToastInternal): {
-	id: string;
-	dismiss: () => void;
-	update: (updateToast: ToasterToast) => void;
-};
-export declare function useToast(): {
-	toast: typeof toast;
-	dismiss: (toastId?: string) => void;
-	toasts: ToasterToast[];
-};
 
 export {
 	Slider$1 as ShadCnSlider,
 	Switch$1 as ShadCnSwitch,
-	Toaster$1 as Toaster,
 	sonner,
 };
 

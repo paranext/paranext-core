@@ -116,7 +116,6 @@ export {
   VerticalTabsContent,
   VerticalTabsTrigger,
 } from './components/basics/tabs-vertical';
-export { Toaster } from './components/shadcn-ui/toaster';
 
 export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
 export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
@@ -144,4 +143,3 @@ export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
-export { useToast } from './components/shadcn-ui/hooks/use-toast';
