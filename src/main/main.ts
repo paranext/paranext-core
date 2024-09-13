@@ -26,7 +26,7 @@ import networkObjectStatusService from '@shared/services/network-object-status.s
 import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
-import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
+import { DEV_MODE_RENDERER_INDICATOR, WINDOW_ID } from '@shared/data/platform.data';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 
@@ -101,25 +101,20 @@ async function main() {
       await installExtensions();
     }
 
-    // Load the previous state with fallback to defaults
-    const newWindowState: windowStateKeeper.State = windowStateKeeper({
-      file: `window-state-${windows.length}.json`,
-      defaultWidth: 1024,
-      defaultHeight: 728,
-    });
-
     let newWindow: BrowserWindow | undefined = new BrowserWindow({
       show: false,
-      x: newWindowState.x,
-      y: newWindowState.y,
-      width: newWindowState.width,
-      height: newWindowState.height,
       icon: getAssetPath('icon.png'),
       webPreferences: {
         preload: app.isPackaged
           ? path.join(__dirname, 'preload.js')
           : path.join(__dirname, '../../.erb/dll/preload.js'),
       },
+    });
+
+    const newWindowState: windowStateKeeper.State = windowStateKeeper({
+      file: `window-state-${newWindow.id}.json`,
+      defaultWidth: 1024,
+      defaultHeight: 728,
     });
 
     // Set our custom protocol handler to load assets from extensions
@@ -131,7 +126,7 @@ async function main() {
     newWindowState.manage(newWindow);
 
     newWindow.loadURL(
-      `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`,
+      `${resolveHtmlPath('index.html')}${`?${WINDOW_ID}=${newWindow.id}`}${globalThis.isNoisyDevModeEnabled ? `&${DEV_MODE_RENDERER_INDICATOR}` : ''}`,
     );
 
     newWindow.on('ready-to-show', () => {
@@ -225,7 +220,6 @@ async function main() {
       );
 
       createWindow();
-      createWindow();
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
@@ -258,6 +252,9 @@ async function main() {
   const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
     'platform.restartExtensionHost': async () => {
       restartExtensionHost();
+    },
+    'platform.createWindow': async () => {
+      createWindow();
     },
     'platform.quit': async () => {
       app.quit();
