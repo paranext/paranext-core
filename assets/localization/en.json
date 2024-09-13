@@ -75,5 +75,6 @@
   "%webView_menuItemName_openProjectSettings%": "Open Project Settings",
   "%webView_menuItemName_project%": "Project",
   "%webView_menuItemName_projectAssignmentsAndProgress%": "Assignments and Progress",
-  "%webView_title_projectId_formatString%": "{projectId} {editable}"
+  "%webView_title_projectId_formatString%": "{projectId} {editable}",
+  "%webView_title_type_formatString%": "{type} {defaultTitle}"
 }
