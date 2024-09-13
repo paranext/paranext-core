@@ -61,6 +61,8 @@ declare global {
   var updateWebViewDefinition: UpdateWebViewDefinition;
   /** Indicates whether test code meant just for developers to see should be run */
   var isNoisyDevModeEnabled: boolean;
+  /** Window id of the Electron browser window */
+  var windowId: string | null;
 }
 /* eslint-enable */
 
