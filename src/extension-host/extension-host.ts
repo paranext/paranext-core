@@ -15,7 +15,8 @@ import { initialize as initializeSettingsService } from '@extension-host/service
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
-import { killChildProcessesFromExtensions } from './services/create-process.service';
+import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
+import startLocalYjsServer from '@extension-host/services/local-yjs.service';
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
@@ -41,6 +42,9 @@ process.on('exit', () => {
   try {
     // The network service has to be running before anything else
     await networkService.initialize();
+
+    // The editor needs this web socket server running to function properly
+    startLocalYjsServer();
 
     // Prepare all services that need to be running because extensions might rely on them
     await Promise.all([
