@@ -5,4 +5,7 @@
 export const PLATFORM_NAMESPACE = 'platform';
 
 /** Query string passed to the renderer when starting if it should enable noisy dev mode */
-export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
+export const DEV_MODE_RENDERER_INDICATOR = 'noisyDevMode';
+
+/** Query string for the electron window id */
+export const WINDOW_ID = 'windowId';
