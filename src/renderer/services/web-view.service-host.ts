@@ -66,6 +66,7 @@ import {
   TAB_TYPE_USER_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import THEME, { SCROLLBAR_STYLES, MUI_OVERRIDES } from '@renderer/theme';
+import localWindowStorage from './localStorage.service';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -533,7 +534,7 @@ const onLayoutChange: OnLayoutChangeRCDock = async (newLayout) => {
  */
 async function loadLayout(layout?: LayoutBase): Promise<void> {
   const dockLayoutVar = await getDockLayout();
-  const layoutToLoad = layout || getStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
+  const layoutToLoad = layout || getLayoutStorageValue(DOCK_LAYOUT_KEY, dockLayoutVar.testLayout);
 
   dockLayoutVar.dockLayout.loadLayout(layoutToLoad);
   if (layout) {
@@ -550,8 +551,8 @@ async function loadLayout(layout?: LayoutBase): Promise<void> {
  * @param defaultValue To return if the key is not found.
  * @returns The value of the key fetched from local storage, or the default value if not found.
  */
-function getStorageValue<T>(key: string, defaultValue: T): T {
-  const saved = localStorage.getItem(key);
+function getLayoutStorageValue<T>(key: string, defaultValue: T): T {
+  const saved = localWindowStorage.getItem(key);
   const initial = saved ? deserialize(saved) : undefined;
   return initial || defaultValue;
 }
@@ -563,7 +564,7 @@ function getStorageValue<T>(key: string, defaultValue: T): T {
  */
 async function saveLayout(layout: LayoutBase): Promise<void> {
   const currentLayout = layout;
-  localStorage.setItem(DOCK_LAYOUT_KEY, serialize(currentLayout));
+  localWindowStorage.setItem(DOCK_LAYOUT_KEY, serialize(currentLayout));
 }
 
 /**
