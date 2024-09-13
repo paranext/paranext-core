@@ -126,7 +126,7 @@ async function main() {
     newWindowState.manage(newWindow);
 
     newWindow.loadURL(
-      `${resolveHtmlPath('index.html')}${`?${WINDOW_ID}=${newWindow.id}`}${globalThis.isNoisyDevModeEnabled ? `&${DEV_MODE_RENDERER_INDICATOR}` : ''}`,
+      `${resolveHtmlPath('index.html')}?${`${WINDOW_ID}=${newWindow.id}`}${globalThis.isNoisyDevModeEnabled ? `&${DEV_MODE_RENDERER_INDICATOR}` : ''}`,
     );
 
     newWindow.on('ready-to-show', () => {
