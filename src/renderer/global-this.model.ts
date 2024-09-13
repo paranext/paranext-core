@@ -118,8 +118,7 @@ globalThis.resetWebViewStateById = resetWebViewStateById;
 // We store the hook reference because we need it to bind it to the webview's iframe 'window' context
 globalThis.useWebViewState = useWebViewState;
 globalThis.useWebViewScrollGroupScrRef = useWebViewScrollGroupScrRef;
-const url = new URL(global.location.search);
-const queryParameters = url.searchParams;
+const queryParameters = new URLSearchParams(global.location.search);
 // Check if the main process indicated noisy dev mode is enabled
 globalThis.isNoisyDevModeEnabled = queryParameters.has(DEV_MODE_RENDERER_INDICATOR);
 globalThis.windowId = queryParameters.get(WINDOW_ID);
