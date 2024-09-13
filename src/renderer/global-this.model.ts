@@ -19,7 +19,7 @@ import useWebViewScrollGroupScrRef from '@renderer/hooks/use-web-view-scroll-gro
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import * as platformBibleReact from 'platform-bible-react';
 import * as platformBibleUtils from 'platform-bible-utils';
-import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
+import { DEV_MODE_RENDERER_INDICATOR, WINDOW_ID } from '@shared/data/platform.data';
 
 // #region webpack DefinePlugin types setup - these should be from the renderer webpack DefinePlugin
 
@@ -118,7 +118,10 @@ globalThis.resetWebViewStateById = resetWebViewStateById;
 // We store the hook reference because we need it to bind it to the webview's iframe 'window' context
 globalThis.useWebViewState = useWebViewState;
 globalThis.useWebViewScrollGroupScrRef = useWebViewScrollGroupScrRef;
+const url = new URL(global.location.search);
+const queryParameters = url.searchParams;
 // Check if the main process indicated noisy dev mode is enabled
-globalThis.isNoisyDevModeEnabled = global.location.search === DEV_MODE_RENDERER_INDICATOR;
+globalThis.isNoisyDevModeEnabled = queryParameters.has(DEV_MODE_RENDERER_INDICATOR);
+globalThis.windowId = queryParameters.get(WINDOW_ID);
 
 // #endregion
