@@ -131,7 +131,7 @@ async function main() {
 
     newWindow.on('ready-to-show', () => {
       if (!newWindow) {
-        throw new Error('"mainWindow" is not defined');
+        throw new Error('"newWindow" is not defined');
       }
       if (process.env.START_MINIMIZED) {
         newWindow.minimize();
