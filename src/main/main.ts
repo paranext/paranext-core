@@ -67,9 +67,9 @@ async function main() {
   }
 } */
 
-  // Keep a global reference of the window object. If you don't, the window will
-  // be closed automatically when the JavaScript object is garbage collected.
-  let mainWindow: BrowserWindow | undefined;
+  // Keep a global reference of the window objects. If you don't, the windows will
+  // be closed automatically when the JavaScript objects are garbage collected.
+  const windows: BrowserWindow[] = [];
 
   if (process.env.NODE_ENV === 'production') {
     const sourceMapSupport = await import('source-map-support');
@@ -95,24 +95,25 @@ async function main() {
     return path.join(globalThis.resourcesPath, 'assets', ...paths);
   }
 
-  /** Sets up the electron BrowserWindow renderer process */
+  /** Sets up an electron BrowserWindow renderer process */
   const createWindow = async () => {
     if (isDebug) {
       await installExtensions();
     }
 
     // Load the previous state with fallback to defaults
-    const mainWindowState = windowStateKeeper({
+    const newWindowState: windowStateKeeper.State = windowStateKeeper({
+      file: `window-state-${windows.length}.json`,
       defaultWidth: 1024,
       defaultHeight: 728,
     });
 
-    mainWindow = new BrowserWindow({
+    let newWindow: BrowserWindow | undefined = new BrowserWindow({
       show: false,
-      x: mainWindowState.x,
-      y: mainWindowState.y,
-      width: mainWindowState.width,
-      height: mainWindowState.height,
+      x: newWindowState.x,
+      y: newWindowState.y,
+      width: newWindowState.width,
+      height: newWindowState.height,
       icon: getAssetPath('icon.png'),
       webPreferences: {
         preload: app.isPackaged
@@ -127,40 +128,42 @@ async function main() {
     // Register listeners on the window, so the state is updated automatically
     // (the listeners will be removed when the window is closed)
     // and restore the maximized or full screen state
-    mainWindowState.manage(mainWindow);
+    newWindowState.manage(newWindow);
 
-    mainWindow.loadURL(
+    newWindow.loadURL(
       `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`,
     );
 
-    mainWindow.on('ready-to-show', () => {
-      if (!mainWindow) {
+    newWindow.on('ready-to-show', () => {
+      if (!newWindow) {
         throw new Error('"mainWindow" is not defined');
       }
       if (process.env.START_MINIMIZED) {
-        mainWindow.minimize();
+        newWindow.minimize();
       } else {
-        mainWindow.show();
+        newWindow.show();
       }
     });
 
-    mainWindow.on('closed', () => {
-      mainWindow = undefined;
+    newWindow.on('closed', () => {
+      newWindow = undefined;
     });
 
     // 'null' to interact with external API
     // eslint-disable-next-line no-null/no-null
-    mainWindow.setMenu(null);
+    newWindow.setMenu(null);
 
     // Open urls in the user's browser
     // Note that webviews can get to this handler with window.open and anchor tags with
     // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
-    mainWindow.webContents.setWindowOpenHandler((handlerDetails) => {
+    newWindow.webContents.setWindowOpenHandler((handlerDetails) => {
       // Only allow https urls
       if (handlerDetails.url?.startsWith('https://')) shell.openExternal(handlerDetails.url);
 
       return { action: 'deny' };
     });
+
+    windows.push(newWindow);
 
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
@@ -222,10 +225,11 @@ async function main() {
       );
 
       createWindow();
+      createWindow();
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
-        if (!mainWindow) createWindow();
+        if (!windows) createWindow();
       });
 
       return undefined;
