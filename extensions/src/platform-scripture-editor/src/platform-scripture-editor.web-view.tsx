@@ -187,6 +187,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <Button className="pr-hidden" />
       <Editor
         ref={editorRef}
+        projectId={projectId}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
         options={options}

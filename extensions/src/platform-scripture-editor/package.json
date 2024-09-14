@@ -32,7 +32,8 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.1",
-    "platform-bible-utils": "file:../../../lib/platform-bible-utils"
+    "platform-bible-utils": "file:../../../lib/platform-bible-utils",
+    "y-websocket": "^2.0.4"
   },
   "devDependencies": {
     "@biblionexus-foundation/platform-editor": "^0.6.1",
