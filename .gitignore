@@ -42,6 +42,9 @@ launchSettings.json
 dev-appdata/
 c-sharp/**/*.BAK
 
+# Collaboration
+/yjs-wss-db
+
 # yalc
 .yalc
 yalc.lock

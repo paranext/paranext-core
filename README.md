@@ -128,6 +128,10 @@ Paranext Core extensions are found in the `extensions` folder. Please follow the
 
 Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing extensions.
 
+### Real-Time Collaborative Editing Feature
+
+See [Real-Time Collaborative Editing](COLLAB.md).
+
 ## GitHub Pages
 
 **[Platform.Bible API Documentation](https://paranext.github.io/paranext-core/papi-dts)**
