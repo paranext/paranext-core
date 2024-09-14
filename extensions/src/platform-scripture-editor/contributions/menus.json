@@ -103,6 +103,12 @@
             "command": "platformScriptureEditor.showThickBorders"
           },
           {
+            "label": "%webView_platformScriptureEditor_moveToNextWindow%",
+            "group": "platformScriptureEditor.layout",
+            "order": 2,
+            "command": "platform.moveToNextWindow"
+          },
+          {
             "label": "%webView_platformScriptureEditor_publisherInfo%",
             "group": "platformScriptureEditor.general",
             "order": 1,

@@ -8,6 +8,7 @@
       "%webView_platformScriptureEditor_tools%": "Tools",
       "%webView_platformScriptureEditor_info%": "Info",
       "%webView_platformScriptureEditor_backgroundColor%": "Background Color",
+      "%webView_platformScriptureEditor_moveToNextWindow%": "Move Tab To Next Window",
       "%webView_platformScriptureEditor_textColor%": "Text Color",
       "%webView_platformScriptureEditor_thickBorders%": "Thick Borders",
       "%webView_platformScriptureEditor_charactersInventory%": "Inventory: Characters...",
