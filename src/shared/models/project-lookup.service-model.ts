@@ -35,7 +35,7 @@ const PDP_FACTORY_LABEL = '-pdpf';
  * Transform the well-known pdp factory id into an id for its network object to use
  *
  * @param pdpFactoryId Id extensions use to identify this pdp factory
- * @returns Id for then network object for this pdp factory
+ * @returns Id for the network object for this pdp factory
  */
 export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string) {
   return endsWith(pdpFactoryId, PDP_FACTORY_LABEL)
@@ -356,15 +356,15 @@ async function internalGetMetadata(
   // Get all registered PDP factories
   const networkObjects = await networkObjectStatusService.getAllNetworkObjectDetails();
   const pdpFactoryIds = Object.keys(networkObjects)
-    .filter((pdpfNetworkObjectName) => {
-      const details = networkObjects[pdpfNetworkObjectName];
+    .filter((networkObjectName) => {
+      const details = networkObjects[networkObjectName];
       if (
         details.objectType === PDP_FACTORY_OBJECT_TYPE &&
         // If a pdp factory id was specified, only get metadata from that pdp factory id.
         // This means the ProjectMetadata could be partial in some sense because not all projectInterfaces
         // available for that project will be in the ProjectMetadata
         arePdpFactoryIdsIncluded(
-          [getPDPFactoryIdFromNetworkObjectName(pdpfNetworkObjectName)],
+          [getPDPFactoryIdFromNetworkObjectName(networkObjectName)],
           includePdpFactoryIds,
           excludePdpFactoryIds,
         )

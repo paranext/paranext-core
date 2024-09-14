@@ -3875,7 +3875,7 @@ declare module 'shared/models/project-lookup.service-model' {
    * Transform the well-known pdp factory id into an id for its network object to use
    *
    * @param pdpFactoryId Id extensions use to identify this pdp factory
-   * @returns Id for then network object for this pdp factory
+   * @returns Id for the network object for this pdp factory
    */
   export function getPDPFactoryNetworkObjectNameFromId(pdpFactoryId: string): string;
   /**

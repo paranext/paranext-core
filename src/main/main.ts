@@ -5,30 +5,31 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to `./src/main.js`
  * using webpack. This gives us some performance wins.
  */
+import { app, BrowserWindow, ipcMain, IpcMainInvokeEvent, shell } from 'electron';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, IpcMainInvokeEvent } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
-import windowStateKeeper from 'electron-window-state';
 import '@main/global-this.model';
 import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
-import logger from '@shared/services/logger.service';
-import * as networkService from '@shared/services/network.service';
-import * as commandService from '@shared/services/command.service';
-import { resolveHtmlPath } from '@node/utils/util';
-import extensionHostService from '@main/services/extension-host.service';
-import networkObjectService from '@shared/services/network-object.service';
 import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
-import { wait, serialize } from 'platform-bible-utils';
-import { CommandNames } from 'papi-shared-types';
-import { SerializedRequestType } from '@shared/utils/util';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
-import { get } from '@shared/services/project-data-provider.service';
-import { VerseRef } from '@sillsdev/scripture';
+import extensionHostService from '@main/services/extension-host.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
-import { DEV_MODE_RENDERER_INDICATOR, WINDOW_ID } from '@shared/data/platform.data';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import { startWindowAggregatorService } from '@main/services/window-aggregator.service-host';
+import { resolveHtmlPath } from '@node/utils/util';
+import { DEV_MODE_RENDERER_INDICATOR, WINDOW_ID } from '@shared/data/platform.data';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import * as commandService from '@shared/services/command.service';
+import logger from '@shared/services/logger.service';
+import networkObjectStatusService from '@shared/services/network-object-status.service';
+import networkObjectService from '@shared/services/network-object.service';
+import * as networkService from '@shared/services/network.service';
+import { get } from '@shared/services/project-data-provider.service';
+import { SerializedRequestType } from '@shared/utils/util';
+import { VerseRef } from '@sillsdev/scripture';
+import windowStateKeeper from 'electron-window-state';
+import { CommandNames } from 'papi-shared-types';
+import { serialize, wait } from 'platform-bible-utils';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 
@@ -41,6 +42,9 @@ async function main() {
 
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
+
+  // The window aggregator service relies on the network object status service
+  await startWindowAggregatorService();
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();
