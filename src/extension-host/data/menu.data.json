@@ -47,6 +47,13 @@
         "command": "platform.quit"
       },
       {
+        "label": "%mainMenu_openNewWindow%",
+        "localizeNotes": "Application main menu > Window > Open New Window",
+        "group": "platform.windowGroup",
+        "order": 1,
+        "command": "platform.createWindow"
+      },
+      {
         "label": "%mainMenu_visitSupportBible%",
         "localizeNotes": "Application main menu > Help > Visit Support.Bible",
         "group": "platform.helpMisc",
@@ -59,13 +66,6 @@
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.about"
-      },
-      {
-        "label": "%mainMenu_TJdidthis%",
-        "localizeNotes": "Main application menu > Help column > Open New Window",
-        "group": "platform.helpMisc",
-        "order": 3,
-        "command": "platform.createWindow"
       }
     ]
   },
