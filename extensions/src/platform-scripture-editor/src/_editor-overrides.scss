@@ -179,6 +179,18 @@ button.toolbar-item {
   }
 }
 
+.typeahead-popover,
+.typeahead-popover li {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+}
+
+.typeahead-popover ul li.selected,
+.typeahead-popover li:hover {
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
 .CommentPlugin_CommentInputBox_Editor,
 .CommentPlugin_CommentsPanel_Editor {
   background-color: hsl(var(--popover));
