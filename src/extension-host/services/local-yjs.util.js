@@ -8,6 +8,8 @@ const decoding = require('lib0/decoding');
 const map = require('lib0/map');
 
 const debounce = require('lodash.debounce');
+const { PlatformEventEmitter } = require('platform-bible-utils');
+const { NamedYjsDoc } = require('./yjs.model.ts');
 
 const callbackHandler = require('./local-yjs.callback.js').callbackHandler;
 const isCallbackSet = require('./local-yjs.callback.js').isCallbackSet;
@@ -64,6 +66,11 @@ exports.getPersistence = () => persistence;
 const docs = new Map();
 // exporting docs so that others can use it
 exports.docs = docs;
+
+/** @type {PlatformEventEmitter<NamedYjsDoc>} */
+const newDocEmitter = new PlatformEventEmitter();
+// let others discover when new docs are created
+exports.newDocCreatedEvent = newDocEmitter.event;
 
 const messageSync = 0;
 const messageAwareness = 1;
@@ -163,16 +170,22 @@ exports.WSSharedDoc = WSSharedDoc;
  * @param {boolean} gc - Whether to allow gc on the doc (applies only when created)
  * @returns {WSSharedDoc}
  */
-const getYDoc = (docname, gc = true) =>
-  map.setIfUndefined(docs, docname, () => {
+const getYDoc = (docname, gc = true) => {
+  let newDoc = undefined;
+  const retVal = map.setIfUndefined(docs, docname, () => {
     const doc = new WSSharedDoc(docname);
     doc.gc = gc;
     if (persistence !== null) {
       persistence.bindState(docname, doc);
     }
     docs.set(docname, doc);
+    newDoc = doc;
     return doc;
   });
+
+  if (newDoc) newDocEmitter.emit({ id: docname, doc: newDoc });
+  return retVal;
+};
 
 exports.getYDoc = getYDoc;
 

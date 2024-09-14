@@ -11,7 +11,7 @@ import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData } from '@papi/frontend/react';
-import { ScriptureReference, debounce } from 'platform-bible-utils';
+import { ScriptureReference } from 'platform-bible-utils';
 import { Button } from 'platform-bible-react';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
@@ -92,29 +92,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const [usj, setUsj] = useProjectData('platformScripture.USJ_Chapter', projectId).ChapterUSJ(
+  const [usj] = useProjectData('platformScripture.USJ_Chapter', projectId).ChapterUSJ(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     usjDocumentDefault,
   );
 
-  const debouncedSetUsj = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
-
   // Editor's current usj state
   const editorUsj = useRef(usj);
-
-  // TODO: remove debounce when issue #826 is done.
-  const onUsjChange = useCallback(
-    (newUsj: Usj) => {
-      // There is a bug where the editor's onChange runs when the state is externally set, so let's
-      // not run onChange if the change came externally (our tracked editorUsj.current editor state
-      // will already be up-to-date)
-      if (deepEqualAcrossIframes(newUsj, editorUsj.current)) return;
-
-      editorUsj.current = newUsj;
-      debouncedSetUsj(newUsj);
-    },
-    [debouncedSetUsj],
-  );
 
   // Update the editor if a change comes in
   useEffect(() => {
@@ -191,7 +175,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         scrRef={scrRef}
         onScrRefChange={setScrRef}
         options={options}
-        onUsjChange={isReadOnly ? undefined : onUsjChange}
         logger={logger}
       />
     </>
