@@ -6,11 +6,11 @@ import {
   MarginalRef,
 } from '@biblionexus-foundation/platform-editor';
 import { Usj } from '@biblionexus-foundation/scripture-utilities';
-import { VerseRef } from '@sillsdev/scripture';
+import { Canon, VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
-import { useProjectData } from '@papi/frontend/react';
+import { useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { ScriptureReference, debounce } from 'platform-bible-utils';
 import { Button } from 'platform-bible-react';
 
@@ -172,13 +172,15 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
+  const [projectName] = useProjectSetting(projectId, 'platform.name', '');
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: 'ltr',
+      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.bookNum) ? 'rtl' : 'ltr',
     }),
-    [isReadOnly],
+    [isReadOnly, projectName, scrRef],
   );
 
   return (
