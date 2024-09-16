@@ -466,6 +466,8 @@ export type ComboBoxProps<T> = {
 	buttonVariant?: ButtonProps["variant"];
 	/** Text direction ltr or rtl */
 	dir?: Direction;
+	/** Component is not enabled when true */
+	disabled?: boolean;
 } & PopoverProps;
 export type Direction = "ltr" | "rtl";
 /**
@@ -474,7 +476,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, disabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;

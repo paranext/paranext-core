@@ -60,6 +60,7 @@ export default function ChapterRangeSelector({
             options={chapterOptions}
             getOptionLabel={(option) => option.toString()}
             value={startChapter}
+            disabled={isDisabled}
           />
         }
         label="Chapters"
@@ -76,6 +77,7 @@ export default function ChapterRangeSelector({
             options={chapterOptions}
             getOptionLabel={(option) => option.toString()}
             value={endChapter}
+            disabled={isDisabled}
           />
         }
         label="to"

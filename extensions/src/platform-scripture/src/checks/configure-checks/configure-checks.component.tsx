@@ -15,7 +15,6 @@ type ConfigureChecksProps = {
   availableChecks: CheckRunnerCheckDetails[];
   handleSelectCheck: (checkLabel: string, selected: boolean) => void;
   selectedChecks: string[];
-  checkFeedback: string[];
   activeRanges: CheckInputRange[];
   handleActiveRangesChange: (newActiveRanges: CheckInputRange[]) => void;
 };
@@ -31,13 +30,12 @@ export default function ConfigureChecks({
   availableChecks,
   handleSelectCheck,
   selectedChecks,
-  checkFeedback,
   activeRanges,
   handleActiveRangesChange,
 }: ConfigureChecksProps) {
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const [usingCurrentBook, setUsingCurrentBook] = useState<boolean>(false);
+  const [usingCurrentBook, setUsingCurrentBook] = useState<boolean>(true);
   const chapterCount = useMemo(() => getChaptersForBook(scrRef.bookNum), [scrRef]);
   const [startChapter, setStartChapter] = useState<number>(1);
   const [endChapter, setEndChapter] = useState<number>(chapterCount);
@@ -64,12 +62,12 @@ export default function ConfigureChecks({
   }, [activeRanges.length, handleActiveRangesChange, projectId, scrRef.bookNum]);
 
   useEffect(() => {
-    if (!usingCurrentBook || !projectId) return;
+    if (!projectId) return;
 
     const newCheckInputRange: CheckInputRange = {
       projectId,
-      start: new VerseRef(scrRef.bookNum, startChapter, 1),
-      end: new VerseRef(scrRef.bookNum, endChapter, 1),
+      start: new VerseRef(scrRef.bookNum, usingCurrentBook ? startChapter : 1, 1),
+      end: usingCurrentBook ? new VerseRef(scrRef.bookNum, endChapter, 1) : undefined,
     };
     handleActiveRangesChange([newCheckInputRange]);
   }, [
@@ -109,11 +107,6 @@ export default function ConfigureChecks({
         selectedListItems={selectedChecks}
         handleSelectListItem={handleSelectCheck}
       />
-      <ul>
-        {checkFeedback &&
-          checkFeedback.length > 0 &&
-          checkFeedback.map((feedback) => <li>{feedback}</li>)}
-      </ul>
       <fieldset className="configure-checks-books">
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}

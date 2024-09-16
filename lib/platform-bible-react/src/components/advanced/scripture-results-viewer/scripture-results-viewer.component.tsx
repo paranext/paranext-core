@@ -35,11 +35,10 @@ import '@/components/advanced/scripture-results-viewer/scripture-results-viewer.
 import {
   compareScrRefs,
   formatScrRef,
-  ScriptureReference,
   ScriptureSelection,
   scrRefToBBBCCCVVV,
 } from 'platform-bible-utils';
-import { MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
@@ -199,6 +198,26 @@ function getColumns(
     },
   ];
 }
+
+const toRefOrRange = (scriptureSelection: ScriptureSelection) => {
+  if (!('offset' in scriptureSelection.start))
+    throw new Error('No offset available in range start');
+  if (scriptureSelection.end && !('offset' in scriptureSelection.end))
+    throw new Error('No offset available in range end');
+  const { offset: offsetStart } = scriptureSelection.start;
+  let offsetEnd: number = 0;
+  if (scriptureSelection.end) ({ offset: offsetEnd } = scriptureSelection.end);
+  if (
+    !scriptureSelection.end ||
+    compareScrRefs(scriptureSelection.start, scriptureSelection.end) === 0
+  )
+    return `${scrRefToBBBCCCVVV(scriptureSelection.start)}+${offsetStart}`;
+  return `${scrRefToBBBCCCVVV(scriptureSelection.start)}+${offsetStart}-${scrRefToBBBCCCVVV(scriptureSelection.end)}+${offsetEnd}`;
+};
+
+const getRowKey = (row: ScriptureSrcItemDetail) =>
+  `${toRefOrRange({ start: row.start, end: row.end })} ${row.source.displayName} ${row.detail}`;
+
 /**
  * Component to display a combined list of detailed items from one or more sources, where the items
  * are keyed primarily by Scripture reference. This is particularly useful for displaying a list of
@@ -259,20 +278,6 @@ export default function ScriptureResultsViewer({
     }
   }, [grouping]);
 
-  const toRefOrRange = useCallback(
-    (start: ScriptureReference, end: ScriptureReference | undefined) => {
-      if (!end || compareScrRefs(start, end) === 0) return `${scrRefToBBBCCCVVV(start)}`;
-      return `${scrRefToBBBCCCVVV(start)}-${scrRefToBBBCCCVVV(end)}`;
-    },
-    [],
-  );
-
-  const getRowKey = useCallback(
-    (row: ScriptureSrcItemDetail) =>
-      `${toRefOrRange(row.start, row.end)} ${row.source} ${row.detail}`,
-    [toRefOrRange],
-  );
-
   const table = useReactTable({
     data: scriptureResults,
     columns,
@@ -303,7 +308,7 @@ export default function ScriptureResultsViewer({
         if (selectedRow) onRowSelected(selectedRow);
       }
     }
-  }, [rowSelection, scriptureResults, getRowKey, onRowSelected, table]);
+  }, [rowSelection, scriptureResults, onRowSelected, table]);
 
   // Define possible grouping options
   const scrBookGroupName = scriptureBookGroupName ?? defaultScrBookGroupName;

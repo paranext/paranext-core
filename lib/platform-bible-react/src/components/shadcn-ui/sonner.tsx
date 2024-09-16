@@ -27,4 +27,5 @@ function Sonner({ ...props }: SonnerProps) {
   );
 }
 
+// The re-export of the sonner function was added manually
 export { Sonner, sonner };
