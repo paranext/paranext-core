@@ -30,7 +30,6 @@ export {
   type ScrollGroupSelectorProps,
 } from './components/advanced/scroll-group-selector.component';
 
-export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export { default as ChapterRangeSelector } from './components/mui/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/mui/chapter-range-selector.component';
 export { default as Checkbox } from './components/mui/checkbox.component';
@@ -91,19 +90,32 @@ export type { TextFieldProps } from './components/basics/text-field.component';
 export { default as Toolbar } from './components/mui/toolbar.component';
 export type { ToolbarProps } from './components/mui/toolbar.component';
 
-export { Input } from './components/shadcn-ui/input';
+export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
+export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
+export {
+  Card,
+  CardHeader,
+  CardFooter,
+  CardTitle,
+  CardDescription,
+  CardContent,
+} from './components/shadcn-ui/card';
 export * from './components/shadcn-ui/dropdown-menu';
+export { Input } from './components/shadcn-ui/input';
+export { Label } from '@/components/shadcn-ui/label';
 export * from './components/shadcn-ui/select';
+export { Separator } from '@/components/shadcn-ui/separator';
+export * from './components/shadcn-ui/sonner';
+export { Slider as ShadCnSlider } from './components/shadcn-ui/slider';
+export { Switch as ShadCnSwitch } from './components/shadcn-ui/switch';
 export * from './components/shadcn-ui/table';
 export { Tabs, TabsList, TabsContent, TabsTrigger } from './components/shadcn-ui/tabs';
-export { Label } from '@/components/shadcn-ui/label';
 export {
   VerticalTabs,
   VerticalTabsList,
   VerticalTabsContent,
   VerticalTabsTrigger,
 } from './components/basics/tabs-vertical';
-export { Separator } from '@/components/shadcn-ui/separator';
 
 export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
 export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
@@ -131,14 +143,3 @@ export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
-export {
-  Card,
-  CardHeader,
-  CardFooter,
-  CardTitle,
-  CardDescription,
-  CardContent,
-} from './components/shadcn-ui/card';
-export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
-export { Slider as ShadCnSlider } from './components/shadcn-ui/slider';
-export { Switch as ShadCnSwitch } from './components/shadcn-ui/switch';

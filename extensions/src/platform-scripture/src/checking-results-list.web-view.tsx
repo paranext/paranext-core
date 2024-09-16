@@ -58,7 +58,7 @@ const parseResults = (
       };
       resultsSets.push(resultsSet);
     }
-    resultsSet.data.push({
+    const newData = {
       detail: checkResult.messageFormatString,
       start:
         'verseRef' in checkResult.start
@@ -76,7 +76,13 @@ const parseResults = (
               jsonPath: checkResult.start.jsonPath,
               offset: checkResult.start.offset,
             },
-    });
+    };
+    // The checking service seems to produce duplicated check results so this is a temporary fix to
+    // get rid of them
+    const isDuplicate = resultsSet.data.some(
+      (item) => JSON.stringify(item) === JSON.stringify(newData),
+    );
+    if (!isDuplicate) resultsSet.data.push(newData);
   });
   return resultsSets;
 };
@@ -150,7 +156,7 @@ global.webViewComponent = function CheckingResultsListWebView({
     return () => {
       promiseIsCurrent = false;
     };
-  }, [updateWebViewDefinition, checkResults.length, projectName, checkResults, projectId]);
+  }, [updateWebViewDefinition, projectName, checkResults, projectId]);
 
   return (
     <div className="checking-results-list">
