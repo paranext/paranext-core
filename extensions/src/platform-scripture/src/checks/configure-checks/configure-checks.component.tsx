@@ -1,9 +1,9 @@
-import { ScriptureReference, Checklist } from 'platform-bible-react';
-import { getChaptersForBook } from 'platform-bible-utils';
-import { useState, useMemo, useCallback, useEffect } from 'react';
-import { Canon, VerseRef } from '@sillsdev/scripture';
 import { useSetting } from '@papi/frontend/react';
+import { Canon, VerseRef } from '@sillsdev/scripture';
+import { Checklist, Label, ScriptureReference, Spinner } from 'platform-bible-react';
+import { getChaptersForBook } from 'platform-bible-utils';
 import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import BookSelector, { BookSelectionMode } from './book-selector.component';
 
 export type BookSelectionStatus = {
@@ -100,13 +100,20 @@ export default function ConfigureChecks({
 
   return (
     <div className="configure-checks-dialog">
-      <Checklist
-        className="configure-checks-check-names"
-        legend="Checks"
-        listItems={availableChecks.map((check) => check.checkDescription)}
-        selectedListItems={selectedChecks}
-        handleSelectListItem={handleSelectCheck}
-      />
+      {availableChecks.length === 0 ? (
+        <div className="configure-checks-loader">
+          <Spinner />
+          <Label>Loading checks</Label>
+        </div>
+      ) : (
+        <Checklist
+          className="configure-checks-check-names"
+          legend="Checks"
+          listItems={availableChecks.map((check) => check.checkDescription)}
+          selectedListItems={selectedChecks}
+          handleSelectListItem={handleSelectCheck}
+        />
+      )}
       <fieldset className="configure-checks-books">
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}
