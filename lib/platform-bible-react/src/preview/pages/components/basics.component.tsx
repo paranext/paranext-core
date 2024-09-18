@@ -19,6 +19,8 @@ import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
 import SpinnerExamples from './basics/spinner.examples.component';
+import ToggleGroupExamples from './basics/toggle-group.examples.component';
+import SonnerExamples from './basics/sonner.examples.component';
 
 function Basics({ direction }: HasDirection) {
   return (
@@ -36,10 +38,12 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Sonner">Sonner</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Spinner">Spinner</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Toggle Group">Toggle Group</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Alert">
@@ -81,6 +85,10 @@ function Basics({ direction }: HasDirection) {
           <SliderExamples />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Sonner">
+          <SonnerExamples />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Spinner">
           <SpinnerExamples />
         </VerticalTabsContent>
@@ -99,6 +107,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Table">
           <TableExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Toggle Group">
+          <ToggleGroupExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
