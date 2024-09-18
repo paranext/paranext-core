@@ -1,7 +1,6 @@
 import { useSetting } from '@papi/frontend/react';
 import { Canon, VerseRef } from '@sillsdev/scripture';
-import { Loader2 } from 'lucide-react';
-import { Checklist, Label, ScriptureReference } from 'platform-bible-react';
+import { Checklist, Label, ScriptureReference, Spinner } from 'platform-bible-react';
 import { getChaptersForBook } from 'platform-bible-utils';
 import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -103,7 +102,7 @@ export default function ConfigureChecks({
     <div className="configure-checks-dialog">
       {availableChecks.length === 0 ? (
         <div className="configure-checks-loader">
-          <Loader2 className="configure-checks-loader-spin" />
+          <Spinner />
           <Label>Loading checks</Label>
         </div>
       ) : (
