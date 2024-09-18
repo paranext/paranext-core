@@ -1,5 +1,6 @@
-import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
+import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
+import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import { ColumnDef } from '../data-table/data-table.component';
 import { getSortingIcon, ItemData, Status } from './inventory.component';
 
@@ -54,59 +55,33 @@ export const inventoryStatusColumn = (
 ): ColumnDef<ItemData> => {
   return {
     accessorKey: 'status',
-    header: ({ column, table }) => {
-      const selectedRows = table.getSelectedRowModel().rows;
-
-      const items: string[] = [];
-      selectedRows.forEach((row) => {
-        items.push(row.getValue('item'));
-      });
-
+    header: ({ column }) => {
       return (
-        <div className="pr-flex pr-justify-start">
-          <Button
-            className="pr-mt-1"
-            variant="ghost"
-            onClick={() => column.toggleSorting(undefined)}
-          >
-            {statusLabel}
-            {getSortingIcon(column.getIsSorted())}
-          </Button>
-          <Button className="pr-m-1">
-            <CircleCheckIcon
-              onClick={() => {
-                statusChangeHandler(items, 'approved');
-              }}
-            />
-          </Button>
-          <Button className="pr-m-1">
-            <CircleXIcon
-              onClick={() => {
-                statusChangeHandler(items, 'unapproved');
-              }}
-            />
-          </Button>
-          <Button className="pr-m-1">
-            <CircleHelpIcon
-              onClick={() => {
-                statusChangeHandler(items, 'unknown');
-              }}
-            />
-          </Button>
-        </div>
+        <Button className="pr-mt-1" variant="ghost" onClick={() => column.toggleSorting(undefined)}>
+          {statusLabel}
+          {getSortingIcon(column.getIsSorted())}
+        </Button>
       );
     },
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
-      switch (status) {
-        case 'approved':
-          return <CircleCheckIcon />;
-        case 'unapproved':
-          return <CircleXIcon />;
-        case 'unknown':
-        default:
-          return <CircleHelpIcon />;
-      }
+      const item: string = row.getValue('item');
+      return (
+        <ToggleGroup value={status} variant="outline" type="single">
+          <ToggleGroupItem onClick={() => statusChangeHandler([item], 'approved')} value="approved">
+            <CircleCheckIcon />
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            onClick={() => statusChangeHandler([item], 'unapproved')}
+            value="unapproved"
+          >
+            <CircleXIcon />
+          </ToggleGroupItem>
+          <ToggleGroupItem onClick={() => statusChangeHandler([item], 'unknown')} value="unknown">
+            <CircleHelpIcon />
+          </ToggleGroupItem>
+        </ToggleGroup>
+      );
     },
   };
 };
