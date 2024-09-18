@@ -6,17 +6,26 @@
   display: flex;
   flex-wrap: wrap;
   height: 100%;
-}
+  justify-content: center;
 
-// Places checkboxes in their given order, but does not shrink to one column when window is only wide enough for one
-.configure-checks-check-names {
-  columns: 2;
-  column-fill: balance;
-  height: 50%;
-  width: 100%;
-  overflow-y: auto;
-}
+  .configure-checks-loader {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
 
-.configure-checks-books {
-  width: 100%;
+  // Places checkboxes in their given order, but does not shrink to one column when window is only wide enough for one
+  .configure-checks-check-names {
+    columns: 2;
+    column-fill: balance;
+    height: 50%;
+    width: 100%;
+    overflow-y: auto;
+  }
+
+  .configure-checks-books {
+    width: 100%;
+  }
 }
