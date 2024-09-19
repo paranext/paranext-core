@@ -33,11 +33,14 @@ export const inventoryCountColumn = (countLabel: string): ColumnDef<ItemData> =>
   return {
     accessorKey: 'count',
     header: ({ column }) => (
-      <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-        {countLabel}
-        {getSortingIcon(column.getIsSorted())}
-      </Button>
+      <div className="pr-flex pr-justify-end pr-tabular-nums">
+        <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
+          {countLabel}
+          {getSortingIcon(column.getIsSorted())}
+        </Button>
+      </div>
     ),
+    cell: ({ row }) => <div className="pr-flex pr-justify-end">{row.getValue('count')}</div>,
   };
 };
 
@@ -57,10 +60,12 @@ export const inventoryStatusColumn = (
     accessorKey: 'status',
     header: ({ column }) => {
       return (
-        <Button className="pr-mt-1" variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-          {statusLabel}
-          {getSortingIcon(column.getIsSorted())}
-        </Button>
+        <div className="pr-flex pr-justify-center">
+          <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
+            {statusLabel}
+            {getSortingIcon(column.getIsSorted())}
+          </Button>
+        </div>
       );
     },
     cell: ({ row }) => {
