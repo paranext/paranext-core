@@ -21,6 +21,7 @@ import TableExamples from './basics/table.examples.component';
 import SpinnerExamples from './basics/spinner.examples.component';
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
 import SonnerExamples from './basics/sonner.examples.component';
+import ChecklistExamples from './basics/checklist.examples.component';
 
 function Basics({ direction }: HasDirection) {
   return (
@@ -32,6 +33,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Checklist">Checklist</VerticalTabsTrigger>
           <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
@@ -60,6 +62,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Checkbox">
           <CheckboxExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Checklist">
+          <ChecklistExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="ComboBox">

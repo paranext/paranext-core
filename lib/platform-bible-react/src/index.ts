@@ -34,8 +34,8 @@ export { default as ChapterRangeSelector } from './components/mui/chapter-range-
 export type { ChapterRangeSelectorProps } from './components/mui/chapter-range-selector.component';
 export { default as Checkbox } from './components/mui/checkbox.component';
 export type { CheckboxProps } from './components/mui/checkbox.component';
-export { default as Checklist } from './components/mui/checklist.component';
-export type { ChecklistProps } from './components/mui/checklist.component';
+export { default as Checklist } from './components/basics/checklist.component';
+export type { ChecklistProps } from './components/basics/checklist.component';
 export { default as ComboBox } from './components/basics/combo-box.component';
 export type {
   ComboBoxLabelOption,

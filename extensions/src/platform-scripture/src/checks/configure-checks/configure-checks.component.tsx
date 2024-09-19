@@ -115,6 +115,7 @@ export default function ConfigureChecks({
         />
       )}
       <fieldset className="configure-checks-books">
+        <legend className="pr-font-sans">Active Range(s)</legend>
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}
           currentBookName={Canon.bookIdToEnglishName(currentBookId)}

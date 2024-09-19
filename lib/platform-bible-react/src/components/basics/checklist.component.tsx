@@ -1,5 +1,5 @@
-import Checkbox from '@/components/mui/checkbox.component';
-import '@/components/mui/checklist.component.css';
+import Checkbox from '../shadcn-ui/checkbox';
+import { Label } from '../shadcn-ui/label';
 
 export type ChecklistProps = {
   /** Optional string representing the id attribute of the fieldset element */
@@ -36,15 +36,17 @@ export default function Checklist({
 }: ChecklistProps) {
   return (
     <fieldset id={id} className={className}>
-      {legend && <legend>{legend}</legend>}
+      {legend && <legend className="pr-font-sans">{legend}</legend>}
       {listItems.map((item) => (
-        <Checkbox
-          key={item}
-          className="check-item"
-          isChecked={selectedListItems.includes(item)}
-          labelText={createLabel ? createLabel(item) : item}
-          onChange={(event) => handleSelectListItem(item, event.target.checked)}
-        />
+        <div className="pr-m-2 pr-flex pr-items-center">
+          <Checkbox
+            key={item}
+            className="pr-mr-2 pr-align-middle"
+            checked={selectedListItems.includes(item)}
+            onCheckedChange={(value: boolean) => handleSelectListItem(item, value)}
+          />
+          <Label>{createLabel ? createLabel(item) : item}</Label>
+        </div>
       ))}
     </fieldset>
   );
