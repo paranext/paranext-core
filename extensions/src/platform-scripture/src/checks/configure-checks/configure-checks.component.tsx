@@ -1,4 +1,4 @@
-import { useSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import { Checklist, Label, ScriptureReference, Spinner } from 'platform-bible-react';
 import { getChaptersForBook } from 'platform-bible-utils';
@@ -40,6 +40,17 @@ export default function ConfigureChecks({
   const [startChapter, setStartChapter] = useState<number>(1);
   const [endChapter, setEndChapter] = useState<number>(chapterCount);
   const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef]);
+
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(
+      () => [
+        '%webView_configureChecks_checks%',
+        '%webView_configureChecks_loadingChecks%',
+        '%webView_configureChecks_activeRanges%',
+      ],
+      [],
+    ),
+  );
 
   const toggleShouldUseCurrentBook = (newMode: string) => {
     if (newMode === BookSelectionMode.CURRENT_BOOK) {
@@ -109,19 +120,21 @@ export default function ConfigureChecks({
       {noAvailableChecks || singleEmptyCheck ? (
         <div className="configure-checks-loader">
           <Spinner />
-          <Label>Loading checks</Label>
+          <Label>{localizedStrings['%webView_configureChecks_loadingChecks%']}</Label>
         </div>
       ) : (
         <Checklist
           className="configure-checks-check-names"
-          legend="Checks"
+          legend={localizedStrings['%webView_configureChecks_checks%']}
           listItems={availableChecks.map((check) => check.checkDescription)}
           selectedListItems={selectedChecks}
           handleSelectListItem={handleSelectCheck}
         />
       )}
       <fieldset className="configure-checks-books">
-        <legend className="pr-font-sans">Active Range(s)</legend>
+        <legend className="pr-font-sans">
+          {localizedStrings['%webView_configureChecks_activeRanges%']}
+        </legend>
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}
           currentBookName={Canon.bookIdToEnglishName(currentBookId)}

@@ -9,23 +9,25 @@
 .book-selection-radio {
   display: flex;
   align-items: center;
+  justify-content: space-between;
 }
 
-.book-selection-radio-label {
-  width: 20%;
+.book-selection-margin-left {
+  margin-left: 4px;
 }
 
-.book-typography {
-  flex: 1;
+.book-selection-margin-right {
+  margin-right: 4px;
 }
 
 .book-selection-radio-action {
-  padding: 2%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .book-selection-radio-content {
-  align-items: center;
-  flex-grow: 1;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
 }

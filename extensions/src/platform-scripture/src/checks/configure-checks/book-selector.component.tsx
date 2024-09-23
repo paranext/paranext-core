@@ -1,8 +1,14 @@
-import { RadioGroup, Radio, Typography } from '@mui/material';
+import { useDialogCallback, useLocalizedStrings } from '@papi/frontend/react';
 import { Canon } from '@sillsdev/scripture';
-import { Button, ChapterRangeSelector, ChapterRangeSelectorProps } from 'platform-bible-react';
+import {
+  Button,
+  ChapterRangeSelector,
+  ChapterRangeSelectorProps,
+  Label,
+  RadioGroup,
+  RadioGroupItem,
+} from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
-import { useDialogCallback } from '@papi/frontend/react';
 
 export enum BookSelectionMode {
   CURRENT_BOOK = 'current book',
@@ -31,6 +37,19 @@ export default function BookSelector({
     BookSelectionMode.CURRENT_BOOK,
   );
 
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(
+      () => [
+        '%webView_platformScripture_currentBook%',
+        '%webView_bookSelector_selectBooks%',
+        '%webView_bookSelector_selectBooks_prompt%',
+        '%webView_bookSelector_choose%',
+        '%webView_bookSelector_chooseBooks%',
+      ],
+      [],
+    ),
+  );
+
   const onSelectionModeChange = (newMode: BookSelectionMode) => {
     setBookSelectionMode(newMode);
     handleBookSelectionModeChange(newMode);
@@ -40,11 +59,11 @@ export default function BookSelector({
     'platform.selectBooks',
     useMemo(
       () => ({
-        prompt: 'Select one or more books to run basic checks on',
-        title: 'Select Books',
+        prompt: localizedStrings['%webView_bookSelector_selectBooks_prompt%'],
+        title: localizedStrings['%webView_bookSelector_selectBooks%'],
         selectedBookIds,
       }),
-      [selectedBookIds],
+      [localizedStrings, selectedBookIds],
     ),
     useCallback(
       (newSelectedBooks) => {
@@ -57,50 +76,46 @@ export default function BookSelector({
   return (
     <RadioGroup
       value={bookSelectionMode}
-      // event.target.value is always a string but we need it to be BookSelectionMode
+      // value is always a string but we need it to be BookSelectionMode
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      onChange={(e) => onSelectionModeChange(e.target.value as BookSelectionMode)}
+      onValueChange={(value) => onSelectionModeChange(value as BookSelectionMode)}
     >
       <div className="book-selection-radio">
-        <Radio value={BookSelectionMode.CURRENT_BOOK} />
-        <Typography className="book-selection-radio-label">Current Book</Typography>
+        <div className="book-selection-radio-action">
+          <RadioGroupItem value={BookSelectionMode.CURRENT_BOOK} />
+          <Label className="book-selection-margin-left">
+            {`${localizedStrings['%webView_platformScripture_currentBook%']}:`}
+          </Label>
+          <Label className="book-selection-margin-left">{currentBookName}</Label>
+        </div>
         <div className="book-selection-radio-content">
-          <div className="book-typography">
-            <Typography padding={0.5} border={1}>
-              {currentBookName}
-            </Typography>
-          </div>
-          <div className="book-selection-radio-action">
-            <ChapterRangeSelector
-              isDisabled={bookSelectionMode === BookSelectionMode.CHOOSE_BOOKS}
-              handleSelectStartChapter={handleSelectStartChapter}
-              handleSelectEndChapter={handleSelectEndChapter}
-              chapterCount={chapterCount}
-              startChapter={startChapter}
-              endChapter={endChapter}
-            />
-          </div>
+          <ChapterRangeSelector
+            isDisabled={bookSelectionMode === BookSelectionMode.CHOOSE_BOOKS}
+            handleSelectStartChapter={handleSelectStartChapter}
+            handleSelectEndChapter={handleSelectEndChapter}
+            chapterCount={chapterCount}
+            startChapter={startChapter}
+            endChapter={endChapter}
+          />
         </div>
       </div>
       <div className="book-selection-radio">
-        <Radio value={BookSelectionMode.CHOOSE_BOOKS} />
-        <Typography className="book-selection-radio-label">Choose Books</Typography>
+        <div className="book-selection-radio-action">
+          <RadioGroupItem value={BookSelectionMode.CHOOSE_BOOKS} />
+          <Label className="book-selection-margin-left">
+            {`${localizedStrings['%webView_bookSelector_chooseBooks%']}`}
+          </Label>
+        </div>
         <div className="book-selection-radio-content">
-          <div className="book-typography">
-            <Typography padding={0.5} border={1}>
-              {selectedBookIds
-                .map((bookId: string) => Canon.bookIdToEnglishName(bookId))
-                .join(', ')}
-            </Typography>
-          </div>
-          <div className="book-selection-radio-action">
-            <Button
-              disabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
-              onClick={() => selectBooks()}
-            >
-              Choose...
-            </Button>
-          </div>
+          <Label className="book-selection-margin-right">
+            {selectedBookIds.map((bookId: string) => Canon.bookIdToEnglishName(bookId)).join(', ')}
+          </Label>
+          <Button
+            disabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
+            onClick={() => selectBooks()}
+          >
+            {localizedStrings['%webView_bookSelector_choose%']}
+          </Button>
         </div>
       </div>
     </RadioGroup>
