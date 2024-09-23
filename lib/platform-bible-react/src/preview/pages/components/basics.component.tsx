@@ -19,6 +19,7 @@ import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
 import SpinnerExamples from './basics/spinner.examples.component';
+import ChapterRangeSelectorExample from './basics/chapter-range-example.component';
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
 import SonnerExamples from './basics/sonner.examples.component';
 import ChecklistExamples from './basics/checklist.examples.component';
@@ -32,6 +33,9 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Chapter Range Selector">
+            Chapter Range Selector
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checklist">Checklist</VerticalTabsTrigger>
           <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
@@ -58,6 +62,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Card">
           <CardExamples direction={direction} />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Chapter Range Selector">
+          <ChapterRangeSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Checkbox">

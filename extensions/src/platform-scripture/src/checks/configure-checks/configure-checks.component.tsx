@@ -98,9 +98,15 @@ export default function ConfigureChecks({
     );
   }, [activeRanges]);
 
+  const noAvailableChecks = useMemo(() => availableChecks.length === 0, [availableChecks]);
+  const singleEmptyCheck = useMemo(
+    () => availableChecks.length === 1 && availableChecks[0].checkId === '',
+    [availableChecks],
+  );
+
   return (
     <div className="configure-checks-dialog">
-      {availableChecks.length === 0 ? (
+      {noAvailableChecks || singleEmptyCheck ? (
         <div className="configure-checks-loader">
           <Spinner />
           <Label>Loading checks</Label>
@@ -124,6 +130,8 @@ export default function ConfigureChecks({
           chapterCount={chapterCount}
           handleSelectStartChapter={setStartChapter}
           handleSelectEndChapter={setEndChapter}
+          startChapter={startChapter}
+          endChapter={endChapter}
         />
       </fieldset>
     </div>
