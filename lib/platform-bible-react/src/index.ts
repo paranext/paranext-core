@@ -102,9 +102,10 @@ export {
 } from './components/shadcn-ui/card';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
-export { Label } from '@/components/shadcn-ui/label';
+export { Label } from './components/shadcn-ui/label';
+export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
-export { Separator } from '@/components/shadcn-ui/separator';
+export { Separator } from './components/shadcn-ui/separator';
 export * from './components/shadcn-ui/sonner';
 export { Slider as ShadCnSlider } from './components/shadcn-ui/slider';
 export { Switch as ShadCnSwitch } from './components/shadcn-ui/switch';

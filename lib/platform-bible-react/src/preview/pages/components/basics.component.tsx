@@ -23,6 +23,7 @@ import ChapterRangeSelectorExample from './basics/chapter-range-example.componen
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
 import SonnerExamples from './basics/sonner.examples.component';
 import ChecklistExamples from './basics/checklist.examples.component';
+import RadioGroupExamples from './basics/radio-group.examples';
 
 function Basics({ direction }: HasDirection) {
   return (
@@ -41,6 +42,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
@@ -82,6 +84,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Input">
           <InputExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Radio Group">
+          <RadioGroupExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Search Bar">
