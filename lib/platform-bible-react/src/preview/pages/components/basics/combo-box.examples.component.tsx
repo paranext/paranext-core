@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import ComboBox from '@/components/basics/combo-box.component';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 
 export default function ComboBoxExamples({ direction }: HasDirection) {
   const [comboBoxValue, setComboBox] = useState<string | undefined>(undefined);

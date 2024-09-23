@@ -5,7 +5,7 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import ExampleAlerts from './basics/alert.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
@@ -71,7 +71,10 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Search Bar">
-          <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} /> &larr; type here
+          <div className="pr-flex pr-gap-2">
+            <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} />{' '}
+            {direction === 'rtl' ? <>&rarr;</> : <>&larr;</>} type here
+          </div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Select">

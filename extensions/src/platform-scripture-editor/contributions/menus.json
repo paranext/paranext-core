@@ -85,10 +85,16 @@
             "command": "platformScripture.openRepeatedWordsInventory"
           },
           {
-            "label": "%webView_platformScriptureEditor_runBasicChecks%",
+            "label": "%webView_platformScriptureEditor_configureChecks%",
             "group": "platformScriptureEditor.checks",
             "order": 1,
-            "command": "platformScripture.runBasicChecks"
+            "command": "platformScripture.openConfigureChecks"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_showCheckResults%",
+            "group": "platformScriptureEditor.checks",
+            "order": 2,
+            "command": "platformScripture.showCheckResults"
           },
           {
             "label": "%webView_platformScriptureEditor_thickBorders%",

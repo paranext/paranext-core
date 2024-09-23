@@ -1,4 +1,4 @@
-import DoneIcon from '@mui/icons-material/Done';
+import { Check } from 'lucide-react';
 import { Button, Checklist } from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
@@ -41,7 +41,7 @@ function SelectBooksDialog({
       <br />
       <div className="select-books-dialog-submit-button">
         <Button onClick={() => submitDialog(selectedBookIds)}>
-          <DoneIcon />
+          <Check />
         </Button>
       </div>
     </div>

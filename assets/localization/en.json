@@ -1,7 +1,9 @@
 {
   "%product_name%": "Platform.Bible",
+  "%about_versionLabel_format%": "Version: {version}",
+  "%about_licenseLabel_format%": "License: {license}",
   "%insertNote%": "Insert Note",
-  "%mainMenu_aboutPlatformBible%": "About Platform.Bible",
+  "%mainMenu_about%": "About Platform.Bible",
   "%mainMenu_downloadSlashInstallResources%": "Download/Install Resources",
   "%mainMenu_downloadSlashUpdateProject%": "Download/Update Project",
   "%mainMenu_exit%": "Exit",

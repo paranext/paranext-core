@@ -5,9 +5,10 @@ import Basics from './pages/components/basics.component';
 import Guide from './pages/guide.component';
 import Layouts from './pages/layouts.component';
 import Playground from './pages/playground.component';
-import { DirToggle, Direction } from './preview-components/direction-toggle';
+import { DirToggle, Direction } from './preview-components/direction-toggle.component';
 import { ThemeProvider } from './preview-components/theme-provider.component';
 import { ThemeButton } from './preview-components/theme-toggle.component';
+import ContactButtons from './preview-components/contact-buttons.component';
 
 function App() {
   const [direction, setDirection] = useState<Direction>('ltr');
@@ -20,8 +21,10 @@ function App() {
           <DirToggle direction={direction} onChangeDirection={changeDirectionHandler} />
           <ThemeButton />
         </div>
+        <div className="pr-fixed pr-bottom-2 pr-right-4 pr-flex pr-gap-2">
+          <ContactButtons />
+        </div>
         <h1 className="pr-pb-4 pr-uppercase">platform-bible-react Preview</h1>
-        <p>Edit lib/platform-bible-react/src/preview/components/... and save to see updates</p>
         <Tabs defaultValue="Playground" className="pr-pt-4" dir={direction}>
           <TabsList>
             <TabsTrigger value="Basics">Basic Components</TabsTrigger>

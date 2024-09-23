@@ -10,6 +10,7 @@ import { cleanupOldWebViewState } from '@renderer/services/web-view-state.servic
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
 import App from './app.component';
+import THEME, { MUI_OVERRIDES, SCROLLBAR_STYLES } from './theme';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -64,6 +65,16 @@ if (!container) {
 
 const root = createRoot(container);
 root.render(<App />);
+
+if (THEME) window.document.body.classList.add(THEME);
+
+const scrollbarStyleSheet = document.createElement('style');
+scrollbarStyleSheet.textContent = SCROLLBAR_STYLES;
+document.head.appendChild(scrollbarStyleSheet);
+
+const muiOverridesStyleSheet = document.createElement('style');
+muiOverridesStyleSheet.textContent = MUI_OVERRIDES;
+document.head.appendChild(muiOverridesStyleSheet);
 
 // This doesn't run if the renderer has an uncaught exception (which is a good thing)
 window.addEventListener('beforeunload', () => {

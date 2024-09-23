@@ -9,7 +9,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { ChevronDown } from 'lucide-react';
 
 export default function DropdownExamples({ direction }: HasDirection) {

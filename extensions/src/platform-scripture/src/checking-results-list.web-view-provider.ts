@@ -5,6 +5,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import { formatReplacementString } from 'platform-bible-utils';
 import checkingResultsListWebView from './checking-results-list.web-view?inline';
 import checkingResultsListStyles from './checking-results-list.web-view.scss?inline';
 
@@ -27,26 +28,24 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
       );
 
     // We know that the projectId (if present in the state) will be a string.
-    let projectId =
-      getWebViewOptions.projectId ||
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      (savedWebView.state?.projectId as string) ||
-      undefined;
-
-    let title = await papi.localization.getLocalizedString({
-      localizeKey: '%webView_checkResultsList_title%',
-    });
+    let projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
     let projectName: string | undefined;
 
     if (projectId) {
-      projectName =
-        (await (
-          await papi.projectDataProviders.get('platform.base', projectId)
-        ).getSetting('platform.name')) ?? projectId;
-
-      title += ` - ${projectName}`;
+      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+      projectName = (await pdp.getSetting('platform.name')) ?? projectId;
     }
+
+    const title = formatReplacementString(
+      await papi.localization.getLocalizedString({
+        localizeKey: '%webView_checkResultsList_title%',
+      }),
+      {
+        resultsCount: '0',
+        projectName,
+      },
+    );
 
     if (!projectId && globalThis.isNoisyDevModeEnabled) {
       logger.debug(`${title} web view did not get a project passed in. Choosing a random one...`);
@@ -62,13 +61,12 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
     logger.info(`${title} web view opening with ${projectId}`);
 
     return {
-      title,
       ...savedWebView,
+      title,
+      projectId,
       content: checkingResultsListWebView,
       styles: checkingResultsListStyles,
       state: {
-        projectName,
-        projectId,
         ...savedWebView.state,
         webViewType: this.webViewType,
       },

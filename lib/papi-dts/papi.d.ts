@@ -88,7 +88,7 @@ declare module 'shared/models/web-view.model' {
     /**
      * Url of image to show on the title bar of the tab
      *
-     * Defaults to Platform.Bible logo
+     * Defaults to the software's standard logo.
      */
     iconUrl?: string;
     /** Name of the tab for the WebView */
@@ -197,7 +197,7 @@ declare module 'shared/models/web-view.model' {
     /**
      * Whether to allow this iframe to open separate windows with window.open and anchor tags with
      * `target="_blank"`. Setting this to true adds `allow-popups` to the WebView iframe's [sandbox
-     * attribute] (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+     * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
      * to `false`
      */
     allowPopups?: boolean;
@@ -3024,7 +3024,7 @@ declare module 'shared/models/docking-framework.model' {
     /**
      * Url of image to show on the title bar of the tab
      *
-     * Defaults to Platform.Bible logo
+     * Defaults to the software's standard logo.
      */
     tabIconUrl?: string;
     /** Text to show on the title bar of the tab */
@@ -5009,6 +5009,10 @@ declare module 'shared/models/create-process-privilege.model' {
    * processes created this way in packaged builds. Child processes are not killed when running in
    * development.
    *
+   * This method is essentially a layer over the [`spawn`
+   * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
+   * the Node `child_process` module. Please see its documentation for more information.
+   *
    * @example The following example assumes there are subdirectories in the extension's files for
    * win32, linux, and macOS that include appropriate executables.
    *
@@ -5050,6 +5054,10 @@ declare module 'shared/models/create-process-privilege.model' {
    * Run {@link fork} to create a child process. The platform will automatically kill all child
    * processes created this way in packaged builds. Child processes are not killed when running in
    * development.
+   *
+   * This method is essentially a layer over the [`fork`
+   * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
+   * the Node `child_process` module. Please see its documentation for more information.
    *
    * @example The following example assumes there is a file named `childProcess.js` in the extension's
    * `assets` subdirectory

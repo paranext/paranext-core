@@ -117,7 +117,7 @@ export default function ScrollGroupSelector({
         )
       }
     >
-      <SelectTrigger className="pr-w-auto">
+      <SelectTrigger className="pr-twp pr-w-auto">
         <SelectValue
           placeholder={
             localizedStringsDefaulted[getLocalizeKeyForScrollGroupId(scrollGroupId)] ??
@@ -130,7 +130,7 @@ export default function ScrollGroupSelector({
         style={{ zIndex: 250 }}
       >
         {availableScrollGroupIds.map((scrollGroupOptionId) => (
-          <SelectItem key={scrollGroupOptionId} value={`${scrollGroupOptionId}`}>
+          <SelectItem key={`${scrollGroupOptionId}`} value={`${scrollGroupOptionId}`}>
             {localizedStringsDefaulted[getLocalizeKeyForScrollGroupId(scrollGroupOptionId)]}
           </SelectItem>
         ))}

@@ -32,7 +32,8 @@ internal class LocalParatextProjects
         ProjectInterfaces.USFM_VERSE,
         ProjectInterfaces.USX_BOOK,
         ProjectInterfaces.USX_CHAPTER,
-        ProjectInterfaces.USX_VERSE];
+        ProjectInterfaces.USX_VERSE,
+        ProjectInterfaces.PLAIN_TEXT_VERSE];
 
     public LocalParatextProjects()
     {

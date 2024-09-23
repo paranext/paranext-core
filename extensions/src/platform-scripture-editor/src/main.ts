@@ -108,10 +108,9 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
     let title = '';
     if (projectId) {
+      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
       title = `${
-        (await (
-          await papi.projectDataProviders.get('platform.base', projectId)
-        ).getSetting('platform.name')) ?? projectId
+        (await pdp.getSetting('platform.name')) ?? projectId
       }${isReadOnly ? '' : ' (Editable)'}`;
     } else title = isReadOnly ? 'Resource Viewer' : 'Scripture Editor';
 

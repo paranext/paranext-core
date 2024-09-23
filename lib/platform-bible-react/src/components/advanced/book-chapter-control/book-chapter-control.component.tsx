@@ -347,7 +347,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           />
         </ShadDropdownMenuTrigger>
         <ShadDropdownMenuContent
-          className="pr-m-1 pr-overflow-y-auto pr-p-0 pr-font-normal pr-text-slate-700"
+          className="pr-m-1 pr-overflow-y-auto pr-p-0 pr-font-normal pr-text-foreground/80"
           // Need to get over the floating window z-index 200
           style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
           onKeyDown={handleKeyDownContent}
@@ -363,7 +363,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             (bookType, bookTypeIndex) =>
               fetchFilteredBooks(bookType).length > 0 && (
                 <div key={bookType}>
-                  <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
+                  <ShadDropdownMenuLabel className="pr-font-semibold pr-text-foreground/80">
                     {BOOK_TYPE_LABELS[bookType]}
                   </ShadDropdownMenuLabel>
 

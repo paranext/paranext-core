@@ -6,12 +6,13 @@ import {
   MarginalRef,
 } from '@biblionexus-foundation/platform-editor';
 import { Usj } from '@biblionexus-foundation/scripture-utilities';
-import { VerseRef } from '@sillsdev/scripture';
+import { Canon, VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
-import { useProjectData } from '@papi/frontend/react';
+import { useProjectData, useProjectSetting } from '@papi/frontend/react';
 import { ScriptureReference, debounce } from 'platform-bible-utils';
+import { Button } from 'platform-bible-react';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -102,7 +103,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const editorUsj = useRef(usj);
 
   // TODO: remove debounce when issue #826 is done.
-  const onChange = useCallback(
+  const onUsjChange = useCallback(
     (newUsj: Usj) => {
       // There is a bug where the editor's onChange runs when the state is externally set, so let's
       // not run onChange if the change came externally (our tracked editorUsj.current editor state
@@ -171,23 +172,29 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
+  const [projectName] = useProjectSetting(projectId, 'platform.name', '');
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: 'ltr',
+      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.bookNum) ? 'rtl' : 'ltr',
     }),
-    [isReadOnly],
+    [isReadOnly, projectName, scrRef],
   );
 
   return (
-    <Editor
-      ref={editorRef}
-      scrRef={scrRef}
-      setScrRef={setScrRef}
-      options={options}
-      onChange={isReadOnly ? undefined : onChange}
-      logger={logger}
-    />
+    <>
+      {/* Workaround to pull in platform-bible-react styles into the editor */}
+      <Button className="pr-hidden" />
+      <Editor
+        ref={editorRef}
+        scrRef={scrRef}
+        onScrRefChange={setScrRef}
+        options={options}
+        onUsjChange={isReadOnly ? undefined : onUsjChange}
+        logger={logger}
+      />
+    </>
   );
 };

@@ -17,6 +17,7 @@ export const DirToggle = React.forwardRef<HTMLButtonElement, ButtonProps & Direc
         onClick={() => {
           changeDirection(oppositeDirection);
         }}
+        title="Toggle layout direction"
         {...props}
       >
         {direction}

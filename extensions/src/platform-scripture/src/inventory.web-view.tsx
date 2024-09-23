@@ -6,8 +6,8 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { VerseRef } from '@sillsdev/scripture';
 import papi from '@papi/frontend';
-import CharacterInventory from './character-inventory.component';
-import RepeatedWordsInventory from './repeated-words-inventory.component';
+import CharacterInventory from './checks/inventories/character-inventory.component';
+import RepeatedWordsInventory from './checks/inventories/repeated-words-inventory.component';
 
 /**
  * Get scripture text for the provided scope and reference for the specified projectId
@@ -46,6 +46,7 @@ const getText = async (
 };
 
 global.webViewComponent = function InventoryWebView({
+  projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
 }: WebViewProps) {
@@ -54,7 +55,6 @@ global.webViewComponent = function InventoryWebView({
       return Array.from(INVENTORY_STRING_KEYS);
     }, []),
   );
-  const [projectId] = useWebViewState('projectId', '');
   const [webViewType] = useWebViewState('webViewType', '');
   const [scriptureRef, setScriptureRef] = useWebViewScrollGroupScrRef();
 
@@ -81,7 +81,7 @@ global.webViewComponent = function InventoryWebView({
   const [scope, setScope] = useState<Scope>('book');
   const [text] = usePromise(
     useCallback(
-      async () => getText(scope, scriptureRef, projectId),
+      async () => (projectId ? getText(scope, scriptureRef, projectId) : ''),
       [scope, scriptureRef, projectId],
     ),
     useMemo(() => '', []),
