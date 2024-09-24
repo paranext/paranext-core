@@ -12,7 +12,9 @@ import ToolbarExamples from './layouts/toolbar.layout.component';
 function Layouts({ direction }: HasDirection) {
   return (
     <div>
-      <p className="pr-mb-2 pr-text-muted-foreground">A place to add examples for layouts</p>
+      <p className="pr-mb-2 pr-text-muted-foreground">
+        A place to add examples for layouts. Those can be used as inspiration or copied from here.
+      </p>
       <VerticalTabs defaultValue="Window" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="Window">Window or Tab</VerticalTabsTrigger>

@@ -23,7 +23,10 @@ import SpinnerExamples from './basics/spinner.examples.component';
 function Basics({ direction }: HasDirection) {
   return (
     <div>
-      <p className="pr-mb-2 pr-text-muted-foreground">A place for the most simple components</p>
+      <p className="pr-mb-2 pr-text-muted-foreground">
+        A place for the most simple components. Those can be installed from platform-bible-react or
+        used in advanced components.
+      </p>
       <VerticalTabs defaultValue="Button" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>

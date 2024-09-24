@@ -17,6 +17,7 @@ import { columns, data } from './data-sources/data-table-content';
 import MarketplaceExamples from './advanced/marketplace.example.component';
 import InventoryExample from './advanced/inventory-example.component';
 import SettingsListExamples from './advanced/settings-list.examples.component';
+import SonnerExamples from './advanced/sonner.examples.component';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -66,7 +67,8 @@ function Compositions({ direction }: HasDirection) {
   return (
     <div>
       <p className="pr-mb-2 pr-text-muted-foreground">
-        A place for components that are composed from basic components
+        A place for components that are composed from basic components. Those can be installed from
+        platform-bible-react.
       </p>
       <VerticalTabs defaultValue="Book Chapter Control" dir={direction}>
         <VerticalTabsList>
@@ -84,6 +86,7 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Scroll Group Selector">
             Scroll Group Selector
           </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Sonner">Sonner</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
@@ -146,6 +149,10 @@ function Compositions({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Settings List">
           <SettingsListExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Sonner">
+          <SonnerExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

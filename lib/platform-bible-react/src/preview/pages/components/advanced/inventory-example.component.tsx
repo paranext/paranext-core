@@ -11,7 +11,7 @@ import Inventory, {
 } from '@/components/advanced/inventory/inventory.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
-import scriptureSnippet from './scripture-snippet';
+import scriptureSnippet from '../data-sources/scripture-snippet';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
