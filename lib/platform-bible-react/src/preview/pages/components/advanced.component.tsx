@@ -17,6 +17,7 @@ import { columns, data } from './data-sources/data-table-content';
 import MarketplaceExamples from './advanced/marketplace.example.component';
 import InventoryExample from './advanced/inventory-example.component';
 import SettingsListExamples from './advanced/settings-list.examples.component';
+import BookSelectorExample from './advanced/book-selector-example.component';
 
 const defaultScrRef: ScriptureReference = {
   bookNum: 1,
@@ -73,6 +74,7 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Book Chapter Control">
             Book Chapter Control
           </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
@@ -89,6 +91,10 @@ function Compositions({ direction }: HasDirection) {
         <VerticalTabsContent value="Book Chapter Control">
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
           <div>{JSON.stringify(scrRef)}</div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Book Selector">
+          <BookSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Scroll Group Selector">

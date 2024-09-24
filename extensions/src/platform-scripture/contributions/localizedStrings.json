@@ -29,6 +29,7 @@
       "%webView_configureChecks_checks%": "Checks",
       "%webView_configureChecks_loadingChecks%": "Loading checks",
       "%webView_configureChecks_activeRanges%": "Active Range(s)",
+      "%webView_bookSelector_currentBook%": "Current book",
       "%webView_bookSelector_selectBooks%": "Select Books",
       "%webView_bookSelector_selectBooks_prompt%": "Select one or more books to run basic checks on",
       "%webView_bookSelector_choose%": "Choose...",
