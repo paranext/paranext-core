@@ -84,7 +84,7 @@ export default function BookSelector({
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       onValueChange={(value: string) => onSelectionModeChange(value as BookSelectionMode)}
     >
-      <div className="pr-flex pr-flex-col pr-gap-4">
+      <div className="pr-flex pr-w-full pr-flex-col pr-gap-4">
         <div className="pr-grid pr-grid-cols-[25%,25%,50%]">
           <div className="pr-flex pr-items-center">
             <RadioGroupItem value={BookSelectionMode.CURRENT_BOOK} />
