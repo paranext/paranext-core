@@ -84,36 +84,39 @@ export default function BookSelector({
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       onValueChange={(value: string) => onSelectionModeChange(value as BookSelectionMode)}
     >
-      <div className="pr-grid pr-grid-cols-3 pr-gap-4">
-        <div className="pr-flex pr-items-center">
-          <RadioGroupItem value={BookSelectionMode.CURRENT_BOOK} />
-          <Label className="pr-ml-1">{`${currentBookText}:`}</Label>
+      <div className="pr-flex pr-flex-col pr-gap-4">
+        <div className="pr-grid pr-grid-cols-[25%,25%,50%]">
+          <div className="pr-flex pr-items-center">
+            <RadioGroupItem value={BookSelectionMode.CURRENT_BOOK} />
+            <Label className="pr-ml-1">{`${currentBookText}:`}</Label>
+          </div>
+          <Label className="pr-flex pr-items-center">{currentBookName}</Label>
+          <div className="pr-flex pr-items-center pr-justify-end">
+            <ChapterRangeSelector
+              isDisabled={bookSelectionMode === BookSelectionMode.CHOOSE_BOOKS}
+              handleSelectStartChapter={handleSelectStartChapter}
+              handleSelectEndChapter={handleSelectEndChapter}
+              chapterCount={chapterCount}
+              startChapter={startChapter}
+              endChapter={endChapter}
+            />
+          </div>
         </div>
-        <Label className="pr-flex pr-items-center">{currentBookName}</Label>
-        <div className="pr-flex pr-items-center">
-          <ChapterRangeSelector
-            isDisabled={bookSelectionMode === BookSelectionMode.CHOOSE_BOOKS}
-            handleSelectStartChapter={handleSelectStartChapter}
-            handleSelectEndChapter={handleSelectEndChapter}
-            chapterCount={chapterCount}
-            startChapter={startChapter}
-            endChapter={endChapter}
-          />
+        <div className="pr-grid pr-grid-cols-[25%,50%,25%]">
+          <div className="pr-flex pr-items-center">
+            <RadioGroupItem value={BookSelectionMode.CHOOSE_BOOKS} />
+            <Label className="pr-ml-1">{`${chooseBooksText}:`}</Label>
+          </div>
+          <Label className="pr-flex pr-items-center">
+            {selectedBookIds.map((bookId: string) => Canon.bookIdToEnglishName(bookId)).join(', ')}
+          </Label>
+          <Button
+            disabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
+            onClick={() => onSelectBooks()}
+          >
+            {chooseText}
+          </Button>
         </div>
-        <div className="pr-flex pr-items-center">
-          <RadioGroupItem value={BookSelectionMode.CHOOSE_BOOKS} />
-          <Label className="pr-ml-1">{`${chooseBooksText}:`}</Label>
-        </div>
-        <Label className="pr-flex pr-items-center">
-          {selectedBookIds.map((bookId: string) => Canon.bookIdToEnglishName(bookId)).join(', ')}
-        </Label>
-        <Button
-          className="pr-flex pr-items-center"
-          disabled={bookSelectionMode === BookSelectionMode.CURRENT_BOOK}
-          onClick={() => onSelectBooks()}
-        >
-          {chooseText}
-        </Button>
       </div>
     </RadioGroup>
   );
