@@ -165,8 +165,8 @@ export default function ConfigureChecks({
         />
       )}
       <fieldset className="configure-checks-books">
-        <legend className="pr-font-sans">
-          {localizedStrings['%webView_configureChecks_activeRanges%']}
+        <legend>
+          <Label>{localizedStrings['%webView_configureChecks_activeRanges%']}</Label>
         </legend>
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}

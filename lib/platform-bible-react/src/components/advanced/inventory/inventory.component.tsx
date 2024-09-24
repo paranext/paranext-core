@@ -299,7 +299,7 @@ export default function Inventory({
           <SelectTrigger className="pr-m-1">
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
-          <SelectContent className="pr-font-sans">
+          <SelectContent>
             <SelectItem value="all">{allItemsText}</SelectItem>
             <SelectItem value="approved">{approvedItemsText}</SelectItem>
             <SelectItem value="unapproved">{unapprovedItemsText}</SelectItem>
@@ -310,7 +310,7 @@ export default function Inventory({
           <SelectTrigger className="pr-m-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
-          <SelectContent className="pr-font-sans">
+          <SelectContent>
             <SelectItem value="book">{scopeBookText}</SelectItem>
             <SelectItem value="chapter">{scopeChapterText}</SelectItem>
             <SelectItem value="verse">{scopeVerseText}</SelectItem>

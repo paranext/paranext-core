@@ -81,7 +81,7 @@ function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="pr-twp pr-font-sans">
+    <div className="pr-twp">
       {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
       <Table stickyHeader={stickyHeader}>
         <TableHeader stickyHeader={stickyHeader}>
