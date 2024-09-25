@@ -22,7 +22,9 @@ export default function BookSelector({
   selectedBookIds,
   handleSelectBooks,
   chapterCount,
+  endChapter,
   handleSelectEndChapter,
+  startChapter,
   handleSelectStartChapter,
 }: BookSelectorProps) {
   const [bookSelectionMode, setBookSelectionMode] = useState<BookSelectionMode>(
@@ -74,6 +76,8 @@ export default function BookSelector({
               handleSelectStartChapter={handleSelectStartChapter}
               handleSelectEndChapter={handleSelectEndChapter}
               chapterCount={chapterCount}
+              startChapter={startChapter}
+              endChapter={endChapter}
             />
           </div>
         </div>

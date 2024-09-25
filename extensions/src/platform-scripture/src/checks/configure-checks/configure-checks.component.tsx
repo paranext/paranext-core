@@ -129,6 +129,8 @@ export default function ConfigureChecks({
           chapterCount={chapterCount}
           handleSelectStartChapter={setStartChapter}
           handleSelectEndChapter={setEndChapter}
+          startChapter={startChapter}
+          endChapter={endChapter}
         />
       </fieldset>
     </div>
