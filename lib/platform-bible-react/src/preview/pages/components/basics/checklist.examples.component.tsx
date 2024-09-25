@@ -14,12 +14,6 @@ export default function ChecklistExamples() {
       );
   };
 
-  // columns: 2;
-  // column-fill: balance;
-  // height: 50%;
-  // width: 100%;
-  // overflow-y: auto;
-
   return (
     <Checklist
       className="pr-h-1/2 pr-w-full pr-columns-2 pr-overflow-auto *:pr-m-4"
