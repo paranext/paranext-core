@@ -1,16 +1,14 @@
-import Switch from '@/components/mui/switch.component';
+import { Switch } from '@/components/shadcn-ui/switch';
+import { useState } from 'react';
 
 export default function SwitchExamples() {
+  const [value, setValue] = useState<boolean>(false);
+
   return (
-    <>
-      Wrongly using MUI switch right now 😬
-      <div>
-        <Switch />
-        <Switch isDisabled />
-        <Switch isChecked />
-        <Switch isChecked isDisabled />
-        <Switch hasError />
-      </div>
-    </>
+    <div className="pr-flex pr-flex-col *:pr-m-4">
+      <Switch checked={value} onCheckedChange={setValue} />
+      <Switch disabled />
+      <Switch checked disabled />
+    </div>
   );
 }

@@ -9,6 +9,7 @@ import * as SeparatorPrimitive from '@radix-ui/react-separator';
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
+import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { VariantProps } from 'class-variance-authority';
 import { LucideProps } from 'lucide-react';
@@ -1235,6 +1236,14 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export declare const ToggleGroup: React$1.ForwardRefExoticComponent<((Omit<ToggleGroupPrimitive.ToggleGroupSingleProps & React$1.RefAttributes<HTMLDivElement>, "ref"> | Omit<ToggleGroupPrimitive.ToggleGroupMultipleProps & React$1.RefAttributes<HTMLDivElement>, "ref">) & VariantProps<(props?: ({
+	variant?: "default" | "outline" | null | undefined;
+	size?: "default" | "sm" | "lg" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string>) & React$1.RefAttributes<HTMLDivElement>>;
+export declare const ToggleGroupItem: React$1.ForwardRefExoticComponent<Omit<ToggleGroupPrimitive.ToggleGroupItemProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & VariantProps<(props?: ({
+	variant?: "default" | "outline" | null | undefined;
+	size?: "default" | "sm" | "lg" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLButtonElement>>;
 export type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;
