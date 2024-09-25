@@ -20,14 +20,14 @@ import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
- * localized strings and pass them into the localizedStrings prop of the Inventory component
+ * localized strings and pass them into the localizedStrings prop of this component
  */
 export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_all%',
   '%webView_inventory_approved%',
   '%webView_inventory_unapproved%',
   '%webView_inventory_unknown%',
-  '%webView_inventory_scope_book%',
+  '%webView_platformScripture_currentBook%',
   '%webView_inventory_scope_chapter%',
   '%webView_inventory_scope_verse%',
   '%webView_inventory_filter_text%',
@@ -189,7 +189,7 @@ export default function Inventory({
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
   const unapprovedItemsText = localizeString(localizedStrings, '%webView_inventory_unapproved%');
   const unknownItemsText = localizeString(localizedStrings, '%webView_inventory_unknown%');
-  const scopeBookText = localizeString(localizedStrings, '%webView_inventory_scope_book%');
+  const scopeBookText = localizeString(localizedStrings, '%webView_platformScripture_currentBook%');
   const scopeChapterText = localizeString(localizedStrings, '%webView_inventory_scope_chapter%');
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
@@ -299,7 +299,7 @@ export default function Inventory({
           <SelectTrigger className="pr-m-1">
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
-          <SelectContent className="pr-font-sans">
+          <SelectContent>
             <SelectItem value="all">{allItemsText}</SelectItem>
             <SelectItem value="approved">{approvedItemsText}</SelectItem>
             <SelectItem value="unapproved">{unapprovedItemsText}</SelectItem>
@@ -310,7 +310,7 @@ export default function Inventory({
           <SelectTrigger className="pr-m-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
-          <SelectContent className="pr-font-sans">
+          <SelectContent>
             <SelectItem value="book">{scopeBookText}</SelectItem>
             <SelectItem value="chapter">{scopeChapterText}</SelectItem>
             <SelectItem value="verse">{scopeVerseText}</SelectItem>

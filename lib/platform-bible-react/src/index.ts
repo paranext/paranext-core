@@ -2,6 +2,12 @@ import './index.css';
 
 // Components and Types
 export { default as BookChapterControl } from './components/advanced/book-chapter-control/book-chapter-control.component';
+export { default as BookSelector } from './components/advanced/book-selector.component';
+export {
+  BOOK_SELECTOR_STRING_KEYS,
+  BookSelectionMode,
+} from './components/advanced/book-selector.component';
+export type { BookSelectorLocalizedStrings } from './components/advanced/book-selector.component';
 export { default as DataTable } from './components/advanced/data-table/data-table.component';
 export type {
   ColumnDef,
@@ -26,16 +32,34 @@ export {
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
 export {
+  default as NavigationContentSearch,
+  type TabKeyValueContent,
+} from './components/advanced/navigation-content-search.component';
+export { default as ScriptureResultsViewer } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
+export type {
+  ResultsSet,
+  ResultsSource,
+  ScriptureItemDetail,
+  ScriptureResultsViewerColumnInfo,
+  ScriptureResultsViewerProps,
+  ScriptureSrcItemDetail,
+} from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
+export {
   default as ScrollGroupSelector,
   type ScrollGroupSelectorProps,
 } from './components/advanced/scroll-group-selector.component';
+export {
+  SettingsList,
+  SettingsListHeader,
+  SettingsListItem,
+} from './components/advanced/settings-components/settings-list.component';
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
 export { default as Checkbox } from './components/mui/checkbox.component';
 export type { CheckboxProps } from './components/mui/checkbox.component';
-export { default as Checklist } from './components/mui/checklist.component';
-export type { ChecklistProps } from './components/mui/checklist.component';
+export { default as Checklist } from './components/basics/checklist.component';
+export type { ChecklistProps } from './components/basics/checklist.component';
 export { default as ComboBox } from './components/basics/combo-box.component';
 export type {
   ComboBoxLabelOption,
@@ -52,29 +76,11 @@ export type { IconButtonProps } from './components/mui/icon-button.component';
 export { default as LabelPosition } from './components/mui/label-position.model';
 export { default as MenuItem } from './components/mui/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/mui/menu-item.component';
-export { default as ScriptureResultsViewer } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
-export type {
-  ResultsSet,
-  ResultsSource,
-  ScriptureItemDetail,
-  ScriptureResultsViewerColumnInfo,
-  ScriptureResultsViewerProps,
-  ScriptureSrcItemDetail,
-} from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Slider } from './components/mui/slider.component';
 export type { SliderProps } from './components/mui/slider.component';
 export { default as Snackbar } from './components/mui/snackbar.component';
-export {
-  default as NavigationContentSearch,
-  type TabKeyValueContent,
-} from './components/advanced/navigation-content-search.component';
-export {
-  SettingsList,
-  SettingsListHeader,
-  SettingsListItem,
-} from './components/advanced/settings-components/settings-list.component';
 export type {
   AnchorOrigin,
   CloseReason,
@@ -102,9 +108,10 @@ export {
 } from './components/shadcn-ui/card';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
-export { Label } from '@/components/shadcn-ui/label';
+export { Label } from './components/shadcn-ui/label';
+export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
-export { Separator } from '@/components/shadcn-ui/separator';
+export { Separator } from './components/shadcn-ui/separator';
 export * from './components/shadcn-ui/sonner';
 export { Slider as ShadCnSlider } from './components/shadcn-ui/slider';
 export { Switch as ShadCnSwitch } from './components/shadcn-ui/switch';

@@ -1,10 +1,17 @@
-import { useSetting } from '@papi/frontend/react';
+import { useDialogCallback, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { Canon, VerseRef } from '@sillsdev/scripture';
-import { Checklist, Label, ScriptureReference, Spinner } from 'platform-bible-react';
+import {
+  BOOK_SELECTOR_STRING_KEYS,
+  BookSelectionMode,
+  BookSelector,
+  Checklist,
+  Label,
+  ScriptureReference,
+  Spinner,
+} from 'platform-bible-react';
 import { getChaptersForBook } from 'platform-bible-utils';
 import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import BookSelector, { BookSelectionMode } from './book-selector.component';
 
 export type BookSelectionStatus = {
   [bookId: string]: boolean;
@@ -40,6 +47,25 @@ export default function ConfigureChecks({
   const [startChapter, setStartChapter] = useState<number>(1);
   const [endChapter, setEndChapter] = useState<number>(chapterCount);
   const currentBookId = useMemo(() => Canon.bookNumberToId(scrRef.bookNum), [scrRef]);
+
+  const [bookSelectorLocalizedStrings] = useLocalizedStrings(
+    useMemo(() => {
+      return Array.from(BOOK_SELECTOR_STRING_KEYS);
+    }, []),
+  );
+
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(
+      () => [
+        '%webView_configureChecks_checks%',
+        '%webView_configureChecks_loadingChecks%',
+        '%webView_configureChecks_activeRanges%',
+        '%webView_bookSelector_selectBooks%',
+        '%webView_bookSelector_selectBooks_prompt%',
+      ],
+      [],
+    ),
+  );
 
   const toggleShouldUseCurrentBook = (newMode: string) => {
     if (newMode === BookSelectionMode.CURRENT_BOOK) {
@@ -98,6 +124,24 @@ export default function ConfigureChecks({
     );
   }, [activeRanges]);
 
+  const selectBooks = useDialogCallback(
+    'platform.selectBooks',
+    useMemo(
+      () => ({
+        prompt: localizedStrings['%webView_bookSelector_selectBooks_prompt%'],
+        title: localizedStrings['%webView_bookSelector_selectBooks%'],
+        selectedBookIds,
+      }),
+      [localizedStrings, selectedBookIds],
+    ),
+    useCallback(
+      (newSelectedBooks) => {
+        if (newSelectedBooks) handleSelectBooks(newSelectedBooks);
+      },
+      [handleSelectBooks],
+    ),
+  );
+
   const noAvailableChecks = useMemo(() => availableChecks.length === 0, [availableChecks]);
   const singleEmptyCheck = useMemo(
     () => availableChecks.length === 1 && availableChecks[0].checkId === '',
@@ -109,28 +153,32 @@ export default function ConfigureChecks({
       {noAvailableChecks || singleEmptyCheck ? (
         <div className="configure-checks-loader">
           <Spinner />
-          <Label>Loading checks</Label>
+          <Label>{localizedStrings['%webView_configureChecks_loadingChecks%']}</Label>
         </div>
       ) : (
         <Checklist
           className="configure-checks-check-names"
-          legend="Checks"
+          legend={localizedStrings['%webView_configureChecks_checks%']}
           listItems={availableChecks.map((check) => check.checkDescription)}
           selectedListItems={selectedChecks}
           handleSelectListItem={handleSelectCheck}
         />
       )}
       <fieldset className="configure-checks-books">
+        <legend>
+          <Label>{localizedStrings['%webView_configureChecks_activeRanges%']}</Label>
+        </legend>
         <BookSelector
           handleBookSelectionModeChange={toggleShouldUseCurrentBook}
           currentBookName={Canon.bookIdToEnglishName(currentBookId)}
+          onSelectBooks={selectBooks}
           selectedBookIds={selectedBookIds}
-          handleSelectBooks={handleSelectBooks}
           chapterCount={chapterCount}
           handleSelectStartChapter={setStartChapter}
           handleSelectEndChapter={setEndChapter}
           startChapter={startChapter}
           endChapter={endChapter}
+          localizedStrings={bookSelectorLocalizedStrings}
         />
       </fieldset>
     </div>

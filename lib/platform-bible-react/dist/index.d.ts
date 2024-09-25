@@ -4,6 +4,7 @@ import { SnackbarCloseReason, SnackbarOrigin } from '@mui/material';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import { PopoverProps } from '@radix-ui/react-popover';
+import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SeparatorPrimitive from '@radix-ui/react-separator';
 import * as SliderPrimitive from '@radix-ui/react-slider';
@@ -195,6 +196,40 @@ export type BookChapterControlProps = {
 	handleSubmit: (scrRef: ScriptureReference) => void;
 };
 export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export type ChapterRangeSelectorProps = {
+	startChapter: number;
+	endChapter: number;
+	handleSelectStartChapter: (chapter: number) => void;
+	handleSelectEndChapter: (chapter: number) => void;
+	isDisabled?: boolean;
+	chapterCount: number;
+};
+export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare enum BookSelectionMode {
+	CURRENT_BOOK = "current book",
+	CHOOSE_BOOKS = "choose books"
+}
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const BOOK_SELECTOR_STRING_KEYS: readonly [
+	"%webView_bookSelector_currentBook%",
+	"%webView_bookSelector_choose%",
+	"%webView_bookSelector_chooseBooks%"
+];
+export type BookSelectorLocalizedStrings = {
+	[localizedInventoryKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+export type BookSelectorProps = ChapterRangeSelectorProps & {
+	handleBookSelectionModeChange: (newMode: BookSelectionMode) => void;
+	currentBookName: string;
+	onSelectBooks: () => void;
+	selectedBookIds: string[];
+	localizedStrings: BookSelectorLocalizedStrings;
+};
+export function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -216,14 +251,14 @@ export declare function DataTable<TData, TValue>({ columns, data, enablePaginati
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
- * localized strings and pass them into the localizedStrings prop of the Inventory component
+ * localized strings and pass them into the localizedStrings prop of this component
  */
 export declare const INVENTORY_STRING_KEYS: readonly [
 	"%webView_inventory_all%",
 	"%webView_inventory_approved%",
 	"%webView_inventory_unapproved%",
 	"%webView_inventory_unknown%",
-	"%webView_inventory_scope_book%",
+	"%webView_platformScripture_currentBook%",
 	"%webView_inventory_scope_chapter%",
 	"%webView_inventory_scope_verse%",
 	"%webView_inventory_filter_text%",
@@ -288,6 +323,112 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Ite
  * @returns Column that shows the status of the related inventory items.
  */
 export declare const inventoryStatusColumn: (statusLabel: string, statusChangeHandler: (items: string[], status: Status) => void) => ColumnDef<ItemData>;
+export type TabKeyValueContent = {
+	key: string;
+	value: string;
+	content: React$1.ReactNode;
+};
+export type NavigationContentSearchProps = {
+	/** List of values and keys for each tab this component should provide */
+	tabList: TabKeyValueContent[];
+	/** Handler to run when the value of the search bar changes */
+	onSearch: (searchQuery: string) => void;
+	/** Optional placeholder for the search bar */
+	searchPlaceholder?: string;
+	/** Optional title to include in the header */
+	headerTitle?: string;
+	/** Optional flag to make the search bar appear full width */
+	isSearchBarFullWidth?: boolean;
+	/** Text direction ltr or rtl */
+	direction?: "ltr" | "rtl";
+};
+export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Information (e.g., a checking error or some other type of "transient" annotation) about something
+ * noteworthy at a specific place in an instance of the Scriptures.
+ */
+export type ScriptureItemDetail = ScriptureSelection & {
+	/**
+	 * Text of the error, note, etc. In the future, we might want to support something more than just
+	 * text so that a JSX element could be provided with a link or some other controls related to the
+	 * issue being reported.
+	 */
+	detail: string;
+};
+/**
+ * A uniquely identifiable source of results that can be displayed in the ScriptureResultsViewer.
+ * Generally, the source will be a particular Scripture check, but there may be other types of
+ * sources.
+ */
+export type ResultsSource = {
+	/**
+	 * Uniquely identifies the source.
+	 *
+	 * @type {string}
+	 */
+	id: string;
+	/**
+	 * Name (potentially localized) of the source, suitable for display in the UI.
+	 *
+	 * @type {string}
+	 */
+	displayName: string;
+};
+export type ScriptureSrcItemDetail = ScriptureItemDetail & {
+	/** Source/type of detail. Can be used for grouping. */
+	source: ResultsSource;
+};
+/**
+ * Represents a set of results keyed by Scripture reference. Generally, the source will be a
+ * particular Scripture check, but this type also allows for other types of uniquely identifiable
+ * sources.
+ */
+export type ResultsSet = {
+	/**
+	 * The backing source associated with this set of results.
+	 *
+	 * @type {ResultsSource}
+	 */
+	source: ResultsSource;
+	/**
+	 * Array of Scripture item details (messages keyed by Scripture reference).
+	 *
+	 * @type {ScriptureItemDetail[]}
+	 */
+	data: ScriptureItemDetail[];
+};
+export type ScriptureResultsViewerColumnInfo = {
+	/** Optional header to display for the Reference column. Default value: 'Scripture Reference'. */
+	scriptureReferenceColumnName?: string;
+	/** Optional text to display to refer to the Scripture book group. Default value: 'Scripture Book'. */
+	scriptureBookGroupName?: string;
+	/** Optional header to display for the Type column. Default value: 'Type'. */
+	typeColumnName?: string;
+	/** Optional header to display for the Details column. Default value: 'Details' */
+	detailsColumnName?: string;
+};
+export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
+	/** Groups of ScriptureItemDetail objects from particular sources (e.g., Scripture checks) */
+	sources: ResultsSet[];
+	/** Flag indicating whether to display column headers. Default is false. */
+	showColumnHeaders?: boolean;
+	/** Flag indicating whether to display source column. Default is false. */
+	showSourceColumn?: boolean;
+	/** Callback function to notify when a row is selected */
+	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
+	/** Text direction ltr or rtl */
+	direction?: "ltr" | "rtl";
+};
+/**
+ * Component to display a combined list of detailed items from one or more sources, where the items
+ * are keyed primarily by Scripture reference. This is particularly useful for displaying a list of
+ * results from Scripture checks, but more generally could be used to display any "results" from any
+ * source(s). The component allows for grouping by Scripture book, source, or both. By default, it
+ * displays somewhat "tree-like" which allows it to be more horizontally compact and intuitive. But
+ * it also has the option of displaying as a traditional table with column headings (with or without
+ * the source column showing).
+ */
+export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, direction, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a {@link ScrollGroupId} or `undefined` for
@@ -341,15 +482,57 @@ export type ScrollGroupSelectorProps = {
 };
 /** Selector component for choosing a scroll group */
 export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
-export type ChapterRangeSelectorProps = {
-	startChapter: number;
-	endChapter: number;
-	handleSelectStartChapter: (chapter: number) => void;
-	handleSelectEndChapter: (chapter: number) => void;
-	isDisabled?: boolean;
-	chapterCount: number;
+/** Props for the SettingsList component, currently just children */
+export type SettingsListProps = React$1.PropsWithChildren;
+/**
+ * SettingsList component is a wrapper for list items. Rendered with a formatted div
+ *
+ * @param children To populate the list with
+ * @returns Formatted div encompassing the children
+ */
+export declare function SettingsList({ children }: SettingsListProps): import("react/jsx-runtime").JSX.Element;
+/** Props for SettingsListItem component */
+export type SettingsListItemProps = React$1.PropsWithChildren & {
+	/** Primary text of the list item */
+	primary: string;
+	/** Optional text of the list item */
+	secondary?: string | undefined;
+	/** Optional boolean to display a message if the children aren't loaded yet. Defaults to false */
+	isLoading?: boolean;
+	/** Optional message to display if isLoading */
+	loadingMessage?: string;
 };
-export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * SettingsListItem component is a common list item. Rendered with a formatted div
+ *
+ * @param primary Primary text of the list item
+ * @param secondary Optional secondary text of the list item
+ * @param isLoading Optional, to display a message if the action component isn't generated yet,
+ *   defaults to false
+ * @param children The action component(s) to provide for this item
+ * @param loadingMessage Optional, message to display if isLoading
+ * @returns Formatted div encompassing the list item content
+ */
+export declare function SettingsListItem({ primary, secondary, children, isLoading, loadingMessage, }: SettingsListItemProps): import("react/jsx-runtime").JSX.Element;
+/** Props for SettingsListHeader component */
+export type SettingsListHeaderProps = {
+	/** The primary text of the list header */
+	primary: string;
+	/** Optional secondary text of the list header */
+	secondary?: string | undefined;
+	/** Optional boolean to include a separator underneath the secondary text. Defaults to false */
+	includeSeparator?: boolean;
+};
+/**
+ * SettingsListHeader component displays text above the list
+ *
+ * @param primary The primary text of the list header
+ * @param secondary Optional secondary text of the list header
+ * @param includeSeparator Optional boolean to include a separator underneath the secondary text.
+ *   Defaults to false
+ * @returns Formatted div with list header content
+ */
+export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
 export declare enum LabelPosition {
 	After = "after",
 	Before = "before",
@@ -689,92 +872,6 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
-/**
- * Information (e.g., a checking error or some other type of "transient" annotation) about something
- * noteworthy at a specific place in an instance of the Scriptures.
- */
-export type ScriptureItemDetail = ScriptureSelection & {
-	/**
-	 * Text of the error, note, etc. In the future, we might want to support something more than just
-	 * text so that a JSX element could be provided with a link or some other controls related to the
-	 * issue being reported.
-	 */
-	detail: string;
-};
-/**
- * A uniquely identifiable source of results that can be displayed in the ScriptureResultsViewer.
- * Generally, the source will be a particular Scripture check, but there may be other types of
- * sources.
- */
-export type ResultsSource = {
-	/**
-	 * Uniquely identifies the source.
-	 *
-	 * @type {string}
-	 */
-	id: string;
-	/**
-	 * Name (potentially localized) of the source, suitable for display in the UI.
-	 *
-	 * @type {string}
-	 */
-	displayName: string;
-};
-export type ScriptureSrcItemDetail = ScriptureItemDetail & {
-	/** Source/type of detail. Can be used for grouping. */
-	source: ResultsSource;
-};
-/**
- * Represents a set of results keyed by Scripture reference. Generally, the source will be a
- * particular Scripture check, but this type also allows for other types of uniquely identifiable
- * sources.
- */
-export type ResultsSet = {
-	/**
-	 * The backing source associated with this set of results.
-	 *
-	 * @type {ResultsSource}
-	 */
-	source: ResultsSource;
-	/**
-	 * Array of Scripture item details (messages keyed by Scripture reference).
-	 *
-	 * @type {ScriptureItemDetail[]}
-	 */
-	data: ScriptureItemDetail[];
-};
-export type ScriptureResultsViewerColumnInfo = {
-	/** Optional header to display for the Reference column. Default value: 'Scripture Reference'. */
-	scriptureReferenceColumnName?: string;
-	/** Optional text to display to refer to the Scripture book group. Default value: 'Scripture Book'. */
-	scriptureBookGroupName?: string;
-	/** Optional header to display for the Type column. Default value: 'Type'. */
-	typeColumnName?: string;
-	/** Optional header to display for the Details column. Default value: 'Details' */
-	detailsColumnName?: string;
-};
-export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
-	/** Groups of ScriptureItemDetail objects from particular sources (e.g., Scripture checks) */
-	sources: ResultsSet[];
-	/** Flag indicating whether to display column headers. Default is false. */
-	showColumnHeaders?: boolean;
-	/** Flag indicating whether to display source column. Default is false. */
-	showSourceColumn?: boolean;
-	/** Callback function to notify when a row is selected */
-	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
-	/** Text direction ltr or rtl */
-	direction?: "ltr" | "rtl";
-};
-/**
- * Component to display a combined list of detailed items from one or more sources, where the items
- * are keyed primarily by Scripture reference. This is particularly useful for displaying a list of
- * results from Scripture checks, but more generally could be used to display any "results" from any
- * source(s). The component allows for grouping by Scripture book, source, or both. By default, it
- * displays somewhat "tree-like" which allows it to be more horizontally compact and intuitive. But
- * it also has the option of displaying as a traditional table with column headings (with or without
- * the source column showing).
- */
-export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, direction, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed
@@ -919,77 +1016,6 @@ export type SnackbarProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function Snackbar({ autoHideDuration, id, isOpen, className, onClose, anchorOrigin, ContentProps, children, }: SnackbarProps): import("react/jsx-runtime").JSX.Element;
-export type TabKeyValueContent = {
-	key: string;
-	value: string;
-	content: React$1.ReactNode;
-};
-export type NavigationContentSearchProps = {
-	/** List of values and keys for each tab this component should provide */
-	tabList: TabKeyValueContent[];
-	/** Handler to run when the value of the search bar changes */
-	onSearch: (searchQuery: string) => void;
-	/** Optional placeholder for the search bar */
-	searchPlaceholder?: string;
-	/** Optional title to include in the header */
-	headerTitle?: string;
-	/** Optional flag to make the search bar appear full width */
-	isSearchBarFullWidth?: boolean;
-	/** Text direction ltr or rtl */
-	direction?: "ltr" | "rtl";
-};
-export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
-/** Props for the SettingsList component, currently just children */
-export type SettingsListProps = React$1.PropsWithChildren;
-/**
- * SettingsList component is a wrapper for list items. Rendered with a formatted div
- *
- * @param children To populate the list with
- * @returns Formatted div encompassing the children
- */
-export declare function SettingsList({ children }: SettingsListProps): import("react/jsx-runtime").JSX.Element;
-/** Props for SettingsListItem component */
-export type SettingsListItemProps = React$1.PropsWithChildren & {
-	/** Primary text of the list item */
-	primary: string;
-	/** Optional text of the list item */
-	secondary?: string | undefined;
-	/** Optional boolean to display a message if the children aren't loaded yet. Defaults to false */
-	isLoading?: boolean;
-	/** Optional message to display if isLoading */
-	loadingMessage?: string;
-};
-/**
- * SettingsListItem component is a common list item. Rendered with a formatted div
- *
- * @param primary Primary text of the list item
- * @param secondary Optional secondary text of the list item
- * @param isLoading Optional, to display a message if the action component isn't generated yet,
- *   defaults to false
- * @param children The action component(s) to provide for this item
- * @param loadingMessage Optional, message to display if isLoading
- * @returns Formatted div encompassing the list item content
- */
-export declare function SettingsListItem({ primary, secondary, children, isLoading, loadingMessage, }: SettingsListItemProps): import("react/jsx-runtime").JSX.Element;
-/** Props for SettingsListHeader component */
-export type SettingsListHeaderProps = {
-	/** The primary text of the list header */
-	primary: string;
-	/** Optional secondary text of the list header */
-	secondary?: string | undefined;
-	/** Optional boolean to include a separator underneath the secondary text. Defaults to false */
-	includeSeparator?: boolean;
-};
-/**
- * SettingsListHeader component displays text above the list
- *
- * @param primary The primary text of the list header
- * @param secondary Optional secondary text of the list header
- * @param includeSeparator Optional boolean to include a separator underneath the secondary text.
- *   Defaults to false
- * @returns Formatted div with list header content
- */
-export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type SwitchProps = {
@@ -1184,6 +1210,8 @@ export interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement
 }
 export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React$1.RefAttributes<HTMLInputElement>>;
 export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: import("class-variance-authority/dist/types").ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
+export declare const RadioGroup: React$1.ForwardRefExoticComponent<Omit<RadioGroupPrimitive.RadioGroupProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const RadioGroupItem: React$1.ForwardRefExoticComponent<Omit<RadioGroupPrimitive.RadioGroupItemProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 export declare const Select: React$1.FC<SelectPrimitive.SelectProps>;
 export declare const SelectGroup: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectGroupProps & React$1.RefAttributes<HTMLDivElement>>;
 export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectValueProps & React$1.RefAttributes<HTMLSpanElement>>;
