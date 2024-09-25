@@ -19,13 +19,10 @@
   // Places checkboxes in their given order, but does not shrink to one column when window is only wide enough for one
   .configure-checks-check-names {
     columns: 2;
-    column-fill: balance;
-    height: 50%;
-    width: 100%;
     overflow-y: auto;
   }
 
-  .configure-checks-books {
+  .configure-checks-card {
     width: 100%;
   }
 }

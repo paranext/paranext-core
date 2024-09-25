@@ -590,29 +590,27 @@ export type CheckboxProps = {
 /** Primary UI component for user interaction */
 export declare function Checkbox({ id, isChecked, labelText, labelPosition, isIndeterminate, isDefaultChecked, isDisabled, hasError, className, onChange, }: CheckboxProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
-	/** Optional string representing the id attribute of the fieldset element */
-	id?: string;
-	/** Optional string representing CSS class name(s) for styling */
-	className?: string;
-	/** Optional string representing legend for fieldset element */
-	legend?: string;
-	/** Array of strings representing the legend text for the fieldset element */
+	/** Array of strings representing the checkable items */
 	listItems: string[];
-	/** Array of strings representing items to be displayed as checkboxes in the checklist */
+	/** Array of strings representing the checked items */
 	selectedListItems: string[];
-	/** Function that takes a string param and is called when a checkbox item is selected or deselected */
+	/**
+	 * Function that is called when a checkbox item is selected or deselected
+	 *
+	 * @param item The string description for this item
+	 * @param selected True if selected, false if not selected
+	 */
 	handleSelectListItem: (item: string, selected: boolean) => void;
 	/**
-	 * Optional function that takes a string param and returns a string representing the label text
-	 * for the checkbox associated with that item
+	 * Optional function creates a label for a provided checkable item
+	 *
+	 * @param item
+	 * @returns A string representing the label text for the checkbox associated with that item
 	 */
 	createLabel?: (item: string) => string;
 };
-/**
- * Renders a list of checkboxes wrapped in a fieldset element. Each checkbox corresponds to an item
- * from the `listItems` array.
- */
-export function Checklist({ id, className, legend, listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+/** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
+export function Checklist({ listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
