@@ -3,7 +3,13 @@ import {
   LanguageStrings,
   ScrollGroupId,
 } from 'platform-bible-utils';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn-ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/shadcn-ui/select';
 
 const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
   [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',

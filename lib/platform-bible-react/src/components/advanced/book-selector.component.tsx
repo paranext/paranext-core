@@ -1,12 +1,12 @@
+import { Button } from '@/components/shadcn-ui/button';
+import { Label } from '@/components/shadcn-ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Canon } from '@sillsdev/scripture';
 import { LocalizedStringValue } from 'platform-bible-utils';
 import { useState } from 'react';
 import ChapterRangeSelector, {
   ChapterRangeSelectorProps,
 } from '../basics/chapter-range-selector.component';
-import { RadioGroup, RadioGroupItem } from '../shadcn-ui/radio-group';
-import { Label } from '../shadcn-ui/label';
-import { Button } from '../shadcn-ui/button';
 
 export enum BookSelectionMode {
   CURRENT_BOOK = 'current book',

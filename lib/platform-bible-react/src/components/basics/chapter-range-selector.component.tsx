@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import ComboBox from '@/components/basics/combo-box.component';
-import { Label } from '../shadcn-ui/label';
+import { Label } from '@/components/shadcn-ui/label';
 
 export type ChapterRangeSelectorProps = {
   startChapter: number;
