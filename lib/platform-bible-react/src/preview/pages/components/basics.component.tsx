@@ -9,21 +9,21 @@ import { HasDirection } from '@/preview/preview-components/direction-toggle.comp
 import ExampleAlerts from './basics/alert.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
+import ChapterRangeSelectorExample from './basics/chapter-range-example.component';
 import CheckboxExamples from './basics/checkbox.examples.component';
+import ChecklistExamples from './basics/checklist.examples.component';
 import ComboBoxExamples from './basics/combo-box.examples.component';
 import DropdownExamples from './basics/dropdown.examples.component';
 import InputExamples from './basics/input.examples.component';
+import RadioGroupExamples from './basics/radio-group.examples';
 import SelectExamples from './basics/select.examples.component';
 import SliderExamples from './basics/slider.examples.component';
+import SonnerExamples from './basics/sonner.examples.component';
+import SpinnerExamples from './basics/spinner.examples.component';
 import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
-import SpinnerExamples from './basics/spinner.examples.component';
-import ChapterRangeSelectorExample from './basics/chapter-range-example.component';
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
-import SonnerExamples from './basics/sonner.examples.component';
-import ChecklistExamples from './basics/checklist.examples.component';
-import RadioGroupExamples from './basics/radio-group.examples';
 
 function Basics({ direction }: HasDirection) {
   return (
