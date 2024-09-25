@@ -92,7 +92,9 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           className={cn('pr-w-[200px] pr-justify-between', className)}
           disabled={isDisabled}
         >
-          {value ? getOptionLabel(value) : buttonPlaceholder}
+          <span className="pr-overflow-hidden pr-text-ellipsis pr-whitespace-nowrap">
+            {value ? getOptionLabel(value) : buttonPlaceholder}
+          </span>
           <ChevronsUpDown className="pr-ms-2 pr-h-4 pr-w-4 pr-shrink-0 pr-opacity-50" />
         </Button>
       </PopoverTrigger>
