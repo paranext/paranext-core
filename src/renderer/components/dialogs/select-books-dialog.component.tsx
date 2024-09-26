@@ -32,7 +32,6 @@ function SelectBooksDialog({
       <div>{prompt}</div>
       <br />
       <Checklist
-        className="book-list"
         listItems={bookIds}
         createLabel={createBookLabel}
         handleSelectListItem={handleBookToggle}
