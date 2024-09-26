@@ -590,6 +590,10 @@ export type CheckboxProps = {
 /** Primary UI component for user interaction */
 export declare function Checkbox({ id, isChecked, labelText, labelPosition, isIndeterminate, isDefaultChecked, isDisabled, hasError, className, onChange, }: CheckboxProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
+	/** Optional string representing the id attribute of the Checklist */
+	id?: string;
+	/** Optional string representing CSS class name(s) for styling */
+	className?: string;
 	/** Array of strings representing the checkable items */
 	listItems: string[];
 	/** Array of strings representing the checked items */
@@ -604,13 +608,13 @@ export type ChecklistProps = {
 	/**
 	 * Optional function creates a label for a provided checkable item
 	 *
-	 * @param item
+	 * @param item The item for which a label is to be created
 	 * @returns A string representing the label text for the checkbox associated with that item
 	 */
 	createLabel?: (item: string) => string;
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
-export function Checklist({ listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+export function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
