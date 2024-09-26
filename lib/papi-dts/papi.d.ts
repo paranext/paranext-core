@@ -2541,6 +2541,8 @@ declare module 'papi-shared-types' {
      * localizes to English if it does not have a localization in a higher-priority locale.
      */
     'platform.interfaceLanguage': string[];
+    /** The color theme for the user interface */
+    'platform.theme': string;
     /**
      * Mementos managed in the dotnet process and used for interacting with PtxUtils. Mementos are
      * persisted objects containing some data. They are stored as xml strings.

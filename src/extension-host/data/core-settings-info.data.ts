@@ -1,3 +1,4 @@
+import { DEFAULT_THEME, THEMES } from '@renderer/theme';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
 import { isString, ScriptureReference, SettingsContribution } from 'platform-bible-utils';
 
@@ -15,6 +16,11 @@ export const platformSettings: SettingsContribution = {
       label: '%settings_platform_interfaceLanguage_label%',
       description: '%settings_platform_interfaceLanguage_description%',
       default: ['eng'],
+    },
+    'platform.theme': {
+      label: '%settings_platform_theme_label%',
+      description: '%settings_platform_theme_description%',
+      default: DEFAULT_THEME,
     },
     'platform.ptxUtilsMementoData': {
       label: '%settings_platform_ptxUtilsMementoData_label%',
@@ -56,6 +62,13 @@ const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'>
   );
 };
 
+const themeValidator: SettingValidator<'platform.theme'> = async (
+  newValue: string,
+): Promise<boolean> => {
+  if (typeof newValue === 'string' && THEMES.includes(newValue)) return true;
+  throw Error('Valid themes: <empty string>, dark, paratext-light, paratext-dark, system');
+};
+
 // TODO: validate that the values are xml strings. Maybe move this validator to dotnet?
 const serializableStringDictionarySettingValidator: SettingValidator<
   'platform.ptxUtilsMementoData' | 'platform.paratextDataLastRegistryDataCachedTimes'
@@ -67,6 +80,7 @@ const serializableStringDictionarySettingValidator: SettingValidator<
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
+  'platform.theme': themeValidator,
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
 };

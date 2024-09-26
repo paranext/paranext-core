@@ -1,4 +1,17 @@
-const THEME = ''; // currently available: '', 'dark', 'paratext-light', 'paratext-dark'
+export const DEFAULT_THEME = 'paratext'; // currently available: '', 'dark', 'paratext-light', 'paratext-dark'
+export const THEMES = ['', 'dark', 'paratext-light', 'paratext-dark', 'system'];
+
+export function getThemeFromLocalStorage(): string {
+  let theme = localStorage.getItem('theme') ?? DEFAULT_THEME;
+  if (theme === 'system') {
+    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : '';
+  }
+  return theme;
+}
+
+export function setThemeInLocalStorage(theme: string): void {
+  localStorage.setItem('theme', theme);
+}
 
 export const SCROLLBAR_STYLES = `
   ::-webkit-scrollbar {
@@ -109,5 +122,3 @@ export const MUI_OVERRIDES = `
     color: hsl(var(--foreground) / 0.5);
   }
 `;
-
-export default THEME;

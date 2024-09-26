@@ -65,7 +65,7 @@ import {
   TAB_TYPE_PROJECT_SETTINGS_TAB,
   TAB_TYPE_USER_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import THEME, { SCROLLBAR_STYLES, MUI_OVERRIDES } from '@renderer/theme';
+import { DEFAULT_THEME, SCROLLBAR_STYLES, MUI_OVERRIDES } from '@renderer/theme';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -985,7 +985,7 @@ export const getWebView = async (
               ${MUI_OVERRIDES}
             </style>
           </head>
-          <body class="${THEME}">
+          <body class="${DEFAULT_THEME}">
             <div id="root">
             </div>
             <script nonce="${srcNonce}">${reactWebView.content}

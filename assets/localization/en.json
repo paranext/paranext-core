@@ -33,6 +33,8 @@
   "%settings_platform_verseRef_description%": "Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and `useWebViewScrollGroupScrRef`",
   "%settings_platform_interfaceLanguage_label%": "Interface Language",
   "%settings_platform_interfaceLanguage_description%": "List of locales to use when localizing the interface. First in the list receives highest priority. 'en' (English) is always added at the end, so everything localizes to English if it does not have a localization in a higher-priority locale.",
+  "%settings_platform_theme_label%": "Theme",
+  "%settings_platform_theme_description%": "The color theme for the user interface",
   "%settings_platform_ptxUtilsMementoData_label%": "PtxUtils Memento Data",
   "%settings_platform_paratextDataLastRegistryDataCachedTimes_label%": "ParatextData Last Registry Data Cached Times",
   "%project_settings_platform_group1_label%": "Platform Settings",

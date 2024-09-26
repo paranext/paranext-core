@@ -9,8 +9,14 @@ import { startDialogService } from '@renderer/services/dialog.service-host';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
+import settingsService from '@shared/services/settings.service';
 import App from './app.component';
-import THEME, { MUI_OVERRIDES, SCROLLBAR_STYLES } from './theme';
+import {
+  getThemeFromLocalStorage,
+  MUI_OVERRIDES,
+  SCROLLBAR_STYLES,
+  setThemeInLocalStorage,
+} from './theme';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -33,6 +39,10 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   throw new Error(`${reasons}`);
 }
 
+async function subscribeToThemeChanges() {
+  return settingsService.subscribe('platform.theme', setThemeInLocalStorage);
+}
+
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
 // - They internally await other services when they need others in order to start
@@ -52,6 +62,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startWebViewService(),
       startDialogService(),
       startScrollGroupService(),
+      subscribeToThemeChanges(),
     );
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
@@ -66,7 +77,8 @@ if (!container) {
 const root = createRoot(container);
 root.render(<App />);
 
-if (THEME) window.document.body.classList.add(THEME);
+const theme = getThemeFromLocalStorage();
+if (theme) window.document.body.classList.add(theme);
 
 const scrollbarStyleSheet = document.createElement('style');
 scrollbarStyleSheet.textContent = SCROLLBAR_STYLES;
