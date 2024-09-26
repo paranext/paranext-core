@@ -31,12 +31,14 @@ function SelectBooksDialog({
     <div className="select-books-dialog">
       <div>{prompt}</div>
       <br />
-      <Checklist
-        listItems={bookIds}
-        createLabel={createBookLabel}
-        handleSelectListItem={handleBookToggle}
-        selectedListItems={selectedBookIds}
-      />
+      <div className="book-list">
+        <Checklist
+          listItems={bookIds}
+          createLabel={createBookLabel}
+          handleSelectListItem={handleBookToggle}
+          selectedListItems={selectedBookIds}
+        />
+      </div>
       <br />
       <div className="select-books-dialog-submit-button">
         <Button onClick={() => submitDialog(selectedBookIds)}>
