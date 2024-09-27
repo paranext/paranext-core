@@ -258,7 +258,7 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 	"%webView_inventory_approved%",
 	"%webView_inventory_unapproved%",
 	"%webView_inventory_unknown%",
-	"%webView_platformScripture_currentBook%",
+	"%webView_inventory_scope_currentBook%",
 	"%webView_inventory_scope_chapter%",
 	"%webView_inventory_scope_verse%",
 	"%webView_inventory_filter_text%",

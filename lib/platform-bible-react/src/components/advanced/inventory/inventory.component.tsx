@@ -27,7 +27,7 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_approved%',
   '%webView_inventory_unapproved%',
   '%webView_inventory_unknown%',
-  '%webView_platformScripture_currentBook%',
+  '%webView_inventory_scope_currentBook%',
   '%webView_inventory_scope_chapter%',
   '%webView_inventory_scope_verse%',
   '%webView_inventory_filter_text%',
@@ -189,7 +189,7 @@ export default function Inventory({
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
   const unapprovedItemsText = localizeString(localizedStrings, '%webView_inventory_unapproved%');
   const unknownItemsText = localizeString(localizedStrings, '%webView_inventory_unknown%');
-  const scopeBookText = localizeString(localizedStrings, '%webView_platformScripture_currentBook%');
+  const scopeBookText = localizeString(localizedStrings, '%webView_inventory_scope_currentBook%');
   const scopeChapterText = localizeString(localizedStrings, '%webView_inventory_scope_chapter%');
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
