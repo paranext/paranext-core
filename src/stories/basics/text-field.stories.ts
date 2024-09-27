@@ -6,14 +6,6 @@ const meta: Meta<typeof TextField> = {
   component: TextField,
   tags: ['autodocs'],
   argTypes: {
-    variant: {
-      options: [0, 1],
-      mapping: ['outlined', 'filled'],
-      control: {
-        type: 'select',
-        labels: ['Outlined', 'Filled'],
-      },
-    },
     helperText: { control: 'text' },
     label: { control: 'text' },
     placeholder: { control: 'text' },

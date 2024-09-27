@@ -1,0 +1,13 @@
+diff --git a/node_modules/@biblionexus-foundation/platform-editor/dist/index.d.ts b/node_modules/@biblionexus-foundation/platform-editor/dist/index.d.ts
+index 81f96c0..27838a0 100644
+--- a/node_modules/@biblionexus-foundation/platform-editor/dist/index.d.ts
++++ b/node_modules/@biblionexus-foundation/platform-editor/dist/index.d.ts
+@@ -5,7 +5,7 @@ import { LoggerBasic } from 'shared-react/plugins/logger-basic.model';
+ import { ScriptureReference } from 'platform-bible-utils';
+ import { SelectionRange } from 'shared-react/annotation/selection.model';
+ import { TextDirection } from 'shared-react/plugins/text-direction.model';
+-import { Usj } from '../../../utilities/src';
++import { Usj } from '@biblionexus-foundation/scripture-utilities';
+ import { UsjNodeOptions } from 'shared-react/nodes/scripture/usj/usj-node-options.model';
+ 
+ declare type Comment_2 = {

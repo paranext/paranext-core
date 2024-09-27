@@ -1,11 +1,14 @@
 #!/bin/sh
 . "$(dirname "$0")/_/husky.sh"
 
-echo "Running Lint check..."
-
+echo "Lint checking..."
 # generate papi.d.ts as part of lint:staged
 npm run lint:staged
 echo "Lint check finished"
+
+echo "Type checking..."
+npm run typecheck
+echo "Type check finished"
 
 echo "If the following fails run npm run editor:unlink"
 npx yalc check

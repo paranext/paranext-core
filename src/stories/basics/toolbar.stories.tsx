@@ -109,19 +109,8 @@ const menuLayoutWithIcons: LocalizedMainMenu = {
   ],
 };
 
-// Function to localize MultiColumnMenu and return Promise<Localized<MultiColumnMenu>>
-function localizeMenu(menu: MultiColumnMenu): Promise<Localized<MultiColumnMenu>> {
-  // Implement localization logic here
-  // For demonstration purposes, let's assume we're just converting keys to strings
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const localizedMenu: Localized<MultiColumnMenu> = menu as Localized<MultiColumnMenu>;
-
-  // Returning a resolved Promise with the localized menu
-  return Promise.resolve(localizedMenu);
-}
-
 function provideMenuData(isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>> {
-  return localizeMenu(isSupportAndDevelopment ? menuLayoutWithIcons : menuLayoutWithoutIcons);
+  return Promise.resolve(isSupportAndDevelopment ? menuLayoutWithIcons : menuLayoutWithoutIcons);
 }
 
 type Story = StoryObj<typeof Toolbar>;
