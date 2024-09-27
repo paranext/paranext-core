@@ -88,7 +88,7 @@ export default function BookSelector({
         <div className="pr-grid pr-grid-cols-[25%,25%,50%]">
           <div className="pr-flex pr-items-center">
             <RadioGroupItem value={BookSelectionMode.CURRENT_BOOK} />
-            <Label className="pr-ml-1">{`${currentBookText}:`}</Label>
+            <Label className="pr-ml-1">{currentBookText}</Label>
           </div>
           <Label className="pr-flex pr-items-center">{currentBookName}</Label>
           <div className="pr-flex pr-items-center pr-justify-end">
@@ -105,7 +105,7 @@ export default function BookSelector({
         <div className="pr-grid pr-grid-cols-[25%,50%,25%]">
           <div className="pr-flex pr-items-center">
             <RadioGroupItem value={BookSelectionMode.CHOOSE_BOOKS} />
-            <Label className="pr-ml-1">{`${chooseBooksText}:`}</Label>
+            <Label className="pr-ml-1">{chooseBooksText}</Label>
           </div>
           <Label className="pr-flex pr-items-center">
             {selectedBookIds.map((bookId: string) => Canon.bookIdToEnglishName(bookId)).join(', ')}
