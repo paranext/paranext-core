@@ -1,7 +1,6 @@
 import { testingSettingService } from '@extension-host/services/settings.service-host';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { SettingNames } from 'papi-shared-types';
-import { slice } from 'platform-bible-utils';
 
 const MOCK_SETTINGS_DATA = {
   'platform.interfaceLanguage': ['fre'],
@@ -60,16 +59,20 @@ jest.mock('@extension-host/data/core-settings-info.data', () => ({
     },
   },
 }));
-jest.mock('@shared/services/localization.service', () => ({
-  __esModule: true,
-  default: {
-    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
-      [localizeKey: string]: string;
-    }> {
-      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+jest.mock('@shared/services/localization.service', () => {
+  // eslint-disable-next-line global-require
+  const { slice } = require('platform-bible-utils');
+  return {
+    __esModule: true,
+    default: {
+      async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
+        [localizeKey: string]: string;
+      }> {
+        return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+      },
     },
-  },
-}));
+  };
+});
 
 test('Get verseRef returns default value', async () => {
   const result = await settingsProviderEngine.get('platform.verseRef');

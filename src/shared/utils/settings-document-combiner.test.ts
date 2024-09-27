@@ -1,4 +1,4 @@
-import { Localized, SettingsContribution, slice } from 'platform-bible-utils';
+import { Localized, SettingsContribution } from 'platform-bible-utils';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
 import {
@@ -7,16 +7,20 @@ import {
 } from '@shared/utils/settings-document-combiner-base';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 
-jest.mock('@shared/services/localization.service', () => ({
-  __esModule: true,
-  default: {
-    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
-      [localizeKey: string]: string;
-    }> {
-      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+jest.mock('@shared/services/localization.service', () => {
+  // eslint-disable-next-line global-require
+  const { slice } = require('platform-bible-utils');
+  return {
+    __esModule: true,
+    default: {
+      async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
+        [localizeKey: string]: string;
+      }> {
+        return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+      },
     },
-  },
-}));
+  };
+});
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 const platformSettings: SettingsContribution = {

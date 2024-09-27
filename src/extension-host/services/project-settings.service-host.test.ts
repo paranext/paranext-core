@@ -1,7 +1,6 @@
 import { testingProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { ProjectSettingValidator } from '@shared/services/project-settings.service-model';
-import { slice } from 'platform-bible-utils';
 
 jest.mock('@shared/services/network.service', () => ({
   ...jest.requireActual('@shared/services/network.service'),
@@ -32,16 +31,20 @@ jest.mock('@extension-host/data/core-project-settings-info.data', () => ({
     },
   },
 }));
-jest.mock('@shared/services/localization.service', () => ({
-  __esModule: true,
-  default: {
-    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
-      [localizeKey: string]: string;
-    }> {
-      return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+jest.mock('@shared/services/localization.service', () => {
+  // eslint-disable-next-line global-require
+  const { slice } = require('platform-bible-utils');
+  return {
+    __esModule: true,
+    default: {
+      async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
+        [localizeKey: string]: string;
+      }> {
+        return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
+      },
     },
-  },
-}));
+  };
+});
 
 describe('isValid', () => {
   it('should return true', async () => {

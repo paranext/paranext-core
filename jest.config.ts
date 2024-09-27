@@ -35,8 +35,16 @@ const config: Config = {
     ...packageInfo.workspaces.map((w) => `<rootDir>/${w}`),
   ],
   transform: {
-    '\\.(ts|tsx|js|jsx)$': 'ts-jest',
+    '\\.(ts|tsx|js|jsx)$': [
+      'ts-jest',
+      {
+        babelConfig: {
+          presets: ['@babel/preset-env'],
+        },
+      },
+    ],
   },
+  transformIgnorePatterns: ['/node_modules/(?!jsonpath)'],
 };
 
 export default config;
