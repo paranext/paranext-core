@@ -24,6 +24,7 @@ export {
   getLocalizeKeysForScrollGroupIds,
 } from './scripture-util';
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
+export { CHAPTER_TYPE, VERSE_TYPE } from './usj-document.model';
 
 // Functions
 export {
@@ -146,3 +147,5 @@ export type {
   UserStateContribution,
 } from './settings.model';
 export { projectSettingsDocumentSchema, settingsDocumentSchema } from './settings.model';
+export type { IUsjDocument, UsjContentLocation, VerseRefOffset } from './usj-document.model';
+export { default as UsjDocument } from './usj-document';
