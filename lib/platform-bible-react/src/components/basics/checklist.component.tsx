@@ -1,5 +1,5 @@
-import Checkbox from '../shadcn-ui/checkbox';
-import { Label } from '../shadcn-ui/label';
+import Checkbox from '@/components/shadcn-ui/checkbox';
+import { Label } from '@/components/shadcn-ui/label';
 
 export type ChecklistProps = {
   /** Optional string representing the id attribute of the fieldset element */
@@ -35,14 +35,14 @@ export default function Checklist({
   createLabel,
 }: ChecklistProps) {
   return (
-    <fieldset id={id} className={className}>
+    <fieldset id={id} className={`pr-twp ${className}`}>
       {legend && (
         <legend>
           <Label>{legend}</Label>
         </legend>
       )}
       {listItems.map((item) => (
-        <div className="pr-twp pr-m-2 pr-flex pr-items-center">
+        <div className="pr-m-2 pr-flex pr-items-center">
           <Checkbox
             key={item}
             className="pr-mr-2 pr-align-middle"
