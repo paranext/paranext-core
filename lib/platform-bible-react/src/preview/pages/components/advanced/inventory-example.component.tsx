@@ -25,7 +25,7 @@ const localizedStrings = {
   '%webView_inventory_filter_text%': 'Filter text...',
   '%webView_inventory_occurrences_table_header_occurrence%': 'Occurrence',
   '%webView_inventory_occurrences_table_header_reference%': 'Reference',
-  '%webView_platformScripture_currentBook%': 'Current book',
+  '%webView_inventory_scope_currentBook%': 'Current book',
   '%webView_inventory_scope_chapter%': 'Current chapter',
   '%webView_inventory_scope_verse%': 'Current verse',
   '%webView_inventory_unapproved%': 'Unapproved items',
