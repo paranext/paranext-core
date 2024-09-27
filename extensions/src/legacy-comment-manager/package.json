@@ -31,6 +31,7 @@
     "react-dom": ">=18.2.0"
   },
   "dependencies": {
+    "@biblionexus-foundation/scripture-utilities": "^0.0.4",
     "@sillsdev/scripture": "^2.0.1",
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },

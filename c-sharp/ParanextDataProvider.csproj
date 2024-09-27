@@ -19,6 +19,11 @@
     <PackageProjectUrl>https://github.com/paranext</PackageProjectUrl>
     <RepositoryUrl>https://github.com/paranext/paranext-core</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <!-- Uncomment the following lines to help with debugging into .NET core
+    <DebugType>portable</DebugType>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <SourceLink>true</SourceLink>
+    -->
   </PropertyGroup>
 
   <ItemGroup>

@@ -27,6 +27,7 @@ internal class LocalParatextProjects
 
     private static readonly List<string> s_paratextProjectInterfaces = [
         ProjectInterfaces.BASE,
+        ProjectInterfaces.LEGACY_COMMENT,
         ProjectInterfaces.USFM_BOOK,
         ProjectInterfaces.USFM_CHAPTER,
         ProjectInterfaces.USFM_VERSE,
