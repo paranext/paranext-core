@@ -162,7 +162,7 @@ export default function Setting({
         <Checkbox
           key={settingKey}
           onChange={() => debouncedHandleChange}
-          isDefaultChecked={setting}
+          defaultChecked={setting}
         />
       );
     else if (typeof setting === 'object')
