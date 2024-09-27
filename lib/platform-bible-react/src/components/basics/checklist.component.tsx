@@ -39,9 +39,8 @@ export default function Checklist({
   return (
     <div id={id} className={className}>
       {listItems.map((item) => (
-        <div className="pr-m-2 pr-flex pr-items-center">
+        <div key={item} className="pr-m-2 pr-flex pr-items-center">
           <Checkbox
-            key={item}
             className="pr-mr-2 pr-align-middle"
             checked={selectedListItems.includes(item)}
             onCheckedChange={(value: boolean) => handleSelectListItem(item, value)}
