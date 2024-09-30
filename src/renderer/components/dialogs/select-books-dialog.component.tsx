@@ -1,5 +1,5 @@
 import { Check } from 'lucide-react';
-import { Button, Checklist } from 'platform-bible-react';
+import { Button, Checklist, Label } from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import DIALOG_BASE from './dialog-base.data';
@@ -29,8 +29,7 @@ function SelectBooksDialog({
 
   return (
     <div className="select-books-dialog">
-      <div>{prompt}</div>
-      <br />
+      <Label>{prompt}</Label>
       <Checklist
         className="book-list"
         listItems={bookIds}
@@ -38,12 +37,12 @@ function SelectBooksDialog({
         handleSelectListItem={handleBookToggle}
         selectedListItems={selectedBookIds}
       />
-      <br />
-      <div className="select-books-dialog-submit-button">
-        <Button onClick={() => submitDialog(selectedBookIds)}>
-          <Check />
-        </Button>
-      </div>
+      <Button
+        className="select-books-dialog-submit-button"
+        onClick={() => submitDialog(selectedBookIds)}
+      >
+        <Check />
+      </Button>
     </div>
   );
 }
