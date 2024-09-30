@@ -4,6 +4,10 @@ import {
   BOOK_SELECTOR_STRING_KEYS,
   BookSelectionMode,
   BookSelector,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
   Checklist,
   Label,
   ScriptureReference,
@@ -156,31 +160,38 @@ export default function ConfigureChecks({
           <Label>{localizedStrings['%webView_configureChecks_loadingChecks%']}</Label>
         </div>
       ) : (
-        <Checklist
-          className="configure-checks-check-names"
-          legend={localizedStrings['%webView_configureChecks_checks%']}
-          listItems={availableChecks.map((check) => check.checkDescription)}
-          selectedListItems={selectedChecks}
-          handleSelectListItem={handleSelectCheck}
-        />
+        <Card className="configure-checks-card">
+          <CardHeader>
+            <CardTitle>{localizedStrings['%webView_configureChecks_checks%']}</CardTitle>
+          </CardHeader>
+          <CardContent className="configure-checks-check-names">
+            <Checklist
+              listItems={availableChecks.map((check) => check.checkDescription)}
+              selectedListItems={selectedChecks}
+              handleSelectListItem={handleSelectCheck}
+            />
+          </CardContent>
+        </Card>
       )}
-      <fieldset className="configure-checks-books">
-        <legend>
-          <Label>{localizedStrings['%webView_configureChecks_activeRanges%']}</Label>
-        </legend>
-        <BookSelector
-          handleBookSelectionModeChange={toggleShouldUseCurrentBook}
-          currentBookName={Canon.bookIdToEnglishName(currentBookId)}
-          onSelectBooks={selectBooks}
-          selectedBookIds={selectedBookIds}
-          chapterCount={chapterCount}
-          handleSelectStartChapter={setStartChapter}
-          handleSelectEndChapter={setEndChapter}
-          startChapter={startChapter}
-          endChapter={endChapter}
-          localizedStrings={bookSelectorLocalizedStrings}
-        />
-      </fieldset>
+      <Card className="configure-checks-card">
+        <CardHeader>
+          <CardTitle>{localizedStrings['%webView_configureChecks_activeRanges%']}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <BookSelector
+            handleBookSelectionModeChange={toggleShouldUseCurrentBook}
+            currentBookName={Canon.bookIdToEnglishName(currentBookId)}
+            onSelectBooks={selectBooks}
+            selectedBookIds={selectedBookIds}
+            chapterCount={chapterCount}
+            handleSelectStartChapter={setStartChapter}
+            handleSelectEndChapter={setEndChapter}
+            startChapter={startChapter}
+            endChapter={endChapter}
+            localizedStrings={bookSelectorLocalizedStrings}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 }
