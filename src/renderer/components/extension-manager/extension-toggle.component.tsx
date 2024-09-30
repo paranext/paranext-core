@@ -36,8 +36,8 @@ export default function ExtensionToggle({
       {children}
       <div className="switch-container">
         <Switch
-          isChecked={toggledExtensionNames.includes(extensionName)}
-          onChange={() => handleExtensionToggle(extensionName)}
+          checked={toggledExtensionNames.includes(extensionName)}
+          onCheckedChange={() => handleExtensionToggle(extensionName)}
         />
       </div>
     </ExtensionCard>
