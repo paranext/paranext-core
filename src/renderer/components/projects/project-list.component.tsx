@@ -163,7 +163,7 @@ export default function ProjectList({
       >
         {children}
         <ListItemText primary={project.name} />
-        {isCheckable && <Checkbox isChecked={isSelected(project)} />}
+        {isCheckable && <Checkbox checked={isSelected(project)} />}
       </ListItemButton>
     );
   };

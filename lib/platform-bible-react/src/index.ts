@@ -56,8 +56,6 @@ export {
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
-export { default as Checkbox } from './components/mui/checkbox.component';
-export type { CheckboxProps } from './components/mui/checkbox.component';
 export { default as Checklist } from './components/basics/checklist.component';
 export type { ChecklistProps } from './components/basics/checklist.component';
 export { default as ComboBox } from './components/basics/combo-box.component';
@@ -68,29 +66,16 @@ export type {
 } from './components/basics/combo-box.component';
 export { default as GridMenu } from './components/mui/grid-menu.component';
 export type { GridMenuProps, GridMenuInfo } from './components/mui/grid-menu.component';
-export { default as ContextMenu } from './components/mui/context-menu.component';
 export { default as HamburgerMenuButton } from './components/mui/hamburger-menu-button.component';
 export type { MultiColumnMenuProvider } from './components/mui/hamburger-menu-button.component';
 export { default as IconButton } from './components/mui/icon-button.component';
 export type { IconButtonProps } from './components/mui/icon-button.component';
-export { default as LabelPosition } from './components/mui/label-position.model';
 export { default as MenuItem } from './components/mui/menu-item.component';
 export type { CommandHandler, MenuItemListProps } from './components/mui/menu-item.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
-export { default as Slider } from './components/mui/slider.component';
-export type { SliderProps } from './components/mui/slider.component';
-export { default as Snackbar } from './components/mui/snackbar.component';
-export type {
-  AnchorOrigin,
-  CloseReason,
-  SnackbarContentProps,
-  SnackbarProps,
-} from './components/mui/snackbar.component';
 export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
-export { default as Switch } from './components/mui/switch.component';
-export type { SwitchProps } from './components/mui/switch.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
 export { default as Toolbar } from './components/mui/toolbar.component';
@@ -106,6 +91,7 @@ export {
   CardDescription,
   CardContent,
 } from './components/shadcn-ui/card';
+export { default as Checkbox } from './components/shadcn-ui/checkbox';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
@@ -113,8 +99,8 @@ export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
 export { Separator } from './components/shadcn-ui/separator';
 export * from './components/shadcn-ui/sonner';
-export { Slider as ShadCnSlider } from './components/shadcn-ui/slider';
-export { Switch as ShadCnSwitch } from './components/shadcn-ui/switch';
+export { Slider } from './components/shadcn-ui/slider';
+export { Switch } from './components/shadcn-ui/switch';
 export * from './components/shadcn-ui/table';
 export { Tabs, TabsList, TabsContent, TabsTrigger } from './components/shadcn-ui/tabs';
 export {
