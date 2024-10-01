@@ -405,9 +405,16 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
   nodeToVerseRefAndOffset(
     bookId: string,
     node: MarkerContent,
-    nodeParent: MarkerObject | MarkerContent[],
+    nodeParent: MarkerObject | MarkerContent[] | undefined,
   ): { verseRef: VerseRef; offset: number } | undefined {
-    const realParent = Array.isArray(nodeParent) ? this.parentMap.get(nodeParent) : nodeParent;
+    if (typeof node === 'string' && nodeParent === undefined)
+      throw new Error(`If "node" is a string, then "nodeParent" cannot be undefined`);
+
+    let realParent: MarkerObject | Usj | undefined;
+    // "node" cannot be a string if "nodeParent" is undefined
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (nodeParent === undefined) realParent = this.parentMap.get(node as MarkerObject);
+    else realParent = Array.isArray(nodeParent) ? this.parentMap.get(nodeParent) : nodeParent;
     if (realParent === undefined)
       throw new Error(`Cannot find parent for ${JSON.stringify(nodeParent)}`);
 

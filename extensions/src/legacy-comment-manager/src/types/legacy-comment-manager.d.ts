@@ -43,17 +43,17 @@ declare module 'legacy-comment-manager' {
 
   /** Provides comment data */
   export type LegacyCommentProjectInterfaceDataTypes = {
-    /** Gets the specified comments by ID or all comments */
-    Comment: DataProviderDataType<LegacyCommentSelector, LegacyComment[], LegacyComment[]>;
+    /** Called "Project Notes" in Paratext 9 */
+    Comments: DataProviderDataType<LegacyCommentSelector, LegacyComment[], LegacyComment[]>;
   };
 
-  /** Provides Scripture data in USFM format by book */
+  /** Provides comments from project team members in a way that is compatible with Paratext 9 */
   export type ILegacyCommentProjectDataProvider =
     IProjectDataProvider<LegacyCommentProjectInterfaceDataTypes> & {
-      /** Gets the comment with the provided commentId or all comments */
-      getComment(selector: LegacyCommentSelector): Promise<LegacyComment[]>;
+      /** Gets the specified comments by ID or all comments in given portion of scripture */
+      getComments(selector: LegacyCommentSelector): Promise<LegacyComment[]>;
       /** Sets all comments or just the comment with the given ID */
-      setComment(
+      setComments(
         selector: LegacyCommentSelector,
         comments: LegacyComment[],
       ): Promise<DataProviderUpdateInstructions<LegacyCommentProjectInterfaceDataTypes>>;
@@ -65,7 +65,7 @@ declare module 'legacy-comment-manager' {
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
-      subscribeComment(
+      subscribeComments(
         selector: LegacyCommentSelector,
         callback: (comments: LegacyComment[]) => void,
         options?: DataProviderSubscriberOptions,
@@ -77,6 +77,6 @@ declare module 'papi-shared-types' {
   import type { ILegacyCommentProjectDataProvider } from 'legacy-comment-manager';
 
   export interface ProjectDataProviderInterfaces {
-    'legacyCommentManager.Comment': ILegacyCommentProjectDataProvider;
+    'legacyCommentManager.comments': ILegacyCommentProjectDataProvider;
   }
 }

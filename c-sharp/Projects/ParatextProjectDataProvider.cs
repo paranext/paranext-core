@@ -66,8 +66,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         Getters.Add("getVersePlainText", GetVersePlainText);
 
-        Getters.Add("getComment", GetComment);
-        Setters.Add("setComment", SetComment);
+        Getters.Add("getComments", GetComments);
+        Setters.Add("setComments", SetComments);
 
         Getters.Add("getSetting", GetProjectSetting);
         Setters.Add("setSetting", SetProjectSetting);
@@ -209,7 +209,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #region Comments
 
-    public ResponseToRequest GetComment(string jsonSelector)
+    public ResponseToRequest GetComments(string jsonSelector)
     {
         CommentSelector selector =
             jsonSelector.DeserializeFromJson<CommentSelector>()
@@ -235,7 +235,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     // For now, only allow adding comments, not changing or removing existing PT 9 comments
     // Too much risk of data loss while there are other bugs related to comments floating around
-    public ResponseToRequest SetComment(string jsonSelector, string commentData)
+    public ResponseToRequest SetComments(string jsonSelector, string commentData)
     {
         // The selector doesn't really make sense for what we're trying to do here, but it's required. Just ignore it.
 

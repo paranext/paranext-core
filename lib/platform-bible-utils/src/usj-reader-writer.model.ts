@@ -91,13 +91,15 @@ export interface IUsjReaderWriter {
    *
    * @param bookId ID of the book represented by this USJ data
    * @param node JSON object representing the location of the VerseRef and offset
-   * @param nodeParent JSON object that owns the `content` array that includes the child
-   * @returns VerseRef and offset representing the location of `child`, if one could be found
+   * @param nodeParent JSON object that owns the `content` array that includes `node`. If
+   *   'undefined' is provided then the `UsjReaderWriter` will attempt to lookup the parent of
+   *   `node`. The lookup will always fail and throw an error if `node` is a string.
+   * @returns VerseRef and offset representing the location of `node`, if one could be found
    */
   nodeToVerseRefAndOffset(
     bookId: string,
     node: MarkerContent,
-    nodeParent: MarkerObject | MarkerContent[],
+    nodeParent: MarkerObject | MarkerContent[] | undefined,
   ): { verseRef: VerseRef; offset: number } | undefined;
   /**
    * Remove all nodes from this USJ data that match a given search function.

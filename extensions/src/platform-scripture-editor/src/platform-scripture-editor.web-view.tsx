@@ -322,9 +322,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   const [legacyComments, setLegacyComments] = useProjectData(
-    'legacyCommentManager.Comment',
+    'legacyCommentManager.comments',
     projectId,
-  ).Comment(
+  ).Comments(
     useMemo(() => {
       return { bookId: Canon.bookNumberToId(scrRef.bookNum), chapterNum: scrRef.chapterNum };
     }, [scrRef]),
