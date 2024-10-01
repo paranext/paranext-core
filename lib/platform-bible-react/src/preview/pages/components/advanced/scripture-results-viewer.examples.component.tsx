@@ -1,6 +1,6 @@
 import ScriptureResultsViewer from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 import { Button } from '@/components/shadcn-ui/button';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { useState } from 'react';
 import generateRandomCheckingData from '../data-sources/generate-random-checking-data';
 

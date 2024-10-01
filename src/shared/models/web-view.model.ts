@@ -1,4 +1,7 @@
-import { LocalizeKey } from 'platform-bible-utils';
+import type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+// Used in JSDoc link
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { ScriptureReference, ScrollGroupId, LocalizeKey } from 'platform-bible-utils';
 
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {
@@ -34,7 +37,7 @@ type WebViewDefinitionBase = {
   /**
    * Url of image to show on the title bar of the tab
    *
-   * Defaults to Platform.Bible logo
+   * Defaults to the software's standard logo.
    */
   iconUrl?: string;
   /**
@@ -51,6 +54,11 @@ type WebViewDefinitionBase = {
    * operations related to this web view.
    */
   projectId?: string;
+  /**
+   * With which scroll group this web view is synced or the {@link ScriptureReference} this web view
+   * is focusing independently of a scroll group
+   */
+  scrollGroupScrRef?: ScrollGroupScrRef;
   /**
    * General object to store unique state for this webview.
    *
@@ -141,7 +149,7 @@ type WebViewDefinitionBase = {
   /**
    * Whether to allow this iframe to open separate windows with window.open and anchor tags with
    * `target="_blank"`. Setting this to true adds `allow-popups` to the WebView iframe's [sandbox
-   * attribute] (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+   * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
    * to `false`
    */
   allowPopups?: boolean;
@@ -230,6 +238,7 @@ export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'title',
   'tooltip',
   'projectId',
+  'scrollGroupScrRef',
 ] as const;
 
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
@@ -299,6 +308,44 @@ export type UseWebViewStateHook = <T>(
   resetWebViewState: () => void,
 ];
 
+// This hook is found in `use-web-view-scroll-group-scr-ref.hook.ts`
+// Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
+// such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
+// destructured members of object types, so using WebViewProps as
+// `{ useWebViewScrollGroupScrRef }: WebViewProps` was not carrying the annotations out to the new
+// `useWebViewScrollGroupScrRef` variable. One day, this may work, so we can fix this JSDoc back to using real @
+/**
+ * JSDOC SOURCE UseWebViewScrollGroupScrRefHook
+ *
+ * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
+ * value and a function to set the value for both the {@link ScriptureReference} and the
+ * {@link ScrollGroupId} with which this web view is synced (using this web view's
+ * `scrollGroupScrRef` property). Use similarly to `useState`.
+ *
+ * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
+ *
+ * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
+ *
+ * - `scrRef`: The current value for the Scripture reference this web view is on
+ * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
+ *   synced to a scroll group, sets the scroll group's Scripture reference
+ * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
+ *   synced to a scroll group, this is `undefined`
+ * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
+ *
+ * _＠example_
+ *
+ * ```typescript
+ * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
+ * ```
+ */
+export type UseWebViewScrollGroupScrRefHook = () => [
+  scrRef: ScriptureReference,
+  setScrRef: (newScrRef: ScriptureReference) => void,
+  scrollGroupId: ScrollGroupId | undefined,
+  setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
+];
+
 // Note: the following comment uses ＠, not the actual @ character, to hackily provide @param and
 // such on this type. It seem that, for some reason, JSDoc does not carry these annotations on
 // destructured members of object types. See comment above UseWebViewStateHook for more info.
@@ -338,6 +385,8 @@ export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) 
 export type WebViewProps = SavedWebViewDefinition & {
   /** JSDOC DESTINATION UseWebViewStateHook */
   useWebViewState: UseWebViewStateHook;
+  /** JSDOC DESTINATION UseWebViewScrollGroupScrRefHook */
+  useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
   /** JSDOC DESTINATION UpdateWebViewDefinition */
   updateWebViewDefinition: UpdateWebViewDefinition;
 };

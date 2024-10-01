@@ -12,7 +12,7 @@ type PlatformTabTitleProps = {
   webViewType?: `${string}.${string}`;
   /** Id of the tab this title is on */
   tabId: string;
-  /** Url to image to show on the tab. Defaults to Platform.Bible logo */
+  /** Url to image to show on the tab. Defaults to the software's standard logo. */
   iconUrl?: string;
   /** Text to show on the tab */
   text: string | LocalizeKey;
@@ -23,7 +23,7 @@ type PlatformTabTitleProps = {
 /**
  * Custom tab title for all tabs in Platform
  *
- * @param iconUrl Url to image to show on the tab. Defaults to Platform.Bible logo
+ * @param iconUrl Url to image to show on the tab. Defaults to the software's standard logo.
  * @param text The text to show on the tab title
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  */

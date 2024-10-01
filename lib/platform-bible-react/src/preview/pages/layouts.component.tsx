@@ -4,9 +4,10 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import WindowOrTabExample from './layouts/window.layout.component';
 import Dashboard5Examples from './layouts/dashboard5.layout.component';
+import ToolbarExamples from './layouts/toolbar.layout.component';
 
 function Layouts({ direction }: HasDirection) {
   return (
@@ -15,6 +16,7 @@ function Layouts({ direction }: HasDirection) {
       <VerticalTabs defaultValue="Window" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="Window">Window or Tab</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Toolbar">MUI Toolbar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Settings">Settings (n/a)</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Shadcn Dashboard 5">Shadcn Dashboard 5</VerticalTabsTrigger>
         </VerticalTabsList>
@@ -25,6 +27,10 @@ function Layouts({ direction }: HasDirection) {
             <WindowOrTabExample direction={direction} />
           </div>
           <WindowOrTabExample direction={direction} />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Toolbar">
+          <ToolbarExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Settings">TODO</VerticalTabsContent>

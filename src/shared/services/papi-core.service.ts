@@ -43,10 +43,12 @@ export type {
 } from '@shared/services/localization.service-model';
 export type { NetworkObjectDetails } from '@shared/models/network-object.model';
 export type { SettingValidator } from '@shared/services/settings.service-model';
+export type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 export type {
   GetWebViewOptions,
   SavedWebViewDefinition,
   UseWebViewStateHook,
+  UseWebViewScrollGroupScrRefHook,
   WebViewContentType,
   WebViewDefinition,
   WebViewProps,

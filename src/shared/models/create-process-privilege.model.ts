@@ -19,6 +19,10 @@ import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
  * processes created this way in packaged builds. Child processes are not killed when running in
  * development.
  *
+ * This method is essentially a layer over the [`spawn`
+ * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
+ * the Node `child_process` module. Please see its documentation for more information.
+ *
  * @example The following example assumes there are subdirectories in the extension's files for
  * win32, linux, and macOS that include appropriate executables.
  *
@@ -61,6 +65,10 @@ export type PlatformSpawn = (
  * Run {@link fork} to create a child process. The platform will automatically kill all child
  * processes created this way in packaged builds. Child processes are not killed when running in
  * development.
+ *
+ * This method is essentially a layer over the [`fork`
+ * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
+ * the Node `child_process` module. Please see its documentation for more information.
  *
  * @example The following example assumes there is a file named `childProcess.js` in the extension's
  * `assets` subdirectory

@@ -79,92 +79,47 @@
 
   /* using color palette https://supercolorpalette.com/?scp=G0-hsl-99827A-E7DDD0-FEF4E7-FEFAF1-FFFFFF-D8E9E3-719892-07463D-0A433D-083030-041616-000000-85DBB8-F2F52E-CD3737 */
   .paratext-light {
-    --background: 0, 0%, 100%;
-    --foreground: 0, 0%, 0%;
-    --muted: 33.9, 32.4%, 86.1%;
-    --muted-foreground: 15.5, 13.2%, 53.9%;
-    --popover: 0, 0%, 100%;
-    --popover-foreground: 0, 0%, 0%;
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --muted: 33.9 32.4% 86.1%;
+    --muted-foreground: 15.5 13.2% 53.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
     --card: 0 0% 100%;
-    --card-foreground: 0, 0%, 0%;
+    --card-foreground: 0 0% 0%;
     --border: 220 13% 91%;
-    --input: 161.3, 26.7%, 88.2%;
-    --primary: 173.4, 82.1%, 15.3%;
-    --primary-foreground: 40, 85.7%, 97.3%;
-    --secondary: 161.3, 26.7%, 88.2%;
-    --secondary-foreground: 173.4, 82.1%, 15.3%;
-    --accent: 161.3, 26.7%, 88.2%;
-    --accent-foreground: 173.4, 82.1%, 15.3%;
-    --destructive: 0, 60%, 51%;
+    --input: 161.3 26.7% 88.2%;
+    --primary: 173.4 82.1% 15.3%;
+    --primary-foreground: 40 85.7% 97.3%;
+    --secondary: 161.3 26.7% 88.2%;
+    --secondary-foreground: 173.4 82.1% 15.3%;
+    --accent: 161.3 26.7% 88.2%;
+    --accent-foreground: 173.4 82.1% 15.3%;
+    --destructive: 0 60% 51%;
     --destructive-foreground: 210 20% 98%;
-    --ring: 13.5, 13.2%, 53.9%;
-
-    /* work around for hsl(var(--xx) / 0.y) not working */
-    /* stylelint-disable selector-class-pattern */
-    .hover\:pr-bg-primary\/90:hover {
-      background-color: hsl(173, 82%, 15%, 0.9);
-    }
-
-    .hover\:pr-bg-secondary\/80:hover {
-      background-color: hsl(161, 26%, 88%, 0.8);
-    }
-
-    .hover\:pr-bg-destructive\/90:hover {
-      background-color: hsl(0, 60%, 51%, 0.9);
-    }
-
-    .pr-bg-muted\/50,
-    .hover\:pr-bg-muted\/50:hover {
-      background-color: hsl(33.9, 32.4%, 86.1%, 0.5);
-    }
-
-    .pr-bg-muted\/40 {
-      background-color: hsl(33.9, 32.4%, 86.1%, 0.4);
-    }
+    --ring: 13.5 13.2% 53.9%;
   }
 
   .paratext-dark {
-    --background: 0, 0%, 0%;
-    --foreground: 0, 0%, 100%;
-    --muted: 15.5, 13.2%, 53.9%;
-    --muted-foreground: 33.9, 32.4%, 86.1%;
-    --popover: 180, 71.4%, 5%;
-    --popover-foreground: 0, 0%, 100%;
+    --background: 0 0% 0%;
+    --foreground: 0 0% 100%;
+    --muted: 15.5 13.2% 53.9%;
+    --muted-foreground: 33.9 32.4% 86.1%;
+    --popover: 180 71.4% 5%;
+    --popover-foreground: 0 0% 100%;
     --card: 0 0% 0%;
-    --card-foreground: 0, 0%, 100%;
+    --card-foreground: 0 0% 100%;
     --border: 220 13% 20%;
     --input: 220 13% 20%;
-    --primary: 161.3, 26.7%, 88.2%;
-    --primary-foreground: 173.4, 82.1%, 15.3%;
-    --secondary: 180, 71.4%, 11%;
-    --secondary-foreground: 161.3, 26.7%, 88.2%;
-    --accent: 180, 71.4%, 11%;
-    --accent-foreground: 161.3, 26.7%, 88.2%;
-    --destructive: 0, 60%, 51%;
+    --primary: 161.3 26.7% 88.2%;
+    --primary-foreground: 173.4 82.1% 15.3%;
+    --secondary: 180 71.4% 11%;
+    --secondary-foreground: 161.3 26.7% 88.2%;
+    --accent: 180 71.4% 11%;
+    --accent-foreground: 161.3 26.7% 88.2%;
+    --destructive: 0 60% 51%;
     --destructive-foreground: 210 20% 98%;
-    --ring: 13.5, 13.2%, 53.9%;
-
-    /* work around for hsl(var(--xx) / 0.y) not working */
-    .hover\:pr-bg-primary\/90:hover {
-      background-color: hsl(161.3, 26.7%, 88.2%, 0.9);
-    }
-
-    .hover\:pr-bg-secondary\/80:hover {
-      background-color: hsl(180, 71.4%, 11%, 0.8);
-    }
-
-    .hover\:pr-bg-destructive\/90:hover {
-      background-color: hsl(0, 60%, 51%, 0.9);
-    }
-
-    .pr-bg-muted\/50,
-    .hover\:pr-bg-muted\/50:hover {
-      background-color: hsl(15.5, 13.2%, 53.9%, 0.5);
-    }
-
-    .pr-bg-muted\/40 {
-      background-color: hsl(15.5, 13.2%, 53.9%, 0.4);
-    }
+    --ring: 13.5 13.2% 53.9%;
   }
 }
 

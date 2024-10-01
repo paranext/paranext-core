@@ -3,7 +3,7 @@ import { AlertCircle, Terminal } from 'lucide-react';
 
 export default function ExampleAlerts() {
   return (
-    <>
+    <div className="pr-flex pr-flex-col pr-gap-2">
       <Alert>
         <Terminal className="pr-h-4 pr-w-4" />
         <AlertTitle>Heads up!</AlertTitle>
@@ -24,6 +24,6 @@ export default function ExampleAlerts() {
       <Alert className="pr-max-w-64">
         Alert! With nothing else in it, this looks like a Card 🤔
       </Alert>
-    </>
+    </div>
   );
 }

@@ -4,14 +4,16 @@ import { isString, ScriptureReference, SettingsContribution } from 'platform-bib
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = {
   label: '%settings_platform_settingName_group1%',
-  description: '%settings_platform_group1_description%',
+  description: '%settings_platform_description_group1%',
   properties: {
     'platform.verseRef': {
       label: '%settings_platform_settingName_verseRef%',
+      description: '%settings_platform_verseRef_description%',
       default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
       label: '%settings_platform_settingName_interfaceLanguage%',
+      description: '%settings_platform_description_interfaceLanguage%',
       default: ['eng'],
     },
     'platform.ptxUtilsMementoData': {

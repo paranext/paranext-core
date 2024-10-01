@@ -14,7 +14,7 @@ jest.mock('@extension-host/data/core-project-settings-info.data', () => ({
   __esModule: true,
   platformProjectSettings: {
     label: '%project_settings_platform_settingName_group1%',
-    description: '%project_settings_platform_group1_description%',
+    description: '%project_settings_platform_description_group1%',
     properties: {
       'platform.fullName': {
         label: '%project_settings_platform_settingName_fullName%',

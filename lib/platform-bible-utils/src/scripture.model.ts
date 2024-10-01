@@ -31,3 +31,14 @@ export type ScriptureSelection = {
   start: ScriptureNode | ScriptureTextAnchor;
   end?: ScriptureNode | ScriptureTextAnchor;
 };
+
+/**
+ * An identifier corresponding to a Scripture reference shared by a group of Scripture reference
+ * consumers.
+ *
+ * For example, a few web views that share a Scroll Group Id would all change Scripture Reference
+ * together.
+ *
+ * These are generally expected to be non-negative numbers (starting at 0).
+ */
+export type ScrollGroupId = number;

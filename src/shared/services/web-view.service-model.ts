@@ -4,7 +4,7 @@ import {
   WebViewId,
   WebViewType,
 } from '@shared/models/web-view.model';
-import { AddWebViewEvent, Layout } from '@shared/models/docking-framework.model';
+import { Layout } from '@shared/models/docking-framework.model';
 import { PlatformEvent } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
 
@@ -19,6 +19,9 @@ import { serializeRequestType } from '@shared/utils/util';
 export interface WebViewServiceType {
   /** Event that emits with webView info when a webView is added */
   onDidAddWebView: PlatformEvent<AddWebViewEvent>;
+
+  /** Event that emits with webView info when a webView is updated */
+  onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
 
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and
@@ -61,5 +64,22 @@ export const EVENT_NAME_ON_DID_ADD_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidAddWebView',
 );
+
+/** Event emitted when webViews are created */
+export type AddWebViewEvent = {
+  webView: SavedWebViewDefinition;
+  layout: Layout;
+};
+
+/** Name to use when creating a network event that is fired when webViews are updated */
+export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW = serializeRequestType(
+  CATEGORY_WEB_VIEW,
+  'onDidUpdateWebView',
+);
+
+/** Event emitted when webViews are updated */
+export type UpdateWebViewEvent = {
+  webView: SavedWebViewDefinition;
+};
 
 export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';

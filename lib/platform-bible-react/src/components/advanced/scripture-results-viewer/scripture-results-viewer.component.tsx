@@ -35,11 +35,10 @@ import '@/components/advanced/scripture-results-viewer/scripture-results-viewer.
 import {
   compareScrRefs,
   formatScrRef,
-  ScriptureReference,
   ScriptureSelection,
   scrRefToBBBCCCVVV,
 } from 'platform-bible-utils';
-import { MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
@@ -199,6 +198,26 @@ function getColumns(
     },
   ];
 }
+
+const toRefOrRange = (scriptureSelection: ScriptureSelection) => {
+  if (!('offset' in scriptureSelection.start))
+    throw new Error('No offset available in range start');
+  if (scriptureSelection.end && !('offset' in scriptureSelection.end))
+    throw new Error('No offset available in range end');
+  const { offset: offsetStart } = scriptureSelection.start;
+  let offsetEnd: number = 0;
+  if (scriptureSelection.end) ({ offset: offsetEnd } = scriptureSelection.end);
+  if (
+    !scriptureSelection.end ||
+    compareScrRefs(scriptureSelection.start, scriptureSelection.end) === 0
+  )
+    return `${scrRefToBBBCCCVVV(scriptureSelection.start)}+${offsetStart}`;
+  return `${scrRefToBBBCCCVVV(scriptureSelection.start)}+${offsetStart}-${scrRefToBBBCCCVVV(scriptureSelection.end)}+${offsetEnd}`;
+};
+
+const getRowKey = (row: ScriptureSrcItemDetail) =>
+  `${toRefOrRange({ start: row.start, end: row.end })} ${row.source.displayName} ${row.detail}`;
+
 /**
  * Component to display a combined list of detailed items from one or more sources, where the items
  * are keyed primarily by Scripture reference. This is particularly useful for displaying a list of
@@ -221,30 +240,18 @@ export default function ScriptureResultsViewer({
 }: ScriptureResultsViewerProps) {
   const [grouping, setGrouping] = useState<GroupingState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: scrBookColId, desc: false }]);
-  const [data, setData] = useState<ScriptureSrcItemDetail[]>(() => {
-    // Initial data extraction from sources
-    return sources.flatMap((source) => {
-      const src = source.source;
-      return source.data.map((item) => ({
-        ...item,
-        source: src,
-      }));
-    });
-  });
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
-  useEffect(() => {
-    // Update data whenever sources change
-    setData(() => {
-      return sources.flatMap((source) => {
-        const src = source.source;
+  const scriptureResults = useMemo(
+    () =>
+      sources.flatMap((source) => {
         return source.data.map((item) => ({
           ...item,
-          source: src,
+          source: source.source,
         }));
-      });
-    });
-  }, [sources]);
+      }),
+    [sources],
+  );
 
   const columns = useMemo(
     () =>
@@ -271,22 +278,8 @@ export default function ScriptureResultsViewer({
     }
   }, [grouping]);
 
-  const toRefOrRange = useCallback(
-    (start: ScriptureReference, end: ScriptureReference | undefined) => {
-      if (!end || compareScrRefs(start, end) === 0) return `${scrRefToBBBCCCVVV(start)}`;
-      return `${scrRefToBBBCCCVVV(start)}-${scrRefToBBBCCCVVV(end)}`;
-    },
-    [],
-  );
-
-  const getRowKey = useCallback(
-    (row: ScriptureSrcItemDetail) =>
-      `${toRefOrRange(row.start, row.end)} ${row.source} ${row.detail}`,
-    [toRefOrRange],
-  );
-
   const table = useReactTable({
-    data,
+    data: scriptureResults,
     columns,
     state: {
       grouping,
@@ -311,11 +304,11 @@ export default function ScriptureResultsViewer({
       const selectedRows = table.getSelectedRowModel().rowsById;
       const keys = Object.keys(selectedRows);
       if (keys.length === 1) {
-        const selectedRow = data.find((row) => getRowKey(row) === keys[0]) || undefined;
+        const selectedRow = scriptureResults.find((row) => getRowKey(row) === keys[0]) || undefined;
         if (selectedRow) onRowSelected(selectedRow);
       }
     }
-  }, [rowSelection, data, getRowKey, onRowSelected, table]);
+  }, [rowSelection, scriptureResults, onRowSelected, table]);
 
   // Define possible grouping options
   const scrBookGroupName = scriptureBookGroupName ?? defaultScrBookGroupName;

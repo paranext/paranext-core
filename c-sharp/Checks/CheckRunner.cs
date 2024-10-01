@@ -183,7 +183,7 @@ internal class CheckRunner(PapiClient papiClient)
 
         if (updateEvents.Count > 0)
             SendDataUpdateEvent(updateEvents);
-        return ResponseToRequest.Succeeded(updateEvents);
+        return ResponseToRequest.Succeeded();
     }
 
     private ResponseToRequest DisableCheck(string checkId, string? projectId)

@@ -1,5 +1,5 @@
-import DoneIcon from '@mui/icons-material/Done';
-import { Button, Checklist } from 'platform-bible-react';
+import { Check } from 'lucide-react';
+import { Button, Checklist, Label } from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { LocalizeKey } from 'platform-bible-utils';
@@ -30,8 +30,7 @@ function SelectBooksDialog({
 
   return (
     <div className="select-books-dialog">
-      <div>{prompt}</div>
-      <br />
+      <Label>{prompt}</Label>
       <Checklist
         className="book-list"
         listItems={bookIds}
@@ -39,12 +38,12 @@ function SelectBooksDialog({
         handleSelectListItem={handleBookToggle}
         selectedListItems={selectedBookIds}
       />
-      <br />
-      <div className="select-books-dialog-submit-button">
-        <Button onClick={() => submitDialog(selectedBookIds)}>
-          <DoneIcon />
-        </Button>
-      </div>
+      <Button
+        className="select-books-dialog-submit-button"
+        onClick={() => submitDialog(selectedBookIds)}
+      >
+        <Check />
+      </Button>
     </div>
   );
 }

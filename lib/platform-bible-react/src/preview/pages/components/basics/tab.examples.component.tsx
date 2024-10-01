@@ -6,7 +6,7 @@ import {
 } from '@/components/basics/tabs-vertical';
 import { Button } from '@/components/shadcn-ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 
 export default function TabExamples({ direction }: HasDirection) {
   return (

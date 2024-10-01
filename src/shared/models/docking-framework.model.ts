@@ -1,10 +1,6 @@
 import { MutableRefObject, ReactNode } from 'react';
 import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
-import {
-  SavedWebViewDefinition,
-  WebViewDefinition,
-  WebViewDefinitionUpdateInfo,
-} from '@shared/models/web-view.model';
+import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
 import { LocalizeKey } from 'platform-bible-utils';
 
 /**
@@ -35,7 +31,7 @@ export type TabInfo = SavedTabInfo & {
   /**
    * Url of image to show on the title bar of the tab
    *
-   * Defaults to Platform.Bible logo
+   * Defaults to the software's standard logo.
    */
   tabIconUrl?: string;
   /**
@@ -119,12 +115,6 @@ interface PanelLayout {
 
 /** Information about how a Paranext tab fits into the dock layout */
 export type Layout = TabLayout | FloatLayout | PanelLayout;
-
-/** Event emitted when webViews are created */
-export type AddWebViewEvent = {
-  webView: SavedWebViewDefinition;
-  layout: Layout;
-};
 
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;

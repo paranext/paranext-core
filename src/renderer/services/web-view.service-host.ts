@@ -33,7 +33,6 @@ import {
   SavedWebViewDefinitionOmittedKeys,
 } from '@shared/models/web-view.model';
 import {
-  AddWebViewEvent,
   Layout,
   OnLayoutChangeRCDock,
   PapiDockLayout,
@@ -47,8 +46,11 @@ import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
 import {
+  AddWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
+  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  UpdateWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
 import networkObjectService from '@shared/services/network-object.service';
@@ -63,6 +65,7 @@ import {
   TAB_TYPE_PROJECT_SETTINGS_TAB,
   TAB_TYPE_USER_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
+import THEME, { SCROLLBAR_STYLES, MUI_OVERRIDES } from '@renderer/theme';
 
 /** Emitter for when a webview is added */
 const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
@@ -71,6 +74,20 @@ const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
 
 /** Event that emits with webView info when a webView is added */
 export const onDidAddWebView = onDidAddWebViewEmitter.event;
+
+/** Emitter for when a webview is updated */
+const onDidUpdateWebViewEmitter = createNetworkEventEmitter<UpdateWebViewEvent>(
+  EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+);
+
+/** Event that emits with webView info when a webView is added */
+export const onDidUpdateWebView = onDidUpdateWebViewEmitter.event;
+
+/**
+ * Alias for `window.open` because `window.open` is deleted to prevent web views from accessing it.
+ * Do not give web views access to this function
+ */
+export const openWindow = window.open.bind(window);
 
 // #region Security
 
@@ -630,7 +647,7 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
 // #region Web view definitions
 
 /**
- * Updates the WebView with the specified ID with the specified properties
+ * Updates the WebView with the specified ID with the specified properties and sends an update event
  *
  * @param webViewId The ID of the WebView to update
  * @param webViewDefinitionUpdateInfo Properties to update on the WebView. Any unspecified
@@ -643,7 +660,22 @@ export function updateWebViewDefinitionSync(
   webViewId: string,
   webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
 ): boolean {
-  return getDockLayoutSync().updateWebViewDefinition(webViewId, webViewDefinitionUpdateInfo);
+  const didUpdateWebView = getDockLayoutSync().updateWebViewDefinition(
+    webViewId,
+    webViewDefinitionUpdateInfo,
+  );
+  if (didUpdateWebView) {
+    const webView = getSavedWebViewDefinitionSync(webViewId);
+    if (!webView) {
+      logger.warn(
+        `Did not find a web view for id ${webViewId} immediately after updating that web view. Investigate`,
+      );
+    } else
+      onDidUpdateWebViewEmitter.emit({
+        webView,
+      });
+  }
+  return didUpdateWebView;
 }
 
 /**
@@ -889,10 +921,11 @@ export const getWebView = async (
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
   window.resetWebViewState = (stateKey) => { resetWebViewStateById('${webView.id}', stateKey) };
   window.useWebViewState = window.parent.useWebViewState.bind(window);
+  window.useWebViewScrollGroupScrRef = window.parent.useWebViewScrollGroupScrRef.bind(window);
   var getSavedWebViewDefinitionById = window.parent.getSavedWebViewDefinitionById;
-  window.getSavedWebViewDefinition = () => { return getSavedWebViewDefinitionById('${webView.id}')}
+  window.getSavedWebViewDefinition = () => { return getSavedWebViewDefinitionById('${webView.id}')};
   var updateWebViewDefinitionById = window.parent.updateWebViewDefinitionById;
-  window.updateWebViewDefinition = (webViewDefinitionUpdateInfo) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo)}
+  window.updateWebViewDefinition = (webViewDefinitionUpdateInfo) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo)};
   window.fetch = papi.fetch;
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
@@ -917,7 +950,7 @@ export const getWebView = async (
       // Add wrapping to turn a plain string into an iframe
       webViewContent = webView.content.includes('<html')
         ? webView.content
-        : `<html><head></head><body>${webView.content}</body></html>`;
+        : `<html><head><style>${SCROLLBAR_STYLES}</style><style>${MUI_OVERRIDES}</style></head><body>${webView.content}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
@@ -945,8 +978,14 @@ export const getWebView = async (
             </style>`
                 : ''
             }
+            <style>
+              ${SCROLLBAR_STYLES}
+            </style>
+            <style>
+              ${MUI_OVERRIDES}
+            </style>
           </head>
-          <body>
+          <body class="${THEME}">
             <div id="root">
             </div>
             <script nonce="${srcNonce}">${reactWebView.content}
@@ -955,31 +994,38 @@ export const getWebView = async (
                 const container = document.getElementById('root');
                 const root = createRoot(container);
 
-                function renderRoot() {
+                function renderRoot(savedDefinition) {
                   // Set up WebViewProps to pass into the WebView component
-                  const savedWebViewDefinition = window.getSavedWebViewDefinition();
+                  const savedWebViewDefinition = savedDefinition ?? window.getSavedWebViewDefinition();
+
+                  if (!savedWebViewDefinition)
+                    throw new Error(
+                      'renderRoot error! getSavedWebViewDefinition returned undefined for web view ${webView.id}! This is unexpected and will cause issues. Please investigate.'
+                    );
 
                   const webViewProps = {
                     ...savedWebViewDefinition,
                     useWebViewState: window.useWebViewState,
-                    updateWebViewDefinition: updateWebViewDefinitionAndRender,
+                    useWebViewScrollGroupScrRef: window.useWebViewScrollGroupScrRef,
+                    updateWebViewDefinition: window.updateWebViewDefinition,
                   };
 
                   root.render(React.createElement(globalThis.webViewComponent, webViewProps));
                 }
 
-                function updateWebViewDefinitionAndRender(...params) {
-                  const didSuccessfullyUpdate = window.updateWebViewDefinition(...params);
-
-                  if (didSuccessfullyUpdate)
-                    renderRoot();
-
-                  return didSuccessfullyUpdate;
-                }
+                const unsubscribeUpdateWebView = window.papi.webViews.onDidUpdateWebView(
+                  ({ webView }) => {
+                    if (webView.id === '${webView.id}')
+                      renderRoot(webView);
+                  },
+                );
 
                 renderRoot();
 
-                window.addEventListener('unload', () => {root.unmount()});
+                window.addEventListener('unload', () => {
+                  root.unmount();
+                  unsubscribeUpdateWebView();
+                });
               }
 
               if (document.readyState === 'loading')
@@ -1087,7 +1133,7 @@ export const getWebView = async (
     ${imports}
     </script>${substring(webViewContent, headEnd + 1)}`;
 
-  const updatedWebView: WebViewTabProps = {
+  const finalWebView: WebViewTabProps = {
     ...webView,
     contentType,
     content: webViewContent,
@@ -1096,14 +1142,18 @@ export const getWebView = async (
     allowedFrameSources,
   };
 
-  const updatedLayout = (await getDockLayout()).addWebViewToDock(updatedWebView, layout);
+  const finalLayout = (await getDockLayout()).addWebViewToDock(finalWebView, layout);
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
-  if (updatedLayout)
+  if (finalLayout)
     onDidAddWebViewEmitter.emit({
-      webView: convertWebViewDefinitionToSaved(updatedWebView),
-      layout: updatedLayout,
+      webView: convertWebViewDefinitionToSaved(finalWebView),
+      layout: finalLayout,
+    });
+  else
+    onDidUpdateWebViewEmitter.emit({
+      webView: convertWebViewDefinitionToSaved(finalWebView),
     });
 
   return webView.id;
@@ -1249,6 +1299,7 @@ export const initialize = () => {
 
 const papiWebViewService: WebViewServiceType = {
   onDidAddWebView,
+  onDidUpdateWebView,
   getWebView,
   getSavedWebViewDefinition,
 };

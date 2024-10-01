@@ -110,7 +110,7 @@ export default function Setting({
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
   const handleChangeSetting = async (event: ChangeEvent<HTMLInputElement>) => {
-    let newValue: UserSettingValues | ProjectSettingValues;
+    let newValue: unknown;
 
     if (event.target.type === 'checkbox') {
       newValue = event.target.checked;
@@ -163,7 +163,7 @@ export default function Setting({
         <Checkbox
           key={settingKey}
           onChange={() => debouncedHandleChange}
-          isDefaultChecked={setting}
+          defaultChecked={setting}
         />
       );
     else if (typeof setting === 'object')

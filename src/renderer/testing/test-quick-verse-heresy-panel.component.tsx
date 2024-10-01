@@ -34,7 +34,7 @@ export function TestQuickVerseHeresyPanel() {
 
   return (
     <div className="buttons-panel">
-      <div className="hello">
+      <div className="test-panel">
         <img
           src="papi-extension://quickVerse/assets/letter-q.png"
           alt="Q icon"

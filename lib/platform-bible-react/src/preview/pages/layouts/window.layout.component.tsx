@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
 

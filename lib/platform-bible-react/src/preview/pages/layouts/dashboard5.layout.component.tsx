@@ -50,7 +50,7 @@ import {
 } from '@/components/shadcn-ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { useState } from 'react';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 
 export default function Dashboard5Examples({ direction }: HasDirection) {
   const [progress, setProgress] = useState<number[]>([25]);

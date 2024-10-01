@@ -5,20 +5,25 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import ExampleAlerts from './basics/alert.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
+import ChapterRangeSelectorExample from './basics/chapter-range-example.component';
 import CheckboxExamples from './basics/checkbox.examples.component';
+import ChecklistExamples from './basics/checklist.examples.component';
 import ComboBoxExamples from './basics/combo-box.examples.component';
 import DropdownExamples from './basics/dropdown.examples.component';
 import InputExamples from './basics/input.examples.component';
+import RadioGroupExamples from './basics/radio-group.examples';
 import SelectExamples from './basics/select.examples.component';
 import SliderExamples from './basics/slider.examples.component';
+import SonnerExamples from './basics/sonner.examples.component';
+import SpinnerExamples from './basics/spinner.examples.component';
 import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
-import SpinnerExamples from './basics/spinner.examples.component';
+import ToggleGroupExamples from './basics/toggle-group.examples.component';
 
 function Basics({ direction }: HasDirection) {
   return (
@@ -29,17 +34,24 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Chapter Range Selector">
+            Chapter Range Selector
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Checklist">Checklist</VerticalTabsTrigger>
           <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Sonner">Sonner</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Spinner">Spinner</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Switch">Switch</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Toggle Group">Toggle Group</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Alert">
@@ -54,8 +66,16 @@ function Basics({ direction }: HasDirection) {
           <CardExamples direction={direction} />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Chapter Range Selector">
+          <ChapterRangeSelectorExample />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Checkbox">
           <CheckboxExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Checklist">
+          <ChecklistExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="ComboBox">
@@ -66,8 +86,15 @@ function Basics({ direction }: HasDirection) {
           <InputExamples />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Radio Group">
+          <RadioGroupExamples />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Search Bar">
-          <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} /> &larr; type here
+          <div className="pr-flex pr-gap-2">
+            <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} />{' '}
+            {direction === 'rtl' ? <>&rarr;</> : <>&larr;</>} type here
+          </div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Select">
@@ -76,6 +103,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Slider">
           <SliderExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Sonner">
+          <SonnerExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Spinner">
@@ -96,6 +127,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Table">
           <TableExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Toggle Group">
+          <ToggleGroupExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

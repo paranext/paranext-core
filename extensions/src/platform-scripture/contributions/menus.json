@@ -13,14 +13,34 @@
       }
     ]
   },
-  "defaultWebViewTopMenu": {
-    "columns": {},
-    "groups": {},
-    "items": []
-  },
-  "defaultWebViewContextMenu": {
-    "groups": {},
-    "items": []
-  },
-  "webViewMenus": {}
+  "webViewMenus": {
+    "platformScripture.configureChecks": {
+      "topMenu": {
+        "columns": {
+          "platformScripture.tools": {
+            "label": "%webView_platformScripture_tools%",
+            "order": 1
+          }
+        },
+        "groups": {
+          "platformScripture.checks": {
+            "column": "platformScripture.tools",
+            "order": 1
+          }
+        },
+        "items": [
+          {
+            "label": "%webView_platformScripture_showCheckResults%",
+            "group": "platformScripture.checks",
+            "order": 1,
+            "command": "platformScripture.showCheckResults"
+          }
+        ]
+      },
+      "contextMenu": {
+        "groups": {},
+        "items": []
+      }
+    }
+  }
 }

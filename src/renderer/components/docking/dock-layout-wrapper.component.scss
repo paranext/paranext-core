@@ -1,5 +1,27 @@
 @import '../../styles/vars';
 
+.dock {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.dock-dropdown,
+.dock-dropdown-menu,
+.dock-dropdown-menu-item {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+}
+
+.dock-dropdown-menu-item:hover {
+  background-color: hsl(var(--accent));
+}
+
+.dock-tab-close-btn:hover,
+.dock-tab:hover .dock-tab-close-btn,
+.dock-tab-close-btn:focus {
+  color: hsl(var(--foreground));
+}
+
 // #region GENERAL //////////////////////////////////////////////
 /* space around app and in between windows */
 .dock-divider {
@@ -7,11 +29,11 @@
 }
 
 .dock-hbox > .dock-divider {
-  transform: scaleX(6);
+  transform: scaleX(3);
 }
 
 .dock-vbox > .dock-divider {
-  transform: scaleY(6);
+  transform: scaleY(3);
 }
 
 .dock-layout {
@@ -50,7 +72,7 @@
 
 /* overriding default style for the shadow indicating that not all tabs are shown */
 .dock-nav-more::after {
-  box-shadow: inset -10px 0 8px -8px $color--text-dimmed;
+  box-shadow: inset -10px 0 8px -8px $color--shadow;
 }
 
 /* expand the invisible dock-tab-hit-area a bit to cover the border area above it */
@@ -159,7 +181,7 @@ $tab-bottom-rounding: $space--s;
 
 // Box shadow around active tab
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  box-shadow: 0 4px 20px 0 $color--text-dimmed;
+  box-shadow: 0 4px 20px 0 $color--shadow;
 }
 //*/
 // #endregion
@@ -186,6 +208,13 @@ $tab-bottom-rounding: $space--s;
 
 .dock-tab-close-btn {
   font-family: $font-family;
+  color: transparent;
+}
+
+.dock-tab.dock-tab-active {
+  .dock-tab-close-btn {
+    color: hsl(var(--foreground));
+  }
 }
 
 /* maximize - minimize control */

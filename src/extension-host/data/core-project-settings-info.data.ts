@@ -7,7 +7,7 @@ import { ProjectSettingsContribution } from 'platform-bible-utils';
 /** Info about all project settings built into core. Does not contain info for extensions' settings */
 export const platformProjectSettings: ProjectSettingsContribution = {
   label: '%project_settings_platform_settingName_group1%',
-  description: '%project_settings_platform_group1_description%',
+  description: '%project_settings_platform_description_group1%',
   properties: {
     'platform.name': {
       label: '%project_settings_platform_settingName_name%',

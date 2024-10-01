@@ -1,15 +1,13 @@
 import { WebViewProps } from '@papi/core';
-import { useLocalizedStrings, useProjectSetting, useSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { VerseRef } from '@sillsdev/scripture';
 import papi from '@papi/frontend';
-import CharacterInventory from './character-inventory.component';
-import RepeatedWordsInventory from './repeated-words-inventory.component';
-
-const defaultVerseRef: ScriptureReference = { bookNum: 1, chapterNum: 1, verseNum: 1 };
+import CharacterInventory from './checks/inventories/character-inventory.component';
+import RepeatedWordsInventory from './checks/inventories/repeated-words-inventory.component';
 
 /**
  * Get scripture text for the provided scope and reference for the specified projectId
@@ -47,15 +45,18 @@ const getText = async (
   throw new Error('Cannot get scripture for unknown scope');
 };
 
-global.webViewComponent = function InventoryWebView({ useWebViewState }: WebViewProps) {
+global.webViewComponent = function InventoryWebView({
+  projectId,
+  useWebViewState,
+  useWebViewScrollGroupScrRef,
+}: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => {
       return Array.from(INVENTORY_STRING_KEYS);
     }, []),
   );
-  const [projectId] = useWebViewState('projectId', '');
   const [webViewType] = useWebViewState('webViewType', '');
-  const [scriptureRef, setScriptureRef] = useSetting('platform.verseRef', defaultVerseRef);
+  const [scriptureRef, setScriptureRef] = useWebViewScrollGroupScrRef();
 
   let InventoryVariant;
   let validItemsSetting: keyof ProjectSettingTypes;
@@ -80,7 +81,7 @@ global.webViewComponent = function InventoryWebView({ useWebViewState }: WebView
   const [scope, setScope] = useState<Scope>('book');
   const [text] = usePromise(
     useCallback(
-      async () => getText(scope, scriptureRef, projectId),
+      async () => (projectId ? getText(scope, scriptureRef, projectId) : ''),
       [scope, scriptureRef, projectId],
     ),
     useMemo(() => '', []),
