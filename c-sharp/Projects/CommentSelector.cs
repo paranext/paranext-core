@@ -2,7 +2,7 @@ namespace Paranext.DataProvider.Projects;
 
 public class CommentSelector
 {
-    public string BookId { get; set; } = "GEN";
+    public string BookId { get; set; } = "";
 
     public int ChapterNum { get; set; } = 0;
 

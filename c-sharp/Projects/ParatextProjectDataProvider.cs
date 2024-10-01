@@ -230,7 +230,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         comments = comments.FindAll((c) => c.VerseRefStr.StartsWith(matchingVerseRef));
         if (!string.IsNullOrEmpty(selector.CommentId))
             comments = comments.FindAll((c) => selector.CommentId == c.Id);
-        Console.WriteLine($"Returning {comments.Count} comments: {string.Join(",", comments)}");
         return ResponseToRequest.Succeeded(comments);
     }
 
@@ -259,7 +258,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             if (thread.Comments.Find((c) => c.Id == ic.Id) != null)
                 continue;
             _commentManager.AddComment(ic);
-            Console.WriteLine($"Saving comment: {ic}");
             _commentManager.SaveUser(ic.User, false);
             madeChange = true;
         }

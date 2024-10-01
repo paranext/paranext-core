@@ -1,3 +1,4 @@
+// This was disabled so class functions that are similar in purpose can be grouped together
 /* eslint-disable @typescript-eslint/member-ordering */
 import {
   USJ_TYPE,
@@ -10,22 +11,30 @@ import { JSONPath } from 'jsonpath-plus';
 import {
   CHAPTER_TYPE,
   ContentJsonPath,
-  IUsjDocument,
+  IUsjReaderWriter,
   UsjContentLocation,
   VERSE_TYPE,
   VerseRefOffset,
-} from './usj-document.model';
+} from './usj-reader-writer.model';
 
 const NODE_TYPES_NOT_CONTAINING_VERSE_TEXT = ['figure', 'note', 'sidebar', 'table'];
+Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
 
 /** Map of USJ content arrays and objects inside content arrays to the content array owner */
 type UsjParentMap = Map<MarkerObject | MarkerContent[], MarkerObject | Usj>;
 
 /**
- * Stack of levels inside a USJ tree relative to a specific node. The top of the stack should always
- * be the root Usj object. `index` represents the index numeric inside of a level's content array.
+ * Represents information about where a USJ node resides in the `content` array of its parent.
+ * `parent` is a reference to the node's parent, and `index` represents the numeric index inside of
+ * `parent`'s content array.
  */
-type WorkingStack = { parent: MarkerObject | Usj; index: number }[];
+type StackItem = { parent: MarkerObject | Usj; index: number };
+
+/**
+ * Stack of levels inside a USJ tree relative to a specific node. The top of the stack should always
+ * be the root Usj object.
+ */
+type WorkingStack = StackItem[];
 
 /**
  * Chapter and verse numbers along with the node within a USJ object that represents the start of
@@ -42,8 +51,8 @@ type ChapterVerseNode = {
 };
 
 /** Represents USJ formatted scripture with helpful utilities for working with it */
-export default class UsjDocument implements IUsjDocument {
-  private usj: Usj;
+export default class UsjReaderWriter implements IUsjReaderWriter {
+  private readonly usj: Usj;
   private parentMapInternal: UsjParentMap | undefined;
 
   constructor(usj: Usj) {
@@ -77,7 +86,7 @@ export default class UsjDocument implements IUsjDocument {
 
   findParent<T>(jsonPathQuery: string): T | undefined {
     // Note that "resultType: 'parent'" does not work for queries
-    // This package allows for putting a carat at the end of the query to get a parent
+    // The "jsonpath-plus" package allows putting a carat at the end of a query to get a parent
     return this.findSingleValue(`${jsonPathQuery}^`);
   }
 
@@ -94,7 +103,7 @@ export default class UsjDocument implements IUsjDocument {
 
   // #region Parent Maps
 
-  private createParentMapInternal(
+  private static createParentMapInternal(
     obj: MarkerObject,
     parent: MarkerObject | Usj,
     parentMap: UsjParentMap,
@@ -103,27 +112,26 @@ export default class UsjDocument implements IUsjDocument {
     // USJ queries may return pointers to content arrays, not just objects
     if (obj.content) parentMap.set(obj.content, obj);
     obj.content?.forEach((child) => {
-      if (typeof child === 'object') this.createParentMapInternal(child, obj, parentMap);
+      if (typeof child === 'object') UsjReaderWriter.createParentMapInternal(child, obj, parentMap);
     });
   }
 
   /** Viewing a Usj object as a tree, build a map to walk up the tree */
-  private createUsjParentMap(): void {
+  private createUsjParentMap(): UsjParentMap {
     const parentMap = new Map<MarkerObject | MarkerContent[], MarkerObject | Usj>();
     if (this.usj.content) parentMap.set(this.usj.content, this.usj);
     this.usj.content.forEach((content) => {
-      if (typeof content === 'object') this.createParentMapInternal(content, this.usj, parentMap);
+      if (typeof content === 'object')
+        UsjReaderWriter.createParentMapInternal(content, this.usj, parentMap);
     });
-    this.parentMapInternal = parentMap;
+    return parentMap;
   }
 
   /** Create the parent map if it doesn't already exist and return it */
   private get parentMap(): UsjParentMap {
     if (this.parentMapInternal) return this.parentMapInternal;
-    this.createUsjParentMap();
-    // We know it isn't undefined because of the previous function call
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return this.parentMapInternal!;
+    this.parentMapInternal = this.createUsjParentMap();
+    return this.parentMapInternal;
   }
 
   // #endregion
@@ -214,9 +222,9 @@ export default class UsjDocument implements IUsjDocument {
    *
    *         A        <- Consider "A" to be `node`
    *     / / | \ \
-   *     B C D E F    <- Consider these to be MarketObjects inside the `content` array own by "A"
+   *     B C D E F    <- Consider these to be MarkerObjects inside the `content` array owned by "A"
    *     |  / \  |
-   *     G H   I J    <- Consider these to be MarketObjects inside their parents `content` arrays
+   *     G H   I J    <- Consider these to be MarkerObjects inside their parents `content` arrays
    *
    * If "F" did not exist in this example, then "E" would be returned. If "E" and "F" didn't exist,
    * then "I" would be returned.
@@ -262,20 +270,20 @@ export default class UsjDocument implements IUsjDocument {
       // Look at the node's children
       if (!skipNextNode && typeof nextNode === 'object' && (nextNode.content?.length ?? 0) > 0) {
         workingStack.push({ parent: nextNode, index: 0 });
+        // Same as `nextNode = nextNode.content[0];` without triggering 2 different eslint errors
         [nextNode] = nextNode.content;
       }
-
       // The node has no children, so look at the next sibling, or the parent's next sibling, etc. up the stack
       else {
         nextNode = undefined;
         while (workingStack.length > 0) {
           const nextLevel = workingStack.pop();
-          // We know that the content exists due to its presence in this data structure
+          // We know that `content` exists due to its presence in this data structure
           // eslint-disable-next-line no-type-assertion/no-type-assertion
           if (nextLevel && nextLevel.index + 1 < nextLevel.parent.content!.length) {
             nextLevel.index += 1;
             workingStack.push(nextLevel);
-            // We know that the content exists due to its presence in this data structure
+            // We know that `content` exists due to its presence in this data structure
             // eslint-disable-next-line no-type-assertion/no-type-assertion
             nextNode = nextLevel.parent.content![nextLevel.index];
             break;
@@ -302,7 +310,7 @@ export default class UsjDocument implements IUsjDocument {
     // Levels in the tree are represented as a stack, so the last item is the current node's parent
     const workingStack = this.createWorkingStack(node);
 
-    return UsjDocument.findNextMatchingNodeUsingWorkingStack(
+    return UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       node,
       workingStack,
       skipTypes,
@@ -315,7 +323,7 @@ export default class UsjDocument implements IUsjDocument {
   // #region Node -> JSONPath
 
   nodeToJsonPath(node: MarkerObject): ContentJsonPath {
-    return UsjDocument.convertWorkingStackToJsonPath(this.createWorkingStack(node));
+    return UsjReaderWriter.convertWorkingStackToJsonPath(this.createWorkingStack(node));
   }
 
   // #endregion
@@ -386,7 +394,7 @@ export default class UsjDocument implements IUsjDocument {
     // This is a MarkerObject based on the while loop a few lines above
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     const previousNode = nodeParent.content[previousNodeIndex] as MarkerObject;
-    const descendant = UsjDocument.findRightMostDescendantMarkerObject(
+    const descendant = UsjReaderWriter.findRightMostDescendantMarkerObject(
       previousNode,
       nodeParent,
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
@@ -396,18 +404,18 @@ export default class UsjDocument implements IUsjDocument {
 
   nodeToVerseRefAndOffset(
     bookId: string,
-    child: MarkerContent,
-    parent: MarkerObject | MarkerContent[],
+    node: MarkerContent,
+    nodeParent: MarkerObject | MarkerContent[],
   ): { verseRef: VerseRef; offset: number } | undefined {
-    const realParent = Array.isArray(parent) ? this.parentMap.get(parent) : parent;
+    const realParent = Array.isArray(nodeParent) ? this.parentMap.get(nodeParent) : nodeParent;
     if (realParent === undefined)
-      throw new Error(`Cannot find parent for ${JSON.stringify(parent)}`);
+      throw new Error(`Cannot find parent for ${JSON.stringify(nodeParent)}`);
 
-    const chapterVerseContent = this.findVerseRefForNode(child, realParent);
+    const chapterVerseContent = this.findVerseRefForNode(node, realParent);
     if (!chapterVerseContent) return undefined;
 
     if (!chapterVerseContent.chapterNum)
-      throw new Error(`Could not determine chapter number for ${JSON.stringify(child)}`);
+      throw new Error(`Could not determine chapter number for ${JSON.stringify(node)}`);
 
     const verseRef = new VerseRef(
       bookId,
@@ -416,10 +424,10 @@ export default class UsjDocument implements IUsjDocument {
     );
 
     let offset = 0;
-    // Walk forward through the USJ nodes until `child` is found, incrementing `offset` along the way
+    // Walk forward through the USJ nodes until `node` is found, incrementing `offset` along the way
     if (chapterVerseContent.startingContentNode !== undefined) {
       this.findNextMatchingNode(chapterVerseContent.startingContentNode, [], (n, stack) => {
-        if (n === child) return true;
+        if (n === node) return true;
         if (stack.find((level) => NODE_TYPES_NOT_CONTAINING_VERSE_TEXT.includes(level.parent.type)))
           return false;
         if (typeof n === 'string') {
@@ -446,7 +454,7 @@ export default class UsjDocument implements IUsjDocument {
 
   jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset {
     const effectiveBookId = bookId ?? this.findBookId();
-    if (!effectiveBookId) throw new Error('Invalid USJ - not able to determine the book ID');
+    if (!effectiveBookId) throw new Error('Not able to determine the book ID');
 
     const target: MarkerContent | undefined = this.findSingleValue(jsonPathQuery);
     if (!target) throw new Error(`No result found for JSONPath query: ${jsonPathQuery}`);
@@ -470,13 +478,13 @@ export default class UsjDocument implements IUsjDocument {
 
     // Prefer getting the book ID from the USJ itself, but it might not be available
     const bookId = this.findBookId() ?? verseRef.book;
-    if (!bookId) throw new Error('Invalid USJ - not able to determine the book ID');
+    if (!bookId) throw new Error('Not able to determine the book ID');
     if (bookId !== verseRef.book)
       throw new Error(`Book IDs don't match: USJ=${bookId}, VerseRef=${verseRef.book}`);
 
     const chapterNode = this.findChapterNode(verseRef.chapterNum);
     if (chapterNode === undefined)
-      throw new Error(`Could not find ${bookId} chapter ${verseRef.chapterNum.toString()}`);
+      throw new Error(`Could not find ${bookId} chapter ${verseRef.chapterNum}`);
 
     let foundAnotherChapter = false;
     let jsonPath: ContentJsonPath = '';
@@ -487,7 +495,7 @@ export default class UsjDocument implements IUsjDocument {
       (node, workingStack) => {
         if (node === chapterNode) {
           if (verseRef.verseNum === 0) {
-            jsonPath = UsjDocument.convertWorkingStackToJsonPath(workingStack);
+            jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
             return true;
           }
           return false;
@@ -502,7 +510,7 @@ export default class UsjDocument implements IUsjDocument {
           node.number !== undefined &&
           node.number === expectedVerse
         ) {
-          jsonPath = UsjDocument.convertWorkingStackToJsonPath(workingStack);
+          jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
           return true;
         }
         return false;
@@ -525,7 +533,7 @@ export default class UsjDocument implements IUsjDocument {
         if (typeof node === 'string') {
           cumulativeVerseLengthSeen += node.length;
           if (cumulativeVerseLengthSeen > verseRefOffset) {
-            jsonPath = UsjDocument.convertWorkingStackToJsonPath(workingStack);
+            jsonPath = UsjReaderWriter.convertWorkingStackToJsonPath(workingStack);
             usjNodeOffset = verseRefOffset - cumulativeVerseLengthSeen + node.length;
             foundNode = node;
             return true;
@@ -554,7 +562,7 @@ export default class UsjDocument implements IUsjDocument {
     let lengthScanned = 0;
     let lengthTrimmed = 0;
     let foundStartingAtOffset = 0;
-    UsjDocument.findNextMatchingNodeUsingWorkingStack(
+    UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       startingPoint.node,
       this.convertJsonPathToWorkingStack(startingPoint.jsonPath),
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
@@ -588,7 +596,7 @@ export default class UsjDocument implements IUsjDocument {
     lengthScanned = 0;
     let finalOffset = 0;
     let finalStack: WorkingStack = [];
-    const finalNode = UsjDocument.findNextMatchingNodeUsingWorkingStack(
+    const finalNode = UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       startingPoint.node,
       this.convertJsonPathToWorkingStack(startingPoint.jsonPath),
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
@@ -608,7 +616,7 @@ export default class UsjDocument implements IUsjDocument {
     return {
       node: finalNode,
       offset: finalOffset,
-      jsonPath: UsjDocument.convertWorkingStackToJsonPath(finalStack),
+      jsonPath: UsjReaderWriter.convertWorkingStackToJsonPath(finalStack),
     };
   }
 
@@ -620,7 +628,7 @@ export default class UsjDocument implements IUsjDocument {
     let retVal = '';
     let offsetRemaining = start.offset;
     let lengthRecorded = 0;
-    UsjDocument.findNextMatchingNodeUsingWorkingStack(
+    UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       start.node,
       this.convertJsonPathToWorkingStack(start.jsonPath),
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
@@ -654,17 +662,20 @@ export default class UsjDocument implements IUsjDocument {
     maxLength: number = 100,
   ): string {
     let retVal = '';
-    UsjDocument.findNextMatchingNodeUsingWorkingStack(
+    UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
       start.node,
       this.convertJsonPathToWorkingStack(start.jsonPath),
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,
       (node, currentStack) => {
-        // Can't only compare nodes because they might be value types that are equal
-        if (
-          node === end.node &&
-          end.jsonPath === UsjDocument.convertWorkingStackToJsonPath(currentStack)
-        )
-          return true;
+        // `node` and `end.node` are both `MarkerContent` which might be strings or objects
+        if (node === end.node) {
+          // If both objects are the same, then we definitely found `end`
+          if (typeof node === 'object') return true;
+
+          // If both strings are the same, we need to verify that we're at the same place in `usj`
+          if (end.jsonPath === UsjReaderWriter.convertWorkingStackToJsonPath(currentStack))
+            return true;
+        }
         if (typeof node !== 'string') return false;
         retVal = `${retVal}${node}`;
         if (retVal.length > maxLength) retVal = retVal.substring(0, maxLength);
@@ -676,7 +687,7 @@ export default class UsjDocument implements IUsjDocument {
 
   // #endregion
 
-  // #region Edit this USJ document
+  // #region Edit this USJ data
 
   private static removeContentNodesFromArray(
     contentArray: MarkerContent[],
@@ -695,9 +706,8 @@ export default class UsjDocument implements IUsjDocument {
   }
 
   removeContentNodes(searchFunction: (potentiallyMatchingNode: MarkerContent) => boolean): number {
-    const retVal = UsjDocument.removeContentNodesFromArray(this.usj.content, searchFunction);
-    // Clear out the parent map since we changed the document
-    this.parentMapInternal = undefined;
+    const retVal = UsjReaderWriter.removeContentNodesFromArray(this.usj.content, searchFunction);
+    this.usjChanged();
     return retVal;
   }
 

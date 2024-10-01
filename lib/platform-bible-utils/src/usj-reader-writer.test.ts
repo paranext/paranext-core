@@ -1,6 +1,6 @@
 import { Usj } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
-import UsjDocument from './usj-document';
+import UsjReaderWriter from './usj-reader-writer';
 
 const usj: Usj = JSON.parse(`{
   "type": "USJ",
@@ -815,7 +815,7 @@ const usj: Usj = JSON.parse(`{
 }`);
 
 test('Correct VerseRefs and offsets are found using findVerseRefAndOffset', () => {
-  const usjDoc = new UsjDocument(usj);
+  const usjDoc = new UsjReaderWriter(usj);
   const expectedResults = [
     { jsonPath: '$.content[8]', chapter: 1, verse: 0, offset: 0 },
     { jsonPath: '$.content[9]', chapter: 1, verse: 0, offset: 0 },
@@ -857,12 +857,14 @@ test('Correct VerseRefs and offsets are found using findVerseRefAndOffset', () =
   }).toThrow('Could not determine chapter number for "USJ"');
 
   expect(() => {
-    new UsjDocument({ type: 'USJ', version: '0.2.1', content: [] }).jsonPathToVerseRefAndOffset('');
-  }).toThrow('Invalid USJ - not able to determine the book ID');
+    new UsjReaderWriter({ type: 'USJ', version: '0.2.1', content: [] }).jsonPathToVerseRefAndOffset(
+      '',
+    );
+  }).toThrow('Not able to determine the book ID');
 });
 
 test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
-  const usjDoc = new UsjDocument(usj);
+  const usjDoc = new UsjReaderWriter(usj);
 
   const result0 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:0'), 0);
   expect(typeof result0.node).toBe('object');
@@ -924,15 +926,16 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
   }).toThrow(`Book IDs don't match: USJ=MAT, VerseRef=JHN`);
 
   expect(() => {
-    new UsjDocument({ type: 'USJ', version: '0.2.1', content: [] }).verseRefToUsjContentLocation(
-      new VerseRef('JHN 1:1'),
-      0,
-    );
+    new UsjReaderWriter({
+      type: 'USJ',
+      version: '0.2.1',
+      content: [],
+    }).verseRefToUsjContentLocation(new VerseRef('JHN 1:1'), 0);
   }).toThrow('Could not find JHN chapter 1');
 });
 
 test('Correct USJ details are found using findNextLocationOfMatchingText', () => {
-  const usjDoc = new UsjDocument(usj);
+  const usjDoc = new UsjReaderWriter(usj);
 
   // Start from a verse node
   const startingPoint1 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:2'), 0);
