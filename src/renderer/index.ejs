@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <!--
+      Content-Security-Policy controls what resources the renderer can access.
+
+      Design decisions and guiding principles at https://github.com/paranext/paranext/wiki/Content-Security-Policy-Design
+
+      DO NOT CHANGE THIS WITHOUT A SERIOUS REASON
+
+      Please uncomment the image creation arbitrary code execution in `evil.js`'s WebView when you
+      make changes so we can double check it is still successfully blocked.
+
+      default-src 'none' so things can't happen unless we allow them
+      script-src-elem allows script tags but not in-line attribute scripts. That way, we can remove
+        scripts we don't want using monkey-patched `document.createElement` and not have to worry
+        about in-line scripts
+        'self' so scripts can be loaded from us
+        'wasm-unsafe-eval' because webview iframes want to use wasm
+          TODO: we may want to remove this once we have webview iframe CSP separated from this so we
+          don't allow extensions to run wasm code in parent window. It does not seem to be so, but
+          this may be an avenue through which they can escape their iframe sandbox and do things
+          like navigate the page. Warrants further consideration paranext-core#89
+        'unsafe-inline' because web view iframes use srcdoc right now, which inherits CSP from parent frames
+          TODO: PLEASE FIX THIS - Move web views to be retrieved from the backend, and remove this. paranext-core#89
+          The web views must pass as same origin in order to be able to use same-origin features
+          like accessing the papi. `papi-extension:` protocol is considered to be origin `null`
+          We cannot solve this by using the same nonce on every webview because each HTML webview
+          will need to provide its own nonces to merge with ours. Not sure if it would be an issue
+          beyond that, though, assuming we don't provide a way to get the nonce from a script.
+        We do NOT list papi-extension: so scripts cannot be loaded from installed extensions without
+        being limited by our WebView iframe security
+      style-src allows them to use style/link tags and style attributes on tags
+        'self' so styles can be loaded from us
+        papi-extension: so styles can be loaded from installed extensions
+        'unsafe-inline' because that's how bundled libraries' styles are loaded in :( like MUI
+      frame-src determines what iframes can be loaded
+        'self' so frame contents can be loaded from us - sort-of includes `srcdoc` iframes with
+        extension webview code... `srcdoc` iframes are actually executed in the parent and then put
+        in the iframe, so `frame-src` doesn't actually count for them. But the rest of the CSP does
+        papi-extension: so extensions can load their bundled asset iframes as WebViewContentType.URL
+        on different origin
+        https: so extensions can load remote iframes as WebViewContentType.URL on different origin
+          Note: WebViewContentType.HTML and WebViewContentType.React load in as `srcdoc` iframes
+          with same origin and our CSP (these `srcdoc` iframes inherit this CSP as well in addition
+          to using the CSP defined in `web-view.service.ts`) and iframe sandbox to prevent them from
+          executing arbitrary code on our origin as best we can. However, WebViewContentType.URL
+          loads in as `src` iframes, so we cannot control their CSP. As such, we must not allow them
+          to be on the same origin. See the MutationObserver in `web-view.service.ts` and
+          `web-view.component.tsx` for the allowed iframe `sandbox` attribute options on these
+          WebViewContentTypes. Also note `blob:` urls are considered same origin as parent, so NEVER
+          list blob: here in `frame-src` CSP
+          Note: it is ok for WebViews with same origin in our CSP and sandbox to be able to create
+          child iframes without our CSP and sandbox protection because those child iframes would be
+          on different origin and would only be able to do what the extension developer allows them
+          via message passing and would have the same sandbox restrictions as the WebView.
+          TODO: wrap WebViewContentType.URL webviews in an iframe that's hosting their url and
+          remove `papi-extension:` and `https:` here when we fix webview code to be retrieved from the backend? paranext-core#89
+      object-src 'none' to prevent insecure object and embed until we have a reason to use them
+      worker-src 'self' so web workers can be loaded from us
+      manifest-src 'self' so we can load our manifest
+        TODO: What exactly does this do?
+      connect-src only communicate over the network through JS APIs as we allow
+        'self' communicate with us
+        https: communicate with secure networks
+        ws: communicate with webSockets
+          TODO: try to template the specific url from ClientNetworkConnector in. paranext-core#89
+      img-src load images
+        'self' so images can be loaded from us
+        papi-extension: so images can be loaded from installed extensions
+          TODO: remove this when we fix webview code to be retrieved from the backend? paranext-core#89
+        https: so they can load images over secure connections
+        data: so they can load data urls
+      media-src load audio, video, etc
+        'self' so media can be loaded from us
+        papi-extension: so media can be loaded from installed extensions
+          TODO: remove this when we fix webview code to be retrieved from the backend? paranext-core#89
+        https: so media can be loaded over secure connections
+        data: so they can load data urls
+      font-src load fonts
+        'self' so fonts can be loaded from us
+        papi-extension: so fonts can be loaded from installed extensions
+          TODO: remove this when we fix webview code to be retrieved from the backend? paranext-core#89
+        https: so fonts can be loaded over secure connections
+        data: so they can load data urls
+      form-action 'self' lets the form submit to us
+        TODO: not sure if this is needed. If we can attach handlers to forms, we might be able to remove this
+      navigate-to 'none' prevents them from redirecting this iframe somewhere else
+        WARNING: This is experimental and does not work as of July 2023! It is here for future
+        compatibility in case they add support for it
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'none';
+        script-src-elem 'self' 'wasm-unsafe-eval' 'unsafe-inline';
+        style-src 'self' papi-extension: 'unsafe-inline';
+        frame-src 'self' papi-extension: https:;
+        object-src 'none';
+        worker-src 'self';
+        manifest-src 'self';
+        connect-src 'self' https: ws:;
+        img-src 'self' papi-extension: https: data:;
+        media-src 'self' papi-extension: https: data:;
+        font-src 'self' papi-extension: https: data:;
+        form-action 'self';
+        navigate-to 'none';"
+    />
+    <title>Platform.Bible</title>
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>

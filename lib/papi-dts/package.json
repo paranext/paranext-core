@@ -1,0 +1,54 @@
+{
+  "name": "papi-dts",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "TypeScript definitions for Paranext's PAPI",
+  "homepage": "https://github.com/paranext/paranext-core/tree/main/lib/papi-dts",
+  "bugs": {
+    "url": "https://github.com/paranext/paranext-core/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paranext/paranext-core.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Paranext",
+    "url": "https://github.com/paranext/"
+  },
+  "contributors": [
+    {
+      "name": "TJ Couch",
+      "email": "tj_couch@sil.org",
+      "url": "https://github.com/tjcouch-sil"
+    }
+  ],
+  "main": "",
+  "types": "papi.d.ts",
+  "scripts": {
+    "build:docs": "typedoc",
+    "build": "tsc && prettier --write papi.d.ts && tsx edit-papi-d-ts.ts && prettier --write papi.d.ts",
+    "build:clean": "npm run clean && npm run build",
+    "clean": "rimraf papi.tsbuildinfo",
+    "lint": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
+    "lint-fix": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint",
+    "lint:staged": "lint-staged -q"
+  },
+  "lint-staged": {
+    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
+    "*.json": ["prettier --parser json --write"],
+    "*.{html,md,yml}": ["prettier --single-quote --write"]
+  },
+  "dependencies": {
+    "platform-bible-utils": "file:../platform-bible-utils"
+  },
+  "devDependencies": {
+    "escape-string-regexp": "^5.0.0",
+    "rimraf": "^6.0.1",
+    "typedoc": "^0.26.7",
+    "typescript": "^5.4.5"
+  },
+  "volta": {
+    "extends": "../../package.json"
+  }
+}

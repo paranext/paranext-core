@@ -1,0 +1,31 @@
+import crypto from 'crypto';
+import { createNonce } from '@node/utils/crypto-util';
+import { stringLength } from 'platform-bible-utils';
+import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
+
+/** For now this is just for extensions, but maybe we will want to expand this in the future */
+export type ExecutionTokenType = 'extension';
+
+/** Execution tokens can be passed into API calls to provide context about their identity */
+export class ExecutionToken implements ExtensionBasicData {
+  readonly type: ExecutionTokenType;
+  readonly name: string;
+  readonly nonce: string;
+
+  constructor(tokenType: ExecutionTokenType, name: string) {
+    if (!tokenType) throw new Error('token type must be defined');
+    if (!name || stringLength(name) < 1) throw new Error('name must be a string of length > 0');
+
+    this.type = tokenType;
+    this.name = name;
+    this.nonce = createNonce('hex');
+    Object.freeze(this);
+  }
+
+  getHash(): string {
+    return crypto
+      .createHash('sha256')
+      .update(`${this.type}${this.name}${this.nonce}`)
+      .digest('hex');
+  }
+}

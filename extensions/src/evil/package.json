@@ -1,0 +1,15 @@
+{
+  "name": "evil",
+  "version": "0.0.1",
+  "description": "Paranext extension that tries to break things!!1!!",
+  "main": "evil.js",
+  "types": "evil.d.ts",
+  "author": "Paranext",
+  "license": "MIT",
+  "volta": {
+    "extends": "../../package.json"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}

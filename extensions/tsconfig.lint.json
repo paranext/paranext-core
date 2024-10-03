@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig",
+  "include": [".eslintrc.cjs", "*.cjs", "*.js", "*.ts", "lib", "src", "webpack"]
+}

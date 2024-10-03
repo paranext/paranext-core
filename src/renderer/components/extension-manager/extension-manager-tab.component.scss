@@ -1,0 +1,21 @@
+.extension-manager-dialog {
+  overflow-y: auto;
+  display: flex;
+  padding: 5%;
+  flex-direction: column;
+}
+
+.extension-manager-label {
+  padding-bottom: 5%;
+}
+
+.extension-manager-actions {
+  padding-top: 5%;
+  align-self: flex-end;
+}
+
+.extension-manager-instance {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}

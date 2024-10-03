@@ -1,43 +1,38 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Watch and Build Extension",
-      "type": "node",
+      "name": "Debug .NET Core",
+      "type": "coreclr",
       "request": "launch",
-      "runtimeExecutable": "npm",
-      "skipFiles": ["<node_internals>/**"],
-      "runtimeArgs": ["run", "watch"]
+      "preLaunchTask": "npm: build:data",
+      "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/ParanextDataProvider",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "stopAtEntry": false,
+      "justMyCode": false,
+      "windows": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/win-x64/ParanextDataProvider.exe"
+      },
+      "linux": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/linux-x64/ParanextDataProvider"
+      },
+      "osx": {
+        "program": "${workspaceFolder}/c-sharp/bin/Debug/net8.0/osx-x64/ParanextDataProvider"
+      }
     },
     {
-      "name": "Build WebViews",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npm",
-      "skipFiles": ["<node_internals>/**"],
-      "runtimeArgs": ["run", "build:web-view"]
+      "name": "Attach to .NET Core",
+      "type": "coreclr",
+      "request": "attach",
+      "processName": "ParanextDataProvider",
+      "windows": {
+        "processName": "ParanextDataProvider.exe"
+      },
+      "justMyCode": false
     },
     {
-      "name": "Build Main",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npm",
-      "skipFiles": ["<node_internals>/**"],
-      "runtimeArgs": ["run", "build:main"]
-    },
-    {
-      "name": "Build Extension",
-      "type": "node",
-      "request": "launch",
-      "runtimeExecutable": "npm",
-      "skipFiles": ["<node_internals>/**"],
-      "runtimeArgs": ["run", "build"]
-    },
-    {
-      "name": "Debug Platform with Extension",
+      "name": "Debug Platform Backend",
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "npm",
@@ -45,12 +40,28 @@
       "skipFiles": ["<node_internals>/**"],
       "env": {
         "MAIN_ARGS": "--inspect=5858 --remote-debugging-port=9223",
-        "IN_VSCODE": "true"
+        "IN_VSCODE": "true",
+        "DEV_NOISY": "false"
       },
-      "presentation": {
-        "hidden": false,
-        "group": "",
-        "order": 1
+      "autoAttachChildProcesses": true
+    },
+    {
+      "name": "Attach to Renderer",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9223,
+      "webRoot": "${workspaceFolder}",
+      "timeout": 15000
+    },
+    {
+      "name": "Debug Extension Host",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "start:extension-host"],
+      "skipFiles": ["<node_internals>/**"],
+      "env": {
+        "IN_VSCODE": "true"
       }
     },
     {
@@ -61,12 +72,32 @@
       "timeout": 15000
     },
     {
-      "name": "Attach to Renderer",
-      "type": "chrome",
-      "request": "attach",
-      "port": 9223,
-      "webRoot": "${workspaceFolder}",
-      "timeout": 15000
+      "name": "Storybook",
+      "type": "node",
+      "request": "launch",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "storybook"],
+      "skipFiles": ["<node_internals>/**"],
+      "autoAttachChildProcesses": true
+    },
+    {
+      "name": "Debug building papi.d.ts",
+      "request": "launch",
+      "runtimeArgs": ["run", "build:types"],
+      "runtimeExecutable": "npm",
+      "skipFiles": ["<node_internals>/**"],
+      "type": "node"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Debug Platform",
+      "configurations": ["Debug Platform Backend", "Attach to Renderer"],
+      "presentation": {
+        "hidden": false,
+        "group": "",
+        "order": 1
+      }
     }
   ]
 }

@@ -1,0 +1,35 @@
+# #region shared with https://github.com/paranext/paranext-extension-template/blob/main/.eslintignore
+
+# Please keep this file in sync with .prettierignore and .stylelintignore
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+
+# Dependency directory
+# https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git
+node_modules
+
+# OSX
+.DS_Store
+
+.idea
+npm-debug.log.*
+*.css.d.ts
+*.sass.d.ts
+*.scss.d.ts
+
+# Built files
+dist
+release
+temp-build
+
+# generated files
+package-lock.json
+
+# #endregion

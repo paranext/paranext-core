@@ -1,0 +1,38 @@
+@import './usj-nodes';
+@import './commenting';
+@import './editor';
+@import './editor-overrides';
+
+body {
+  background-color: hsl(var(--background));
+// remove margins added by the electron browser user-agent style sheet
+  margin: 0;
+}
+
+// #region verse number highlight
+
+// Highlight keyframes thanks to chazsolo at https://stackoverflow.com/a/55835473
+@keyframes highlight {
+  from {
+    background-color: yellow;
+  }
+}
+
+.editor-container .highlighted {
+  position: relative;
+}
+
+.editor-container .highlighted::before {
+  content: '';
+  position: absolute;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  opacity: 0.8;
+  animation: highlight 2s;
+}
+
+// #endregion

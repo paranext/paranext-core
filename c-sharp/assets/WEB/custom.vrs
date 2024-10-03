@@ -1,0 +1,29 @@
+# custom.vrs 
+# prepared by Michael Johnson for the World English Bible project
+# amend total quantity of verses in chapter
+ROM 14:26
+REV 12:17
+TOB 5:22
+TOB 10:12
+SIR 23:28
+ESG 1:22
+ESG 3:15
+ESG 5:14
+ESG 8:17
+ESG 10:14
+SIR 33:33
+SIR 41:24
+BAR 1:22
+4MA 7:25
+4MA 12:20
+# deliberately missing verses
+-ROM 16:26
+-ROM 16:27
+-3JN 1:15
+-S3Y 1:49
+-ESG 4:6
+-ESG 9:5
+-ESG 9:30
+
+
+ 

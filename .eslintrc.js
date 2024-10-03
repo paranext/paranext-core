@@ -1,18 +1,17 @@
-// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs
-
 module.exports = {
   extends: [
     // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
     // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
     'erb',
+    // https://github.com/storybookjs/eslint-plugin-storybook/blob/main/lib/configs/recommended.ts
+    'plugin:storybook/recommended',
     // Make sure this is last so it gets the chance to override other configs.
     // See https://github.com/prettier/eslint-config-prettier and https://github.com/prettier/eslint-plugin-prettier
     'plugin:prettier/recommended',
   ],
 
   rules: {
-    // Some rules in this following shared region are not applied since they are overridden in subsequent regions
-    // #region shared with https://github.com/paranext/paranext-core/blob/main/.eslintrc.js except certain overrides
+    // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.eslintrc.cjs and https://github.com/paranext/paranext-extension-template/blob/main/.eslintrc.js except certain overrides
 
     // #region ERB rules
 
@@ -94,52 +93,10 @@ module.exports = {
     // #endregion
 
     // #endregion
-
-    // #region Overrides to rules from paranext-core
-
-    'import/no-unresolved': ['error', { ignore: ['@papi'] }],
-
-    // #endregion
   },
   globals: {
     globalThis: 'readonly',
   },
-  overrides: [
-    {
-      // Allow this file to have overrides to rules from paranext-core
-      files: ['.eslintrc.*js'],
-      rules: {
-        'no-dupe-keys': 'off',
-      },
-    },
-    {
-      files: ['*.js'],
-      rules: {
-        strict: 'off',
-      },
-    },
-    {
-      // Don't require extensions to have a default export for "activate()"
-      files: ['*.ts'],
-      rules: {
-        'import/prefer-default-export': 'off',
-      },
-    },
-    {
-      files: ['./lib/*', './webpack/*'],
-      rules: {
-        // These files are scripts not running in Platform.Bible, so they can't use the logger
-        'no-console': 'off',
-      },
-    },
-    {
-      files: ['*.d.ts'],
-      rules: {
-        // Allow .d.ts files to self import so they can refer to their types in `papi-shared-types`
-        'import/no-self-import': 'off',
-      },
-    },
-  ],
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',
@@ -150,14 +107,15 @@ module.exports = {
   plugins: ['@typescript-eslint', 'no-type-assertion', 'no-null'],
   settings: {
     'import/resolver': {
-      typescript: {
-        alwaysTryTypes: true,
+      // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below
+      node: {},
+      webpack: {
+        config: require.resolve('./.erb/configs/webpack.config.eslint.ts'),
       },
+      typescript: {},
     },
     'import/parsers': {
       '@typescript-eslint/parser': ['.ts', '.tsx'],
     },
   },
 };
-
-// #endregion
