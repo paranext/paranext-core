@@ -4,8 +4,8 @@
   "supportUrl": "",
   "localizedDisplayInfo": {
     "en": {
-      "displayName": "Hello Someone Extension",
-      "shortSummary": "Simple hello someone extension",
+      "displayName": "Paranext Extension Template",
+      "shortSummary": "Base template for a Platform.Bible Extension",
       "description": "assets/descriptions/description-en.md"
     }
   }

@@ -25,12 +25,30 @@
       // Include default type declarations
       "node_modules/@types",
       // Include papi-dts type declarations (for papi.d.ts)
-      "../../../lib",
+      "../paranext-core/lib",
       // Include core extensions' type declarations
-      "../../../extensions/src",
+      "../paranext-core/extensions/src",
       // Include this extension's type declarations. It's in this location so there aren't any
       // unexpected files there for typeRoots to include
-      "src/types"
+      "src/types",
+
+      /**
+       * Add extension repos' `src/types` folders here if you want to use local development type
+       * declarations. These will override the cached extension type declarations included in
+       * final entry in this array. Note that running extensions' local development type
+       * declaration files get copied into the cached extension type declarations while running
+       * Platform.Bible in development, but adding extension repos' `src/types` folders here means
+       * the local development type declarations will always be up-to-date instead of only when
+       * Platform.Bible is running in development.
+       *
+       * @example Adding `"../paranext-extension-word-list/src/types",` includes the local version
+       * of the Word List extension's type declarations. Then, your extension can use types from the
+       * local build of the Word List extension.
+       */
+
+      // Include cached extension type declarations in case this extension needs to depend on them
+      // These are last, so any modules in the above typeRoots take precedence.
+      "../paranext-core/dev-appdata/cache/extension-types"
     ],
     // Papi exposes decorators for use in classes
     "experimentalDecorators": true,
