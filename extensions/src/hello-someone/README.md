@@ -2,6 +2,81 @@
 
 Simple hello someone extension for Platform.Bible
 
+<!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
+
+## Template Info
+
+This is a webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs. Note that the `*.web-view.*` files and the `public/assets` folder mentioned in [Summary](#summary) are not present in this template. For inspiration on what these could look like, refer to any extension that is built using this template. An example would be the [Text Collection extension](https://github.com/paranext/paranext-extension-text-collection).
+
+There is also [a template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template).
+
+### Customize extension details
+
+Follow these instructions to customize the template to be your own Platform.Bible extension. This section is a more compact version of the [`Your first extension` guide](https://github.com/paranext/paranext-extension-template/wiki/Your-First-Extension).
+
+#### Install and hook up to the template
+
+Note: please skip this section and continue with [Replace placeholders](#replace-placeholders) if you are following these instructions as part of [creating an extension within `paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template#to-create-a-new-extension-in-this-repo).
+
+To make the process of customizing from the template as smooth as possible, we recommend you do the following before anything else:
+
+- [Install and set up this repo](#to-install)
+- [Update this extension from the template](#to-update-this-extension-from-the-template)
+
+#### Replace placeholders
+
+- At the top of this `README.md`:
+
+  - Replace the first line `# paranext-extension-template` with `# your-extension-name`
+  - Below the first line, replace the extension description with your own description
+  - In the [Summary](#summary) section, replace `src/types/paranext-extension-template.d.ts` with `src/types/<your_extension_name>.d.ts`
+
+- In `manifest.json`:
+
+  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
+  - Update ownership information and other relevant fields as desired
+
+- In `package.json`:
+
+  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
+  - Update ownership information and other relevant fields as desired
+
+- In `assets/displayData.json`:
+
+  - If your extension has an icon, update the `icon` value to point towards the icon file (for example: `assets/icon.svg`)
+  - Update the `moreInfoUrl` field to web URL to a page where users can find out more information about you / your organization / your extension.
+  - Update the `supportUrl` field to web URL to a support page where users can request help and report issues with your extension.
+  - Update the `en` entry of `localizedDisplayInfo` so that:
+
+    - `displayName` contains a human-readable name for your extension (i.e. `Your Extension Name`).
+    - `shortSummary` contains a short, few sentence summary of what your extension does.
+    - `description` points to a Markdown (`.md`) file containing the full description of your extension (similar to what you would put in a `README`).
+
+  - If your extension supports multiple languages, add another entry to `localizedDisplayInfo` by copying and pasting the `en` entry, changing `en` to the [BCP 47 language tag](https://en.wikipedia.org/wiki/IETF_language_tag) of the language you want to support, and translating the `displayName`, `shortSummary`, and `description` fields appropriately. We recommend naming your description files `description-<language tag>.md`.
+
+- In `LICENSE`:
+
+  - Adjust as desired (feel free to choose a different license)
+  - If you choose to stay with the current license, update the copyright statement
+
+- Rename `src/types/paranext-extension-template.d.ts` to `src/types/<your_extension_name>.d.ts`
+
+  - In this renamed file, replace `paranext-extension-template` with `your-extension-name`
+
+- In `src/main.ts`, replace `Extension template` with `Your Extension Name` (2 occurrences)
+
+#### Customize the extension manifest and package information
+
+The `manifest.json` and `package.json` files contain information specific to your extension. Add your extension's details in these two files as needed. See more information on the `manifest.json` and `package.json` files in [Extension Anatomy](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#extension-manifest).
+
+#### Hide Template Info
+
+Once finished customizing this template to be your own, you can uncomment the [HTML comment tag](https://www.w3schools.com/html/html_comments.asp) above the [Template Info](#template-info) section to hide this template-related info in this readme. You can do this by clicking on the line and doing CTRL + / in VS Code. You can also do this manually by removing the first opening '&lt;!--' and the only closing '-->' on the line. Leaving this info commented in your readme will hide it in your readme while avoiding merge conflicts if you decide to [update this extension from the template](#to-update-this-extension-from-the-template) in the future. If you never want to update this extension from the template, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
+
+Note: if you [update this extension from the template](#to-update-this-extension-from-the-template), there may be important changes in this section like additional customizations you must make to this extension. Please keep an eye out for readme changes when updating from the template.
+
+<!-- Closing comment tag for Template Info Section -->
+
 ## Summary
 
 The general file structure is as follows:
