@@ -19,12 +19,12 @@ function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps<TData>
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="pr-ml-auto pr-hidden pr-h-8 lg:pr-flex">
-          <FilterIcon className="pr-mr-2 pr-h-4 pr-w-4" />
+        <Button variant="outline" size="sm" className="tw-ml-auto tw-hidden tw-h-8 lg:tw-flex">
+          <FilterIcon className="tw-mr-2 tw-h-4 tw-w-4" />
           View
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="pr-w-[150px]">
+      <DropdownMenuContent align="end" className="tw-w-[150px]">
         <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {table
@@ -34,7 +34,7 @@ function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps<TData>
             return (
               <DropdownMenuCheckboxItem
                 key={column.id}
-                className="pr-capitalize"
+                className="tw-capitalize"
                 checked={column.getIsVisible()}
                 onCheckedChange={(value) => column.toggleVisibility(!!value)}
               >

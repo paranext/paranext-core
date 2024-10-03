@@ -19,11 +19,11 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
     ref,
   ) => {
     return (
-      <div className="pr-relative">
+      <div className="tw-relative">
         <ShadInput
           {...props}
           type="text"
-          className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-bg-background pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-shadow-none pr-outline-none"
+          className="tw-box-border tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pl-4 tw-pr-3 tw-font-medium tw-shadow-none tw-outline-none"
           onChange={(event) => handleSearch(event.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -35,7 +35,7 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
           ref={ref}
         />
         <History
-          className="pr-absolute pr-right-3 pr-top-1/2 pr-h-4 pr-w-4 pr--translate-y-1/2 pr-transform pr-cursor-pointer pr-text-muted-foreground"
+          className="tw-absolute tw-right-3 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-cursor-pointer tw-text-muted-foreground"
           onClick={() => {
             // eslint-disable-next-line no-console
             console.log('back in history');

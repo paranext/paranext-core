@@ -6,7 +6,7 @@ export default function SliderExamples() {
   return (
     <>
       <Slider
-        className="pr-h-10"
+        className="tw-h-10"
         min={0}
         max={100}
         step={1}
@@ -15,7 +15,7 @@ export default function SliderExamples() {
       />
       {sliderValue}
 
-      <Slider className="pr-h-10" disabled min={0} max={100} step={1} defaultValue={[50]} />
+      <Slider className="tw-h-10" disabled min={0} max={100} step={1} defaultValue={[50]} />
     </>
   );
 }

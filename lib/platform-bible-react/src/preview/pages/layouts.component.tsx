@@ -12,7 +12,7 @@ import ToolbarExamples from './layouts/toolbar.layout.component';
 function Layouts({ direction }: HasDirection) {
   return (
     <div>
-      <p className="pr-mb-2 pr-text-muted-foreground">A place to add examples for layouts</p>
+      <p className="tw-mb-2 tw-text-muted-foreground">A place to add examples for layouts</p>
       <VerticalTabs defaultValue="Window" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="Window">Window or Tab</VerticalTabsTrigger>
@@ -22,7 +22,7 @@ function Layouts({ direction }: HasDirection) {
         </VerticalTabsList>
 
         <VerticalTabsContent value="Window">
-          <div className="pr-mb-2 pr-flex pr-gap-2">
+          <div className="tw-mb-2 tw-flex tw-gap-2">
             <WindowOrTabExample direction={direction} />
             <WindowOrTabExample direction={direction} />
           </div>
@@ -36,7 +36,7 @@ function Layouts({ direction }: HasDirection) {
         <VerticalTabsContent value="Settings">TODO</VerticalTabsContent>
 
         <VerticalTabsContent value="Shadcn Dashboard 5">
-          <div className="pr-h-[405px] pr-rounded-md pr-border">
+          <div className="tw-h-[405px] tw-rounded-md tw-border">
             <Dashboard5Examples direction={direction} />
           </div>
         </VerticalTabsContent>

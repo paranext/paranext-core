@@ -186,7 +186,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   return (
     <>
       {/* Workaround to pull in platform-bible-react styles into the editor */}
-      <Button className="pr-hidden" />
+      <Button className="tw-hidden" />
       <Editor
         ref={editorRef}
         scrRef={scrRef}

@@ -62,7 +62,7 @@ export default function ScriptureResultsViewerExample({ direction }: HasDirectio
   };
 
   return (
-    <div className="pr-h-96 pr-overflow-y-hidden">
+    <div className="tw-h-96 tw-overflow-y-hidden">
       <div>
         {checks.map((check, index) => (
           <Button

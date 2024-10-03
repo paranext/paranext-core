@@ -19,7 +19,7 @@ function createColorCells(color: string, invert: boolean = false) {
 function createPreviewCell(color: string, foreground: string, text: string) {
   return (
     <td>
-      <Input className={`pr-bg-${color} pr-border-2 pr-text-${foreground}`} value={text} />
+      <Input className={`tw-bg-${color} tw-border-2 tw-text-${foreground}`} value={text} />
     </td>
   );
 }
@@ -30,7 +30,7 @@ export default function ThemeColorDisplay() {
       <p>
         Color variables are defined in{' '}
         <a
-          className="pr-text-blue-600 hover:pr-underline"
+          className="tw-text-blue-600 hover:tw-underline"
           href="https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css"
         >
           index.css
@@ -53,7 +53,7 @@ export default function ThemeColorDisplay() {
       {/* dummy to create all classes */}
       <div
         style={{ display: 'none' }}
-        className="pr-bg-accent pr-bg-accent-foreground pr-bg-background pr-bg-border pr-bg-card pr-bg-card-foreground pr-bg-destructive pr-bg-destructive-foreground pr-bg-foreground pr-bg-input pr-bg-muted pr-bg-muted-foreground pr-bg-popover pr-bg-popover-foreground pr-bg-primary pr-bg-primary-foreground pr-bg-ring pr-bg-secondary pr-bg-secondary-foreground"
+        className="tw-bg-accent tw-bg-accent-foreground tw-bg-background tw-bg-border tw-bg-card tw-bg-card-foreground tw-bg-destructive tw-bg-destructive-foreground tw-bg-foreground tw-bg-input tw-bg-muted tw-bg-muted-foreground tw-bg-popover tw-bg-popover-foreground tw-bg-primary tw-bg-primary-foreground tw-bg-ring tw-bg-secondary tw-bg-secondary-foreground"
       />
       <table>
         <thead>
