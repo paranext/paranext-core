@@ -1,4 +1,4 @@
-// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.prettierrc.js and https://github.com/paranext/paranext-extension-template/blob/main/.prettierrc.js
+// #region shared with https://github.com/paranext/paranext-core/blob/main/.prettierrc.js and https://github.com/paranext/paranext-multi-extension-template/blob/main/.prettierrc.js
 
 module.exports = {
   tabWidth: 2,
@@ -7,7 +7,7 @@ module.exports = {
   singleQuote: true,
   // prettier-plugin-jsdoc options
   tsdoc: true,
-  plugins: ['prettier-plugin-jsdoc', 'prettier-plugin-tailwindcss'],
+  plugins: ['prettier-plugin-jsdoc'],
   overrides: [
     {
       files: '*.json',

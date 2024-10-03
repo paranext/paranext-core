@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig",
-  "files": [".eslintrc.cjs", "edit-papi-d-ts.ts", "papi.d.ts"]
-}

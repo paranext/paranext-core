@@ -1,5 +1,0 @@
-{
-  "watch": ["src/client/**", "src/extension-host/**", "src/node/**", "src/shared/**"],
-  "ext": "ts,js,json",
-  "delay": 500
-}

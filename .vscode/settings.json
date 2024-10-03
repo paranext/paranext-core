@@ -1,11 +1,5 @@
 {
-  "dotnet.defaultSolution": "c-sharp/ParanextDataProvider.sln",
-  "dotnet-test-explorer.testProjectPath": "c-sharp-tests/c-sharp-tests.csproj",
-
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "[csharp]": {
-    "editor.defaultFormatter": "csharpier.csharpier-vscode"
-  },
   "editor.formatOnSave": true,
   "editor.rulers": [100],
   "editor.wordWrapColumn": 100,
@@ -13,7 +7,6 @@
   "eslint.validate": ["javascript", "javascriptreact", "html", "typescriptreact"],
 
   "files.associations": {
-    "*.css": "tailwindcss",
     ".eslintignore": "ignore",
     ".prettierignore": "ignore",
     ".stylelintignore": "ignore"
@@ -27,11 +20,8 @@
   "search.exclude": {
     ".git": true,
     ".eslintcache": true,
-    ".erb/dll": true,
-    "release/{build,app/dist}": true,
     "node_modules": true,
     "npm-debug.log.*": true,
-    "test/**/__snapshots__": true,
     "package-lock.json": true,
     "*.{css,sass,scss}.d.ts": true
   },
