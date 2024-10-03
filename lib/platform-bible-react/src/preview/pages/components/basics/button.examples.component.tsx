@@ -5,8 +5,8 @@ export default function ButtonExamples() {
     <table>
       <tbody>
         <tr>
-          <td className="pr-pe-2">variant</td>
-          <td className="pr-flex pr-gap-2">
+          <td className="tw-pe-2">variant</td>
+          <td className="tw-flex tw-gap-2">
             <Button onClick={() => alert('Hello World')} variant="default">
               default
             </Button>
@@ -18,15 +18,15 @@ export default function ButtonExamples() {
           </td>
         </tr>
         <tr>
-          <td className="pr-pe-2">size</td>
+          <td className="tw-pe-2">size</td>
           <td>
-            <span className="pr-mx-2">default:</span>
+            <span className="tw-mx-2">default:</span>
             <Button size="default">AAA</Button>
-            <span className="pr-mx-2">icon:</span>
+            <span className="tw-mx-2">icon:</span>
             <Button size="icon">AAA</Button>
-            <span className="pr-mx-2">sm:</span>
+            <span className="tw-mx-2">sm:</span>
             <Button size="sm">AAA</Button>
-            <span className="pr-mx-2">lg:</span>
+            <span className="tw-mx-2">lg:</span>
             <Button size="lg">AAA</Button>
           </td>
         </tr>

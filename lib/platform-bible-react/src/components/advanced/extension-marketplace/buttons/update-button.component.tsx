@@ -26,9 +26,9 @@ export default function UpdateButton({
   return (
     <Button
       className={cn(
-        'pr-h-8 pr-rounded-md pr-bg-blue-600 pr-px-4 pr-text-white pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-blue-700 hover:pr-text-white',
+        'tw-h-8 tw-rounded-md tw-bg-blue-600 tw-px-4 tw-text-white tw-transition tw-duration-300 tw-ease-in-out hover:tw-bg-blue-700 hover:tw-text-white',
         {
-          'pr-cursor-not-allowed pr-bg-blue-700': isUpdating,
+          'tw-cursor-not-allowed tw-bg-blue-700': isUpdating,
         },
         className,
       )}
@@ -37,7 +37,7 @@ export default function UpdateButton({
     >
       {isUpdating ? (
         <>
-          <Spinner size={15} className="pr-mr-1 pr-text-white" />
+          <Spinner size={15} className="tw-mr-1 tw-text-white" />
           Updating...
         </>
       ) : (

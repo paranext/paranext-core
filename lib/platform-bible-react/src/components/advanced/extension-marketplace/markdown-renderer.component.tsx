@@ -1,3 +1,4 @@
+import { cn } from '@/utils/shadcn-ui.util';
 import Markdown from 'markdown-to-jsx';
 
 interface MarkdownRendererProps {
@@ -5,6 +6,7 @@ interface MarkdownRendererProps {
   id?: string;
   /** The markdown string to render */
   markdown: string;
+  className?: string;
 }
 
 /**
@@ -15,9 +17,9 @@ interface MarkdownRendererProps {
  * @param id Optional unique identifier
  * @returns A div containing the rendered markdown content.
  */
-export default function MarkdownRenderer({ id, markdown }: MarkdownRendererProps) {
+export default function MarkdownRenderer({ id, markdown, className }: MarkdownRendererProps) {
   return (
-    <div id={id} className="pr-prose">
+    <div id={id} className={cn('pr-twp tw-prose', className)}>
       <Markdown>{markdown}</Markdown>
     </div>
   );

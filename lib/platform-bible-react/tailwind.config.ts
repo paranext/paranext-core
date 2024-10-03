@@ -1,12 +1,17 @@
-import { Config } from 'tailwindcss';
 import { scopedPreflightStyles } from 'tailwindcss-scoped-preflight';
+
+// #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/tailwind.config.ts and https://github.com/paranext/paranext-extension-template/blob/main/tailwind.config.ts
+
+import { Config } from 'tailwindcss';
+import typography from '@tailwindcss/typography';
 import tailwindCssAnimate from 'tailwindcss-animate';
 
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx}'],
   // Prefix on all tailwind classes so they don't clash with built-in classes
-  // short for platform-bible-react - we don't want to conflict with other people's tailwind classes either
-  prefix: 'pr-',
+  // short for tailwind - we hope to have the same prefix as users of this library so the cn
+  // function that uses tailwind-merge can properly overwrite related tailwind classes
+  prefix: 'tw-',
   // Theme from shadcn/ui
   theme: {
     container: {
@@ -74,13 +79,22 @@ const config: Config = {
     },
   },
   plugins: [
+    // Prose styles as sensible defaults for markdown renderer component
+    typography(),
+    // Animations in tailwind style
+    tailwindCssAnimate,
+
+    // #endregion
     // Restrict tailwind's preflight base css style modifications to within this component library
     scopedPreflightStyles({
-      // short for platform-bible-react tailwind-preflight - need to put this class on top of each component
+      // short for platform-bible-react tailwind-preflight - need to put this class on top of each
+      // component to apply our expected styling. This is named something unique to our library
+      // because we want our preflight to be ours alone and not to affect anyone else's css. If they
+      // want to use our preflight for some reason, they can. But generally if they make their own
+      // scoped preflight, they would expect that putting their own scope class would apply their
+      // preflight, not ours.
       cssSelector: '.pr-twp',
     }),
-    // Plugin from shadcn/ui
-    tailwindCssAnimate,
   ],
 };
 

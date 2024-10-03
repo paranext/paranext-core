@@ -6,7 +6,7 @@ type SonnerProps = ComponentProps<typeof Toaster>;
 function Sonner({ ...props }: SonnerProps) {
   return (
     <Toaster
-      className="pr-toaster pr-group"
+      className="tw-toaster tw-group"
       toastOptions={{
         classNames: {
           toast:

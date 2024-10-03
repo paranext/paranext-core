@@ -63,16 +63,16 @@ export default function VersionHistory({ id, versionHistory }: VersionHistoryPro
 
   return (
     <div id={id}>
-      <h3 className="pr-text-md pr-font-semibold">What`s New</h3>
-      <ul className="pr-list-disc pr-pl-5 pr-pr-4 pr-text-xs pr-text-gray-600">
+      <h3 className="tw-text-md tw-font-semibold">What`s New</h3>
+      <ul className="tw-list-disc tw-pl-5 tw-pr-4 tw-text-xs tw-text-gray-600">
         {(showAllVersions ? sortedEntries : sortedEntries.slice(0, 5)).map((entry) => (
-          <div key={entry[0]} className="pr-mt-3 pr-flex pr-justify-between">
-            <div className="pr-text-gray-600">
-              <li className="pr-prose pr-text-xs">
+          <div key={entry[0]} className="tw-mt-3 tw-flex tw-justify-between">
+            <div className="tw-text-gray-600">
+              <li className="tw-prose tw-text-xs">
                 <span>{entry[1].description}</span>
               </li>
             </div>
-            <div className="pr-justify-end pr-text-right">
+            <div className="tw-justify-end tw-text-right">
               <div>Version {entry[0]}</div>
               <div>{formatTimeString(entry[1].date)}</div>
             </div>
@@ -83,7 +83,7 @@ export default function VersionHistory({ id, versionHistory }: VersionHistoryPro
         <button
           type="button"
           onClick={() => setShowAllVersions(!showAllVersions)}
-          className="pr-text-xs pr-text-gray-500 pr-underline"
+          className="tw-text-xs tw-text-gray-500 tw-underline"
         >
           {showAllVersions ? 'Show Less Version History' : 'Show All Version History'}
         </button>

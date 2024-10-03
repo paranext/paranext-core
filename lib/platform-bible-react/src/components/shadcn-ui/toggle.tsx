@@ -5,18 +5,18 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/shadcn-ui.util';
 
 const toggleVariants = cva(
-  'pr-twp pr-inline-flex pr-items-center pr-justify-center pr-rounded-md pr-text-sm pr-font-medium pr-ring-offset-background pr-transition-colors hover:pr-bg-muted hover:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-pointer-events-none disabled:pr-opacity-50 data-[state=on]:pr-bg-accent data-[state=on]:pr-text-accent-foreground',
+  'pr-twp tw-inline-flex tw-items-center tw-justify-center tw-rounded-md tw-text-sm tw-font-medium tw-ring-offset-background tw-transition-colors hover:tw-bg-muted hover:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 data-[state=on]:tw-bg-accent data-[state=on]:tw-text-accent-foreground',
   {
     variants: {
       variant: {
-        default: 'pr-bg-transparent',
+        default: 'tw-bg-transparent',
         outline:
-          'pr-border pr-border-input pr-bg-transparent hover:pr-bg-accent hover:pr-text-accent-foreground',
+          'tw-border tw-border-input tw-bg-transparent hover:tw-bg-accent hover:tw-text-accent-foreground',
       },
       size: {
-        default: 'pr-h-10 pr-px-3',
-        sm: 'pr-h-9 pr-px-2.5',
-        lg: 'pr-h-11 pr-px-5',
+        default: 'tw-h-10 tw-px-3',
+        sm: 'tw-h-9 tw-px-2.5',
+        lg: 'tw-h-11 tw-px-5',
       },
     },
     defaultVariants: {

@@ -2,7 +2,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-grou
 
 export default function ToggleGroupExamples() {
   return (
-    <div className="*:pr-m-4">
+    <div className="*:tw-m-4">
       <ToggleGroup variant="outline" type="multiple">
         <ToggleGroupItem value="a">A</ToggleGroupItem>
         <ToggleGroupItem value="b">B</ToggleGroupItem>
