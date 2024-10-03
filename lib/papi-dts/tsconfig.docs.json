@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "include": ["./papi.d.ts"],
+  "compilerOptions": {
+    // Clearing outFile from the tsconfig we are extending to avoid module error
+    "outFile": null
+  },
+  "exclude": ["node_modules"]
+}

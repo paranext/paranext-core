@@ -1,33 +1,47 @@
-# #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/.gitignore
-
 # Logs
 logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-release
-dist-ssr
-*.local
+# Runtime data
+pids
+*.pid
+*.seed
+
+# Coverage directory used by tools like istanbul
+coverage
 
 # formatting and linting
 .eslintcache
+.eslintConfig.json
 
-# Editor directories and files
-.idea
+# Dependency directory
+# https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git
+node_modules
+
+# OSX
 .DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
 
-# Temporary intermediate build files
-temp-build
+release/app/dist
+release/build
+.erb/dll
+storybook-static
 
-# #endregion
+.idea
+npm-debug.log.*
+*.css.d.ts
+*.sass.d.ts
+*.scss.d.ts
+
+# Extra VS Code workspaces
+*.code-workspace
+
+# Extra Visual Studio files
+launchSettings.json
+
+# Test development user appdata files
+dev-appdata/
+c-sharp/**/*.BAK
+
+# yalc
+.yalc
+yalc.lock

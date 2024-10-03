@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html>
+  <head> </head>
+  <body>
+    <div>Hello Someone!!</div>
+    <div>
+      <input id="name-input" value="Bill" />
+      <button id="greetings-button" type="button">Greet</button>
+      <button id="delete-button" type="button">Delete</button>
+    </div>
+    <div id="greetings-button-output"></div>
+    <div>
+      <input
+        id="set-greetings-input"
+        value="Hey, my name is Bill. I got set by the webview!"
+      /><button id="set-greetings-button" type="button">Set Greeting</button>
+    </div>
+    <div>
+      <input id="set-age-input" type="number" value="43" /><button
+        id="set-age-button"
+        type="button"
+      >
+        Set Age
+      </button>
+    </div>
+    <div id="people-data"></div>
+    <div id="people-update-count">People Updates: 0</div>
+    <div id="bill-any-greetings-update-count">Any Greetings Updates (via Bill): 0</div>
+    <div id="bill-greetings-update-count">Bill Greetings Updates: 0</div>
+    <div id="bill-any-age-update-count">Any Age Updates (via Bill): 0</div>
+    <div id="bill-age-update-count">Bill Age Updates: 0</div>
+    <br />
+    <div><button id="new-web-view-button" type="button">Create a new People WebView!</button></div>
+    <script>
+      const papi = require('@papi/frontend');
+      const { logger } = require('@papi/frontend');
+      const { htmlEncode, serialize } = require('platform-bible-utils');
+
+      function print(input) {
+        logger.debug(input);
+      }
+
+      const dataProviderPromise = papi.dataProviders.get('helloSomeone.people');
+
+      async function setupWebView() {
+        const peopleDataProvider = await dataProviderPromise;
+
+        // Attach handler for greetings-button
+        const greetingsButton = document.getElementById('greetings-button');
+        greetingsButton.addEventListener('click', async () => {
+          const nameInput = document.getElementById('name-input');
+          const greeting = await peopleDataProvider.getGreeting(nameInput.value.toLowerCase());
+          const helloSomeoneOutput = document.getElementById('greetings-button-output');
+          helloSomeoneOutput.textContent = htmlEncode(greeting || '');
+          print(greeting);
+        });
+        greetingsButton.addEventListener('contextmenu', async (e) => {
+          e.preventDefault();
+          const nameInput = document.getElementById('name-input');
+          const name = nameInput.value.toLowerCase();
+          const promises = new Array(10000);
+          for (let i = 0; i < 10000; i += 1) promises[i] = peopleDataProvider.getGreeting(name);
+          await Promise.all(promises);
+          print('Done');
+        });
+
+        // Attach handler for delete-button
+        const deleteButton = document.getElementById('delete-button');
+        deleteButton.addEventListener('click', async () => {
+          const nameInput = document.getElementById('name-input');
+          const success = await peopleDataProvider.deletePerson(nameInput.value.toLowerCase());
+          const helloSomeoneOutput = document.getElementById('greetings-button-output');
+          helloSomeoneOutput.textContent = htmlEncode(
+            `${success ? 'Successfully' : 'Unsuccessfully'} deleted ${nameInput.value}.${
+              success ? ' RIP ⚰️' : ''
+            }`.replace(/'/g, '`'),
+          );
+        });
+
+        // Attach handler for set-greetings-button
+        const setGreetingsButton = document.getElementById('set-greetings-button');
+        setGreetingsButton.addEventListener('click', async () => {
+          const nameInput = document.getElementById('name-input');
+          const name = nameInput.value;
+          const setGreetingsInput = document.getElementById('set-greetings-input');
+          const success = await peopleDataProvider.setGreeting(
+            name.toLowerCase(),
+            setGreetingsInput.value,
+          );
+          const helloSomeoneOutput = document.getElementById('greetings-button-output');
+          helloSomeoneOutput.textContent = htmlEncode(
+            `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s greeting!`.replace(
+              /'/g,
+              '`',
+            ),
+          );
+        });
+
+        // Attach handler for set-age-button
+        const setAgeButton = document.getElementById('set-age-button');
+        setAgeButton.addEventListener('click', async () => {
+          const nameInput = document.getElementById('name-input');
+          const name = nameInput.value;
+          const setAgeInput = document.getElementById('set-age-input');
+          const success = await peopleDataProvider.setAge(
+            name.toLowerCase(),
+            parseInt(setAgeInput.value),
+          );
+          const helloSomeoneOutput = document.getElementById('greetings-button-output');
+          helloSomeoneOutput.textContent = htmlEncode(
+            `${success ? 'Successfully' : 'Unsuccessfully'} set ${name}'s age!`.replace(/'/g, '`'),
+          );
+        });
+
+        // Update the 'people' display on load and on updates
+        peopleDataProvider.subscribePeople(undefined, (people) => {
+          const peopleData = document.getElementById('people-data');
+          const peopleString = serialize(people, undefined, 2);
+          peopleData.textContent = htmlEncode(peopleString.replace(/"/g, '`'));
+          print(peopleString);
+        });
+
+        // Update the people update count on any people update
+        let peopleUpdateCount = 0;
+        peopleDataProvider.subscribePeople(
+          undefined,
+          () => {
+            peopleUpdateCount += 1;
+            const peopleUpdateCountDiv = document.getElementById('people-update-count');
+            peopleUpdateCountDiv.textContent = htmlEncode(`People Updates: ${peopleUpdateCount}`);
+          },
+          { retrieveDataImmediately: false },
+        );
+
+        // Update the greetings count on greetings updates
+        let billAnyGreetingsUpdateCount = 0;
+        peopleDataProvider.subscribeGreeting(
+          'BiLl',
+          () => {
+            billAnyGreetingsUpdateCount += 1;
+            const billAnyGreetingsUpdateCountDiv = document.getElementById(
+              'bill-any-greetings-update-count',
+            );
+            billAnyGreetingsUpdateCountDiv.textContent = htmlEncode(
+              `Any Greetings Updates (via Bill): ${billAnyGreetingsUpdateCount}`,
+            );
+          },
+          { retrieveDataImmediately: false, whichUpdates: '*' },
+        );
+
+        // Update the greetings count on greetings updates
+        let billGreetingsUpdateCount = -1;
+        peopleDataProvider.subscribeGreeting('bIlL', () => {
+          billGreetingsUpdateCount += 1;
+          const billGreetingsUpdateCountDiv = document.getElementById(
+            'bill-greetings-update-count',
+          );
+          billGreetingsUpdateCountDiv.textContent = htmlEncode(
+            `Bill Greetings Updates: ${billGreetingsUpdateCount}`,
+          );
+        });
+
+        // Update the age count on age updates
+        let billAnyAgeUpdateCount = 0;
+        peopleDataProvider.subscribeAge(
+          'BiLl',
+          () => {
+            billAnyAgeUpdateCount += 1;
+            const billAnyAgeUpdateCountDiv = document.getElementById('bill-any-age-update-count');
+            billAnyAgeUpdateCountDiv.textContent = htmlEncode(
+              `Any Age Updates (via Bill): ${billAnyAgeUpdateCount}`,
+            );
+          },
+          { retrieveDataImmediately: false, whichUpdates: '*' },
+        );
+
+        // Update the age count on age updates
+        let billAgeUpdateCount = -1;
+        peopleDataProvider.subscribeAge('bIlL', () => {
+          billAgeUpdateCount += 1;
+          const billAgeUpdateCountDiv = document.getElementById('bill-age-update-count');
+          billAgeUpdateCountDiv.textContent = htmlEncode(`Bill Age Updates: ${billAgeUpdateCount}`);
+        });
+
+        // Attach handler for new-web-view-button
+        const newWebViewButton = document.getElementById('new-web-view-button');
+        newWebViewButton.addEventListener('click', async () => {
+          const webViewId = await papi.webViews.getWebView('helloSomeone.peopleViewer', {
+            type: 'float',
+            floatSize: {
+              width: 450,
+              height: 350,
+            },
+          });
+          print(`New People webview id: ${webViewId}`);
+        });
+      }
+
+      if (document.readyState === 'loading')
+        document.addEventListener('DOMContentLoaded', setupWebView);
+      else setupWebView();
+
+      //# sourceURL=hello-someone.web-view.html
+    </script>
+  </body>
+</html>

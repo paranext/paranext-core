@@ -1,0 +1,13 @@
+.papi-menu-item {
+  background-color: transparent;
+}
+
+.papi-menu-icon-trailing {
+  margin-left: 10px;
+  place-content: flex-end;
+}
+
+.papi-menu-item img {
+  max-width: 24px;
+  max-height: 24px;
+}

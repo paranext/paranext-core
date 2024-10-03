@@ -1,0 +1,124 @@
+name: Package
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      debug_enabled:
+        type: boolean
+        description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
+        required: false
+        default: false
+
+jobs:
+  publish:
+    name: Main on ${{ matrix.os }}, .Net ${{ matrix.dotnet_version }}
+
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        dotnet_version: [8.0.x]
+
+    steps:
+      - name: Install MacPorts
+        if: ${{ matrix.os == 'macos-latest' }}
+        uses: melusina-org/setup-macports@v1
+
+      - name: Install icu4c on macOS
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          sudo port -v install icu
+
+      - name: Checkout git repo
+        uses: actions/checkout@v4
+
+      - name: Install .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ matrix.dotnet_version }}
+
+      - name: Read package.json
+        id: package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'package.json'
+
+      - name: Install Node and NPM
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
+          cache: npm
+
+      - name: Install and build
+        run: |
+          npm install
+          npm run build
+
+      - name: Update release version
+        shell: bash
+        run: |
+          COMMIT_HASH=$(git rev-parse --short "$GITHUB_SHA")
+          cd ./release/app
+          CURRENT_VERSION=$(node -pe "require('./package.json').version")
+          NEW_VERSION="${CURRENT_VERSION}-commit.${COMMIT_HASH}"
+          echo "Updating version from ${CURRENT_VERSION} to ${NEW_VERSION}"
+          npm --no-git-tag-version version $NEW_VERSION
+
+      - name: Publish releases - Windows
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: |
+          npm exec electron-builder -- build --publish never --win
+
+      - name: Publish releases - macOS
+        if: ${{ matrix.os == 'macos-latest' }}
+        # env:
+        #   # These values are used for auto updates signing
+        #   APPLE_ID: ${{ secrets.APPLE_ID }}
+        #   APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
+        #   CSC_LINK: ${{ secrets.CSC_LINK }}
+        #   CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+        run: |
+          npm exec electron-builder -- build --publish never --mac
+
+      - name: Publish releases - Linux
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          # no hardlinks so dependencies are copied
+          USE_HARD_LINKS: false
+        run: |
+          npm exec electron-builder -- build --publish never --linux
+
+      - name: Upload Windows artifacts
+        if: ${{ matrix.os == 'windows-latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-windows
+          path: |
+            ./release/build/*.exe
+            !./release/build/*Setup*.exe
+
+      - name: Upload macOS artifacts
+        if: ${{ matrix.os == 'macos-latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-macos
+          path: |
+            ./release/build/*.dmg
+
+      - name: Upload Linux artifacts
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-linux
+          path: |
+            ./release/build/*.AppImage
+
+      # Enable tmate debugging of manually-triggered workflows if the input option was provided
+      - name: Setup tmate session
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
