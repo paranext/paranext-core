@@ -1,10 +1,10 @@
 import { logger } from '@papi/backend';
 
 export async function activate() {
-  logger.info('Legacy comment manager is activating!');
+  logger.info('Extension template is activating!');
 }
 
 export async function deactivate() {
-  logger.info('Legacy comment manager is deactivating!');
+  logger.info('Extension template is deactivating!');
   return true;
 }
