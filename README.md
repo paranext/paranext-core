@@ -2,6 +2,8 @@
 
 Basic extension template for Platform.Bible
 
+<!-- <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info). -->
+
 ## Template Info
 
 This is a webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs. Note that the `*.web-view.*` files and the `public/assets` folder mentioned in [Summary](#summary) are not present in this template. For inspiration on what these could look like, refer to any extension that is built using this template. An example would be the [Text Collection extension](https://github.com/paranext/paranext-extension-text-collection).
@@ -32,13 +34,11 @@ To make the process of customizing from the template as smooth as possible, we r
 - In `manifest.json`:
 
   - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
-  - Replace the description with your own description
   - Update ownership information and other relevant fields as desired
 
 - In `package.json`:
 
   - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
-  - Replace the description with your own description
   - Update ownership information and other relevant fields as desired
 
 - In `assets/displayData.json`:
@@ -69,9 +69,13 @@ To make the process of customizing from the template as smooth as possible, we r
 
 The `manifest.json` and `package.json` files contain information specific to your extension. Add your extension's details in these two files as needed. See more information on the `manifest.json` and `package.json` files in [Extension Anatomy](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#extension-manifest).
 
-#### Remove Template Info
+#### Hide Template Info
 
-Once finished customizing this template to be your own, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
+Once finished customizing this template to be your own, you can uncomment the [HTML comment tag](https://www.w3schools.com/html/html_comments.asp) above the [Template Info](#template-info) section to hide this template-related info in this readme. You can do this by clicking on the line and doing CTRL + / in VS Code. You can also do this manually by removing the first opening '&lt;!--' and the only closing '-->' on the line. Leaving this info commented in your readme will hide it in your readme while avoiding merge conflicts if you decide to [update this extension from the template](#to-update-this-extension-from-the-template) in the future. If you never want to update this extension from the template, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
+
+Note: if you [update this extension from the template](#to-update-this-extension-from-the-template), there may be important changes in this section like additional customizations you must make to this extension. Please keep an eye out for readme changes when updating from the template.
+
+<!-- Closing comment tag for Template Info Section -->
 
 ## Summary
 
