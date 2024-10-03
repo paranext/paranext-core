@@ -1,5 +1,5 @@
 {
-  "name": "paranext-extension-template",
+  "name": "helloSomeone",
   "version": "0.0.1",
   "displayData": "assets/displayData.json",
   "author": "Paranext",
@@ -7,10 +7,10 @@
   "main": "src/main.ts",
   "extensionDependencies": {},
   "elevatedPrivileges": [],
-  "types": "src/types/paranext-extension-template.d.ts",
+  "types": "src/types/hello-someone.d.ts",
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",
   "localizedStrings": "contributions/localizedStrings.json",
-  "activationEvents": []
+  "activationEvents": ["onCommand:helloSomeone.helloSomeone"]
 }
