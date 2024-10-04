@@ -10,11 +10,12 @@ module.exports = {
   ],
   rules: {
     'color-named': null,
-    'function-parentheses-space-inside': null,
     'max-nesting-depth': 2,
     'no-descending-specificity': null,
     'selector-max-compound-selectors': 4,
     'selector-max-id': 1,
+    // only -webkit-mask-... rules are working, not the ones without -webkit
+    'property-no-vendor-prefix': [true, { ignoreProperties: [/mask-.*/] }],
   },
 };
 

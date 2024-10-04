@@ -1,10 +1,14 @@
 {
-  "name": "paranext-extension-template",
+  "name": "platformScriptureEditor",
   "version": "0.0.1",
-  "description": "Extension template for Paranext. Powered by webpack",
+  "description": "Editor extension for Platform.Bible",
   "author": "Paranext",
   "license": "MIT",
   "main": "src/main.ts",
-  "types": "src/types/paranext-extension-template.d.ts",
+  "types": "src/types/platform-scripture-editor.d.ts",
+  "menus": "contributions/menus.json",
+  "settings": "contributions/settings.json",
+  "projectSettings": "contributions/projectSettings.json",
+  "localizedStrings": "contributions/localizedStrings.json",
   "activationEvents": []
 }
