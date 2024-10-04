@@ -17,7 +17,7 @@ export const SINGLE_TEMPLATE_NAME = 'paranext-extension-template';
 /** The url for the single extension template remote as used in the git scripts */
 export const SINGLE_TEMPLATE_URL = 'https://github.com/paranext/paranext-extension-template';
 /** The branch to use in pulling changes from `SINGLE_TEMPLATE_REMOTE_NAME` in the git scripts */
-export const SINGLE_TEMPLATE_BRANCH = 'main';
+export const SINGLE_TEMPLATE_BRANCH = '5680aa4cd42d57e7da98a0c356e21c8a6bcc741c';
 
 // #region localization
 
