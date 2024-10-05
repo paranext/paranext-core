@@ -1,5 +1,4 @@
 using System.Diagnostics.CodeAnalysis;
-using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 
 namespace TestParanextDataProvider.Projects;

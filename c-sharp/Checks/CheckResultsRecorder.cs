@@ -1,3 +1,4 @@
+using Paranext.DataProvider.ParatextUtils;
 using Paratext.Checks;
 using Paratext.Data;
 using Paratext.Data.Checking;
@@ -15,8 +16,6 @@ namespace Paranext.DataProvider.Checks;
 /// </summary>
 public sealed class CheckResultsRecorder(string checkId, string projectId) : IRecordCheckError
 {
-    public int CurrentBookNumber { get; set; } = 0;
-
     public void RecordError(
         ITextToken token,
         int offset,
@@ -27,16 +26,18 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
         VerseListItemType type = VerseListItemType.Error
     )
     {
-        var chapterVerse = token.ScrRefString.Split(":");
-        int chapterNumber = int.Parse(chapterVerse[0]);
-        int verseNumber = GetVerseNumber(chapterVerse[1]);
-        VerseRef verseRef = new (CurrentBookNumber, chapterNumber, verseNumber);
-        CheckRunResults.Add(new CheckRunResult(
-            checkId,
-            projectId,
-            message,
-            new CheckLocation(verseRef, offset),
-            new CheckLocation(verseRef, offset + length)));
+        CheckRunResults.Add(
+            new CheckRunResult(
+                checkId,
+                projectId,
+                message,
+                // ParatextData adds a space at the end sometimes that isn't in the text
+                token.Text.TrimEnd(),
+                // Actual offsets will be calculated below after results have been filtered
+                new CheckLocation(token.VerseRef, offset),
+                new CheckLocation(token.VerseRef, 0)
+            )
+        );
     }
 
     public void RecordError(
@@ -49,34 +50,79 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
         VerseListItemType type = VerseListItemType.Error
     )
     {
-        CheckRunResults.Add(new CheckRunResult(
-            checkId,
-            projectId,
-            message,
-            new CheckLocation(vref, selectionStart),
-            new CheckLocation(vref, selectionStart + text.Length)));
+        CheckRunResults.Add(
+            new CheckRunResult(
+                checkId,
+                projectId,
+                message,
+                // ParatextData adds a space at the end sometimes that isn't in the text
+                text.TrimEnd(),
+                // Actual offsets will be calculated below after results have been filtered
+                new CheckLocation(vref, selectionStart),
+                new CheckLocation(vref, 0)
+            )
+        );
+    }
+
+    /// <summary>
+    /// Remove all results that are within the given book and return them
+    /// </summary>
+    /// <returns>All results that were removed</returns>
+    public List<CheckRunResult> TrimResultsFromBook(int bookNum)
+    {
+        var retVal = new List<CheckRunResult>();
+        for (int i = CheckRunResults.Count - 1; i >= 0; i--)
+        {
+            var result = CheckRunResults[i];
+            var verseRef = result.Start.VerseRef;
+            if (verseRef.BookNum == bookNum)
+            {
+                retVal.Add(result);
+                CheckRunResults.RemoveAt(i);
+            }
+        }
+        return retVal;
+    }
+
+    /// <summary>
+    /// Remove all results that are not within the given range
+    /// </summary>
+    public void FilterResults(CheckInputRange range)
+    {
+        for (int i = CheckRunResults.Count - 1; i >= 0; i--)
+        {
+            var result = CheckRunResults[i];
+            var verseRef = result.Start.VerseRef;
+            if (!range.IsWithinRange(result.ProjectId, verseRef.BookNum, verseRef.ChapterNum))
+                CheckRunResults.RemoveAt(i);
+        }
+    }
+
+    /// <summary>
+    /// Given an indexed view of USFM text, determine the actual offsets to include for each result
+    /// </summary>
+    public void CalculateActualOffsets(UsfmBookIndexer indexer)
+    {
+        foreach (var result in CheckRunResults)
+        {
+            var verseIndex = indexer.GetIndex(result.Start.VerseRef);
+            if (!verseIndex.HasValue)
+            {
+                result.Start.Offset = 0;
+                continue;
+            }
+
+            var textIndex = indexer.Usfm.IndexOf(result.Text, verseIndex.Value);
+            if (textIndex < 0)
+            {
+                result.Start.Offset = 0;
+                continue;
+            }
+
+            result.Start.Offset += textIndex - verseIndex.Value;
+            result.End.Offset = result.Start.Offset + result.Text.Length;
+        }
     }
 
     public List<CheckRunResult> CheckRunResults { get; } = [];
-
-    private static int GetVerseNumber(string verseNumber)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(verseNumber);
-        if (!IsDigit(verseNumber[0]))
-            throw new ArgumentException($"verseNumber must start with an integer: {verseNumber}");
-
-        int lastIndex = 1;
-        while (lastIndex < verseNumber.Length)
-        {
-            if (!IsDigit(verseNumber[lastIndex]))
-                break;
-            lastIndex++;
-        }
-        return int.Parse(verseNumber[..lastIndex]);
-    }
-
-    private static bool IsDigit(char c)
-    {
-        return c >= '0' && c <= '9';
-    }
 }
