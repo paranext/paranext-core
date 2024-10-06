@@ -29,7 +29,7 @@ const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
 const scrRefsSerialized = localStorage.getItem(SCR_REFS_STORAGE_KEY);
 /** Object that maps scroll group ids to the scripture reference at each of those scroll group ids */
 const scrRefs: { [scrollGroupId: ScrollGroupId]: ScriptureReference | undefined } =
-  scrRefsSerialized ? deserialize(scrRefsSerialized) ?? {} : {};
+  scrRefsSerialized ? (deserialize(scrRefsSerialized) ?? {}) : {};
 
 function saveScrRefs() {
   localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
