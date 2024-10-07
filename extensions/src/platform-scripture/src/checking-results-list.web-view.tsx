@@ -83,6 +83,7 @@ const parseResults = (
       (item) => JSON.stringify(item) === JSON.stringify(newData),
     );
     if (!isDuplicate) resultsSet.data.push(newData);
+    else logger.debug(`duplicate result found ${JSON.stringify(newData)}`);
   });
   return resultsSets;
 };
