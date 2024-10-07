@@ -44,8 +44,8 @@ public class UsfmBookIndexer
 
     /// <summary>
     /// Returns the index into the USFM string that corresponds to the start of the chapter and
-    /// verse in this VerseRef. If the verse number is 0, returns the index that corresponds to the
-    /// start of the chapter. If the chapter and verse can't be found, returns null.
+    /// verse provided. If the verse number is 0, returns the index that corresponds to the start of
+    /// the chapter. If the chapter and verse can't be found, returns null.
     /// <br/>
     /// A returned index points to the backslash of the "\v" or "\c" marker.
     /// </summary>
