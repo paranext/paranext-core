@@ -16,6 +16,8 @@ namespace Paranext.DataProvider.Checks;
 /// </summary>
 public sealed class CheckResultsRecorder(string checkId, string projectId) : IRecordCheckError
 {
+    public List<CheckRunResult> CheckRunResults { get; } = [];
+
     public void RecordError(
         ITextToken token,
         int offset,
@@ -123,6 +125,4 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
             result.End.Offset = result.Start.Offset + result.Text.Length;
         }
     }
-
-    public List<CheckRunResult> CheckRunResults { get; } = [];
 }
