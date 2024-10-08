@@ -1,8 +1,7 @@
 import fs from 'fs';
 import webpackPaths from '../configs/webpack.paths';
 
-const { srcNodeModulesPath, appNodeModulesPath, erbNodeModulesPath } =
-  webpackPaths;
+const { srcNodeModulesPath, appNodeModulesPath, erbNodeModulesPath } = webpackPaths;
 
 if (fs.existsSync(appNodeModulesPath)) {
   if (!fs.existsSync(srcNodeModulesPath)) {
