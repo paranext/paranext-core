@@ -10,6 +10,7 @@ using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
+using Paratext.Checks.Checks;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -61,6 +62,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         Getters.Add("getSetting", GetProjectSetting);
         Setters.Add("setSetting", SetProjectSetting);
+
+        Getters.Add("getScrStylesheet", GetScrStyleSheet);
 
         RegisterSettingsValidators();
     }
@@ -462,6 +465,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // The value of returned strings are case-sensitive and cannot change unless data provider subscriptions change
         return ResponseToRequest.Succeeded(AllScriptureDataTypes);
+    }
+
+    public ResponseToRequest GetScrStyleSheet(string jsonString)
+    {
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        // This is an overly simplistic way to get a stylesheet.
+        // Booknum = 1 represents Genesis, for which the function will return the the default
+        // stylesheet for canonical books.
+        ScrStylesheet scrStylesheet = scrText.ScrStylesheet(1);
+
+        if (scrStylesheet == null)
+            return ResponseToRequest.Failed($"ScrStylesheet was null");
+
+        return ResponseToRequest.Succeeded(scrStylesheet);
     }
 
     #endregion

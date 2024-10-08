@@ -36,3 +36,12 @@ export const extractRepeatedWords = (
 
   return repeatedWords;
 };
+
+export const extractMarkers = (text: string, target: string | undefined = undefined): string[] => {
+  // Finds markers (a backslash character followed by any number of characters until a whitespace is detected)
+  const markers = text.match(/\\[a-zA-Z0-9]+\*?/g) || [];
+
+  if (target) return markers?.filter((marker) => marker === target);
+
+  return markers;
+};

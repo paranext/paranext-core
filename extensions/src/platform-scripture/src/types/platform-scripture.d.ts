@@ -11,6 +11,20 @@ declare module 'platform-scripture' {
   import { Dispose, LocalizeKey, UnsubscriberAsync } from 'platform-bible-utils';
   import type { Usj } from '@biblionexus-foundation/scripture-utilities';
 
+  // export type ScrTag = {
+  //   // bunch of stuff
+  // }
+
+  // // Can we import this type from somewhere, like with VerseRef?
+  // export type ScrStylesheet = {
+  //   altStylesheetErrors: string[] | undefined,
+  //   mainStylesheetErrors: string[] | undefined,
+  //   name: string,
+  //   tagCount: number,
+  //   tags: ScrTag[]
+  // };
+  export type ScrStylesheet = string | undefined;
+
   // #region Project Interface Data Types
 
   /** Provides Scripture data in USFM format by book */
@@ -89,6 +103,15 @@ declare module 'platform-scripture' {
      * figures, and other things that are not considered "verse text".
      */
     VersePlainText: DataProviderDataType<VerseRef, string | undefined, string>;
+  };
+
+  /** Provides ScrStylesheet that contains marker specifications */
+  export type ScrStylesheetProjectInterfaceDataTypes = {
+    /**
+     * Gets the data in plain text form for the specified verse. Plain text does not include notes,
+     * figures, and other things that are not considered "verse text".
+     */
+    ScrStylesheet: DataProviderDataType<ScrStylesheet, string, string>;
   };
 
   /**
@@ -458,6 +481,32 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
     };
 
+  /** Provides ScrStylesheet, that contains information about the markers used in this project */
+  export type IScrStylesheetProjectDataProvider =
+    IProjectDataProvider<ScrStylesheetProjectInterfaceDataTypes> & {
+      /**
+       * Gets the stylesheet for the provided book number
+       *
+       * @todo Add support for getting custom stylesheets
+       */
+      getScrStylesheet(bookNum: number): Promise<ScrStylesheet | undefined>;
+      /** Setting is not supported for now */
+      setScrStylesheet(bookNum: number): Promise<void>;
+      /**
+       * Subscribe to run a callback function when stylesheet changed
+       *
+       * @param bookNum Tells the provider what changes to listen for
+       * @param callback Function to run with the updated stylesheet for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeVersePlainText(
+        bookNum: number,
+        callback: (ScrStylesheet: ScrStylesheet | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
   // #endregion
 
   // #region Check Data Types
@@ -672,6 +721,7 @@ declare module 'papi-shared-types' {
     IUSJChapterProjectDataProvider,
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
+    IScrStylesheetProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     CheckDetails,
@@ -689,6 +739,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Chapter': IUSJChapterProjectDataProvider;
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
+    'platformScripture.ScrStylesheet': IScrStylesheetProjectDataProvider;
   }
 
   export interface DataProviders {
@@ -730,6 +781,10 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openRepeatedWordsInventory': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    'platformScripture.openMarkersInventory': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
@@ -779,5 +834,9 @@ declare module 'papi-shared-types' {
     'platformScripture.repeatableWords': string;
 
     'platformScripture.nonRepeatableWords': string;
+
+    'platformScripture.validMarkers': string;
+
+    'platformScripture.invalidMarkers': string;
   }
 }
