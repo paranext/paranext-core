@@ -29,7 +29,18 @@
       "windows": {
         "processName": "ParanextDataProvider.exe"
       },
-      "justMyCode": false
+      "justMyCode": false,
+      "suppressJITOptimizations": true,
+      "sourceLinkOptions": {
+        "*": {
+          "enabled": true
+        }
+      },
+      "symbolOptions": {
+        "searchPaths": [],
+        "searchMicrosoftSymbolServer": true,
+        "searchNuGetOrgSymbolServer": true
+      }
     },
     {
       "name": "Debug Platform Backend",
