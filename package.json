@@ -39,7 +39,7 @@
       "url": "https://github.com/tjcouch-sil"
     }
   ],
-  "main": "./src/main/main.ts",
+  "main": "./.erb/dll/main.bundle.dev.js",
   "scripts": {
     "build": "concurrently --kill-others-on-fail \"npm:build:main\" \"npm:build:extension-host\" \"npm:build:renderer\" \"npm:build:types\" \"npm:build:extensions\" \"npm:build:data-release\"",
     "build:dll": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
@@ -76,8 +76,9 @@
     "postinstall": "patch-package && tsx .erb/scripts/check-native-dep.js && electron-builder install-app-deps && npm run build:dll && cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.renderer.dev.dll.ts",
     "prepare": "husky install && npm run csharp:tool:restore",
     "rebuild": "electron-rebuild --parallel --types prod,dev,optional --module-dir release/app",
-    "start": "tsx ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
-    "start:main": "cross-env NODE_ENV=development electronmon -r ts-node/register/transpile-only .",
+    "prestart": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.main.dev.ts",
+    "start": "ts-node ./.erb/scripts/check-port-in-use.js && npm run start:renderer",
+    "start:main": "concurrently -k \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./.erb/configs/webpack.config.main.dev.ts\" \"electronmon .\"",
     "start:extension-host": "cross-env NODE_ENV=development nodemon --transpile-only ./src/extension-host/extension-host.ts",
     "start:extensions": "cd extensions && npm run watch",
     "start:preload": "cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --config ./.erb/configs/webpack.config.preload.dev.ts",
@@ -95,7 +96,7 @@
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
     "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
-  "browserslist": [],
+  "browserslist": ["extends browserslist-config-erb"],
   "dependencies": {
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
@@ -127,7 +128,7 @@
     "@babel/preset-env": "^7.25.7",
     "@babel/preset-react": "^7.25.7",
     "@babel/preset-typescript": "^7.25.7",
-    "@electron/notarize": "^2.2.1",
+    "@electron/notarize": "^2.3.2",
     "@electron/rebuild": "^3.6.2",
     "@pmmmwh/react-refresh-webpack-plugin": "^0.5.15",
     "@storybook/addon-essentials": "^8.3.4",
@@ -152,7 +153,6 @@
     "@types/react-dom": "^18.3.0",
     "@types/react-test-renderer": "^18.3.0",
     "@types/source-map-support": "^0.5.10",
-    "@types/terser-webpack-plugin": "^5.2.0",
     "@types/webpack-bundle-analyzer": "^4.7.0",
     "@types/ws": "^8.5.12",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
@@ -164,7 +164,7 @@
     "css-loader": "^6.11.0",
     "css-minimizer-webpack-plugin": "^7.0.0",
     "detect-port": "^1.6.1",
-    "electron": "^27.3.3",
+    "electron": "^32.1.2",
     "electron-builder": "^24.13.3",
     "electron-devtools-installer": "^3.2.0",
     "electronmon": "^2.0.3",
@@ -231,11 +231,11 @@
     "npm": ">=7.x"
   },
   "electronmon": {
-    "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**"],
+    "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**", ".erb/dll/**"],
     "logLevel": "quiet"
   },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
-    "node": "20.11.1"
+    "node": "20.18.0"
   }
 }
