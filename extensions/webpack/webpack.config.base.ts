@@ -99,7 +99,7 @@ const configBase: webpack.Configuration = {
           // We are not using css-loader since we are getting style files using ?inline. css-loader
           // would allow us to import CSS into CommonJS
           // Compiles Sass to CSS
-          'sass-loader',
+          { loader: 'sass-loader', options: { api: 'modern-compiler' } },
         ],
       },
       /**
