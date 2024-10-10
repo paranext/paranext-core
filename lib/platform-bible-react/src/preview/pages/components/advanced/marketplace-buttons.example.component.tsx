@@ -38,28 +38,28 @@ export default function MarketplaceButtonExamples() {
       </p>
       <br />
       FilterButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-space-x-2">
         <FilterDropdown groups={[filterGroup, sortGroup]} />
       </div>
       InstallButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-space-x-2">
         <InstallButton isInstalling={false} handleClick={() => {}} buttonText="Get" />
         <InstallButton isInstalling handleClick={() => {}} buttonText="Get" />
         <InstallButton isInstalling={false} handleClick={() => {}} />
         <InstallButton isInstalling handleClick={() => {}} />
       </div>
       DisableButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-space-x-2">
         <DisableButton isDisabling={false} handleClick={() => {}} />
         <DisableButton isDisabling handleClick={() => {}} />
       </div>
       EnableButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-space-x-2">
         <EnableButton isEnabling={false} handleClick={() => {}} />
         <EnableButton isEnabling handleClick={() => {}} />
       </div>
       UpdateButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-space-x-2">
         <UpdateButton isUpdating={false} handleClick={() => {}} />
         <UpdateButton isUpdating handleClick={() => {}} />
       </div>

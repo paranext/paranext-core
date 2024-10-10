@@ -14,7 +14,7 @@ import HowToGuide from './guide/howto.component';
 function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
   return (
     <div>
-      <p className="pr-mb-2 pr-text-muted-foreground">
+      <p className="tw-mb-2 tw-text-muted-foreground">
         A place to look up and learn about some concepts
       </p>
       <VerticalTabs dir={direction} defaultValue="Howto">

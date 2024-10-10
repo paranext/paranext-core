@@ -17,7 +17,7 @@ export default function ChecklistExamples() {
 
   return (
     <Card>
-      <CardContent className="pr-h-1/2 pr-w-full pr-columns-2 pr-overflow-auto *:pr-m-4">
+      <CardContent className="tw-h-1/2 tw-w-full tw-columns-2 tw-overflow-auto *:tw-m-4">
         <Checklist
           handleSelectListItem={handleSelectListItem}
           listItems={listItems}

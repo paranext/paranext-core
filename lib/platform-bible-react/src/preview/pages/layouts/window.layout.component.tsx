@@ -23,13 +23,13 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
   };
   const [scrRef, setScrRef] = useState(defaultScrRef);
   return (
-    <div className="pr-rounded-md pr-border">
-      <div className="pr-flex pr-flex-row pr-rounded-se-md pr-bg-muted/50">
-        <div className="pr-m-2">
+    <div className="tw-rounded-md tw-border">
+      <div className="tw-flex tw-flex-row tw-rounded-se-md tw-bg-muted/50">
+        <div className="tw-m-2">
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
         </div>
-        <div className="pr-grow" />
-        <div className="pr-m-2 pr-flex">
+        <div className="tw-grow" />
+        <div className="tw-m-2 tw-flex">
           <Tabs defaultValue="a" dir={direction}>
             <TabsList>
               <TabsTrigger value="a">A</TabsTrigger>
@@ -44,20 +44,20 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
               <DropdownMenuLabel>Tab Options</DropdownMenuLabel>
               <DropdownMenuGroup>
                 <DropdownMenuItem
-                  className="pr-flex pr-justify-between pr-gap-2"
+                  className="tw-flex tw-justify-between tw-gap-2"
                   onClick={(e) => {
                     e.preventDefault();
                   }}
                 >
                   <span>Zoom</span>
-                  <span className="pr-flex pr-gap-2">
+                  <span className="tw-flex tw-gap-2">
                     <span>50%</span>
                     <span>-----o-----</span>
                     <span>200%</span>
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="pr-flex pr-justify-between pr-gap-2"
+                  className="tw-flex tw-justify-between tw-gap-2"
                   onClick={(e) => {
                     e.preventDefault();
                   }}
@@ -66,27 +66,27 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
                   <span>[Publish v]</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="pr-flex pr-justify-between pr-gap-2"
+                  className="tw-flex tw-justify-between tw-gap-2"
                   onClick={(e) => {
                     e.preventDefault();
                   }}
                 >
                   <span>Scroll with</span>
                   <Tabs defaultValue="a" dir={direction}>
-                    <TabsList className="pr-h-7">
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="a">
+                    <TabsList className="tw-h-7">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="a">
                         A
                       </TabsTrigger>
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="b">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="b">
                         B
                       </TabsTrigger>
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="c">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="c">
                         C
                       </TabsTrigger>
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="d">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="d">
                         D
                       </TabsTrigger>
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="-">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="-">
                         -
                       </TabsTrigger>
                     </TabsList>
@@ -95,13 +95,13 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem className="pr-flex pr-justify-between pr-gap-2">
+                <DropdownMenuItem className="tw-flex tw-justify-between tw-gap-2">
                   <span>1 item in a group</span>
                   <DropdownMenuShortcut>CTRL⇧F</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="pr-flex pr-justify-between pr-gap-2">
+              <DropdownMenuItem className="tw-flex tw-justify-between tw-gap-2">
                 <span>Item without group</span>
                 <DropdownMenuShortcut>CTRL⇧F</DropdownMenuShortcut>
               </DropdownMenuItem>
@@ -110,13 +110,13 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
           <Button variant="ghost">X</Button>
         </div>
         <Button
-          className="pr-h-14 pr-w-14 pr-rounded-ee-none pr-rounded-ss-none"
+          className="tw-h-14 tw-w-14 tw-rounded-ee-none tw-rounded-ss-none"
           variant="secondary"
         >
-          <p className="pr-text-2xl">+</p>
+          <p className="tw-text-2xl">+</p>
         </Button>
       </div>
-      <div className="pr-p-4">
+      <div className="tw-p-4">
         <p>
           Imagine here the text of <code>{JSON.stringify(scrRef)}</code>
         </p>

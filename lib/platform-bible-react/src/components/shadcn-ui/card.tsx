@@ -7,7 +7,7 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
     <div
       ref={ref}
       className={cn(
-        'pr-twp pr-rounded-lg pr-border pr-bg-card pr-text-card-foreground pr-shadow-sm',
+        'pr-twp tw-rounded-lg tw-border tw-bg-card tw-text-card-foreground tw-shadow-sm',
         className,
       )}
       {...props}
@@ -20,7 +20,7 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('pr-twp pr-flex pr-flex-col pr-space-y-1.5 pr-p-6', className)}
+      className={cn('pr-twp tw-flex tw-flex-col tw-space-y-1.5 tw-p-6', className)}
       {...props}
     />
   ),
@@ -32,7 +32,7 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
     <h3
       ref={ref}
       className={cn(
-        'pr-twp pr-text-2xl pr-font-semibold pr-leading-none pr-tracking-tight',
+        'pr-twp tw-text-2xl tw-font-semibold tw-leading-none tw-tracking-tight',
         className,
       )}
       {...props}
@@ -48,13 +48,13 @@ const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn('pr-twp pr-text-sm pr-text-muted-foreground', className)} {...props} />
+  <p ref={ref} className={cn('pr-twp tw-text-sm tw-text-muted-foreground', className)} {...props} />
 ));
 CardDescription.displayName = 'CardDescription';
 
 const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('pr-twp pr-p-6 pr-pt-0', className)} {...props} />
+    <div ref={ref} className={cn('pr-twp tw-p-6 tw-pt-0', className)} {...props} />
   ),
 );
 CardContent.displayName = 'CardContent';
@@ -63,7 +63,7 @@ const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('pr-twp pr-flex pr-items-center pr-p-6 pr-pt-0', className)}
+      className={cn('pr-twp tw-flex tw-items-center tw-p-6 tw-pt-0', className)}
       {...props}
     />
   ),

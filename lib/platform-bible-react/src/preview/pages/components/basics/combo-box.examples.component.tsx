@@ -7,7 +7,7 @@ export default function ComboBoxExamples({ direction }: HasDirection) {
   const [comboBox2Value, setComboBox2Value] = useState<string | undefined>(undefined);
 
   return (
-    <div className="pr-space-y-4">
+    <div className="tw-space-y-4">
       <ComboBox
         dir={direction}
         options={['Option1', 'Option2', 'Option3']}

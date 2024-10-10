@@ -66,7 +66,7 @@ function Compositions({ direction }: HasDirection) {
 
   return (
     <div>
-      <p className="pr-mb-2 pr-text-muted-foreground">
+      <p className="tw-mb-2 tw-text-muted-foreground">
         A place for components that are composed from basic components
       </p>
       <VerticalTabs defaultValue="Book Chapter Control" dir={direction}>

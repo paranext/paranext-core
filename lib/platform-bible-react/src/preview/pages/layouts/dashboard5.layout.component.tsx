@@ -55,103 +55,103 @@ import { HasDirection } from '@/preview/preview-components/direction-toggle.comp
 export default function Dashboard5Examples({ direction }: HasDirection) {
   const [progress, setProgress] = useState<number[]>([25]);
   return (
-    <div className="pr-flex pr-h-[100%] pr-w-full pr-rounded-md pr-bg-muted/40">
-      <aside className="pr-s-0 pr-inset-y-0 pr-z-10 pr-hidden pr-w-14 pr-flex-col pr-rounded-s-md pr-border-e pr-bg-background sm:pr-flex">
-        <nav className="pr-flex pr-flex-col pr-items-center pr-gap-4 pr-px-2 sm:pr-py-5">
-          <div className="pr-group pr-flex pr-h-9 pr-w-9 pr-shrink-0 pr-items-center pr-justify-center pr-gap-2 pr-rounded-full pr-bg-primary pr-text-lg pr-font-semibold pr-text-primary-foreground md:pr-h-8 md:pr-w-8 md:pr-text-base">
-            <Package2 className="pr-group-hover:pr-scale-110 pr-h-4 pr-w-4 pr-transition-all" />
-            <a className="pr-sr-only">Acme Inc</a>
+    <div className="tw-flex tw-h-[100%] tw-w-full tw-rounded-md tw-bg-muted/40">
+      <aside className="tw-s-0 tw-inset-y-0 tw-z-10 tw-hidden tw-w-14 tw-flex-col tw-rounded-s-md tw-border-e tw-bg-background sm:tw-flex">
+        <nav className="tw-flex tw-flex-col tw-items-center tw-gap-4 tw-px-2 sm:tw-py-5">
+          <div className="tw-group tw-flex tw-h-9 tw-w-9 tw-shrink-0 tw-items-center tw-justify-center tw-gap-2 tw-rounded-full tw-bg-primary tw-text-lg tw-font-semibold tw-text-primary-foreground md:tw-h-8 md:tw-w-8 md:tw-text-base">
+            <Package2 className="tw-group-hover:tw-scale-110 tw-h-4 tw-w-4 tw-transition-all" />
+            <a className="tw-sr-only">Acme Inc</a>
           </div>
           <div>
             <div>
-              <div className="pr-flex pr-h-9 pr-w-9 pr-items-center pr-justify-center pr-rounded-lg pr-text-muted-foreground pr-transition-colors hover:pr-text-foreground md:pr-h-8 md:pr-w-8">
-                <Home className="pr-h-5 pr-w-5" />
+              <div className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-lg tw-text-muted-foreground tw-transition-colors hover:tw-text-foreground md:tw-h-8 md:tw-w-8">
+                <Home className="tw-h-5 tw-w-5" />
               </div>
             </div>
           </div>
           <div>
             <div>
-              <div className="pr-flex pr-h-9 pr-w-9 pr-items-center pr-justify-center pr-rounded-lg pr-bg-accent pr-text-accent-foreground pr-transition-colors hover:pr-text-foreground md:pr-h-8 md:pr-w-8">
-                <ShoppingCart className="pr-h-5 pr-w-5" />
+              <div className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-lg tw-bg-accent tw-text-accent-foreground tw-transition-colors hover:tw-text-foreground md:tw-h-8 md:tw-w-8">
+                <ShoppingCart className="tw-h-5 tw-w-5" />
               </div>
             </div>
           </div>
           <div>
             <div>
-              <div className="pr-flex pr-h-9 pr-w-9 pr-items-center pr-justify-center pr-rounded-lg pr-text-muted-foreground pr-transition-colors hover:pr-text-foreground md:pr-h-8 md:pr-w-8">
-                <Package className="pr-h-5 pr-w-5" />
+              <div className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-lg tw-text-muted-foreground tw-transition-colors hover:tw-text-foreground md:tw-h-8 md:tw-w-8">
+                <Package className="tw-h-5 tw-w-5" />
               </div>
             </div>
           </div>
           <div>
             <div>
-              <div className="pr-flex pr-h-9 pr-w-9 pr-items-center pr-justify-center pr-rounded-lg pr-text-muted-foreground pr-transition-colors hover:pr-text-foreground md:pr-h-8 md:pr-w-8">
-                <Users2 className="pr-h-5 pr-w-5" />
+              <div className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-lg tw-text-muted-foreground tw-transition-colors hover:tw-text-foreground md:tw-h-8 md:tw-w-8">
+                <Users2 className="tw-h-5 tw-w-5" />
               </div>
             </div>
           </div>
           <div>
             <div>
-              <div className="pr-flex pr-h-9 pr-w-9 pr-items-center pr-justify-center pr-rounded-lg pr-text-muted-foreground pr-transition-colors hover:pr-text-foreground md:pr-h-8 md:pr-w-8">
-                <LineChart className="pr-h-5 pr-w-5" />
+              <div className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-lg tw-text-muted-foreground tw-transition-colors hover:tw-text-foreground md:tw-h-8 md:tw-w-8">
+                <LineChart className="tw-h-5 tw-w-5" />
               </div>
             </div>
           </div>
         </nav>
-        <nav className="pr-mt-auto pr-flex pr-flex-col pr-items-center pr-gap-4 pr-px-2 sm:pr-py-5">
+        <nav className="tw-mt-auto tw-flex tw-flex-col tw-items-center tw-gap-4 tw-px-2 sm:tw-py-5">
           <div>
             <div>
-              <div className="pr-flex pr-h-9 pr-w-9 pr-items-center pr-justify-center pr-rounded-lg pr-text-muted-foreground pr-transition-colors hover:pr-text-foreground md:pr-h-8 md:pr-w-8">
-                <Settings className="pr-h-5 pr-w-5" />
+              <div className="tw-flex tw-h-9 tw-w-9 tw-items-center tw-justify-center tw-rounded-lg tw-text-muted-foreground tw-transition-colors hover:tw-text-foreground md:tw-h-8 md:tw-w-8">
+                <Settings className="tw-h-5 tw-w-5" />
               </div>
             </div>
           </div>
         </nav>
       </aside>
-      <div className="pr-flex pr-flex-col pr-overflow-auto focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring sm:pr-gap-4 sm:pr-py-4 sm:pr-pl-14">
-        <header className="sm:h-auto pr-sticky pr-top-0 pr-z-30 pr-flex pr-h-14 pr-items-center pr-gap-4 pr-border-b pr-bg-background pr-px-4 sm:pr-static sm:pr-border-0 sm:pr-bg-transparent sm:pr-px-6">
-          <Tabs className="pr-hidden">
+      <div className="tw-flex tw-flex-col tw-overflow-auto focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring sm:tw-gap-4 sm:tw-py-4 sm:tw-pl-14">
+        <header className="sm:h-auto tw-sticky tw-top-0 tw-z-30 tw-flex tw-h-14 tw-items-center tw-gap-4 tw-border-b tw-bg-background tw-px-4 sm:tw-static sm:tw-border-0 sm:tw-bg-transparent sm:tw-px-6">
+          <Tabs className="tw-hidden">
             <TabsList>
               <TabsTrigger value="a">
-                <Button size="icon" variant="outline" className="sm:pr-hidden">
-                  <PanelLeft className="pr-h-5 pr-w-5" />
-                  <a className="pr-sr-only">Toggle Menu</a>
+                <Button size="icon" variant="outline" className="sm:tw-hidden">
+                  <PanelLeft className="tw-h-5 tw-w-5" />
+                  <a className="tw-sr-only">Toggle Menu</a>
                 </Button>
               </TabsTrigger>
               <TabsTrigger value="b" />
             </TabsList>
 
-            {/* <SheetContent side="left" className="sm:max-pr-w-xs"> */}
-            <TabsContent value="a" className="sm:max-pr-w-xs pr-bg-secondary">
-              <nav className="pr-grid pr-gap-6 pr-text-lg pr-font-medium">
-                <div className="pr-group pr-flex pr-h-10 pr-w-10 pr-shrink-0 pr-items-center pr-justify-center pr-gap-2 pr-rounded-full pr-bg-primary pr-text-lg pr-font-semibold pr-text-primary-foreground md:pr-text-base">
-                  <Package2 className="pr-group-hover:pr-scale-110 pr-h-5 pr-w-5 pr-transition-all" />
-                  <a className="pr-sr-only">Acme Inc</a>
+            {/* <SheetContent side="left" className="sm:max-tw-w-xs"> */}
+            <TabsContent value="a" className="sm:max-tw-w-xs tw-bg-secondary">
+              <nav className="tw-grid tw-gap-6 tw-text-lg tw-font-medium">
+                <div className="tw-group tw-flex tw-h-10 tw-w-10 tw-shrink-0 tw-items-center tw-justify-center tw-gap-2 tw-rounded-full tw-bg-primary tw-text-lg tw-font-semibold tw-text-primary-foreground md:tw-text-base">
+                  <Package2 className="tw-group-hover:tw-scale-110 tw-h-5 tw-w-5 tw-transition-all" />
+                  <a className="tw-sr-only">Acme Inc</a>
                 </div>
-                <div className="pr-flex pr-items-center pr-gap-4 pr-px-2.5 pr-text-muted-foreground hover:pr-text-foreground">
-                  <Home className="pr-h-5 pr-w-5" />
+                <div className="tw-flex tw-items-center tw-gap-4 tw-px-2.5 tw-text-muted-foreground hover:tw-text-foreground">
+                  <Home className="tw-h-5 tw-w-5" />
                   Dashboard
                 </div>
-                <div className="pr-flex pr-items-center pr-gap-4 pr-px-2.5 pr-text-foreground">
-                  <ShoppingCart className="pr-h-5 pr-w-5" />
+                <div className="tw-flex tw-items-center tw-gap-4 tw-px-2.5 tw-text-foreground">
+                  <ShoppingCart className="tw-h-5 tw-w-5" />
                   Orders
                 </div>
-                <div className="pr-flex pr-items-center pr-gap-4 pr-px-2.5 pr-text-muted-foreground hover:pr-text-foreground">
-                  <Package className="pr-h-5 pr-w-5" />
+                <div className="tw-flex tw-items-center tw-gap-4 tw-px-2.5 tw-text-muted-foreground hover:tw-text-foreground">
+                  <Package className="tw-h-5 tw-w-5" />
                   Products
                 </div>
-                <div className="pr-flex pr-items-center pr-gap-4 pr-px-2.5 pr-text-muted-foreground hover:pr-text-foreground">
-                  <Users2 className="pr-h-5 pr-w-5" />
+                <div className="tw-flex tw-items-center tw-gap-4 tw-px-2.5 tw-text-muted-foreground hover:tw-text-foreground">
+                  <Users2 className="tw-h-5 tw-w-5" />
                   Customers
                 </div>
-                <div className="pr-flex pr-items-center pr-gap-4 pr-px-2.5 pr-text-muted-foreground hover:pr-text-foreground">
-                  <LineChart className="pr-h-5 pr-w-5" />
+                <div className="tw-flex tw-items-center tw-gap-4 tw-px-2.5 tw-text-muted-foreground hover:tw-text-foreground">
+                  <LineChart className="tw-h-5 tw-w-5" />
                   Settings
                 </div>
               </nav>
             </TabsContent>
           </Tabs>
-          {/*           <Breadcrumb className="pr-hidden md:pr-flex">
+          {/*           <Breadcrumb className="tw-hidden md:tw-flex">
         <BreadcrumbList>
           <BreadcrumbItem>
             <BreadcrumbLink asChild>
@@ -170,17 +170,17 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb> */}
-          <div className="pr-relative pr-ml-auto pr-flex-1 md:pr-grow-0">
-            <Search className="pr-absolute pr-left-2.5 pr-top-2.5 pr-h-4 pr-w-4 pr-text-muted-foreground" />
+          <div className="tw-relative tw-ml-auto tw-flex-1 md:tw-grow-0">
+            <Search className="tw-absolute tw-left-2.5 tw-top-2.5 tw-h-4 tw-w-4 tw-text-muted-foreground" />
             <Input
               type="search"
               placeholder="Search..."
-              className="pr-w-full pr-rounded-lg pr-bg-background pr-pl-8 focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring md:pr-w-[200px] lg:pr-w-[336px]"
+              className="tw-w-full tw-rounded-lg tw-bg-background tw-pl-8 focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring md:tw-w-[200px] lg:tw-w-[336px]"
             />
           </div>
           <DropdownMenu dir={direction}>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="pr-overflow-hidden pr-rounded-full">
+              <Button variant="outline" size="icon" className="tw-overflow-hidden tw-rounded-full">
                 <User />
               </Button>
             </DropdownMenuTrigger>
@@ -194,13 +194,13 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
             </DropdownMenuContent>
           </DropdownMenu>
         </header>
-        <main className="pr-grid pr-flex-1 pr-items-start pr-gap-4 pr-p-4 sm:pr-px-6 sm:pr-py-0 md:pr-gap-8 lg:pr-grid-cols-3 xl:pr-grid-cols-3">
-          <div className="pr-grid pr-auto-rows-max pr-items-start pr-gap-4 md:pr-gap-8 lg:pr-col-span-2">
-            <div className="pr-grid pr-gap-4 sm:pr-grid-cols-2 md:pr-grid-cols-4 lg:pr-grid-cols-2 xl:pr-grid-cols-4">
-              <Card className="sm:pr-col-span-2" x-chunk="dashboard-05-chunk-0">
+        <main className="tw-grid tw-flex-1 tw-items-start tw-gap-4 tw-p-4 sm:tw-px-6 sm:tw-py-0 md:tw-gap-8 lg:tw-grid-cols-3 xl:tw-grid-cols-3">
+          <div className="tw-grid tw-auto-rows-max tw-items-start tw-gap-4 md:tw-gap-8 lg:tw-col-span-2">
+            <div className="tw-grid tw-gap-4 sm:tw-grid-cols-2 md:tw-grid-cols-4 lg:tw-grid-cols-2 xl:tw-grid-cols-4">
+              <Card className="sm:tw-col-span-2" x-chunk="dashboard-05-chunk-0">
                 <CardHeader className="pb-3">
                   <CardTitle>Your Orders</CardTitle>
-                  <CardDescription className="max-pr-w-lg pr-text-balance pr-leading-relaxed">
+                  <CardDescription className="max-tw-w-lg tw-text-balance tw-leading-relaxed">
                     Introducing Our Dynamic Orders Dashboard for Seamless Management and Insightful
                     Analysis.
                   </CardDescription>
@@ -212,10 +212,10 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
               <Card x-chunk="dashboard-05-chunk-1">
                 <CardHeader className="pb-2">
                   <CardDescription>This Week</CardDescription>
-                  <CardTitle className="pr-text-4xl">$1,329</CardTitle>
+                  <CardTitle className="tw-text-4xl">$1,329</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="pr-text-xs pr-text-muted-foreground">
+                  <div className="tw-text-xs tw-text-muted-foreground">
                     +{progress[0]}% from last week
                   </div>
                 </CardContent>
@@ -234,27 +234,27 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
               <Card x-chunk="dashboard-05-chunk-2">
                 <CardHeader className="pb-2">
                   <CardDescription>This Month</CardDescription>
-                  <CardTitle className="pr-text-4xl">$5,329</CardTitle>
+                  <CardTitle className="tw-text-4xl">$5,329</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="pr-text-xs pr-text-muted-foreground">+10% from last month</div>
+                  <div className="tw-text-xs tw-text-muted-foreground">+10% from last month</div>
                 </CardContent>
                 <CardFooter>Progress value={10}</CardFooter>
               </Card>
             </div>
             <Tabs defaultValue="week" dir={direction}>
-              <div className="pr-flex pr-items-center">
+              <div className="tw-flex tw-items-center">
                 <TabsList>
                   <TabsTrigger value="week">Week</TabsTrigger>
                   <TabsTrigger value="month">Month</TabsTrigger>
                   <TabsTrigger value="year">Year</TabsTrigger>
                 </TabsList>
-                <div className="pr-ms-auto pr-flex pr-items-center pr-gap-2">
+                <div className="tw-ms-auto tw-flex tw-items-center tw-gap-2">
                   <DropdownMenu dir={direction}>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" size="sm" className="pr-h-7 pr-gap-1 pr-text-sm">
-                        <ListFilter className="pr-h-3.5 pr-w-3.5" />
-                        <span className="pr-sr-only sm:pr-not-sr-only">Filter</span>
+                      <Button variant="outline" size="sm" className="tw-h-7 tw-gap-1 tw-text-sm">
+                        <ListFilter className="tw-h-3.5 tw-w-3.5" />
+                        <span className="tw-sr-only sm:tw-not-sr-only">Filter</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -265,15 +265,15 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                       <DropdownMenuCheckboxItem>Refunded</DropdownMenuCheckboxItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
-                  <Button size="sm" variant="outline" className="pr-h-7 pr-gap-1 pr-text-sm">
-                    <File className="pr-h-3.5 pr-w-3.5" />
-                    <span className="pr-sr-only sm:pr-not-sr-only">Export</span>
+                  <Button size="sm" variant="outline" className="tw-h-7 tw-gap-1 tw-text-sm">
+                    <File className="tw-h-3.5 tw-w-3.5" />
+                    <span className="tw-sr-only sm:tw-not-sr-only">Export</span>
                   </Button>
                 </div>
               </div>
               <TabsContent value="week">
                 <Card x-chunk="dashboard-05-chunk-3">
-                  <CardHeader className="pr-px-7">
+                  <CardHeader className="tw-px-7">
                     <CardTitle>Orders</CardTitle>
                     <CardDescription>Recent orders from your store.</CardDescription>
                   </CardHeader>
@@ -282,124 +282,124 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                       <TableHeader>
                         <TableRow>
                           <TableHead>Customer</TableHead>
-                          <TableHead className="pr-hidden sm:pr-table-cell">Type</TableHead>
-                          <TableHead className="pr-hidden sm:pr-table-cell">Status</TableHead>
-                          <TableHead className="pr-hidden md:pr-table-cell">Date</TableHead>
-                          <TableHead className="pr-text-right">Amount</TableHead>
+                          <TableHead className="tw-hidden sm:tw-table-cell">Type</TableHead>
+                          <TableHead className="tw-hidden sm:tw-table-cell">Status</TableHead>
+                          <TableHead className="tw-hidden md:tw-table-cell">Date</TableHead>
+                          <TableHead className="tw-text-right">Amount</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        <TableRow className="pr-bg-accent">
+                        <TableRow className="tw-bg-accent">
                           <TableCell>
-                            <div className="pr-font-medium">Liam Johnson</div>
-                            <div className="pr-hidden pr-text-sm pr-text-muted-foreground md:pr-inline">
+                            <div className="tw-font-medium">Liam Johnson</div>
+                            <div className="tw-hidden tw-text-sm tw-text-muted-foreground md:tw-inline">
                               liam@example.com
                             </div>
                           </TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">Sale</TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">
-                            <div className="pr-bg-secondary pr-text-xs">Fulfilled</div>
+                          <TableCell className="tw-hidden sm:tw-table-cell">Sale</TableCell>
+                          <TableCell className="tw-hidden sm:tw-table-cell">
+                            <div className="tw-bg-secondary tw-text-xs">Fulfilled</div>
                           </TableCell>
-                          <TableCell className="pr-hidden md:pr-table-cell">2023-06-23</TableCell>
-                          <TableCell className="pr-text-right">$250.00</TableCell>
+                          <TableCell className="tw-hidden md:tw-table-cell">2023-06-23</TableCell>
+                          <TableCell className="tw-text-right">$250.00</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>
-                            <div className="pr-font-medium">Olivia Smith</div>
-                            <div className="pr-hidden pr-text-sm pr-text-muted-foreground md:pr-inline">
+                            <div className="tw-font-medium">Olivia Smith</div>
+                            <div className="tw-hidden tw-text-sm tw-text-muted-foreground md:tw-inline">
                               olivia@example.com
                             </div>
                           </TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">Refund</TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">
-                            <div className="pr-border pr-text-xs">Declined</div>
+                          <TableCell className="tw-hidden sm:tw-table-cell">Refund</TableCell>
+                          <TableCell className="tw-hidden sm:tw-table-cell">
+                            <div className="tw-border tw-text-xs">Declined</div>
                           </TableCell>
-                          <TableCell className="pr-hidden md:pr-table-cell">2023-06-24</TableCell>
-                          <TableCell className="pr-text-right">$150.00</TableCell>
+                          <TableCell className="tw-hidden md:tw-table-cell">2023-06-24</TableCell>
+                          <TableCell className="tw-text-right">$150.00</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>
-                            <div className="pr-font-medium">Noah Williams</div>
-                            <div className="pr-hidden pr-text-sm pr-text-muted-foreground md:pr-inline">
+                            <div className="tw-font-medium">Noah Williams</div>
+                            <div className="tw-hidden tw-text-sm tw-text-muted-foreground md:tw-inline">
                               noah@example.com
                             </div>
                           </TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">Subscription</TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">
-                            <div className="pr-bg-secondary pr-text-xs">Fulfilled</div>
+                          <TableCell className="tw-hidden sm:tw-table-cell">Subscription</TableCell>
+                          <TableCell className="tw-hidden sm:tw-table-cell">
+                            <div className="tw-bg-secondary tw-text-xs">Fulfilled</div>
                           </TableCell>
-                          <TableCell className="pr-hidden md:pr-table-cell">2023-06-25</TableCell>
-                          <TableCell className="pr-text-right">$350.00</TableCell>
+                          <TableCell className="tw-hidden md:tw-table-cell">2023-06-25</TableCell>
+                          <TableCell className="tw-text-right">$350.00</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>
-                            <div className="pr-font-medium">Emma Brown</div>
-                            <div className="pr-hidden pr-text-sm pr-text-muted-foreground md:pr-inline">
+                            <div className="tw-font-medium">Emma Brown</div>
+                            <div className="tw-hidden tw-text-sm tw-text-muted-foreground md:tw-inline">
                               emma@example.com
                             </div>
                           </TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">Sale</TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">
-                            <div className="pr-bg-secondary pr-text-xs">Fulfilled</div>
+                          <TableCell className="tw-hidden sm:tw-table-cell">Sale</TableCell>
+                          <TableCell className="tw-hidden sm:tw-table-cell">
+                            <div className="tw-bg-secondary tw-text-xs">Fulfilled</div>
                           </TableCell>
-                          <TableCell className="pr-hidden md:pr-table-cell">2023-06-26</TableCell>
-                          <TableCell className="pr-text-right">$450.00</TableCell>
+                          <TableCell className="tw-hidden md:tw-table-cell">2023-06-26</TableCell>
+                          <TableCell className="tw-text-right">$450.00</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>
-                            <div className="pr-font-medium">Liam Johnson</div>
-                            <div className="pr-hidden pr-text-sm pr-text-muted-foreground md:pr-inline">
+                            <div className="tw-font-medium">Liam Johnson</div>
+                            <div className="tw-hidden tw-text-sm tw-text-muted-foreground md:tw-inline">
                               liam@example.com
                             </div>
                           </TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">Sale</TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">
-                            <div className="pr-bg-secondary pr-text-xs">Fulfilled</div>
+                          <TableCell className="tw-hidden sm:tw-table-cell">Sale</TableCell>
+                          <TableCell className="tw-hidden sm:tw-table-cell">
+                            <div className="tw-bg-secondary tw-text-xs">Fulfilled</div>
                           </TableCell>
-                          <TableCell className="pr-hidden md:pr-table-cell">2023-06-23</TableCell>
-                          <TableCell className="pr-text-right">$250.00</TableCell>
+                          <TableCell className="tw-hidden md:tw-table-cell">2023-06-23</TableCell>
+                          <TableCell className="tw-text-right">$250.00</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>
-                            <div className="pr-font-medium">Liam Johnson</div>
-                            <div className="pr-hidden pr-text-sm pr-text-muted-foreground md:pr-inline">
+                            <div className="tw-font-medium">Liam Johnson</div>
+                            <div className="tw-hidden tw-text-sm tw-text-muted-foreground md:tw-inline">
                               liam@example.com
                             </div>
                           </TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">Sale</TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">
-                            <div className="pr-bg-secondary pr-text-xs">Fulfilled</div>
+                          <TableCell className="tw-hidden sm:tw-table-cell">Sale</TableCell>
+                          <TableCell className="tw-hidden sm:tw-table-cell">
+                            <div className="tw-bg-secondary tw-text-xs">Fulfilled</div>
                           </TableCell>
-                          <TableCell className="pr-hidden md:pr-table-cell">2023-06-23</TableCell>
-                          <TableCell className="pr-text-right">$250.00</TableCell>
+                          <TableCell className="tw-hidden md:tw-table-cell">2023-06-23</TableCell>
+                          <TableCell className="tw-text-right">$250.00</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>
-                            <div className="pr-font-medium">Olivia Smith</div>
-                            <div className="pr-hidden pr-text-sm pr-text-muted-foreground md:pr-inline">
+                            <div className="tw-font-medium">Olivia Smith</div>
+                            <div className="tw-hidden tw-text-sm tw-text-muted-foreground md:tw-inline">
                               olivia@example.com
                             </div>
                           </TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">Refund</TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">
-                            <div className="pr-bg-secondary pr-text-xs">Declined</div>
+                          <TableCell className="tw-hidden sm:tw-table-cell">Refund</TableCell>
+                          <TableCell className="tw-hidden sm:tw-table-cell">
+                            <div className="tw-bg-secondary tw-text-xs">Declined</div>
                           </TableCell>
-                          <TableCell className="pr-hidden md:pr-table-cell">2023-06-24</TableCell>
-                          <TableCell className="pr-text-right">$150.00</TableCell>
+                          <TableCell className="tw-hidden md:tw-table-cell">2023-06-24</TableCell>
+                          <TableCell className="tw-text-right">$150.00</TableCell>
                         </TableRow>
                         <TableRow>
                           <TableCell>
-                            <div className="pr-font-medium">Emma Brown</div>
-                            <div className="pr-hidden pr-text-sm pr-text-muted-foreground md:pr-inline">
+                            <div className="tw-font-medium">Emma Brown</div>
+                            <div className="tw-hidden tw-text-sm tw-text-muted-foreground md:tw-inline">
                               emma@example.com
                             </div>
                           </TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">Sale</TableCell>
-                          <TableCell className="pr-hidden sm:pr-table-cell">
-                            <div className="pr-bg-secondary pr-text-xs">Fulfilled</div>
+                          <TableCell className="tw-hidden sm:tw-table-cell">Sale</TableCell>
+                          <TableCell className="tw-hidden sm:tw-table-cell">
+                            <div className="tw-bg-secondary tw-text-xs">Fulfilled</div>
                           </TableCell>
-                          <TableCell className="pr-hidden md:pr-table-cell">2023-06-26</TableCell>
-                          <TableCell className="pr-text-right">$450.00</TableCell>
+                          <TableCell className="tw-hidden md:tw-table-cell">2023-06-26</TableCell>
+                          <TableCell className="tw-text-right">$450.00</TableCell>
                         </TableRow>
                       </TableBody>
                     </Table>
@@ -409,34 +409,34 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
             </Tabs>
           </div>
           <div>
-            <Card className="pr-overflow-hidden" x-chunk="dashboard-05-chunk-4">
-              <CardHeader className="pr-flex pr-flex-row pr-items-start pr-bg-muted/50">
-                <div className="pr-grid pr-gap-0.5">
-                  <CardTitle className="pr-group pr-flex pr-items-center pr-gap-2 pr-text-lg">
+            <Card className="tw-overflow-hidden" x-chunk="dashboard-05-chunk-4">
+              <CardHeader className="tw-flex tw-flex-row tw-items-start tw-bg-muted/50">
+                <div className="tw-grid tw-gap-0.5">
+                  <CardTitle className="tw-group tw-flex tw-items-center tw-gap-2 tw-text-lg">
                     Order Oe31b70H
                     <Button
                       size="icon"
                       variant="outline"
-                      className="pr-h-6 pr-w-6 pr-opacity-0 pr-transition-opacity group-hover:pr-opacity-100"
+                      className="tw-h-6 tw-w-6 tw-opacity-0 tw-transition-opacity group-hover:tw-opacity-100"
                     >
-                      <Copy className="pr-h-3 pr-w-3" />
-                      <a className="pr-sr-only">Copy Order ID</a>
+                      <Copy className="tw-h-3 tw-w-3" />
+                      <a className="tw-sr-only">Copy Order ID</a>
                     </Button>
                   </CardTitle>
                   <CardDescription>Date: November 23, 2023</CardDescription>
                 </div>
-                <div className="pr-ml-auto pr-flex pr-items-center pr-gap-1">
-                  <Button size="sm" variant="outline" className="pr-h-8 pr-gap-1">
-                    <Truck className="pr-h-3.5 pr-w-3.5" />
-                    <span className="lg:pr-sr-only xl:pr-not-sr-only xl:pr-whitespace-nowrap">
+                <div className="tw-ml-auto tw-flex tw-items-center tw-gap-1">
+                  <Button size="sm" variant="outline" className="tw-h-8 tw-gap-1">
+                    <Truck className="tw-h-3.5 tw-w-3.5" />
+                    <span className="lg:tw-sr-only xl:tw-not-sr-only xl:tw-whitespace-nowrap">
                       Track Order
                     </span>
                   </Button>
                   <DropdownMenu dir={direction}>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="outline" className="pr-h-8 pr-w-8">
-                        <MoreVertical className="pr-h-3.5 pr-w-3.5" />
-                        <a className="pr-sr-only">More</a>
+                      <Button size="icon" variant="outline" className="tw-h-8 tw-w-8">
+                        <MoreVertical className="tw-h-3.5 tw-w-3.5" />
+                        <a className="tw-sr-only">More</a>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -448,83 +448,83 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                   </DropdownMenu>
                 </div>
               </CardHeader>
-              <CardContent className="pr-p-6 pr-text-sm">
-                <div className="pr-grid pr-gap-3">
-                  <div className="pr-font-semibold">Order Details</div>
-                  <ul className="pr-grid pr-gap-3">
-                    <li className="pr-flex pr-items-center pr-justify-between">
-                      <span className="pr-text-muted-foreground">
+              <CardContent className="tw-p-6 tw-text-sm">
+                <div className="tw-grid tw-gap-3">
+                  <div className="tw-font-semibold">Order Details</div>
+                  <ul className="tw-grid tw-gap-3">
+                    <li className="tw-flex tw-items-center tw-justify-between">
+                      <span className="tw-text-muted-foreground">
                         Glimmer Lamps x <span>2</span>
                       </span>
                       <span>$250.00</span>
                     </li>
-                    <li className="pr-flex pr-items-center pr-justify-between">
-                      <span className="pr-text-muted-foreground">
+                    <li className="tw-flex tw-items-center tw-justify-between">
+                      <span className="tw-text-muted-foreground">
                         Aqua Filters x <span>1</span>
                       </span>
                       <span>$49.00</span>
                     </li>
                   </ul>
-                  <hr className="pr-my-2" />
-                  <ul className="pr-grid pr-gap-3">
-                    <li className="pr-flex pr-items-center pr-justify-between">
-                      <span className="pr-text-muted-foreground">Subtotal</span>
+                  <hr className="tw-my-2" />
+                  <ul className="tw-grid tw-gap-3">
+                    <li className="tw-flex tw-items-center tw-justify-between">
+                      <span className="tw-text-muted-foreground">Subtotal</span>
                       <span>$299.00</span>
                     </li>
-                    <li className="pr-flex pr-items-center pr-justify-between">
-                      <span className="pr-text-muted-foreground">Shipping</span>
+                    <li className="tw-flex tw-items-center tw-justify-between">
+                      <span className="tw-text-muted-foreground">Shipping</span>
                       <span>$5.00</span>
                     </li>
-                    <li className="pr-flex pr-items-center pr-justify-between">
-                      <span className="pr-text-muted-foreground">Tax</span>
+                    <li className="tw-flex tw-items-center tw-justify-between">
+                      <span className="tw-text-muted-foreground">Tax</span>
                       <span>$25.00</span>
                     </li>
-                    <li className="pr-flex pr-items-center pr-justify-between pr-font-semibold">
-                      <span className="pr-text-muted-foreground">Total</span>
+                    <li className="tw-flex tw-items-center tw-justify-between tw-font-semibold">
+                      <span className="tw-text-muted-foreground">Total</span>
                       <span>$329.00</span>
                     </li>
                   </ul>
                 </div>
-                <hr className="pr-my-4" />
-                <div className="pr-grid pr-grid-cols-2 pr-gap-4">
-                  <div className="pr-grid pr-gap-3">
-                    <div className="pr-font-semibold">Shipping Information</div>
-                    <address className="pr-grid pr-gap-0.5 pr-not-italic pr-text-muted-foreground">
+                <hr className="tw-my-4" />
+                <div className="tw-grid tw-grid-cols-2 tw-gap-4">
+                  <div className="tw-grid tw-gap-3">
+                    <div className="tw-font-semibold">Shipping Information</div>
+                    <address className="tw-grid tw-gap-0.5 tw-not-italic tw-text-muted-foreground">
                       <span>Liam Johnson</span>
                       <span>1234 Main St.</span>
                       <span>Anytown, CA 12345</span>
                     </address>
                   </div>
-                  <div className="pr-grid pr-auto-rows-max pr-gap-3">
-                    <div className="pr-font-semibold">Billing Information</div>
-                    <div className="pr-text-muted-foreground">Same as shipping address</div>
+                  <div className="tw-grid tw-auto-rows-max tw-gap-3">
+                    <div className="tw-font-semibold">Billing Information</div>
+                    <div className="tw-text-muted-foreground">Same as shipping address</div>
                   </div>
                 </div>
-                <hr className="pr-my-4" />
-                <div className="pr-grid pr-gap-3">
-                  <div className="pr-font-semibold">Customer Information</div>
-                  <dl className="pr-grid pr-gap-3">
-                    <div className="pr-flex pr-items-center pr-justify-between">
-                      <dt className="pr-text-muted-foreground">Customer</dt>
+                <hr className="tw-my-4" />
+                <div className="tw-grid tw-gap-3">
+                  <div className="tw-font-semibold">Customer Information</div>
+                  <dl className="tw-grid tw-gap-3">
+                    <div className="tw-flex tw-items-center tw-justify-between">
+                      <dt className="tw-text-muted-foreground">Customer</dt>
                       <dd>Liam Johnson</dd>
                     </div>
-                    <div className="pr-flex pr-items-center pr-justify-between">
-                      <dt className="pr-text-muted-foreground">Email</dt>
+                    <div className="tw-flex tw-items-center tw-justify-between">
+                      <dt className="tw-text-muted-foreground">Email</dt>
                       <dd>
                         <a
                           href="mailto:"
-                          className="focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring"
+                          className="focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring"
                         >
                           liam@acme.com
                         </a>
                       </dd>
                     </div>
-                    <div className="pr-flex pr-items-center pr-justify-between">
-                      <dt className="pr-text-muted-foreground">Phone</dt>
+                    <div className="tw-flex tw-items-center tw-justify-between">
+                      <dt className="tw-text-muted-foreground">Phone</dt>
                       <dd>
                         <a
                           href="tel:"
-                          className="focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring"
+                          className="focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring"
                         >
                           +1 234 567 890
                         </a>
@@ -532,13 +532,13 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                     </div>
                   </dl>
                 </div>
-                <hr className="pr-my-4" />
-                <div className="pr-grid pr-gap-3">
-                  <div className="pr-font-semibold">Payment Information</div>
-                  <dl className="pr-grid pr-gap-3">
-                    <div className="pr-flex pr-items-center pr-justify-between">
-                      <dt className="pr-flex pr-items-center pr-gap-1 pr-text-muted-foreground">
-                        <CreditCard className="pr-h-4 pr-w-4" />
+                <hr className="tw-my-4" />
+                <div className="tw-grid tw-gap-3">
+                  <div className="tw-font-semibold">Payment Information</div>
+                  <dl className="tw-grid tw-gap-3">
+                    <div className="tw-flex tw-items-center tw-justify-between">
+                      <dt className="tw-flex tw-items-center tw-gap-1 tw-text-muted-foreground">
+                        <CreditCard className="tw-h-4 tw-w-4" />
                         Visa
                       </dt>
                       <dd>**** **** **** 4532</dd>
@@ -546,22 +546,22 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                   </dl>
                 </div>
               </CardContent>
-              <CardFooter className="pr-flex pr-flex-row pr-items-center pr-border-t pr-bg-muted/50 pr-px-6 pr-py-3">
-                <div className="pr-text-xs pr-text-muted-foreground">
+              <CardFooter className="tw-flex tw-flex-row tw-items-center tw-border-t tw-bg-muted/50 tw-px-6 tw-py-3">
+                <div className="tw-text-xs tw-text-muted-foreground">
                   Updated <time dateTime="2023-11-23">November 23, 2023</time>
                 </div>
-                {/*                 <Pagination className="pr-ml-auto mr-0 pr-w-auto">
+                {/*                 <Pagination className="tw-ml-auto mr-0 tw-w-auto">
               <PaginationContent>
                 <PaginationItem>
-                  <Button size="icon" variant="outline" className="pr-h-6 pr-w-6">
-                    <ChevronLeft className="pr-h-3.5 pr-w-3.5" />
-                    <a className="pr-sr-only">Previous Order</a>
+                  <Button size="icon" variant="outline" className="tw-h-6 tw-w-6">
+                    <ChevronLeft className="tw-h-3.5 tw-w-3.5" />
+                    <a className="tw-sr-only">Previous Order</a>
                   </Button>
                 </PaginationItem>
                 <PaginationItem>
-                  <Button size="icon" variant="outline" className="pr-h-6 pr-w-6">
-                    <ChevronRight className="pr-h-3.5 pr-w-3.5" />
-                    <a className="pr-sr-only">Next Order</a>
+                  <Button size="icon" variant="outline" className="tw-h-6 tw-w-6">
+                    <ChevronRight className="tw-h-3.5 tw-w-3.5" />
+                    <a className="tw-sr-only">Next Order</a>
                   </Button>
                 </PaginationItem>
               </PaginationContent>

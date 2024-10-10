@@ -26,9 +26,9 @@ export default function DisableButton({
   return (
     <Button
       className={cn(
-        'pr-h-8 pr-rounded-md pr-bg-gray-300 pr-text-black pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-gray-400',
+        'tw-h-8 tw-rounded-md tw-bg-gray-300 tw-text-black tw-transition tw-duration-300 tw-ease-in-out hover:tw-bg-gray-400',
         {
-          'pr-cursor-not-allowed pr-bg-gray-400': isDisabling,
+          'tw-cursor-not-allowed tw-bg-gray-400': isDisabling,
         },
         className,
       )}
@@ -37,7 +37,7 @@ export default function DisableButton({
     >
       {isDisabling ? (
         <>
-          <Spinner size={15} className="pr-mr-1 pr-text-black" />
+          <Spinner size={15} className="tw-mr-1 tw-text-black" />
           Disabling...
         </>
       ) : (

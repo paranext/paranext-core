@@ -323,7 +323,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, [isContentOpenDelayed]);
 
   return (
-    <div className="pr-twp pr-flex">
+    <div className="pr-twp tw-flex">
       <ShadDropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
         <ShadDropdownMenuTrigger asChild>
           <BookChapterInput
@@ -347,7 +347,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           />
         </ShadDropdownMenuTrigger>
         <ShadDropdownMenuContent
-          className="pr-m-1 pr-overflow-y-auto pr-p-0 pr-font-normal pr-text-foreground/80"
+          className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
           // Need to get over the floating window z-index 200
           style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
           onKeyDown={handleKeyDownContent}
@@ -363,7 +363,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             (bookType, bookTypeIndex) =>
               fetchFilteredBooks(bookType).length > 0 && (
                 <div key={bookType}>
-                  <ShadDropdownMenuLabel className="pr-font-semibold pr-text-foreground/80">
+                  <ShadDropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
                     {BOOK_TYPE_LABELS[bookType]}
                   </ShadDropdownMenuLabel>
 
