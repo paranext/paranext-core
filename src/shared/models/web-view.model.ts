@@ -1,7 +1,7 @@
 import type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 // Used in JSDoc link
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+import { ScriptureReference, ScrollGroupId, LocalizeKey } from 'platform-bible-utils';
 
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {
@@ -40,8 +40,11 @@ type WebViewDefinitionBase = {
    * Defaults to the software's standard logo.
    */
   iconUrl?: string;
-  /** Name of the tab for the WebView */
-  title?: string;
+  /**
+   * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
+   * WebView
+   */
+  title?: string | LocalizeKey;
   /** Tooltip that is shown when hovering over the webview title */
   tooltip?: string;
   /**

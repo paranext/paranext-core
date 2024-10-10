@@ -6,11 +6,11 @@ import { LocalizeKey } from 'platform-bible-utils';
 const MOCK_FILES: { [uri: string]: string } = {
   'resources://assets/localization/en.json': `{
     "%some_localization_key%": "This is the English text for %some_localization_key%.",
-    "%submitButton%": "Submit"
+    "%general_button_submit%": "Submit"
   }`,
   'resources://assets/localization/fr.json': `{
     "%some_localization_key%": "Ceci est le texte en français pour %some_localization_key%.",
-    "%submitButton%": "Soumettre"
+    "%general_button_submit%": "Soumettre"
   }`,
   'resources://assets/localization/metadata.json': `{
     "%yes%": {
@@ -71,7 +71,7 @@ afterEach(() => {
 });
 
 test('Correct localized value returned to match single localizeKey', async () => {
-  const LOCALIZE_KEY = '%submitButton%';
+  const LOCALIZE_KEY = '%general_button_submit%';
   const response = await localizationDataProviderEngine.getLocalizedString({
     localizeKey: LOCALIZE_KEY,
     locales: ['fr'],
@@ -80,13 +80,13 @@ test('Correct localized value returned to match single localizeKey', async () =>
 });
 
 test('Correct localized values returned to match array of localizeKeys', async () => {
-  const LOCALIZE_KEYS: LocalizeKey[] = ['%submitButton%', '%some_localization_key%'];
+  const LOCALIZE_KEYS: LocalizeKey[] = ['%general_button_submit%', '%some_localization_key%'];
   const response = await localizationDataProviderEngine.getLocalizedStrings({
     localizeKeys: LOCALIZE_KEYS,
     locales: ['fr'],
   });
   expect(response).toEqual({
-    '%submitButton%': 'Soumettre',
+    '%general_button_submit%': 'Soumettre',
     '%some_localization_key%': 'Ceci est le texte en français pour %some_localization_key%.',
   });
 });
@@ -124,14 +124,14 @@ test('Keys returned with localizeKeys that do not exist', async () => {
 });
 
 test('Strings and keys returned with localizeKeys where one exists but the other does not', async () => {
-  const LOCALIZE_KEYS: LocalizeKey[] = ['%submitButton%', '%the_wrong_key%'];
+  const LOCALIZE_KEYS: LocalizeKey[] = ['%general_button_submit%', '%the_wrong_key%'];
   expect(
     await localizationDataProviderEngine.getLocalizedStrings({
       localizeKeys: LOCALIZE_KEYS,
       locales: ['fr'],
     }),
   ).toEqual({
-    '%submitButton%': 'Soumettre',
+    '%general_button_submit%': 'Soumettre',
     '%the_wrong_key%': '%the_wrong_key%',
   });
   expect(logger.warn).toHaveBeenCalledWith(
@@ -140,7 +140,7 @@ test('Strings and keys returned with localizeKeys where one exists but the other
 });
 
 test('Error returned with localizeKey and incorrectly formatted language code', async () => {
-  const LOCALIZE_KEY = '%submitButton%'; // irrelevant because it will throw for language code before it accesses key/value pairs
+  const LOCALIZE_KEY = '%general_button_submit%'; // irrelevant because it will throw for language code before it accesses key/value pairs
   await expect(
     localizationDataProviderEngine.getLocalizedString({
       localizeKey: LOCALIZE_KEY,
@@ -153,7 +153,7 @@ test('Error returned with localizeKey and incorrectly formatted language code', 
 });
 
 test('Error returned with localizeKeys and incorrect language code', async () => {
-  const LOCALIZE_KEYS: LocalizeKey[] = ['%submitButton%', '%some_localization_key%']; // irrelevant because it will throw for language code before it accesses key/value pairs
+  const LOCALIZE_KEYS: LocalizeKey[] = ['%general_button_submit%', '%some_localization_key%']; // irrelevant because it will throw for language code before it accesses key/value pairs
   await expect(
     localizationDataProviderEngine.getLocalizedStrings({
       localizeKeys: LOCALIZE_KEYS,
@@ -166,7 +166,7 @@ test('Error returned with localizeKeys and incorrect language code', async () =>
 });
 
 test('Default language is english when no language provided with localizeKey', async () => {
-  const LOCALIZE_KEY = '%submitButton%';
+  const LOCALIZE_KEY = '%general_button_submit%';
   const response = await localizationDataProviderEngine.getLocalizedString({
     localizeKey: LOCALIZE_KEY,
   });
@@ -174,18 +174,18 @@ test('Default language is english when no language provided with localizeKey', a
 });
 
 test('Default language is english when no language provided with localizeKeys', async () => {
-  const LOCALIZE_KEYS: LocalizeKey[] = ['%submitButton%', '%some_localization_key%'];
+  const LOCALIZE_KEYS: LocalizeKey[] = ['%general_button_submit%', '%some_localization_key%'];
   const response = await localizationDataProviderEngine.getLocalizedStrings({
     localizeKeys: LOCALIZE_KEYS,
   });
   expect(response).toEqual({
     '%some_localization_key%': 'This is the English text for %some_localization_key%.',
-    '%submitButton%': 'Submit',
+    '%general_button_submit%': 'Submit',
   });
 });
 
 test('Good key and missing but valid language code return default English', async () => {
-  const LOCALIZE_KEY = '%submitButton%';
+  const LOCALIZE_KEY = '%general_button_submit%';
   globalThis.isPackaged = true;
   const response = await localizationDataProviderEngine.getLocalizedString({
     localizeKey: LOCALIZE_KEY,
@@ -195,13 +195,13 @@ test('Good key and missing but valid language code return default English', asyn
 });
 
 test('Good keys and missing but valid language code return default English', async () => {
-  const LOCALIZE_KEYS: LocalizeKey[] = ['%submitButton%', '%some_localization_key%'];
+  const LOCALIZE_KEYS: LocalizeKey[] = ['%general_button_submit%', '%some_localization_key%'];
   const response = await localizationDataProviderEngine.getLocalizedStrings({
     localizeKeys: LOCALIZE_KEYS,
     locales: ['qya-Latn'],
   });
   expect(response).toEqual({
     '%some_localization_key%': 'This is the English text for %some_localization_key%.',
-    '%submitButton%': 'Submit',
+    '%general_button_submit%': 'Submit',
   });
 });
