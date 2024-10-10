@@ -16,16 +16,16 @@ function App() {
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <div className="pr-twp pr-p-2">
-        <div className="pr-fixed pr-right-4 pr-top-4 pr-flex pr-gap-2">
+      <div className="pr-twp tw-p-2">
+        <div className="tw-fixed tw-right-4 tw-top-4 tw-flex tw-gap-2">
           <DirToggle direction={direction} onChangeDirection={changeDirectionHandler} />
           <ThemeButton />
         </div>
-        <div className="pr-fixed pr-bottom-2 pr-right-4 pr-flex pr-gap-2">
+        <div className="tw-fixed tw-bottom-2 tw-right-4 tw-flex tw-gap-2">
           <ContactButtons />
         </div>
-        <h1 className="pr-pb-4 pr-uppercase">platform-bible-react Preview</h1>
-        <Tabs defaultValue="Playground" className="pr-pt-4" dir={direction}>
+        <h1 className="tw-pb-4 tw-uppercase">platform-bible-react Preview</h1>
+        <Tabs defaultValue="Playground" className="tw-pt-4" dir={direction}>
           <TabsList>
             <TabsTrigger value="Basics">Basic Components</TabsTrigger>
             <TabsTrigger value="Advanced">Advanced Components</TabsTrigger>

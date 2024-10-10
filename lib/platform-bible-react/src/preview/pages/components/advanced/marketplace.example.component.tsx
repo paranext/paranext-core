@@ -4,7 +4,7 @@ import MoreInfo from '@/components/advanced/extension-marketplace/more-info.comp
 
 export default function MarketplaceExamples() {
   return (
-    <div className="pr-w-1/3 pr-space-y-4">
+    <div className="tw-w-1/3 tw-space-y-4">
       <MoreInfo
         category="Study Tools"
         downloads={{ x: 1000000000 }}

@@ -18,7 +18,7 @@ export default function DropdownExamples({ direction }: HasDirection) {
       <DropdownMenuTrigger asChild>
         <Button>
           Open
-          <ChevronDown className="pr-ms-2" />
+          <ChevronDown className="tw-ms-2" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent>

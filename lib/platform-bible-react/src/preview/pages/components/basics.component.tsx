@@ -28,7 +28,7 @@ import ToggleGroupExamples from './basics/toggle-group.examples.component';
 function Basics({ direction }: HasDirection) {
   return (
     <div>
-      <p className="pr-mb-2 pr-text-muted-foreground">A place for the most simple components</p>
+      <p className="tw-mb-2 tw-text-muted-foreground">A place for the most simple components</p>
       <VerticalTabs defaultValue="Button" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
@@ -91,7 +91,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Search Bar">
-          <div className="pr-flex pr-gap-2">
+          <div className="tw-flex tw-gap-2">
             <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} />{' '}
             {direction === 'rtl' ? <>&rarr;</> : <>&larr;</>} type here
           </div>

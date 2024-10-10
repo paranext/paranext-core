@@ -83,6 +83,7 @@
     "@babel/preset-typescript": "^7.25.7",
     "@mui/icons-material": "^5.15.10",
     "@senojs/rollup-plugin-style-inject": "^0.2.3",
+    "@tailwindcss/typography": "^0.5.15",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.5.0",
     "@testing-library/react": "^16.0.1",

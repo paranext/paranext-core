@@ -30,9 +30,9 @@ const ThemeToggle = React.forwardRef<
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="icon">
             {/* as copied from the website, it's not working to toggle the icon */}
-            <Sun className="pr-h-[1.2rem] pr-w-[1.2rem] pr-rotate-0 pr-scale-100 pr-transition-all dark:pr--rotate-90 dark:pr-scale-0" />
-            <Moon className="pr-absolute pr-h-[1.2rem] pr-w-[1.2rem] pr-rotate-90 pr-scale-0 pr-transition-all dark:pr-rotate-0 dark:pr-scale-100" />
-            <span className="pr-sr-only">Toggle theme</span>
+            <Sun className="tw-h-[1.2rem] tw-w-[1.2rem] tw-rotate-0 tw-scale-100 tw-transition-all dark:tw--rotate-90 dark:tw-scale-0" />
+            <Moon className="tw-absolute tw-h-[1.2rem] tw-w-[1.2rem] tw-rotate-90 tw-scale-0 tw-transition-all dark:tw-rotate-0 dark:tw-scale-100" />
+            <span className="tw-sr-only">Toggle theme</span>
           </Button>
         </DropdownMenuTrigger>
 
@@ -52,7 +52,7 @@ export const ThemeButton = React.forwardRef<
 >(({ className }, ref) => {
   const { theme, setTheme } = useTheme();
   return (
-    <div className="pr-flex pr-gap-2">
+    <div className="tw-flex tw-gap-2">
       <div ref={ref} className={className}>
         <Button
           variant="outline"
@@ -87,9 +87,9 @@ export const ThemeButton = React.forwardRef<
           }
         >
           {theme.includes('dark') ? (
-            <Moon className="pr-h-[1.2rem] pr-w-[1.2rem]" />
+            <Moon className="tw-h-[1.2rem] tw-w-[1.2rem]" />
           ) : (
-            <Sun className="pr-h-[1.2rem] pr-w-[1.2rem]" />
+            <Sun className="tw-h-[1.2rem] tw-w-[1.2rem]" />
           )}
         </Button>
       </div>

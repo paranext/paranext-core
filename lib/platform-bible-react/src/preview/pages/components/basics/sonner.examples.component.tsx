@@ -3,7 +3,7 @@ import { Sonner, sonner } from '@/components/shadcn-ui/sonner';
 
 export default function SonnerExamples() {
   return (
-    <div className="*:pr-m-4">
+    <div className="*:tw-m-4">
       <Button
         onClick={() => sonner('This is a normal message', { description: 'This is a description' })}
       >

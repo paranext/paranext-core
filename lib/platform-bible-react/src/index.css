@@ -3,18 +3,30 @@
 @tailwind utilities;
 
 @layer base {
+  /* Adding the preflight selector (pr-twp) to components was not changing the font as desired.
+  So this piece of code adds tw-font-sans everywhere we include preflight. */
+  .pr-twp {
+    @apply tw-font-sans;
+  }
+}
+
+/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/tailwind.scss */
+
+@layer base {
   @font-face {
     font-family: 'Inter';
     font-display: 'swap';
     src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
   }
 
-  /* Adding the preflight selector (pr-twp) to components was not changing the font as desired.
-  So this piece of code adds pr-font-sans everywhere we include preflight. */
-  .pr-twp {
-    @apply pr-font-sans;
-  }
-
+  /*
+   * Theme colors in Platform.Bible. These are applied in CSS properties using `hsl(var(--varName))`
+   * or Tailwind classes like `tw-bg-primary`
+   *
+   * See the wiki's
+   * [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+   * section for more information
+   */
   :root {
     --background: 0 0% 100%;
     --foreground: 222.2 84% 4.9%;
@@ -125,10 +137,12 @@
 
 @layer base {
   * {
-    @apply pr-border-border;
+    @apply tw-border-border;
   }
 
   body {
-    @apply pr-bg-background pr-text-foreground;
+    @apply tw-bg-background tw-text-foreground;
   }
 }
+
+/* #endregion */

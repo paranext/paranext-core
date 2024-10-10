@@ -9,6 +9,8 @@ import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
 import { AsyncVariable, includes, split, waitForDuration } from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
+import { PathLike } from 'fs';
+import { FileHandle, readFile } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
@@ -105,6 +107,19 @@ function getCommandLineArgumentsToForward() {
   ];
 }
 
+/**
+ * Read the contents of a JSON file.
+ *
+ * @param filePath - A path to a file. If a URL is provided, it must use the file: protocol. If a
+ *   FileHandle is provided, the underlying file will not be closed automatically.
+ * @returns The JSON file contents.
+ * @see https://stackoverflow.com/questions/70601733/dynamic-import-with-json-file-doesnt-work-typescript
+ */
+async function readJsonFile(filePath: PathLike | FileHandle) {
+  const file = await readFile(filePath, 'utf8');
+  return JSON.parse(file);
+}
+
 /** Starts the extension host process if it isn't already running. */
 async function startExtensionHost() {
   if (extensionHost) return;
@@ -132,12 +147,9 @@ async function startExtensionHost() {
     );
   } else {
     // If we are in development, get the nodemon watch config so we can pass it in along with the
-    // external extension directories
-    // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
-    // For this dev-only code, it is useful to be able to synchronously get the nodemon.json file
-    const nodemonConfig = await import(
-      /* webpackIgnore: true */ path.join(globalThis.resourcesPath, 'nodemon.json')
-    );
+    // external extension directories.
+    // For this dev-only code, it is useful to be able to get the nodemon.json file.
+    const nodemonConfig = await readJsonFile(path.join(globalThis.resourcesPath, 'nodemon.json'));
     const nodemonWatchPaths: string[] = nodemonConfig?.watch ? nodemonConfig.watch : [];
 
     extensionHost = spawn(

@@ -12,7 +12,7 @@ export default function HowToGuide() {
         <a
           target="_blank"
           rel="noreferrer"
-          className="pr-text-blue-600 hover:pr-underline"
+          className="tw-text-blue-600 hover:tw-underline"
           href="https://github.com/paranext/paranext/wiki/Component-usage-and-creation"
         >
           the component creation page
