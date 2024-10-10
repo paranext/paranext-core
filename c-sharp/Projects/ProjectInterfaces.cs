@@ -17,5 +17,5 @@ public static class ProjectInterfaces
     public const string USX_CHAPTER = "platformScripture.USX_Chapter";
     public const string USX_VERSE = "platformScripture.USX_Verse";
     public const string PLAIN_TEXT_VERSE = "platformScripture.PlainText_Verse";
-    public const string SCR_STYLESHEET = "platformScripture.ScrStylesheet";
+    public const string MARKER_NAMES = "platformScripture.MarkerNames";
 }

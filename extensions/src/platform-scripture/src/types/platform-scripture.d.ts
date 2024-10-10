@@ -11,20 +11,6 @@ declare module 'platform-scripture' {
   import { Dispose, LocalizeKey, UnsubscriberAsync } from 'platform-bible-utils';
   import type { Usj } from '@biblionexus-foundation/scripture-utilities';
 
-  // export type ScrTag = {
-  //   // bunch of stuff
-  // }
-
-  // // Can we import this type from somewhere, like with VerseRef?
-  // export type ScrStylesheet = {
-  //   altStylesheetErrors: string[] | undefined,
-  //   mainStylesheetErrors: string[] | undefined,
-  //   name: string,
-  //   tagCount: number,
-  //   tags: ScrTag[]
-  // };
-  export type ScrStylesheet = string | undefined;
-
   // #region Project Interface Data Types
 
   /** Provides Scripture data in USFM format by book */
@@ -105,13 +91,10 @@ declare module 'platform-scripture' {
     VersePlainText: DataProviderDataType<VerseRef, string | undefined, string>;
   };
 
-  /** Provides ScrStylesheet that contains marker specifications */
-  export type ScrStylesheetProjectInterfaceDataTypes = {
-    /**
-     * Gets the data in plain text form for the specified verse. Plain text does not include notes,
-     * figures, and other things that are not considered "verse text".
-     */
-    ScrStylesheet: DataProviderDataType<ScrStylesheet, string, string>;
+  /** Provides information about markers */
+  export type MarkerNamesProjectInterfaceDataTypes = {
+    /** Gets an array of string that contain information about markers */
+    MarkerNames: DataProviderDataType<string[], string, string>;
   };
 
   /**
@@ -481,28 +464,28 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
     };
 
-  /** Provides ScrStylesheet, that contains information about the markers used in this project */
-  export type IScrStylesheetProjectDataProvider =
-    IProjectDataProvider<ScrStylesheetProjectInterfaceDataTypes> & {
+  /** Provides a string array that contains information about the markers used in this project */
+  export type IMarkerNamesProjectDataProvider =
+    IProjectDataProvider<MarkerNamesProjectInterfaceDataTypes> & {
       /**
-       * Gets the stylesheet for the provided book number
+       * Gets marker info for the default stylesheet
        *
-       * @todo Add support for getting custom stylesheets
+       * @todo Add support for getting marker info from custom stylesheets
        */
-      getScrStylesheet(bookNum: number): Promise<ScrStylesheet | undefined>;
+      getMarkerNames(bookNum: number): Promise<string[] | undefined>;
       /** Setting is not supported for now */
-      setScrStylesheet(bookNum: number): Promise<void>;
+      setMarkerNames(bookNum: number): Promise<void>;
       /**
-       * Subscribe to run a callback function when stylesheet changed
+       * Subscribe to run a callback function when marker info changed
        *
        * @param bookNum Tells the provider what changes to listen for
-       * @param callback Function to run with the updated stylesheet for this selector
+       * @param callback Function to run with the updated marker info for this selector
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
-      subscribeVersePlainText(
+      subscriberMarkerNames(
         bookNum: number,
-        callback: (ScrStylesheet: ScrStylesheet | undefined) => void,
+        callback: (markerNames: string[] | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -721,7 +704,7 @@ declare module 'papi-shared-types' {
     IUSJChapterProjectDataProvider,
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
-    IScrStylesheetProjectDataProvider,
+    IMarkerNamesProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     CheckDetails,
@@ -739,7 +722,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Chapter': IUSJChapterProjectDataProvider;
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
-    'platformScripture.ScrStylesheet': IScrStylesheetProjectDataProvider;
+    'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
   }
 
   export interface DataProviders {

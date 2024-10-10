@@ -34,7 +34,7 @@ internal class LocalParatextProjects
         ProjectInterfaces.USX_CHAPTER,
         ProjectInterfaces.USX_VERSE,
         ProjectInterfaces.PLAIN_TEXT_VERSE,
-        ProjectInterfaces.SCR_STYLESHEET];
+        ProjectInterfaces.MARKER_NAMES];
 
     public LocalParatextProjects()
     {

@@ -1,4 +1,4 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey, ScriptureReference, substring } from 'platform-bible-utils';
 import {
   Button,
   ColumnDef,
@@ -10,10 +10,9 @@ import {
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import papi from '@papi/frontend';
-import { ScrStylesheet } from 'platform-scripture';
 import { extractMarkers } from './inventory-utils';
 
 const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
@@ -22,6 +21,21 @@ const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
+
+const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
+
+function getDescription(markersInfo: string[], marker: string): string | undefined {
+  const markerWithoutBackslash = substring(marker, 1);
+  // Escape all characters that need escaping to be handled as plain text
+  const escapedMarker = markerWithoutBackslash.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Search for whole words surrounded by whitespace or periods or at string boundaries (^ and $)
+  const regex = new RegExp(`(^|[\\s.])${escapedMarker}([\\s.]|$)`);
+  return markersInfo.find((markerNames) => regex.test(markerNames));
+}
 
 /**
  * Function that constructs the column for the inventory component
@@ -34,7 +48,7 @@ const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
 const createColumns = (
   itemLabel: string,
   styleNameLabel: string,
-  stylesheet: ScrStylesheet,
+  markerNames: string[],
   countLabel: string,
   statusLabel: string,
   statusChangeHandler: (items: string[], status: Status) => void,
@@ -45,8 +59,8 @@ const createColumns = (
     accessorKey: 'styleName',
     header: () => <Button variant="ghost">{styleNameLabel}</Button>,
     cell: ({ row }) => {
-      const item: string = row.getValue('item');
-      return `Hier moet je die description voor ${item} nog komen`;
+      const marker: string = row.getValue('item');
+      return getDescription(markerNames, marker) || 'Unknown marker';
     },
   },
   inventoryStatusColumn(statusLabel, statusChangeHandler),
@@ -79,6 +93,21 @@ function MarkerInventory({
   onScopeChange,
   projectId,
 }: MarkerInventoryProps) {
+  const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
+
+  const [markerNames, setMarkerNames] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchStylesheet = async () => {
+      if (!projectId) return;
+      const PDP = await papi.projectDataProviders.get('platformScripture.MarkerNames', projectId);
+      const newMarkerNames = await PDP.getMarkerNames(scrRef.bookNum);
+      if (newMarkerNames) setMarkerNames(newMarkerNames);
+    };
+
+    fetchStylesheet();
+  }, [projectId, scrRef.bookNum]);
+
   const [markerInventoryStrings] = useLocalizedStrings(MARKER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
     () => markerInventoryStrings['%webView_inventory_table_header_marker%'],
@@ -97,33 +126,22 @@ function MarkerInventory({
     [markerInventoryStrings],
   );
 
-  const [stylesheet, setStylesheet] = useState<ScrStylesheet>();
-
-  useEffect(() => {
-    const fetchStylesheet = async () => {
-      if (!projectId) return;
-      const PDP = await papi.projectDataProviders.get('platformScripture.ScrStylesheet', projectId);
-      const scrStylesheet = await PDP.getScrStylesheet(1);
-      setStylesheet(scrStylesheet);
-    };
-
-    fetchStylesheet();
-  }, [projectId]);
-
-  //   function getFirstCharactersUntilWhitespace(str: string) {
-  //     const match = str.match(/^\S+/);
-  //     return match ? match[0] : ''; // Return the matched string or an empty string if no match found
-  // }
-
-  // useEffect(() => {
-  //   console.log(stylesheet);
-  // }, [stylesheet]);
-
   const getColumns = useCallback(
     (onStatusChange: (changedItems: string[], status: Status) => void) =>
-      createColumns(itemLabel, styleNameLabel, stylesheet, countLabel, statusLabel, onStatusChange),
-    [itemLabel, styleNameLabel, stylesheet, countLabel, statusLabel],
+      createColumns(
+        itemLabel,
+        styleNameLabel,
+        markerNames,
+        countLabel,
+        statusLabel,
+        onStatusChange,
+      ),
+    [itemLabel, styleNameLabel, markerNames, countLabel, statusLabel],
   );
+
+  useEffect(() => {
+    console.log(markerNames);
+  }, [markerNames]);
 
   return (
     <Inventory

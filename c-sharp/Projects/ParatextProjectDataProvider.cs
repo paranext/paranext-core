@@ -63,7 +63,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         Getters.Add("getSetting", GetProjectSetting);
         Setters.Add("setSetting", SetProjectSetting);
 
-        Getters.Add("getScrStylesheet", GetScrStyleSheet);
+        Getters.Add("getMarkerNames", GetMarkerNames);
 
         RegisterSettingsValidators();
     }
@@ -467,18 +467,22 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return ResponseToRequest.Succeeded(AllScriptureDataTypes);
     }
 
-    public ResponseToRequest GetScrStyleSheet(string jsonString)
+    public ResponseToRequest GetMarkerNames(string jsonString)
     {
+        if( !Int32.TryParse(jsonString, out int bookNum) )
+        {
+            return ResponseToRequest.Failed($"Book number '{jsonString}' is not a number");
+        }
+
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        // This is an overly simplistic way to get a stylesheet.
-        // Booknum = 1 represents Genesis, for which the function will return the the default
-        // stylesheet for canonical books.
-        ScrStylesheet scrStylesheet = scrText.ScrStylesheet(1);
+        ScrStylesheet scrStylesheet = scrText.ScrStylesheet(bookNum);
 
         if (scrStylesheet == null)
-            return ResponseToRequest.Failed($"ScrStylesheet was null");
+            return ResponseToRequest.Failed($"ScrStylesheet for book number '{jsonString}' is null");
 
-        return ResponseToRequest.Succeeded(scrStylesheet);
+        var markerNames = scrStylesheet.Tags.Where(tag => tag != null).Select(tag => tag.Name).ToArray();
+
+        return ResponseToRequest.Succeeded(markerNames);
     }
 
     #endregion
