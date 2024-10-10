@@ -22,6 +22,7 @@ const config: Config = {
     }),
     '^platform-bible-react$': '<rootDir>/node_modules/platform-bible-react/dist/index.js',
     '^platform-bible-utils$': '<rootDir>/node_modules/platform-bible-utils/dist/index.js',
+    '^jsonpath-plus$': '<rootDir>/node_modules/jsonpath-plus/dist/index-browser-umd.cjs',
   },
   setupFiles: ['./.erb/scripts/check-build-exists.ts'],
   testEnvironment: 'jsdom',

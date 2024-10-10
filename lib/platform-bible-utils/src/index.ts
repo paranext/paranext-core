@@ -24,6 +24,7 @@ export {
   getLocalizeKeysForScrollGroupIds,
 } from './scripture-util';
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
+export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';
 
 // Functions
 export {
@@ -146,3 +147,9 @@ export type {
   UserStateContribution,
 } from './settings.model';
 export { projectSettingsDocumentSchema, settingsDocumentSchema } from './settings.model';
+export type {
+  IUsjReaderWriter,
+  UsjContentLocation,
+  VerseRefOffset,
+} from './usj-reader-writer.model';
+export { default as UsjReaderWriter } from './usj-reader-writer';
