@@ -288,7 +288,7 @@ export type InventoryProps = {
 	scriptureReference: ScriptureReference;
 	setScriptureReference: (scriptureReference: ScriptureReference) => void;
 	localizedStrings: InventoryLocalizedStrings;
-	extractItems: (text: string, item?: string | undefined) => string[];
+	items: string[];
 	approvedItems: string[];
 	onApprovedItemsChange: (items: string[]) => void;
 	unapprovedItems: string[];
@@ -299,7 +299,7 @@ export type InventoryProps = {
 	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, items, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
@@ -307,6 +307,14 @@ export function Inventory({ scriptureReference, setScriptureReference, localized
  * @returns Column that shows the inventory items. Should be used with the DataTable component
  */
 export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemData>;
+/**
+ * Function that creates the related item column for inventories
+ *
+ * @param relatedItemLabel Localized label for the related item column (e.g. 'Preceding Marker')
+ * @returns Column that shows the related inventory items. Should be used with the DataTable
+ *   component
+ */
+export declare const inventoryRelatedItemColumn: (relatedItemLabel: string) => ColumnDef<ItemData>;
 /**
  * Function that creates the count column for inventories. Should be used with the DataTable
  * component.

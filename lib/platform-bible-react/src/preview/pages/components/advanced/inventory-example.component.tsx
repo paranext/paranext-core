@@ -69,7 +69,7 @@ function InventoryExample() {
         onScopeChange={setScope}
         text={scriptureSnippet}
         getColumns={createColumns}
-        extractItems={extractItems}
+        items={extractItems(scriptureSnippet)}
       />
       Approved items:
       <ul>

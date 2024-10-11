@@ -4,19 +4,22 @@ import {
   ColumnDef,
   Inventory,
   ItemData,
+  Label,
   Scope,
   Status,
+  Switch,
   inventoryCountColumn,
   inventoryItemColumn,
+  inventoryRelatedItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import papi from '@papi/frontend';
-import { extractMarkers } from './inventory-utils';
 
 const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_marker%',
+  '%webView_inventory_table_header_preceding_marker%',
   '%webView_inventory_table_header_style_name%',
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
@@ -26,6 +29,27 @@ const defaultScrRef: ScriptureReference = {
   bookNum: 1,
   chapterNum: 1,
   verseNum: 1,
+};
+
+const extractMarkers = (text: string): string[] => {
+  // Finds markers (a backslash character followed by any number of letters, digits and possibly a *)
+  return text.match(/\\[a-zA-Z0-9]+\*?/g) || [];
+};
+
+type MarkerPair = {
+  marker: string;
+  precedingMarker: string;
+};
+
+const extractMarkersWithPreceding = (text: string): MarkerPair[] => {
+  const markers = extractMarkers(text);
+
+  const markerPairs: MarkerPair[] = [];
+  markers.forEach((marker, index) =>
+    markerPairs.push({ marker, precedingMarker: index > 0 ? markers[index - 1] : '' }),
+  );
+
+  return markerPairs;
 };
 
 function getDescription(markersInfo: string[], marker: string): string | undefined {
@@ -47,12 +71,15 @@ function getDescription(markersInfo: string[], marker: string): string | undefin
  */
 const createColumns = (
   itemLabel: string,
+  relatedItemLabel: string,
   styleNameLabel: string,
   markerNames: string[],
   countLabel: string,
   statusLabel: string,
   statusChangeHandler: (items: string[], status: Status) => void,
+  showPrecedingMarkers?: boolean,
 ): ColumnDef<ItemData>[] => [
+  ...(showPrecedingMarkers ? [inventoryRelatedItemColumn(relatedItemLabel)] : []),
   inventoryItemColumn(itemLabel),
   inventoryCountColumn(countLabel),
   {
@@ -96,6 +123,7 @@ function MarkerInventory({
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
   const [markerNames, setMarkerNames] = useState<string[]>([]);
+  const [showPreceding, setShowPreceding] = useState<boolean>(true);
 
   useEffect(() => {
     const fetchStylesheet = async () => {
@@ -113,6 +141,10 @@ function MarkerInventory({
     () => markerInventoryStrings['%webView_inventory_table_header_marker%'],
     [markerInventoryStrings],
   );
+  const relatedItemLabel = useMemo(
+    () => markerInventoryStrings['%webView_inventory_table_header_preceding_marker%'],
+    [markerInventoryStrings],
+  );
   const styleNameLabel = useMemo(
     () => markerInventoryStrings['%webView_inventory_table_header_style_name%'],
     [markerInventoryStrings],
@@ -126,38 +158,58 @@ function MarkerInventory({
     [markerInventoryStrings],
   );
 
+  const markers: string[] = useMemo(() => (text ? extractMarkers(text) : []), [text]);
+  const markersWithPreceding: MarkerPair[] = useMemo(
+    () => (text ? extractMarkersWithPreceding(text) : []),
+    [text],
+  );
+
   const getColumns = useCallback(
     (onStatusChange: (changedItems: string[], status: Status) => void) =>
       createColumns(
         itemLabel,
+        relatedItemLabel,
         styleNameLabel,
         markerNames,
         countLabel,
         statusLabel,
         onStatusChange,
+        showPreceding,
       ),
-    [itemLabel, styleNameLabel, markerNames, countLabel, statusLabel],
+    [
+      itemLabel,
+      relatedItemLabel,
+      styleNameLabel,
+      markerNames,
+      countLabel,
+      statusLabel,
+      showPreceding,
+    ],
   );
 
   useEffect(() => {
-    console.log(markerNames);
-  }, [markerNames]);
+    console.log(markersWithPreceding);
+  }, [markerNames, markersWithPreceding]);
 
   return (
-    <Inventory
-      scriptureReference={scriptureReference}
-      setScriptureReference={setScriptureReference}
-      localizedStrings={localizedStrings}
-      extractItems={extractMarkers}
-      approvedItems={approvedItems}
-      onApprovedItemsChange={onApprovedItemsChange}
-      unapprovedItems={unapprovedItems}
-      onUnapprovedItemsChange={onUnapprovedItemsChange}
-      text={text}
-      scope={scope}
-      onScopeChange={onScopeChange}
-      getColumns={getColumns}
-    />
+    <div>
+      <Switch checked={showPreceding} onCheckedChange={setShowPreceding} />
+      <Label>Show Preceding markers</Label>
+      <Inventory
+        scriptureReference={scriptureReference}
+        setScriptureReference={setScriptureReference}
+        localizedStrings={localizedStrings}
+        items={markers}
+        approvedItems={approvedItems}
+        onApprovedItemsChange={onApprovedItemsChange}
+        unapprovedItems={unapprovedItems}
+        onUnapprovedItemsChange={onUnapprovedItemsChange}
+        text={text}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        getColumns={getColumns}
+      />
+    </div>
   );
 }
 

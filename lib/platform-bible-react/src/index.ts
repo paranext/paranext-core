@@ -29,6 +29,7 @@ export type {
 export {
   inventoryItemColumn,
   inventoryCountColumn,
+  inventoryRelatedItemColumn,
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
 export {

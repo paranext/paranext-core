@@ -71,7 +71,7 @@ export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode 
 /**
  * Filters data that is shown in the DataTable section of the inventory
  *
- * @param items All items and their related information
+ * @param itemData All items and their related information
  * @param statusFilter Allows filtering by status (i.e. show all items, or only items that are
  *   'approved', 'unapproved' or 'unknown')
  * @param textFilter Allows filtering by text. All items that include the filter text will be
@@ -79,11 +79,11 @@ export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode 
  * @returns Array of items and their related information that are matched by the specified filters
  */
 const filterItemData = (
-  items: ItemData[],
+  itemData: ItemData[],
   statusFilter: StatusFilter,
   textFilter: string,
 ): ItemData[] => {
-  let filteredItemData: ItemData[] = items;
+  let filteredItemData: ItemData[] = itemData;
 
   if (statusFilter !== 'all') {
     filteredItemData = filteredItemData.filter(
@@ -101,22 +101,18 @@ const filterItemData = (
 };
 
 /**
- * Turns scripture text into array of inventory items, along with their count and status
+ * Turns array of strings into array of inventory items, along with their count and status
  *
- * @param text Scripture text from which the inventory items are extracted
- * @param getInventoryItems Function that provides logic for extracting inventory items from text
+ * @param items String array that contains inventory items
  * @param getStatusForItem Function that gets status for inventory item from related project
  *   settings
  * @returns Array of inventory items, along with their count and status
  */
-const convertTextToItemData = (
-  text: string,
-  getInventoryItems: (text: string) => string[],
+const convertToItemData = (
+  items: string[],
   getStatusForItem: (item: string) => Status,
 ): ItemData[] => {
   const itemData: ItemData[] = [];
-
-  const items: string[] = getInventoryItems(text);
 
   for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
     const item = items[itemIndex];
@@ -157,7 +153,7 @@ type InventoryProps = {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: InventoryLocalizedStrings;
-  extractItems: (text: string, item?: string | undefined) => string[];
+  items: string[];
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
@@ -175,7 +171,7 @@ export default function Inventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,
-  extractItems,
+  items,
   approvedItems,
   onApprovedItemsChange,
   unapprovedItems,
@@ -194,14 +190,14 @@ export default function Inventory({
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
 
-  const [items, setItems] = useState<ItemData[]>([]);
+  const [itemData, setItemData] = useState<ItemData[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<string>('');
 
   const statusChangeHandler = useCallback(
     (changedItems: string[], status: Status) => {
-      setItems((prevTableData) => {
+      setItemData((prevTableData) => {
         let tableData: ItemData[] = [];
         changedItems.forEach((item) => {
           tableData = prevTableData.map((tableEntry) => {
@@ -253,12 +249,12 @@ export default function Inventory({
 
   useEffect(() => {
     if (!text) return;
-    setItems(convertTextToItemData(text, extractItems, getStatusForItem));
-  }, [extractItems, text, getStatusForItem]);
+    setItemData(convertToItemData(items, getStatusForItem));
+  }, [items, text, getStatusForItem]);
 
   const filteredItemData = useMemo(() => {
-    return filterItemData(items, statusFilter, textFilter);
-  }, [items, statusFilter, textFilter]);
+    return filterItemData(itemData, statusFilter, textFilter);
+  }, [itemData, statusFilter, textFilter]);
 
   useEffect(() => {
     setSelectedItem('');
@@ -338,7 +334,7 @@ export default function Inventory({
           <OccurrencesTable
             selectedItem={selectedItem}
             text={text}
-            extractItems={extractItems}
+            items={items}
             scriptureReference={scriptureReference}
             setScriptureReference={(newScriptureReference) =>
               setScriptureReference(newScriptureReference)

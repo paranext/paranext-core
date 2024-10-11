@@ -5,16 +5,10 @@ import { split } from 'platform-bible-utils';
  * the provided target
  *
  * @param text The scripture text from which the characters will be extracted
- * @param target (Optional) If provided, the function only extracts exact matches of this character
  * @returns An array of characters extracted from the provided scripture text
  */
-export const extractCharacters = (
-  text: string,
-  target: string | undefined = undefined,
-): string[] => {
-  let characters: string[] = split(text, '');
-  if (target) characters = characters.filter((character) => character === target);
-  return characters;
+export const extractCharacters = (text: string): string[] => {
+  return split(text, '');
 };
 
 /**
@@ -22,26 +16,9 @@ export const extractCharacters = (
  * the provided target
  *
  * @param text The scripture text from which the characters will be extracted
- * @param target (Optional) If provided, the function only extracts exact matches of this words
  * @returns An array of repeated words extracted from the provided scripture text
  */
-export const extractRepeatedWords = (
-  text: string,
-  target: string | undefined = undefined,
-): string[] => {
+export const extractRepeatedWords = (text: string): string[] => {
   // Finds repeated words, and captures the first occurrence of the word
-  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
-
-  if (target) return repeatedWords?.filter((word) => word === target);
-
-  return repeatedWords;
-};
-
-export const extractMarkers = (text: string, target: string | undefined = undefined): string[] => {
-  // Finds markers (a backslash character followed by any number of characters until a whitespace is detected)
-  const markers = text.match(/\\[a-zA-Z0-9]+\*?/g) || [];
-
-  if (target) return markers?.filter((marker) => marker === target);
-
-  return markers;
+  return text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
 };

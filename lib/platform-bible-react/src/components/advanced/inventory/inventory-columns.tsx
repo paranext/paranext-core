@@ -23,6 +23,25 @@ export const inventoryItemColumn = (itemLabel: string): ColumnDef<ItemData> => {
 };
 
 /**
+ * Function that creates the related item column for inventories
+ *
+ * @param relatedItemLabel Localized label for the related item column (e.g. 'Preceding Marker')
+ * @returns Column that shows the related inventory items. Should be used with the DataTable
+ *   component
+ */
+export const inventoryRelatedItemColumn = (relatedItemLabel: string): ColumnDef<ItemData> => {
+  return {
+    accessorKey: 'relatedItem',
+    header: ({ column }) => (
+      <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
+        {relatedItemLabel}
+        {getSortingIcon(column.getIsSorted())}
+      </Button>
+    ),
+  };
+};
+
+/**
  * Function that creates the count column for inventories. Should be used with the DataTable
  * component.
  *

@@ -20,7 +20,7 @@ type SearchResult = {
 const extractOccurrences = (
   text: string | undefined,
   item: string,
-  extractItems: (text: string, item?: string | undefined) => string[],
+  items: string[],
   scriptureRef: ScriptureReference,
 ): SearchResult[] => {
   if (!text || text === '' || item === '') return [];
@@ -48,9 +48,21 @@ const extractOccurrences = (
       }
     }
 
-    const items: string[] = extractItems(line, item);
+    const uniqueItems: string[] = Array.from(new Set(items));
 
-    for (let i = 0; i < items.length; i++) {
+    const itemsInLine: string[] = [];
+
+    uniqueItems.forEach((uniqueItem) => {
+      // Find all occurrences of the item
+      const regex = new RegExp(uniqueItem, 'g');
+      const matches = line.match(regex);
+
+      if (matches) {
+        itemsInLine.push(...matches);
+      }
+    });
+
+    for (let i = 0; i < itemsInLine.length; i++) {
       const result: SearchResult = {
         reference: {
           ...scriptureRef,
@@ -71,7 +83,7 @@ const extractOccurrences = (
 type OccurrencesTableProps = {
   selectedItem: string;
   text: string | undefined;
-  extractItems: (text: string, item?: string | undefined) => string[];
+  items: string[];
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
@@ -80,7 +92,7 @@ type OccurrencesTableProps = {
 function OccurrencesTable({
   selectedItem,
   text,
-  extractItems,
+  items,
   scriptureReference,
   setScriptureReference,
   localizedStrings,
@@ -88,12 +100,12 @@ function OccurrencesTable({
   const reference = localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
   const occurrence = localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
   const [tableData, setTableData] = useState<SearchResult[]>(
-    extractOccurrences(text, selectedItem, extractItems, scriptureReference),
+    extractOccurrences(text, selectedItem, items, scriptureReference),
   );
 
   useEffect(
-    () => setTableData(extractOccurrences(text, selectedItem, extractItems, scriptureReference)),
-    [text, selectedItem, scriptureReference, extractItems],
+    () => setTableData(extractOccurrences(text, selectedItem, items, scriptureReference)),
+    [text, selectedItem, scriptureReference, items],
   );
 
   return (
