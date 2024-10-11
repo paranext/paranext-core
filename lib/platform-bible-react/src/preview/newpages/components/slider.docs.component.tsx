@@ -1,6 +1,6 @@
 import { Slider } from '@/components/shadcn-ui/slider';
 import CodePreview from '@/preview/newpreview-components/code-preview.component';
-import DocsPage, { DocsPageProps } from '@/preview/newpreview-components/docs-page';
+import DocsPage from '@/preview/newpreview-components/docs-page';
 import Example from '@/preview/newpreview-components/example';
 import ApiReferenceTable, {
   ComponentProperty,
@@ -9,17 +9,18 @@ import { NavEntry } from '@/preview/newpreview-components/quicknav.component';
 import IntroSection from '@/preview/newpreview-components/section-intro.component';
 import Section from '@/preview/newpreview-components/section.component';
 import UsagePattern from '@/preview/newpreview-components/usage-pattern.component';
-import { UxApprovals } from '@/preview/newpreview-components/ux-approval.component';
+import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
 
-const uxApprovalList: UxApprovals = {
+const uxApprovalList: UsabilityChecks = {
   rtl_ready: 'done',
   font: 'needed',
-  spacing: 'rework',
+  spacing: 'needs rework',
   themeable: 'done',
-  wording: 'not_applicable',
+  accessible: 'needed',
+  wording: 'not applicable',
 };
 
-const sliderProps: ComponentProperty[] = [
+const props: ComponentProperty[] = [
   { name: 'defaultValue', type: 'number[]', default: '[]', values: '' },
   { name: 'max', type: 'number', default: '100', values: '' },
   { name: 'step', type: 'number', default: '1', values: '' },
@@ -42,9 +43,10 @@ export default function SliderDocs() {
           <IntroSection
             id="intro"
             header="Slider"
+            githubComponentUrlPart="shadcn-ui/slider.tsx"
             description="An input where the user selects a value from within a given range."
             content={<Slider defaultValue={[50]} max={100} step={1} />}
-            approvalList={uxApprovalList}
+            usabilityChecks={uxApprovalList}
           />
 
           <Section
@@ -95,7 +97,7 @@ export default function SliderExample() {
             id="api"
             header="API Reference"
             description="All properties of the slider component"
-            content={<ApiReferenceTable properties={sliderProps} />}
+            content={<ApiReferenceTable properties={props} />}
           />
 
           <Section

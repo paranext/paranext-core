@@ -1,7 +1,7 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { ReactHTMLElement } from 'react';
 import CodePreview from './code-preview.component';
-import { ThemeProvider } from '../preview-components/theme-provider.component';
+import ComponentPreview from './component-preview.component';
 
 type ExampleProps = {
   title: string;
@@ -20,10 +20,8 @@ export default function Example({ title, code, component }: ExampleProps) {
         </TabsList>
       </div>
 
-      <TabsContent value="preview" className="pr-rounded-md pr-border pr-p-4">
-        <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-          {component}
-        </ThemeProvider>
+      <TabsContent value="preview">
+        <ComponentPreview component={component} />
       </TabsContent>
       <TabsContent value="code">
         <CodePreview code={code} />

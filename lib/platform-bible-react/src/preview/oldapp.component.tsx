@@ -14,7 +14,7 @@ export default function OldApp() {
   const changeDirectionHandler = (dir: Direction) => setDirection(dir);
 
   return (
-    <>
+    <div className="pr-hidden">
       <div className="pr-fixed pr-right-4 pr-top-4 pr-flex pr-gap-2">
         <DirToggle direction={direction} onChangeDirection={changeDirectionHandler} />
         <ThemeButton />
@@ -48,6 +48,6 @@ export default function OldApp() {
           <Guide direction={direction} onChangeDirection={changeDirectionHandler} />
         </TabsContent>
       </Tabs>
-    </>
+    </div>
   );
 }

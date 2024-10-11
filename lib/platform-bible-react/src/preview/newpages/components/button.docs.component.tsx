@@ -8,17 +8,18 @@ import ApiReferenceTable, {
 import { NavEntry } from '@/preview/newpreview-components/quicknav.component';
 import IntroSection from '@/preview/newpreview-components/section-intro.component';
 import Section from '@/preview/newpreview-components/section.component';
-import { UxApprovals } from '@/preview/newpreview-components/ux-approval.component';
+import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
 
-const uxApprovalList: UxApprovals = {
+const uxApprovalList: UsabilityChecks = {
   rtl_ready: 'needed',
   font: 'needed',
   spacing: 'needed',
   themeable: 'needed',
+  accessible: 'needed',
   wording: 'needed',
 };
 
-const sliderProps: ComponentProperty[] = [
+const props: ComponentProperty[] = [
   { name: 'size', type: 'enum', default: 'default', values: 'default | icon | lg | sm' },
   {
     name: 'variant',
@@ -46,9 +47,10 @@ export default function ButtonDocs() {
           <IntroSection
             id="intro"
             header="Button"
+            githubComponentUrlPart="shadcn-ui/button.tsx"
             description="TBD"
             content={<Button>Hello</Button>}
-            approvalList={uxApprovalList}
+            usabilityChecks={uxApprovalList}
           />
 
           <Section
@@ -68,7 +70,7 @@ export default function ButtonDocs() {
             id="api"
             header="API Reference"
             description="All properties of the Button component"
-            content={<ApiReferenceTable properties={sliderProps} />}
+            content={<ApiReferenceTable properties={props} />}
           />
 
           <Section

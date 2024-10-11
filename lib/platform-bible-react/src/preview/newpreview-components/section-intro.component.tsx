@@ -1,22 +1,40 @@
+import { Button } from '@/components/shadcn-ui/button';
+import { SquareArrowOutUpRight } from 'lucide-react';
+import Link from './link';
 import { SectionProps } from './section.component';
-import UxApproval, { UxApprovalProps } from './ux-approval.component';
+import UxApproval, { UsabilityChecks } from './ux-approval.component';
+import ComponentPreview from './component-preview.component';
+
+type IntroSectionProps = SectionProps & { usabilityChecks: UsabilityChecks } & {
+  githubComponentUrlPart: string;
+};
 
 export default function IntroSection({
   id,
   header,
   description,
   content,
-  approvalList,
-}: SectionProps & UxApprovalProps) {
+  usabilityChecks,
+  githubComponentUrlPart,
+}: IntroSectionProps) {
+  const componentName = githubComponentUrlPart.slice(githubComponentUrlPart.lastIndexOf('/') + 1);
   return (
     <section id={id}>
       <div className="pr-mb-4 pr-flex pr-items-center pr-justify-between">
-        <h1 className="pr-text-4xl pr-font-bold">{header}</h1>
-
-        <UxApproval approvalList={approvalList} />
+        <div className="pr-flex pr-items-center">
+          <h1 className="pr-text-4xl pr-font-bold">{header}</h1>
+          <Button size="icon" variant="link">
+            <Link
+              href={`https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/components/${githubComponentUrlPart}`}
+              newTab
+              text={<SquareArrowOutUpRight className="pr-h-5" />}
+            />
+          </Button>
+        </div>
+        <UxApproval usabilityChecks={usabilityChecks} componentName={componentName} />
       </div>
       <p className="pr-mb-6 pr-text-xl pr-text-muted-foreground">{description}</p>
-      {content}
+      <ComponentPreview component={content} />
     </section>
   );
 }

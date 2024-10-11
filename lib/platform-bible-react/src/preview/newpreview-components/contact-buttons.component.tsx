@@ -1,6 +1,5 @@
 import { Button } from '@/components/shadcn-ui/button';
-import { Mail } from 'lucide-react';
-import DiscordLogo from '../preview-components/discord-logo.component';
+import UxButtons from './ux-buttons';
 
 export default function ContactButtons2() {
   return (
@@ -15,21 +14,7 @@ export default function ContactButtons2() {
         </a>
       </Button>
 
-      <Button variant="ghost" size="icon" title="Discord">
-        <a
-          target="_blank"
-          rel="noreferrer"
-          href="https://discord.com/channels/1064938364597436416/1082713526780575845"
-        >
-          <DiscordLogo />
-        </a>
-      </Button>
-
-      <Button variant="ghost" size="icon" title="email">
-        <a href="mailto:feedback@paratext.org">
-          <Mail />
-        </a>
-      </Button>
+      <UxButtons />
     </>
   );
 }
