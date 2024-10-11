@@ -271,8 +271,13 @@ export type InventoryLocalizedStrings = {
 };
 export type Scope = "book" | "chapter" | "verse";
 export type Status = "approved" | "unapproved" | "unknown";
-export type ItemData = {
+export type InventoryItem = {
 	item: string;
+	relatedItem?: string;
+};
+export type InventoryTableData = {
+	item: string;
+	relatedItem?: string;
 	count: number;
 	status: Status;
 };
@@ -288,7 +293,7 @@ export type InventoryProps = {
 	scriptureReference: ScriptureReference;
 	setScriptureReference: (scriptureReference: ScriptureReference) => void;
 	localizedStrings: InventoryLocalizedStrings;
-	items: string[];
+	items: InventoryItem[];
 	approvedItems: string[];
 	onApprovedItemsChange: (items: string[]) => void;
 	unapprovedItems: string[];
@@ -296,7 +301,7 @@ export type InventoryProps = {
 	text: string | undefined;
 	scope: Scope;
 	onScopeChange: (scope: Scope) => void;
-	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
+	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<InventoryTableData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
 export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, items, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
@@ -306,7 +311,7 @@ export function Inventory({ scriptureReference, setScriptureReference, localized
  * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
  * @returns Column that shows the inventory items. Should be used with the DataTable component
  */
-export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<InventoryTableData>;
 /**
  * Function that creates the related item column for inventories
  *
@@ -314,7 +319,7 @@ export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemD
  * @returns Column that shows the related inventory items. Should be used with the DataTable
  *   component
  */
-export declare const inventoryRelatedItemColumn: (relatedItemLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryRelatedItemColumn: (relatedItemLabel: string) => ColumnDef<InventoryTableData>;
 /**
  * Function that creates the count column for inventories. Should be used with the DataTable
  * component.
@@ -322,7 +327,7 @@ export declare const inventoryRelatedItemColumn: (relatedItemLabel: string) => C
  * @param itemLabel Localized label for the count column
  * @returns Column that shows the number of occurrences of the related inventory items
  */
-export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<InventoryTableData>;
 /**
  * Function that creates the status column for inventories. Should be used with the DataTable
  * component.
@@ -331,7 +336,7 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Ite
  * @param statusChangeHandler Callback function that handles status updates to selected item(s)
  * @returns Column that shows the status of the related inventory items.
  */
-export declare const inventoryStatusColumn: (statusLabel: string, statusChangeHandler: (items: string[], status: Status) => void) => ColumnDef<ItemData>;
+export declare const inventoryStatusColumn: (statusLabel: string, statusChangeHandler: (items: string[], status: Status) => void) => ColumnDef<InventoryTableData>;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;

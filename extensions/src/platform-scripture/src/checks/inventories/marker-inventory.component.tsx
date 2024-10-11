@@ -3,7 +3,8 @@ import {
   Button,
   ColumnDef,
   Inventory,
-  ItemData,
+  InventoryItem,
+  InventoryTableData,
   Label,
   Scope,
   Status,
@@ -31,25 +32,16 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-const extractMarkers = (text: string): string[] => {
+const extractMarkersWithPreceding = (text: string): InventoryItem[] => {
   // Finds markers (a backslash character followed by any number of letters, digits and possibly a *)
-  return text.match(/\\[a-zA-Z0-9]+\*?/g) || [];
-};
+  const markers = text.match(/\\[a-zA-Z0-9]+\*?/g) || [];
 
-type MarkerPair = {
-  marker: string;
-  precedingMarker: string;
-};
-
-const extractMarkersWithPreceding = (text: string): MarkerPair[] => {
-  const markers = extractMarkers(text);
-
-  const markerPairs: MarkerPair[] = [];
+  const inventoryItems: InventoryItem[] = [];
   markers.forEach((marker, index) =>
-    markerPairs.push({ marker, precedingMarker: index > 0 ? markers[index - 1] : '' }),
+    inventoryItems.push({ item: marker, relatedItem: index > 0 ? markers[index - 1] : '' }),
   );
 
-  return markerPairs;
+  return inventoryItems;
 };
 
 function getDescription(markersInfo: string[], marker: string): string | undefined {
@@ -78,7 +70,7 @@ const createColumns = (
   statusLabel: string,
   statusChangeHandler: (items: string[], status: Status) => void,
   showPrecedingMarkers?: boolean,
-): ColumnDef<ItemData>[] => [
+): ColumnDef<InventoryTableData>[] => [
   ...(showPrecedingMarkers ? [inventoryRelatedItemColumn(relatedItemLabel)] : []),
   inventoryItemColumn(itemLabel),
   inventoryCountColumn(countLabel),
@@ -158,8 +150,7 @@ function MarkerInventory({
     [markerInventoryStrings],
   );
 
-  const markers: string[] = useMemo(() => (text ? extractMarkers(text) : []), [text]);
-  const markersWithPreceding: MarkerPair[] = useMemo(
+  const markers: InventoryItem[] = useMemo(
     () => (text ? extractMarkersWithPreceding(text) : []),
     [text],
   );
@@ -188,8 +179,8 @@ function MarkerInventory({
   );
 
   useEffect(() => {
-    console.log(markersWithPreceding);
-  }, [markerNames, markersWithPreceding]);
+    console.log(markers);
+  }, [markerNames, markers]);
 
   return (
     <div>

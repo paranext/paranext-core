@@ -2,7 +2,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
 import { ColumnDef } from '../data-table/data-table.component';
-import { getSortingIcon, ItemData, Status } from './inventory.component';
+import { getSortingIcon, InventoryTableData, Status } from './inventory.component';
 
 /**
  * Function that creates the item column for inventories
@@ -10,7 +10,7 @@ import { getSortingIcon, ItemData, Status } from './inventory.component';
  * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
  * @returns Column that shows the inventory items. Should be used with the DataTable component
  */
-export const inventoryItemColumn = (itemLabel: string): ColumnDef<ItemData> => {
+export const inventoryItemColumn = (itemLabel: string): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'item',
     header: ({ column }) => (
@@ -29,7 +29,9 @@ export const inventoryItemColumn = (itemLabel: string): ColumnDef<ItemData> => {
  * @returns Column that shows the related inventory items. Should be used with the DataTable
  *   component
  */
-export const inventoryRelatedItemColumn = (relatedItemLabel: string): ColumnDef<ItemData> => {
+export const inventoryRelatedItemColumn = (
+  relatedItemLabel: string,
+): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'relatedItem',
     header: ({ column }) => (
@@ -48,7 +50,7 @@ export const inventoryRelatedItemColumn = (relatedItemLabel: string): ColumnDef<
  * @param itemLabel Localized label for the count column
  * @returns Column that shows the number of occurrences of the related inventory items
  */
-export const inventoryCountColumn = (countLabel: string): ColumnDef<ItemData> => {
+export const inventoryCountColumn = (countLabel: string): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'count',
     header: ({ column }) => (
@@ -74,7 +76,7 @@ export const inventoryCountColumn = (countLabel: string): ColumnDef<ItemData> =>
 export const inventoryStatusColumn = (
   statusLabel: string,
   statusChangeHandler: (items: string[], status: Status) => void,
-): ColumnDef<ItemData> => {
+): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'status',
     header: ({ column }) => {

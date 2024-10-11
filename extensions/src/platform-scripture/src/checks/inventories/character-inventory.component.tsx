@@ -1,9 +1,10 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey, ScriptureReference, split } from 'platform-bible-utils';
 import {
   Button,
   ColumnDef,
   Inventory,
-  ItemData,
+  InventoryItem,
+  InventoryTableData,
   Scope,
   Status,
   inventoryCountColumn,
@@ -12,7 +13,6 @@ import {
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { useCallback, useMemo } from 'react';
-import { extractCharacters } from './inventory-utils';
 
 const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_character%',
@@ -20,6 +20,24 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
+
+/**
+ * Extracts characters from scripture text. If a target is provided, only extracts occurrences of
+ * the provided target
+ *
+ * @param text The scripture text from which the characters will be extracted
+ * @returns An array of characters extracted from the provided scripture text
+ */
+const extractCharacters = (text: string): InventoryItem[] => {
+  const characters = split(text, '');
+
+  const inventoryItems: InventoryItem[] = [];
+  characters.forEach((character) => {
+    inventoryItems.push({ item: character });
+  });
+
+  return inventoryItems;
+};
 
 /**
  * Function that constructs the column for the inventory component
@@ -37,7 +55,7 @@ const createColumns = (
   countLabel: string,
   statusLabel: string,
   statusChangeHandler: (items: string[], status: Status) => void,
-): ColumnDef<ItemData>[] => [
+): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn(itemLabel),
   {
     accessorKey: 'unicodeValue',
@@ -105,7 +123,7 @@ function CharacterInventory({
       scriptureReference={scriptureReference}
       setScriptureReference={setScriptureReference}
       localizedStrings={localizedStrings}
-      extractItems={extractCharacters}
+      items={text ? extractCharacters(text) : []}
       approvedItems={approvedItems}
       onApprovedItemsChange={onApprovedItemsChange}
       unapprovedItems={unapprovedItems}

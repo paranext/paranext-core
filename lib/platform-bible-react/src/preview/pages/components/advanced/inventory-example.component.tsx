@@ -5,9 +5,10 @@ import {
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
 import Inventory, {
-  ItemData,
+  InventoryTableData,
   Scope,
   Status,
+  InventoryItem,
 } from '@/components/advanced/inventory/inventory.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
@@ -34,19 +35,24 @@ const localizedStrings = {
 
 const createColumns = (
   statusChangeHandler: (items: string[], status: Status) => void,
-): ColumnDef<ItemData>[] => [
+): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn('Item'),
   inventoryCountColumn('Count'),
   inventoryStatusColumn('Status', statusChangeHandler),
 ];
 
-const extractItems = (text: string, target: string | undefined = undefined): string[] => {
+const extractItems = (text: string, target: string | undefined = undefined): InventoryItem[] => {
   // Finds repeated words, and captures the first occurrence of the word
   const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
 
-  if (target) return repeatedWords?.filter((word) => word === target);
+  const inventoryItems: InventoryItem[] = [];
+  repeatedWords.forEach((word) => {
+    inventoryItems.push({ item: word });
+  });
 
-  return repeatedWords;
+  if (target) return inventoryItems?.filter((item) => item.item === target);
+
+  return inventoryItems;
 };
 
 function InventoryExample() {

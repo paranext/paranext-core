@@ -2,7 +2,8 @@ import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible
 import {
   ColumnDef,
   Inventory,
-  ItemData,
+  InventoryItem,
+  InventoryTableData,
   Scope,
   Status,
   inventoryCountColumn,
@@ -11,13 +12,31 @@ import {
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { useCallback, useMemo } from 'react';
-import { extractRepeatedWords } from './inventory-utils';
 
 const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_repeated_words%',
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
+
+/**
+ * Extracts repeated words from scripture text. If a target is provided, only extracts occurences of
+ * the provided target
+ *
+ * @param text The scripture text from which the characters will be extracted
+ * @returns An array of repeated words extracted from the provided scripture text
+ */
+export const extractRepeatedWords = (text: string): InventoryItem[] => {
+  // Finds repeated words, and captures the first occurrence of the word
+  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
+
+  const inventoryItems: InventoryItem[] = [];
+  repeatedWords.forEach((repeatedWord) => {
+    inventoryItems.push({ item: repeatedWord });
+  });
+
+  return inventoryItems;
+};
 
 /**
  * Function that constructs the column for the inventory component
@@ -33,7 +52,7 @@ const createColumns = (
   countLabel: string,
   statusLabel: string,
   statusChangeHandler: (items: string[], status: Status) => void,
-): ColumnDef<ItemData>[] => [
+): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn(itemLabel),
   inventoryCountColumn(countLabel),
   inventoryStatusColumn(statusLabel, statusChangeHandler),
@@ -89,7 +108,7 @@ function RepeatedWordsInventory({
       scriptureReference={scriptureReference}
       setScriptureReference={setScriptureReference}
       localizedStrings={localizedStrings}
-      extractItems={extractRepeatedWords}
+      items={text ? extractRepeatedWords(text) : []}
       approvedItems={approvedItems}
       onApprovedItemsChange={onApprovedItemsChange}
       unapprovedItems={unapprovedItems}

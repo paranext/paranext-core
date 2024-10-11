@@ -22,7 +22,8 @@ export {
 } from './components/advanced/inventory/inventory.component';
 export type {
   InventoryLocalizedStrings,
-  ItemData,
+  InventoryItem,
+  InventoryTableData,
   Scope,
   Status,
 } from './components/advanced/inventory/inventory.component';

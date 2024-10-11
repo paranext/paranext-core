@@ -45,8 +45,14 @@ export type Status = 'approved' | 'unapproved' | 'unknown';
 
 export type StatusFilter = Status | 'all';
 
-export type ItemData = {
+export type InventoryItem = {
   item: string;
+  relatedItem?: string;
+};
+
+export type InventoryTableData = {
+  item: string;
+  relatedItem?: string;
   count: number;
   status: Status;
 };
@@ -79,11 +85,11 @@ export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode 
  * @returns Array of items and their related information that are matched by the specified filters
  */
 const filterItemData = (
-  itemData: ItemData[],
+  itemData: InventoryTableData[],
   statusFilter: StatusFilter,
   textFilter: string,
-): ItemData[] => {
-  let filteredItemData: ItemData[] = itemData;
+): InventoryTableData[] => {
+  let filteredItemData: InventoryTableData[] = itemData;
 
   if (statusFilter !== 'all') {
     filteredItemData = filteredItemData.filter(
@@ -103,29 +109,30 @@ const filterItemData = (
 /**
  * Turns array of strings into array of inventory items, along with their count and status
  *
- * @param items String array that contains inventory items
+ * @param inventoryItems String array that contains inventory items
  * @param getStatusForItem Function that gets status for inventory item from related project
  *   settings
  * @returns Array of inventory items, along with their count and status
  */
-const convertToItemData = (
-  items: string[],
+const convertToTableData = (
+  inventoryItems: InventoryItem[],
   getStatusForItem: (item: string) => Status,
-): ItemData[] => {
-  const itemData: ItemData[] = [];
+): InventoryTableData[] => {
+  const itemData: InventoryTableData[] = [];
 
-  for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-    const item = items[itemIndex];
+  for (let itemIndex = 0; itemIndex < inventoryItems.length; itemIndex++) {
+    const inventoryItem = inventoryItems[itemIndex];
     const existingItem = itemData.find((entry) => {
-      return entry.item === item;
+      return entry.item === inventoryItem.item && entry.relatedItem === inventoryItem.relatedItem;
     });
     if (existingItem) {
       existingItem.count += 1;
     } else {
-      const newItem: ItemData = {
-        item,
+      const newItem: InventoryTableData = {
+        item: inventoryItem.item,
+        relatedItem: inventoryItem.relatedItem,
         count: 1,
-        status: getStatusForItem(item),
+        status: getStatusForItem(inventoryItem.item),
       };
       itemData.push(newItem);
     }
@@ -153,7 +160,7 @@ type InventoryProps = {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: InventoryLocalizedStrings;
-  items: string[];
+  items: InventoryItem[];
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
@@ -163,7 +170,7 @@ type InventoryProps = {
   onScopeChange: (scope: Scope) => void;
   getColumns: (
     onStatusChange: (newItems: string[], status: Status) => void,
-  ) => ColumnDef<ItemData>[];
+  ) => ColumnDef<InventoryTableData>[];
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -190,7 +197,7 @@ export default function Inventory({
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
 
-  const [itemData, setItemData] = useState<ItemData[]>([]);
+  const [itemData, setItemData] = useState<InventoryTableData[]>([]);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<string>('');
@@ -198,7 +205,7 @@ export default function Inventory({
   const statusChangeHandler = useCallback(
     (changedItems: string[], status: Status) => {
       setItemData((prevTableData) => {
-        let tableData: ItemData[] = [];
+        let tableData: InventoryTableData[] = [];
         changedItems.forEach((item) => {
           tableData = prevTableData.map((tableEntry) => {
             if (tableEntry.item === item && tableEntry.status !== status)
@@ -249,7 +256,7 @@ export default function Inventory({
 
   useEffect(() => {
     if (!text) return;
-    setItemData(convertToItemData(items, getStatusForItem));
+    setItemData(convertToTableData(items, getStatusForItem));
   }, [items, text, getStatusForItem]);
 
   const filteredItemData = useMemo(() => {
@@ -260,7 +267,10 @@ export default function Inventory({
     setSelectedItem('');
   }, [filteredItemData]);
 
-  const rowClickHandler = (row: RowContents<ItemData>, table: TableContents<ItemData>) => {
+  const rowClickHandler = (
+    row: RowContents<InventoryTableData>,
+    table: TableContents<InventoryTableData>,
+  ) => {
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
 
@@ -334,7 +344,7 @@ export default function Inventory({
           <OccurrencesTable
             selectedItem={selectedItem}
             text={text}
-            items={items}
+            items={[]} // Fix this
             scriptureReference={scriptureReference}
             setScriptureReference={(newScriptureReference) =>
               setScriptureReference(newScriptureReference)
