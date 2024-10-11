@@ -5,7 +5,7 @@ type CodePreviewProps = { good: boolean; componentExample: ReactHTMLElement; tex
 
 export default function UsagePattern({ good, componentExample, text }: CodePreviewProps) {
   return (
-    <div className="pr-rounded-md pr-border pr-p-4">
+    <div className="pr-rounded-md pr-border pr-bg-background pr-p-4">
       <div className="pr-mb-2 pr-flex pr-items-center">
         {good ? (
           <CheckCircle2 className="pr-mr-2 pr-h-5 pr-w-5 pr-text-green-500" />

@@ -9,18 +9,25 @@ import Nav, { Page } from './newpreview-components/nav.component';
 import { Direction, DirToggle } from './preview-components/direction-toggle.component';
 import { ThemeButton } from './preview-components/theme-toggle.component';
 import ButtonDocs from './newpages/components/button.docs.component';
+import SliderDocs from './newpages/components/slider.docs.component';
 
+function makePageObject(page: string) {
+  return {
+    name: page,
+  };
+}
+
+const guidePages: Page[] = ['Word smithing', 'Sizing'].map(makePageObject);
 const componentPages: Page[] = ['Button', 'Slider', 'Dialog', '1', '2', '3', '4', '5'].map(
-  (it: string) => {
-    return {
-      name: it,
-    };
-  },
+  makePageObject,
 );
 const pages: Page[] = [
   { name: 'Overview' },
+  { name: 'Patterns and Recommendation', children: guidePages },
+  { name: 'Basic components', children: componentPages },
+  { name: 'Advanced components', children: componentPages },
+  { name: 'Example layouts', children: componentPages },
   { name: 'Installation' },
-  { name: 'Components', children: componentPages },
 ];
 
 export default function Docs() {
@@ -62,9 +69,9 @@ export default function Docs() {
             <ThemeButton />
           </div>
         </header>
-        <div className="pr-flex pr-bg-muted/10">
-          {/* <SliderDocs /> */}
-          <ButtonDocs />
+        <div className="pr-flex pr-bg-muted/20">
+          <SliderDocs />
+          {/* <ButtonDocs /> */}
           {/* <NavigationContentSearchDocs direction={direction} /> */}
         </div>
       </div>

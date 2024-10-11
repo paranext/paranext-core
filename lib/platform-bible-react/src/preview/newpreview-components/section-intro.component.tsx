@@ -17,7 +17,6 @@ export default function IntroSection({
   usabilityChecks,
   githubComponentUrlPart,
 }: IntroSectionProps) {
-  const componentName = githubComponentUrlPart.slice(githubComponentUrlPart.lastIndexOf('/') + 1);
   return (
     <section id={id}>
       <div className="pr-mb-4 pr-flex pr-items-center pr-justify-between">
@@ -31,7 +30,7 @@ export default function IntroSection({
             />
           </Button>
         </div>
-        <UxApproval usabilityChecks={usabilityChecks} componentName={componentName} />
+        <UxApproval usabilityChecks={usabilityChecks} componentName={header} />
       </div>
       <p className="pr-mb-6 pr-text-xl pr-text-muted-foreground">{description}</p>
       <ComponentPreview component={content} />
