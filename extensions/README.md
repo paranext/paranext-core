@@ -1,6 +1,52 @@
 # paranext-core/extensions
 
-Official extensions provided by Paranext
+Template for creating multiple Platform.Bible extensions in one repo
+
+<!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
+
+## Template Info
+
+This is a webpack project template pre-configured to build an arbitrary number of Platform.Bible extensions. It contains the bare minimum of what a multi-extension repo needs. Note that many of the files mentioned in [Summary](#summary) are not present in this template because they describe extension code which must be added to this template. For inspiration on what extensions in a multi-extension repo could look like, refer to any repo forked from this template. An example would be the [paranext-sample-extensions]() [MISSING! PLEASE ADD WHEN AVAILABLE].
+
+### Customize repo details
+
+Follow these instructions to customize the template to be your own Platform.Bible extension repo.
+
+#### Install and hook up to the template
+
+To make the process of customizing from the template as smooth as possible, we recommend you do the following before anything else:
+
+- [Install and set up this repo](#to-install)
+- [Update this repo from the template](#to-update-this-repo-and-extensions-from-the-templates) to hook everything up for smooth updates in the future
+
+#### Replace placeholders
+
+- At the top of this `README.md`:
+
+  - Replace the first line `# paranext-multi-extension-template` with `# your-extension-repo-name`
+  - Below the first line, replace the repo description with your own description
+
+- In `package.json`:
+
+  - Replace `"paranext-multi-extension-template"` with `"your-extension-repo-name"`
+  - Update ownership information and other relevant fields as desired
+
+- In `LICENSE`:
+
+  - Adjust as desired (feel free to choose a different license)
+  - If you choose to stay with the current license, update the copyright statement
+
+#### Create your first extension in this repo
+
+Follow the steps in [To create a new extension in this repo](#to-create-a-new-extension-in-this-repo) to create your first extension in this repo! You can follow the same steps to create new extensions as desired.
+
+#### Hide Template Info
+
+Once finished customizing this template to be your own, you can uncomment the [HTML comment tag](https://www.w3schools.com/html/html_comments.asp) above the [Template Info](#template-info) section to hide this template-related info in this readme. You can do this by clicking on the line and doing CTRL + / in VS Code. You can also do this manually by removing the first opening '&lt;!--' and the only closing '--&gt;' on the line. Leaving this info commented in your readme will hide it in your readme while avoiding merge conflicts if you decide to [update this repo and extensions from the templates](#to-update-this-repo-and-extensions-from-the-templates) in the future. If you never want to update this repo and extensions from the templates, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
+
+Note: if you [update this repo and extensions from the templates](#to-update-this-repo-and-extensions-from-the-templates), there may be important changes in this section like additional customizations you must make to this repo. Please keep an eye out for readme changes when updating from the template.
+
+<!-- Closing comment tag for Template Info Section -->
 
 ## Summary
 
@@ -167,6 +213,22 @@ Platform.Bible WebViews must be treated differently than other code, so this pro
 - WebView code must be bundled and can only import specific packages provided by Platform.Bible (see `externals` in `webpack.config.base.ts`), so this project bundles React WebViews before bundling the main extension file to support this requirement. The project discovers and bundles files that end with `.web-view.tsx` in this way.
   - Note: while watching for changes, if you add a new `.web-view.tsx` file, you must either restart webpack or make a nominal change and save in an existing `.web-view.tsx` file for webpack to discover and bundle this new file.
 - WebView code and styles must be provided to the `papi` as strings, so you can import WebView files with [`?inline`](#special-imports) after the file path to import the file as a string.
+
+### Built-in Tailwind CSS support
+
+This project is equipped with [Tailwind CSS](https://tailwindcss.com/) configured the same way it is configured in Platform.Bible's React component library `platform-bible-react` to enable WebViews to match Platform.Bible's look and feel. To add Tailwind CSS to your WebView, simply import your extension's `./src/tailwind.scss` file into your WebView's style `.scss` file:
+
+```scss
+@import './path/to/src/tailwind.scss';
+```
+
+Adding this import to your WebView's styles enables Tailwind CSS in the WebView. Important Tailwind configuration notes:
+
+- This project's Tailwind's configuration is set up with the prefix `tw-`, so all Tailwind classes must have `tw-` at the beginning (e.g. `tw-bg-purple-500`).
+- [Tailwind's preflight](https://tailwindcss.com/docs/preflight) is enabled by default, meaning some default HTML tag styles are significantly modified. You can [disable it](https://tailwindcss.com/docs/preflight#disabling-preflight) or [restrict its scope](https://www.npmjs.com/package/tailwindcss-scoped-preflight) if desired. However, we generally recommend instead using [`@tailwindcss/typography`](https://github.com/tailwindlabs/tailwindcss-typography), included in this project's Tailwind configuration by default, when displaying flowing content.
+- You can apply theme colors using Tailwind classes corresponding to the CSS property and theme color variable name like `tw-bg-primary`.
+
+Please see the wiki's [Tailwind CSS in Web Views](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#web-view-component) page for more information about using Tailwind in your web view.
 
 ### Special imports
 
