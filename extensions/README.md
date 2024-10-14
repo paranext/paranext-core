@@ -1,6 +1,6 @@
 # paranext-core/extensions
 
-Template for creating multiple Platform.Bible extensions in one repo
+Official extensions provided by Paranext.
 
 <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 
