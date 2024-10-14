@@ -3,7 +3,6 @@ import path from 'path';
 import { glob } from 'glob';
 import fs from 'fs';
 import { Pattern } from 'copy-webpack-plugin';
-import { LIBRARY_TYPE } from './webpack.config.base';
 
 // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/webpack/webpack.util.ts
 
@@ -27,6 +26,16 @@ export const webViewTempDir = 'temp-build';
 
 /** Folder containing the built extension files */
 export const outputFolder = 'dist';
+
+/**
+ * The module format of library we want webpack to use for externals and create for our extensions
+ *
+ * @see webpack.Configuration['externalsType'] for info about external import format
+ * @see webpack.LibraryOptions['type'] for info about library format
+ */
+// commonjs-static formats the code to export everything on module.exports.<export_name> so it works
+// well in cjs or esm https://webpack.js.org/configuration/output/#type-commonjs-static
+export const LIBRARY_TYPE: NonNullable<webpack.Configuration['externalsType']> = 'commonjs-static';
 
 /** Get a list of TypeScript WebView files to bundle. Path relative to project root */
 function getWebViewTsxPaths() {
@@ -323,6 +332,46 @@ export type ExtensionInfo = ExtensionManifest & {
   shouldCopyOnly?: boolean;
 };
 
+/** Cached list of extension folder names */
+let extensionFolderNamesCached: string[] | undefined;
+
+/**
+ * Get a list of the names of the folders with extensions in them (in the source folder)
+ *
+ * Synchronous version of `getExtensionFolderNames`
+ */
+export function getExtensionFolderNamesSync(): string[] {
+  if (extensionFolderNamesCached) return extensionFolderNamesCached;
+
+  extensionFolderNamesCached = fs
+    .readdirSync(sourceFolder, {
+      withFileTypes: true,
+    })
+    .filter((dirEntry) => dirEntry.isDirectory())
+    .map((dirEntry) => dirEntry.name);
+
+  return extensionFolderNamesCached;
+}
+
+/**
+ * Get a list of the names of the folders with extensions in them (in the source folder)
+ *
+ * Asynchronous version of `getExtensionFolderNamesSync`
+ */
+export async function getExtensionFolderNames(): Promise<string[]> {
+  if (extensionFolderNamesCached) return extensionFolderNamesCached;
+
+  extensionFolderNamesCached = (
+    await fs.promises.readdir(sourceFolder, {
+      withFileTypes: true,
+    })
+  )
+    .filter((dirEntry) => dirEntry.isDirectory())
+    .map((dirEntry) => dirEntry.name);
+
+  return extensionFolderNamesCached;
+}
+
 /**
  * Gets a list of the extension folders and their respective entry files
  *
@@ -330,13 +379,7 @@ export type ExtensionInfo = ExtensionManifest & {
  */
 export async function getExtensions(): Promise<ExtensionInfo[]> {
   // Get names of each folder in the source folder
-  const extensionFolderNames = (
-    await fs.promises.readdir(sourceFolder, {
-      withFileTypes: true,
-    })
-  )
-    .filter((dirEntry) => dirEntry.isDirectory())
-    .map((dirEntry) => dirEntry.name);
+  const extensionFolderNames = await getExtensionFolderNames();
 
   // Return extension info for each extension folder
   // We're filtering out the `undefined` entries, so assert that there is no `undefined`
