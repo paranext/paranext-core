@@ -2,10 +2,11 @@ import { Button } from '@/components/shadcn-ui/button';
 import CodePreview from '@/preview/newpreview-components/code-preview.component';
 import DocsPage from '@/preview/newpreview-components/docs-page';
 import Example from '@/preview/newpreview-components/example';
-import ApiReferenceTable, {
+import PropertiesTable, {
   ComponentProperty,
 } from '@/preview/newpreview-components/properties-table.component';
 import { NavEntry } from '@/preview/newpreview-components/quicknav.component';
+import ApiReferenceSection from '@/preview/newpreview-components/section-api-reference.component';
 import IntroSection from '@/preview/newpreview-components/section-intro.component';
 import Section from '@/preview/newpreview-components/section.component';
 import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
@@ -66,12 +67,7 @@ export default function ButtonDocs() {
             content={<CodePreview code="import ..." />}
           />
 
-          <Section
-            id="api"
-            header="API Reference"
-            description="All properties of the Button component"
-            content={<ApiReferenceTable properties={props} />}
-          />
+          <ApiReferenceSection apiFunctionName="Button" properties={props} />
 
           <Section
             id="examples"

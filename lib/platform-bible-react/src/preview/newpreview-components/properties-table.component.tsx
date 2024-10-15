@@ -1,5 +1,5 @@
 export type ComponentProperty = { name: string; type: string; default: string; values: string };
-type ApiReferenceTableProps = { properties: ComponentProperty[] };
+export type PropertiesTableProps = { properties: ComponentProperty[] };
 
 function th(name: string) {
   return <th className="pr-px-4 pr-py-2 pr-text-left pr-font-thin">{name}</th>;
@@ -9,7 +9,7 @@ function td(value: string) {
   return <td className="pr-px-4 pr-py-2">{value}</td>;
 }
 
-export default function ApiReferenceTable({ properties }: ApiReferenceTableProps) {
+export default function PropertiesTable({ properties }: PropertiesTableProps) {
   return (
     <table className="pr-w-full pr-border-collapse">
       <thead>

@@ -61,8 +61,17 @@ export default function UxApproval({ usabilityChecks, componentName }: UxApprova
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className={cn('pr-h-8', allApproved ? 'pr-text-green-600' : '')}>
-          {allApproved ? <BadgeCheck className="pr-h-5" /> : <CircleDashed className="pr-h-5" />}{' '}
+        <Button variant="outline" className="pr-h-8">
+          {allApproved ? (
+            <BadgeCheck className="pr-h-5 pr-text-green-500" />
+          ) : (
+            <CircleDashed
+              className={cn(
+                'pr-h-5',
+                approvalCount >= maxApprovals / 2 ? 'pr-text-yellow-500' : 'pr-text-red-500',
+              )}
+            />
+          )}{' '}
           <span className="pr-ps-2">
             UX approvals {approvalCount} / {maxApprovals}
           </span>
