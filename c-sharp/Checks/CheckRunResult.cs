@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Paranext.DataProvider.Checks;
 
 /// <summary>
@@ -8,13 +10,17 @@ public sealed class CheckRunResult(
     string checkId,
     string projectId,
     string messageFormatString,
+    string text,
     CheckLocation start,
-    CheckLocation end)
-    : IEquatable<CheckRunResult>
+    CheckLocation end
+) : IEquatable<CheckRunResult>
 {
     public string CheckId { get; } = checkId;
     public string ProjectId { get; } = projectId;
     public string MessageFormatString { get; } = messageFormatString;
+
+    [JsonIgnore]
+    public string Text { get; } = text;
     public CheckLocation Start { get; } = start;
     public CheckLocation End { get; } = end;
 
@@ -29,10 +35,11 @@ public sealed class CheckRunResult(
             return false;
 
         return CheckId == other.CheckId
-           && ProjectId == other.ProjectId
-           && MessageFormatString == other.MessageFormatString
-           && Start == other.Start
-           && End == other.End;
+            && ProjectId == other.ProjectId
+            && MessageFormatString == other.MessageFormatString
+            && Text == other.Text
+            && Start == other.Start
+            && End == other.End;
     }
 
     public static bool operator ==(CheckRunResult a, CheckRunResult b)
@@ -47,6 +54,6 @@ public sealed class CheckRunResult(
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(CheckId, ProjectId, MessageFormatString, Start, End);
+        return HashCode.Combine(CheckId, ProjectId, MessageFormatString, Text, Start, End);
     }
 }

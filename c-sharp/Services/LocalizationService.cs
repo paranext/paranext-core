@@ -17,7 +17,12 @@ internal static class LocalizationService
     /// <param name="defaultValue">Default value if the key comes back as the value or the request fails</param>
     /// <param name="shouldThrowErrors">if set to `true`, will throw errors instead of ignoring and returning default value. Defaults to `false`</param>
     /// <returns></returns>
-    public static string GetLocalizedString(PapiClient papiClient, string key, string? defaultValue = null, bool shouldThrowErrors = false)
+    public static string GetLocalizedString(
+        PapiClient papiClient,
+        string key,
+        string? defaultValue = null,
+        bool shouldThrowErrors = false
+    )
     {
         string value = defaultValue ?? key;
         TaskCompletionSource taskSource = new();
@@ -47,7 +52,8 @@ internal static class LocalizationService
                 {
                     if (shouldThrowErrors)
                         taskSource.TrySetException(ex);
-                    else {
+                    else
+                    {
                         Trace.TraceError(ex.Message);
                         taskSource.TrySetResult();
                     }

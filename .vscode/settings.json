@@ -1,4 +1,6 @@
 {
+  "css.customData": [".vscode/tailwindcss.json"],
+
   "dotnet.defaultSolution": "c-sharp/ParanextDataProvider.sln",
   "dotnet-test-explorer.testProjectPath": "c-sharp-tests/c-sharp-tests.csproj",
 

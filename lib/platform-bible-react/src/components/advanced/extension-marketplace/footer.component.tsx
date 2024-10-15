@@ -51,23 +51,23 @@ export default function Footer({
   const languageNames = getLanguageNames(locales);
 
   return (
-    <div id={id} className="pr-border-t pr-pb-4 pr-pt-4">
-      <div className="pr-md:flex-row pr-md:space-x-8 pr-flex pr-flex-col pr-space-x-0">
+    <div id={id} className="tw-border-t tw-pb-4 tw-pt-4">
+      <div className="tw-md:flex-row tw-md:space-x-8 tw-flex tw-flex-col tw-space-x-0">
         <VersionHistory versionHistory={versionHistory} />
-        <div className="pr-md:border-t-0 pr-md:border-l pr-md-h-auto pr-md-ml-8 pr-mt-4 pr-border-t pr-border-gray-300" />
-        <div className="pr-md:mt-0 pr-mt-4 pr-flex-1 pr-space-y-3">
-          <h2 className="pr-text-md pr-font-semibold">Information</h2>
-          <div className="pr-flex pr-items-start pr-justify-between pr-pr-4 pr-text-xs pr-text-gray-600">
-            <p className="pr-flex pr-flex-col pr-justify-start">
-              <span className="pr-mb-2">Publisher</span>
-              <span className="pr-font-semibold">{publisherDisplayName}</span>
-              <span className="pr-mb-2 pr-mt-4">Size</span>
-              <span className="pr-font-semibold">{formattedFileSize}</span>
+        <div className="tw-md:border-t-0 tw-md:border-l tw-md-h-auto tw-md-ml-8 tw-mt-4 tw-border-t tw-border-gray-300" />
+        <div className="tw-md:mt-0 tw-mt-4 tw-flex-1 tw-space-y-3">
+          <h2 className="tw-text-md tw-font-semibold">Information</h2>
+          <div className="tw-flex tw-items-start tw-justify-between tw-pr-4 tw-text-xs tw-text-gray-600">
+            <p className="tw-flex tw-flex-col tw-justify-start">
+              <span className="tw-mb-2">Publisher</span>
+              <span className="tw-font-semibold">{publisherDisplayName}</span>
+              <span className="tw-mb-2 tw-mt-4">Size</span>
+              <span className="tw-font-semibold">{formattedFileSize}</span>
             </p>
-            <div className="pr-flex pr-w-3/4 pr-items-center pr-justify-between pr-text-xs pr-text-gray-600">
-              <p className="pr-flex pr-flex-col pr-justify-start">
-                <span className="pr-mb-2">Languages</span>
-                <span className="pr-font-semibold">{languageNames.join(', ')}</span>
+            <div className="tw-flex tw-w-3/4 tw-items-center tw-justify-between tw-text-xs tw-text-gray-600">
+              <p className="tw-flex tw-flex-col tw-justify-start">
+                <span className="tw-mb-2">Languages</span>
+                <span className="tw-font-semibold">{languageNames.join(', ')}</span>
               </p>
             </div>
           </div>

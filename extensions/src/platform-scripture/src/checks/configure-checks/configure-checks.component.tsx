@@ -58,6 +58,10 @@ export default function ConfigureChecks({
     }, []),
   );
 
+  useEffect(() => {
+    setEndChapter(chapterCount);
+  }, [chapterCount]);
+
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
       () => [

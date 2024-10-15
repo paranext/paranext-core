@@ -9,20 +9,20 @@ export type GoToMenuItemProps = {
 
 function GoToMenuItem({ handleSort, handleLocationHistory, handleBookmarks }: GoToMenuItemProps) {
   return (
-    <ShadDropdownMenuLabel className="pr-flex pr-justify-between">
-      <p className="pr-inline-block pr-align-middle">Go To</p>
-      <div className="pr-flex pr-items-center">
+    <ShadDropdownMenuLabel className="tw-flex tw-justify-between">
+      <p className="tw-inline-block tw-align-middle">Go To</p>
+      <div className="tw-flex tw-items-center">
         <ArrowDownWideNarrow
           onClick={handleSort}
-          className="pr-m-2 pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2"
+          className="tw-m-2 tw-h-4 tw-w-4 tw-cursor-pointer tw-gap-2"
         />
         <Clock
           onClick={handleLocationHistory}
-          className="pr-m-2 pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2"
+          className="tw-m-2 tw-h-4 tw-w-4 tw-cursor-pointer tw-gap-2"
         />
         <Bookmark
           onClick={handleBookmarks}
-          className="pr-m-2 pr-h-4 pr-w-4 pr-cursor-pointer pr-gap-2"
+          className="tw-m-2 tw-h-4 tw-w-4 tw-cursor-pointer tw-gap-2"
         />
       </div>
     </ShadDropdownMenuLabel>

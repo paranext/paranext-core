@@ -3,6 +3,7 @@
 /// <reference types="node" />
 /// <reference types="node" />
 /// <reference types="node" />
+/// <reference types="node" />
 declare module 'shared/services/scroll-group.service-model' {
   import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';

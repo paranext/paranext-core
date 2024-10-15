@@ -18,7 +18,7 @@ export default function ToolbarExamples() {
       resolve(menu);
     });
   return (
-    <div className="pr-flex pr-flex-col pr-gap-4">
+    <div className="tw-flex tw-flex-col tw-gap-4">
       <Toolbar className="toolbar" menuProvider={undefined} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>

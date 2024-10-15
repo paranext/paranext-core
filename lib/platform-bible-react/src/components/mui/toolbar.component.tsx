@@ -39,7 +39,7 @@ export default function Toolbar({
     <div ref={containerRef} style={{ position: 'relative' }}>
       <AppBar position="static" id={id}>
         <MuiToolbar
-          className={cn('pr-bg-muted pr-text-muted-foreground', className)}
+          className={cn('tw-bg-muted tw-text-muted-foreground', className)}
           variant="dense"
         >
           {menuProvider ? (

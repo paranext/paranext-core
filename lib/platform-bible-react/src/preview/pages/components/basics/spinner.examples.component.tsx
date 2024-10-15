@@ -4,7 +4,7 @@ export default function SpinnerExamples() {
   return (
     <div>
       <Spinner /> Default
-      <Spinner className="pr-text-red-600" /> Red
+      <Spinner className="tw-text-red-600" /> Red
       <Spinner size={10} /> Size 10
     </div>
   );

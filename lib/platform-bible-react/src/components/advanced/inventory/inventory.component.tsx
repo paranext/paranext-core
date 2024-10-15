@@ -60,12 +60,12 @@ export type ItemData = {
  */
 export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
   if (sortDirection === 'asc') {
-    return <ArrowUpIcon className="pr-ms-2 pr-h-4 pr-w-4" />;
+    return <ArrowUpIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
   }
   if (sortDirection === 'desc') {
-    return <ArrowDownIcon className="pr-ms-2 pr-h-4 pr-w-4" />;
+    return <ArrowDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
   }
-  return <ArrowUpDownIcon className="pr-ms-2 pr-h-4 pr-w-4" />;
+  return <ArrowUpDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
 };
 
 /**
@@ -290,13 +290,13 @@ export default function Inventory({
   };
 
   return (
-    <div className="pr-twp pr-flex pr-h-full pr-flex-col">
-      <div className="pr-flex">
+    <div className="pr-twp tw-flex tw-h-full tw-flex-col">
+      <div className="tw-flex">
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
         >
-          <SelectTrigger className="pr-m-1">
+          <SelectTrigger className="tw-m-1">
             <SelectValue placeholder="Select filter" />
           </SelectTrigger>
           <SelectContent>
@@ -307,7 +307,7 @@ export default function Inventory({
           </SelectContent>
         </Select>
         <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope}>
-          <SelectTrigger className="pr-m-1">
+          <SelectTrigger className="tw-m-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>
           <SelectContent>
@@ -317,7 +317,7 @@ export default function Inventory({
           </SelectContent>
         </Select>
         <Input
-          className="pr-m-1 pr-rounded-md pr-border"
+          className="tw-m-1 tw-rounded-md tw-border"
           placeholder={filterText}
           value={textFilter}
           onChange={(event) => {
@@ -325,7 +325,7 @@ export default function Inventory({
           }}
         />
       </div>
-      <div className="pr-m-1 pr-flex-1 pr-overflow-auto pr-rounded-md pr-border">
+      <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
         <DataTable
           columns={columns}
           data={filteredItemData}
@@ -334,7 +334,7 @@ export default function Inventory({
         />
       </div>
       {selectedItem !== '' && (
-        <div className="pr-m-1 pr-flex-1 pr-overflow-auto pr-rounded-md pr-border">
+        <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
             selectedItem={selectedItem}
             text={text}

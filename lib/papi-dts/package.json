@@ -39,14 +39,14 @@
     "*.json": ["prettier --parser json --write"],
     "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
-  "devDependencies": {
-    "escape-string-regexp": "^5.0.0",
-    "rimraf": "^5.0.5",
-    "typedoc": "^0.25.13",
-    "typescript": "^5.4.5"
-  },
   "dependencies": {
     "platform-bible-utils": "file:../platform-bible-utils"
+  },
+  "devDependencies": {
+    "escape-string-regexp": "^5.0.0",
+    "rimraf": "^6.0.1",
+    "typedoc": "^0.26.9",
+    "typescript": "^5.4.5"
   },
   "volta": {
     "extends": "../../package.json"

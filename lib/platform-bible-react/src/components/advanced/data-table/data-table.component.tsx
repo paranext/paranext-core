@@ -116,7 +116,7 @@ function DataTable<TData, TValue>({
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={columns.length} className="pr-h-24 pr-text-center">
+              <TableCell colSpan={columns.length} className="tw-h-24 tw-text-center">
                 No results.
               </TableCell>
             </TableRow>
@@ -124,7 +124,7 @@ function DataTable<TData, TValue>({
         </TableBody>
       </Table>
       {enablePagination && (
-        <div className="pr-flex pr-items-center pr-justify-end pr-space-x-2 pr-py-4">
+        <div className="tw-flex tw-items-center tw-justify-end tw-space-x-2 tw-py-4">
           <Button
             variant="outline"
             size="sm"

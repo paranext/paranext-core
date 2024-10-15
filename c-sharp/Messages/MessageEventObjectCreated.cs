@@ -24,7 +24,7 @@ public sealed class MessageEventObjectCreated
             {
                 Id = id,
                 ObjectType = objectType,
-                Functions = functions
+                Functions = functions,
             }
         ) { }
 }

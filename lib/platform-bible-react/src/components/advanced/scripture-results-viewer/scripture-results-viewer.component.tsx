@@ -182,7 +182,7 @@ function getColumns(
     {
       accessorFn: (row) => row.source.displayName,
       id: typeColId,
-      header: showSrcCol ? colInfo?.typeColumnName ?? defaultTypeColumnName : undefined,
+      header: showSrcCol ? (colInfo?.typeColumnName ?? defaultTypeColumnName) : undefined,
       cell: (info) => (showSrcCol || info.row.getIsGrouped() ? info.getValue() : undefined),
       getGroupingValue: (row) => row.source.id,
       sortingFn: (a, b) =>
@@ -342,7 +342,7 @@ export default function ScriptureResultsViewer({
     if (row.getIsGrouped()) return '';
     // UX has now said they don't think they want banding. I'm leaving in the code to
     // set even and odd styles, but there's nothing in the CSS to style them differently.
-    // The "even" style used to also have  pr-bg-neutral-300 (along with even) to create
+    // The "even" style used to also have  tw-bg-neutral-300 (along with even) to create
     // a visual banding effect. That could be added back in if UX changes the decision.
     return cn('banded-row', index % 2 === 0 ? 'even' : 'odd');
   };
@@ -356,23 +356,23 @@ export default function ScriptureResultsViewer({
     if (row.getIsGrouped()) {
       switch (row.depth) {
         case 1:
-          return 'pr-ps-4';
+          return 'tw-ps-4';
         default:
           return undefined;
       }
     }
     switch (row.depth) {
       case 1:
-        return 'pr-ps-8';
+        return 'tw-ps-8';
       case 2:
-        return 'pr-ps-12';
+        return 'tw-ps-12';
       default:
         return undefined;
     }
   };
 
   return (
-    <div className="pr-twp pr-flex pr-h-full pr-w-full pr-flex-col">
+    <div className="pr-twp tw-flex tw-h-full tw-w-full tw-flex-col">
       {!showColumnHeaders && (
         <Select
           value={JSON.stringify(grouping)}
@@ -380,7 +380,7 @@ export default function ScriptureResultsViewer({
             handleSelectChange(value);
           }}
         >
-          <SelectTrigger className="pr-mb-1 pr-mt-2">
+          <SelectTrigger className="tw-mb-1 tw-mt-2">
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="item-aligned">
@@ -394,7 +394,7 @@ export default function ScriptureResultsViewer({
           </SelectContent>
         </Select>
       )}
-      <Table className="pr-relative pr-flex pr-flex-col pr-overflow-y-auto pr-p-0">
+      <Table className="tw-relative tw-flex tw-flex-col tw-overflow-y-auto tw-p-0">
         {showColumnHeaders && (
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -403,7 +403,7 @@ export default function ScriptureResultsViewer({
                   .filter((h) => h.column.columnDef.header)
                   .map((header) => (
                     /* For sticky column headers to work, we probably need to change the default definition of the shadcn Table component. See https://github.com/shadcn-ui/ui/issues/1151 */
-                    <TableHead key={header.id} colSpan={header.colSpan} className="top-0 pr-sticky">
+                    <TableHead key={header.id} colSpan={header.colSpan} className="top-0 tw-sticky">
                       {header.isPlaceholder ? undefined : (
                         <div>
                           {header.column.getCanGroup() ? (
@@ -445,14 +445,14 @@ export default function ScriptureResultsViewer({
                   return (
                     <TableCell
                       key={cell.id}
-                      // It seems like a hack to use pr-p-[1px] to override the "built in" pr-p-4
+                      // It seems like a hack to use tw-p-[1px] to override the "built in" tw-p-4
                       // that comes in with the shadcn TableCell class. I could just remove it from
                       // that class, but it's not clear that that is desirable. I'm not even 100%
                       // sure I know what padding value to use here, but the problem with 4 (the
                       // default) is that is prevents the nested indentation when grouping.
                       className={cn(
                         cell.column.columnDef.id,
-                        'pr-p-[1px]',
+                        'tw-p-[1px]',
                         getIndent(grouping, row, cell),
                       )}
                     >

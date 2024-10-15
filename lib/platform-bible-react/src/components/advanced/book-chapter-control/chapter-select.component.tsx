@@ -39,15 +39,15 @@ function ChapterSelect({
   );
 
   return (
-    <div className={cn('pr-flex pr-flex-wrap pr-items-start pr-justify-start pr-self-stretch')}>
+    <div className={cn('tw-flex tw-flex-wrap tw-items-start tw-justify-start tw-self-stretch')}>
       {chapters.map((chapter) => (
         <div
           key={chapter}
           className={cn(
-            'pr-box-content pr-flex pr-h-4 pr-w-4 pr-cursor-pointer pr-items-center pr-justify-end pr-rounded-md pr-p-2 pr-text-amber-800',
+            'tw-box-content tw-flex tw-h-4 tw-w-4 tw-cursor-pointer tw-items-center tw-justify-end tw-rounded-md tw-p-2 tw-text-amber-800',
             {
-              'pr-font-semibold pr-text-amber-900': chapter === activeChapter,
-              'pr-bg-amber-200': chapter === highlightedChapter,
+              'tw-font-semibold tw-text-amber-900': chapter === activeChapter,
+              'tw-bg-amber-200': chapter === highlightedChapter,
             },
           )}
           onClick={(event) => {

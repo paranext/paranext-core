@@ -1,0 +1,12 @@
+{
+  "icon": "",
+  "moreInfoUrl": "",
+  "supportUrl": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Platform Scripture Editor",
+      "shortSummary": "Editor extension for Platform.Bible",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}

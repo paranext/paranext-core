@@ -38,10 +38,11 @@ internal class TimeDataProvider : DataProvider
     {
         return functionName switch
         {
-            "getTime"
-                => ResponseToRequest.Succeeded(DateTime.Now.ToISO8601TimeFormatWithUTCString()),
+            "getTime" => ResponseToRequest.Succeeded(
+                DateTime.Now.ToISO8601TimeFormatWithUTCString()
+            ),
             "setTime" => ResponseToRequest.Failed("Cannot set the time"),
-            _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
+            _ => ResponseToRequest.Failed($"Unexpected function: {functionName}"),
         };
     }
 }

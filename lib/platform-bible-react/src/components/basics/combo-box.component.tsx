@@ -89,18 +89,18 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           role="combobox"
           aria-expanded={open}
           id={id}
-          className={cn('pr-w-[200px] pr-justify-between', className)}
+          className={cn('tw-w-[200px] tw-justify-between', className)}
           disabled={isDisabled}
         >
-          <span className="pr-overflow-hidden pr-text-ellipsis pr-whitespace-nowrap">
+          <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
             {value ? getOptionLabel(value) : buttonPlaceholder}
           </span>
-          <ChevronsUpDown className="pr-ms-2 pr-h-4 pr-w-4 pr-shrink-0 pr-opacity-50" />
+          <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="pr-w-[200px] pr-p-0" dir={dir}>
+      <PopoverContent className="tw-w-[200px] tw-p-0" dir={dir}>
         <Command>
-          <CommandInput dir={dir} placeholder={textPlaceholder} className="pr-text-inherit" />
+          <CommandInput dir={dir} placeholder={textPlaceholder} className="tw-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
             {options.map((option) => (
@@ -113,8 +113,8 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
                 }}
               >
                 <Check
-                  className={cn('pr-me-2 pr-h-4 pr-w-4', {
-                    'pr-opacity-0': !value || getOptionLabel(value) !== getOptionLabel(option),
+                  className={cn('tw-me-2 tw-h-4 tw-w-4', {
+                    'tw-opacity-0': !value || getOptionLabel(value) !== getOptionLabel(option),
                   })}
                 />
                 {getOptionLabel(option)}

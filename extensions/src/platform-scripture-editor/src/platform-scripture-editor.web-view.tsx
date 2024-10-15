@@ -105,11 +105,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // TODO: remove debounce when issue #826 is done.
   const onUsjChange = useCallback(
     (newUsj: Usj) => {
-      // There is a bug where the editor's onChange runs when the state is externally set, so let's
-      // not run onChange if the change came externally (our tracked editorUsj.current editor state
-      // will already be up-to-date)
-      if (deepEqualAcrossIframes(newUsj, editorUsj.current)) return;
-
       editorUsj.current = newUsj;
       debouncedSetUsj(newUsj);
     },
@@ -186,13 +181,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   return (
     <>
       {/* Workaround to pull in platform-bible-react styles into the editor */}
-      <Button className="pr-hidden" />
+      <Button className="tw-hidden" />
       <Editor
         ref={editorRef}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
-        options={options}
         onUsjChange={isReadOnly ? undefined : onUsjChange}
+        options={options}
         logger={logger}
       />
     </>

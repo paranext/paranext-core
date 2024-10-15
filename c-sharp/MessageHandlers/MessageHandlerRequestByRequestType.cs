@@ -1,6 +1,6 @@
-using Paranext.DataProvider.Messages;
 using System.Collections.Concurrent;
 using System.Text.Json;
+using Paranext.DataProvider.Messages;
 
 namespace Paranext.DataProvider.MessageHandlers;
 

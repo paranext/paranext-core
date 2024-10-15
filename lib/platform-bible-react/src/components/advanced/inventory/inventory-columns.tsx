@@ -33,14 +33,14 @@ export const inventoryCountColumn = (countLabel: string): ColumnDef<ItemData> =>
   return {
     accessorKey: 'count',
     header: ({ column }) => (
-      <div className="pr-flex pr-justify-end pr-tabular-nums">
+      <div className="tw-flex tw-justify-end tw-tabular-nums">
         <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
           {countLabel}
           {getSortingIcon(column.getIsSorted())}
         </Button>
       </div>
     ),
-    cell: ({ row }) => <div className="pr-flex pr-justify-end">{row.getValue('count')}</div>,
+    cell: ({ row }) => <div className="tw-flex tw-justify-end">{row.getValue('count')}</div>,
   };
 };
 
@@ -60,7 +60,7 @@ export const inventoryStatusColumn = (
     accessorKey: 'status',
     header: ({ column }) => {
       return (
-        <div className="pr-flex pr-justify-center">
+        <div className="tw-flex tw-justify-center">
           <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
             {statusLabel}
             {getSortingIcon(column.getIsSorted())}

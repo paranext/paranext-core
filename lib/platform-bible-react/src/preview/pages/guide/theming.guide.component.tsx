@@ -10,7 +10,7 @@ export default function ThemingGuide() {
         which properties the shadcn components expect (so that they will set their style themselves)
         and use them accordingly.
       </p>
-      <div className="pr-flex pr-items-center pr-gap-2">
+      <div className="tw-flex tw-items-center tw-gap-2">
         Try it: change theme
         <ThemeButton />
       </div>
@@ -23,30 +23,30 @@ export default function ThemingGuide() {
         <tbody>
           <tr>
             <td>
-              Bad example<div className="pr-text-xs">manual styles, unable to be themed</div>
+              Bad example<div className="tw-text-xs">manual styles, unable to be themed</div>
             </td>
             <td>
               <Input
                 value="This is some text"
-                className="pr-box-border pr-gap-2.5 pr-rounded-lg pr-border pr-border-solid pr-border-black pr-bg-white pr-py-2 pr-pl-4 pr-pr-3 pr-font-medium pr-text-slate-900 pr-shadow-none pr-outline-none"
+                className="tw-box-border tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-border-black tw-bg-white tw-py-2 tw-pl-4 tw-pr-3 tw-font-medium tw-text-slate-900 tw-shadow-none tw-outline-none"
               />
             </td>
           </tr>
           <tr>
             <td>
               Good example
-              <div className="pr-text-xs">theme-able by using the default styles</div>
+              <div className="tw-text-xs">theme-able by using the default styles</div>
             </td>
             <td>
               <Input
                 value="This is some text"
-                className="pr-full pr-file:border-0 pr-col-span-2 pr-flex pr-h-8 pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50"
+                className="tw-full tw-file:border-0 tw-col-span-2 tw-flex tw-h-8 tw-rounded-md tw-border tw-border-input tw-bg-background tw-px-3 tw-py-2 tw-text-sm tw-ring-offset-background file:tw-bg-transparent file:tw-text-sm file:tw-font-medium placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50"
               />
             </td>
           </tr>
         </tbody>
       </table>
-      <h2 className="pr-py-2 pr-font-bold">Overwriting styles</h2>
+      <h2 className="tw-py-2 tw-font-bold">Overwriting styles</h2>
       <p>
         Try to not overwrite styles (colors). In case you need to, use Tailwind classes to apply
         color variables, in the same way that shadcn does it. Shadcn defines the colors that you can
@@ -55,12 +55,12 @@ export default function ThemingGuide() {
       <br />
       <p>
         To overwrite styles use Tailwind css classes like{' '}
-        <code>className=&quot;pr-bg-muted&quot;</code> on a header-like component and{' '}
-        <code>className=&quot;pr-text-muted-foreground&quot;</code> for text on this component.
+        <code>className=&quot;tw-bg-muted&quot;</code> on a header-like component and{' '}
+        <code>className=&quot;tw-text-muted-foreground&quot;</code> for text on this component.
       </p>
       <p>
         You can also use shades of these colors with{' '}
-        <code>className=&quot;pr-bg-muted/50&quot;</code>, but try to stay consistent with how
+        <code>className=&quot;tw-bg-muted/50&quot;</code>, but try to stay consistent with how
         shadcn applies these styles in a very deliberate, rare choice.
       </p>
       <br />
@@ -69,7 +69,7 @@ export default function ThemingGuide() {
         preview app. If you are unsure, check out how{' '}
         <a
           href="https://ui.shadcn.com/"
-          className="pr-text-blue-600 hover:pr-underline"
+          className="tw-text-blue-600 hover:tw-underline"
           target="_blank"
           rel="noreferrer"
         >
@@ -78,7 +78,7 @@ export default function ThemingGuide() {
         uses a similar thing or talk to the{' '}
         <a
           href="https://discord.com/channels/1064938364597436416/1082713526780575845"
-          className="pr-text-blue-600 hover:pr-underline"
+          className="tw-text-blue-600 hover:tw-underline"
           target="_blank"
           rel="noreferrer"
         >

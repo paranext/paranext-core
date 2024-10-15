@@ -52,7 +52,7 @@
   pointer-events: none;
   margin-block-start: 1em;
   margin-inline-start: calc(10px + 2.5vw);
-  width: fill-available;
+  width: stretch;
 }
 
 .editor-text-bold {
@@ -241,7 +241,7 @@ pre::-webkit-scrollbar-thumb {
 }
 
 .link-editor div.link-edit {
-  background-image: url("/assets/images/icons/pencil-fill.svg");
+  background-image: url('/assets/images/icons/pencil-fill.svg');
   background-size: 16px;
   background-position: center;
   background-repeat: no-repeat;
@@ -253,11 +253,11 @@ pre::-webkit-scrollbar-thumb {
   cursor: pointer;
 }
 
-.link-editor[dir="ltr"] div.link-edit {
+.link-editor[dir='ltr'] div.link-edit {
   right: 0;
 }
 
-.link-editor[dir="rtl"] div.link-edit {
+.link-editor[dir='rtl'] div.link-edit {
   left: 0;
 }
 
@@ -270,11 +270,11 @@ pre::-webkit-scrollbar-thumb {
   text-overflow: ellipsis;
 }
 
-.link-editor[dir="ltr"] .link-input a {
+.link-editor[dir='ltr'] .link-input a {
   margin-right: 30px;
 }
 
-.link-editor[dir="rtl"] .link-input a {
+.link-editor[dir='rtl'] .link-input a {
   margin-left: 30px;
 }
 
@@ -402,20 +402,12 @@ i.redo {
   background-image: url('/assets/images/icons/arrow-clockwise.svg');
 }
 
-%paragraph {
-  background-image: url('/assets/images/icons/text-paragraph.svg');
-}
-
 .icon.m,
 .icon.nb,
 .icon.p,
 .icon.pi,
 .icon.paragraph {
-  @extend %paragraph;
-}
-
-%h-one {
-  background-image: url('/assets/images/icons/type-h1.svg');
+  background-image: url('/assets/images/icons/text-paragraph.svg');
 }
 
 .icon.ms,
@@ -424,77 +416,45 @@ i.redo {
 .icon.s,
 .icon.large-heading,
 .icon.h1 {
-  @extend %h-one;
-}
-
-%h-two {
-  background-image: url('/assets/images/icons/type-h2.svg');
+  background-image: url('/assets/images/icons/type-h1.svg');
 }
 
 .icon.ms2,
 .icon.small-heading,
 .icon.h2 {
-  @extend %h-two;
-}
-
-%h-three {
-  background-image: url('/assets/images/icons/type-h3.svg');
+  background-image: url('/assets/images/icons/type-h2.svg');
 }
 
 .icon.ms3,
 .icon.h3 {
-  @extend %h-three;
+  background-image: url('/assets/images/icons/type-h3.svg');
 }
 
-
-%square-one {
-  background-image: url("/assets/images/icons/1-square.svg");
-}
 
 .icon.mt,
 .icon.mt1,
 .icon.square-1 {
-  @extend %square-one;
-}
-
-%square-two {
-  background-image: url("/assets/images/icons/2-square.svg");
+  background-image: url('/assets/images/icons/1-square.svg');
 }
 
 .icon.mt2,
 .icon.square-2 {
-  @extend %square-two;
-}
-
-%square-three {
-  background-image: url("/assets/images/icons/3-square.svg");
+  background-image: url('/assets/images/icons/2-square.svg');
 }
 
 .icon.mt3,
 .icon.square-3 {
-  @extend %square-three;
-}
-
-%square-four {
-  background-image: url("/assets/images/icons/4-square.svg");
+  background-image: url('/assets/images/icons/3-square.svg');
 }
 
 .icon.mt4,
 .icon.square-4 {
-  @extend %square-four;
-}
-
-%bookmark {
-  background-image: url("/assets/images/icons/bookmark.svg");
+  background-image: url('/assets/images/icons/4-square.svg');
 }
 
 .icon.cl,
 .icon.bookmark {
-  @extend %bookmark;
-}
-
-%file-earmark {
-  background-image: url("/assets/images/icons/file-earmark.svg");
+  background-image: url('/assets/images/icons/bookmark.svg');
 }
 
 .icon.ide,
@@ -506,7 +466,7 @@ i.redo {
 .icon.toc2,
 .icon.toc3,
 .icon.file-earmark {
-  @extend %file-earmark;
+  background-image: url('/assets/images/icons/file-earmark.svg');
 }
 
 .icon.bullet-list,
@@ -519,15 +479,11 @@ i.redo {
   background-image: url('/assets/images/icons/list-ol.svg');
 }
 
-%quote {
-  background-image: url('/assets/images/icons/chat-square-quote.svg');
-}
-
 .icon.b,
 .icon.q1,
 .icon.q2,
 .icon.quote {
-  @extend %quote;
+  background-image: url('/assets/images/icons/chat-square-quote.svg');
 }
 
 .icon.ban {
@@ -592,7 +548,7 @@ i.chevron-down {
   display: inline-block;
   height: 8px;
   width: 8px;
-  background-image: url("/assets/images/icons/chevron-down.svg");
+  background-image: url('/assets/images/icons/chevron-down.svg');
 }
 
 .debug-timetravel-panel {

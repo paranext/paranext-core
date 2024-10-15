@@ -23,7 +23,7 @@ export default function TabExamples({ direction }: HasDirection) {
         <TabsContent value="2-youShouldNotSeeThis">Tab 2 Content</TabsContent>
         {/* intentionally left out 3 to see the effect */}
       </Tabs>
-      <hr className="pr-my-4" />
+      <hr className="tw-my-4" />
       <VerticalTabs defaultValue="2-youShouldNotSeeThis" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="1">

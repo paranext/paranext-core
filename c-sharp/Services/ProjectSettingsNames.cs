@@ -35,7 +35,13 @@ public sealed class ProjectSettingsNames
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
-    private static readonly HashSet<string> s_ptSettingBooleans = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
+    private static readonly HashSet<string> s_ptSettingBooleans =
+    [
+        "Editable",
+        "MatchBasedOnStems",
+        "AllowReadAccess",
+        "AllowSharingWithSLDR",
+    ];
 
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =

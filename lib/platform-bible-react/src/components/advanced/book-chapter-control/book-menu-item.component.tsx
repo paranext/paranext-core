@@ -45,9 +45,9 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
         ref={ref}
         key={bookId}
         textValue={bookId}
-        className={cn('pr-mx-1 pr-px-1 pr-font-normal pr-text-foreground/80', {
+        className={cn('tw-mx-1 tw-px-1 tw-font-normal tw-text-foreground/80', {
           // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
-          'pr-bg-amber-50 pr-text-yellow-900 data-[highlighted]:pr-bg-amber-100': isSelected,
+          'tw-bg-amber-50 tw-text-yellow-900 data-[highlighted]:tw-bg-amber-100': isSelected,
         })}
         onSelect={(event: Event) => {
           // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
@@ -62,12 +62,12 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
       >
         <span
           className={cn(
-            'pr-border-b-0 pr-border-l-2 pr-border-r-0 pr-border-t-0 pr-border-solid pr-px-2',
+            'tw-border-b-0 tw-border-l-2 tw-border-r-0 tw-border-t-0 tw-border-solid tw-px-2',
             {
-              'pr-font-bold': isSelected,
-              'pr-border-l-red-200': bookType.toLowerCase() === 'ot',
-              'pr-border-l-purple-200': bookType.toLowerCase() === 'nt',
-              'pr-border-l-indigo-200': bookType.toLowerCase() === 'dc',
+              'tw-font-bold': isSelected,
+              'tw-border-l-red-200': bookType.toLowerCase() === 'ot',
+              'tw-border-l-purple-200': bookType.toLowerCase() === 'nt',
+              'tw-border-l-indigo-200': bookType.toLowerCase() === 'dc',
             },
           )}
         >
