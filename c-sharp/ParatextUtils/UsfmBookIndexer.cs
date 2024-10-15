@@ -24,7 +24,10 @@ public class UsfmBookIndexer
 
     #region Properties
 
-    public string Usfm { get { return _usfm;} }
+    public string Usfm
+    {
+        get { return _usfm; }
+    }
 
     #endregion
 
@@ -119,9 +122,9 @@ public class UsfmBookIndexer
             if (_usfm[i] != '\\')
                 continue;
 
-            if (_usfm[i+1] == 'c')
+            if (_usfm[i + 1] == 'c')
             {
-                var chapterNumber = ExtractNumber(_usfm, i+2);
+                var chapterNumber = ExtractNumber(_usfm, i + 2);
                 if (chapterNumber.HasValue && chapterNumber.Value > 1)
                 {
                     onChapter = chapterNumber.Value;
@@ -129,9 +132,9 @@ public class UsfmBookIndexer
                     retVal[onChapter].Add(0, i);
                 }
             }
-            else if (_usfm[i+1] == 'v')
+            else if (_usfm[i + 1] == 'v')
             {
-                var verseNumber = ExtractNumber(_usfm, i+2);
+                var verseNumber = ExtractNumber(_usfm, i + 2);
                 if (verseNumber.HasValue)
                     retVal[onChapter].Add(verseNumber.Value, i);
             }

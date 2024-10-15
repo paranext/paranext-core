@@ -33,17 +33,25 @@ public sealed class ProjectSettingsNames
     public const string PT_NONREPEATABLE_WORDS = "NonRepeatableWords";
 
     public const string PB_VALID_MARKERS = "platformScripture.validMarkers";
+
     // Note that this setting does not exist in PT9
     public const string PT_VALID_MARKERS = "ValidMarkers";
 
     public const string PB_INVALID_MARKERS = "platformScripture.invalidMarkers";
+
     // Note that this setting does not exist in PT9
     public const string PT_INVALID_MARKERS = "InvalidMarkers";
 
     /// <summary>
     /// Paratext setting names that are either T or F and need to be converted to booleans
     /// </summary>
-    private static readonly HashSet<string> s_ptSettingBooleans = ["Editable", "MatchBasedOnStems", "AllowReadAccess", "AllowSharingWithSLDR", ];
+    private static readonly HashSet<string> s_ptSettingBooleans =
+    [
+        "Editable",
+        "MatchBasedOnStems",
+        "AllowReadAccess",
+        "AllowSharingWithSLDR",
+    ];
 
     // Make sure this dictionary gets updated whenever new settings are added
     private static readonly Dictionary<string, string> s_platformBibleToParatextSettingsNames =

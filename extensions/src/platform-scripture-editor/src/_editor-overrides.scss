@@ -308,55 +308,81 @@ i.redo {
   background-image: none;
 }
 
-%paragraph {
+.icon.m,
+.icon.nb,
+.icon.p,
+.icon.pi,
+.icon.paragraph {
   // could be replaced with lucid icon text
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/text-paragraph.svg');
   background-image: none;
 }
 
-%h-one {
+.icon.ms,
+.icon.ms1,
+.icon.r,
+.icon.s,
+.icon.large-heading,
+.icon.h1 {
   // could be replaced with lucid icon heading-1
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h1.svg');
   background-image: none;
 }
 
-%h-two {
+.icon.ms2,
+.icon.small-heading,
+.icon.h2 {
   // could be replaced with lucid icon heading-2
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h2.svg');
   background-image: none;
 }
 
-%h-three {
+.icon.ms3,
+.icon.h3 {
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/type-h3.svg');
   background-image: none;
 }
 
-%square-one {
+.icon.mt,
+.icon.mt1,
+.icon.square-1 {
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/1-square.svg');
   background-image: none;
 }
 
-%square-two {
+.icon.mt2,
+.icon.square-2 {
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/2-square.svg');
   background-image: none;
 }
 
-%square-three {
+.icon.mt3,
+.icon.square-3 {
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/3-square.svg');
   background-image: none;
 }
 
-%square-four {
+.icon.mt4,
+.icon.square-4 {
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/4-square.svg');
   background-image: none;
 }
 
-%bookmark {
+.icon.cl,
+.icon.bookmark {
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/bookmark.svg');
   background-image: none;
 }
 
-%file-earmark {
+.icon.ide,
+.icon.h,
+.icon.h1,
+.icon.h2,
+.icon.h3,
+.icon.toc1,
+.icon.toc2,
+.icon.toc3,
+.icon.file-earmark {
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/file-earmark.svg');
   background-image: none;
 }
@@ -373,7 +399,10 @@ i.redo {
   background-image: none;
 }
 
-%quote {
+.icon.b,
+.icon.q1,
+.icon.q2,
+.icon.quote {
   // could be replaced with lucid icon message-square-quote
   -webkit-mask-image: url('papi-extension://platformScriptureEditor/assets/images/icons/chat-square-quote.svg');
   background-image: none;

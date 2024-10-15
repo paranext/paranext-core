@@ -34,7 +34,7 @@ public sealed class MessageEventProjectDataProviderFactoryCreated
                 Attributes = new ProjectDataProviderFactoryAttributes
                 {
                     ProjectInterfaces = projectInterfaces,
-                }
+                },
             }
         ) { }
 }

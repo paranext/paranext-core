@@ -42,7 +42,7 @@ namespace Paranext.DataProvider.Services
 
             papiClient.SendRequest(
                 PROJECT_SETTINGS_SERVICE,
-                new object[] { "isValid", key, newValueJson, currentValueJson, allChangesJson, },
+                new object[] { "isValid", key, newValueJson, currentValueJson, allChangesJson },
                 (bool success, object? returnValue) =>
                 {
                     try
@@ -142,7 +142,8 @@ namespace Paranext.DataProvider.Services
             {
                 // Check if the JsonElement is an array
                 if (
-                    jsonElement.ValueKind != JsonValueKind.Array || jsonElement.GetArrayLength() < 3
+                    jsonElement.ValueKind != JsonValueKind.Array
+                    || jsonElement.GetArrayLength() < 3
                 )
                 {
                     return ResponseToRequest.Failed(
