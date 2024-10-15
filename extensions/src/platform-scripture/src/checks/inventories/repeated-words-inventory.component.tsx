@@ -64,7 +64,9 @@ function RepeatedWordsInventory({
   scope,
   onScopeChange,
 }: RepeatedWordsInventoryProps) {
-  const [repeatedWordsInventoryStrings] = useLocalizedStrings(REPEATED_WORDS_INVENTORY_STRING_KEYS);
+  const [repeatedWordsInventoryStrings] = useLocalizedStrings(
+    useMemo(() => REPEATED_WORDS_INVENTORY_STRING_KEYS, []),
+  );
   const itemLabel = useMemo(
     () => repeatedWordsInventoryStrings['%webView_inventory_table_header_repeated_words%'],
     [repeatedWordsInventoryStrings],

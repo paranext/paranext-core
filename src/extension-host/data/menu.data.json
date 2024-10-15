@@ -1,10 +1,10 @@
 {
   "mainMenu": {
     "columns": {
-      "platform.project": { "label": "%mainMenu_menuItemName_project%", "order": 1 },
-      "platform.window": { "label": "%mainMenu_menuItemName_window%", "order": 2 },
-      "platform.layout": { "label": "%mainMenu_menuItemName_layout%", "order": 3 },
-      "platform.help": { "label": "%mainMenu_menuItemName_help%", "order": 4 },
+      "platform.project": { "label": "%mainMenu_project%", "order": 1 },
+      "platform.window": { "label": "%mainMenu_Window%", "order": 2 },
+      "platform.layout": { "label": "%mainMenu_Layout%", "order": 3 },
+      "platform.help": { "label": "%mainMenu_Help%", "order": 4 },
       "isExtensible": true
     },
     "groups": {
@@ -26,7 +26,7 @@
     },
     "items": [
       {
-        "label": "%mainMenu_menuItemName_openProject%",
+        "label": "%mainMenu_openProject%",
         "localizeNotes": "Application main menu > Project > Open Project",
         "group": "platform.projectProjects",
         "order": 1,
@@ -98,7 +98,7 @@
         "command": "platform.assignments"
       },
       {
-        "label": "%webView_menuItemName_openProjectSettings%",
+        "label": "%webView_openProjectSettings%",
         "localizeNotes": "Web view main menu > Project > Open Project Settings...",
         "group": "platform.projectTop",
         "order": 3,

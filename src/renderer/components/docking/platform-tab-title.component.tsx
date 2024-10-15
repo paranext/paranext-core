@@ -3,7 +3,7 @@ import { CommandHandler, HamburgerMenuButton } from 'platform-bible-react';
 import './platform-tab-title.component.scss';
 import menuDataService from '@shared/services/menu-data.service';
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
 
@@ -37,7 +37,9 @@ export default function PlatformTabTitle({
   const menuSelector = webViewType ?? 'invalid.invalid';
 
   const tabAria: LocalizeKey = '%tab_aria_tab%';
-  const [localizedStrings] = useLocalizedStrings(isLocalizeKey(text) ? [text, tabAria] : [tabAria]);
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => (isLocalizeKey(text) ? [text, tabAria] : [tabAria]), [text]),
+  );
   const title = isLocalizeKey(text) ? localizedStrings[text] : text;
   const tabLabel = localizedStrings[tabAria];
 

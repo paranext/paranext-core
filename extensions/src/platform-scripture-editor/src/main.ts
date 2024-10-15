@@ -14,9 +14,9 @@ logger.info('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
 const projectIdTitleFormatStr = '%webView_title_projectId_formatString%';
-const editable = '%webView_platformScriptureEditor_editable%';
-const resourceViewer = '%webView_platformScriptureEditor_resourceViewer%';
-const scriptureEditor = '%webView_platformScriptureEditor_scriptureEditor%';
+const editable = '%webView_platformScriptureEditor_title_editable_indicator%';
+const resourceViewer = '%webView_platformScriptureEditor_title_readonly_no_project%';
+const scriptureEditor = '%webView_platformScriptureEditor_title_editable_no_project%';
 
 interface PlatformScriptureEditorOptions extends GetWebViewOptions {
   projectId: string | undefined;

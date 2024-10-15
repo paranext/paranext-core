@@ -13,15 +13,15 @@ jest.mock('@extension-host/data/core-project-settings-info.data', () => ({
   ...jest.requireActual('@extension-host/data/core-project-settings-info.data'),
   __esModule: true,
   platformProjectSettings: {
-    label: '%project_settings_platform_settingName_group1%',
-    description: '%project_settings_platform_description_group1%',
+    label: '%project_settings_platform_group1_label%',
+    description: '%project_settings_platform_group1_description%',
     properties: {
       'platform.fullName': {
-        label: '%project_settings_platform_settingName_fullName%',
+        label: '%project_settings_platform_fullName_label%',
         default: '%test_project_full_name_missing%',
       },
       'platform.language': {
-        label: '%project_settings_platform_settingName_language%',
+        label: '%project_settings_platform_language_label%',
         default: '%test_project_language_missing%',
       },
     },

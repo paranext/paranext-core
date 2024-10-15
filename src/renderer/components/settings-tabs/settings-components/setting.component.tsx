@@ -1,4 +1,4 @@
-import { ChangeEvent, useCallback, useState } from 'react';
+import { ChangeEvent, useCallback, useMemo, useState } from 'react';
 import {
   ProjectSettingNames,
   ProjectSettingTypes,
@@ -184,7 +184,7 @@ export default function Setting({
   }, [setting, settingKey, debouncedHandleChange, errorMessage]);
 
   const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
-  const [localizedStrings] = useLocalizedStrings([loadingSettingKey]);
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
   const localizedLoadingSetting = localizedStrings[loadingSettingKey];
 
   return (

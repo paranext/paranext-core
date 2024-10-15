@@ -6,23 +6,23 @@ import { ProjectSettingsContribution } from 'platform-bible-utils';
 
 /** Info about all project settings built into core. Does not contain info for extensions' settings */
 export const platformProjectSettings: ProjectSettingsContribution = {
-  label: '%project_settings_platform_settingName_group1%',
-  description: '%project_settings_platform_description_group1%',
+  label: '%project_settings_platform_group1_label%',
+  description: '%project_settings_platform_group1_description%',
   properties: {
     'platform.name': {
-      label: '%project_settings_platform_settingName_name%',
+      label: '%project_settings_platform_name_label%',
       default: '%project_settings_platform_defaultSettingName_noName%',
     },
     'platform.fullName': {
-      label: '%project_settings_platform_settingName_fullName%',
-      default: '%project_settings_platform_defaultFullName_nameMissing%',
+      label: '%project_settings_platform_fullName_label%',
+      default: '%project_full_name_missing%',
     },
     'platform.language': {
-      label: '%project_settings_platform_settingName_language%',
-      default: '%project_settings_platform_defaultLanguage_languageMissing%',
+      label: '%project_settings_platform_language_label%',
+      default: '%project_language_missing%',
     },
     'platform.isEditable': {
-      label: '%project_settings_platform_settingName_isEditable%',
+      label: '%project_settings_platform_isEditable_label%',
       description: '%project_settings_platform_isEditable_description%',
       default: true,
     },

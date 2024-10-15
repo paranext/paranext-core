@@ -6,9 +6,9 @@ const MOCK_MENU_DATA: PlatformMenus = {
   mainMenu: {
     columns: {
       'paratext.paratext': { label: '%mainMenu_Paratext%', order: 0 },
-      'platform.window': { label: '%mainMenu_menuItemName_window%', order: 1 },
-      'platform.layout': { label: '%mainMenu_menuItemName_layout%', order: 2 },
-      'platform.help': { label: '%mainMenu_menuItemName_help%', order: 3, isExtensible: true },
+      'platform.window': { label: '%mainMenu_Window%', order: 1 },
+      'platform.layout': { label: '%mainMenu_Layout%', order: 2 },
+      'platform.help': { label: '%mainMenu_Help%', order: 3, isExtensible: true },
       isExtensible: true,
     },
     groups: {

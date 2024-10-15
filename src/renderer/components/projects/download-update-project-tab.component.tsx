@@ -39,13 +39,18 @@ export default function DownloadUpdateProjectTab() {
   const downloadedProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadedProjects%';
   const downloadedProjectsHeaderKey = '%downloadUpdateProjectTab_subheader_downloadedProjects%';
   const deleteListItemKey = '%downloadUpdateProjectTab_listItem_delete%';
-  const [localizedStrings] = useLocalizedStrings([
-    downloadableProjectsAriaKey,
-    downloadableProjectsHeaderKey,
-    downloadedProjectsAriaKey,
-    downloadedProjectsHeaderKey,
-    deleteListItemKey,
-  ]);
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(
+      () => [
+        downloadableProjectsAriaKey,
+        downloadableProjectsHeaderKey,
+        downloadedProjectsAriaKey,
+        downloadedProjectsHeaderKey,
+        deleteListItemKey,
+      ],
+      [],
+    ),
+  );
   const localizedDownloadableProjectsAria = localizedStrings[downloadableProjectsAriaKey];
   const localizedDownloadableProjectsHeader = localizedStrings[downloadableProjectsHeaderKey];
   const localizedDownloadedProjectsAria = localizedStrings[downloadedProjectsAriaKey];
