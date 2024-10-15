@@ -1,8 +1,33 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
-import { CircleCheckIcon, CircleHelpIcon, CircleXIcon } from 'lucide-react';
-import { ColumnDef } from '../data-table/data-table.component';
-import { getSortingIcon, InventoryTableData, Status } from './inventory.component';
+import {
+  ArrowDownIcon,
+  ArrowUpDownIcon,
+  ArrowUpIcon,
+  CircleCheckIcon,
+  CircleHelpIcon,
+  CircleXIcon,
+} from 'lucide-react';
+import { ReactNode } from 'react';
+import { ColumnDef, SortDirection } from '../data-table/data-table.component';
+import { InventoryTableData, Status } from './inventory-utils';
+
+/**
+ * Gets an icon that indicates the current sorting direction based on the provided input
+ *
+ * @param sortDirection Sorting direction. Can be ascending ('asc'), descending ('desc') or false (
+ *   i.e. not sorted)
+ * @returns The appropriate sorting icon for the provided sorting direction
+ */
+export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
+  if (sortDirection === 'asc') {
+    return <ArrowUpIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+  }
+  if (sortDirection === 'desc') {
+    return <ArrowDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+  }
+  return <ArrowUpDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
+};
 
 /**
  * Function that creates the item column for inventories
@@ -66,6 +91,49 @@ export const inventoryCountColumn = (countLabel: string): ColumnDef<InventoryTab
 };
 
 /**
+ * Function that updates project settings when status for item(s) changes
+ *
+ * @param changedItems Array of items for which the status is being updated
+ * @param newStatus The status that the items are being given
+ * @param approvedItems Array of currently approved items
+ * @param onApprovedItemsChange Callback function that stores the updated list of approved items
+ * @param unapprovedItems Array of currently unapproved items
+ * @param onUnapprovedItemsChange Callback function that stores the updated list of unapproved items
+ */
+const statusChangeHandler = (
+  changedItems: string[],
+  newStatus: Status,
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
+) => {
+  let newApprovedItems: string[] = [...approvedItems];
+  changedItems.forEach((item) => {
+    if (newStatus === 'approved') {
+      if (!newApprovedItems.includes(item)) {
+        newApprovedItems.push(item);
+      }
+    } else {
+      newApprovedItems = newApprovedItems.filter((validItem) => validItem !== item);
+    }
+  });
+  onApprovedItemsChange(newApprovedItems);
+
+  let newUnapprovedItems: string[] = [...unapprovedItems];
+  changedItems.forEach((item) => {
+    if (newStatus === 'unapproved') {
+      if (!newUnapprovedItems.includes(item)) {
+        newUnapprovedItems.push(item);
+      }
+    } else {
+      newUnapprovedItems = newUnapprovedItems.filter((unapprovedItem) => unapprovedItem !== item);
+    }
+  });
+  onUnapprovedItemsChange(newUnapprovedItems);
+};
+
+/**
  * Function that creates the status column for inventories. Should be used with the DataTable
  * component.
  *
@@ -75,7 +143,10 @@ export const inventoryCountColumn = (countLabel: string): ColumnDef<InventoryTab
  */
 export const inventoryStatusColumn = (
   statusLabel: string,
-  statusChangeHandler: (items: string[], status: Status) => void,
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
 ): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'status',
@@ -94,16 +165,49 @@ export const inventoryStatusColumn = (
       const item: string = row.getValue('item');
       return (
         <ToggleGroup value={status} variant="outline" type="single">
-          <ToggleGroupItem onClick={() => statusChangeHandler([item], 'approved')} value="approved">
+          <ToggleGroupItem
+            onClick={() =>
+              statusChangeHandler(
+                [item],
+                'approved',
+                approvedItems,
+                onApprovedItemsChange,
+                unapprovedItems,
+                onUnapprovedItemsChange,
+              )
+            }
+            value="approved"
+          >
             <CircleCheckIcon />
           </ToggleGroupItem>
           <ToggleGroupItem
-            onClick={() => statusChangeHandler([item], 'unapproved')}
+            onClick={() =>
+              statusChangeHandler(
+                [item],
+                'unapproved',
+                approvedItems,
+                onApprovedItemsChange,
+                unapprovedItems,
+                onUnapprovedItemsChange,
+              )
+            }
             value="unapproved"
           >
             <CircleXIcon />
           </ToggleGroupItem>
-          <ToggleGroupItem onClick={() => statusChangeHandler([item], 'unknown')} value="unknown">
+          <ToggleGroupItem
+            onClick={() =>
+              statusChangeHandler(
+                [item],
+                'unknown',
+                approvedItems,
+                onApprovedItemsChange,
+                unapprovedItems,
+                onUnapprovedItemsChange,
+              )
+            }
+            value="unknown"
+          >
             <CircleHelpIcon />
           </ToggleGroupItem>
         </ToggleGroup>

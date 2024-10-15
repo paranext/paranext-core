@@ -16,21 +16,16 @@ export type {
   TableContents,
 } from './components/advanced/data-table/data-table.component';
 export { default as Inventory } from './components/advanced/inventory/inventory.component';
-export {
-  getSortingIcon,
-  INVENTORY_STRING_KEYS,
-} from './components/advanced/inventory/inventory.component';
+export { INVENTORY_STRING_KEYS } from './components/advanced/inventory/inventory.component';
+export type { InventoryLocalizedStrings } from './components/advanced/inventory/inventory.component';
 export type {
-  InventoryLocalizedStrings,
   InventoryItem,
   InventoryTableData,
   Scope,
-  Status,
-} from './components/advanced/inventory/inventory.component';
+} from './components/advanced/inventory/inventory-utils';
 export {
   inventoryItemColumn,
   inventoryCountColumn,
-  inventoryRelatedItemColumn,
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
 export {

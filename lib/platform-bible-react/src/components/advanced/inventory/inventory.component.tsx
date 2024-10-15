@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LocalizedStringValue, ScriptureReference } from 'platform-bible-utils';
 import { Input } from '@/components/shadcn-ui/input';
 import {
@@ -11,11 +11,13 @@ import {
 import DataTable, {
   ColumnDef,
   RowContents,
-  SortDirection,
   TableContents,
 } from '@/components/advanced/data-table/data-table.component';
 import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
-import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
+import Checkbox from '@/components/shadcn-ui/checkbox';
+import { Label } from '@/components/shadcn-ui/label';
+import { inventoryRelatedItemColumn } from './inventory-columns';
+import { InventoryItem, InventoryTableData, Scope, Status, StatusFilter } from './inventory-utils';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -37,41 +39,6 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
 
 export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
-};
-
-export type Scope = 'book' | 'chapter' | 'verse';
-
-export type Status = 'approved' | 'unapproved' | 'unknown';
-
-export type StatusFilter = Status | 'all';
-
-export type InventoryItem = {
-  item: string;
-  relatedItem?: string;
-};
-
-export type InventoryTableData = {
-  item: string;
-  relatedItem?: string;
-  count: number;
-  status: Status;
-};
-
-/**
- * Gets an icon that indicates the current sorting direction based on the provided input
- *
- * @param sortDirection Sorting direction. Can be ascending ('asc'), descending ('desc') or false (
- *   i.e. not sorted)
- * @returns The appropriate sorting icon for the provided sorting direction
- */
-export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
-  if (sortDirection === 'asc') {
-    return <ArrowUpIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
-  }
-  if (sortDirection === 'desc') {
-    return <ArrowDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
-  }
-  return <ArrowUpDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
 };
 
 /**
@@ -106,6 +73,16 @@ const filterItemData = (
   return filteredItemData;
 };
 
+const getStatusForItem = (
+  item: string,
+  approvedItems: string[],
+  unapprovedItems: string[],
+): Status => {
+  if (approvedItems.includes(item)) return 'approved';
+  if (unapprovedItems.includes(item)) return 'unapproved';
+  return 'unknown';
+};
+
 /**
  * Turns array of strings into array of inventory items, along with their count and status
  *
@@ -116,29 +93,34 @@ const filterItemData = (
  */
 const convertToTableData = (
   inventoryItems: InventoryItem[],
-  getStatusForItem: (item: string) => Status,
+  approvedItems: string[],
+  unapprovedItems: string[],
+  showRelatedItems: boolean,
 ): InventoryTableData[] => {
-  const itemData: InventoryTableData[] = [];
+  const tableData: InventoryTableData[] = [];
 
   for (let itemIndex = 0; itemIndex < inventoryItems.length; itemIndex++) {
     const inventoryItem = inventoryItems[itemIndex];
-    const existingItem = itemData.find((entry) => {
-      return entry.item === inventoryItem.item && entry.relatedItem === inventoryItem.relatedItem;
+    const existingItem = tableData.find((tableEntry) => {
+      return showRelatedItems
+        ? tableEntry.item === inventoryItem.item &&
+            tableEntry.relatedItem === inventoryItem.relatedItem
+        : tableEntry.item === inventoryItem.item;
     });
     if (existingItem) {
       existingItem.count += 1;
     } else {
       const newItem: InventoryTableData = {
         item: inventoryItem.item,
-        relatedItem: inventoryItem.relatedItem,
+        relatedItem: showRelatedItems ? inventoryItem.relatedItem : undefined,
         count: 1,
-        status: getStatusForItem(inventoryItem.item),
+        status: getStatusForItem(inventoryItem.item, approvedItems, unapprovedItems),
       };
-      itemData.push(newItem);
+      tableData.push(newItem);
     }
   }
 
-  return itemData;
+  return tableData;
 };
 
 /**
@@ -160,17 +142,15 @@ type InventoryProps = {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: InventoryLocalizedStrings;
+  showRelatedItemsButtonText?: string;
+  showRelatedItemsTableHeader?: string;
   items: InventoryItem[];
   approvedItems: string[];
-  onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
-  onUnapprovedItemsChange: (items: string[]) => void;
   text: string | undefined;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
-  getColumns: (
-    onStatusChange: (newItems: string[], status: Status) => void,
-  ) => ColumnDef<InventoryTableData>[];
+  columns: ColumnDef<InventoryTableData>[];
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -178,15 +158,15 @@ export default function Inventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,
+  showRelatedItemsButtonText,
+  showRelatedItemsTableHeader,
   items,
   approvedItems,
-  onApprovedItemsChange,
   unapprovedItems,
-  onUnapprovedItemsChange,
   text,
   scope,
   onScopeChange,
-  getColumns,
+  columns,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -197,75 +177,32 @@ export default function Inventory({
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
 
-  const [itemData, setItemData] = useState<InventoryTableData[]>([]);
+  const [showRelatedItems, setShowRelatedItems] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
   const [selectedItem, setSelectedItem] = useState<string>('');
 
-  const statusChangeHandler = useCallback(
-    (changedItems: string[], status: Status) => {
-      setItemData((prevTableData) => {
-        let tableData: InventoryTableData[] = [];
-        changedItems.forEach((item) => {
-          tableData = prevTableData.map((tableEntry) => {
-            if (tableEntry.item === item && tableEntry.status !== status)
-              return { ...tableEntry, status };
-            return tableEntry;
-          });
-        });
-        return tableData;
-      });
+  const showRelatedItemsControl: boolean = useMemo(() => {
+    return items.some((item: InventoryItem) => item.relatedItem !== undefined);
+  }, [items]);
 
-      let newApprovedItems: string[] = [...approvedItems];
-      changedItems.forEach((item) => {
-        if (status === 'approved') {
-          if (!newApprovedItems.includes(item)) {
-            newApprovedItems.push(item);
-          }
-        } else {
-          newApprovedItems = newApprovedItems.filter((validItem) => validItem !== item);
-        }
-      });
-      onApprovedItemsChange(newApprovedItems);
+  const tableData: InventoryTableData[] = useMemo(() => {
+    if (!text) return [];
+    return convertToTableData(items, approvedItems, unapprovedItems, showRelatedItems);
+  }, [items, approvedItems, unapprovedItems, showRelatedItems, text]);
 
-      let newUnapprovedItems: string[] = [...unapprovedItems];
-      changedItems.forEach((item) => {
-        if (status === 'unapproved') {
-          if (!newUnapprovedItems.includes(item)) {
-            newUnapprovedItems.push(item);
-          }
-        } else {
-          newUnapprovedItems = newUnapprovedItems.filter(
-            (unapprovedItem) => unapprovedItem !== item,
-          );
-        }
-      });
-      onUnapprovedItemsChange(newUnapprovedItems);
-    },
-    [approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange],
-  );
+  const allColumns: ColumnDef<InventoryTableData>[] = useMemo(() => {
+    if (!showRelatedItems) return columns;
+    return [inventoryRelatedItemColumn(showRelatedItemsTableHeader ?? 'Related Item'), ...columns];
+  }, [columns, showRelatedItems, showRelatedItemsTableHeader]);
 
-  const getStatusForItem = useCallback(
-    (item: string): Status => {
-      if (approvedItems.includes(item)) return 'approved';
-      if (unapprovedItems.includes(item)) return 'unapproved';
-      return 'unknown';
-    },
-    [approvedItems, unapprovedItems],
-  );
-
-  useEffect(() => {
-    if (!text) return;
-    setItemData(convertToTableData(items, getStatusForItem));
-  }, [items, text, getStatusForItem]);
-
-  const filteredItemData = useMemo(() => {
-    return filterItemData(itemData, statusFilter, textFilter);
-  }, [itemData, statusFilter, textFilter]);
+  const filteredTableData = useMemo(() => {
+    return filterItemData(tableData, statusFilter, textFilter);
+  }, [tableData, statusFilter, textFilter]);
 
   useEffect(() => {
     setSelectedItem('');
-  }, [filteredItemData]);
+  }, [filteredTableData]);
 
   const rowClickHandler = (
     row: RowContents<InventoryTableData>,
@@ -276,8 +213,6 @@ export default function Inventory({
 
     setSelectedItem(row.getValue('item'));
   };
-
-  const columns = useMemo(() => getColumns(statusChangeHandler), [getColumns, statusChangeHandler]);
 
   const handleScopeChange = (value: string) => {
     if (value === 'book' || value === 'chapter' || value === 'verse') {
@@ -297,7 +232,7 @@ export default function Inventory({
 
   return (
     <div className="pr-twp tw-flex tw-h-full tw-flex-col">
-      <div className="tw-flex">
+      <div className="tw-flex tw-items-stretch">
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
@@ -330,11 +265,23 @@ export default function Inventory({
             setTextFilter(event.target.value);
           }}
         />
+        {showRelatedItemsControl && (
+          <div className="tw-m-1 tw-flex tw-items-center tw-rounded-md tw-border">
+            <Checkbox
+              className="tw-m-1"
+              checked={showRelatedItems}
+              onCheckedChange={(checked: boolean) => setShowRelatedItems(checked)}
+            />
+            <Label className="tw-m-1 tw-flex-shrink-0 tw-whitespace-nowrap">
+              {showRelatedItemsButtonText ?? 'Show Related Items'}
+            </Label>
+          </div>
+        )}
       </div>
       <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
         <DataTable
-          columns={columns}
-          data={filteredItemData}
+          columns={allColumns}
+          data={filteredTableData}
           onRowClickHandler={rowClickHandler}
           stickyHeader
         />

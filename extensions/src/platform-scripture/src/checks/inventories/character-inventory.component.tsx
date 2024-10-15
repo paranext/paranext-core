@@ -6,13 +6,12 @@ import {
   InventoryItem,
   InventoryTableData,
   Scope,
-  Status,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 
 const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_character%',
@@ -54,7 +53,10 @@ const createColumns = (
   unicodeValueLabel: string,
   countLabel: string,
   statusLabel: string,
-  statusChangeHandler: (items: string[], status: Status) => void,
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
 ): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn(itemLabel),
   {
@@ -66,7 +68,13 @@ const createColumns = (
     },
   },
   inventoryCountColumn(countLabel),
-  inventoryStatusColumn(statusLabel, statusChangeHandler),
+  inventoryStatusColumn(
+    statusLabel,
+    approvedItems,
+    onApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange,
+  ),
 ];
 
 type CharacterInventoryProps = {
@@ -112,10 +120,28 @@ function CharacterInventory({
     [characterInventoryStrings],
   );
 
-  const getColumns = useCallback(
-    (onStatusChange: (changedItems: string[], status: Status) => void) =>
-      createColumns(itemLabel, unicodeValueLabel, countLabel, statusLabel, onStatusChange),
-    [itemLabel, unicodeValueLabel, countLabel, statusLabel],
+  const columns = useMemo(
+    () =>
+      createColumns(
+        itemLabel,
+        unicodeValueLabel,
+        countLabel,
+        statusLabel,
+        approvedItems,
+        onApprovedItemsChange,
+        unapprovedItems,
+        onUnapprovedItemsChange,
+      ),
+    [
+      itemLabel,
+      unicodeValueLabel,
+      countLabel,
+      statusLabel,
+      approvedItems,
+      onApprovedItemsChange,
+      unapprovedItems,
+      onUnapprovedItemsChange,
+    ],
   );
 
   return (
@@ -125,13 +151,11 @@ function CharacterInventory({
       localizedStrings={localizedStrings}
       items={text ? extractCharacters(text) : []}
       approvedItems={approvedItems}
-      onApprovedItemsChange={onApprovedItemsChange}
       unapprovedItems={unapprovedItems}
-      onUnapprovedItemsChange={onUnapprovedItemsChange}
       text={text}
       scope={scope}
       onScopeChange={onScopeChange}
-      getColumns={getColumns}
+      columns={columns}
     />
   );
 }

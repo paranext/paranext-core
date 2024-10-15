@@ -4,13 +4,13 @@ import {
   inventoryItemColumn,
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
-import Inventory, {
+import {
+  InventoryItem,
   InventoryTableData,
   Scope,
-  Status,
-  InventoryItem,
-} from '@/components/advanced/inventory/inventory.component';
-import { ScriptureReference } from 'platform-bible-utils';
+} from '@/components/advanced/inventory/inventory-utils';
+import Inventory from '@/components/advanced/inventory/inventory.component';
+import { ScriptureReference, substring } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
 
@@ -24,6 +24,7 @@ const localizedStrings = {
   '%webView_inventory_all%': 'All items',
   '%webView_inventory_approved%': 'Approved items',
   '%webView_inventory_filter_text%': 'Filter text...',
+  '%webView_inventory_show_related_items%': 'Show Related Items',
   '%webView_inventory_occurrences_table_header_occurrence%': 'Occurrence',
   '%webView_inventory_occurrences_table_header_reference%': 'Reference',
   '%webView_inventory_scope_currentBook%': 'Current book',
@@ -34,11 +35,20 @@ const localizedStrings = {
 };
 
 const createColumns = (
-  statusChangeHandler: (items: string[], status: Status) => void,
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
 ): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn('Item'),
   inventoryCountColumn('Count'),
-  inventoryStatusColumn('Status', statusChangeHandler),
+  inventoryStatusColumn(
+    'Status',
+    approvedItems,
+    onApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange,
+  ),
 ];
 
 const extractItems = (text: string, target: string | undefined = undefined): InventoryItem[] => {
@@ -47,7 +57,7 @@ const extractItems = (text: string, target: string | undefined = undefined): Inv
 
   const inventoryItems: InventoryItem[] = [];
   repeatedWords.forEach((word) => {
-    inventoryItems.push({ item: word });
+    inventoryItems.push({ item: word, relatedItem: substring(word, 2) });
   });
 
   if (target) return inventoryItems?.filter((item) => item.item === target);
@@ -68,13 +78,16 @@ function InventoryExample() {
         setScriptureReference={setScrRef}
         localizedStrings={localizedStrings}
         approvedItems={approvedItems}
-        onApprovedItemsChange={setApprovedItems}
         unapprovedItems={unapprovedItems}
-        onUnapprovedItemsChange={setUnapprovedItems}
         scope={scope}
         onScopeChange={setScope}
         text={scriptureSnippet}
-        getColumns={createColumns}
+        columns={createColumns(
+          approvedItems,
+          setApprovedItems,
+          unapprovedItems,
+          setUnapprovedItems,
+        )}
         items={extractItems(scriptureSnippet)}
       />
       Approved items:

@@ -57,6 +57,7 @@
       "%webView_inventory_table_header_unicode_value%": "Unicode Value",
       "%webView_inventory_table_header_count%": "Count",
       "%webView_inventory_table_header_status%": "Status",
+      "%webView_inventory_show_preceding_marker%": "Show Preceding Marker",
       "%webView_inventory_occurrences_table_header_reference%": "Reference",
       "%webView_inventory_occurrences_table_header_occurrence%": "Occurrence"
     }

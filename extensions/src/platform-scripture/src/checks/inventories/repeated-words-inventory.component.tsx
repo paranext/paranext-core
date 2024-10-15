@@ -5,13 +5,12 @@ import {
   InventoryItem,
   InventoryTableData,
   Scope,
-  Status,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { useCallback, useMemo } from 'react';
+import { useMemo } from 'react';
 
 const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_repeated_words%',
@@ -51,11 +50,20 @@ const createColumns = (
   itemLabel: string,
   countLabel: string,
   statusLabel: string,
-  statusChangeHandler: (items: string[], status: Status) => void,
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
 ): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn(itemLabel),
   inventoryCountColumn(countLabel),
-  inventoryStatusColumn(statusLabel, statusChangeHandler),
+  inventoryStatusColumn(
+    statusLabel,
+    approvedItems,
+    onApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange,
+  ),
 ];
 
 interface RepeatedWordsInventoryProps {
@@ -97,10 +105,26 @@ function RepeatedWordsInventory({
     [repeatedWordsInventoryStrings],
   );
 
-  const getColumns = useCallback(
-    (onStatusChange: (changedItems: string[], status: Status) => void) =>
-      createColumns(itemLabel, countLabel, statusLabel, onStatusChange),
-    [itemLabel, countLabel, statusLabel],
+  const columns = useMemo(
+    () =>
+      createColumns(
+        itemLabel,
+        countLabel,
+        statusLabel,
+        approvedItems,
+        onApprovedItemsChange,
+        unapprovedItems,
+        onUnapprovedItemsChange,
+      ),
+    [
+      itemLabel,
+      countLabel,
+      statusLabel,
+      approvedItems,
+      onApprovedItemsChange,
+      unapprovedItems,
+      onUnapprovedItemsChange,
+    ],
   );
 
   return (
@@ -110,13 +134,11 @@ function RepeatedWordsInventory({
       localizedStrings={localizedStrings}
       items={text ? extractRepeatedWords(text) : []}
       approvedItems={approvedItems}
-      onApprovedItemsChange={onApprovedItemsChange}
       unapprovedItems={unapprovedItems}
-      onUnapprovedItemsChange={onUnapprovedItemsChange}
       text={text}
       scope={scope}
       onScopeChange={onScopeChange}
-      getColumns={getColumns}
+      columns={columns}
     />
   );
 }
