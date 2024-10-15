@@ -15,7 +15,11 @@ internal abstract class ProjectDataProviderFactory : NetworkObject
     private readonly List<string> _projectInterfaces;
     private readonly string _pdpfName;
 
-    protected ProjectDataProviderFactory(List<string> projectInterfaces, string pdpfName, PapiClient papiClient)
+    protected ProjectDataProviderFactory(
+        List<string> projectInterfaces,
+        string pdpfName,
+        PapiClient papiClient
+    )
         : base(papiClient)
     {
         _projectInterfaces = projectInterfaces;

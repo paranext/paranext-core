@@ -16,8 +16,8 @@ internal class PrivateConstructorResolver : DefaultJsonTypeInfoResolver
         if (jsonTypeInfo is { Kind: JsonTypeInfoKind.Object, CreateObject: null })
         {
             if (
-                jsonTypeInfo.Type
-                    .GetConstructors(BindingFlags.Public | BindingFlags.Instance)
+                jsonTypeInfo
+                    .Type.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
                     .All(c => c.GetParameters().Length > 0)
             )
             {
