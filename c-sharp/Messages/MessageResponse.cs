@@ -33,7 +33,7 @@ public sealed class MessageResponse : Message
             RequestId = requestId,
             RequesterId = requesterId,
             Success = false,
-            ErrorMessage = errorMessage
+            ErrorMessage = errorMessage,
         };
     }
 
@@ -53,7 +53,7 @@ public sealed class MessageResponse : Message
             RequestId = requestId,
             RequesterId = requesterId,
             Success = true,
-            Contents = contents
+            Contents = contents,
         };
     }
 

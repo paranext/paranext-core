@@ -36,7 +36,7 @@ public sealed class MessageEventProjectDataProviderCreated
                 {
                     ProjectId = projectID,
                     ProjectInterfaces = projectInterfaces,
-                }
+                },
             }
         ) { }
 }
