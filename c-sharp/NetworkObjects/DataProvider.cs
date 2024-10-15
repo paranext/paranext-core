@@ -1,9 +1,9 @@
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.Messages;
-using Paranext.DataProvider.MessageTransports;
 using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Paranext.DataProvider.MessageHandlers;
+using Paranext.DataProvider.Messages;
+using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.NetworkObjects;
 

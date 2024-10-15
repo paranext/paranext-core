@@ -2,9 +2,9 @@ import webpack from 'webpack';
 import path from 'path';
 import merge from 'webpack-merge';
 import CopyPlugin from 'copy-webpack-plugin';
-import configBase, { LIBRARY_TYPE, rootDir } from './webpack.config.base';
+import configBase, { rootDir } from './webpack.config.base';
 import WebViewResolveWebpackPlugin from './web-view-resolve-webpack-plugin';
-import { outputFolder } from './webpack.util';
+import { LIBRARY_TYPE, outputFolder } from './webpack.util';
 
 /** Webpack configuration for building main */
 const configMain: webpack.Configuration = merge(configBase, {

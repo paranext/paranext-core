@@ -94,23 +94,20 @@ internal class CheckRunner(PapiClient papiClient)
 
             return functionName switch
             {
-                "disableCheck"
-                    => DisableCheck(
-                        args[0].Deserialize<string>() ?? "",
-                        args.Count > 1 ? args[1].Deserialize<string>() : null
-                    ),
-                "enableCheck"
-                    => EnableCheck(
-                        args[0].Deserialize<string>() ?? "",
-                        args[1].Deserialize<string>() ?? ""
-                    ),
+                "disableCheck" => DisableCheck(
+                    args[0].Deserialize<string>() ?? "",
+                    args.Count > 1 ? args[1].Deserialize<string>() : null
+                ),
+                "enableCheck" => EnableCheck(
+                    args[0].Deserialize<string>() ?? "",
+                    args[1].Deserialize<string>() ?? ""
+                ),
                 "getActiveRanges" => GetActiveRanges(),
                 "getAvailableChecks" => GetAvailableChecks(),
                 "getCheckResults" => GetCheckResults(),
-                "setActiveRanges"
-                    => SetActiveRanges(
-                        CheckInputRangeConverter.CreateCheckInputRangeArray(args[1])
-                    ),
+                "setActiveRanges" => SetActiveRanges(
+                    CheckInputRangeConverter.CreateCheckInputRangeArray(args[1])
+                ),
                 _ => ResponseToRequest.Failed($"Unknown function: {functionName}"),
             };
         }

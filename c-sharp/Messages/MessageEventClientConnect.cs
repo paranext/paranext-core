@@ -23,7 +23,7 @@ public sealed class MessageEventClientConnect
             new MessageEventClientConnectContents
             {
                 ClientId = clientId,
-                DidReconnect = didReconnect
+                DidReconnect = didReconnect,
             }
         ) { }
 }

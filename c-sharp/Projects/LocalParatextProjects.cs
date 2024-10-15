@@ -25,7 +25,8 @@ internal class LocalParatextProjects
 
     private readonly List<string> _requiredProjectRootFiles = ["usfm.sty", "Attribution.md"];
 
-    private static readonly List<string> s_paratextProjectInterfaces = [
+    private static readonly List<string> s_paratextProjectInterfaces =
+    [
         ProjectInterfaces.BASE,
         ProjectInterfaces.USFM_BOOK,
         ProjectInterfaces.USFM_CHAPTER,
@@ -33,7 +34,8 @@ internal class LocalParatextProjects
         ProjectInterfaces.USX_BOOK,
         ProjectInterfaces.USX_CHAPTER,
         ProjectInterfaces.USX_VERSE,
-        ProjectInterfaces.PLAIN_TEXT_VERSE];
+        ProjectInterfaces.PLAIN_TEXT_VERSE,
+    ];
 
     public LocalParatextProjects()
     {
@@ -44,7 +46,10 @@ internal class LocalParatextProjects
             "Paratext 9 Projects"
         );
 
-        Paratext9ProjectsFolder = Path.Join(Path.GetPathRoot(Environment.CurrentDirectory), "My Paratext 9 Projects");
+        Paratext9ProjectsFolder = Path.Join(
+            Path.GetPathRoot(Environment.CurrentDirectory),
+            "My Paratext 9 Projects"
+        );
     }
 
     #endregion
@@ -68,15 +73,18 @@ internal class LocalParatextProjects
             ParatextGlobals.Initialize(ProjectRootFolder);
 
             Console.WriteLine(
-                $"Projects loaded from {ProjectRootFolder}: {string.Join(",", GetScrTexts().Select(scrText => scrText.Name))}");
+                $"Projects loaded from {ProjectRootFolder}: {string.Join(",", GetScrTexts().Select(scrText => scrText.Name))}"
+            );
 
             // Read the projects in any locations other than project root folder
-            IEnumerable<ProjectDetails> otherProjectDetails =
-                LoadOtherProjectDetails(shouldIncludePT9ProjectsOnWindows);
+            IEnumerable<ProjectDetails> otherProjectDetails = LoadOtherProjectDetails(
+                shouldIncludePT9ProjectsOnWindows
+            );
 
             if (otherProjectDetails.Any())
                 Console.WriteLine(
-                    $"Projects found in other locations: {string.Join(",", otherProjectDetails.Select(projectDetails => projectDetails.Name))}");
+                    $"Projects found in other locations: {string.Join(",", otherProjectDetails.Select(projectDetails => projectDetails.Name))}"
+                );
 
             foreach (ProjectDetails projectDetails in otherProjectDetails)
             {
@@ -121,7 +129,7 @@ internal class LocalParatextProjects
 
     public static List<string> GetParatextProjectInterfaces()
     {
-        return [..s_paratextProjectInterfaces];
+        return [.. s_paratextProjectInterfaces];
     }
 
     #endregion
@@ -149,7 +157,8 @@ internal class LocalParatextProjects
 
     #region Private properties and methods
 
-    private static IEnumerable<ScrText> GetScrTexts() {
+    private static IEnumerable<ScrText> GetScrTexts()
+    {
         return ScrTextCollection.ScrTexts(IncludeProjects.ScriptureOnly);
     }
 
@@ -160,7 +169,7 @@ internal class LocalParatextProjects
         var projectName = new ProjectName
         {
             ShortName = projectDetails.Name,
-            ProjectPath = projectPath
+            ProjectPath = projectPath,
         };
         ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
     }
@@ -169,11 +178,18 @@ internal class LocalParatextProjects
     /// Return projects that are available on disk on the local machine
     /// </summary>
     /// <returns>Enumeration of (ProjectMetadata, project directory) tuples for all projects</returns>
-    private IEnumerable<ProjectDetails> LoadOtherProjectDetails(bool shouldIncludePT9ProjectsOnWindows)
+    private IEnumerable<ProjectDetails> LoadOtherProjectDetails(
+        bool shouldIncludePT9ProjectsOnWindows
+    )
     {
         // Get project info for projects outside the normal project root folder
         List<string> nonPT9ProjectRootFolders = [];
-        if (OperatingSystem.IsWindows() && shouldIncludePT9ProjectsOnWindows && Directory.Exists(Paratext9ProjectsFolder)) nonPT9ProjectRootFolders.Add(Paratext9ProjectsFolder);
+        if (
+            OperatingSystem.IsWindows()
+            && shouldIncludePT9ProjectsOnWindows
+            && Directory.Exists(Paratext9ProjectsFolder)
+        )
+            nonPT9ProjectRootFolders.Add(Paratext9ProjectsFolder);
 
         foreach (var rootFolder in nonPT9ProjectRootFolders)
         {
@@ -181,7 +197,11 @@ internal class LocalParatextProjects
             {
                 // There are a lot of folders with underscores in the name that we should ignore in
                 // My Paratext 9 Projects
-                if (rootFolder == Paratext9ProjectsFolder && Path.GetFileNameWithoutExtension(dir).StartsWith('_')) continue;
+                if (
+                    rootFolder == Paratext9ProjectsFolder
+                    && Path.GetFileNameWithoutExtension(dir).StartsWith('_')
+                )
+                    continue;
 
                 ProjectDetails? projectDetails;
                 string errorMessage;
@@ -224,7 +244,9 @@ internal class LocalParatextProjects
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrText.cs#L258
         // Removing extension twice because file may be in form name.id.ext to match Paratext
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ScrTextCollection.cs#L1661
-        var shortName = Path.GetFileNameWithoutExtension(Path.GetFileNameWithoutExtension(projectHomeDir));
+        var shortName = Path.GetFileNameWithoutExtension(
+            Path.GetFileNameWithoutExtension(projectHomeDir)
+        );
 
         var idNode = settings.SelectSingleNode("/ScriptureText/Guid");
         if (idNode == null)
@@ -267,10 +289,7 @@ internal class LocalParatextProjects
         {
             File.Copy(
                 filePath,
-                filePath.Replace(
-                    "assets/" + projectName,
-                    Path.Join(projectFolder)
-                )
+                filePath.Replace("assets/" + projectName, Path.Join(projectFolder))
             );
         }
     }

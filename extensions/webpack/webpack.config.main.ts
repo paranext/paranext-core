@@ -2,13 +2,14 @@ import webpack from 'webpack';
 import path from 'path';
 import merge from 'webpack-merge';
 import CopyPlugin from 'copy-webpack-plugin';
-import configBase, { LIBRARY_TYPE, rootDir } from './webpack.config.base';
+import configBase, { rootDir } from './webpack.config.base';
 import WebViewResolveWebpackPlugin from './web-view-resolve-webpack-plugin';
 import {
   outputFolder,
   getExtensions,
   getMainCopyFilePatterns,
   getMainEntries,
+  LIBRARY_TYPE,
 } from './webpack.util';
 
 /** Webpack configuration for building main */
