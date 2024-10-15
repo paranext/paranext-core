@@ -8,6 +8,7 @@ using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
+using Paratext.Data.ProjectComments;
 using Paratext.Data.ProjectSettingsAccess;
 using SIL.Scripture;
 
@@ -32,6 +33,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private readonly LocalParatextProjects _paratextProjects;
 
+    private readonly CommentManager _commentManager;
+
     #endregion
 
     #region Constructors
@@ -45,6 +48,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         : base(name, papiClient, projectDetails)
     {
         _paratextProjects = paratextProjects;
+        _commentManager = CommentManager.Get(
+            LocalParatextProjects.GetParatextProject(projectDetails.Metadata.Id)
+        );
+
         Getters.Add("getBookUSFM", GetBookUsfm);
         Setters.Add("setBookUSFM", SetBookUsfm);
         Getters.Add("getChapterUSFM", GetChapterUsfm);
@@ -58,6 +65,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         Getters.Add("getVerseUSX", GetVerseUsx);
 
         Getters.Add("getVersePlainText", GetVersePlainText);
+
+        Getters.Add("getComments", GetComments);
+        Setters.Add("setComments", SetComments);
 
         Getters.Add("getSetting", GetProjectSetting);
         Setters.Add("setSetting", SetProjectSetting);
@@ -197,6 +207,69 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #endregion
 
+    #region Comments
+
+    public ResponseToRequest GetComments(string jsonSelector)
+    {
+        CommentSelector selector =
+            jsonSelector.DeserializeFromJson<CommentSelector>()
+            ?? throw new InvalidDataException($"Invalid selector provided: {jsonSelector}");
+
+        List<Comment> comments = _commentManager.AllComments.ToList();
+        if (comments.Count == 0)
+            return ResponseToRequest.Succeeded(comments);
+
+        string matchingVerseRef;
+        if (selector.ChapterNum > 0 && selector.VerseNum > 0)
+            matchingVerseRef = $"{selector.BookId} {selector.ChapterNum}:{selector.VerseNum}";
+        else if (selector.ChapterNum > 0)
+            matchingVerseRef = $"{selector.BookId} {selector.ChapterNum}:";
+        else
+            matchingVerseRef = selector.BookId;
+
+        comments = comments.FindAll((c) => c.VerseRefStr.StartsWith(matchingVerseRef));
+        if (!string.IsNullOrEmpty(selector.CommentId))
+            comments = comments.FindAll((c) => selector.CommentId == c.Id);
+        return ResponseToRequest.Succeeded(comments);
+    }
+
+    // For now, only allow adding comments, not changing or removing existing PT 9 comments
+    // Too much risk of data loss while there are other bugs related to comments floating around
+    public ResponseToRequest SetComments(string jsonSelector, string commentData)
+    {
+        // The selector doesn't really make sense for what we're trying to do here, but it's required. Just ignore it.
+
+        var incomingComments =
+            commentData.DeserializeFromJson<Comment[]>()
+            ?? throw new InvalidDataException($"Invalid commend data provided: {commentData}");
+
+        bool madeChange = false;
+        foreach (var ic in incomingComments)
+        {
+            if (string.IsNullOrWhiteSpace(ic.Thread))
+                continue;
+            var thread =
+                _commentManager.FindThread(ic.Thread)
+                ?? _commentManager.CreateThread(
+                    _commentManager.ScrText,
+                    new ScriptureSelection(ic.VerseRef, ic.SelectedText, ic.StartPosition),
+                    NoteStatus.Todo
+                );
+            if (thread.Comments.Find((c) => c.Id == ic.Id) != null)
+                continue;
+            _commentManager.AddComment(ic);
+            _commentManager.SaveUser(ic.User, false);
+            madeChange = true;
+        }
+
+        if (madeChange)
+            SendDataUpdateEvent(ProjectDataType.COMMENTS);
+
+        return ResponseToRequest.Succeeded();
+    }
+
+    #endregion
+
     #region Settings
 
     public static string VisibilitySettingName => Setting.Visibility.ToString();
@@ -268,9 +341,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 {
                     "T" => ResponseToRequest.Succeeded(true),
                     "F" => ResponseToRequest.Succeeded(false),
-                    _ => ResponseToRequest.Failed(
-                        $"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"
-                    ),
+                    _
+                        => ResponseToRequest.Failed(
+                            $"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"
+                        ),
                 };
             }
             return ResponseToRequest.Succeeded(settingValue);

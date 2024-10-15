@@ -91,12 +91,23 @@
     "storybook:build": "storybook build"
   },
   "lint-staged": {
-    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
-    "*.json": ["prettier --parser json --write"],
-    "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
-    "*.{html,md,yml}": ["prettier --single-quote --write"]
+    "*.{cjs,js,jsx,ts,tsx}": [
+      "prettier --write",
+      "cross-env NODE_ENV=development eslint --cache"
+    ],
+    "*.json": [
+      "prettier --parser json --write"
+    ],
+    "*.{css,scss}": [
+      "stylelint --fix --allow-empty-input"
+    ],
+    "*.{html,md,yml}": [
+      "prettier --single-quote --write"
+    ]
   },
-  "browserslist": ["extends browserslist-config-erb"],
+  "browserslist": [
+    "extends browserslist-config-erb"
+  ],
   "dependencies": {
     "@emotion/react": "^11.11.4",
     "@emotion/styled": "^11.11.0",
@@ -190,6 +201,7 @@
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
+    "jsonpath-plus": "^10.0.0",
     "lint-staged": "^15.2.10",
     "mini-css-extract-plugin": "^2.9.1",
     "node-loader": "^2.0.0",
@@ -231,10 +243,20 @@
     "npm": ">=7.x"
   },
   "electronmon": {
-    "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**", ".erb/dll/**"],
+    "patterns": [
+      "!**/**",
+      "src/main/**",
+      "src/node/**",
+      "src/shared/**",
+      ".erb/dll/**"
+    ],
     "logLevel": "quiet"
   },
-  "workspaces": ["lib/*", "extensions", "extensions/src/*"],
+  "workspaces": [
+    "lib/*",
+    "extensions",
+    "extensions/src/*"
+  ],
   "volta": {
     "node": "20.18.0"
   }
