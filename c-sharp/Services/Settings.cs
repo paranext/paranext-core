@@ -8,4 +8,6 @@ public sealed class Settings
 
     public const string INCLUDE_MY_PARATEXT_9_PROJECTS =
         "platformScripture.includeMyParatext9Projects";
+
+    public const string COMMENTS_ENABLED = "platform.commentsEnabled";
 }

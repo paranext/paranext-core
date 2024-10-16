@@ -24,6 +24,11 @@ export const platformSettings: SettingsContribution = {
       label: '%settings_platform_paratextDataLastRegistryDataCachedTimes_label%',
       default: {},
     },
+    'platform.commentsEnabled': {
+      label: '%settings_platform_comments_enabled_label%',
+      description: '%settings_platform_comments_enabled_description%',
+      default: false,
+    },
   },
 };
 
@@ -63,10 +68,17 @@ const serializableStringDictionarySettingValidator: SettingValidator<
   return typeof newValue === 'object' && Object.values(newValue).every((value) => isString(value));
 };
 
+const booleanValidator: SettingValidator<'platform.commentsEnabled'> = async (
+  newValue: boolean,
+): Promise<boolean> => {
+  return typeof newValue === 'boolean';
+};
+
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
+  'platform.commentsEnabled': booleanValidator,
 };

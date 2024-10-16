@@ -19,6 +19,7 @@ const config: Config = {
     ...pathsToModuleNameMapper(compilerOptions.paths, {
       prefix: '<rootDir>/src',
     }),
+    '^jsonpath-plus$': '<rootDir>/../../node_modules/jsonpath-plus/dist/index-browser-umd.cjs',
   },
   testEnvironment: 'jsdom',
   testEnvironmentOptions: {
