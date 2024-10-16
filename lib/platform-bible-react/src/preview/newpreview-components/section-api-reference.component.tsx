@@ -2,9 +2,11 @@ import { Button } from '@/components/shadcn-ui/button';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import Link from './link';
 import PropertiesTable, { PropertiesTableProps } from './properties-table.component';
-import Section from './section.component';
+import Section, { SectionApi } from './section.component';
 
-type ApiReferenceSectionProps = PropertiesTableProps & { apiFunctionName: string };
+type ApiReferenceSectionProps = PropertiesTableProps & { apiFunctionName: string } & {
+  sectionApi: SectionApi;
+};
 
 function makeHeader(apiFunctionName: string) {
   return (
@@ -24,6 +26,7 @@ function makeHeader(apiFunctionName: string) {
 export default function ApiReferenceSection({
   properties,
   apiFunctionName,
+  sectionApi,
 }: ApiReferenceSectionProps) {
   return (
     <Section
@@ -31,6 +34,7 @@ export default function ApiReferenceSection({
       header={makeHeader(apiFunctionName)}
       description="All properties of the NavigationContentSearch component"
       content={<PropertiesTable properties={properties} />}
+      api={sectionApi}
     />
   );
 }

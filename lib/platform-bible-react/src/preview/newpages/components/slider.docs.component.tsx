@@ -7,7 +7,7 @@ import { ComponentProperty } from '@/preview/newpreview-components/properties-ta
 import { NavEntry } from '@/preview/newpreview-components/quicknav.component';
 import ApiReferenceSection from '@/preview/newpreview-components/section-api-reference.component';
 import IntroSection from '@/preview/newpreview-components/section-intro.component';
-import Section from '@/preview/newpreview-components/section.component';
+import Section, { SectionApi } from '@/preview/newpreview-components/section.component';
 import UsagePattern from '@/preview/newpreview-components/usage-pattern.component';
 import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
 
@@ -26,15 +26,18 @@ const props: ComponentProperty[] = [
   { name: 'step', type: 'number', default: '1', values: '' },
 ];
 
+const bestPracticesSectionApi: SectionApi = { updateIsOpen: undefined };
+const usageSectionApi: SectionApi = { updateIsOpen: undefined };
+const apiSectionApi: SectionApi = { updateIsOpen: undefined };
+const exampleSectionApi: SectionApi = { updateIsOpen: undefined };
+
 const sections: NavEntry[] = [
   { id: 'intro', name: 'Intro' },
-  { id: 'best-practices', name: 'Best Practices' },
-  { id: 'usage', name: 'Usage' },
-  { id: 'api', name: 'Api Reference' },
-  { id: 'examples', name: 'Examples' },
+  { id: 'best-practices', name: 'Best Practices', api: bestPracticesSectionApi },
+  { id: 'usage', name: 'Usage', api: usageSectionApi },
+  { id: 'api', name: 'Api Reference', api: apiSectionApi },
+  { id: 'examples', name: 'Examples', api: exampleSectionApi },
 ];
-
-const expandAllApi = {};
 
 const markdown = `
 # paranext-core
@@ -42,15 +45,7 @@ const markdown = `
 Extensible Bible translation software
 
 <div align="center">
-  <img src="./assets/icon.svg" width="256" alt="Platform icon" />
-</div>
-
-<div align="center">
-
-[![Build Status][github-actions-status]][github-actions-url]
-[![CodeQL][gitghub-codeql-status]][gitghub-codeql-url]
-[![Github Tag][github-tag-image]][github-tag-url]
-
+  <img src="https://framerusercontent.com/images/23x48W6TDuiHiXHwharuxxrtglo.png" width="256" alt="Platform icon" />
 </div>
 
 ## Summary
@@ -113,6 +108,7 @@ export default function SliderDocs() {
                 </div>
               </>
             }
+            api={bestPracticesSectionApi}
           />
 
           <Section
@@ -130,9 +126,14 @@ export default function SliderExample() {
 }`}
               />
             }
+            api={usageSectionApi}
           />
 
-          <ApiReferenceSection apiFunctionName="Slider" properties={props} />
+          <ApiReferenceSection
+            apiFunctionName="Slider"
+            properties={props}
+            sectionApi={apiSectionApi}
+          />
 
           <Section
             id="examples"
@@ -152,6 +153,7 @@ export default function SliderExample() {
                 />
               </div>
             }
+            api={exampleSectionApi}
           />
         </>
       }
