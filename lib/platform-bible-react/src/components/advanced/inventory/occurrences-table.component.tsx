@@ -8,124 +8,62 @@ import {
 } from '@/components/shadcn-ui/table';
 import { Canon } from '@sillsdev/scripture';
 import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
-import { useEffect, useState } from 'react';
-import { extractNumberFromUSFM, getLinesFromUSFM } from './inventory-utils';
-
-type SearchResult = {
-  reference: ScriptureReference;
-  snippet: string;
-  key: number;
-};
-
-const extractOccurrences = (
-  text: string | undefined,
-  item: string,
-  items: string[],
-  scriptureRef: ScriptureReference,
-): SearchResult[] => {
-  if (!text || text === '' || item === '') return [];
-
-  const results: SearchResult[] = [];
-  const lines = getLinesFromUSFM(text);
-
-  let currentChapter: number | undefined = scriptureRef.chapterNum;
-  let currentVerse: number | undefined = scriptureRef.verseNum;
-  let key: number = 0;
-
-  lines.forEach((line) => {
-    if (line.startsWith('\\id')) {
-      currentChapter = 0;
-      currentVerse = 0;
-    }
-    if (line.startsWith('\\c')) {
-      currentChapter = extractNumberFromUSFM(line);
-      currentVerse = 0;
-    }
-    if (line.startsWith('\\v')) {
-      currentVerse = extractNumberFromUSFM(line);
-      if (currentChapter === 0) {
-        currentChapter = scriptureRef.chapterNum;
-      }
-    }
-
-    const uniqueItems: string[] = Array.from(new Set(items));
-
-    const itemsInLine: string[] = [];
-
-    uniqueItems.forEach((uniqueItem) => {
-      // Find all occurrences of the item
-      const regex = new RegExp(uniqueItem, 'g');
-      const matches = line.match(regex);
-
-      if (matches) {
-        itemsInLine.push(...matches);
-      }
-    });
-
-    for (let i = 0; i < itemsInLine.length; i++) {
-      const result: SearchResult = {
-        reference: {
-          ...scriptureRef,
-          chapterNum: currentChapter !== undefined ? +currentChapter : -1,
-          verseNum: currentVerse !== undefined ? +currentVerse : -1,
-        },
-        snippet: line,
-        key,
-      };
-      key += 1;
-      results.push(result);
-    }
-  });
-
-  return results;
-};
+import { useMemo } from 'react';
+import { InventoryItem, InventoryTableData } from './inventory-utils';
 
 type OccurrencesTableProps = {
-  selectedItem: string;
-  text: string | undefined;
-  items: string[];
-  scriptureReference: ScriptureReference;
+  tableData: InventoryTableData[];
+  selectedItem: InventoryItem;
+  showRelatedItems: boolean;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
 };
 
 function OccurrencesTable({
+  tableData,
   selectedItem,
-  text,
-  items,
-  scriptureReference,
+  showRelatedItems,
   setScriptureReference,
   localizedStrings,
 }: OccurrencesTableProps) {
-  const reference = localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
-  const occurrence = localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
-  const [tableData, setTableData] = useState<SearchResult[]>(
-    extractOccurrences(text, selectedItem, items, scriptureReference),
+  const referenceHeaderText =
+    localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
+  const occurrenceHeaderText =
+    localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
+
+  const filteredTableData = useMemo(
+    () =>
+      tableData.filter((tableEntry: InventoryTableData) =>
+        showRelatedItems
+          ? tableEntry.item === selectedItem.item &&
+            tableEntry.relatedItem === selectedItem.relatedItem
+          : tableEntry.item === selectedItem.item,
+      ),
+    [selectedItem, showRelatedItems, tableData],
   );
 
-  useEffect(
-    () => setTableData(extractOccurrences(text, selectedItem, items, scriptureReference)),
-    [text, selectedItem, scriptureReference, items],
-  );
+  if (filteredTableData.length > 1) throw new Error('Selected item is not unique');
 
   return (
     <Table stickyHeader>
       <TableHeader stickyHeader>
         <TableRow>
-          <TableHead>{reference}</TableHead>
-          <TableHead>{occurrence}</TableHead>
+          <TableHead>{referenceHeaderText}</TableHead>
+          <TableHead>{occurrenceHeaderText}</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {tableData.map((result) => (
+        {filteredTableData[0].occurrences.map((occurrence, index) => (
           <TableRow
-            key={result.key}
+            // This needs to be fixed
+            // eslint-disable-next-line react/no-array-index-key
+            key={index}
             onClick={() => {
-              setScriptureReference(result.reference);
+              setScriptureReference(occurrence.reference);
             }}
           >
-            <TableCell>{`${Canon.bookNumberToEnglishName(result.reference.bookNum)} ${result.reference.chapterNum}:${result.reference.verseNum}`}</TableCell>
-            <TableCell>{result.snippet}</TableCell>
+            <TableCell>{`${Canon.bookNumberToEnglishName(occurrence.reference.bookNum)} ${occurrence.reference.chapterNum}:${occurrence.reference.verseNum}`}</TableCell>
+            <TableCell>{occurrence.text}</TableCell>
           </TableRow>
         ))}
       </TableBody>

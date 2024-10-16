@@ -149,7 +149,7 @@ function CharacterInventory({
       scriptureReference={scriptureReference}
       setScriptureReference={setScriptureReference}
       localizedStrings={localizedStrings}
-      items={text ? extractCharacters(text) : []}
+      extractItems={extractCharacters}
       approvedItems={approvedItems}
       unapprovedItems={unapprovedItems}
       text={text}

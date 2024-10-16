@@ -132,7 +132,7 @@ function RepeatedWordsInventory({
       scriptureReference={scriptureReference}
       setScriptureReference={setScriptureReference}
       localizedStrings={localizedStrings}
-      items={text ? extractRepeatedWords(text) : []}
+      extractItems={extractRepeatedWords}
       approvedItems={approvedItems}
       unapprovedItems={unapprovedItems}
       text={text}

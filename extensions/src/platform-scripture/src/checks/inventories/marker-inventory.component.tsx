@@ -29,8 +29,8 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-const extractMarkers = (text: string, storePrecedingMarker: boolean): InventoryItem[] => {
-  // Finds markers (a backslash character followed by any number of letters, digits and possibly a *)
+const extractMarkers = (text: string): InventoryItem[] => {
+  // Finds markers (a backslash character followed by any number of letters, digits and possibly a '*')
   const markers = text.match(/\\[a-zA-Z0-9]+\*?/g) || [];
 
   const inventoryItems: InventoryItem[] = [];
@@ -38,7 +38,7 @@ const extractMarkers = (text: string, storePrecedingMarker: boolean): InventoryI
     const precedingMarker = index > 0 ? markers[index - 1] : '';
     inventoryItems.push({
       item: marker,
-      relatedItem: storePrecedingMarker ? precedingMarker : undefined,
+      relatedItem: precedingMarker,
     });
   });
 
@@ -128,7 +128,6 @@ function MarkerInventory({
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
   const [markerNames, setMarkerNames] = useState<string[]>([]);
-  const [showPreceding] = useState<boolean>(true);
 
   useEffect(() => {
     const fetchStylesheet = async () => {
@@ -167,11 +166,6 @@ function MarkerInventory({
     [markerInventoryStrings],
   );
 
-  const markers: InventoryItem[] = useMemo(
-    () => (text ? extractMarkers(text, showPreceding) : []),
-    [showPreceding, text],
-  );
-
   const columns = useMemo(
     () =>
       createColumns(
@@ -203,7 +197,7 @@ function MarkerInventory({
       scriptureReference={scriptureReference}
       setScriptureReference={setScriptureReference}
       localizedStrings={localizedStrings}
-      items={markers}
+      extractItems={extractMarkers}
       approvedItems={approvedItems}
       unapprovedItems={unapprovedItems}
       text={text}

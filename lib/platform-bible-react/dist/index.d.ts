@@ -253,11 +253,16 @@ export type InventoryItem = {
 	item: string;
 	relatedItem?: string;
 };
+export type InventoryItemOccurrence = {
+	reference: ScriptureReference;
+	text: string;
+};
 export type InventoryTableData = {
 	item: string;
 	relatedItem?: string;
 	count: number;
 	status: Status;
+	occurrences: InventoryItemOccurrence[];
 };
 export type Scope = "book" | "chapter" | "verse";
 export type Status = "approved" | "unapproved" | "unknown";
@@ -287,7 +292,7 @@ export type InventoryProps = {
 	localizedStrings: InventoryLocalizedStrings;
 	showRelatedItemsButtonText?: string;
 	showRelatedItemsTableHeader?: string;
-	items: InventoryItem[];
+	extractItems: (text: string) => InventoryItem[];
 	approvedItems: string[];
 	unapprovedItems: string[];
 	text: string | undefined;
@@ -296,7 +301,7 @@ export type InventoryProps = {
 	columns: ColumnDef<InventoryTableData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, showRelatedItemsButtonText, showRelatedItemsTableHeader, items, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, showRelatedItemsButtonText, showRelatedItemsTableHeader, extractItems, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *

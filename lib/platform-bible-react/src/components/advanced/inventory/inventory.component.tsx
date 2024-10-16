@@ -17,7 +17,13 @@ import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.
 import Checkbox from '@/components/shadcn-ui/checkbox';
 import { Label } from '@/components/shadcn-ui/label';
 import { inventoryRelatedItemColumn } from './inventory-columns';
-import { InventoryItem, InventoryTableData, Scope, Status, StatusFilter } from './inventory-utils';
+import {
+  createTableData,
+  InventoryItem,
+  InventoryTableData,
+  Scope,
+  StatusFilter,
+} from './inventory-utils';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -73,64 +79,6 @@ const filterItemData = (
   return filteredItemData;
 };
 
-const getStatusForItem = (
-  item: string,
-  approvedItems: string[],
-  unapprovedItems: string[],
-): Status => {
-  if (approvedItems.includes(item)) return 'approved';
-  if (unapprovedItems.includes(item)) return 'unapproved';
-  return 'unknown';
-};
-
-/**
- * Turns array of strings into array of inventory items, along with their count and status
- *
- * @param inventoryItems String array that contains inventory items
- * @param getStatusForItem Function that gets status for inventory item from related project
- *   settings
- * @returns Array of inventory items, along with their count and status
- */
-const convertToTableData = (
-  inventoryItems: InventoryItem[],
-  approvedItems: string[],
-  unapprovedItems: string[],
-  showRelatedItems: boolean,
-): InventoryTableData[] => {
-  const tableData: InventoryTableData[] = [];
-
-  for (let itemIndex = 0; itemIndex < inventoryItems.length; itemIndex++) {
-    const inventoryItem = inventoryItems[itemIndex];
-    const existingItem = tableData.find((tableEntry) => {
-      return showRelatedItems
-        ? tableEntry.item === inventoryItem.item &&
-            tableEntry.relatedItem === inventoryItem.relatedItem
-        : tableEntry.item === inventoryItem.item;
-    });
-    if (existingItem) {
-      existingItem.count += 1;
-    } else {
-      const newItem: InventoryTableData = {
-        item: inventoryItem.item,
-        relatedItem: showRelatedItems ? inventoryItem.relatedItem : undefined,
-        count: 1,
-        status: getStatusForItem(inventoryItem.item, approvedItems, unapprovedItems),
-      };
-      tableData.push(newItem);
-    }
-  }
-
-  return tableData;
-};
-
-/**
- * Gets the localized value for the provided key
- *
- * @param strings Object containing localized string
- * @param key Key for a localized string
- * @returns The localized value for the provided key, if available. Returns the key if no localized
- *   value is available
- */
 const localizeString = (
   strings: InventoryLocalizedStrings,
   key: keyof InventoryLocalizedStrings,
@@ -144,7 +92,7 @@ type InventoryProps = {
   localizedStrings: InventoryLocalizedStrings;
   showRelatedItemsButtonText?: string;
   showRelatedItemsTableHeader?: string;
-  items: InventoryItem[];
+  extractItems: (text: string) => InventoryItem[];
   approvedItems: string[];
   unapprovedItems: string[];
   text: string | undefined;
@@ -160,7 +108,7 @@ export default function Inventory({
   localizedStrings,
   showRelatedItemsButtonText,
   showRelatedItemsTableHeader,
-  items,
+  extractItems,
   approvedItems,
   unapprovedItems,
   text,
@@ -180,16 +128,23 @@ export default function Inventory({
   const [showRelatedItems, setShowRelatedItems] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
-  const [selectedItem, setSelectedItem] = useState<string>('');
-
-  const showRelatedItemsControl: boolean = useMemo(() => {
-    return items.some((item: InventoryItem) => item.relatedItem !== undefined);
-  }, [items]);
+  const [selectedItem, setSelectedItem] = useState<InventoryItem>({ item: '' });
 
   const tableData: InventoryTableData[] = useMemo(() => {
     if (!text) return [];
-    return convertToTableData(items, approvedItems, unapprovedItems, showRelatedItems);
-  }, [items, approvedItems, unapprovedItems, showRelatedItems, text]);
+    return createTableData(
+      text,
+      scriptureReference,
+      approvedItems,
+      unapprovedItems,
+      extractItems,
+      showRelatedItems,
+    );
+  }, [text, scriptureReference, approvedItems, unapprovedItems, extractItems, showRelatedItems]);
+
+  const showRelatedItemsControl: boolean = useMemo(() => {
+    return tableData.some((tableEntry: InventoryTableData) => tableEntry.relatedItem !== undefined);
+  }, [tableData]);
 
   const allColumns: ColumnDef<InventoryTableData>[] = useMemo(() => {
     if (!showRelatedItems) return columns;
@@ -201,7 +156,7 @@ export default function Inventory({
   }, [tableData, statusFilter, textFilter]);
 
   useEffect(() => {
-    setSelectedItem('');
+    setSelectedItem({ item: '' });
   }, [filteredTableData]);
 
   const rowClickHandler = (
@@ -211,7 +166,10 @@ export default function Inventory({
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
 
-    setSelectedItem(row.getValue('item'));
+    setSelectedItem({
+      item: row.getValue('item'),
+      relatedItem: showRelatedItems ? row.getValue('relatedItem') : undefined,
+    });
   };
 
   const handleScopeChange = (value: string) => {
@@ -286,16 +244,13 @@ export default function Inventory({
           stickyHeader
         />
       </div>
-      {selectedItem !== '' && (
+      {selectedItem.item !== '' && (
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
+            tableData={filteredTableData}
             selectedItem={selectedItem}
-            text={text}
-            items={[]} // Fix this
-            scriptureReference={scriptureReference}
-            setScriptureReference={(newScriptureReference) =>
-              setScriptureReference(newScriptureReference)
-            }
+            showRelatedItems={showRelatedItems}
+            setScriptureReference={setScriptureReference}
             localizedStrings={localizedStrings}
           />
         </div>

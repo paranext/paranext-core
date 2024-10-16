@@ -51,7 +51,7 @@ const createColumns = (
   ),
 ];
 
-const extractItems = (text: string, target: string | undefined = undefined): InventoryItem[] => {
+const extractItems = (text: string): InventoryItem[] => {
   // Finds repeated words, and captures the first occurrence of the word
   const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
 
@@ -59,8 +59,6 @@ const extractItems = (text: string, target: string | undefined = undefined): Inv
   repeatedWords.forEach((word) => {
     inventoryItems.push({ item: word, relatedItem: substring(word, 2) });
   });
-
-  if (target) return inventoryItems?.filter((item) => item.item === target);
 
   return inventoryItems;
 };
@@ -88,7 +86,7 @@ function InventoryExample() {
           unapprovedItems,
           setUnapprovedItems,
         )}
-        items={extractItems(scriptureSnippet)}
+        extractItems={extractItems}
       />
       Approved items:
       <ul>
