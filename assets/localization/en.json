@@ -35,6 +35,8 @@
   "%settings_platform_interfaceLanguage_description%": "List of locales to use when localizing the interface. First in the list receives highest priority. 'en' (English) is always added at the end, so everything localizes to English if it does not have a localization in a higher-priority locale.",
   "%settings_platform_ptxUtilsMementoData_label%": "PtxUtils Memento Data",
   "%settings_platform_paratextDataLastRegistryDataCachedTimes_label%": "ParatextData Last Registry Data Cached Times",
+  "%settings_platform_comments_enabled_label%": "Comments enabled (experimental)",
+  "%settings_platform_comments_enabled_description%": "Enabled reading and writing comments in projects. This is an experimental feature.",
   "%project_settings_platform_group1_label%": "Platform Settings",
   "%project_settings_platform_group1_description%": "Project settings pertaining to the software overall",
   "%project_settings_platform_name_label%": "Project Short Name",
