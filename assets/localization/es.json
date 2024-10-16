@@ -23,5 +23,5 @@
   "%settings_platform_group1_description%": "Configuraciones generales del software fundamental",
   "%settings_platform_interfaceLanguage_description%": "Lista de locales usados al localizar la interfaz en orden descendente de prioridad. 'en' (inglés) siempre se añade al final, de modo que si no se encuentra una traducción en ninguno de los idiomas especificados, aparecerá en inglés.",
   "%settings_platform_label_group1%": "Configuraciones de Platform",
-  "%settings_platform_interfaceLanguage_label%": "Idioma de interfaz"
+  "%settings_platform_settingName_interfaceLanguage%": "Idioma de interfaz"
 }

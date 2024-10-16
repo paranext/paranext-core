@@ -28,7 +28,7 @@ const platformSettings: SettingsContribution = {
       default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
-      label: '%settings_platform_interfaceLanguage_label%',
+      label: '%settings_platform_settingName_interfaceLanguage%',
       default: ['eng'],
     },
   },
@@ -42,7 +42,7 @@ const platformSettingsLocalized: Localized<SettingsContribution> = {
       default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
-      label: 'settings_platform_label_interfaceLanguage',
+      label: 'settings_platform_settingName_interfaceLanguage',
       default: ['eng'],
     },
   },
