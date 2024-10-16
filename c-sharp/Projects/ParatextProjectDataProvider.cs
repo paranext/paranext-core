@@ -7,6 +7,7 @@ using Paranext.DataProvider.JsonUtils;
 using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Services;
+using Paratext.Checks.Checks;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
 using Paratext.Data.ProjectSettingsAccess;
@@ -71,6 +72,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         Getters.Add("getSetting", GetProjectSetting);
         Setters.Add("setSetting", SetProjectSetting);
+
+        Getters.Add("getMarkerNames", GetMarkerNames);
 
         RegisterSettingsValidators();
     }
@@ -571,6 +574,29 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         // The value of returned strings are case-sensitive and cannot change unless data provider subscriptions change
         return ResponseToRequest.Succeeded(AllScriptureDataTypes);
+    }
+
+    public ResponseToRequest GetMarkerNames(string jsonString)
+    {
+        if (!Int32.TryParse(jsonString, out int bookNum))
+        {
+            return ResponseToRequest.Failed($"Book number '{jsonString}' is not a number");
+        }
+
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        ScrStylesheet scrStylesheet = scrText.ScrStylesheet(bookNum);
+
+        if (scrStylesheet == null)
+            return ResponseToRequest.Failed(
+                $"ScrStylesheet for book number '{jsonString}' is null"
+            );
+
+        var markerNames = scrStylesheet
+            .Tags.Where(tag => tag != null)
+            .Select(tag => tag.Name)
+            .ToArray();
+
+        return ResponseToRequest.Succeeded(markerNames);
     }
 
     #endregion

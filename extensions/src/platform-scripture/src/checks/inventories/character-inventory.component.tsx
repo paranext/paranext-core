@@ -1,18 +1,17 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey, ScriptureReference, split } from 'platform-bible-utils';
 import {
   Button,
   ColumnDef,
   Inventory,
-  ItemData,
+  InventoryItem,
+  InventoryTableData,
   Scope,
-  Status,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { useCallback, useMemo } from 'react';
-import { extractCharacters } from './inventory-utils';
+import { useMemo } from 'react';
 
 const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_character%',
@@ -20,6 +19,24 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
+
+/**
+ * Extracts characters from scripture text. If a target is provided, only extracts occurrences of
+ * the provided target
+ *
+ * @param text The scripture text from which the characters will be extracted
+ * @returns An array of characters extracted from the provided scripture text
+ */
+const extractCharacters = (text: string): InventoryItem[] => {
+  const characters = split(text, '');
+
+  const inventoryItems: InventoryItem[] = [];
+  characters.forEach((character) => {
+    inventoryItems.push({ item: character });
+  });
+
+  return inventoryItems;
+};
 
 /**
  * Function that constructs the column for the inventory component
@@ -36,8 +53,11 @@ const createColumns = (
   unicodeValueLabel: string,
   countLabel: string,
   statusLabel: string,
-  statusChangeHandler: (items: string[], status: Status) => void,
-): ColumnDef<ItemData>[] => [
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
+): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn(itemLabel),
   {
     accessorKey: 'unicodeValue',
@@ -48,7 +68,13 @@ const createColumns = (
     },
   },
   inventoryCountColumn(countLabel),
-  inventoryStatusColumn(statusLabel, statusChangeHandler),
+  inventoryStatusColumn(
+    statusLabel,
+    approvedItems,
+    onApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange,
+  ),
 ];
 
 type CharacterInventoryProps = {
@@ -94,10 +120,28 @@ function CharacterInventory({
     [characterInventoryStrings],
   );
 
-  const getColumns = useCallback(
-    (onStatusChange: (changedItems: string[], status: Status) => void) =>
-      createColumns(itemLabel, unicodeValueLabel, countLabel, statusLabel, onStatusChange),
-    [itemLabel, unicodeValueLabel, countLabel, statusLabel],
+  const columns = useMemo(
+    () =>
+      createColumns(
+        itemLabel,
+        unicodeValueLabel,
+        countLabel,
+        statusLabel,
+        approvedItems,
+        onApprovedItemsChange,
+        unapprovedItems,
+        onUnapprovedItemsChange,
+      ),
+    [
+      itemLabel,
+      unicodeValueLabel,
+      countLabel,
+      statusLabel,
+      approvedItems,
+      onApprovedItemsChange,
+      unapprovedItems,
+      onUnapprovedItemsChange,
+    ],
   );
 
   return (
@@ -107,13 +151,11 @@ function CharacterInventory({
       localizedStrings={localizedStrings}
       extractItems={extractCharacters}
       approvedItems={approvedItems}
-      onApprovedItemsChange={onApprovedItemsChange}
       unapprovedItems={unapprovedItems}
-      onUnapprovedItemsChange={onUnapprovedItemsChange}
       text={text}
       scope={scope}
       onScopeChange={onScopeChange}
-      getColumns={getColumns}
+      columns={columns}
     />
   );
 }

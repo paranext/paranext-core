@@ -37,6 +37,18 @@
         "description": "%project_settings_platformScripture_nonRepeatableWords_description%",
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.validMarkers": {
+        "label": "%project_settings_platformScripture_validMarkers_label%",
+        "description": "%project_settings_platformScripture_validMarkers_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.invalidMarkers": {
+        "label": "%project_settings_platformScripture_invalidMarkers_label%",
+        "description": "%project_settings_platformScripture_invalidMarkers_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

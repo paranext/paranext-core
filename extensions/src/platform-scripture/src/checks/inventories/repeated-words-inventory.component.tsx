@@ -2,22 +2,40 @@ import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible
 import {
   ColumnDef,
   Inventory,
-  ItemData,
+  InventoryItem,
+  InventoryTableData,
   Scope,
-  Status,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { useCallback, useMemo } from 'react';
-import { extractRepeatedWords } from './inventory-utils';
+import { useMemo } from 'react';
 
 const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_repeated_words%',
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
+
+/**
+ * Extracts repeated words from scripture text. If a target is provided, only extracts occurences of
+ * the provided target
+ *
+ * @param text The scripture text from which the characters will be extracted
+ * @returns An array of repeated words extracted from the provided scripture text
+ */
+export const extractRepeatedWords = (text: string): InventoryItem[] => {
+  // Finds repeated words, and captures the first occurrence of the word
+  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
+
+  const inventoryItems: InventoryItem[] = [];
+  repeatedWords.forEach((repeatedWord) => {
+    inventoryItems.push({ item: repeatedWord });
+  });
+
+  return inventoryItems;
+};
 
 /**
  * Function that constructs the column for the inventory component
@@ -32,11 +50,20 @@ const createColumns = (
   itemLabel: string,
   countLabel: string,
   statusLabel: string,
-  statusChangeHandler: (items: string[], status: Status) => void,
-): ColumnDef<ItemData>[] => [
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
+): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn(itemLabel),
   inventoryCountColumn(countLabel),
-  inventoryStatusColumn(statusLabel, statusChangeHandler),
+  inventoryStatusColumn(
+    statusLabel,
+    approvedItems,
+    onApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange,
+  ),
 ];
 
 interface RepeatedWordsInventoryProps {
@@ -78,10 +105,26 @@ function RepeatedWordsInventory({
     [repeatedWordsInventoryStrings],
   );
 
-  const getColumns = useCallback(
-    (onStatusChange: (changedItems: string[], status: Status) => void) =>
-      createColumns(itemLabel, countLabel, statusLabel, onStatusChange),
-    [itemLabel, countLabel, statusLabel],
+  const columns = useMemo(
+    () =>
+      createColumns(
+        itemLabel,
+        countLabel,
+        statusLabel,
+        approvedItems,
+        onApprovedItemsChange,
+        unapprovedItems,
+        onUnapprovedItemsChange,
+      ),
+    [
+      itemLabel,
+      countLabel,
+      statusLabel,
+      approvedItems,
+      onApprovedItemsChange,
+      unapprovedItems,
+      onUnapprovedItemsChange,
+    ],
   );
 
   return (
@@ -91,13 +134,11 @@ function RepeatedWordsInventory({
       localizedStrings={localizedStrings}
       extractItems={extractRepeatedWords}
       approvedItems={approvedItems}
-      onApprovedItemsChange={onApprovedItemsChange}
       unapprovedItems={unapprovedItems}
-      onUnapprovedItemsChange={onUnapprovedItemsChange}
       text={text}
       scope={scope}
       onScopeChange={onScopeChange}
-      getColumns={getColumns}
+      columns={columns}
     />
   );
 }
