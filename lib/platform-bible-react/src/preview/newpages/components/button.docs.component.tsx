@@ -73,7 +73,7 @@ export default function ButtonDocs() {
             id="examples"
             header="Examples"
             content={
-              <div className="pr-space-y-6">
+              <div className="tw-space-y-6">
                 <Example
                   title="Variants"
                   code={`<Button variant="default">default</Button>
@@ -83,7 +83,7 @@ export default function ButtonDocs() {
 <Button variant="ghost">ghost</Button>
 <Button variant="link">link</Button>`}
                   component={
-                    <div className="pr-space-x-2">
+                    <div className="tw-space-x-2">
                       <Button variant="default">default</Button>
                       <Button variant="secondary">secondary</Button>
                       <Button variant="destructive">destructive</Button>
@@ -101,7 +101,7 @@ export default function ButtonDocs() {
 <Button size="lg">lg</Button>
 <Button size="sm">sm</Button>`}
                   component={
-                    <div className="pr-space-x-2">
+                    <div className="tw-space-x-2">
                       <Button size="default">default</Button>
                       <Button size="icon">icon</Button>
                       <Button size="lg">lg</Button>

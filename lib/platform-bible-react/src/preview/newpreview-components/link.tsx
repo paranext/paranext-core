@@ -8,7 +8,7 @@ export default function Link({ href, text, newTab, className }: LinkProps) {
     <a
       target={newTab ? '_blank' : ''}
       rel="noreferrer"
-      className={cn('pr-text-blue-600 hover:pr-underline', className)}
+      className={cn('tw-text-blue-600 hover:tw-underline', className)}
       href={href}
     >
       {text}

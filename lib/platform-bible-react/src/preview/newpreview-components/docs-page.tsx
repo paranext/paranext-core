@@ -8,8 +8,8 @@ export type DocsPageProps = { direction: Direction };
 export default function DocsPage({ sections, content }: DocsPageBaseProps) {
   return (
     <>
-      <main className="pr-flex-1 pr-p-6">
-        <div className="pr-mx-auto pr-max-w-3xl pr-space-y-12">{content}</div>
+      <main className="tw-flex-1 tw-p-6">
+        <div className="tw-mx-auto tw-max-w-3xl tw-space-y-12">{content}</div>
       </main>
 
       <QuickNav sections={sections} />

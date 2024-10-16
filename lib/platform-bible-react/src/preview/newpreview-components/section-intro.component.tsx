@@ -19,20 +19,20 @@ export default function IntroSection({
 }: IntroSectionProps) {
   return (
     <section id={id}>
-      <div className="pr-mb-4 pr-flex pr-items-center pr-justify-between">
-        <div className="pr-flex pr-items-center">
-          <h1 className="pr-text-4xl pr-font-bold">{header}</h1>
+      <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">
+        <div className="tw-flex tw-items-center">
+          <h1 className="tw-text-4xl tw-font-bold">{header}</h1>
           <Button size="icon" variant="link">
             <Link
               href={`https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/components/${githubComponentUrlPart}`}
               newTab
-              text={<SquareArrowOutUpRight className="pr-h-5" />}
+              text={<SquareArrowOutUpRight className="tw-h-5" />}
             />
           </Button>
         </div>
         <UxApproval usabilityChecks={usabilityChecks} componentName={header} />
       </div>
-      <p className="pr-mb-6 pr-text-xl pr-text-muted-foreground">{description}</p>
+      <p className="tw-mb-6 tw-text-xl tw-text-muted-foreground">{description}</p>
       <ComponentPreview component={content} />
     </section>
   );

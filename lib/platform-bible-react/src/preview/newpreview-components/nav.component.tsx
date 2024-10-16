@@ -4,14 +4,14 @@ type NavProps = { pages: Page[] };
 
 export default function Nav({ pages }: NavProps) {
   return (
-    <nav className="pr-p-4 pr-pt-0">
-      <ul className="pr-space-y-2">
+    <nav className="tw-p-4 tw-pt-0">
+      <ul className="tw-space-y-2">
         {pages.map((page: Page) => {
           const navPage = (
             <li>
               <a
                 href="#"
-                className="pr-block pr-py-2 pr-text-sm pr-font-medium pr-text-foreground hover:pr-text-primary"
+                className="tw-block tw-py-2 tw-text-sm tw-font-medium tw-text-foreground hover:tw-text-primary"
               >
                 {page.name}
               </a>
@@ -24,7 +24,7 @@ export default function Nav({ pages }: NavProps) {
                 <li>
                   <a
                     href="#"
-                    className="pr-block pr-py-1 pr-text-sm pr-text-muted-foreground hover:pr-text-primary"
+                    className="tw-block tw-py-1 tw-text-sm tw-text-muted-foreground hover:tw-text-primary"
                   >
                     {subpage.name}
                   </a>

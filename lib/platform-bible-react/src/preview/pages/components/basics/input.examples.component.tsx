@@ -45,7 +45,7 @@ export default function InputExamples() {
             BVC Input <div className="tw-text-xs">(from book-chapter-control)</div>
           </td>
           <td>
-            <Input className="tw-box-border tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-border-black tw-bg-white tw-py-2 tw-pl-4 tw-pr-3 tw-font-medium tw-text-slate-900 tw-shadow-none tw-outline-none" />
+            <Input className="tw-tw-3 tw-box-border tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-border-black tw-bg-white tw-py-2 tw-pl-4 tw-font-medium tw-text-slate-900 tw-shadow-none tw-outline-none" />
           </td>
         </tr>
       </tbody>

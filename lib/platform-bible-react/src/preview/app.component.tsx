@@ -5,7 +5,7 @@ import { ThemeProvider } from './preview-components/theme-provider.component';
 function App() {
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
-      <div className="tw-p-2 pr-twp">
+      <div className="pr-twp tw-p-2">
         <OldApp />
         <Docs />
       </div>

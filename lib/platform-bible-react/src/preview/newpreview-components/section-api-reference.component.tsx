@@ -8,13 +8,13 @@ type ApiReferenceSectionProps = PropertiesTableProps & { apiFunctionName: string
 
 function makeHeader(apiFunctionName: string) {
   return (
-    <div className="pr-flex pr-items-center">
+    <div className="tw-flex tw-items-center">
       <div>Api Reference</div>
       <Button size="icon" variant="link">
         <Link
           href={`https://paranext.github.io/paranext-core/platform-bible-react/functions/${apiFunctionName}.html`}
           newTab
-          text={<SquareArrowOutUpRight className="pr-h-5" />}
+          text={<SquareArrowOutUpRight className="tw-h-5" />}
         />
       </Button>
     </div>

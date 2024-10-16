@@ -2,18 +2,18 @@ export type ComponentProperty = { name: string; type: string; default: string; v
 export type PropertiesTableProps = { properties: ComponentProperty[] };
 
 function th(name: string) {
-  return <th className="pr-px-4 pr-py-2 pr-text-left pr-font-thin">{name}</th>;
+  return <th className="tw-px-4 tw-py-2 tw-text-left tw-font-thin">{name}</th>;
 }
 
 function td(value: string) {
-  return <td className="pr-px-4 pr-py-2">{value}</td>;
+  return <td className="tw-px-4 tw-py-2">{value}</td>;
 }
 
 export default function PropertiesTable({ properties }: PropertiesTableProps) {
   return (
-    <table className="pr-w-full pr-border-collapse">
+    <table className="tw-w-full tw-border-collapse">
       <thead>
-        <tr className="pr-border-b">
+        <tr className="tw-border-b">
           {th('Prop')}
           {th('Type')}
           {th('Default')}
@@ -23,7 +23,7 @@ export default function PropertiesTable({ properties }: PropertiesTableProps) {
       <tbody>
         {properties.map((property: ComponentProperty) => {
           return (
-            <tr className="pr-border-b">
+            <tr className="tw-border-b">
               {td(property.name)}
               {td(property.type)}
               {td(property.default)}

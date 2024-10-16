@@ -11,9 +11,9 @@ type ExampleProps = {
 
 export default function Example({ title, code, component }: ExampleProps) {
   return (
-    <Tabs defaultValue="preview" className="pr-w-full">
-      <div className="pr-flex pr-justify-between">
-        <h3 className="pr-mb-2 pr-text-lg pr-font-medium">{title}</h3>
+    <Tabs defaultValue="preview" className="tw-w-full">
+      <div className="tw-flex tw-justify-between">
+        <h3 className="tw-mb-2 tw-text-lg tw-font-medium">{title}</h3>
         <TabsList>
           <TabsTrigger value="preview">Preview</TabsTrigger>
           <TabsTrigger value="code">Code</TabsTrigger>

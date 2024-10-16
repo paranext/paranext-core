@@ -87,7 +87,7 @@ export default function SliderDocs() {
             description="Use this component for ... TBD"
             content={
               <>
-                <div className="pr-grid pr-grid-cols-2 pr-gap-4">
+                <div className="tw-grid tw-grid-cols-2 tw-gap-4">
                   <UsagePattern
                     good
                     componentExample={<Slider defaultValue={[50]} max={100} step={1} />}
@@ -97,9 +97,9 @@ export default function SliderDocs() {
                     good={false}
                     componentExample={
                       <>
-                        <Slider defaultValue={[25]} max={100} step={1} className="pr-w-1/3" />
-                        <Slider defaultValue={[50]} max={100} step={1} className="pr-w-1/3" />
-                        <Slider defaultValue={[75]} max={100} step={1} className="pr-w-1/3" />
+                        <Slider defaultValue={[25]} max={100} step={1} className="tw-w-1/3" />
+                        <Slider defaultValue={[50]} max={100} step={1} className="tw-w-1/3" />
+                        <Slider defaultValue={[75]} max={100} step={1} className="tw-w-1/3" />
                       </>
                     }
                     text="Don't use multiple Sliders for related values. Consider using a single range
@@ -107,8 +107,8 @@ export default function SliderDocs() {
                   />
                 </div>
                 <br />
-                <h3 className="pr-pb-2 pr-font-thin">Markdown</h3>
-                <div className="pr-rounded-md pr-border pr-bg-background pr-p-4">
+                <h3 className="tw-pb-2 tw-font-thin">Markdown</h3>
+                <div className="tw-rounded-md tw-border tw-bg-background tw-p-4">
                   <MarkdownRenderer markdown={markdown} />
                 </div>
               </>
@@ -138,7 +138,7 @@ export default function SliderExample() {
             id="examples"
             header="Examples"
             content={
-              <div className="pr-space-y-6">
+              <div className="tw-space-y-6">
                 <Example
                   title="Default"
                   code="<Slider defaultValue={[50]} max={100} step={1} />"
