@@ -2,6 +2,7 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import { useMemo } from 'react';
 import PackageInfo from '../../../release/app/package.json';
 
 export const TAB_TYPE_ABOUT = 'about';
@@ -19,7 +20,7 @@ export default function AboutPanel() {
       '%about_versionLabel_format%': versionLabelFormat,
       '%about_licenseLabel_format%': licenseLabelFormat,
     },
-  ] = useLocalizedStrings(STRING_KEYS);
+  ] = useLocalizedStrings(useMemo(() => STRING_KEYS, []));
 
   // logger.info());
 

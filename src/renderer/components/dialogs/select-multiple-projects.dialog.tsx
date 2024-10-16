@@ -7,7 +7,7 @@ import ProjectList, {
 } from '@renderer/components/projects/project-list.component';
 import '@renderer/components/dialogs/select-multiple-projects.dialog.scss';
 import projectLookupService from '@shared/services/project-lookup.service';
-import { Button, usePromise } from 'platform-bible-react';
+import { Button, LocalizeKey, usePromise } from 'platform-bible-react';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
@@ -103,12 +103,14 @@ function SelectMultipleProjectsDialog({
   );
 }
 
+const localizeSelectProjectsKey: LocalizeKey = '%selectMultipleProjects_title_selectProjects%';
+
 const SELECT_MULTIPLE_PROJECTS_DIALOG: DialogDefinition<
   typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE
 > = Object.freeze({
   ...DIALOG_BASE,
   tabType: SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE,
-  defaultTitle: 'Select Projects',
+  defaultTitle: localizeSelectProjectsKey,
   initialSize: {
     width: 500,
     height: 350,

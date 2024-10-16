@@ -19,8 +19,8 @@ const startingDoc = {
   },
   defaultWebViewTopMenu: {
     columns: {
-      'platform.project': { label: '%webView_Project%', order: 1 },
-      'platform.edit': { label: '%webView_Edit%', order: 2, isExtensible: true },
+      'platform.project': { label: '%webView_menuItemName_project%', order: 1 },
+      'platform.edit': { label: '%webView_menuItemName_edit%', order: 2, isExtensible: true },
     },
     groups: {
       'platform.projectTop': { column: 'platform.project', order: 1 },
@@ -54,14 +54,14 @@ const startingDoc = {
     },
     items: [
       {
-        label: '%insertNote%',
+        label: '%general_insertNote%',
         localizeNotes: 'Web view context menu > Insert note...',
         group: 'platform.insert',
         order: 1,
         command: 'platform.insertNote',
       },
       {
-        label: '%wordList%',
+        label: '%menuItemName_wordList%',
         localizeNotes: 'Web view context menu > Word list...',
         group: 'platform.wordList',
         order: 1,
@@ -284,8 +284,8 @@ const expectedOutput = {
   },
   defaultWebViewTopMenu: {
     columns: {
-      'platform.project': { label: '%webView_Project%', order: 1 },
-      'platform.edit': { label: '%webView_Edit%', order: 2, isExtensible: true },
+      'platform.project': { label: '%webView_menuItemName_project%', order: 1 },
+      'platform.edit': { label: '%webView_menuItemName_edit%', order: 2, isExtensible: true },
     },
     groups: {
       'platform.projectTop': { column: 'platform.project', order: 1 },
@@ -319,14 +319,14 @@ const expectedOutput = {
     },
     items: [
       {
-        label: '%insertNote%',
+        label: '%general_insertNote%',
         localizeNotes: 'Web view context menu > Insert note...',
         group: 'platform.insert',
         order: 1,
         command: 'platform.insertNote',
       },
       {
-        label: '%wordList%',
+        label: '%menuItemName_wordList%',
         localizeNotes: 'Web view context menu > Word list...',
         group: 'platform.wordList',
         order: 1,

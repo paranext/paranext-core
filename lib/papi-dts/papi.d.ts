@@ -57,7 +57,7 @@ declare module 'shared/services/scroll-group.service-model' {
 }
 declare module 'shared/models/web-view.model' {
   import type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+  import { ScriptureReference, ScrollGroupId, LocalizeKey } from 'platform-bible-utils';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -92,8 +92,11 @@ declare module 'shared/models/web-view.model' {
      * Defaults to the software's standard logo.
      */
     iconUrl?: string;
-    /** Name of the tab for the WebView */
-    title?: string;
+    /**
+     * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
+     * WebView
+     */
+    title?: string | LocalizeKey;
     /** Tooltip that is shown when hovering over the webview title */
     tooltip?: string;
     /**
@@ -2998,6 +3001,7 @@ declare module 'shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
   import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
   import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
+  import { LocalizeKey } from 'platform-bible-utils';
   /**
    * Saved information used to recreate a tab.
    *
@@ -3028,8 +3032,11 @@ declare module 'shared/models/docking-framework.model' {
      * Defaults to the software's standard logo.
      */
     tabIconUrl?: string;
-    /** Text to show on the title bar of the tab */
-    tabTitle: string;
+    /**
+     * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
+     * tab
+     */
+    tabTitle: string | LocalizeKey;
     /** Text to show when hovering over the title bar of the tab */
     tabTooltip?: string;
     /** Content to show inside the tab. */

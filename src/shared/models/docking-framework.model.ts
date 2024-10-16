@@ -1,6 +1,7 @@
 import { MutableRefObject, ReactNode } from 'react';
 import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
+import { LocalizeKey } from 'platform-bible-utils';
 
 /**
  * Saved information used to recreate a tab.
@@ -33,8 +34,11 @@ export type TabInfo = SavedTabInfo & {
    * Defaults to the software's standard logo.
    */
   tabIconUrl?: string;
-  /** Text to show on the title bar of the tab */
-  tabTitle: string;
+  /**
+   * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
+   * tab
+   */
+  tabTitle: string | LocalizeKey;
   /** Text to show when hovering over the title bar of the tab */
   tabTooltip?: string;
   /** Content to show inside the tab. */
