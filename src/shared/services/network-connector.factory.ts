@@ -4,7 +4,7 @@
  */
 
 import { isClient } from '@shared/utils/internal-util';
-import INetworkConnector from '@shared/services/network-connector.interface';
+import INetworkProtocolHandler from '@shared/services/network-protocol-handler.interface';
 
 /**
  * Creates a NetworkConnector for the client or the server depending on where you're running
@@ -12,14 +12,13 @@ import INetworkConnector from '@shared/services/network-connector.interface';
  * @returns NetworkConnector
  */
 // eslint-disable-next-line import/prefer-default-export
-export const createNetworkConnector = async (): Promise<INetworkConnector> => {
+export const createProtocolHandler = async (): Promise<INetworkProtocolHandler> => {
   if (isClient()) {
-    const ClientNetworkConnector = (
-      await import('@client/services/client-network-connector.service')
+    const ClientProtocolHandler = (
+      await import('@client/services/client-websocket-protocol-handler')
     ).default;
-    return new ClientNetworkConnector();
+    return new ClientProtocolHandler();
   }
-  const ServerNetworkConnector = (await import('@main/services/server-network-connector.service'))
-    .default;
-  return new ServerNetworkConnector();
+  const ServerProtocolHandler = (await import('@main/services/server-websocket-listener')).default;
+  return new ServerProtocolHandler();
 };
