@@ -10,6 +10,13 @@
         "group": "platform.projectProjects",
         "order": 1005,
         "command": "platformScripture.toggleIncludeMyParatext9Projects"
+      },
+      {
+        "label": "%mainMenu_openParatextRegistration%",
+        "localizeNotes": "Application main menu > Help > Paratext Registration Information...",
+        "group": "platform.helpRegistration",
+        "order": 1006,
+        "command": "platformScripture.showParatextRegistration"
       }
     ]
   },
