@@ -49,3 +49,7 @@ export default function ButtonExample() {
 ### Now to the real usage pattern components
 
 #### Button combinations
+
+here is where the <code>.md file</code> ends.
+
+<hr/>
