@@ -91,6 +91,12 @@ declare module 'platform-scripture' {
     VersePlainText: DataProviderDataType<VerseRef, string | undefined, string>;
   };
 
+  /** Provides information about markers */
+  export type MarkerNamesProjectInterfaceDataTypes = {
+    /** Gets an array of string that contain information about markers */
+    MarkerNames: DataProviderDataType<string[], string, string>;
+  };
+
   /**
    * Provides project data for Scripture projects.
    *
@@ -458,6 +464,32 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
     };
 
+  /** Provides a string array that contains information about the markers used in this project */
+  export type IMarkerNamesProjectDataProvider =
+    IProjectDataProvider<MarkerNamesProjectInterfaceDataTypes> & {
+      /**
+       * Gets marker info for the default stylesheet
+       *
+       * @todo Add support for getting marker info from custom stylesheets
+       */
+      getMarkerNames(bookNum: number): Promise<string[] | undefined>;
+      /** Setting is not supported for now */
+      setMarkerNames(bookNum: number): Promise<void>;
+      /**
+       * Subscribe to run a callback function when marker info changed
+       *
+       * @param bookNum Tells the provider what changes to listen for
+       * @param callback Function to run with the updated marker info for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscriberMarkerNames(
+        bookNum: number,
+        callback: (markerNames: string[] | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
   // #endregion
 
   // #region Check Data Types
@@ -672,6 +704,7 @@ declare module 'papi-shared-types' {
     IUSJChapterProjectDataProvider,
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
+    IMarkerNamesProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     CheckDetails,
@@ -689,6 +722,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Chapter': IUSJChapterProjectDataProvider;
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
+    'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
   }
 
   export interface DataProviders {
@@ -730,6 +764,10 @@ declare module 'papi-shared-types' {
     ) => Promise<string | undefined>;
 
     'platformScripture.openRepeatedWordsInventory': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    'platformScripture.openMarkersInventory': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
@@ -779,5 +817,9 @@ declare module 'papi-shared-types' {
     'platformScripture.repeatableWords': string;
 
     'platformScripture.nonRepeatableWords': string;
+
+    'platformScripture.validMarkers': string;
+
+    'platformScripture.invalidMarkers': string;
   }
 }

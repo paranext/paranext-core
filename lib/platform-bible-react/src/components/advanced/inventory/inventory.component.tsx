@@ -1,4 +1,4 @@
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { LocalizedStringValue, ScriptureReference } from 'platform-bible-utils';
 import { Input } from '@/components/shadcn-ui/input';
 import {
@@ -11,11 +11,19 @@ import {
 import DataTable, {
   ColumnDef,
   RowContents,
-  SortDirection,
   TableContents,
 } from '@/components/advanced/data-table/data-table.component';
 import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
-import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
+import Checkbox from '@/components/shadcn-ui/checkbox';
+import { Label } from '@/components/shadcn-ui/label';
+import { inventoryRelatedItemColumn } from './inventory-columns';
+import {
+  createTableData,
+  InventoryItem,
+  InventoryTableData,
+  Scope,
+  StatusFilter,
+} from './inventory-utils';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -39,39 +47,10 @@ export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
-export type Scope = 'book' | 'chapter' | 'verse';
-
-export type Status = 'approved' | 'unapproved' | 'unknown';
-
-export type StatusFilter = Status | 'all';
-
-export type ItemData = {
-  item: string;
-  count: number;
-  status: Status;
-};
-
-/**
- * Gets an icon that indicates the current sorting direction based on the provided input
- *
- * @param sortDirection Sorting direction. Can be ascending ('asc'), descending ('desc') or false (
- *   i.e. not sorted)
- * @returns The appropriate sorting icon for the provided sorting direction
- */
-export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
-  if (sortDirection === 'asc') {
-    return <ArrowUpIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
-  }
-  if (sortDirection === 'desc') {
-    return <ArrowDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
-  }
-  return <ArrowUpDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
-};
-
 /**
  * Filters data that is shown in the DataTable section of the inventory
  *
- * @param items All items and their related information
+ * @param itemData All items and their related information
  * @param statusFilter Allows filtering by status (i.e. show all items, or only items that are
  *   'approved', 'unapproved' or 'unknown')
  * @param textFilter Allows filtering by text. All items that include the filter text will be
@@ -79,11 +58,11 @@ export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode 
  * @returns Array of items and their related information that are matched by the specified filters
  */
 const filterItemData = (
-  items: ItemData[],
+  itemData: InventoryTableData[],
   statusFilter: StatusFilter,
   textFilter: string,
-): ItemData[] => {
-  let filteredItemData: ItemData[] = items;
+): InventoryTableData[] => {
+  let filteredItemData: InventoryTableData[] = itemData;
 
   if (statusFilter !== 'all') {
     filteredItemData = filteredItemData.filter(
@@ -100,52 +79,6 @@ const filterItemData = (
   return filteredItemData;
 };
 
-/**
- * Turns scripture text into array of inventory items, along with their count and status
- *
- * @param text Scripture text from which the inventory items are extracted
- * @param getInventoryItems Function that provides logic for extracting inventory items from text
- * @param getStatusForItem Function that gets status for inventory item from related project
- *   settings
- * @returns Array of inventory items, along with their count and status
- */
-const convertTextToItemData = (
-  text: string,
-  getInventoryItems: (text: string) => string[],
-  getStatusForItem: (item: string) => Status,
-): ItemData[] => {
-  const itemData: ItemData[] = [];
-
-  const items: string[] = getInventoryItems(text);
-
-  for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-    const item = items[itemIndex];
-    const existingItem = itemData.find((entry) => {
-      return entry.item === item;
-    });
-    if (existingItem) {
-      existingItem.count += 1;
-    } else {
-      const newItem: ItemData = {
-        item,
-        count: 1,
-        status: getStatusForItem(item),
-      };
-      itemData.push(newItem);
-    }
-  }
-
-  return itemData;
-};
-
-/**
- * Gets the localized value for the provided key
- *
- * @param strings Object containing localized string
- * @param key Key for a localized string
- * @returns The localized value for the provided key, if available. Returns the key if no localized
- *   value is available
- */
 const localizeString = (
   strings: InventoryLocalizedStrings,
   key: keyof InventoryLocalizedStrings,
@@ -157,17 +90,15 @@ type InventoryProps = {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: InventoryLocalizedStrings;
-  extractItems: (text: string, item?: string | undefined) => string[];
+  showRelatedItemsButtonText?: string;
+  showRelatedItemsTableHeader?: string;
+  extractItems: (text: string) => InventoryItem[];
   approvedItems: string[];
-  onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
-  onUnapprovedItemsChange: (items: string[]) => void;
   text: string | undefined;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
-  getColumns: (
-    onStatusChange: (newItems: string[], status: Status) => void,
-  ) => ColumnDef<ItemData>[];
+  columns: ColumnDef<InventoryTableData>[];
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -175,15 +106,15 @@ export default function Inventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,
+  showRelatedItemsButtonText,
+  showRelatedItemsTableHeader,
   extractItems,
   approvedItems,
-  onApprovedItemsChange,
   unapprovedItems,
-  onUnapprovedItemsChange,
   text,
   scope,
   onScopeChange,
-  getColumns,
+  columns,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -194,84 +125,52 @@ export default function Inventory({
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
 
-  const [items, setItems] = useState<ItemData[]>([]);
+  const [showRelatedItems, setShowRelatedItems] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
-  const [selectedItem, setSelectedItem] = useState<string>('');
+  const [selectedItem, setSelectedItem] = useState<InventoryItem>({ item: '' });
 
-  const statusChangeHandler = useCallback(
-    (changedItems: string[], status: Status) => {
-      setItems((prevTableData) => {
-        let tableData: ItemData[] = [];
-        changedItems.forEach((item) => {
-          tableData = prevTableData.map((tableEntry) => {
-            if (tableEntry.item === item && tableEntry.status !== status)
-              return { ...tableEntry, status };
-            return tableEntry;
-          });
-        });
-        return tableData;
-      });
+  const tableData: InventoryTableData[] = useMemo(() => {
+    if (!text) return [];
+    return createTableData(
+      text,
+      scriptureReference,
+      approvedItems,
+      unapprovedItems,
+      extractItems,
+      showRelatedItems,
+    );
+  }, [text, scriptureReference, approvedItems, unapprovedItems, extractItems, showRelatedItems]);
 
-      let newApprovedItems: string[] = [...approvedItems];
-      changedItems.forEach((item) => {
-        if (status === 'approved') {
-          if (!newApprovedItems.includes(item)) {
-            newApprovedItems.push(item);
-          }
-        } else {
-          newApprovedItems = newApprovedItems.filter((validItem) => validItem !== item);
-        }
-      });
-      onApprovedItemsChange(newApprovedItems);
+  const showRelatedItemsControl: boolean = useMemo(() => {
+    return tableData.some((tableEntry: InventoryTableData) => tableEntry.relatedItem !== undefined);
+  }, [tableData]);
 
-      let newUnapprovedItems: string[] = [...unapprovedItems];
-      changedItems.forEach((item) => {
-        if (status === 'unapproved') {
-          if (!newUnapprovedItems.includes(item)) {
-            newUnapprovedItems.push(item);
-          }
-        } else {
-          newUnapprovedItems = newUnapprovedItems.filter(
-            (unapprovedItem) => unapprovedItem !== item,
-          );
-        }
-      });
-      onUnapprovedItemsChange(newUnapprovedItems);
-    },
-    [approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange],
-  );
+  const allColumns: ColumnDef<InventoryTableData>[] = useMemo(() => {
+    if (!showRelatedItems) return columns;
+    return [inventoryRelatedItemColumn(showRelatedItemsTableHeader ?? 'Related Item'), ...columns];
+  }, [columns, showRelatedItems, showRelatedItemsTableHeader]);
 
-  const getStatusForItem = useCallback(
-    (item: string): Status => {
-      if (approvedItems.includes(item)) return 'approved';
-      if (unapprovedItems.includes(item)) return 'unapproved';
-      return 'unknown';
-    },
-    [approvedItems, unapprovedItems],
-  );
+  const filteredTableData = useMemo(() => {
+    return filterItemData(tableData, statusFilter, textFilter);
+  }, [tableData, statusFilter, textFilter]);
 
   useEffect(() => {
-    if (!text) return;
-    setItems(convertTextToItemData(text, extractItems, getStatusForItem));
-  }, [extractItems, text, getStatusForItem]);
+    setSelectedItem({ item: '' });
+  }, [filteredTableData]);
 
-  const filteredItemData = useMemo(() => {
-    return filterItemData(items, statusFilter, textFilter);
-  }, [items, statusFilter, textFilter]);
-
-  useEffect(() => {
-    setSelectedItem('');
-  }, [filteredItemData]);
-
-  const rowClickHandler = (row: RowContents<ItemData>, table: TableContents<ItemData>) => {
+  const rowClickHandler = (
+    row: RowContents<InventoryTableData>,
+    table: TableContents<InventoryTableData>,
+  ) => {
     table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
     row.toggleSelected(undefined);
 
-    setSelectedItem(row.getValue('item'));
+    setSelectedItem({
+      item: row.getValue('item'),
+      relatedItem: showRelatedItems ? row.getValue('relatedItem') : undefined,
+    });
   };
-
-  const columns = useMemo(() => getColumns(statusChangeHandler), [getColumns, statusChangeHandler]);
 
   const handleScopeChange = (value: string) => {
     if (value === 'book' || value === 'chapter' || value === 'verse') {
@@ -291,7 +190,7 @@ export default function Inventory({
 
   return (
     <div className="pr-twp tw-flex tw-h-full tw-flex-col">
-      <div className="tw-flex">
+      <div className="tw-flex tw-items-stretch">
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
@@ -324,25 +223,34 @@ export default function Inventory({
             setTextFilter(event.target.value);
           }}
         />
+        {showRelatedItemsControl && (
+          <div className="tw-m-1 tw-flex tw-items-center tw-rounded-md tw-border">
+            <Checkbox
+              className="tw-m-1"
+              checked={showRelatedItems}
+              onCheckedChange={(checked: boolean) => setShowRelatedItems(checked)}
+            />
+            <Label className="tw-m-1 tw-flex-shrink-0 tw-whitespace-nowrap">
+              {showRelatedItemsButtonText ?? 'Show Related Items'}
+            </Label>
+          </div>
+        )}
       </div>
       <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
         <DataTable
-          columns={columns}
-          data={filteredItemData}
+          columns={allColumns}
+          data={filteredTableData}
           onRowClickHandler={rowClickHandler}
           stickyHeader
         />
       </div>
-      {selectedItem !== '' && (
+      {selectedItem.item !== '' && (
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
+            tableData={filteredTableData}
             selectedItem={selectedItem}
-            text={text}
-            extractItems={extractItems}
-            scriptureReference={scriptureReference}
-            setScriptureReference={(newScriptureReference) =>
-              setScriptureReference(newScriptureReference)
-            }
+            showRelatedItems={showRelatedItems}
+            setScriptureReference={setScriptureReference}
             localizedStrings={localizedStrings}
           />
         </div>
