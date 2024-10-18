@@ -2,10 +2,14 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
+      "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
+      "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
       "%settings_platformScripture_paratext_group_label%": "Paratext 9-related Settings",
       "%settings_platformScripture_paratext_group_description%": "Settings related to how Platform.Bible should interact with older Paratext installations",
       "%settings_platformScripture_includeMyParatext9Projects_label%": "Include My Paratext 9 Projects",
       "%settings_platformScripture_includeMyParatext9Projects_description%": "Whether to look in the Paratext 9 project storage folder for Paratext projects to load (Windows only). Located at \"C:\\My Paratext 9 Projects\". Note: you must restart Platform.Bible in order for a change in this setting to take effect.",
+      "%platformScripture_webView_paratextRegistration_title%": "Paratext Registration Information",
+      "%platformScripture_webView_paratextRegistration_tooltip%": "Enter your Paratext Registration Information into this form.",
       "%project_settings_platformScripture_group1_label%": "Scripture Project Settings",
       "%project_settings_platformScripture_booksPresent_label%": "Scripture Books Present",
       "%project_settings_platformScripture_booksPresent_description%": "Which books of the Bible are present in this Scripture project",
@@ -19,7 +23,6 @@
       "%project_settings_platformScripture_repeatableWords_description%": "List of words that are allowed to be repeated in this project.",
       "%project_settings_platformScripture_nonRepeatableWords_label%": "Non-repeatable Words",
       "%project_settings_platformScripture_nonRepeatableWords_description%": "List of words that are not allowed to be repeated in this project.",
-      "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
       "%webView_platformScripture_tools%": "Tools",
       "%webView_platformScripture_showCheckResults%": "Show Check Results...",
       "%webView_characterInventory_title%": "Character Inventory",

@@ -740,6 +740,14 @@ declare module 'papi-shared-types' {
     'platformScripture.showCheckResults': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    /**
+     * Show the Paratext Registration window with which the user can connect to the Paratext
+     * Registry
+     */
+    'platformScripture.showParatextRegistration': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
   }
 
   export interface SettingTypes {

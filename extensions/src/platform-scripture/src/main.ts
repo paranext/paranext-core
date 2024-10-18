@@ -15,6 +15,9 @@ import CheckResultsWebViewProvider, {
   checkResultsListWebViewType,
   CheckResultsWebViewOptions,
 } from './checking-results-list.web-view-provider';
+import ParatextRegistrationWebViewProvider, {
+  paratextRegistrationWebViewType,
+} from './paratext-registration.web-view-provider';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -120,6 +123,14 @@ async function showCheckResults(webViewId: string | undefined): Promise<string |
   return papi.webViews.getWebView(checkResultsListWebViewType, { type: 'tab' }, options);
 }
 
+async function showParatextRegistration(): Promise<string | undefined> {
+  return papi.webViews.getWebView(
+    paratextRegistrationWebViewType,
+    { type: 'float', position: 'center', floatSize: { width: 540, height: 410 } },
+    { existingId: '?' },
+  );
+}
+
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
 
@@ -142,6 +153,7 @@ export async function activate(context: ExecutionActivationContext) {
   const configureChecksWebViewProvider = new ConfigureChecksWebViewProvider(
     '%webView_configureChecks_title%',
   );
+  const paratextRegistrationWebViewProvider = new ParatextRegistrationWebViewProvider();
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
@@ -215,6 +227,14 @@ export async function activate(context: ExecutionActivationContext) {
     checkResultsListWebViewType,
     checkResultsWebViewProvider,
   );
+  const showParatextRegistrationPromise = papi.commands.registerCommand(
+    'platformScripture.showParatextRegistration',
+    showParatextRegistration,
+  );
+  const showParatextRegistrationWebViewProviderPromise = papi.webViewProviders.register(
+    paratextRegistrationWebViewType,
+    paratextRegistrationWebViewProvider,
+  );
 
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
@@ -237,6 +257,8 @@ export async function activate(context: ExecutionActivationContext) {
     await configureChecksWebViewProviderPromise,
     await showCheckResultsPromise,
     await showCheckResultsWebViewProviderPromise,
+    await showParatextRegistrationPromise,
+    await showParatextRegistrationWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
