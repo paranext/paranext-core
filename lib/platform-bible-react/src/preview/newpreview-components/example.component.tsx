@@ -4,7 +4,7 @@ import CodePreview from './code-preview.component';
 import ComponentPreview from './component-preview.component';
 
 type ExampleProps = {
-  title: string;
+  title: string | ReactHTMLElement;
   code: string;
   component: ReactHTMLElement;
 };

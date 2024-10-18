@@ -1,7 +1,7 @@
 import { cn } from '@/utils/shadcn-ui.util';
 import { ReactHTMLElement } from 'react';
 
-type LinkProps = { href: string; text: ReactHTMLElement; newTab: boolean; className?: string };
+type LinkProps = { href: string; text: ReactHTMLElement; newTab?: boolean; className?: string };
 
 export default function Link({ href, text, newTab, className }: LinkProps) {
   return (

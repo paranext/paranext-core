@@ -1,7 +1,9 @@
+import MarkdownRenderer from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Button } from '@/components/shadcn-ui/button';
 import CodePreview from '@/preview/newpreview-components/code-preview.component';
 import DocsPage from '@/preview/newpreview-components/docs-page.component';
 import Example from '@/preview/newpreview-components/example.component';
+import Link from '@/preview/newpreview-components/link.component';
 import { ComponentProperty } from '@/preview/newpreview-components/properties-table.component';
 import { NavEntry } from '@/preview/newpreview-components/quicknav.component';
 import ApiReferenceSection from '@/preview/newpreview-components/section-api-reference.component';
@@ -9,6 +11,11 @@ import IntroSection from '@/preview/newpreview-components/section-intro.componen
 import Section, { SectionApi } from '@/preview/newpreview-components/section.component';
 import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
 import { ChevronsDownUp } from 'lucide-react';
+import UsagePattern from '@/preview/newpreview-components/usage-pattern.component';
+import Code from '@/preview/newpreview-components/code.component';
+import markdown from './button.docs.md?raw';
+
+// alternative md import: https://github.com/priority3/vite-plugin-react-markdown
 
 const uxApprovalList: UsabilityChecks = {
   rtl_ready: 'needed',
@@ -53,7 +60,17 @@ export default function ButtonDocs() {
             id="intro"
             header="Button"
             githubComponentUrlPart="shadcn-ui/button.tsx"
-            description="TBD"
+            description={
+              <>
+                This component is based on the{' '}
+                <Link
+                  newTab
+                  href="https://ui.shadcn.com/docs/components/button"
+                  text="shadcn button"
+                />{' '}
+                component
+              </>
+            }
             content={<Button>Hello World</Button>}
             usabilityChecks={uxApprovalList}
           />
@@ -61,7 +78,79 @@ export default function ButtonDocs() {
           <Section
             id="best-practices"
             header="Best Practices"
-            description="Use this component for ... TBD"
+            description={
+              <>
+                <MarkdownRenderer markdown={markdown} />
+                <div className="tw-grid tw-grid-cols-3 tw-gap-4">
+                  <UsagePattern
+                    good={false}
+                    text="Not using primary color for the primary action"
+                    componentExample={
+                      <div className="tw-flex tw-gap-2">
+                        <Button>Cancel</Button>
+                        <Button variant="secondary">OK</Button>
+                      </div>
+                    }
+                  />
+                  <UsagePattern
+                    good={false}
+                    text="Not using the correct order of buttons"
+                    componentExample={
+                      <div className="tw-flex tw-gap-2">
+                        <Button>OK</Button>
+                        <Button variant="secondary">Cancel</Button>
+                      </div>
+                    }
+                  />
+                  <UsagePattern
+                    good
+                    text="Correct use of order and variants"
+                    componentExample={
+                      <div className="tw-flex tw-gap-2">
+                        <Button variant="secondary">Cancel</Button>
+                        <Button>OK</Button>
+                      </div>
+                    }
+                  />
+                </div>
+                <MarkdownRenderer
+                  markdown={`#### Button spacing
+Also see <a href="#">Spacing</a>`}
+                />
+                <div className="tw-grid tw-grid-cols-3 tw-gap-4">
+                  <UsagePattern
+                    good={false}
+                    text="No spacing"
+                    componentExample={
+                      <div className="tw-flex">
+                        <Button variant="secondary">Cancel</Button>
+                        <Button>OK</Button>
+                      </div>
+                    }
+                  />
+                  <UsagePattern
+                    good={false}
+                    text="Too wide spacing"
+                    componentExample={
+                      <div className="tw-flex tw-gap-4">
+                        <Button variant="secondary">Cancel</Button>
+                        <Button>OK</Button>
+                      </div>
+                    }
+                  />
+                  <UsagePattern
+                    good
+                    text={<MarkdownRenderer markdown="Good spacing: `tw-gap-2`" />}
+                    componentExample={
+                      <div className="tw-flex tw-gap-2">
+                        <Button variant="secondary">Cancel</Button>
+                        <Button>OK</Button>
+                      </div>
+                    }
+                  />
+                </div>
+              </>
+            }
             api={bestPracticesSectionApi}
           />
 
@@ -154,7 +243,15 @@ export default function ButtonExample() {
                 />
 
                 <Example
-                  title="Smaller icon button with tw-h-8 on the button and tw-h-4 on the icon"
+                  title={
+                    <div className="tw-flex tw-gap-1">
+                      <span>Smaller icon button with</span>
+                      <Code>tw-h-8</Code>
+                      <span>on the button and</span>
+                      <Code>tw-h-4</Code>
+                      <span>on the icon</span>
+                    </div>
+                  }
                   code={`<Button
   size="icon"
   variant="secondary"

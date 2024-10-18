@@ -20,8 +20,11 @@ function copyToClipboard(code: string) {
 export default function CodePreview({ code }: CodePreviewProps) {
   return (
     <>
-      <pre className="tw-relative tw-rounded-md tw-bg-muted tw-p-4 tw-text-sm">
-        <code>{code}</code>
+      <div className="tw-relative tw-rounded-md tw-bg-muted tw-p-4 tw-text-sm">
+        {/* Alternative in markdown style: <div className="tw-prose tw-relative"> */}
+        <pre>
+          <code>{code}</code>
+        </pre>
         <Button
           variant="link"
           size="icon"
@@ -31,7 +34,7 @@ export default function CodePreview({ code }: CodePreviewProps) {
         >
           <Copy className="tw-h-4" />
         </Button>
-      </pre>
+      </div>
       <Sonner />
     </>
   );

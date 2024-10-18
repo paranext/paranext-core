@@ -12,7 +12,7 @@ export type SectionApi = { updateIsOpen?: (open: boolean) => void };
 export type SectionProps = {
   id: string;
   header: string | ReactHTMLElement;
-  description?: string;
+  description?: string | ReactHTMLElement;
   content?: ReactHTMLElement;
 };
 export type SectionPropsWithApi = SectionProps & {

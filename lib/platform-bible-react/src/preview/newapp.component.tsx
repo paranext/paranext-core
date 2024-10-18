@@ -71,8 +71,8 @@ export default function Docs() {
           </div>
         </header>
         <div className="tw-flex tw-bg-muted/20">
-          <Slider2Docs />
-          {/* <ButtonDocs /> */}
+          {/* <Slider2Docs /> */}
+          <ButtonDocs />
           {/* <NavigationContentSearchDocs direction={direction} /> */}
         </div>
       </div>

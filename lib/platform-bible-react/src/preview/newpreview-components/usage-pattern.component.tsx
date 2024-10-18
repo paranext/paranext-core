@@ -1,11 +1,21 @@
+import { cn } from '@/utils/shadcn-ui.util';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { ReactHTMLElement } from 'react';
 
-type CodePreviewProps = { good: boolean; componentExample: ReactHTMLElement; text: string };
+type CodePreviewProps = {
+  good: boolean;
+  componentExample: ReactHTMLElement;
+  text: string | ReactHTMLElement;
+};
 
 export default function UsagePattern({ good, componentExample, text }: CodePreviewProps) {
   return (
-    <div className="tw-rounded-md tw-border tw-bg-background tw-p-4">
+    <div
+      className={cn(
+        'tw-rounded-md tw-border tw-bg-background tw-p-4',
+        good ? 'tw-border-green-500' : '',
+      )}
+    >
       <div className="tw-mb-2 tw-flex tw-items-center">
         {good ? (
           <CheckCircle2 className="tw-mr-2 tw-h-5 tw-w-5 tw-text-green-500" />
