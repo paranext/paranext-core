@@ -13,7 +13,7 @@ export default function UsagePattern({ good, componentExample, text }: CodePrevi
     <div
       className={cn(
         'tw-rounded-md tw-border tw-bg-background tw-p-4',
-        good ? 'tw-border-green-500' : '',
+        good ? 'tw-border-primary' : '',
       )}
     >
       <div className="tw-mb-2 tw-flex tw-items-center">

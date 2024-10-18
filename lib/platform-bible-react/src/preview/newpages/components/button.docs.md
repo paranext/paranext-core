@@ -9,13 +9,21 @@ Use the default button sizes. For small icon buttons use <code>tw-h-8</code> on 
 The primary button should always be the last button (right in a ltr layout), all other buttons should be secondary buttons.
 
 <div>
-  <span>Good</span>
+  <div className="tw-flex tw-items-center tw-gap-2 tw-py-2">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-check tw-text-green-500"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></svg>
+    <span>Good Usage</span>
+  </div>
+  <div>the following is a placeholder...</div>
   <div className="tw-bg-green-500 tw-p-2 tw-h-24">
     <iframe className="tw-border tw-w-[100%] tw-h-20" src="http://localhost:5173/" />
   </div>
 </div>
 <div>
-  <span>Bad</span>
+  <div className="tw-flex tw-items-center tw-gap-2 tw-py-2">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-x tw-text-red-500"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+    <span>Bad Usage</span>
+  </div>
+  <div>the following is a placeholder...</div>
   <div className="tw-bg-red-500 tw-p-2 tw-h-24">
     <iframe className="tw-border tw-w-[100%] tw-h-20" src="http://localhost:5173/" />
   </div>

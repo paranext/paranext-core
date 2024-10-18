@@ -83,6 +83,16 @@ export default function ButtonDocs() {
                 <MarkdownRenderer markdown={markdown} />
                 <div className="tw-grid tw-grid-cols-3 tw-gap-4">
                   <UsagePattern
+                    good
+                    text="Correct use of order and variants"
+                    componentExample={
+                      <div className="tw-flex tw-gap-2">
+                        <Button variant="secondary">Cancel</Button>
+                        <Button>OK</Button>
+                      </div>
+                    }
+                  />
+                  <UsagePattern
                     good={false}
                     text="Not using primary color for the primary action"
                     componentExample={
@@ -102,9 +112,15 @@ export default function ButtonDocs() {
                       </div>
                     }
                   />
+                </div>
+                <MarkdownRenderer
+                  markdown={`#### Button spacing
+Also see <a href="#">Spacing</a>`}
+                />
+                <div className="tw-grid tw-grid-cols-3 tw-gap-4">
                   <UsagePattern
                     good
-                    text="Correct use of order and variants"
+                    text={<MarkdownRenderer markdown="Good spacing: `tw-gap-2`" />}
                     componentExample={
                       <div className="tw-flex tw-gap-2">
                         <Button variant="secondary">Cancel</Button>
@@ -112,12 +128,6 @@ export default function ButtonDocs() {
                       </div>
                     }
                   />
-                </div>
-                <MarkdownRenderer
-                  markdown={`#### Button spacing
-Also see <a href="#">Spacing</a>`}
-                />
-                <div className="tw-grid tw-grid-cols-3 tw-gap-4">
                   <UsagePattern
                     good={false}
                     text="No spacing"
@@ -133,16 +143,6 @@ Also see <a href="#">Spacing</a>`}
                     text="Too wide spacing"
                     componentExample={
                       <div className="tw-flex tw-gap-4">
-                        <Button variant="secondary">Cancel</Button>
-                        <Button>OK</Button>
-                      </div>
-                    }
-                  />
-                  <UsagePattern
-                    good
-                    text={<MarkdownRenderer markdown="Good spacing: `tw-gap-2`" />}
-                    componentExample={
-                      <div className="tw-flex tw-gap-2">
                         <Button variant="secondary">Cancel</Button>
                         <Button>OK</Button>
                       </div>
