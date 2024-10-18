@@ -1,8 +1,8 @@
 import MarkdownRenderer from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Slider } from '@/components/shadcn-ui/slider';
 import CodePreview from '@/preview/newpreview-components/code-preview.component';
-import DocsPage from '@/preview/newpreview-components/docs-page';
-import Example from '@/preview/newpreview-components/example';
+import DocsPage from '@/preview/newpreview-components/docs-page.component';
+import Example from '@/preview/newpreview-components/example.component';
 import { ComponentProperty } from '@/preview/newpreview-components/properties-table.component';
 import { NavEntry } from '@/preview/newpreview-components/quicknav.component';
 import ApiReferenceSection from '@/preview/newpreview-components/section-api-reference.component';
@@ -117,7 +117,7 @@ export default function SliderDocs() {
             description="To use the Slider component, import it and pass the necessary props."
             content={
               <CodePreview
-                code={`import { Slider } from "@/components/ui/slider"
+                code={`import { Slider } from '@/components/shadcn-ui/slider';"
 
 export default function SliderExample() {
   return (

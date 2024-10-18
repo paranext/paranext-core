@@ -8,6 +8,9 @@ import ContactButtons2 from './newpreview-components/contact-buttons.component';
 import Nav, { Page } from './newpreview-components/nav.component';
 import { Direction, DirToggle } from './preview-components/direction-toggle.component';
 import { ThemeButton } from './preview-components/theme-toggle.component';
+import NavigationContentSearchDocs from './newpages/components/navigation-content-search.docs.component';
+import ButtonDocs from './newpages/components/button.docs.component';
+import Slider2Docs from './newpages/components/slider2.docs.component';
 
 function makePageObject(page: string) {
   return {
@@ -68,7 +71,7 @@ export default function Docs() {
           </div>
         </header>
         <div className="tw-flex tw-bg-muted/20">
-          <SliderDocs />
+          <Slider2Docs />
           {/* <ButtonDocs /> */}
           {/* <NavigationContentSearchDocs direction={direction} /> */}
         </div>

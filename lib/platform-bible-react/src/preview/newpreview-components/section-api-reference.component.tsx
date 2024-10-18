@@ -1,6 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { SquareArrowOutUpRight } from 'lucide-react';
-import Link from './link';
+import Link from './link.component';
 import PropertiesTable, { PropertiesTableProps } from './properties-table.component';
 import Section, { SectionApi } from './section.component';
 

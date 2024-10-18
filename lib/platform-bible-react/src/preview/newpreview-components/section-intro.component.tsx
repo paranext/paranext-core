@@ -1,6 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { SquareArrowOutUpRight } from 'lucide-react';
-import Link from './link';
+import Link from './link.component';
 import { SectionProps } from './section.component';
 import UxApproval, { UsabilityChecks } from './ux-approval.component';
 import ComponentPreview from './component-preview.component';

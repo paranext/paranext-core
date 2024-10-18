@@ -6,7 +6,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { BadgeCheck, ChevronDown, CircleDashed } from 'lucide-react';
 import { useState } from 'react';
 import UxButtons from './ux-buttons';
-import Link from './link';
+import Link from './link.component';
 
 export type UxState = 'needed' | 'done' | 'needs rework' | 'not applicable';
 export type UsabilityChecks = {

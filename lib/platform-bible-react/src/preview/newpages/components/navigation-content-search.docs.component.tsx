@@ -1,13 +1,11 @@
 import NavigationContentSearch from '@/components/advanced/navigation-content-search.component';
 import CodePreview from '@/preview/newpreview-components/code-preview.component';
-import DocsPage, { DocsPageProps } from '@/preview/newpreview-components/docs-page';
-import PropertiesTable, {
-  ComponentProperty,
-} from '@/preview/newpreview-components/properties-table.component';
+import DocsPage, { DocsPageProps } from '@/preview/newpreview-components/docs-page.component';
+import { ComponentProperty } from '@/preview/newpreview-components/properties-table.component';
 import { NavEntry } from '@/preview/newpreview-components/quicknav.component';
 import ApiReferenceSection from '@/preview/newpreview-components/section-api-reference.component';
 import IntroSection from '@/preview/newpreview-components/section-intro.component';
-import Section from '@/preview/newpreview-components/section.component';
+import Section, { SectionApi } from '@/preview/newpreview-components/section.component';
 import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
 import { useState } from 'react';
 
@@ -22,11 +20,15 @@ const uxApprovalList: UsabilityChecks = {
 
 const props: ComponentProperty[] = [{ name: '???', type: '???', default: '???', values: '???' }];
 
+const bestPracticesSectionApi: SectionApi = { updateIsOpen: undefined };
+const usageSectionApi: SectionApi = { updateIsOpen: undefined };
+const apiSectionApi: SectionApi = { updateIsOpen: undefined };
+
 const sections: NavEntry[] = [
   { id: 'intro', name: 'Intro' },
-  { id: 'best-practices', name: 'Best Practices' },
-  { id: 'usage', name: 'Usage' },
-  { id: 'api', name: 'Api Reference' },
+  { id: 'best-practices', name: 'Best Practices', api: bestPracticesSectionApi },
+  { id: 'usage', name: 'Usage', api: usageSectionApi },
+  { id: 'api', name: 'Api Reference', api: apiSectionApi },
 ];
 
 export default function NavigationContentSearchDocs({ direction }: DocsPageProps) {
@@ -93,6 +95,7 @@ export default function NavigationContentSearchDocs({ direction }: DocsPageProps
             id="best-practices"
             header="Best Practices"
             description="Use this component for ... TBD"
+            api={bestPracticesSectionApi}
           />
 
           <Section
@@ -100,9 +103,14 @@ export default function NavigationContentSearchDocs({ direction }: DocsPageProps
             header="Usage"
             description="To use the NavigationContentSearch component, import it and pass the necessary props."
             content={<CodePreview code="import ..." />}
+            api={usageSectionApi}
           />
 
-          <ApiReferenceSection apiFunctionName="NavigationContentSearch" properties={props} />
+          <ApiReferenceSection
+            apiFunctionName="NavigationContentSearch"
+            properties={props}
+            sectionApi={apiSectionApi}
+          />
         </>
       }
     />

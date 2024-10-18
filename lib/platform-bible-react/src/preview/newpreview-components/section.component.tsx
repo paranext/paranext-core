@@ -5,7 +5,7 @@ import {
 } from '@/components/shadcn-ui/collapsible';
 import { ChevronDown, ChevronUp, LinkIcon } from 'lucide-react';
 import React, { ReactHTMLElement } from 'react';
-import Link from './link';
+import Link from './link.component';
 
 export type SectionApi = { updateIsOpen?: (open: boolean) => void };
 
