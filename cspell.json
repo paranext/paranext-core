@@ -51,6 +51,7 @@
     "iusfm",
     "iusj",
     "iusx",
+    "JSONRPCID",
     "localizable",
     "localstorage",
     "maximizable",
@@ -92,7 +93,8 @@
     "usfm",
     "verseref",
     "versification",
-    "vref"
+    "vref",
+    "VSTHRD"
   ],
   "ignoreWords": [],
   "import": []

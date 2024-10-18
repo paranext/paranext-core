@@ -1,13 +1,10 @@
 import {
   ConnectionStatus,
-  CONNECTOR_INFO_DISCONNECTED,
   InternalEvent,
   InternalNetworkEventHandler,
   InternalRequest,
   InternalRequestHandler,
   InternalResponse,
-  NetworkConnectorInfo,
-  RequestRouter,
 } from '@shared/data/internal-connection.model';
 import {
   deserialize,
@@ -294,7 +291,7 @@ export default class ClientNetworkConnector implements INetworkConnector {
     return requestPromise;
   };
 
-  emitEventOnNetwork = async <T>(eventType: string, event: InternalEvent<T>) => {
+  emitEventOnNetwork = async <T,>(eventType: string, event: InternalEvent<T>) => {
     // TODO: implement some kind of waiting for a connection? This method is async for hopeful forward compatibility
     this.sendMessage({
       type: MessageType.Event,

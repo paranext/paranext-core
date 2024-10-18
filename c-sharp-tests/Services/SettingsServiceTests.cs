@@ -17,7 +17,7 @@ public class SettingsServiceTests
     {
         _client = new DummyPapiClient();
         _settingsService = new DummySettingsService(_client);
-        await _settingsService.RegisterDataProvider();
+        await _settingsService.RegisterDataProviderAsync();
     }
 
     [TearDown]

@@ -1,5 +1,4 @@
 using System.Text.Json.Nodes;
-using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using SIL.Extensions;
 
@@ -18,11 +17,11 @@ internal class TimeDataProvider : DataProvider
     public TimeDataProvider(PapiClient papiClient)
         : base("current-time", papiClient) { }
 
-    protected override Task StartDataProvider()
+    protected override Task StartDataProviderAsync()
     {
         _timer.Elapsed += (_, _) =>
         {
-            SendDataUpdateEvent("*");
+            ThreadingUtils.RunTask(SendDataUpdateEventAsync("*"), "TimeDataProvider timer elapsed");
         };
         _timer.AutoReset = true;
         _timer.Enabled = true;
@@ -34,15 +33,13 @@ internal class TimeDataProvider : DataProvider
         return _supportedFunctions;
     }
 
-    protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
+    protected override object? HandleRequest(string functionName, JsonArray args)
     {
         return functionName switch
         {
-            "getTime" => ResponseToRequest.Succeeded(
-                DateTime.Now.ToISO8601TimeFormatWithUTCString()
-            ),
-            "setTime" => ResponseToRequest.Failed("Cannot set the time"),
-            _ => ResponseToRequest.Failed($"Unexpected function: {functionName}"),
+            "getTime" => DateTime.Now.ToISO8601TimeFormatWithUTCString(),
+            "setTime" => throw new InvalidOperationException("Cannot set the time"),
+            _ => throw new ArgumentException($"Unexpected function: {functionName}"),
         };
     }
 }

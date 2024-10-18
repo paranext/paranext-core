@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Paranext.DataProvider.JsonUtils;
-using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
@@ -81,12 +80,12 @@ internal class CheckRunner(PapiClient papiClient)
         ];
     }
 
-    protected override Task StartDataProvider()
+    protected override Task StartDataProviderAsync()
     {
         return Task.CompletedTask;
     }
 
-    protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
+    protected override object? HandleRequest(string functionName, JsonArray args)
     {
         lock (_dataProviderLock)
         {
@@ -108,7 +107,7 @@ internal class CheckRunner(PapiClient papiClient)
                 "setActiveRanges" => SetActiveRanges(
                     CheckInputRangeConverter.CreateCheckInputRangeArray(args[1])
                 ),
-                _ => ResponseToRequest.Failed($"Unknown function: {functionName}"),
+                _ => throw new InvalidDataException($"Unknown function: {functionName}"),
             };
         }
     }
@@ -117,19 +116,17 @@ internal class CheckRunner(PapiClient papiClient)
 
     #region CheckRunner methods
 
-    private ResponseToRequest GetAvailableChecks()
+    private List<ParatextCheckDetails> GetAvailableChecks()
     {
-        return ResponseToRequest.Succeeded(
-            new List<ParatextCheckDetails>(_checkDetailsByCheckId.Values)
-        );
+        return new List<ParatextCheckDetails>(_checkDetailsByCheckId.Values);
     }
 
-    private ResponseToRequest GetActiveRanges()
+    private CheckInputRange[] GetActiveRanges()
     {
-        return ResponseToRequest.Succeeded(_activeRanges);
+        return _activeRanges;
     }
 
-    private ResponseToRequest SetActiveRanges(CheckInputRange[]? ranges)
+    private object? SetActiveRanges(CheckInputRange[]? ranges)
     {
         ArgumentNullException.ThrowIfNull(ranges);
 
@@ -156,11 +153,11 @@ internal class CheckRunner(PapiClient papiClient)
         if (notifyOfUpdatedCheckResults)
             updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
 
-        SendDataUpdateEvent(updateEvents);
-        return ResponseToRequest.Succeeded(updateEvents);
+        ThreadingUtils.RunTask(SendDataUpdateEventAsync(updateEvents), "active ranges update");
+        return updateEvents;
     }
 
-    private ResponseToRequest GetCheckResults()
+    private List<CheckRunResult> GetCheckResults()
     {
         var retVal = new List<CheckRunResult>();
         foreach (var check in _checksByIds.Values)
@@ -173,10 +170,10 @@ internal class CheckRunner(PapiClient papiClient)
             Console.WriteLine($"Trimming {fullCount} check results to 1000");
         }
         Console.WriteLine($"Returning {retVal.Count} check results");
-        return ResponseToRequest.Succeeded(retVal);
+        return retVal;
     }
 
-    private ResponseToRequest EnableCheck(string checkId, string projectId)
+    private bool EnableCheck(string checkId, string projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
@@ -198,11 +195,11 @@ internal class CheckRunner(PapiClient papiClient)
         }
 
         if (updateEvents.Count > 0)
-            SendDataUpdateEvent(updateEvents);
-        return ResponseToRequest.Succeeded();
+            ThreadingUtils.RunTask(SendDataUpdateEventAsync(updateEvents), "enable check update");
+        return true;
     }
 
-    private ResponseToRequest DisableCheck(string checkId, string? projectId)
+    private bool DisableCheck(string checkId, string? projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
 
@@ -222,8 +219,8 @@ internal class CheckRunner(PapiClient papiClient)
             if (resultsRemoved)
                 updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
 
-            SendDataUpdateEvent(updateEvents);
-            return ResponseToRequest.Succeeded(updateEvents);
+            ThreadingUtils.RunTask(SendDataUpdateEventAsync(updateEvents), "disable check update");
+            return true;
         }
 
         var projectIds = checkDetails.EnabledProjectIds;
@@ -237,8 +234,8 @@ internal class CheckRunner(PapiClient papiClient)
         if (resultsCount > 0)
             updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
 
-        SendDataUpdateEvent(updateEvents);
-        return ResponseToRequest.Succeeded(updateEvents);
+        ThreadingUtils.RunTask(SendDataUpdateEventAsync(updateEvents), "disable check update");
+        return true;
     }
 
     private void RerunChecks(object? sender, TextChangedEventArgs e)
@@ -259,7 +256,10 @@ internal class CheckRunner(PapiClient papiClient)
             notifyOfNewOrDifferentResults = RunChecksForProject(projectId);
 
         if (notifyOfNewOrDifferentResults)
-            SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS);
+            ThreadingUtils.RunTask(
+                SendDataUpdateEventAsync(DATA_TYPE_CHECK_RESULTS),
+                "RerunChecks"
+            );
     }
 
     /// <summary>

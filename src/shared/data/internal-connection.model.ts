@@ -3,53 +3,18 @@
  * to be used outside of NetworkConnectors and ConnectionService.ts
  */
 
-import { ComplexRequest, ComplexResponse, SerializedRequestType } from '@shared/utils/util';
-
-/**
- * Represents when the request router does not know to which client id the request belongs. Server
- * should try to determine the correct client id through other means, and client should just send to
- * server
- */
-export const CLIENT_ID_UNKNOWN = -2;
-
-/** Represents when the client id has not been assigned by the server */
-export const CLIENT_ID_UNASSIGNED = -1;
-
-/** "Client id" for the server */
-export const CLIENT_ID_SERVER = 0;
-
-/** Represents when the connector info has not been populated by the server */
-export const CONNECTOR_INFO_DISCONNECTED = Object.freeze({
-  clientId: CLIENT_ID_UNASSIGNED,
-});
+import { SerializedRequestType } from '@shared/utils/util';
+import {
+  JSONRPC,
+  JSONRPCErrorCode,
+  JSONRPCErrorResponse,
+  JSONRPCRequest,
+  JSONRPCResponse,
+  JSONRPCSuccessResponse,
+} from 'json-rpc-2.0';
 
 /** Prefix on requests that indicates that the request is a command */
 export const CATEGORY_COMMAND = 'command';
-
-/** Information about the network connector */
-export type NetworkConnectorInfo = Readonly<{
-  clientId: number;
-}>;
-
-/** Event emitted when client connections are established */
-export type ClientConnectEvent = {
-  clientId: number;
-  didReconnect: boolean;
-};
-
-/** Event emitted when client connections are lost */
-export type ClientDisconnectEvent = { clientId: number };
-
-/**
- * Functions that run when network connector events occur. These should likely be emit functions
- * from NetworkEventEmitters so the events inform all interested connections
- */
-export type NetworkConnectorEventHandlers = {
-  /** Handles when a new connection is established */
-  didClientConnectHandler?: (event: ClientConnectEvent) => void;
-  /** Handles when a client disconnects */
-  didClientDisconnectHandler?: (event: ClientDisconnectEvent) => void;
-};
 
 /**
  * Whether this connector is setting up or has finished setting up its connection and is ready to
@@ -64,50 +29,29 @@ export enum ConnectionStatus {
   Connected,
 }
 
-/** Request to do something and to respond */
-export type InternalRequest<TParam = unknown> = {
-  requestId: number;
-} & ComplexRequest<TParam>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type RequestParams = Array<any>;
 
-/** Response to a request */
-export type InternalResponse<TReturn = unknown> = {
-  /** The process that sent this Response */
-  senderId: number;
-  requestId: number;
-  /** The process that originally sent the Request that matches to this response */
-  requesterId: number;
-} & ComplexResponse<TReturn>;
+export type CallerData = {
+  origin: string;
+};
 
-/**
- * Handler for requests from the server. Used internally between network connector and Connection
- * Service
- */
-export type InternalRequestHandler = <TParam, TReturn>(
-  requestType: string,
-  request: InternalRequest<TParam>,
-) => Promise<InternalResponse<TReturn>>;
-
-/** Handler for requests from the server */
-export type RequestHandler = <TParam, TReturn>(
+export type RequestHandler = (
   requestType: SerializedRequestType,
-  request: ComplexRequest<TParam>,
-) => Promise<ComplexResponse<TReturn>>;
+  requestParams: RequestParams,
+  callerData?: CallerData,
+) => Promise<JSONRPCResponse>;
 
-/** Function that returns a clientId to which to send the request based on the requestType */
-export type RequestRouter = (requestType: string) => number;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export type InternalRequestHandler = (...params: any[]) => any;
 
 /** Event to be sent out throughout all processes */
 export type InternalEvent<T> = {
-  /** The process that emitted this Event */
-  senderId: number;
   /** Contents of the event */
   event: T;
 };
 
-/**
- * Handler for events from on the network. Used internally between network connector and Connection
- * Service
- */
+/** Handler for events coming from on the network */
 export type InternalNetworkEventHandler = <T>(
   eventType: string,
   incomingEvent: InternalEvent<T>,
@@ -115,3 +59,30 @@ export type InternalNetworkEventHandler = <T>(
 
 /** Handler for events from on the network */
 export type NetworkEventHandler = <T>(eventType: string, event: T) => void;
+
+export function createRequest(
+  requestId: number | string,
+  requestType: SerializedRequestType,
+  requestParams: RequestParams,
+): JSONRPCRequest {
+  return { jsonrpc: JSONRPC, id: requestId, method: requestType, params: requestParams };
+}
+
+export function createSuccessResponse<T>(
+  requestId: number | string,
+  contents: T,
+): JSONRPCSuccessResponse {
+  return { jsonrpc: JSONRPC, id: requestId, result: contents };
+}
+
+export function createErrorResponse(
+  requestId: number | string,
+  errorMessage: string,
+  errorCode: JSONRPCErrorCode = JSONRPCErrorCode.InternalError,
+): JSONRPCErrorResponse {
+  return { id: requestId, jsonrpc: JSONRPC, error: { code: errorCode, message: errorMessage } };
+}
+
+export const REGISTER_METHOD = 'network:registerMethod';
+export const UNREGISTER_METHOD = 'network:unregisterMethod';
+export const GET_METHODS = 'network:getMethods';

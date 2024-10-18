@@ -634,7 +634,6 @@ declare module 'shared/global-this.model' {
 }
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
-  import { UnsubscriberAsync } from 'platform-bible-utils';
   /**
    * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
    * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
@@ -644,65 +643,6 @@ declare module 'shared/utils/util' {
    * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
    */
   export function newNonce(): string;
-  /**
-   * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.
-   *
-   * @param unsafeRegisterFn Function that does some kind of async registration and returns an
-   *   unsubscriber and a promise that resolves when the registration is finished
-   * @param isInitialized Whether the service associated with this safe UnsubscriberAsync function is
-   *   initialized
-   * @param initialize Promise that resolves when the service is finished initializing
-   * @returns Safe version of an unsafe function that returns a promise to an UnsubscriberAsync
-   *   (meaning it will wait to register until the service is initialized)
-   */
-  export const createSafeRegisterFn: <TParam extends unknown[]>(
-    unsafeRegisterFn: (...args: TParam) => Promise<UnsubscriberAsync>,
-    isInitialized: boolean,
-    initialize: () => Promise<void>,
-  ) => (...args: TParam) => Promise<UnsubscriberAsync>;
-  /**
-   * Type of object passed to a complex request handler that provides information about the request.
-   * This type is used as the public-facing interface for requests
-   */
-  export type ComplexRequest<TParam = unknown> = {
-    /** The one who sent the request */
-    senderId: number;
-    contents: TParam;
-  };
-  type ComplexResponseSuccess<TReturn = unknown> = {
-    /** Whether the handler that created this response was successful in handling the request */
-    success: true;
-    /**
-     * Content with which to respond to the request. Must be provided unless the response failed or
-     * TReturn is undefined
-     */
-    contents: TReturn;
-  };
-  type ComplexResponseFailure = {
-    /** Whether the handler that created this response was successful in handling the request */
-    success: false;
-    /**
-     * Content with which to respond to the request. Must be provided unless the response failed or
-     * TReturn is undefined Removed from failure so we do not change the type of contents for type
-     * safety. We could add errorContents one day if we really need it
-     */
-    /** Error explaining the problem that is only populated if success is false */
-    errorMessage: string;
-  };
-  /**
-   * Type of object to create when handling a complex request where you desire to provide additional
-   * information beyond the contents of the response This type is used as the public-facing interface
-   * for responses
-   */
-  export type ComplexResponse<TReturn = unknown> =
-    | ComplexResponseSuccess<TReturn>
-    | ComplexResponseFailure;
-  /** Type of request handler - indicates what type of parameters and what return type the handler has */
-  export enum RequestHandlerType {
-    Args = 'args',
-    Contents = 'contents',
-    Complex = 'complex',
-  }
   /**
    * Modules that someone might try to require in their extensions that we have similar apis for. When
    * an extension requires these modules, an error throws that lets them know about our similar api.
@@ -753,46 +693,16 @@ declare module 'shared/data/internal-connection.model' {
    * Types that are internal to the communication we do through WebSocket. These types should not need
    * to be used outside of NetworkConnectors and ConnectionService.ts
    */
-  import { ComplexRequest, ComplexResponse, SerializedRequestType } from 'shared/utils/util';
-  /**
-   * Represents when the request router does not know to which client id the request belongs. Server
-   * should try to determine the correct client id through other means, and client should just send to
-   * server
-   */
-  export const CLIENT_ID_UNKNOWN = -2;
-  /** Represents when the client id has not been assigned by the server */
-  export const CLIENT_ID_UNASSIGNED = -1;
-  /** "Client id" for the server */
-  export const CLIENT_ID_SERVER = 0;
-  /** Represents when the connector info has not been populated by the server */
-  export const CONNECTOR_INFO_DISCONNECTED: Readonly<{
-    clientId: -1;
-  }>;
+  import { SerializedRequestType } from 'shared/utils/util';
+  import {
+    JSONRPCErrorCode,
+    JSONRPCErrorResponse,
+    JSONRPCRequest,
+    JSONRPCResponse,
+    JSONRPCSuccessResponse,
+  } from 'json-rpc-2.0';
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
-  /** Information about the network connector */
-  export type NetworkConnectorInfo = Readonly<{
-    clientId: number;
-  }>;
-  /** Event emitted when client connections are established */
-  export type ClientConnectEvent = {
-    clientId: number;
-    didReconnect: boolean;
-  };
-  /** Event emitted when client connections are lost */
-  export type ClientDisconnectEvent = {
-    clientId: number;
-  };
-  /**
-   * Functions that run when network connector events occur. These should likely be emit functions
-   * from NetworkEventEmitters so the events inform all interested connections
-   */
-  export type NetworkConnectorEventHandlers = {
-    /** Handles when a new connection is established */
-    didClientConnectHandler?: (event: ClientConnectEvent) => void;
-    /** Handles when a client disconnects */
-    didClientDisconnectHandler?: (event: ClientDisconnectEvent) => void;
-  };
   /**
    * Whether this connector is setting up or has finished setting up its connection and is ready to
    * communicate on the network
@@ -805,130 +715,86 @@ declare module 'shared/data/internal-connection.model' {
     /** This connector has finished setting up its connection - has connectorInfo and such */
     Connected = 2,
   }
-  /** Request to do something and to respond */
-  export type InternalRequest<TParam = unknown> = {
-    requestId: number;
-  } & ComplexRequest<TParam>;
-  /** Response to a request */
-  export type InternalResponse<TReturn = unknown> = {
-    /** The process that sent this Response */
-    senderId: number;
-    requestId: number;
-    /** The process that originally sent the Request that matches to this response */
-    requesterId: number;
-  } & ComplexResponse<TReturn>;
-  /**
-   * Handler for requests from the server. Used internally between network connector and Connection
-   * Service
-   */
-  export type InternalRequestHandler = <TParam, TReturn>(
-    requestType: string,
-    request: InternalRequest<TParam>,
-  ) => Promise<InternalResponse<TReturn>>;
-  /** Handler for requests from the server */
-  export type RequestHandler = <TParam, TReturn>(
+  export type RequestParams = Array<any>;
+  export type CallerData = {
+    origin: string;
+  };
+  export type RequestHandler = (
     requestType: SerializedRequestType,
-    request: ComplexRequest<TParam>,
-  ) => Promise<ComplexResponse<TReturn>>;
-  /** Function that returns a clientId to which to send the request based on the requestType */
-  export type RequestRouter = (requestType: string) => number;
+    requestParams: RequestParams,
+    callerData?: CallerData,
+  ) => Promise<JSONRPCResponse>;
+  export type InternalRequestHandler = (...params: any[]) => any;
   /** Event to be sent out throughout all processes */
   export type InternalEvent<T> = {
-    /** The process that emitted this Event */
-    senderId: number;
     /** Contents of the event */
     event: T;
   };
-  /**
-   * Handler for events from on the network. Used internally between network connector and Connection
-   * Service
-   */
+  /** Handler for events coming from on the network */
   export type InternalNetworkEventHandler = <T>(
     eventType: string,
     incomingEvent: InternalEvent<T>,
   ) => void;
   /** Handler for events from on the network */
   export type NetworkEventHandler = <T>(eventType: string, event: T) => void;
+  export function createRequest(
+    requestId: number | string,
+    requestType: SerializedRequestType,
+    requestParams: RequestParams,
+  ): JSONRPCRequest;
+  export function createSuccessResponse<T>(
+    requestId: number | string,
+    contents: T,
+  ): JSONRPCSuccessResponse;
+  export function createErrorResponse(
+    requestId: number | string,
+    errorMessage: string,
+    errorCode?: JSONRPCErrorCode,
+  ): JSONRPCErrorResponse;
+  export const REGISTER_METHOD = 'network:registerMethod';
+  export const UNREGISTER_METHOD = 'network:unregisterMethod';
+  export const GET_METHODS = 'network:getMethods';
 }
-declare module 'shared/services/network-connector.interface' {
-  import {
-    ConnectionStatus,
-    InternalEvent,
-    InternalNetworkEventHandler,
-    InternalRequestHandler,
-    NetworkConnectorEventHandlers,
-    NetworkConnectorInfo,
-    RequestRouter,
-  } from 'shared/data/internal-connection.model';
+declare module 'shared/models/papi-network-event-emitter.model' {
+  import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
   /**
-   * Interface that defines the network connection functionality the server and the client must
-   * implement. Used by NetworkConnectorFactory to supply the right kind of NetworkConnector to
-   * ConnectionService
+   * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
+   * callbacks when the event is emitted. Events on NetworkEventEmitters can be emitted across
+   * processes. They are coordinated between processes by their type. Use eventEmitter.event(callback)
+   * to subscribe to the event. Use eventEmitter.emit(event) to run the subscriptions. Generally, this
+   * EventEmitter should be private, and its event should be public. That way, the emitter is not
+   * publicized, but anyone can subscribe to the event.
+   *
+   * WARNING: Do not use this class directly outside of NetworkService, or it will not do what you
+   * expect. Use NetworkService.createNetworkEventEmitter.
+   *
+   * WARNING: You cannot emit events with complex types on the network.
    */
-  export default interface INetworkConnector {
-    /** Information about the connector. Populated by the server while connecting */
-    connectorInfo: NetworkConnectorInfo;
+  export default class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
+    /** Callback that sends the event to other processes on the network when it is emitted */
+    private networkSubscriber;
+    /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
+    private networkDisposer;
     /**
-     * Whether this connector is setting up or has finished setting up its connection and is ready to
-     * communicate on the network
+     * Creates a NetworkEventEmitter
+     *
+     * @param networkSubscriber Callback that accepts the event and emits it to other processes
+     * @param networkDisposer Callback that unlinks this emitter from the network
      */
-    connectionStatus: ConnectionStatus;
+    constructor(
+      /** Callback that sends the event to other processes on the network when it is emitted */
+      networkSubscriber: PlatformEventHandler<T>,
+      /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
+      networkDisposer: () => void,
+    );
+    emit: (event: T) => void;
     /**
-     * Sets up the NetworkConnector by populating connector info, setting up event handlers, and doing
-     * one of the following:
+     * Runs only the subscriptions for the event that are on this process. Does not send over network
      *
-     * - On Client: connecting to the server.
-     * - On Server: opening an endpoint for clients to connect.
-     *
-     * MUST ALSO RUN notifyClientConnected() WHEN PROMISE RESOLVES
-     *
-     * @param localRequestHandler Function that handles requests from the connection. Only called when
-     *   this connector can handle the request
-     * @param requestRouter Function that returns a clientId to which to send the request based on the
-     *   requestType. If requestRouter returns this connector's clientId, localRequestHandler is used
-     * @param localEventHandler Function that handles events from the server by accepting an eventType
-     *   and an event and emitting the event locally
-     * @param networkConnectorEventHandlers Functions that run when network connector events occur
-     *   like when clients are disconnected
-     * @returns Promise that resolves with connector info when finished connecting
+     * @param event Event data to provide to subscribed callbacks
      */
-    connect: (
-      localRequestHandler: InternalRequestHandler,
-      requestRouter: RequestRouter,
-      localEventHandler: InternalNetworkEventHandler,
-      networkConnectorEventHandlers: NetworkConnectorEventHandlers,
-    ) => Promise<NetworkConnectorInfo>;
-    /**
-     * Notify the server that this client has received its connectorInfo and is ready to go.
-     *
-     * MUST RUN AFTER connect() WHEN ITS PROMISE RESOLVES
-     *
-     * TODO: Is this necessary?
-     */
-    notifyClientConnected: () => Promise<void>;
-    /**
-     * Disconnects from the connection:
-     *
-     * - On Client: disconnects from the server
-     * - On Server: disconnects from clients and closes its connection endpoint
-     */
-    disconnect: () => void;
-    /**
-     * Send a request to the server/a client and resolve after receiving a response
-     *
-     * @param requestType The type of request
-     * @param contents Contents to send in the request
-     * @returns Promise that resolves with the response message
-     */
-    request: InternalRequestHandler;
-    /**
-     * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
-     * run by NetworkEventEmitter after sending on network.
-     *
-     * @param eventType Unique network event type for coordinating between processes
-     * @param event Event to emit on the network
-     */
-    emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => Promise<void>;
+    emitLocal(event: T): void;
+    dispose: () => Promise<boolean>;
   }
 }
 declare module 'shared/utils/internal-util' {
@@ -965,18 +831,74 @@ declare module 'shared/utils/internal-util' {
    */
   export const getProcessType: () => ProcessType;
 }
-declare module 'shared/data/network-connector.model' {
-  /**
-   * Types that are relevant particularly to the implementation of communication on
-   * NetworkConnector.ts files Do not use these types outside of ClientNetworkConnector.ts and
-   * ServerNetworkConnector.ts
-   */
+declare module 'shared/services/network-protocol-handler.interface' {
   import {
+    ConnectionStatus,
     InternalEvent,
-    InternalRequest,
-    InternalResponse,
-    NetworkConnectorInfo,
+    InternalNetworkEventHandler,
+    InternalRequestHandler,
+    RequestHandler,
   } from 'shared/data/internal-connection.model';
+  /**
+   * Interface that defines the network connection functionality the server and the client must
+   * implement. Used by NetworkConnectorFactory to supply the right kind of NetworkConnector to
+   * ConnectionService
+   */
+  export default interface INetworkProtocolHandler {
+    /**
+     * Whether this connector is setting up or has finished setting up its connection and is ready to
+     * communicate on the network
+     */
+    connectionStatus: ConnectionStatus;
+    /**
+     * Sets up the NetworkConnector by populating connector info, setting up event handlers, and doing
+     * one of the following:
+     *
+     * - On Client: connecting to the server.
+     * - On Server: opening an endpoint for clients to connect.
+     *
+     * MUST ALSO RUN notifyClientConnected() WHEN PROMISE RESOLVES
+     *
+     * @param localRequestHandler Function that handles requests from the connection. Only called when
+     *   this connector can handle the request
+     * @param requestRouter Function that returns a clientId to which to send the request based on the
+     *   requestType. If requestRouter returns this connector's clientId, localRequestHandler is used
+     * @param localEventHandler Function that handles events from the server by accepting an eventType
+     *   and an event and emitting the event locally
+     * @param networkConnectorEventHandlers Functions that run when network connector events occur
+     *   like when clients are disconnected
+     * @returns Promise that resolves when finished connecting
+     */
+    connect: (localEventHandler: InternalNetworkEventHandler) => Promise<boolean>;
+    /**
+     * Disconnects from the connection:
+     *
+     * - On Client: disconnects from the server
+     * - On Server: disconnects from clients and closes its connection endpoint
+     */
+    disconnect: () => void;
+    /**
+     * Send a request to the server/a client and resolve after receiving a response
+     *
+     * @param requestType The type of request
+     * @param requestParams Parameters to send in the request
+     * @returns Promise that resolves with the response message
+     */
+    request: RequestHandler;
+    /** Register a method that will be called if an RPC request is made */
+    registerMethod: (methodName: string, method: InternalRequestHandler) => Promise<boolean>;
+    unregisterMethod: (methodName: string) => Promise<boolean>;
+    /**
+     * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
+     * run by NetworkEventEmitter after sending on network.
+     *
+     * @param eventType Unique network event type for coordinating between processes
+     * @param event Event to emit on the network
+     */
+    emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => void;
+  }
+}
+declare module 'shared/data/network-connector.model' {
   /** Port to use for the webSocket */
   export const WEBSOCKET_PORT = 8876;
   /** Number of attempts a client will make to connect to the WebSocket server before failing */
@@ -986,59 +908,6 @@ declare module 'shared/data/network-connector.model' {
    * after a failure
    */
   export const WEBSOCKET_ATTEMPTS_WAIT = 1000;
-  /** WebSocket message type that indicates how to handle it */
-  export enum MessageType {
-    InitClient = 'init-client',
-    ClientConnect = 'client-connect',
-    Request = 'request',
-    Response = 'response',
-    Event = 'event',
-  }
-  /** Message sent to the client to give it NetworkConnectorInfo */
-  export type InitClient = {
-    type: MessageType.InitClient;
-    senderId: number;
-    connectorInfo: NetworkConnectorInfo;
-    /** Guid unique to this connection. Used to verify important messages like reconnecting */
-    clientGuid: string;
-  };
-  /** Message responding to the server to let it know this connection is ready to receive messages */
-  export type ClientConnect = {
-    type: MessageType.ClientConnect;
-    senderId: number;
-    /**
-     * ClientGuid for this client the last time it was connected to the server. Used when reconnecting
-     * (like if the browser refreshes): if the server has a connection with this clientGuid, it will
-     * unregister all requests on that client so the reconnecting client can register its request
-     * handlers again.
-     */
-    reconnectingClientGuid?: string;
-  };
-  /** Request to do something and to respond */
-  export type WebSocketRequest<TParam = unknown> = {
-    type: MessageType.Request;
-    /** What kind of request this is. Certain command, etc */
-    requestType: string;
-  } & InternalRequest<TParam>;
-  /** Response to a request */
-  export type WebSocketResponse<TReturn = unknown> = {
-    type: MessageType.Response;
-    /** What kind of request this is. Certain command, etc */
-    requestType: string;
-  } & InternalResponse<TReturn>;
-  /** Event to be sent out throughout all processes */
-  export type WebSocketEvent<T> = {
-    type: MessageType.Event;
-    /** What kind of event this is */
-    eventType: string;
-  } & InternalEvent<T>;
-  /** Messages send by the WebSocket */
-  export type Message =
-    | InitClient
-    | ClientConnect
-    | WebSocketRequest
-    | WebSocketResponse
-    | WebSocketEvent<unknown>;
 }
 declare module 'shared/services/logger.service' {
   import log from 'electron-log';
@@ -1128,386 +997,144 @@ declare module 'client/services/web-socket.factory' {
    */
   export const createWebSocket: (url: string) => Promise<IWebSocket>;
 }
-declare module 'client/services/client-network-connector.service' {
+declare module 'client/services/client-websocket-protocol-handler' {
+  import { JSONRPCResponse } from 'json-rpc-2.0';
+  import INetworkProtocolHandler from 'shared/services/network-protocol-handler.interface';
   import {
     ConnectionStatus,
-    InternalEvent,
     InternalNetworkEventHandler,
-    InternalRequest,
+    InternalEvent,
+    RequestParams,
     InternalRequestHandler,
-    InternalResponse,
-    NetworkConnectorInfo,
-    RequestRouter,
   } from 'shared/data/internal-connection.model';
-  import INetworkConnector from 'shared/services/network-connector.interface';
-  /** Handles the connection from the client to the server */
-  export default class ClientNetworkConnector implements INetworkConnector {
-    connectorInfo: NetworkConnectorInfo;
+  import { SerializedRequestType } from 'shared/utils/util';
+  export default class ClientWebSocketProtocolHandler implements INetworkProtocolHandler {
     connectionStatus: ConnectionStatus;
-    /** The webSocket connected to the server */
-    private webSocket?;
-    /**
-     * All message subscriptions - emitters that emit an event each time a message with a specific
-     * message type comes in
-     */
-    private messageEmitters;
-    /**
-     * Promise that resolves when the connection is finished or rejects if disconnected before the
-     * connection finishes
-     */
-    private connectPromise?;
-    /** Function that removes this initClient handler from the connection */
-    private unsubscribeHandleInitClientMessage?;
-    /** Function that removes this response handler from the connection */
-    private unsubscribeHandleResponseMessage?;
-    /** Function that removes this handleRequest from the connection */
-    private unsubscribeHandleRequestMessage?;
-    /** Function that removes this handleEvent from the connection */
-    private unsubscribeHandleEventMessage?;
-    /**
-     * Function to call when we receive a request that is registered on this connector. Handles
-     * requests from the connection and returns a response to send back
-     */
-    private localRequestHandler?;
-    /**
-     * Function to call when we are sending a request. Returns a clientId to which to send the request
-     * based on the requestType
-     */
-    private requestRouter?;
-    /**
-     * Function to call when we receive an event. Handles events from the connection by emitting the
-     * event locally
-     */
-    private localEventHandler?;
-    /** All requests that are waiting for a response */
-    private requests;
-    /** Unique Guid associated with this connection. Used to verify certain things with server */
-    private clientGuid;
-    connect: (
-      localRequestHandler: InternalRequestHandler,
-      requestRouter: RequestRouter,
-      localEventHandler: InternalNetworkEventHandler,
-    ) => Promise<
-      Readonly<{
-        clientId: number;
-      }>
-    >;
-    notifyClientConnected: () => Promise<void>;
-    disconnect: () => void;
-    request: <TParam, TReturn>(
-      requestType: string,
-      request: InternalRequest<TParam>,
-    ) => Promise<InternalResponse<TReturn>>;
-    emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => Promise<void>;
-    /**
-     * Send a message to the server via webSocket. Throws if not connected
-     *
-     * @param message Message to send
-     */
-    private sendMessage;
-    /**
-     * Receives and appropriately publishes server webSocket messages
-     *
-     * @param event WebSocket message information
-     * @param fromSelf Whether this message is from this connector instead of from someone else
-     */
+    private ws;
+    private requestId;
+    private readonly rpcServer;
+    private readonly rpcClient;
+    private readonly rpcClientServer;
+    private readonly localMethods;
+    private readonly connectionMutex;
+    private readonly registrationMutexMap;
+    private readonly connectionComplete;
+    constructor();
+    get nextRequestId(): number;
+    private static handleError;
+    private static onError;
+    connect(localEventHandler: InternalNetworkEventHandler): Promise<boolean>;
+    disconnect(): void;
+    request(
+      requestType: SerializedRequestType,
+      requestParams: RequestParams,
+    ): Promise<JSONRPCResponse>;
+    emitEventOnNetwork<T>(eventType: string, event: InternalEvent<T>): void;
+    registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean>;
+    unregisterMethod(methodName: string): Promise<boolean>;
+    private addEventListenersToWebSocket;
+    private removeEventListenersFromWebSocket;
+    private onOpen;
+    private onClose;
     private onMessage;
-    /**
-     * Subscribes a function to run on webSocket messages of a particular type
-     *
-     * @param messageType The type of message on which to subscribe the function
-     * @param callback Function to run with the contents of the webSocket message
-     * @returns Unsubscriber function to run to stop calling the passed-in function on webSocket
-     *   messages
-     */
-    private subscribe;
-    /**
-     * Function that handles webSocket messages of type Response. Resolves the request associated with
-     * the received response message
-     *
-     * @param response Response message to resolve
-     */
-    private handleResponseMessage;
-    /**
-     * Function that handles incoming webSocket messages and locally sent messages of type Request.
-     * Runs the requestHandler provided in connect() and sends a message with the response
-     *
-     * @param requestMessage Request message to handle
-     * @param isIncoming Whether this message is coming from the server and we should definitely
-     *   handle it locally or if it is a locally sent request and we should send to the server if we
-     *   don't have a local handler
-     */
-    private handleRequestMessage;
-    /**
-     * Function that handles incoming webSocket messages of type Event. Runs the eventHandler provided
-     * in connect()
-     *
-     * @param eventMessage Event message to handle
-     */
-    private handleEventMessage;
+    private sendRequestFunction;
+    private bindMethods;
   }
 }
-declare module 'main/services/server-network-connector.service' {
+declare module 'main/services/server-websocket-protocol-handler' {
+  import { JSONRPCResponse } from 'json-rpc-2.0';
+  import INetworkProtocolHandler from 'shared/services/network-protocol-handler.interface';
   import {
     ConnectionStatus,
-    InternalEvent,
     InternalNetworkEventHandler,
-    InternalRequest,
+    InternalEvent,
+    CallerData,
+    RequestParams,
     InternalRequestHandler,
-    InternalResponse,
-    NetworkConnectorEventHandlers,
-    NetworkConnectorInfo,
-    RequestRouter,
   } from 'shared/data/internal-connection.model';
-  import INetworkConnector from 'shared/services/network-connector.interface';
-  /** Handles the endpoint and connections from the server to the clients */
-  export default class ServerNetworkConnector implements INetworkConnector {
-    connectorInfo: NetworkConnectorInfo;
+  import { SerializedRequestType } from 'shared/utils/util';
+  /** Single websocket protocol handler on the "main" side of a client connection */
+  export default class ServerWebSocketProtocolHandler implements INetworkProtocolHandler {
     connectionStatus: ConnectionStatus;
-    /** The webSocket connected to the server */
-    private webSocketServer?;
-    /** The next client id to use for a new connection. Starts at 1 because the server is 0 */
-    private nextClientId;
-    /** The webSocket clients that are connected and information about them */
-    private clientSockets;
-    /**
-     * All message subscriptions - emitters that emit an event each time a message with a specific
-     * message type comes in
-     */
-    private messageEmitters;
-    /**
-     * Promise that resolves when finished starting the server or rejects if disconnected before the
-     * server finishes
-     */
-    private connectPromise?;
-    /** Function that removes this clientConnect handler from connections */
-    private unsubscribeHandleClientConnectMessage?;
-    /** Function that removes this response handler from connections */
-    private unsubscribeHandleResponseMessage?;
-    /** Function that removes this handleRequest from connections */
-    private unsubscribeHandleRequestMessage?;
-    /** Function that removes this handleEvent from the connection */
-    private unsubscribeHandleEventMessage?;
-    /**
-     * Function to call when we receive a request that is registered on this connector. Handles
-     * requests from connections and returns a response to send back
-     */
-    private localRequestHandler?;
-    /**
-     * Function to call when we are sending a request. Returns a clientId to which to send the request
-     * based on the requestType
-     */
-    private requestRouter?;
-    /**
-     * Function to call when we receive an event. Handles events from connections and emits the event
-     * locally
-     */
-    private localEventHandler?;
-    /** Functions to run when network connector events occur like when clients are disconnected */
-    private networkConnectorEventHandlers?;
-    /** All requests that are waiting for a response */
-    private requests;
-    connect: (
-      localRequestHandler: InternalRequestHandler,
-      requestRouter: RequestRouter,
-      localEventHandler: InternalNetworkEventHandler,
-      networkConnectorEventHandlers: NetworkConnectorEventHandlers,
-    ) => Promise<
-      Readonly<{
-        clientId: number;
-      }>
-    >;
-    notifyClientConnected: () => Promise<void>;
-    disconnect: () => void;
-    request: <TParam, TReturn>(
-      requestType: string,
-      request: InternalRequest<TParam>,
-    ) => Promise<InternalResponse<TReturn>>;
-    emitEventOnNetwork: <T>(eventType: string, event: InternalEvent<T>) => Promise<void>;
-    /** Get the client socket for a certain clientId. Throws if not found */
-    private getClientSocket;
-    /**
-     * Attempts to get the client socket for a certain clientGuid. Returns undefined if not found.
-     * This does not throw because it will likely be very common that we do not have a clientId for a
-     * certain clientGuid as connecting clients will often supply old clientGuids.
-     */
-    private getClientSocketFromGuid;
-    /** Get the clientId for a certain webSocket. Throws if not found */
-    private getClientIdFromSocket;
-    /**
-     * Send a message to a client via webSocket. Throws if not connected
-     *
-     * @param message Message to send
-     * @param recipientId The client to which to send the message. TODO: determine if we can intuit
-     *   this instead
-     */
-    private sendMessage;
-    /**
-     * Receives and appropriately publishes webSocket messages
-     *
-     * @param event WebSocket message information
-     * @param fromSelf Whether this message is from this connector instead of from someone else
-     */
+    private ws;
+    private requestId;
+    private readonly rpcServer;
+    private readonly rpcClient;
+    private readonly protocolHandlerByMethodName;
+    constructor(
+      webSocket: WebSocket,
+      protocolHandlerByMethodName: Map<string, INetworkProtocolHandler>,
+    );
+    get nextRequestId(): number;
+    private static handleError;
+    private static onError;
+    connectSync(localEventHandler: InternalNetworkEventHandler): void;
+    connect(localEventHandler: InternalNetworkEventHandler): Promise<boolean>;
+    disconnect(): void;
+    request(
+      requestType: SerializedRequestType,
+      requestParams: RequestParams,
+      serverParams?: CallerData,
+    ): Promise<JSONRPCResponse>;
+    emitEventOnNetwork<T>(eventType: string, event: InternalEvent<T>): void;
+    registerRemoteMethod(methodName: string): boolean;
+    unregisterRemoteMethod(methodName: string): boolean;
+    registerMethod(_methodName: string, _method: InternalRequestHandler): Promise<boolean>;
+    unregisterMethod(_methodName: string): Promise<boolean>;
+    private addEventListenersToWebSocket;
+    private removeEventListenersFromWebSocket;
+    private onClose;
     private onMessage;
-    /**
-     * Subscribes a function to run on webSocket messages of a particular type
-     *
-     * @param messageType The type of message on which to subscribe the function
-     * @param callback Function to run with the contents of the webSocket message
-     * @returns Unsubscriber function to run to stop calling the passed-in function on webSocket
-     *   messages
-     */
-    private subscribe;
-    /**
-     * Registers an incoming webSocket connection and sends connection info with InitClient. Does not
-     * consider the client fully connected yet until they respond and tell us they connected with
-     * ClientConnect
-     */
+    private processMessage;
+    private sendRequestFunction;
+    private bindMethods;
+  }
+}
+declare module 'main/services/server-websocket-listener' {
+  import {
+    ConnectionStatus,
+    InternalNetworkEventHandler,
+    InternalEvent,
+    CallerData,
+    RequestParams,
+    InternalRequestHandler,
+  } from 'shared/data/internal-connection.model';
+  import INetworkProtocolHandler from 'shared/services/network-protocol-handler.interface';
+  import { JSONRPCResponse } from 'json-rpc-2.0';
+  import { SerializedRequestType } from 'shared/utils/util';
+  /** Protocol handler for the listening socket that spins off individual WebSocket protocol handlers */
+  export default class ServerWebSocketListener implements INetworkProtocolHandler {
+    connectionStatus: ConnectionStatus;
+    private localEventHandler;
+    private webSocketServer;
+    private readonly connectionMutex;
+    private readonly protocolHandlerBySocket;
+    private readonly protocolHandlerByMethodName;
+    private readonly localMethods;
+    constructor();
+    connect(localEventHandler: InternalNetworkEventHandler): Promise<boolean>;
+    disconnect(): void;
+    request(
+      requestType: SerializedRequestType,
+      requestParams: RequestParams,
+      serverParams?: CallerData,
+    ): Promise<JSONRPCResponse>;
+    registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean>;
+    unregisterMethod(methodName: string): Promise<boolean>;
+    emitEventOnNetwork<T>(eventType: string, event: InternalEvent<T>): void;
     private onClientConnect;
-    /** Handles when client connection disconnects. Unregisters and such */
     private onClientDisconnect;
-    /** Closes connection and unregisters a client webSocket when it has disconnected */
-    private disconnectClient;
-    /**
-     * Function that handles webSocket messages of type ClientConnect. Mark the connection fully
-     * connected and notify that a client connected or reconnected
-     *
-     * @param clientConnect Message from the client about the connection
-     * @param connectorId ClientId of the client who is sending this ClientConnect message
-     */
-    private handleClientConnectMessage;
-    /**
-     * Function that handles webSocket messages of type Response. Resolves the request associated with
-     * the received response message or forwards to appropriate client
-     *
-     * @param response Response message to resolve
-     * @param responderId Responding client
-     */
-    private handleResponseMessage;
-    /**
-     * Function that handles incoming webSocket messages and locally sent messages of type Request.
-     * Handles the request and sends a response if we have a handler or forwards to the appropriate
-     * client
-     *
-     * @param requestMessage Request to handle
-     * @param requesterId Who sent this message
-     */
-    private handleRequestMessage;
-    /**
-     * Function that handles incoming webSocket messages of type Event. Runs the eventHandler provided
-     * in connect() and forwards the event to other clients
-     *
-     * @param eventMessage Event message to handle
-     */
-    private handleEventMessage;
+    private bindMethods;
   }
 }
 declare module 'shared/services/network-connector.factory' {
-  import INetworkConnector from 'shared/services/network-connector.interface';
+  import INetworkProtocolHandler from 'shared/services/network-protocol-handler.interface';
   /**
    * Creates a NetworkConnector for the client or the server depending on where you're running
    *
    * @returns NetworkConnector
    */
-  export const createNetworkConnector: () => Promise<INetworkConnector>;
-}
-declare module 'shared/services/connection.service' {
-  /**
-   * Handles setting up a connection to the electron backend and exchanging simple messages. Do not
-   * use outside NetworkService.ts. For communication, use NetworkService.ts as it is an abstraction
-   * over this.
-   */
-  import {
-    NetworkConnectorEventHandlers,
-    NetworkEventHandler,
-    RequestHandler,
-    RequestRouter,
-  } from 'shared/data/internal-connection.model';
-  import { ComplexResponse } from 'shared/utils/util';
-  /**
-   * Send a request to the server and resolve after receiving a response
-   *
-   * @param requestType The type of request
-   * @param contents Contents to send in the request
-   * @returns Promise that resolves with the response message
-   */
-  export const request: <TParam, TReturn>(
-    requestType: string,
-    contents: TParam,
-  ) => Promise<ComplexResponse<TReturn>>;
-  /**
-   * Sends an event to other processes. Does NOT run the local event subscriptions as they should be
-   * run by NetworkEventEmitter after sending on network.
-   *
-   * @param eventType Unique network event type for coordinating between processes
-   * @param event Event to emit on the network
-   */
-  export const emitEventOnNetwork: <T>(eventType: string, event: T) => Promise<void>;
-  /** Disconnects from the server */
-  export const disconnect: () => void;
-  /**
-   * Sets up the ConnectionService by connecting to the server and setting up event handlers
-   *
-   * @param localRequestHandler Function that handles requests from the server by accepting a
-   *   requestType and a ComplexRequest and returning a Promise of a Complex Response
-   * @param networkRequestRouter Function that determines the appropriate clientId to which to send
-   *   requests of the given type
-   * @param localEventHandler Function that handles events from the server by accepting an eventType
-   *   and an event and emitting the event locally
-   * @param connectorEventHandlers Functions that run when network connector events occur like when
-   *   clients are disconnected
-   * @returns Promise that resolves when finished connecting
-   */
-  export const connect: (
-    localRequestHandler: RequestHandler,
-    networkRequestRouter: RequestRouter,
-    localEventHandler: NetworkEventHandler,
-    connectorEventHandlers: NetworkConnectorEventHandlers,
-  ) => Promise<void>;
-  /** Gets this connection's clientId */
-  export const getClientId: () => number;
-}
-declare module 'shared/models/papi-network-event-emitter.model' {
-  import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
-  /**
-   * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
-   * callbacks when the event is emitted. Events on NetworkEventEmitters can be emitted across
-   * processes. They are coordinated between processes by their type. Use eventEmitter.event(callback)
-   * to subscribe to the event. Use eventEmitter.emit(event) to run the subscriptions. Generally, this
-   * EventEmitter should be private, and its event should be public. That way, the emitter is not
-   * publicized, but anyone can subscribe to the event.
-   *
-   * WARNING: Do not use this class directly outside of NetworkService, or it will not do what you
-   * expect. Use NetworkService.createNetworkEventEmitter.
-   *
-   * WARNING: You cannot emit events with complex types on the network.
-   */
-  export default class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
-    /** Callback that sends the event to other processes on the network when it is emitted */
-    private networkSubscriber;
-    /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
-    private networkDisposer;
-    /**
-     * Creates a NetworkEventEmitter
-     *
-     * @param networkSubscriber Callback that accepts the event and emits it to other processes
-     * @param networkDisposer Callback that unlinks this emitter from the network
-     */
-    constructor(
-      /** Callback that sends the event to other processes on the network when it is emitted */
-      networkSubscriber: PlatformEventHandler<T>,
-      /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
-      networkDisposer: () => void,
-    );
-    emit: (event: T) => void;
-    /**
-     * Runs only the subscriptions for the event that are on this process. Does not send over network
-     *
-     * @param event Event data to provide to subscribed callbacks
-     */
-    emitLocal(event: T): void;
-    dispose: () => Promise<boolean>;
-  }
+  export const createProtocolHandler: () => Promise<INetworkProtocolHandler>;
 }
 declare module 'shared/services/network.service' {
   /**
@@ -1515,46 +1142,12 @@ declare module 'shared/services/network.service' {
    * expose this whole service on papi, but there are a few things that are exposed via
    * papiNetworkService
    */
-  import { ClientConnectEvent, ClientDisconnectEvent } from 'shared/data/internal-connection.model';
+  import { InternalRequestHandler } from 'shared/data/internal-connection.model';
   import { UnsubscriberAsync, PlatformEventEmitter, PlatformEvent } from 'platform-bible-utils';
-  import {
-    ComplexRequest,
-    ComplexResponse,
-    RequestHandlerType,
-    SerializedRequestType,
-  } from 'shared/utils/util';
-  /**
-   * Args handler function for a request. Called when a request is handled. The function should accept
-   * the spread of the contents array of the request as its parameters. The function should return an
-   * object that becomes the contents object of the response. This type of handler is a normal
-   * function.
-   */
-  type ArgsRequestHandler<TParam extends Array<unknown> = any[], TReturn = any> = (
-    ...args: TParam
-  ) => Promise<TReturn> | TReturn;
-  /**
-   * Contents handler function for a request. Called when a request is handled. The function should
-   * accept the contents object of the request as its single parameter. The function should return an
-   * object that becomes the contents object of the response.
-   */
-  type ContentsRequestHandler<TParam = any, TReturn = any> = (contents: TParam) => Promise<TReturn>;
-  /**
-   * Complex handler function for a request. Called when a request is handled. The function should
-   * accept a ComplexRequest object as its single parameter. The function should return a
-   * ComplexResponse object that becomes the response.. This type of handler is the most flexible of
-   * the request handlers.
-   */
-  type ComplexRequestHandler<TParam = any, TReturn = any> = (
-    request: ComplexRequest<TParam>,
-  ) => Promise<ComplexResponse<TReturn>>;
-  /** Event that emits with clientId when a client connects */
-  export const onDidClientConnect: PlatformEvent<ClientConnectEvent>;
-  /** Event that emits with clientId when a client disconnects */
-  export const onDidClientDisconnect: PlatformEvent<ClientDisconnectEvent>;
+  import { SerializedRequestType } from 'shared/utils/util';
+  export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
-  export const shutdown: () => void;
-  /** Sets up the NetworkService. Runs only once */
-  export const initialize: () => Promise<void>;
+  export const shutdown: () => Promise<void>;
   /**
    * Send a request on the network and resolve the response contents.
    *
@@ -1571,34 +1164,30 @@ declare module 'shared/services/network.service' {
    *
    * @param requestType The type of request on which to register the handler
    * @param handler Function to register to run on requests
-   * @param handlerType Type of handler function - indicates what type of parameters and what return
-   *   type the handler has
    * @returns Promise that resolves if the request successfully registered and unsubscriber function
    *   to run to stop the passed-in function from handling requests
    */
   export function registerRequestHandler(
     requestType: SerializedRequestType,
-    handler: ArgsRequestHandler,
-    handlerType?: RequestHandlerType,
+    requestHandler: InternalRequestHandler,
   ): Promise<UnsubscriberAsync>;
-  export function registerRequestHandler(
+  /**
+   * Creates a function that is a request function with a baked requestType. This is also nice because
+   * you get TypeScript type support using this function.
+   *
+   * @param requestType RequestType for request function
+   * @returns Function to call with arguments of request that performs the request and resolves with
+   *   the response contents
+   */
+  export const createRequestFunction: <TParam extends unknown[], TReturn>(
     requestType: SerializedRequestType,
-    handler: ContentsRequestHandler,
-    handlerType?: RequestHandlerType,
-  ): Promise<UnsubscriberAsync>;
-  export function registerRequestHandler(
-    requestType: SerializedRequestType,
-    handler: ComplexRequestHandler,
-    handlerType?: RequestHandlerType,
-  ): Promise<UnsubscriberAsync>;
+  ) => (...args: TParam) => Promise<TReturn>;
   /**
    * Creates an event emitter that works properly over the network. Other connections receive this
    * event when it is emitted.
    *
    * WARNING: You can only create a network event emitter once per eventType to prevent hijacked event
    * emitters.
-   *
-   * WARNING: You cannot emit events with complex types on the network.
    *
    * @param eventType Unique network event type for coordinating between connections
    * @returns Event emitter whose event works between connections
@@ -1611,20 +1200,7 @@ declare module 'shared/services/network.service' {
    * @returns Event for the event type that runs the callback provided when the event is emitted
    */
   export const getNetworkEvent: <T>(eventType: string) => PlatformEvent<T>;
-  /**
-   * Creates a function that is a request function with a baked requestType. This is also nice because
-   * you get TypeScript type support using this function.
-   *
-   * @param requestType RequestType for request function
-   * @returns Function to call with arguments of request that performs the request and resolves with
-   *   the response contents
-   */
-  export const createRequestFunction: <TParam extends unknown[], TReturn>(
-    requestType: SerializedRequestType,
-  ) => (...args: TParam) => Promise<TReturn>;
   export interface PapiNetworkService {
-    onDidClientConnect: typeof onDidClientConnect;
-    onDidClientDisconnect: typeof onDidClientDisconnect;
     createNetworkEventEmitter: typeof createNetworkEventEmitter;
     getNetworkEvent: typeof getNetworkEvent;
   }
@@ -2952,9 +2528,22 @@ declare module 'papi-shared-types' {
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
-  import { CommandHandlers, CommandNames } from 'papi-shared-types';
-  /** Sets up the CommandService. Only runs once and always returns the same promise after that */
-  export const initialize: () => Promise<void>;
+  import { CommandHandlers } from 'papi-shared-types';
+  /**
+   * Register a command on the papi to be handled here
+   *
+   * @param commandName Command name to register for handling here
+   *
+   *   - Note: Command names must consist of two string separated by at least one period. We recommend one
+   *       period and lower camel case in case we expand the api in the future to allow dot notation.
+   *
+   * @param handler Function to run when the command is invoked
+   * @returns True if successfully registered, throws with error message if not
+   */
+  export const registerCommand: <CommandName extends keyof CommandHandlers>(
+    commandName: CommandName,
+    handler: CommandHandlers[CommandName],
+  ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
   export const sendCommand: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
@@ -2973,21 +2562,6 @@ declare module 'shared/services/command.service' {
   ) => (
     ...args: Parameters<CommandHandlers[CommandName]>
   ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
-  /**
-   * Register a command on the papi to be handled here
-   *
-   * @param commandName Command name to register for handling here
-   *
-   *   - Note: Command names must consist of two string separated by at least one period. We recommend one
-   *       period and lower camel case in case we expand the api in the future to allow dot notation.
-   *
-   * @param handler Function to run when the command is invoked
-   * @returns True if successfully registered, throws with error message if not
-   */
-  export const registerCommand: <CommandName extends CommandNames>(
-    commandName: CommandName,
-    handler: CommandHandlers[CommandName],
-  ) => Promise<UnsubscriberAsync>;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You

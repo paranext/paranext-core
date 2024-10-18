@@ -238,7 +238,7 @@ export default class ServerNetworkConnector implements INetworkConnector {
     return requestPromise;
   };
 
-  emitEventOnNetwork = async <T>(eventType: string, event: InternalEvent<T>) => {
+  emitEventOnNetwork = async <T,>(eventType: string, event: InternalEvent<T>) => {
     // Send this event to all connections
     // Using for...of on iterator here because it is significantly faster (not converting to array first) and cleaner this way in this case
     // eslint-disable-next-line no-restricted-syntax

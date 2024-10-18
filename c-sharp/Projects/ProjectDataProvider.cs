@@ -1,8 +1,7 @@
 using System.Text.Json.Nodes;
 using Paranext.DataProvider.JsonUtils;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider.NetworkObjects;
 
 namespace Paranext.DataProvider.Projects;
 
@@ -26,13 +25,13 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
     /// <summary>
     /// Upon success, getters should return a ResponseToRequest that contains the requested data.
     /// </summary>
-    protected Dictionary<string, Func<string, ResponseToRequest>> Getters { get; } = new();
+    protected Dictionary<string, Func<string, object?>> Getters { get; } = [];
 
     /// <summary>
     /// Upon success, setters should return a ResponseToRequest that contains data scope used to notify the network about data changes.
     /// If there is only a single scope to the data (i.e., it is not partitioned), return a ResponseToRequest containing "*".
     /// </summary>
-    protected Dictionary<string, Func<string, string, ResponseToRequest>> Setters { get; } = new();
+    protected Dictionary<string, Func<string, string, object?>> Setters { get; } = [];
 
     private ProjectDataScope ExtractDataScope(string jsonString)
     {
@@ -52,75 +51,55 @@ internal abstract class ProjectDataProvider : NetworkObjects.DataProvider
         return functionNames;
     }
 
-    protected override MessageEvent GetDataProviderCreatedEvent()
+    protected override NetworkObjectCreatedDetails GetDataProviderCreatedDetails()
     {
         var functionNames = GetFunctionNames();
         functionNames.Sort();
-        return new MessageEventProjectDataProviderCreated(
-            DataProviderName,
-            functionNames.ToArray(),
-            ProjectDetails.Metadata.Id,
-            ProjectDetails.Metadata.ProjectInterfaces
-        );
-    }
-
-    protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
-    {
-        // TODO: Handle wrong number of parameters (e.g. none) more gracefully
-
-        try
+        return new ProjectDataProviderCreatedDetails
         {
-            if (functionName.StartsWith("get"))
-                return Getters[functionName](args[0]!.ToJsonString());
-
-            if (functionName.StartsWith("set"))
+            Id = DataProviderName,
+            ObjectType = DataProviderType,
+            Functions = [.. functionNames],
+            Attributes = new ProjectDataProviderAttributes()
             {
-                var setReturn = Setters[functionName](args[0]!.ToJsonString(), args[1]!.ToString());
-                SendDataUpdateEvent(setReturn.Contents);
-                return setReturn;
-            }
-
-            return ResponseToRequest.Failed($"Unknown function: {functionName}");
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine(e.ToString());
-            return ResponseToRequest.Failed(e.ToString());
-        }
+                ProjectId = ProjectDetails.Metadata.Id,
+                ProjectInterfaces = ProjectDetails.Metadata.ProjectInterfaces,
+            },
+        };
     }
 
-    private ResponseToRequest GetExtensionData(string jsonScope)
+    protected override object? HandleRequest(string functionName, JsonArray args)
     {
-        try
+        if (functionName.StartsWith("get"))
+            return Getters[functionName](args[0]!.ToJsonString());
+
+        if (functionName.StartsWith("set"))
         {
-            return GetExtensionData(ExtractDataScope(jsonScope));
+            var setReturn = Setters[functionName](args[0]!.ToJsonString(), args[1]!.ToString());
+            ThreadingUtils.RunTask(SendDataUpdateEventAsync(setReturn), "PDP setter event");
+            return setReturn;
         }
-        catch (Exception ex)
-        {
-            return ResponseToRequest.Failed(ex.ToString());
-        }
+
+        throw new InvalidDataException($"Unknown function: {functionName}");
     }
 
-    private ResponseToRequest SetExtensionData(string jsonScope, string data)
+    private object? GetExtensionData(string jsonScope)
     {
-        try
-        {
-            var retVal = SetExtensionData(ExtractDataScope(jsonScope), data);
-            return retVal;
-        }
-        catch (Exception ex)
-        {
-            return ResponseToRequest.Failed(ex.ToString());
-        }
+        return GetExtensionData(ExtractDataScope(jsonScope));
+    }
+
+    private object? SetExtensionData(string jsonScope, string data)
+    {
+        return SetExtensionData(ExtractDataScope(jsonScope), data);
     }
 
     /// <summary>
     /// Get an extension's data in a project identified by <param name="scope"></param>.
     /// </summary>
-    public abstract ResponseToRequest GetExtensionData(ProjectDataScope scope);
+    public abstract object? GetExtensionData(ProjectDataScope scope);
 
     /// <summary>
     /// Set an extension's data in a project identified by <param name="scope"></param>.
     /// </summary>
-    public abstract ResponseToRequest SetExtensionData(ProjectDataScope scope, string data);
+    public abstract object? SetExtensionData(ProjectDataScope scope, string data);
 }

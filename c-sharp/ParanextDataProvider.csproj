@@ -32,6 +32,7 @@
     <PackageReference Include="SIL.Core" Version="14.2.0-beta0009" />
     <PackageReference Include="SIL.Scripture" Version="14.2.0-beta0009" />
     <PackageReference Include="SIL.WritingSystems" Version="14.2.0-beta0009" />
+    <PackageReference Include="StreamJsonRpc" Version="2.19.27" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
     <PackageReference Include="icu.net" Version="2.10.0" />

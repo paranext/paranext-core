@@ -1,12 +1,5 @@
 import { ProcessType } from '@shared/global-this.model';
-import {
-  UnsubscriberAsync,
-  charAt,
-  indexOf,
-  isString,
-  stringLength,
-  substring,
-} from 'platform-bible-utils';
+import { charAt, indexOf, isString, stringLength, substring } from 'platform-bible-utils';
 
 const NONCE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const NONCE_CHARS_LENGTH = stringLength(NONCE_CHARS);
@@ -24,85 +17,6 @@ export function newNonce(): string {
     nonce += charAt(NONCE_CHARS, Math.floor(Math.random() * NONCE_CHARS_LENGTH));
   return nonce;
 }
-
-// #region Unsubscriber stuff
-
-/**
- * Creates a safe version of a register function that returns a Promise<UnsubscriberAsync>.
- *
- * @param unsafeRegisterFn Function that does some kind of async registration and returns an
- *   unsubscriber and a promise that resolves when the registration is finished
- * @param isInitialized Whether the service associated with this safe UnsubscriberAsync function is
- *   initialized
- * @param initialize Promise that resolves when the service is finished initializing
- * @returns Safe version of an unsafe function that returns a promise to an UnsubscriberAsync
- *   (meaning it will wait to register until the service is initialized)
- */
-export const createSafeRegisterFn = <TParam extends Array<unknown>>(
-  unsafeRegisterFn: (...args: TParam) => Promise<UnsubscriberAsync>,
-  isInitialized: boolean,
-  initialize: () => Promise<void>,
-): ((...args: TParam) => Promise<UnsubscriberAsync>) => {
-  return async (...args: TParam) => {
-    if (!isInitialized) await initialize();
-    return unsafeRegisterFn(...args);
-  };
-};
-
-// #endregion
-
-// #region Request/Response types
-
-/**
- * Type of object passed to a complex request handler that provides information about the request.
- * This type is used as the public-facing interface for requests
- */
-export type ComplexRequest<TParam = unknown> = {
-  /** The one who sent the request */
-  senderId: number;
-  contents: TParam;
-};
-
-type ComplexResponseSuccess<TReturn = unknown> = {
-  /** Whether the handler that created this response was successful in handling the request */
-  success: true;
-  /**
-   * Content with which to respond to the request. Must be provided unless the response failed or
-   * TReturn is undefined
-   */
-  contents: TReturn;
-};
-
-type ComplexResponseFailure = {
-  /** Whether the handler that created this response was successful in handling the request */
-  success: false;
-  /**
-   * Content with which to respond to the request. Must be provided unless the response failed or
-   * TReturn is undefined Removed from failure so we do not change the type of contents for type
-   * safety. We could add errorContents one day if we really need it
-   */
-  /* contents?: TReturn; */
-  /** Error explaining the problem that is only populated if success is false */
-  errorMessage: string;
-};
-
-/**
- * Type of object to create when handling a complex request where you desire to provide additional
- * information beyond the contents of the response This type is used as the public-facing interface
- * for responses
- */
-export type ComplexResponse<TReturn = unknown> =
-  | ComplexResponseSuccess<TReturn>
-  | ComplexResponseFailure;
-
-/** Type of request handler - indicates what type of parameters and what return type the handler has */
-export enum RequestHandlerType {
-  Args = 'args',
-  Contents = 'contents',
-  Complex = 'complex',
-}
-
-// #endregion
 
 // #region Module loading
 

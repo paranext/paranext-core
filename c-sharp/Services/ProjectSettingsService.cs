@@ -1,11 +1,12 @@
 using System.Text.Json;
-using Paranext.DataProvider.MessageHandlers;
 using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.Services
 {
     internal static class ProjectSettingsService
     {
+        private static readonly TimeSpan s_timeout = TimeSpan.FromSeconds(1);
+
         private const string PROJECT_SETTINGS_SERVICE = "object:ProjectSettingsService.function";
         private const string PROJECT_SETTING_VALIDATOR = "extensionProjectSettingValidator:";
 
@@ -37,35 +38,24 @@ namespace Paranext.DataProvider.Services
         )
         {
             bool requestSucceeded = false;
-            TaskCompletionSource taskSource = new();
-            using var validationTask = taskSource.Task;
-
-            papiClient.SendRequest(
+            var task = papiClient.SendRequestAsync(
                 PROJECT_SETTINGS_SERVICE,
-                new object[] { "isValid", key, newValueJson, currentValueJson, allChangesJson },
+                ["isValid", key, newValueJson, currentValueJson, allChangesJson],
                 (bool success, object? returnValue) =>
                 {
-                    try
-                    {
-                        if (success)
-                        {
-                            var result = (JsonElement?)returnValue;
-                            if (result.HasValue)
-                                requestSucceeded = result.Value.GetBoolean();
-                        }
+                    if (!success)
+                        return;
 
-                        taskSource.TrySetResult();
-                    }
-                    catch (Exception ex)
-                    {
-                        requestSucceeded = false;
-                        taskSource.TrySetException(ex);
-                    }
+                    var result = (JsonElement?)returnValue;
+                    if (result.HasValue)
+                        requestSucceeded = result.Value.GetBoolean();
                 }
             );
 
-            using var cts = new CancellationTokenSource();
-            validationTask.Wait(cts.Token);
+            string description = $"ProjectSettingService.IsValid for {key}";
+            if (!ThreadingUtils.RunTask(task, description, s_timeout))
+                throw new TimeoutException(description);
+
             return requestSucceeded;
         }
 
@@ -85,34 +75,24 @@ namespace Paranext.DataProvider.Services
         public static string? GetDefault(PapiClient papiClient, string key)
         {
             string? defaultValue = null;
-            TaskCompletionSource taskSource = new();
-            using var getDefaultTask = taskSource.Task;
-
-            papiClient.SendRequest(
+            var task = papiClient.SendRequestAsync(
                 PROJECT_SETTINGS_SERVICE,
-                new object[] { "getDefault", key },
+                ["getDefault", key],
                 (bool success, object? returnValue) =>
                 {
-                    try
-                    {
-                        if (success)
-                        {
-                            var result = (JsonElement?)returnValue;
-                            if (result.HasValue)
-                                defaultValue = result.Value.ToString();
-                        }
+                    if (!success)
+                        return;
 
-                        taskSource.TrySetResult();
-                    }
-                    catch (Exception ex)
-                    {
-                        taskSource.TrySetException(ex);
-                    }
+                    var result = (JsonElement?)returnValue;
+                    if (result.HasValue)
+                        defaultValue = result.Value.ToString();
                 }
             );
 
-            using var cts = new CancellationTokenSource();
-            getDefaultTask.Wait(cts.Token);
+            string description = $"ProjectSettingService.GetDefault for {key}";
+            if (!ThreadingUtils.RunTask(task, description, s_timeout))
+                throw new TimeoutException(description);
+
             return defaultValue;
         }
 
@@ -138,7 +118,7 @@ namespace Paranext.DataProvider.Services
             > validatorCallback
         )
         {
-            ResponseToRequest requestHandler(JsonElement jsonElement)
+            bool requestHandler(JsonElement jsonElement)
             {
                 // Check if the JsonElement is an array
                 if (
@@ -146,7 +126,7 @@ namespace Paranext.DataProvider.Services
                     || jsonElement.GetArrayLength() < 3
                 )
                 {
-                    return ResponseToRequest.Failed(
+                    throw new ArgumentException(
                         $"Validator for {key} expected a JSON array with 3 items: newValueJson"
                             + "currentValueJson, allChangesJson"
                     );
@@ -156,23 +136,32 @@ namespace Paranext.DataProvider.Services
                 string currentValueJson = jsonElement[1].GetString() ?? "";
                 string allChangesJson = jsonElement[2].GetString() ?? "";
 
-                var validationResponse = validatorCallback(
+                var (result, error) = validatorCallback(
                     (newValueJson, currentValueJson, allChangesJson)
                 );
-                return validationResponse.result
-                    ? ResponseToRequest.Succeeded()
-                    : ResponseToRequest.Failed(
-                        validationResponse.error
+                return result
+                    ? true
+                    : throw new InvalidDataException(
+                        error
                             ?? "Parameter validation failed for {key}. Error response provided no details."
                     );
             }
             ;
 
-            var t = papiClient.RegisterRequestHandler(GetValidatorKey(key), requestHandler);
+            var task = papiClient.RegisterRequestHandlerAsync(
+                GetValidatorKey(key),
+                requestHandler,
+                (int)s_timeout.TotalMilliseconds
+            );
 
-            using var cts = new CancellationTokenSource();
-            t.Wait(cts.Token);
-            return t.Result;
+            string description = $"ProjectSettingService.RegisterValidator for {key}";
+            if (!ThreadingUtils.RunTask(task, description, s_timeout))
+                throw new TimeoutException(description);
+
+            // The task has completed already at this point
+#pragma warning disable VSTHRD002
+            return task.IsCompletedSuccessfully && task.Result;
+#pragma warning restore VSTHRD002
         }
     }
 }

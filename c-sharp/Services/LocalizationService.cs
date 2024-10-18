@@ -25,44 +25,42 @@ internal static class LocalizationService
     )
     {
         string value = defaultValue ?? key;
-        TaskCompletionSource taskSource = new();
-        using var getSettingTask = taskSource.Task;
-
-        papiClient.SendRequest(
+        Exception? thrownException = null;
+        var requestTask = papiClient.SendRequestAsync(
             SETTINGS_SERVICE_REQUEST,
-            new object[] { "getLocalizedString", new LocalizationSelector(key) },
+            ["getLocalizedString", new LocalizationSelector(key)],
             (bool success, object? returnValue) =>
             {
                 try
                 {
-                    if (success)
-                    {
-                        var result = (JsonElement?)returnValue;
-                        if (result.HasValue)
-                        {
-                            var resultString = result.Value.Deserialize<string>();
-                            if (resultString != null && resultString != key)
-                                value = resultString;
-                        }
-                    }
+                    if (!success)
+                        return;
 
-                    taskSource.TrySetResult();
+                    var result = (JsonElement?)returnValue;
+                    if (result.HasValue)
+                    {
+                        var resultString = result.Value.Deserialize<string>();
+                        if (resultString != null && resultString != key)
+                            value = resultString;
+                    }
                 }
                 catch (Exception ex)
                 {
                     if (shouldThrowErrors)
-                        taskSource.TrySetException(ex);
+                        thrownException = ex;
                     else
-                    {
                         Trace.TraceError(ex.Message);
-                        taskSource.TrySetResult();
-                    }
                 }
             }
         );
 
-        using var cts = new CancellationTokenSource();
-        getSettingTask.Wait(cts.Token);
+        string description = $"getLocalizedString for {key}";
+        if (!ThreadingUtils.RunTask(requestTask, description, TimeSpan.FromSeconds(1)))
+            throw new TimeoutException(description);
+
+        if (thrownException != null)
+            throw thrownException;
+
         return value;
     }
 }
