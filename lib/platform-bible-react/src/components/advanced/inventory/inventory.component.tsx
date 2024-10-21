@@ -1,13 +1,3 @@
-import { useEffect, useMemo, useState } from 'react';
-import { LocalizedStringValue, ScriptureReference } from 'platform-bible-utils';
-import { Input } from '@/components/shadcn-ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/shadcn-ui/select';
 import DataTable, {
   ColumnDef,
   RowContents,
@@ -15,11 +5,30 @@ import DataTable, {
 } from '@/components/advanced/data-table/data-table.component';
 import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
 import Checkbox from '@/components/shadcn-ui/checkbox';
+import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
-import { inventoryRelatedItemColumn } from './inventory-columns';
 import {
-  createTableData,
-  InventoryItem,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/shadcn-ui/select';
+import { RowSelectionState } from '@tanstack/react-table';
+import {
+  deepEqual,
+  LocalizedStringValue,
+  ScriptureReference,
+  substring,
+} from 'platform-bible-utils';
+import { useEffect, useMemo, useState } from 'react';
+import { inventoryRelatedItemColumn as inventoryAdditionalItemColumn } from './inventory-columns';
+import {
+  getBookNumFromId,
+  getLinesFromUSFM,
+  getNumberFromUSFM,
+  getStatusForItem,
+  InventoryItemOccurrence,
   InventoryTableData,
   Scope,
   StatusFilter,
@@ -45,6 +54,11 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
 
 export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+
+export type AdditionalItemsLabels = {
+  checkboxText?: string;
+  tableHeaders?: string[];
 };
 
 /**
@@ -74,7 +88,7 @@ const filterItemData = (
   }
 
   if (textFilter !== '')
-    filteredItemData = filteredItemData.filter((item) => item.item.includes(textFilter));
+    filteredItemData = filteredItemData.filter((item) => item.items[0].includes(textFilter));
 
   return filteredItemData;
 };
@@ -90,9 +104,15 @@ type InventoryProps = {
   scriptureReference: ScriptureReference;
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: InventoryLocalizedStrings;
-  showRelatedItemsButtonText?: string;
-  showRelatedItemsTableHeader?: string;
-  extractItems: (text: string) => InventoryItem[];
+  extractItems:
+    | RegExp
+    | ((
+        text: string | undefined,
+        scriptureRef: ScriptureReference,
+        approvedItems: string[],
+        unapprovedItems: string[],
+      ) => InventoryTableData[]);
+  additionalItemsLabels?: AdditionalItemsLabels;
   approvedItems: string[];
   unapprovedItems: string[];
   text: string | undefined;
@@ -101,14 +121,90 @@ type InventoryProps = {
   columns: ColumnDef<InventoryTableData>[];
 };
 
+/**
+ * Turns array of strings into array of inventory items, along with their count and status
+ *
+ * @param inventoryItems String array that contains inventory items
+ * @param getStatusForItem Function that gets status for inventory item from related project
+ *   settings
+ * @returns Array of inventory items, along with their count and status
+ */
+const createTableData = (
+  text: string | undefined,
+  scriptureRef: ScriptureReference,
+  approvedItems: string[],
+  unapprovedItems: string[],
+  itemRegex: RegExp,
+): InventoryTableData[] => {
+  if (!text || text === '') return [];
+
+  const tableData: InventoryTableData[] = [];
+
+  let currentBook: number | undefined = scriptureRef.bookNum;
+  let currentChapter: number | undefined = scriptureRef.chapterNum;
+  let currentVerse: number | undefined = scriptureRef.verseNum;
+
+  const lines = getLinesFromUSFM(text);
+
+  lines.forEach((line: string) => {
+    if (line.startsWith('\\id')) {
+      currentBook = getBookNumFromId(line);
+      currentChapter = 0;
+      currentVerse = 0;
+    }
+    if (line.startsWith('\\c')) {
+      currentChapter = getNumberFromUSFM(line);
+      currentVerse = 0;
+    }
+    if (line.startsWith('\\v')) {
+      currentVerse = getNumberFromUSFM(line);
+      if (currentChapter === 0) {
+        currentChapter = scriptureRef.chapterNum;
+      }
+    }
+
+    let match: RegExpExecArray | null = itemRegex.exec(line);
+    // RegExp.exec returns null when no match is found
+    // eslint-disable-next-line no-null/no-null
+    while (match !== null) {
+      const items = match;
+      const itemIndex = match.index;
+      const existingItem = tableData.find((tableEntry) => deepEqual(tableEntry.items, items));
+      const newReference: InventoryItemOccurrence = {
+        reference: {
+          bookNum: currentBook !== undefined ? currentBook : -1,
+          chapterNum: currentChapter !== undefined ? currentChapter : -1,
+          verseNum: currentVerse !== undefined ? currentVerse : -1,
+        },
+        text: substring(line, Math.max(0, itemIndex - 25), Math.min(itemIndex + 25, line.length)),
+      };
+      if (existingItem) {
+        existingItem.count += 1;
+        existingItem.occurrences.push(newReference);
+      } else {
+        const newItem: InventoryTableData = {
+          items,
+          count: 1,
+          status: getStatusForItem(items[0], approvedItems, unapprovedItems),
+          occurrences: [newReference],
+        };
+        tableData.push(newItem);
+      }
+
+      match = itemRegex.exec(line);
+    }
+  });
+
+  return tableData;
+};
+
 /** Inventory component that is used to view and control the status of provided project settings */
 export default function Inventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,
-  showRelatedItemsButtonText,
-  showRelatedItemsTableHeader,
   extractItems,
+  additionalItemsLabels,
   approvedItems,
   unapprovedItems,
   text,
@@ -125,51 +221,95 @@ export default function Inventory({
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
 
-  const [showRelatedItems, setShowRelatedItems] = useState<boolean>(false);
+  const [showAdditionalItems, setShowAdditionalItems] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
-  const [selectedItem, setSelectedItem] = useState<InventoryItem>({ item: '' });
+  const [selectedItem, setSelectedItem] = useState<string[]>([]);
 
   const tableData: InventoryTableData[] = useMemo(() => {
     if (!text) return [];
-    return createTableData(
-      text,
-      scriptureReference,
-      approvedItems,
-      unapprovedItems,
-      extractItems,
-      showRelatedItems,
-    );
-  }, [text, scriptureReference, approvedItems, unapprovedItems, extractItems, showRelatedItems]);
+    if (extractItems instanceof RegExp)
+      return createTableData(
+        text,
+        scriptureReference,
+        approvedItems,
+        unapprovedItems,
+        extractItems,
+      );
+    return extractItems(text, scriptureReference, approvedItems, unapprovedItems);
+  }, [text, extractItems, scriptureReference, approvedItems, unapprovedItems]);
 
-  const showRelatedItemsControl: boolean = useMemo(() => {
-    return tableData.some((tableEntry: InventoryTableData) => tableEntry.relatedItem !== undefined);
-  }, [tableData]);
+  const showAdditionalItemsControl: boolean = useMemo(() => {
+    return !!additionalItemsLabels;
+  }, [additionalItemsLabels]);
+
+  const reducedTableData: InventoryTableData[] = useMemo(() => {
+    if (showAdditionalItems) return tableData;
+
+    const newTableData: InventoryTableData[] = [];
+
+    tableData.forEach((tableEntry) => {
+      const firstItem = tableEntry.items[0];
+
+      const existingEntry = newTableData.find(
+        (newTableEntry) => newTableEntry.items[0] === firstItem,
+      );
+
+      if (existingEntry) {
+        existingEntry.count += tableEntry.count;
+        existingEntry.occurrences = existingEntry.occurrences.concat(tableEntry.occurrences);
+      } else {
+        newTableData.push({
+          items: [firstItem],
+          count: tableEntry.count,
+          occurrences: tableEntry.occurrences,
+          status: tableEntry.status,
+        });
+      }
+    });
+
+    return newTableData;
+  }, [showAdditionalItems, tableData]);
+
+  const filteredTableData: InventoryTableData[] = useMemo(() => {
+    return filterItemData(reducedTableData, statusFilter, textFilter);
+  }, [reducedTableData, statusFilter, textFilter]);
 
   const allColumns: ColumnDef<InventoryTableData>[] = useMemo(() => {
-    if (!showRelatedItems) return columns;
-    return [inventoryRelatedItemColumn(showRelatedItemsTableHeader ?? 'Related Item'), ...columns];
-  }, [columns, showRelatedItems, showRelatedItemsTableHeader]);
+    if (!showAdditionalItems) return columns;
+    const additionalColumns: ColumnDef<InventoryTableData>[] = [];
 
-  const filteredTableData = useMemo(() => {
-    return filterItemData(tableData, statusFilter, textFilter);
-  }, [tableData, statusFilter, textFilter]);
+    const numberOfAdditionalItems = filteredTableData.reduce((maxAdditionalItems, obj) => {
+      return Math.max(maxAdditionalItems, obj.items.length - 1);
+    }, 0);
+
+    for (let index = 0; index < numberOfAdditionalItems; index++) {
+      additionalColumns.push(
+        inventoryAdditionalItemColumn(
+          additionalItemsLabels?.tableHeaders?.[index] || 'Additional Item',
+          index,
+        ),
+      );
+    }
+
+    return [...additionalColumns, ...columns];
+  }, [additionalItemsLabels?.tableHeaders, columns, filteredTableData, showAdditionalItems]);
 
   useEffect(() => {
-    setSelectedItem({ item: '' });
+    setSelectedItem([]);
   }, [filteredTableData]);
 
   const rowClickHandler = (
     row: RowContents<InventoryTableData>,
     table: TableContents<InventoryTableData>,
   ) => {
-    table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
-    row.toggleSelected(undefined);
-
-    setSelectedItem({
-      item: row.getValue('item'),
-      relatedItem: showRelatedItems ? row.getValue('relatedItem') : undefined,
+    table.setRowSelection(() => {
+      const newSelection: RowSelectionState = {};
+      newSelection[row.index] = true;
+      return newSelection;
     });
+
+    setSelectedItem(row.original.items);
   };
 
   const handleScopeChange = (value: string) => {
@@ -223,15 +363,18 @@ export default function Inventory({
             setTextFilter(event.target.value);
           }}
         />
-        {showRelatedItemsControl && (
+        {showAdditionalItemsControl && (
           <div className="tw-m-1 tw-flex tw-items-center tw-rounded-md tw-border">
             <Checkbox
               className="tw-m-1"
-              checked={showRelatedItems}
-              onCheckedChange={(checked: boolean) => setShowRelatedItems(checked)}
+              checked={showAdditionalItems}
+              onCheckedChange={(checked: boolean) => {
+                setSelectedItem([]);
+                setShowAdditionalItems(checked);
+              }}
             />
             <Label className="tw-m-1 tw-flex-shrink-0 tw-whitespace-nowrap">
-              {showRelatedItemsButtonText ?? 'Show Related Items'}
+              {additionalItemsLabels?.checkboxText ?? 'Show Related Items'}
             </Label>
           </div>
         )}
@@ -244,12 +387,11 @@ export default function Inventory({
           stickyHeader
         />
       </div>
-      {selectedItem.item !== '' && (
+      {selectedItem[0] !== '' && (
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
             tableData={filteredTableData}
             selectedItem={selectedItem}
-            showRelatedItems={showRelatedItems}
             setScriptureReference={setScriptureReference}
             localizedStrings={localizedStrings}
           />

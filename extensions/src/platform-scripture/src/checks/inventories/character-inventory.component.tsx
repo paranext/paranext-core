@@ -1,9 +1,8 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference, split } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import {
   Button,
   ColumnDef,
   Inventory,
-  InventoryItem,
   InventoryTableData,
   Scope,
   inventoryCountColumn,
@@ -19,24 +18,6 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
-
-/**
- * Extracts characters from scripture text. If a target is provided, only extracts occurrences of
- * the provided target
- *
- * @param text The scripture text from which the characters will be extracted
- * @returns An array of characters extracted from the provided scripture text
- */
-const extractCharacters = (text: string): InventoryItem[] => {
-  const characters = split(text, '');
-
-  const inventoryItems: InventoryItem[] = [];
-  characters.forEach((character) => {
-    inventoryItems.push({ item: character });
-  });
-
-  return inventoryItems;
-};
 
 /**
  * Function that constructs the column for the inventory component
@@ -144,12 +125,15 @@ function CharacterInventory({
     ],
   );
 
+  // Matches all characters
+  const charactersRegex: RegExp = /./g;
+
   return (
     <Inventory
       scriptureReference={scriptureReference}
       setScriptureReference={setScriptureReference}
       localizedStrings={localizedStrings}
-      extractItems={extractCharacters}
+      extractItems={charactersRegex}
       approvedItems={approvedItems}
       unapprovedItems={unapprovedItems}
       text={text}

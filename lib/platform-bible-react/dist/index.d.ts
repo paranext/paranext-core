@@ -249,23 +249,34 @@ export interface DataTableProps<TData, TValue> {
  * from TanStack's React Table library
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
-export type InventoryItem = {
-	item: string;
-	relatedItem?: string;
-};
 export type InventoryItemOccurrence = {
 	reference: ScriptureReference;
 	text: string;
 };
 export type InventoryTableData = {
-	item: string;
-	relatedItem?: string;
+	items: string[];
 	count: number;
 	status: Status;
 	occurrences: InventoryItemOccurrence[];
 };
 export type Scope = "book" | "chapter" | "verse";
 export type Status = "approved" | "unapproved" | "unknown";
+/**
+ * Splits USFM string into shorter line-like segments
+ *
+ * @param text A single (likely very large) USFM string
+ * @returns An array containing the input text, split into shorter segments
+ */
+export declare const getLinesFromUSFM: (text: string) => string[];
+/**
+ * Extracts chapter or verse number from USFM strings that start with a chapter or verse marker
+ *
+ * @param text USFM string
+ * @returns Chapter or verse number if one is found. Else returns 0.
+ */
+export declare const getNumberFromUSFM: (text: string) => number | undefined;
+export declare const getBookNumFromId: (text: string) => number | undefined;
+export declare const getStatusForItem: (item: string, approvedItems: string[], unapprovedItems: string[]) => Status;
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -286,13 +297,16 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
+export type AdditionalItemsLabels = {
+	checkboxText?: string;
+	tableHeaders?: string[];
+};
 export type InventoryProps = {
 	scriptureReference: ScriptureReference;
 	setScriptureReference: (scriptureReference: ScriptureReference) => void;
 	localizedStrings: InventoryLocalizedStrings;
-	showRelatedItemsButtonText?: string;
-	showRelatedItemsTableHeader?: string;
-	extractItems: (text: string) => InventoryItem[];
+	extractItems: RegExp | ((text: string | undefined, scriptureRef: ScriptureReference, approvedItems: string[], unapprovedItems: string[]) => InventoryTableData[]);
+	additionalItemsLabels?: AdditionalItemsLabels;
 	approvedItems: string[];
 	unapprovedItems: string[];
 	text: string | undefined;
@@ -301,7 +315,7 @@ export type InventoryProps = {
 	columns: ColumnDef<InventoryTableData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, showRelatedItemsButtonText, showRelatedItemsTableHeader, extractItems, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *

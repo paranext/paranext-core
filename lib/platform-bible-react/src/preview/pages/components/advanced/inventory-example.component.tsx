@@ -4,13 +4,9 @@ import {
   inventoryItemColumn,
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
-import {
-  InventoryItem,
-  InventoryTableData,
-  Scope,
-} from '@/components/advanced/inventory/inventory-utils';
+import { InventoryTableData, Scope } from '@/components/advanced/inventory/inventory-utils';
 import Inventory from '@/components/advanced/inventory/inventory.component';
-import { ScriptureReference, substring } from 'platform-bible-utils';
+import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
 
@@ -51,18 +47,6 @@ const createColumns = (
   ),
 ];
 
-const extractItems = (text: string): InventoryItem[] => {
-  // Finds repeated words, and captures the first occurrence of the word
-  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
-
-  const inventoryItems: InventoryItem[] = [];
-  repeatedWords.forEach((word) => {
-    inventoryItems.push({ item: word, relatedItem: substring(word, 2) });
-  });
-
-  return inventoryItems;
-};
-
 function InventoryExample() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [approvedItems, setApprovedItems] = useState<string[]>(['well', 'he']);
@@ -86,18 +70,18 @@ function InventoryExample() {
           unapprovedItems,
           setUnapprovedItems,
         )}
-        extractItems={extractItems}
+        extractItems={/\b(\p{L}+)\b(?=\s\b\1\b)/gu}
       />
       Approved items:
       <ul>
         {approvedItems.map((item) => {
-          return <li>- {item}</li>;
+          return <li key={item}>- {item}</li>;
         })}
       </ul>
       Unapproved items:
       <ul>
         {unapprovedItems.map((item) => {
-          return <li>- {item}</li>;
+          return <li key={item}>- {item}</li>;
         })}
       </ul>
       <p>

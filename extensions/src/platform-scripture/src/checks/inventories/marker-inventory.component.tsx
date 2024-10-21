@@ -1,18 +1,28 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference, substring } from 'platform-bible-utils';
+import papi from '@papi/frontend';
+import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import {
   Button,
   ColumnDef,
+  getBookNumFromId,
+  getLinesFromUSFM,
+  getNumberFromUSFM,
+  getStatusForItem,
   Inventory,
-  InventoryItem,
-  InventoryTableData,
-  Scope,
   inventoryCountColumn,
   inventoryItemColumn,
+  InventoryItemOccurrence,
   inventoryStatusColumn,
+  InventoryTableData,
+  Scope,
 } from 'platform-bible-react';
-import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import {
+  deepEqual,
+  LanguageStrings,
+  LocalizeKey,
+  ScriptureReference,
+  substring,
+} from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
-import papi from '@papi/frontend';
 
 const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_marker%',
@@ -29,20 +39,79 @@ const defaultScrRef: ScriptureReference = {
   verseNum: 1,
 };
 
-const extractMarkers = (text: string): InventoryItem[] => {
-  // Finds markers (a backslash character followed by any number of letters, digits and possibly a '*')
-  const markers = text.match(/\\[a-zA-Z0-9]+\*?/g) || [];
+const extractMarkers = (
+  text: string | undefined,
+  scriptureRef: ScriptureReference,
+  approvedItems: string[],
+  unapprovedItems: string[],
+): InventoryTableData[] => {
+  if (!text || text === '') return [];
 
-  const inventoryItems: InventoryItem[] = [];
-  markers.forEach((marker, index) => {
-    const precedingMarker = index > 0 ? markers[index - 1] : '';
-    inventoryItems.push({
-      item: marker,
-      relatedItem: precedingMarker,
-    });
+  const tableData: InventoryTableData[] = [];
+
+  let currentBook: number | undefined = scriptureRef.bookNum;
+  let currentChapter: number | undefined = scriptureRef.chapterNum;
+  let currentVerse: number | undefined = scriptureRef.verseNum;
+
+  const markerRegex: RegExp = /\\[a-zA-Z0-9]+\*?/g;
+
+  let precedingMarker: string = '';
+
+  const lines = getLinesFromUSFM(text);
+
+  lines.forEach((line: string) => {
+    if (line.startsWith('\\id')) {
+      currentBook = getBookNumFromId(line);
+      currentChapter = 0;
+      currentVerse = 0;
+    }
+    if (line.startsWith('\\c')) {
+      currentChapter = getNumberFromUSFM(line);
+      currentVerse = 0;
+    }
+    if (line.startsWith('\\v')) {
+      currentVerse = getNumberFromUSFM(line);
+      if (currentChapter === 0) {
+        currentChapter = scriptureRef.chapterNum;
+      }
+    }
+
+    let match: RegExpExecArray | null = markerRegex.exec(line);
+    // RegExp.exec returns null when no match is found
+    // eslint-disable-next-line no-null/no-null
+    while (match !== null) {
+      // This code depends on our regular expression to match a single marker per match
+      if (match.length > 1) throw new Error('Multiple markers found in a single match');
+      const items = [match[0], precedingMarker];
+      [precedingMarker] = match;
+      const itemIndex = match.index;
+      const existingItem = tableData.find((tableEntry) => deepEqual(tableEntry.items, items));
+      const newReference: InventoryItemOccurrence = {
+        reference: {
+          bookNum: currentBook !== undefined ? currentBook : -1,
+          chapterNum: currentChapter !== undefined ? currentChapter : -1,
+          verseNum: currentVerse !== undefined ? currentVerse : -1,
+        },
+        text: substring(line, Math.max(0, itemIndex - 25), Math.min(itemIndex + 25, line.length)),
+      };
+      if (existingItem) {
+        existingItem.count += 1;
+        existingItem.occurrences.push(newReference);
+      } else {
+        const newItem: InventoryTableData = {
+          items,
+          count: 1,
+          status: getStatusForItem(items[0], approvedItems, unapprovedItems),
+          occurrences: [newReference],
+        };
+        tableData.push(newItem);
+      }
+
+      match = markerRegex.exec(line);
+    }
   });
 
-  return inventoryItems;
+  return tableData;
 };
 
 function getDescription(markersInfo: string[], marker: string): string | undefined {
@@ -204,8 +273,10 @@ function MarkerInventory({
       scope={scope}
       onScopeChange={onScopeChange}
       columns={columns}
-      showRelatedItemsTableHeader={precedingMarkerLabel}
-      showRelatedItemsButtonText={showPrecedingMarkerLabel}
+      additionalItemsLabels={{
+        checkboxText: showPrecedingMarkerLabel,
+        tableHeaders: [precedingMarkerLabel],
+      }}
     />
   );
 }

@@ -38,6 +38,7 @@ export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode 
 export const inventoryItemColumn = (itemLabel: string): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'item',
+    accessorFn: (row: InventoryTableData) => row.items[0],
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
         {itemLabel}
@@ -50,18 +51,20 @@ export const inventoryItemColumn = (itemLabel: string): ColumnDef<InventoryTable
 /**
  * Function that creates the related item column for inventories
  *
- * @param relatedItemLabel Localized label for the related item column (e.g. 'Preceding Marker')
+ * @param additionalItemLabel Localized label for the related item column (e.g. 'Preceding Marker')
  * @returns Column that shows the related inventory items. Should be used with the DataTable
  *   component
  */
 export const inventoryRelatedItemColumn = (
-  relatedItemLabel: string,
+  additionalItemLabel: string,
+  additionalItemIndex: number,
 ): ColumnDef<InventoryTableData> => {
   return {
-    accessorKey: 'relatedItem',
+    accessorKey: `item${additionalItemIndex}`,
+    accessorFn: (row: InventoryTableData) => row.items[additionalItemIndex],
     header: ({ column }) => (
       <Button variant="ghost" onClick={() => column.toggleSorting(undefined)}>
-        {relatedItemLabel}
+        {additionalItemLabel}
         {getSortingIcon(column.getIsSorted())}
       </Button>
     ),

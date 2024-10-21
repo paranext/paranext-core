@@ -7,14 +7,13 @@ import {
   TableRow,
 } from '@/components/shadcn-ui/table';
 import { Canon } from '@sillsdev/scripture';
-import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
+import { deepEqual, LanguageStrings, ScriptureReference } from 'platform-bible-utils';
 import { useMemo } from 'react';
-import { InventoryItem, InventoryTableData } from './inventory-utils';
+import { InventoryTableData } from './inventory-utils';
 
 type OccurrencesTableProps = {
   tableData: InventoryTableData[];
-  selectedItem: InventoryItem;
-  showRelatedItems: boolean;
+  selectedItem: string[];
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
   localizedStrings: LanguageStrings;
 };
@@ -22,7 +21,6 @@ type OccurrencesTableProps = {
 function OccurrencesTable({
   tableData,
   selectedItem,
-  showRelatedItems,
   setScriptureReference,
   localizedStrings,
 }: OccurrencesTableProps) {
@@ -34,12 +32,9 @@ function OccurrencesTable({
   const filteredTableData = useMemo(
     () =>
       tableData.filter((tableEntry: InventoryTableData) =>
-        showRelatedItems
-          ? tableEntry.item === selectedItem.item &&
-            tableEntry.relatedItem === selectedItem.relatedItem
-          : tableEntry.item === selectedItem.item,
+        deepEqual(tableEntry.items, selectedItem),
       ),
-    [selectedItem, showRelatedItems, tableData],
+    [selectedItem, tableData],
   );
 
   if (filteredTableData.length > 1) throw new Error('Selected item is not unique');

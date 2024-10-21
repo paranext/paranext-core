@@ -19,9 +19,15 @@ export { default as Inventory } from './components/advanced/inventory/inventory.
 export { INVENTORY_STRING_KEYS } from './components/advanced/inventory/inventory.component';
 export type { InventoryLocalizedStrings } from './components/advanced/inventory/inventory.component';
 export type {
-  InventoryItem,
+  InventoryItemOccurrence,
   InventoryTableData,
   Scope,
+} from './components/advanced/inventory/inventory-utils';
+export {
+  getLinesFromUSFM,
+  getNumberFromUSFM,
+  getBookNumFromId,
+  getStatusForItem,
 } from './components/advanced/inventory/inventory-utils';
 export {
   inventoryItemColumn,
