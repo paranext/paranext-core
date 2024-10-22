@@ -223,13 +223,13 @@ Platform.Bible WebViews must be treated differently than other code, so this pro
 
 ### Built-in Tailwind CSS support
 
-This project is equipped with [Tailwind CSS](https://tailwindcss.com/) configured the same way it is configured in Platform.Bible's React component library `platform-bible-react` to enable WebViews to match Platform.Bible's look and feel. To add Tailwind CSS to your WebView, simply import your extension's `./src/tailwind.scss` file into your WebView's style `.scss` file:
+This project is equipped with [Tailwind CSS](https://tailwindcss.com/) configured the same way it is configured in Platform.Bible's React component library `platform-bible-react` to enable WebViews to match Platform.Bible's look and feel. To add Tailwind CSS to your WebView, simply import your extension's `./src/tailwind.css` file into your WebView's style `.scss` file (note that you should not add the `.css` extension when importing local CSS files into `.scss` files):
 
 ```scss
-@import './path/to/src/tailwind.scss';
+@import './path/to/src/tailwind';
 ```
 
-Adding this import to your WebView's styles enables Tailwind CSS in the WebView. Important Tailwind configuration notes:
+Adding this import to your WebView's styles enables Tailwind CSS in the WebView. Alternatively, you can directly use `./src/tailwind.css` as your WebView's style file if you do not need any additional CSS. Important Tailwind configuration notes:
 
 - This project's Tailwind's configuration is set up with the prefix `tw-`, so all Tailwind classes must have `tw-` at the beginning (e.g. `tw-bg-purple-500`).
 - [Tailwind's preflight](https://tailwindcss.com/docs/preflight) is enabled by default, meaning some default HTML tag styles are significantly modified. You can [disable it](https://tailwindcss.com/docs/preflight#disabling-preflight) or [restrict its scope](https://www.npmjs.com/package/tailwindcss-scoped-preflight) if desired. However, we generally recommend instead using [`@tailwindcss/typography`](https://github.com/tailwindlabs/tailwindcss-typography), included in this project's Tailwind configuration by default, when displaying flowing content.
