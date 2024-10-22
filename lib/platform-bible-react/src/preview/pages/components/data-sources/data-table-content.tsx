@@ -6,7 +6,7 @@ type MyDataType = {
   character: string;
 };
 
-const getSortingIcon = (sortDirection: false | SortDirection): string => {
+const getSortingSymbol = (sortDirection: false | SortDirection): string => {
   if (sortDirection === 'asc') {
     return '↑';
   }
@@ -58,7 +58,7 @@ export const columns: ColumnDef<MyDataType>[] = [
       return (
         <Button onClick={() => column.toggleSorting(undefined)}>
           Character
-          {getSortingIcon(column.getIsSorted())}
+          {getSortingSymbol(column.getIsSorted())}
         </Button>
       );
     },

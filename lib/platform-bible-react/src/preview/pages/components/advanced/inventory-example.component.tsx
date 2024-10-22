@@ -4,8 +4,8 @@ import {
   inventoryItemColumn,
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
-import { InventoryTableData, Scope } from '@/components/advanced/inventory/inventory-utils';
-import Inventory from '@/components/advanced/inventory/inventory.component';
+import { InventoryTableData } from '@/components/advanced/inventory/inventory-utils';
+import Inventory, { Scope } from '@/components/advanced/inventory/inventory.component';
 import { ScriptureReference } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';

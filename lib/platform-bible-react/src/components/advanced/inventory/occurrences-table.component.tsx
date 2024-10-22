@@ -51,7 +51,7 @@ function OccurrencesTable({
         {selectedTableData.length > 0 &&
           selectedTableData[0].occurrences.map((occurrence, index) => (
             <TableRow
-              // This needs to be fixed
+              // This might need to be fixed
               // eslint-disable-next-line react/no-array-index-key
               key={index}
               onClick={() => {

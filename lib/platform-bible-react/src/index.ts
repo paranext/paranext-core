@@ -17,17 +17,19 @@ export type {
 } from './components/advanced/data-table/data-table.component';
 export { default as Inventory } from './components/advanced/inventory/inventory.component';
 export { INVENTORY_STRING_KEYS } from './components/advanced/inventory/inventory.component';
-export type { InventoryLocalizedStrings } from './components/advanced/inventory/inventory.component';
 export type {
-  InventoryItemOccurrence,
-  InventoryTableData,
+  InventoryLocalizedStrings,
   Scope,
-} from './components/advanced/inventory/inventory-utils';
+} from './components/advanced/inventory/inventory.component';
 export {
   getLinesFromUSFM,
   getNumberFromUSFM,
   getBookNumFromId,
   getStatusForItem,
+} from './components/advanced/inventory/inventory-utils';
+export type {
+  InventoryTableData,
+  InventoryItemOccurrence,
 } from './components/advanced/inventory/inventory-utils';
 export {
   inventoryItemColumn,

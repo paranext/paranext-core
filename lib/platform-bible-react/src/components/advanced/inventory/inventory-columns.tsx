@@ -1,3 +1,4 @@
+import { ColumnDef, SortDirection } from '@/components/advanced/data-table/data-table.component';
 import { Button } from '@/components/shadcn-ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 import {
@@ -9,7 +10,6 @@ import {
   CircleXIcon,
 } from 'lucide-react';
 import { ReactNode } from 'react';
-import { ColumnDef, SortDirection } from '../data-table/data-table.component';
 import { InventoryTableData, Status } from './inventory-utils';
 
 /**
@@ -19,7 +19,7 @@ import { InventoryTableData, Status } from './inventory-utils';
  *   i.e. not sorted)
  * @returns The appropriate sorting icon for the provided sorting direction
  */
-export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
+const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
   if (sortDirection === 'asc') {
     return <ArrowUpIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
   }

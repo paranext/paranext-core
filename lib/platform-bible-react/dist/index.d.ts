@@ -249,6 +249,7 @@ export interface DataTableProps<TData, TValue> {
  * from TanStack's React Table library
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+export type Status = "approved" | "unapproved" | "unknown";
 export type InventoryItemOccurrence = {
 	reference: ScriptureReference;
 	text: string;
@@ -259,8 +260,6 @@ export type InventoryTableData = {
 	status: Status;
 	occurrences: InventoryItemOccurrence[];
 };
-export type Scope = "book" | "chapter" | "verse";
-export type Status = "approved" | "unapproved" | "unknown";
 /**
  * Splits USFM string into shorter line-like segments
  *
@@ -297,6 +296,7 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
+export type Scope = "book" | "chapter" | "verse";
 export type AdditionalItemsLabels = {
 	checkboxText?: string;
 	tableHeaders?: string[];

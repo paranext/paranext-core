@@ -80,7 +80,8 @@ const extractMarkers = (
     // RegExp.exec returns null when no match is found
     // eslint-disable-next-line no-null/no-null
     while (match !== null) {
-      // This code depends on our regular expression to match a single marker per match
+      // For this code to work correctly we need our regular expression to match a single marker
+      // on each per match
       if (match.length > 1) throw new Error('Multiple markers found in a single match');
       const items = [match[0], precedingMarker];
       [precedingMarker] = match;
@@ -114,13 +115,13 @@ const extractMarkers = (
   return tableData;
 };
 
-function getDescription(markersInfo: string[], marker: string): string | undefined {
+function getDescription(markerDescriptions: string[], marker: string): string | undefined {
   const markerWithoutBackslash = substring(marker, 1);
   // Escape all characters that need escaping to be handled as plain text
   const escapedMarker = markerWithoutBackslash.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  // Search for whole words surrounded by whitespace or periods or at string boundaries (^ and $)
+  // Search for whole marker surrounded by whitespace or periods or at string boundaries (^ and $)
   const regex = new RegExp(`(^|[\\s.])${escapedMarker}([\\s.]|$)`);
-  return markersInfo.find((markerNames) => regex.test(markerNames));
+  return markerDescriptions.find((markerNames) => regex.test(markerNames));
 }
 
 /**

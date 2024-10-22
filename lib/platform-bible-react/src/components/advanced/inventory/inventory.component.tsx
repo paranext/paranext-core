@@ -1,6 +1,7 @@
 import DataTable, {
   ColumnDef,
   RowContents,
+  RowSelectionState,
   TableContents,
 } from '@/components/advanced/data-table/data-table.component';
 import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
@@ -14,7 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import { RowSelectionState } from '@tanstack/react-table';
 import {
   deepEqual,
   LocalizedStringValue,
@@ -22,7 +22,6 @@ import {
   substring,
 } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
-import { inventoryRelatedItemColumn as inventoryAdditionalItemColumn } from './inventory-columns';
 import {
   getBookNumFromId,
   getLinesFromUSFM,
@@ -30,9 +29,9 @@ import {
   getStatusForItem,
   InventoryItemOccurrence,
   InventoryTableData,
-  Scope,
-  StatusFilter,
+  Status,
 } from './inventory-utils';
+import { inventoryRelatedItemColumn } from './inventory-columns';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -56,7 +55,11 @@ export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
-export type AdditionalItemsLabels = {
+export type Scope = 'book' | 'chapter' | 'verse';
+
+type StatusFilter = Status | 'all';
+
+type AdditionalItemsLabels = {
   checkboxText?: string;
   tableHeaders?: string[];
 };
@@ -91,34 +94,6 @@ const filterItemData = (
     filteredItemData = filteredItemData.filter((item) => item.items[0].includes(textFilter));
 
   return filteredItemData;
-};
-
-const localizeString = (
-  strings: InventoryLocalizedStrings,
-  key: keyof InventoryLocalizedStrings,
-) => {
-  return strings[key] ?? key;
-};
-
-type InventoryProps = {
-  scriptureReference: ScriptureReference;
-  setScriptureReference: (scriptureReference: ScriptureReference) => void;
-  localizedStrings: InventoryLocalizedStrings;
-  extractItems:
-    | RegExp
-    | ((
-        text: string | undefined,
-        scriptureRef: ScriptureReference,
-        approvedItems: string[],
-        unapprovedItems: string[],
-      ) => InventoryTableData[]);
-  additionalItemsLabels?: AdditionalItemsLabels;
-  approvedItems: string[];
-  unapprovedItems: string[];
-  text: string | undefined;
-  scope: Scope;
-  onScopeChange: (scope: Scope) => void;
-  columns: ColumnDef<InventoryTableData>[];
 };
 
 /**
@@ -196,6 +171,42 @@ const createTableData = (
   });
 
   return tableData;
+};
+
+/**
+ * Gets the localized value for the provided key
+ *
+ * @param strings Object containing localized string
+ * @param key Key for a localized string
+ * @returns The localized value for the provided key, if available. Returns the key if no localized
+ *   value is available
+ */
+const localizeString = (
+  strings: InventoryLocalizedStrings,
+  key: keyof InventoryLocalizedStrings,
+) => {
+  return strings[key] ?? key;
+};
+
+type InventoryProps = {
+  scriptureReference: ScriptureReference;
+  setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  localizedStrings: InventoryLocalizedStrings;
+  extractItems:
+    | RegExp
+    | ((
+        text: string | undefined,
+        scriptureRef: ScriptureReference,
+        approvedItems: string[],
+        unapprovedItems: string[],
+      ) => InventoryTableData[]);
+  additionalItemsLabels?: AdditionalItemsLabels;
+  approvedItems: string[];
+  unapprovedItems: string[];
+  text: string | undefined;
+  scope: Scope;
+  onScopeChange: (scope: Scope) => void;
+  columns: ColumnDef<InventoryTableData>[];
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -286,7 +297,7 @@ export default function Inventory({
 
     for (let index = 0; index < numberOfAdditionalItems; index++) {
       additionalColumns.push(
-        inventoryAdditionalItemColumn(
+        inventoryRelatedItemColumn(
           additionalItemsLabels?.tableHeaders?.[index] || 'Additional Item',
           index + 1,
         ),

@@ -3,6 +3,8 @@
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference } from 'platform-bible-utils';
 
+export type Status = 'approved' | 'unapproved' | 'unknown';
+
 export type InventoryItemOccurrence = {
   reference: ScriptureReference;
   text: string;
@@ -14,12 +16,6 @@ export type InventoryTableData = {
   status: Status;
   occurrences: InventoryItemOccurrence[];
 };
-
-export type Scope = 'book' | 'chapter' | 'verse';
-
-export type Status = 'approved' | 'unapproved' | 'unknown';
-
-export type StatusFilter = Status | 'all';
 
 /* #endregion */
 
@@ -44,7 +40,9 @@ export const getLinesFromUSFM = (text: string) => {
  */
 export const getNumberFromUSFM = (text: string): number | undefined => {
   // Captures all digits that follow \v or \c markers followed by whitespace located at the start of a string
-  const match = text.match(/^\\[vc]\s+(\d+)/);
+  const regex = /^\\[vc]\s+(\d+)/;
+  const match = text.match(regex);
+
   if (match) {
     return +match[1];
   }

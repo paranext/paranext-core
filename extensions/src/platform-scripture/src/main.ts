@@ -42,7 +42,7 @@ const repeatableWordsValidator: ProjectSettingValidator<
   'platformScripture.repeatableWords' | 'platformScripture.nonRepeatableWords'
 > = async (newValue) => typeof newValue === 'string';
 
-// A word can be any string value
+// A marker can be any string value
 const markersValidator: ProjectSettingValidator<
   'platformScripture.validMarkers' | 'platformScripture.invalidMarkers'
 > = async (newValue) => typeof newValue === 'string';
