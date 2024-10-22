@@ -1,9 +1,5 @@
 import { useCallback, useRef } from 'react';
-import {
-  WebViewContentType,
-  WebViewDefinition,
-  SavedWebViewDefinition,
-} from '@shared/models/web-view.model';
+import { WebViewContentType, WebViewDefinition } from '@shared/models/web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
@@ -18,10 +14,11 @@ import {
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 import { getLocalizeKeysForScrollGroupIds, serialize } from 'platform-bible-utils';
-import { BookChapterControl, ScrollGroupSelector } from 'platform-bible-react';
+import { BookChapterControl, ScrollGroupSelector, useEvent } from 'platform-bible-react';
 import './web-view.component.css';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { getNetworkEvent } from '@shared/services/network.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -30,6 +27,21 @@ export function getTitle({ webViewType, title, contentType }: Partial<WebViewTab
 }
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+/**
+ * Tell the web view service to load the web view with the provided information. Used to retrieve
+ * web view content and to reload the web view when the extension service reloads
+ *
+ * @param data Web view definition to load
+ */
+async function retrieveWebViewContent(webViewType: string, id: string): Promise<void> {
+  const loadedId = await getWebView(webViewType, undefined, {
+    existingId: id,
+    createNewIfNotFound: false,
+  });
+  if (loadedId !== id)
+    logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
+}
 
 export default function WebView({
   id,
@@ -45,6 +57,19 @@ export default function WebView({
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const iframeRef = useRef<HTMLIFrameElement>(undefined!);
+
+  useEvent(
+    getNetworkEvent('platform.onDidReloadExtensions'),
+    useCallback(async () => {
+      try {
+        await retrieveWebViewContent(webViewType, id);
+      } catch (e) {
+        logger.error(
+          `web-view.component failed to reload web view content for webViewType ${webViewType} id ${id} when extensions reloaded: ${e}`,
+        );
+      }
+    }, [webViewType, id]),
+  );
 
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WebViewContentType.URL;
@@ -109,22 +134,6 @@ export default function WebView({
   );
 }
 
-/**
- * Tell the web view service to load the web view with the provided saved definition
- *
- * @param data Web view definition to load
- */
-async function retrieveWebViewContent(data: SavedWebViewDefinition): Promise<void> {
-  const loadedId = await getWebView(data.webViewType, undefined, {
-    existingId: data.id,
-    createNewIfNotFound: false,
-  });
-  if (loadedId !== data.id)
-    logger.error(
-      `WebView with type ${data.webViewType} and id ${data.id} loaded into id ${loadedId}!`,
-    );
-}
-
 export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefinition): TabInfo {
   return {
     ...savedTabInfo,
@@ -153,7 +162,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
     if (!data.content && data.content !== '') {
       (async () => {
         try {
-          await retrieveWebViewContent(data);
+          await retrieveWebViewContent(data.webViewType, data.id);
         } catch (e) {
           logger.error(
             `web-view.component failed to retrieve web view content for ${serialize(
