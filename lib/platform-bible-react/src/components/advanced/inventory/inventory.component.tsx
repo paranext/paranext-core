@@ -279,15 +279,16 @@ export default function Inventory({
     if (!showAdditionalItems) return columns;
     const additionalColumns: ColumnDef<InventoryTableData>[] = [];
 
-    const numberOfAdditionalItems = filteredTableData.reduce((maxAdditionalItems, obj) => {
-      return Math.max(maxAdditionalItems, obj.items.length - 1);
-    }, 0);
+    const numberOfAdditionalItems =
+      filteredTableData.reduce((maxAdditionalItems, obj) => {
+        return Math.max(maxAdditionalItems, obj.items.length);
+      }, 0) - 1;
 
     for (let index = 0; index < numberOfAdditionalItems; index++) {
       additionalColumns.push(
         inventoryAdditionalItemColumn(
           additionalItemsLabels?.tableHeaders?.[index] || 'Additional Item',
-          index,
+          index + 1,
         ),
       );
     }
@@ -387,7 +388,7 @@ export default function Inventory({
           stickyHeader
         />
       </div>
-      {selectedItem[0] !== '' && (
+      {selectedItem.length > 0 && (
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
             tableData={filteredTableData}

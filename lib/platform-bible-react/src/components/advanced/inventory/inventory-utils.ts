@@ -53,7 +53,7 @@ export const getNumberFromUSFM = (text: string): number | undefined => {
 
 export const getBookNumFromId = (text: string): number | undefined => {
   // Captures all digits that follow \v or \c markers followed by whitespace located at the start of a string
-  const match = text.match(/^\\[id]\s+([A-Z]+)/);
+  const match = text.match(/\\id\s+([A-Z]+)/);
   if (match) {
     return Canon.bookIdToNumber(match[1]);
   }

@@ -29,7 +29,7 @@ function OccurrencesTable({
   const occurrenceHeaderText =
     localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
 
-  const filteredTableData = useMemo(
+  const selectedTableData = useMemo(
     () =>
       tableData.filter((tableEntry: InventoryTableData) =>
         deepEqual(tableEntry.items, selectedItem),
@@ -37,7 +37,7 @@ function OccurrencesTable({
     [selectedItem, tableData],
   );
 
-  if (filteredTableData.length > 1) throw new Error('Selected item is not unique');
+  if (selectedTableData.length > 1) throw new Error('Selected item is not unique');
 
   return (
     <Table stickyHeader>
@@ -48,19 +48,20 @@ function OccurrencesTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {filteredTableData[0].occurrences.map((occurrence, index) => (
-          <TableRow
-            // This needs to be fixed
-            // eslint-disable-next-line react/no-array-index-key
-            key={index}
-            onClick={() => {
-              setScriptureReference(occurrence.reference);
-            }}
-          >
-            <TableCell>{`${Canon.bookNumberToEnglishName(occurrence.reference.bookNum)} ${occurrence.reference.chapterNum}:${occurrence.reference.verseNum}`}</TableCell>
-            <TableCell>{occurrence.text}</TableCell>
-          </TableRow>
-        ))}
+        {selectedTableData.length > 0 &&
+          selectedTableData[0].occurrences.map((occurrence, index) => (
+            <TableRow
+              // This needs to be fixed
+              // eslint-disable-next-line react/no-array-index-key
+              key={index}
+              onClick={() => {
+                setScriptureReference(occurrence.reference);
+              }}
+            >
+              <TableCell>{`${Canon.bookNumberToEnglishName(occurrence.reference.bookNum)} ${occurrence.reference.chapterNum}:${occurrence.reference.verseNum}`}</TableCell>
+              <TableCell>{occurrence.text}</TableCell>
+            </TableRow>
+          ))}
       </TableBody>
     </Table>
   );
