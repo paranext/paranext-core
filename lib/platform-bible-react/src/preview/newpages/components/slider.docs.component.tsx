@@ -9,7 +9,7 @@ import ApiReferenceSection from '@/preview/newpreview-components/section-api-ref
 import IntroSection from '@/preview/newpreview-components/section-intro.component';
 import Section, { SectionApi } from '@/preview/newpreview-components/section.component';
 import UsagePattern from '@/preview/newpreview-components/usage-pattern.component';
-import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
+import { UsabilityChecks } from '@/preview/newpreview-components/ux-checks.component';
 
 const uxApprovalList: UsabilityChecks = {
   rtl_ready: 'done',

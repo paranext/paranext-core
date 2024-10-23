@@ -9,7 +9,7 @@ import { NavEntry } from '@/preview/newpreview-components/quicknav.component';
 import ApiReferenceSection from '@/preview/newpreview-components/section-api-reference.component';
 import IntroSection from '@/preview/newpreview-components/section-intro.component';
 import Section, { SectionApi } from '@/preview/newpreview-components/section.component';
-import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
+import { UsabilityChecks } from '@/preview/newpreview-components/ux-checks.component';
 import { ChevronsDownUp } from 'lucide-react';
 import UsagePattern from '@/preview/newpreview-components/usage-pattern.component';
 import Code from '@/preview/newpreview-components/code.component';

@@ -2,7 +2,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import Link from './link.component';
 import { SectionProps } from './section.component';
-import UxApproval, { UsabilityChecks } from './ux-approval.component';
+import UxChecks, { UsabilityChecks } from './ux-checks.component';
 import ComponentPreview from './component-preview.component';
 
 type IntroSectionProps = SectionProps & { usabilityChecks: UsabilityChecks } & {
@@ -30,7 +30,7 @@ export default function IntroSection({
             />
           </Button>
         </div>
-        <UxApproval usabilityChecks={usabilityChecks} componentName={header} />
+        <UxChecks usabilityChecks={usabilityChecks} componentName={header} />
       </div>
       <p className="tw-mb-6 tw-text-xl tw-text-muted-foreground">{description}</p>
       <ComponentPreview component={content} />

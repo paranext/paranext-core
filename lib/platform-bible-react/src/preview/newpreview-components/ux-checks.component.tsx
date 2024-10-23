@@ -36,44 +36,44 @@ function usabilityCheckLabel(usabilityCheck: string): string {
   }
 }
 
-export type UxApprovalProps = { usabilityChecks: UsabilityChecks; componentName: string };
+export type UxChecksProps = { usabilityChecks: UsabilityChecks; componentName: string };
 
-function approved(approval: UxState) {
-  return approval === 'done' || approval === 'not applicable';
+function passing(checkState: UxState) {
+  return checkState === 'done' || checkState === 'not applicable';
 }
 
-function countUxApprovals(usabilityChecks: UsabilityChecks): number {
-  let approvalCount = 0;
+function countUsabilityChecks(usabilityChecks: UsabilityChecks): number {
+  let checkCount = 0;
   Object.values(usabilityChecks).forEach((value: UxState) => {
-    if (approved(value)) approvalCount += 1;
+    if (passing(value)) checkCount += 1;
   });
-  return approvalCount;
+  return checkCount;
 }
 
-export default function UxApproval({ usabilityChecks, componentName }: UxApprovalProps) {
+export default function UxChecks({ usabilityChecks, componentName }: UxChecksProps) {
   const [open, setOpen] = useState(false);
 
-  const maxApprovals = Object.keys(usabilityChecks).length;
-  const approvalCount = countUxApprovals(usabilityChecks);
-  const allApproved = approvalCount === maxApprovals;
+  const maxChecks = Object.keys(usabilityChecks).length;
+  const usabilityCheckCount = countUsabilityChecks(usabilityChecks);
+  const allPassing = usabilityCheckCount === maxChecks;
   const issuesUrl = `https://github.com/paranext/paranext-core/issues?q=is%3Aissue+is%3Aopen+${encodeURIComponent(componentName)}`;
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="outline" className="tw-h-8">
-          {allApproved ? (
+          {allPassing ? (
             <BadgeCheck className="tw-h-5 tw-text-green-500" />
           ) : (
             <CircleDashed
               className={cn(
                 'tw-h-5',
-                approvalCount >= maxApprovals / 2 ? 'tw-text-yellow-500' : 'tw-text-red-500',
+                usabilityCheckCount >= maxChecks / 2 ? 'tw-text-yellow-500' : 'tw-text-red-500',
               )}
             />
           )}{' '}
           <span className="tw-ps-2">
-            UX approvals {approvalCount} / {maxApprovals}
+            Usability checks {usabilityCheckCount} / {maxChecks}
           </span>
           <ChevronDown className="tw-ml-2 tw-h-4 tw-w-4" />
         </Button>
@@ -96,7 +96,7 @@ export default function UxApproval({ usabilityChecks, componentName }: UxApprova
                       key={`checkbox-${usabilityCheck}`}
                       id={usabilityCheck}
                       disabled
-                      checked={approved(uxState)}
+                      checked={passing(uxState)}
                       className="tw-mt-1"
                     />
                     <Label

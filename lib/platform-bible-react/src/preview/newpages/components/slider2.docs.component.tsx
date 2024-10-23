@@ -3,7 +3,7 @@ import DocsPageGenerator from '@/preview/newpreview-components/docs-page-generat
 import Example from '@/preview/newpreview-components/example.component';
 import { ComponentProperty } from '@/preview/newpreview-components/properties-table.component';
 import UsagePattern from '@/preview/newpreview-components/usage-pattern.component';
-import { UsabilityChecks } from '@/preview/newpreview-components/ux-approval.component';
+import { UsabilityChecks } from '@/preview/newpreview-components/ux-checks.component';
 
 const uxApprovalList: UsabilityChecks = {
   rtl_ready: 'done',
