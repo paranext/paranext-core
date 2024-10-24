@@ -1,12 +1,12 @@
-import Checkbox from '@/components/shadcn-ui/checkbox';
 import { ColumnDef, SortDirection } from '@/components/advanced/data-table/data-table.component';
-import { Button } from '../../../..';
+import { Button } from '@/components/shadcn-ui/button';
+import Checkbox from '@/components/shadcn-ui/checkbox';
 
 type MyDataType = {
   character: string;
 };
 
-const getSortingIcon = (sortDirection: false | SortDirection): string => {
+const getSortingSymbol = (sortDirection: false | SortDirection): string => {
   if (sortDirection === 'asc') {
     return '↑';
   }
@@ -58,7 +58,7 @@ export const columns: ColumnDef<MyDataType>[] = [
       return (
         <Button onClick={() => column.toggleSorting(undefined)}>
           Character
-          {getSortingIcon(column.getIsSorted())}
+          {getSortingSymbol(column.getIsSorted())}
         </Button>
       );
     },

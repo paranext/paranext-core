@@ -8,6 +8,7 @@ import { VerseRef } from '@sillsdev/scripture';
 import papi from '@papi/frontend';
 import CharacterInventory from './checks/inventories/character-inventory.component';
 import RepeatedWordsInventory from './checks/inventories/repeated-words-inventory.component';
+import MarkerInventory from './checks/inventories/marker-inventory.component';
 
 /**
  * Get scripture text for the provided scope and reference for the specified projectId
@@ -72,12 +73,15 @@ global.webViewComponent = function InventoryWebView({
       validItemsSetting = 'platformScripture.repeatableWords';
       invalidItemsSetting = 'platformScripture.nonRepeatableWords';
       break;
+    case 'platformScripture.markersInventory':
+      InventoryVariant = MarkerInventory;
+      validItemsSetting = 'platformScripture.validMarkers';
+      invalidItemsSetting = 'platformScripture.invalidMarkers';
+      break;
     default:
       throw new Error(`${webViewType} is not a valid inventory type`);
   }
 
-  const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
-  const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
   const [scope, setScope] = useState<Scope>('book');
   const [text] = usePromise(
     useCallback(
@@ -86,6 +90,9 @@ global.webViewComponent = function InventoryWebView({
     ),
     useMemo(() => '', []),
   );
+
+  const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
+  const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
 
   const validItemsArray = useMemo(() => validItems.split(' '), [validItems]);
   const invalidItemsArray = useMemo(() => invalidItems.split(' '), [invalidItems]);
@@ -102,6 +109,7 @@ global.webViewComponent = function InventoryWebView({
       text={text}
       scope={scope}
       onScopeChange={(newScope: Scope) => setScope(newScope)}
+      projectId={projectId}
     />
   );
 };
