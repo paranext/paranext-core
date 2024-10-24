@@ -49,13 +49,15 @@ export const inventoryItemColumn = (itemLabel: string): ColumnDef<InventoryTable
 };
 
 /**
- * Function that creates the related item column for inventories
+ * Function that creates the additional item columns for inventories
  *
  * @param additionalItemLabel Localized label for the related item column (e.g. 'Preceding Marker')
- * @returns Column that shows the related inventory items. Should be used with the DataTable
+ * @param additionalItemIndex Index that locates the desired item in the items array of the
+ *   inventory
+ * @returns Column that shows additional inventory items. Should be used with the DataTable
  *   component
  */
-export const inventoryRelatedItemColumn = (
+export const inventoryAdditionalItemColumn = (
   additionalItemLabel: string,
   additionalItemIndex: number,
 ): ColumnDef<InventoryTableData> => {
@@ -140,9 +142,13 @@ const statusChangeHandler = (
  * Function that creates the status column for inventories. Should be used with the DataTable
  * component.
  *
- * @param itemLabel Localized label for the status column
- * @param statusChangeHandler Callback function that handles status updates to selected item(s)
- * @returns Column that shows the status of the related inventory items.
+ * @param statusLabel Localized label for the status column
+ * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
+ * @param onApprovedItemsChange Callback function that stores the updated list of approved items
+ * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
+ * @param onUnapprovedItemsChange Callback function that stores the updated list of unapproved items
+ * @returns Column that shows the status buttons for the related inventory item. The button for the
+ *   current status of the item is selected
  */
 export const inventoryStatusColumn = (
   statusLabel: string,

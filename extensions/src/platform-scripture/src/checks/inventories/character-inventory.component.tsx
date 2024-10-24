@@ -19,6 +19,9 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_status%',
 ];
 
+// Matches all characters
+const charactersRegex: RegExp = /./g;
+
 /**
  * Function that constructs the column for the inventory component
  *
@@ -26,7 +29,11 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
  * @param unicodeValueLabel Localized label for the Unicode Value column
  * @param countLabel Localized label for the count column
  * @param statusLabel Localized label for the status column
- * @param statusChangeHandler Callback function that handles status updates to selected item(s)
+ * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
+ * @param onApprovedItemsChange Callback function that stores the updated list of approved items
+ * @param unapprovedItems UnapprovedItems Array of unapproved items, typically as defined in
+ *   `Settings.xml`
+ * @param onUnapprovedItemsChange Callback function that stores the updated list of unapproved items
  * @returns An array of columns that can be passed into the inventory component
  */
 const createColumns = (
@@ -124,9 +131,6 @@ function CharacterInventory({
       onUnapprovedItemsChange,
     ],
   );
-
-  // Matches all characters
-  const charactersRegex: RegExp = /./g;
 
   return (
     <Inventory

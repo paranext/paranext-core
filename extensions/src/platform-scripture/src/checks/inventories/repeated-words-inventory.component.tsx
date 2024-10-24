@@ -17,13 +17,21 @@ const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_status%',
 ];
 
+// Matches a sequence of letters surrounded by word boundaries followed by that exact same
+// sequence of letters surrounded by word boundaries
+const repeatedWordsRegex: RegExp = /\b(\p{L}+)\b(?=\s\b\1\b)/gu;
+
 /**
  * Function that constructs the column for the inventory component
  *
  * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
  * @param countLabel Localized label for the count column
  * @param statusLabel Localized label for the status column
- * @param statusChangeHandler Callback function that handles status updates to selected item(s)
+ * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
+ * @param onApprovedItemsChange Callback function that stores the updated list of approved items
+ * @param unapprovedItems UnapprovedItems Array of unapproved items, typically as defined in
+ *   `Settings.xml`
+ * @param onUnapprovedItemsChange Callback function that stores the updated list of unapproved items
  * @returns An array of columns that can be passed into the inventory component
  */
 const createColumns = (
@@ -106,10 +114,6 @@ function RepeatedWordsInventory({
       onUnapprovedItemsChange,
     ],
   );
-
-  // Matches a sequence of letters surrounded by word boundaries followed by that exact same
-  // sequence of letters surrounded by word boundaries
-  const repeatedWordsRegex: RegExp = /\b(\p{L}+)\b(?=\s\b\1\b)/gu;
 
   return (
     <Inventory

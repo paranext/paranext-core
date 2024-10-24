@@ -53,6 +53,8 @@ const extractMarkers = (
   let currentChapter: number | undefined = scriptureRef.chapterNum;
   let currentVerse: number | undefined = scriptureRef.verseNum;
 
+  // Matches a backslash followed by a sequence of letters (regular and capitals) and possibly
+  // a *-symbol
   const markerRegex: RegExp = /\\[a-zA-Z0-9]+\*?/g;
 
   let precedingMarker: string = '';
@@ -120,8 +122,8 @@ function getDescription(markerDescriptions: string[], marker: string): string | 
   // Escape all characters that need escaping to be handled as plain text
   const escapedMarker = markerWithoutBackslash.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Search for whole marker surrounded by whitespace or periods or at string boundaries (^ and $)
-  const regex = new RegExp(`(^|[\\s.])${escapedMarker}([\\s.]|$)`);
-  return markerDescriptions.find((markerNames) => regex.test(markerNames));
+  const findMarker = new RegExp(`(^|[\\s.])${escapedMarker}([\\s.]|$)`);
+  return markerDescriptions.find((markerNames) => findMarker.test(markerNames));
 }
 
 /**
@@ -129,13 +131,15 @@ function getDescription(markerDescriptions: string[], marker: string): string | 
  *
  * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
  * @param styleNameLabel Localized label for the style name column
- * @param markerNames
+ * @param markerNames Full marker name, as defined in the USFM stylesheet for the project
+ * @param unicodeValueLabel Localized label for the Unicode Value column
  * @param countLabel Localized label for the count column
- * @param statusLabel
- * @param approvedItems
- * @param onApprovedItemsChange
- * @param unapprovedItems
- * @param onUnapprovedItemsChange
+ * @param statusLabel Localized label for the status column
+ * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
+ * @param onApprovedItemsChange Callback function that stores the updated list of approved items
+ * @param unapprovedItems UnapprovedItems Array of unapproved items, typically as defined in
+ *   `Settings.xml`
+ * @param onUnapprovedItemsChange Callback function that stores the updated list of unapproved items
  * @returns An array of columns that can be passed into the inventory component
  */
 const createColumns = (

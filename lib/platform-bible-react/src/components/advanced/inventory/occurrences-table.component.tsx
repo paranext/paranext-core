@@ -7,20 +7,29 @@ import {
   TableRow,
 } from '@/components/shadcn-ui/table';
 import { Canon } from '@sillsdev/scripture';
-import { deepEqual, LanguageStrings, ScriptureReference } from 'platform-bible-utils';
-import { useMemo } from 'react';
-import { InventoryTableData } from './inventory-utils';
+import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
+import { InventoryItemOccurrence } from './inventory-utils';
 
+/** Props for the OccurrencesTable component */
 type OccurrencesTableProps = {
-  tableData: InventoryTableData[];
-  selectedItem: string[];
+  /** Data that contains scriptures references and snippets of scripture */
+  occurrenceData: InventoryItemOccurrence[];
+  /** Callback function that is executed when the scripture reference is changed */
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  /**
+   * Object with all localized strings that the OccurrencesTable needs to work well across multiple
+   * languages
+   */
   localizedStrings: LanguageStrings;
 };
 
+/**
+ * Table that shows occurrences of specified inventory item(s). The first column shows the related
+ * scripture reference. The second column shows the snippet of scripture that contains the specified
+ * inventory item
+ */
 function OccurrencesTable({
-  tableData,
-  selectedItem,
+  occurrenceData,
   setScriptureReference,
   localizedStrings,
 }: OccurrencesTableProps) {
@@ -28,16 +37,6 @@ function OccurrencesTable({
     localizedStrings['%webView_inventory_occurrences_table_header_reference%'];
   const occurrenceHeaderText =
     localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
-
-  const selectedTableData = useMemo(
-    () =>
-      tableData.filter((tableEntry: InventoryTableData) =>
-        deepEqual(tableEntry.items, selectedItem),
-      ),
-    [selectedItem, tableData],
-  );
-
-  if (selectedTableData.length > 1) throw new Error('Selected item is not unique');
 
   return (
     <Table stickyHeader>
@@ -48,8 +47,8 @@ function OccurrencesTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {selectedTableData.length > 0 &&
-          selectedTableData[0].occurrences.map((occurrence, index) => (
+        {occurrenceData.length > 0 &&
+          occurrenceData.map((occurrence, index) => (
             <TableRow
               // This might need to be fixed
               // eslint-disable-next-line react/no-array-index-key

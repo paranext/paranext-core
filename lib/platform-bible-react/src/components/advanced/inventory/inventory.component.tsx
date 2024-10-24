@@ -31,7 +31,7 @@ import {
   InventoryTableData,
   Status,
 } from './inventory-utils';
-import { inventoryRelatedItemColumn } from './inventory-columns';
+import { inventoryAdditionalItemColumn } from './inventory-columns';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -55,19 +55,22 @@ export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
+/** Scope of scripture that the inventory can operate on */
 export type Scope = 'book' | 'chapter' | 'verse';
 
+/** Status values that the status filter can select from */
 type StatusFilter = Status | 'all';
 
+/** Text labels for the inventory columns and the control components of additional inventory items */
 type AdditionalItemsLabels = {
   checkboxText?: string;
   tableHeaders?: string[];
 };
 
 /**
- * Filters data that is shown in the DataTable section of the inventory
+ * Filters data that is shown in the DataTable section of the Inventory
  *
- * @param itemData All items and their related information
+ * @param itemData All inventory items and their related information
  * @param statusFilter Allows filtering by status (i.e. show all items, or only items that are
  *   'approved', 'unapproved' or 'unknown')
  * @param textFilter Allows filtering by text. All items that include the filter text will be
@@ -99,9 +102,12 @@ const filterItemData = (
 /**
  * Turns array of strings into array of inventory items, along with their count and status
  *
- * @param inventoryItems String array that contains inventory items
- * @param getStatusForItem Function that gets status for inventory item from related project
- *   settings
+ * @param text The source scripture text that is searched for inventory items
+ * @param scriptureRef The scripture reference that the application is currently set to
+ * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
+ * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
+ * @param itemRegex Regular expression that describes what items this Inventory should extract from
+ *   the provided scripture text
  * @returns Array of inventory items, along with their count and status
  */
 const createTableData = (
@@ -188,10 +194,27 @@ const localizeString = (
   return strings[key] ?? key;
 };
 
+/** Props for the Inventory component */
 type InventoryProps = {
+  /** The scripture reference that the application is currently set to */
   scriptureReference: ScriptureReference;
+  /** Callback function that is executed when the scripture reference is changed */
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  /**
+   * Object with all localized strings that the Inventory needs to work well across multiple
+   * languages. When using this component with Platform.Bible, you can import
+   * `INVENTORY_STRING_KEYS` from this library, pass it in to the Platform's localization hook, and
+   * pass the localized keys that are returned by the hook into this prop.
+   */
   localizedStrings: InventoryLocalizedStrings;
+  /**
+   * The logic that finds the desired items in the source text. This can either be a Regular
+   * expression that captures one or multiple items (preferred), or a custom function that builds
+   * and return an InventoryDataTable[] manually. Note: In case the logic captures more than one
+   * item (i.e. InventoryTableData.items has a length greater than 1), you must provide text labels
+   * for the related columns and control elements to show by setting the `additionalItemsLabels`
+   * prop
+   */
   extractItems:
     | RegExp
     | ((
@@ -200,12 +223,27 @@ type InventoryProps = {
         approvedItems: string[],
         unapprovedItems: string[],
       ) => InventoryTableData[]);
+  /**
+   * Text labels for control elements and additional column headers in case your Inventory has more
+   * than one item to show (e.g. The 'Preceding Marker' in the Markers Inventory)
+   */
   additionalItemsLabels?: AdditionalItemsLabels;
+  /** Array of approved items, typically as defined in `Settings.xml` */
   approvedItems: string[];
+  /** UnapprovedItems Array of unapproved items, typically as defined in `Settings.xml` */
   unapprovedItems: string[];
+  /** The source scripture text that is searched for inventory items */
   text: string | undefined;
+  /** Scope of scripture that the inventory will operate on */
   scope: Scope;
+  /** Callback function that is executed when the scope is changed from the Inventory */
   onScopeChange: (scope: Scope) => void;
+  /**
+   * Column definitions for the Inventory data table. The most commonly used column definitions are
+   * pre-configured for your convenience and can be imported (e.g. inventoryItemColumn,
+   * inventoryAdditionalItemColumn inventoryCountColumn, and inventoryStatusColumn). If you need any
+   * other columns you can add these yourself
+   */
   columns: ColumnDef<InventoryTableData>[];
 };
 
@@ -297,7 +335,7 @@ export default function Inventory({
 
     for (let index = 0; index < numberOfAdditionalItems; index++) {
       additionalColumns.push(
-        inventoryRelatedItemColumn(
+        inventoryAdditionalItemColumn(
           additionalItemsLabels?.tableHeaders?.[index] || 'Additional Item',
           index + 1,
         ),
@@ -339,6 +377,15 @@ export default function Inventory({
       throw new Error(`Invalid status filter value: ${value}`);
     }
   };
+
+  const occurrenceData: InventoryItemOccurrence[] = useMemo(() => {
+    if (selectedItem.length === 0) return [];
+    const occurrence = tableData.filter((tableEntry: InventoryTableData) =>
+      deepEqual(tableEntry.items, selectedItem),
+    );
+    if (occurrence.length > 1) throw new Error('Selected item is not unique');
+    return occurrence[0].occurrences;
+  }, [selectedItem, tableData]);
 
   return (
     <div className="pr-twp tw-flex tw-h-full tw-flex-col">
@@ -399,11 +446,10 @@ export default function Inventory({
           stickyHeader
         />
       </div>
-      {selectedItem.length > 0 && (
+      {occurrenceData.length > 0 && (
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
-            tableData={filteredTableData}
-            selectedItem={selectedItem}
+            occurrenceData={occurrenceData}
             setScriptureReference={setScriptureReference}
             localizedStrings={localizedStrings}
           />
