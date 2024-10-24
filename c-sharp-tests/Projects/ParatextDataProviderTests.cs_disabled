@@ -33,7 +33,7 @@ namespace TestParanextDataProvider.Projects
             ParatextProjects.FakeAddProject(_projectDetails, _scrText);
 
             var settingsService = new DummySettingsService(Client);
-            await settingsService.RegisterDataProvider();
+            await settingsService.RegisterDataProviderAsync();
             settingsService.AddSettingValue(Settings.INCLUDE_MY_PARATEXT_9_PROJECTS, true);
         }
 
@@ -55,7 +55,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonElement serverMessage = CreateRequestMessage(function);
 
@@ -109,7 +109,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonElement serverMessage = CreateRequestMessage(
                 function,
@@ -145,7 +145,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonElement serverMessage = CreateRequestMessage(
                 function,
@@ -180,7 +180,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonElement serverMessage = CreateRequestMessage(
                 function,
@@ -241,7 +241,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonElement serverMessage = CreateRequestMessage(
                 function,
@@ -304,7 +304,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonElement serverMessage = CreateRequestMessage(
                 function,
@@ -367,7 +367,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonElement serverMessage = CreateRequestMessage(
                 function,
@@ -421,7 +421,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             // Set up an event listener to listen for the update
             List<MessageEvent> updateEvents = new();
@@ -506,7 +506,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             // Set up an event listener to listen for the update
             List<MessageEvent> updateEvents = new();
@@ -568,7 +568,7 @@ namespace TestParanextDataProvider.Projects
         {
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             ResponseToRequest response = provider.GetExtensionData(
                 new ProjectDataScope
@@ -593,7 +593,7 @@ namespace TestParanextDataProvider.Projects
         {
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             ResponseToRequest response = provider.SetExtensionData(
                 new ProjectDataScope
@@ -615,7 +615,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonNode scope = CreateDataScope("myExtension", "myFile.txt");
             JsonElement serverMessage = CreateRequestMessage("getExtensionData", scope);
@@ -636,7 +636,7 @@ namespace TestParanextDataProvider.Projects
 
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             JsonNode scope = CreateDataScope("myExtension", "myFile.txt");
             JsonElement serverMessage = CreateRequestMessage(
@@ -671,7 +671,7 @@ namespace TestParanextDataProvider.Projects
         {
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             var result = provider.SetProjectSetting(
                 VisibilitySettingName.SerializeToJson(),
@@ -691,7 +691,7 @@ namespace TestParanextDataProvider.Projects
         {
             DummyParatextProjectDataProvider provider =
                 new(PdpName, Client, _projectDetails, ParatextProjects);
-            await provider.RegisterDataProvider();
+            await provider.RegisterDataProviderAsync();
 
             var result = provider.SetProjectSetting(
                 VisibilitySettingName.SerializeToJson(),

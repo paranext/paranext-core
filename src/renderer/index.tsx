@@ -1,7 +1,6 @@
 import '@renderer/global-this.model';
 import { createRoot } from 'react-dom/client';
 import * as networkService from '@shared/services/network.service';
-import * as commandService from '@shared/services/command.service';
 import { startWebViewService } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 import webViewProviderService from '@shared/services/web-view-provider.service';
@@ -47,7 +46,6 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     blockWebSocketsToPapiNetwork();
 
     await runPromisesAndThrowIfRejected(
-      commandService.initialize(),
       webViewProviderService.initialize(),
       startWebViewService(),
       startDialogService(),

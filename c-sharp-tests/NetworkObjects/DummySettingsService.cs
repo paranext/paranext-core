@@ -26,7 +26,7 @@ internal class DummySettingsService : DataProvider
         _settingValues.Clear();
     }
 
-    protected override Task StartDataProvider()
+    protected override Task StartDataProviderAsync()
     {
         return Task.CompletedTask;
     }

@@ -5,39 +5,12 @@
 
 import * as networkService from '@shared/services/network.service';
 import { UnsubscriberAsync } from 'platform-bible-utils';
-import { createSafeRegisterFn, serializeRequestType } from '@shared/utils/util';
+import { serializeRequestType } from '@shared/utils/util';
 import { CommandHandlers, CommandNames } from 'papi-shared-types';
-import { CATEGORY_COMMAND } from '@shared/data/internal-connection.model';
-
-/** Whether this service has finished setting up */
-let isInitialized = false;
-
-/** Promise that resolves when this service is finished initializing */
-let initializePromise: Promise<void> | undefined;
+import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 
 /**
- * Send a command to the backend.
- *
- * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use
- * sendCommand
- */
-const sendCommandUnsafe = async <CommandName extends CommandNames>(
-  commandName: CommandName,
-  ...args: Parameters<CommandHandlers[CommandName]>
-): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> => {
-  // This type assertion is needed when the return type is unknown or when it's not Awaited<...>.
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
-  return networkService.request(
-    serializeRequestType(CATEGORY_COMMAND, commandName),
-    ...args,
-  ) as Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
-};
-
-/**
- * Register a command on the papi to be handled here.
- *
- * WARNING: THIS DOES NOT CHECK FOR INITIALIZATION. DO NOT USE OUTSIDE OF INITIALIZATION. Use
- * registerCommand
+ * Register a command on the papi to be handled here
  *
  * @param commandName Command name to register for handling here
  *
@@ -45,10 +18,9 @@ const sendCommandUnsafe = async <CommandName extends CommandNames>(
  *       period and lower camel case in case we expand the api in the future to allow dot notation.
  *
  * @param handler Function to run when the command is invoked
- * @returns Promise that resolves if the request successfully registered and unsubscriber function
- *   to run to stop the passed-in function from handling requests
+ * @returns True if successfully registered, throws with error message if not
  */
-const registerCommandUnsafe = <CommandName extends CommandNames>(
+export const registerCommand = <CommandName extends CommandNames>(
   commandName: CommandName,
   handler: CommandHandlers[CommandName],
 ): Promise<UnsubscriberAsync> => {
@@ -58,31 +30,17 @@ const registerCommandUnsafe = <CommandName extends CommandNames>(
   );
 };
 
-/** Sets up the CommandService. Only runs once and always returns the same promise after that */
-export const initialize = () => {
-  if (initializePromise) return initializePromise;
-
-  initializePromise = (async (): Promise<void> => {
-    if (isInitialized) return;
-
-    // TODO: Might be best to make a singleton or something
-    await networkService.initialize();
-
-    // Set up subscriptions that the service needs to work
-
-    isInitialized = true;
-  })();
-
-  return initializePromise;
-};
-
 /** Send a command to the backend. */
 export const sendCommand = async <CommandName extends CommandNames>(
   commandName: CommandName,
   ...args: Parameters<CommandHandlers[CommandName]>
 ): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> => {
-  await initialize();
-  return sendCommandUnsafe(commandName, ...args);
+  // This type assertion is needed when the return type is unknown or when it's not Awaited<...>.
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+  return networkService.request(
+    serializeRequestType(CATEGORY_COMMAND, commandName),
+    ...args,
+  ) as Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
 };
 
 /**
@@ -101,26 +59,6 @@ export const createSendCommandFunction = <CommandName extends CommandNames>(
   ): Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>> =>
     sendCommand(commandName, ...args);
 };
-
-/**
- * Register a command on the papi to be handled here
- *
- * @param commandName Command name to register for handling here
- *
- *   - Note: Command names must consist of two string separated by at least one period. We recommend one
- *       period and lower camel case in case we expand the api in the future to allow dot notation.
- *
- * @param handler Function to run when the command is invoked
- * @returns True if successfully registered, throws with error message if not
- */
-export const registerCommand: <CommandName extends CommandNames>(
-  commandName: CommandName,
-  handler: CommandHandlers[CommandName],
-) => Promise<UnsubscriberAsync> = createSafeRegisterFn(
-  registerCommandUnsafe,
-  isInitialized,
-  initialize,
-);
 
 /**
  * JSDOC SOURCE commandService

@@ -62,7 +62,7 @@ namespace TestParanextDataProvider
             return Task.CompletedTask;
         }
 
-        public override Task<bool> RegisterRequestHandler(
+        public override Task<bool> RegisterRequestHandlerAsync(
             string requestType,
             Func<JsonElement, ResponseToRequest> requestHandler,
             int responseTimeoutInMs = 5000

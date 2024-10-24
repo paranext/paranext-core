@@ -1,10 +1,9 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
-using System.Text;
 using System.Text.Json;
 using Paranext.DataProvider.JsonUtils;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.Messages;
+using SIL.Extensions;
+using StreamJsonRpc;
 
 namespace Paranext.DataProvider.MessageTransports;
 
@@ -15,25 +14,15 @@ internal class PapiClient : IDisposable
 {
     #region Delegates/Constants/Member variables
 
-    private const int RECEIVE_BUFFER_LENGTH = 2048;
-    private const int MAX_OUTGOING_MESSAGES = 10;
-    private static readonly Encoding s_utf8WithoutBom = new UTF8Encoding();
     private static readonly Uri s_connectionUri = new("ws://localhost:8876");
 
-    protected readonly Dictionary<string, IMessageHandler> _messageHandlersByMessageType = new();
-    protected readonly ConcurrentDictionary<int, IMessageHandler> _messageHandlersForMyRequests =
-        new();
     private readonly ClientWebSocket _webSocket = new();
-    private readonly Task _incomingMessageTask;
-    private readonly Task _outgoingMessageTask;
-    private readonly TimeSpan _connectTimeout = TimeSpan.FromSeconds(30);
-    private readonly TimeSpan _disconnectTimeout = TimeSpan.FromSeconds(2);
-    private readonly TaskCompletionSource<bool> _clientInitializationComplete = new();
-    private readonly BlockingCollection<Message> _outgoingMessages = new(MAX_OUTGOING_MESSAGES);
+    private readonly JsonRpc _jsonRpc;
+    private readonly ConcurrentDictionary<string, Delegate> _localMethods = new();
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly CancellationToken _cancellationToken;
-    private int _clientId = MessageInitClientConnectorInfo.CLIENT_ID_UNSET;
-    private int _nextRequestId = 1;
+    private TaskCompletionSource _disconnectTaskCompletionSource = new();
+
     private bool _isDisposed = false;
 
     #endregion
@@ -44,22 +33,19 @@ internal class PapiClient : IDisposable
     {
         _cancellationToken = _cancellationTokenSource.Token;
 
-        _incomingMessageTask = new Task(HandleIncomingMessages, _cancellationToken);
-        _outgoingMessageTask = new Task(HandleOutgoingMessages, _cancellationToken);
-
-        _messageHandlersByMessageType[MessageType.EVENT] = new MessageHandlerEvent();
-        _messageHandlersByMessageType[MessageType.INIT_CLIENT] = new MessageHandlerInitClient(
-            (int clientId) =>
-            {
-                if (_clientInitializationComplete.Task.IsCompletedSuccessfully)
-                    throw new InvalidOperationException("Reinitializing client is not allowed");
-
-                _clientId = clientId;
-                _clientInitializationComplete.TrySetResult(true);
-            }
-        );
-        _messageHandlersByMessageType[MessageType.REQUEST] =
-            new MessageHandlerRequestByRequestType();
+        var options = SerializationOptions.CreateSerializationOptions();
+        var formatter = new SystemTextJsonFormatter();
+        formatter.JsonSerializerOptions.TypeInfoResolver = options.TypeInfoResolver;
+        formatter.JsonSerializerOptions.Encoder = options.Encoder;
+        formatter.JsonSerializerOptions.PropertyNamingPolicy = options.PropertyNamingPolicy;
+        formatter.JsonSerializerOptions.WriteIndented = options.WriteIndented;
+        formatter.JsonSerializerOptions.IgnoreReadOnlyProperties = options.IgnoreReadOnlyProperties;
+        formatter.JsonSerializerOptions.Converters.AddRange(options.Converters);
+        _jsonRpc = new JsonRpc(new WebSocketMessageHandler(_webSocket, formatter))
+        {
+            AllowModificationWhileListening = true,
+            ExceptionOptions = ExceptionSettings.TrustedData,
+        };
     }
 
     #endregion
@@ -89,15 +75,12 @@ internal class PapiClient : IDisposable
 
         if (isDisposing)
         {
+            _jsonRpc.Dispose();
             _webSocket.Dispose();
-            _clientInitializationComplete.TrySetResult(false);
-            _clientInitializationComplete.Task.Dispose();
             _cancellationTokenSource.Dispose();
-            _outgoingMessages.Dispose();
+            _disconnectTaskCompletionSource.TrySetResult();
+            _disconnectTaskCompletionSource.Task.Dispose();
         }
-
-        _messageHandlersByMessageType.Clear();
-        _messageHandlersForMyRequests.Clear();
 
         _isDisposed = true;
     }
@@ -112,10 +95,9 @@ internal class PapiClient : IDisposable
     public bool Connected => !_isDisposed && _webSocket.State == WebSocketState.Open;
 
     /// <summary>
-    /// Gets a task that completes once incoming and outgoing message handling is finished
+    /// Gets a task that resolves when <see cref="DisconnectAsync"/> is called.
     /// </summary>
-    public Task MessageHandlingCompleteTask =>
-        _isDisposed ? Task.CompletedTask : Task.WhenAll(_incomingMessageTask, _outgoingMessageTask);
+    public Task DisconnectTask => _disconnectTaskCompletionSource.Task;
 
     #endregion
 
@@ -132,25 +114,17 @@ internal class PapiClient : IDisposable
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
         Console.WriteLine("PapiClient connecting");
-
         await _webSocket.ConnectAsync(s_connectionUri, _cancellationToken);
-        _incomingMessageTask.Start();
-        _outgoingMessageTask.Start();
-
-        if (
-            !await IsTaskCompleted(
-                _clientInitializationComplete.Task,
-                _connectTimeout,
-                _cancellationToken
-            )
-        )
-        {
-            Console.WriteLine("PapiClient did not connect");
-            await DisconnectAsync();
-            return false;
-        }
-
         Console.WriteLine("PapiClient connected successfully");
+
+        _jsonRpc.Disconnected += (object? _, JsonRpcDisconnectedEventArgs args) =>
+        {
+            Console.WriteLine(
+                $"JSONRPC disconnected: Reason = {args.Reason}, Description = {args.Description}, Exception = {args.Exception}"
+            );
+            _disconnectTaskCompletionSource.TrySetResult();
+        };
+        _jsonRpc.StartListening();
         return true;
     }
 
@@ -164,10 +138,7 @@ internal class PapiClient : IDisposable
 
         Console.WriteLine("PapiClient disconnecting");
 
-        SignalToBeginGracefulDisconnect();
-
-        if (!await IsTaskCompletedNoCancellation(MessageHandlingCompleteTask, _disconnectTimeout))
-            Console.WriteLine("Message handling tasks did not shut down properly");
+        await _cancellationTokenSource.CancelAsync();
 
         if (Connected)
         {
@@ -188,24 +159,38 @@ internal class PapiClient : IDisposable
     /// <param name="responseCallback">Callback for the response to this request being sent.
     /// The first argument indicates whether the request was successful.
     /// The second argument is the optional contents of the response message.</param>
-    public virtual void SendRequest(
+    public async virtual Task SendRequestAsync(
         string requestType,
-        object requestContents,
+        IReadOnlyList<object?>? requestContents,
         Action<bool, object?> responseCallback
     )
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        int requestId = GetRequestId();
-        var requestMessage =
-            (requestContents is JsonElement jse)
-                ? new MessageRequest(requestType, requestId, jse)
-                : new MessageRequest(requestType, requestId, requestContents);
-        _messageHandlersForMyRequests[requestId] = new MessageHandlerResponse(
-            requestMessage,
-            responseCallback
-        );
-        QueueOutgoingMessage(requestMessage);
+        if (_localMethods.TryGetValue(requestType, out Delegate? handler) && handler != null)
+        {
+            handler.DynamicInvoke(requestContents);
+            return;
+        }
+
+        await _jsonRpc
+            .InvokeWithCancellationAsync<object?>(requestType, requestContents, _cancellationToken)
+            .ContinueWith(
+                task =>
+                {
+                    if (task.IsCompletedSuccessfully)
+                    {
+                        responseCallback(true, task.Result);
+                    }
+                    else
+                    {
+                        responseCallback(false, task.Exception?.Message);
+                    }
+                },
+                _cancellationToken,
+                TaskContinuationOptions.None,
+                TaskScheduler.Default
+            );
     }
 
     /// <summary>
@@ -215,144 +200,68 @@ internal class PapiClient : IDisposable
     /// <param name="requestHandler">Method that is called when a request of the specified type is received from the server</param>
     /// <param name="responseTimeoutInMs">Number of milliseconds to wait for the registration response to be received</param>
     /// <returns><see cref="Task"/> that will resolve to true if registration was successful, false otherwise</returns>
-    public virtual async Task<bool> RegisterRequestHandler(
+    public virtual async Task<bool> RegisterRequestHandlerAsync(
         string requestType,
-        Func<JsonElement, ResponseToRequest> requestHandler,
+        Delegate requestHandler,
         int responseTimeoutInMs = 5000
     )
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
+        if (!_localMethods.TryAdd(requestType, requestHandler))
+        {
+            Console.WriteLine($"Handler already registered for type {requestType}");
+            return false;
+        }
+
         Console.WriteLine($"Registering handler for request type {requestType}...");
-        bool registrationSucceeded = false;
-        TaskCompletionSource registrationSource = new();
-        using Task registrationTask = registrationSource.Task;
-
-        SendRequest(
-            "server:registerRequest",
-            new object[] { requestType, _clientId },
-            (bool success, object? _) =>
-            {
-                if (!success)
-                {
-                    Console.WriteLine(
-                        $"Failed to register request type \"{requestType}\" with the server"
-                    );
-                }
-                else
-                {
-                    var responder = (MessageHandlerRequestByRequestType)
-                        _messageHandlersByMessageType[MessageType.REQUEST];
-                    responder.SetHandlerForRequestType(requestType, requestHandler);
-                    Console.WriteLine(
-                        $"Request type \"{requestType}\" successfully registered with the server"
-                    );
-                    registrationSucceeded = true;
-                }
-
-                if (!registrationSource.TrySetResult())
-                    Console.WriteLine("Couldn't signal that registration is complete");
-            }
+        var registrationTask = _jsonRpc.InvokeWithCancellationAsync<bool>(
+            "network:registerMethod",
+            [requestType],
+            _cancellationToken
         );
 
         var timeout = TimeSpan.FromMilliseconds(responseTimeoutInMs);
-        if (!await IsTaskCompleted(registrationTask, timeout, _cancellationToken))
+        if (!await IsTaskCompletedAsync(registrationTask, timeout, _cancellationToken))
         {
             Console.WriteLine($"No response when registering request type \"{requestType}\"");
-            registrationSource.TrySetCanceled();
+            _localMethods.TryRemove(requestType, out _);
+            return false;
         }
 
-        return registrationSucceeded;
+        bool succeeded = await registrationTask;
+        if (succeeded)
+            _jsonRpc.AddLocalRpcMethod(requestType, requestHandler);
+        return succeeded;
     }
 
     /// <summary>
     /// Configure PapiClient to call <paramref name="eventHandler"/> whenever an event of type <paramref name="eventType"/> is received.
     /// </summary>
     /// <param name="eventType">Event type to monitor</param>
-    /// <param name="eventHandler">Function that accepts an event message and optionally returns messages to send</param>
-    public virtual void RegisterEventHandler(
-        string eventType,
-        Func<MessageEvent, Message?> eventHandler
-    )
+    /// <param name="eventHandler">Function that accepts an event message</param>
+    public virtual void RegisterEventHandler(string eventType, Delegate eventHandler)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        var msgHandler = (MessageHandlerEvent)_messageHandlersByMessageType[MessageType.EVENT];
-        msgHandler.RegisterEventHandler(eventType, eventHandler);
+        _jsonRpc.AddLocalRpcMethod(eventType, eventHandler);
         Console.WriteLine($"Handler for event type \"{eventType}\" successfully registered");
-    }
-
-    /// <summary>
-    /// Configure PapiClient to no longer call <paramref name="eventHandler"/> whenever an event of type <paramref name="eventType"/> is received.
-    /// </summary>
-    /// <param name="eventType">Event type to monitor</param>
-    /// <param name="eventHandler">Same function reference previously passed to RegisterEventHandler</param>
-    public virtual void UnregisterEventHandler(
-        string eventType,
-        Func<MessageEvent, Message?> eventHandler
-    )
-    {
-        ObjectDisposedException.ThrowIf(_isDisposed, this);
-
-        var msgHandler = (MessageHandlerEvent)_messageHandlersByMessageType[MessageType.EVENT];
-        msgHandler.UnregisterEventHandler(eventType, eventHandler);
-        Console.WriteLine($"Handler for event type \"{eventType}\" successfully unregistered");
     }
 
     /// <summary>
     /// Send an event message to the server.
     /// </summary>
     /// <param name="message">Event message to send</param>
-    public virtual void SendEvent(MessageEvent message)
+    public virtual async Task SendEventAsync(string eventType, object? eventParameters)
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
-        QueueOutgoingMessage(message);
+        await _jsonRpc.NotifyAsync(eventType, [eventParameters]);
     }
 
     #endregion
 
-    #region Protected Methods
-    protected int GetRequestId() => Interlocked.Increment(ref _nextRequestId);
-    #endregion
-
-    #region Private helper methods for any thread to call
-
-    /// <summary>
-    /// Queues the specified message to be sent to the server
-    /// </summary>
-    /// <param name="message">Message to send</param>
-    private void QueueOutgoingMessage(Message message)
-    {
-        _outgoingMessages.Add(message, _cancellationToken);
-    }
-
-    /// <summary>
-    /// This should signal anything that is waiting on potential new data to stop waiting
-    /// </summary>
-    private void SignalToBeginGracefulDisconnect()
-    {
-        Console.WriteLine(
-            $"SignalToBeginGracefulDisconnect: webSocketState={_webSocket.State}, closeStatus={_webSocket.CloseStatus}, closeStatusDescription=\"{_webSocket.CloseStatusDescription}\""
-        );
-
-        // This should shut down the socket and messaging threads
-        _cancellationTokenSource.Cancel();
-
-        // This will make sure anything else blocked on the queue is freed
-        _outgoingMessages.CompleteAdding();
-    }
-
-    /// <summary>
-    /// Check if the given task has completed.  If not, give it until the timeout to complete.
-    /// </summary>
-    /// <param name="task">Task to verify</param>
-    /// <param name="timeout">How long to wait for the task to complete</param>
-    /// <returns><see cref="Task"/> that will resolve to true if the given task completed, false otherwise</returns>
-    private static Task<bool> IsTaskCompletedNoCancellation(Task task, TimeSpan timeout)
-    {
-        return IsTaskCompleted(task, timeout, CancellationToken.None);
-    }
+    #region Private helper methods
 
     /// <summary>
     /// Check if the given task has completed.  If not, give it until the timeout to complete.
@@ -361,7 +270,7 @@ internal class PapiClient : IDisposable
     /// <param name="timeout">How long to wait for the task to complete</param>
     /// <param name="cancellationToken">Cancellation token that could interrupt waiting</param>
     /// <returns><see cref="Task"/> that will resolve to true if the given task completed, false otherwise</returns>
-    private static async Task<bool> IsTaskCompleted(
+    private static async Task<bool> IsTaskCompletedAsync(
         Task task,
         TimeSpan timeout,
         CancellationToken cancellationToken
@@ -378,205 +287,6 @@ internal class PapiClient : IDisposable
         catch (TimeoutException) { }
 
         return task.IsCompleted;
-    }
-
-    #endregion
-
-    #region Private methods for the outgoing messaging task to use exclusively
-
-    /// <summary>
-    /// Entry point for the outgoing messaging task
-    /// Pulls messages out of the queue and sends them to the server
-    /// </summary>
-    private async void HandleOutgoingMessages()
-    {
-        try
-        {
-            Console.WriteLine("PapiClient HandleOutgoingMessages starting");
-
-            do
-            {
-                try
-                {
-                    Message message = _outgoingMessages.Take(_cancellationToken);
-                    await SendOutgoingMessageAsync(message);
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Exception while sending outgoing messages: {ex}");
-                }
-            } while (!_cancellationToken.IsCancellationRequested && Connected);
-        }
-        catch (ObjectDisposedException) { }
-        finally
-        {
-            Console.WriteLine(
-                $"PapiClient HandleOutgoingMessages finishing: cancel={_cancellationToken.IsCancellationRequested}, connected={Connected}"
-            );
-        }
-    }
-
-    private async Task SendOutgoingMessageAsync(Message message)
-    {
-        message.SenderId = _clientId;
-        string jsonData = message.SerializeToJson();
-        /* Helpful for debugging
-        Console.WriteLine(
-            "Sending message over websocket: {0}",
-            StringUtils.LimitLength(jsonData, 180)
-        );
-        */
-        byte[] data = s_utf8WithoutBom.GetBytes(jsonData);
-        await _webSocket.SendAsync(data, WebSocketMessageType.Text, true, _cancellationToken);
-    }
-
-    #endregion
-
-    #region Private methods for the incoming messaging task to use exclusively
-
-    /// <summary>
-    /// Entry point for the incoming messaging task
-    /// Receives and processes messages coming from the server
-    /// </summary>
-    private async void HandleIncomingMessages()
-    {
-        try
-        {
-            Console.WriteLine("PapiClient HandleIncomingMessages starting");
-
-            do
-            {
-                try
-                {
-                    Message? message = await ReceiveIncomingMessageAsync();
-                    // Handle each message asynchronously so we can keep receiving more messages
-                    _ = Task.Run(
-                        () =>
-                        {
-                            HandleIncomingMessage(message);
-                        },
-                        _cancellationToken
-                    );
-                }
-                catch (OperationCanceledException)
-                {
-                    break;
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Exception while handling messages: {ex}");
-                }
-            } while (!_cancellationToken.IsCancellationRequested && Connected);
-        }
-        catch (ObjectDisposedException) { }
-        finally
-        {
-            Console.WriteLine(
-                $"PapiClient HandleIncomingMessages finishing: cancel={_cancellationToken.IsCancellationRequested}, connected={Connected}"
-            );
-        }
-    }
-
-    private async Task<Message?> ReceiveIncomingMessageAsync()
-    {
-        using MemoryStream message = new(RECEIVE_BUFFER_LENGTH);
-        byte[] buffer = new byte[RECEIVE_BUFFER_LENGTH];
-        Memory<byte> bufferMemory = new(buffer);
-        ValueWebSocketReceiveResult result;
-        do
-        {
-            result = await _webSocket.ReceiveAsync(bufferMemory, _cancellationToken);
-            switch (result.MessageType)
-            {
-                case WebSocketMessageType.Text:
-                    message.Write(buffer, 0, result.Count);
-                    break;
-                case WebSocketMessageType.Binary:
-                    throw new InvalidOperationException("Can't handle binary data yet.");
-                case WebSocketMessageType.Close:
-                    SignalToBeginGracefulDisconnect();
-                    return null;
-                default:
-                    throw new Exception($"Unknown WebSocketMessageType: {result.MessageType}");
-            }
-        } while (!result.EndOfMessage);
-
-        string jsonData = s_utf8WithoutBom.GetString(message.GetBuffer(), 0, (int)message.Position);
-        /* Helpful for debugging
-        Console.WriteLine(
-            "Received message over websocket: {0}",
-            StringUtils.LimitLength(jsonData, 180)
-        );
-        */
-        return jsonData.DeserializeFromJson<Message>();
-    }
-
-    #endregion
-
-    #region Private methods for thread pool threads to use exclusively
-
-    /// <summary>
-    /// Entry point for thread pool threads
-    /// Message handler for any kind of message
-    /// </summary>
-    private void HandleIncomingMessage(Message? message)
-    {
-        try
-        {
-            if (message is null)
-            {
-                if (!_cancellationToken.IsCancellationRequested)
-                    Console.WriteLine("Received null message!");
-                return;
-            }
-
-            if (message is MessageResponse messageResponse)
-            {
-                HandleIncomingMessageResponse(messageResponse);
-                return;
-            }
-
-            if (_messageHandlersByMessageType.TryGetValue(message.Type, out var messageHandler))
-            {
-                foreach (var messageToSend in messageHandler.HandleMessage(message))
-                {
-                    QueueOutgoingMessage(messageToSend);
-                }
-            }
-            else
-            {
-                Console.WriteLine($"No handler registered for message type: {message.Type}");
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Exception while handling message: {ex}");
-        }
-    }
-
-    /// <summary>
-    /// Message handler for a response to a request we previously sent
-    /// </summary>
-    private void HandleIncomingMessageResponse(MessageResponse response)
-    {
-        // Remove, don't just get, the response handler since the request is complete
-        if (_messageHandlersForMyRequests.TryRemove(response.RequestId, out var messageHandler))
-        {
-            foreach (var messageToSend in messageHandler.HandleMessage(response))
-            {
-                QueueOutgoingMessage(messageToSend);
-            }
-        }
-        else
-        {
-            Console.WriteLine(
-                $"No handler registered for response from request ID: {response.RequestId}"
-            );
-        }
     }
 
     #endregion

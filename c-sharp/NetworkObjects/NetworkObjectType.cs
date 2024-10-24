@@ -1,4 +1,4 @@
-namespace Paranext.DataProvider.Messages;
+namespace Paranext.DataProvider.NetworkObjects;
 
 public static class NetworkObjectType
 {
