@@ -326,12 +326,11 @@ export default function Inventory({
 
   const allColumns: ColumnDef<InventoryTableData>[] = useMemo(() => {
     if (!showAdditionalItems) return columns;
-    const additionalColumns: ColumnDef<InventoryTableData>[] = [];
 
-    const numberOfAdditionalItems =
-      filteredTableData.reduce((maxAdditionalItems, obj) => {
-        return Math.max(maxAdditionalItems, obj.items.length);
-      }, 0) - 1;
+    const numberOfAdditionalItems = additionalItemsLabels?.tableHeaders?.length;
+    if (!numberOfAdditionalItems) return columns;
+
+    const additionalColumns: ColumnDef<InventoryTableData>[] = [];
 
     for (let index = 0; index < numberOfAdditionalItems; index++) {
       additionalColumns.push(
@@ -343,7 +342,7 @@ export default function Inventory({
     }
 
     return [...additionalColumns, ...columns];
-  }, [additionalItemsLabels?.tableHeaders, columns, filteredTableData, showAdditionalItems]);
+  }, [additionalItemsLabels?.tableHeaders, columns, showAdditionalItems]);
 
   useEffect(() => {
     setSelectedItem([]);
