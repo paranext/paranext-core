@@ -51,7 +51,8 @@ export const inventoryItemColumn = (itemLabel: string): ColumnDef<InventoryTable
 /**
  * Function that creates the additional item columns for inventories
  *
- * @param additionalItemLabel Localized label for the related item column (e.g. 'Preceding Marker')
+ * @param additionalItemLabel Localized label for the additional item column (e.g. 'Preceding
+ *   Marker')
  * @param additionalItemIndex Index that locates the desired item in the items array of the
  *   inventory
  * @returns Column that shows additional inventory items. Should be used with the DataTable

@@ -5,7 +5,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import inventoryWebView from './inventory.web-view?inline';
 import inventoryWebViewStyles from './inventory.web-view.scss?inline';
 
@@ -31,9 +31,21 @@ export default class InventoryWebViewProvider implements IWebViewProvider {
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
 
-    const title: string = await papi.localization.getLocalizedString({
-      localizeKey: this.titleKey,
-    });
+    let projectName: string | undefined;
+
+    if (projectId) {
+      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+      projectName = (await pdp.getSetting('platform.name')) ?? projectId;
+    }
+
+    const title = formatReplacementString(
+      await papi.localization.getLocalizedString({
+        localizeKey: this.titleKey,
+      }),
+      {
+        projectName,
+      },
+    );
 
     return {
       ...savedWebView,

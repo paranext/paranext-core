@@ -78,6 +78,12 @@ export const LAST_SCR_BOOK_NUM = scrBookData.length - 1;
 export const FIRST_SCR_CHAPTER_NUM = 1;
 export const FIRST_SCR_VERSE_NUM = 1;
 
+export const defaultScrRef: ScriptureReference = {
+  bookNum: 1,
+  chapterNum: 1,
+  verseNum: 1,
+};
+
 export const getChaptersForBook = (bookNum: number): number => {
   return scrBookData[bookNum]?.chapters ?? -1;
 };

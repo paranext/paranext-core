@@ -26,9 +26,9 @@
       "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
       "%webView_platformScripture_tools%": "Tools",
       "%webView_platformScripture_showCheckResults%": "Show Check Results...",
-      "%webView_characterInventory_title%": "Character Inventory",
-      "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory",
-      "%webView_markersInventory_title%": "Markers Inventory",
+      "%webView_characterInventory_title%": "Character Inventory: {projectName}",
+      "%webView_repeatedWordsInventory_title%": "Repeated Words Inventory: {projectName}",
+      "%webView_markersInventory_title%": "Markers Inventory: {projectName}",
       "%webView_configureChecks_title%": "Configure Checks: {projectName}",
       "%webView_configureChecks_checks%": "Checks",
       "%webView_configureChecks_loadingChecks%": "Loading checks",
@@ -49,6 +49,7 @@
       "%webView_inventory_scope_chapter%": "Current chapter",
       "%webView_inventory_scope_verse%": "Current verse",
       "%webView_inventory_filter_text%": "Filter text...",
+      "%webView_inventory_show_additional_items%": "Show Additional Items",
       "%webView_inventory_table_header_repeated_words%": "Repeated Word",
       "%webView_inventory_table_header_character%": "Character",
       "%webView_inventory_table_header_marker%": "Marker",
@@ -58,6 +59,7 @@
       "%webView_inventory_table_header_count%": "Count",
       "%webView_inventory_table_header_status%": "Status",
       "%webView_inventory_show_preceding_marker%": "Show Preceding Marker",
+      "%webView_inventory_unknown_marker%": "Unknown Marker",
       "%webView_inventory_occurrences_table_header_reference%": "Reference",
       "%webView_inventory_occurrences_table_header_occurrence%": "Occurrence"
     }

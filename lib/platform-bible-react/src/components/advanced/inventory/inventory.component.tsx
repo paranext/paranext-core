@@ -47,6 +47,7 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_scope_chapter%',
   '%webView_inventory_scope_verse%',
   '%webView_inventory_filter_text%',
+  '%webView_inventory_show_additional_items%',
   '%webView_inventory_occurrences_table_header_reference%',
   '%webView_inventory_occurrences_table_header_occurrence%',
 ] as const);
@@ -117,7 +118,7 @@ const createTableData = (
   unapprovedItems: string[],
   itemRegex: RegExp,
 ): InventoryTableData[] => {
-  if (!text || text === '') return [];
+  if (!text) return [];
 
   const tableData: InventoryTableData[] = [];
 
@@ -148,7 +149,8 @@ const createTableData = (
     // RegExp.exec returns null when no match is found
     // eslint-disable-next-line no-null/no-null
     while (match !== null) {
-      const items = match;
+      const items: string[] = [];
+      match.forEach((item) => items.push(item));
       const itemIndex = match.index;
       const existingItem = tableData.find((tableEntry) => deepEqual(tableEntry.items, items));
       const newReference: InventoryItemOccurrence = {
@@ -230,9 +232,9 @@ type InventoryProps = {
   additionalItemsLabels?: AdditionalItemsLabels;
   /** Array of approved items, typically as defined in `Settings.xml` */
   approvedItems: string[];
-  /** UnapprovedItems Array of unapproved items, typically as defined in `Settings.xml` */
+  /** Array of unapproved items, typically as defined in `Settings.xml` */
   unapprovedItems: string[];
-  /** The source scripture text that is searched for inventory items */
+  /** The source scripture text that is searched for in inventory items */
   text: string | undefined;
   /** Scope of scripture that the inventory will operate on */
   scope: Scope;
@@ -269,6 +271,10 @@ export default function Inventory({
   const scopeChapterText = localizeString(localizedStrings, '%webView_inventory_scope_chapter%');
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
+  const showAdditionalItemsText = localizeString(
+    localizedStrings,
+    '%webView_inventory_show_additional_items%',
+  );
 
   const [showAdditionalItems, setShowAdditionalItems] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -287,10 +293,6 @@ export default function Inventory({
       );
     return extractItems(text, scriptureReference, approvedItems, unapprovedItems);
   }, [text, extractItems, scriptureReference, approvedItems, unapprovedItems]);
-
-  const showAdditionalItemsControl: boolean = useMemo(() => {
-    return !!additionalItemsLabels;
-  }, [additionalItemsLabels]);
 
   const reducedTableData: InventoryTableData[] = useMemo(() => {
     if (showAdditionalItems) return tableData;
@@ -378,13 +380,16 @@ export default function Inventory({
   };
 
   const occurrenceData: InventoryItemOccurrence[] = useMemo(() => {
-    if (selectedItem.length === 0) return [];
-    const occurrence = tableData.filter((tableEntry: InventoryTableData) =>
-      deepEqual(tableEntry.items, selectedItem),
-    );
+    if (reducedTableData.length === 0 || selectedItem.length === 0) return [];
+    const occurrence = reducedTableData.filter((tableEntry: InventoryTableData) => {
+      return deepEqual(
+        showAdditionalItems ? tableEntry.items : [tableEntry.items[0]],
+        selectedItem,
+      );
+    });
     if (occurrence.length > 1) throw new Error('Selected item is not unique');
     return occurrence[0].occurrences;
-  }, [selectedItem, tableData]);
+  }, [selectedItem, showAdditionalItems, reducedTableData]);
 
   return (
     <div className="pr-twp tw-flex tw-h-full tw-flex-col">
@@ -421,7 +426,7 @@ export default function Inventory({
             setTextFilter(event.target.value);
           }}
         />
-        {showAdditionalItemsControl && (
+        {additionalItemsLabels && (
           <div className="tw-m-1 tw-flex tw-items-center tw-rounded-md tw-border">
             <Checkbox
               className="tw-m-1"
@@ -432,7 +437,7 @@ export default function Inventory({
               }}
             />
             <Label className="tw-m-1 tw-flex-shrink-0 tw-whitespace-nowrap">
-              {additionalItemsLabels?.checkboxText ?? 'Show Related Items'}
+              {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
             </Label>
           </div>
         )}

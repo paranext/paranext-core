@@ -60,19 +60,31 @@ test('Get book number for Matthew from USFM string', async () => {
   expect(number).toEqual(40);
 });
 
-test('Get book number for non-existing ID from USFM string', async () => {
+test('Get book number for Psalms from USFM string with lower case ID', async () => {
+  const input: string = '\\id psa';
+  const number: number | undefined = getBookNumFromId(input);
+  expect(number).toEqual(19);
+});
+
+test('Get book number for Job from USFM string with mixed case ID', async () => {
+  const input: string = '\\id jOb';
+  const number: number | undefined = getBookNumFromId(input);
+  expect(number).toEqual(18);
+});
+
+test('Try to get book number for non-existing ID from USFM string', async () => {
   const input: string = '\\id ABC this ID does not exist';
   const number: number | undefined = getBookNumFromId(input);
   expect(number).toEqual(0);
 });
 
-test('Get book number for empty ID marker from USFM string', async () => {
+test('Try to get book number for empty ID marker from USFM string', async () => {
   const input: string = '\\id';
   const number: number | undefined = getBookNumFromId(input);
   expect(number).toEqual(0);
 });
 
-test('Get book number for random (non-USFM) string', async () => {
+test('Try to get book number for random (non-USFM) string', async () => {
   const input: string = 'No USFM here';
   const number: number | undefined = getBookNumFromId(input);
   expect(number).toEqual(0);

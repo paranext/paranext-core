@@ -22,9 +22,9 @@ export type InventoryTableData = {
   /**
    * The item (e.g. a character in the characters inventory, a marker in the marker inventory) In
    * most cases the array will only have one element. In case of additional items (e.g. the
-   * preceding marker in the markers check), the primary item should stored in the first index. To
-   * show additional items in the inventory, make sure to configure the `additionalItemsLabels` prop
-   * for the Inventory component
+   * preceding marker in the markers check), the primary item should be stored in the first index.
+   * To show additional items in the inventory, make sure to configure the `additionalItemsLabels`
+   * prop for the Inventory component
    */
   items: string[];
   /** The number of times this item occurs in the selected scope */
@@ -76,7 +76,7 @@ export const getNumberFromUSFM = (text: string): number | undefined => {
  */
 export const getBookNumFromId = (text: string): number => {
   // Captures all digits that follow an \id marker followed by whitespace located at the start of a string
-  const match = text.match(/^\\id\s+([A-Z]+)/);
+  const match = text.match(/^\\id\s+([A-Za-z]+)/);
   if (match) {
     return Canon.bookIdToNumber(match[1]);
   }
@@ -96,8 +96,8 @@ export const getStatusForItem = (
   approvedItems: string[],
   unapprovedItems: string[],
 ): Status => {
-  if (approvedItems.includes(item)) return 'approved';
   if (unapprovedItems.includes(item)) return 'unapproved';
+  if (approvedItems.includes(item)) return 'approved';
   return 'unknown';
 };
 

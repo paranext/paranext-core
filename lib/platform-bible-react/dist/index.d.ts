@@ -266,9 +266,9 @@ export type InventoryTableData = {
 	/**
 	 * The item (e.g. a character in the characters inventory, a marker in the marker inventory) In
 	 * most cases the array will only have one element. In case of additional items (e.g. the
-	 * preceding marker in the markers check), the primary item should stored in the first index. To
-	 * show additional items in the inventory, make sure to configure the `additionalItemsLabels` prop
-	 * for the Inventory component
+	 * preceding marker in the markers check), the primary item should be stored in the first index.
+	 * To show additional items in the inventory, make sure to configure the `additionalItemsLabels`
+	 * prop for the Inventory component
 	 */
 	items: string[];
 	/** The number of times this item occurs in the selected scope */
@@ -323,6 +323,7 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 	"%webView_inventory_scope_chapter%",
 	"%webView_inventory_scope_verse%",
 	"%webView_inventory_filter_text%",
+	"%webView_inventory_show_additional_items%",
 	"%webView_inventory_occurrences_table_header_reference%",
 	"%webView_inventory_occurrences_table_header_occurrence%"
 ];
@@ -365,9 +366,9 @@ export type InventoryProps = {
 	additionalItemsLabels?: AdditionalItemsLabels;
 	/** Array of approved items, typically as defined in `Settings.xml` */
 	approvedItems: string[];
-	/** UnapprovedItems Array of unapproved items, typically as defined in `Settings.xml` */
+	/** Array of unapproved items, typically as defined in `Settings.xml` */
 	unapprovedItems: string[];
-	/** The source scripture text that is searched for inventory items */
+	/** The source scripture text that is searched for in inventory items */
 	text: string | undefined;
 	/** Scope of scripture that the inventory will operate on */
 	scope: Scope;

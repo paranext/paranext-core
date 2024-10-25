@@ -7,7 +7,8 @@ import {
   TableRow,
 } from '@/components/shadcn-ui/table';
 import { Canon } from '@sillsdev/scripture';
-import { LanguageStrings, ScriptureReference } from 'platform-bible-utils';
+import { deepEqual, LanguageStrings, ScriptureReference } from 'platform-bible-utils';
+import { useMemo } from 'react';
 import { InventoryItemOccurrence } from './inventory-utils';
 
 /** Props for the OccurrencesTable component */
@@ -38,6 +39,18 @@ function OccurrencesTable({
   const occurrenceHeaderText =
     localizedStrings['%webView_inventory_occurrences_table_header_occurrence%'];
 
+  const occurrences: InventoryItemOccurrence[] = useMemo(() => {
+    const uniqueOccurrences: InventoryItemOccurrence[] = [];
+
+    occurrenceData.forEach((occurrence) => {
+      if (!uniqueOccurrences.some((uniqueOccurrence) => deepEqual(uniqueOccurrence, occurrence))) {
+        uniqueOccurrences.push(occurrence);
+      }
+    });
+
+    return uniqueOccurrences;
+  }, [occurrenceData]);
+
   return (
     <Table stickyHeader>
       <TableHeader stickyHeader>
@@ -47,12 +60,12 @@ function OccurrencesTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {occurrenceData.length > 0 &&
-          occurrenceData.map((occurrence, index) => (
+        {occurrences.length > 0 &&
+          occurrences.map((occurrence) => (
             <TableRow
-              // This might need to be fixed
-              // eslint-disable-next-line react/no-array-index-key
-              key={index}
+              key={`${occurrence.reference.bookNum} ${occurrence.reference.chapterNum}:${
+                occurrence.reference.verseNum
+              }-${occurrence.text}`}
               onClick={() => {
                 setScriptureReference(occurrence.reference);
               }}

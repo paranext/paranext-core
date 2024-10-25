@@ -6,21 +6,15 @@ import {
 } from '@/components/advanced/inventory/inventory-columns';
 import { InventoryTableData } from '@/components/advanced/inventory/inventory-utils';
 import Inventory, { Scope } from '@/components/advanced/inventory/inventory.component';
-import { ScriptureReference } from 'platform-bible-utils';
+import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
 
 const localizedStrings = {
   '%webView_inventory_all%': 'All items',
   '%webView_inventory_approved%': 'Approved items',
   '%webView_inventory_filter_text%': 'Filter text...',
-  '%webView_inventory_show_related_items%': 'Show Related Items',
+  '%webView_inventory_show_additional_items%': 'Show Additional Items',
   '%webView_inventory_occurrences_table_header_occurrence%': 'Occurrence',
   '%webView_inventory_occurrences_table_header_reference%': 'Reference',
   '%webView_inventory_scope_currentBook%': 'Current book',
@@ -70,6 +64,8 @@ function InventoryExample() {
           unapprovedItems,
           setUnapprovedItems,
         )}
+        // Matches a sequence of letters surrounded by word boundaries followed by that exact same
+        // sequence of letters surrounded by word boundaries
         extractItems={/\b(\p{L}+)\b(?=\s\b\1\b)/gu}
       />
       Approved items:

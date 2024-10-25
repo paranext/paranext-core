@@ -22,6 +22,7 @@ export {
   FIRST_SCR_VERSE_NUM,
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
+  defaultScrRef,
 } from './scripture-util';
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';

@@ -17,6 +17,7 @@ import {
 } from 'platform-bible-react';
 import {
   deepEqual,
+  defaultScrRef,
   LanguageStrings,
   LocalizeKey,
   ScriptureReference,
@@ -31,13 +32,8 @@ const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
   '%webView_inventory_show_preceding_marker%',
+  '%webView_inventory_unknown_marker%',
 ];
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
 
 const extractMarkers = (
   text: string | undefined,
@@ -45,7 +41,7 @@ const extractMarkers = (
   approvedItems: string[],
   unapprovedItems: string[],
 ): InventoryTableData[] => {
-  if (!text || text === '') return [];
+  if (!text) return [];
 
   const tableData: InventoryTableData[] = [];
 
@@ -78,13 +74,12 @@ const extractMarkers = (
       }
     }
 
-    let match: RegExpExecArray | null = markerRegex.exec(line);
-    // RegExp.exec returns null when no match is found
-    // eslint-disable-next-line no-null/no-null
-    while (match !== null) {
+    let match: RegExpExecArray | undefined = markerRegex.exec(line) ?? undefined;
+    while (match) {
       // For this code to work correctly we need our regular expression to match a single marker
       // on each per match
       if (match.length > 1) throw new Error('Multiple markers found in a single match');
+
       const items = [match[0], precedingMarker];
       [precedingMarker] = match;
       const itemIndex = match.index;
@@ -110,7 +105,7 @@ const extractMarkers = (
         tableData.push(newItem);
       }
 
-      match = markerRegex.exec(line);
+      match = markerRegex.exec(line) ?? undefined;
     }
   });
 
@@ -137,8 +132,7 @@ function getDescription(markerDescriptions: string[], marker: string): string | 
  * @param statusLabel Localized label for the status column
  * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
  * @param onApprovedItemsChange Callback function that stores the updated list of approved items
- * @param unapprovedItems UnapprovedItems Array of unapproved items, typically as defined in
- *   `Settings.xml`
+ * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
  * @param onUnapprovedItemsChange Callback function that stores the updated list of unapproved items
  * @returns An array of columns that can be passed into the inventory component
  */
@@ -146,6 +140,7 @@ const createColumns = (
   itemLabel: string,
   styleNameLabel: string,
   markerNames: string[],
+  unknownMarkerLabel: string,
   countLabel: string,
   statusLabel: string,
   approvedItems: string[],
@@ -160,7 +155,7 @@ const createColumns = (
     header: () => <Button variant="ghost">{styleNameLabel}</Button>,
     cell: ({ row }) => {
       const marker: string = row.getValue('item');
-      return getDescription(markerNames, marker) || 'Unknown marker';
+      return getDescription(markerNames, marker) || unknownMarkerLabel;
     },
   },
   inventoryStatusColumn(
@@ -239,6 +234,10 @@ function MarkerInventory({
     () => markerInventoryStrings['%webView_inventory_show_preceding_marker%'],
     [markerInventoryStrings],
   );
+  const unknownMarkerLabel = useMemo(
+    () => markerInventoryStrings['%webView_inventory_unknown_marker%'],
+    [markerInventoryStrings],
+  );
 
   const columns = useMemo(
     () =>
@@ -246,6 +245,7 @@ function MarkerInventory({
         itemLabel,
         styleNameLabel,
         markerNames,
+        unknownMarkerLabel,
         countLabel,
         statusLabel,
         approvedItems,
@@ -257,6 +257,7 @@ function MarkerInventory({
       itemLabel,
       styleNameLabel,
       markerNames,
+      unknownMarkerLabel,
       countLabel,
       statusLabel,
       approvedItems,

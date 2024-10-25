@@ -1007,6 +1007,7 @@ export declare const FIRST_SCR_BOOK_NUM = 1;
 export declare const LAST_SCR_BOOK_NUM: number;
 export declare const FIRST_SCR_CHAPTER_NUM = 1;
 export declare const FIRST_SCR_VERSE_NUM = 1;
+export declare const defaultScrRef: ScriptureReference;
 export declare const getChaptersForBook: (bookNum: number) => number;
 export declare const offsetBook: (scrRef: ScriptureReference, offset: number) => ScriptureReference;
 export declare const offsetChapter: (scrRef: ScriptureReference, offset: number) => ScriptureReference;
