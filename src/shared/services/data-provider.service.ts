@@ -195,8 +195,9 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           callback(data);
         }
       } catch (e) {
+        const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
         logger.warn(
-          `Tried to retrieve data after an update event for ${dataType} with selector ${JSON.stringify(selector).substring(0, 120)}, but it threw. ${e}`,
+          `Tried to retrieve data after an update event for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${e}`,
         );
       }
     };

@@ -20,10 +20,29 @@ namespace Paranext.DataProvider.Checks;
 /// </summary>
 public sealed class CheckInputRange
 {
+    private string _projectId;
+    private VerseRef _start;
+    private VerseRef? _end;
+
+    // For deserialization only
+    private CheckInputRange()
+    {
+        _projectId = string.Empty;
+        _start = new VerseRef();
+    }
+
     public CheckInputRange(string projectId, VerseRef start, VerseRef? end)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectId);
+        VerifyRange(start, end);
 
+        _projectId = projectId;
+        _start = start;
+        _end = end;
+    }
+
+    private static void VerifyRange(VerseRef start, VerseRef? end)
+    {
         if (start.ChapterNum <= 0)
             throw new ArgumentOutOfRangeException(nameof(start), "start.ChapterNum must be > 0");
 
@@ -32,15 +51,35 @@ public sealed class CheckInputRange
 
         if (end.HasValue && (start > end.Value))
             throw new ArgumentException("end must come after start");
-
-        ProjectId = projectId;
-        Start = start;
-        End = end;
     }
 
-    public string ProjectId { get; }
-    public VerseRef Start { get; }
-    public VerseRef? End { get; }
+    public string ProjectId
+    {
+        get { return _projectId; }
+        set
+        {
+            ArgumentException.ThrowIfNullOrEmpty(value, "ProjectId");
+            _projectId = value;
+        }
+    }
+    public VerseRef Start
+    {
+        get { return _start; }
+        set
+        {
+            VerifyRange(value, _end);
+            _start = value;
+        }
+    }
+    public VerseRef? End
+    {
+        get { return _end; }
+        set
+        {
+            VerifyRange(_start, value);
+            _end = value;
+        }
+    }
 
     /// <summary>
     /// Determines if a given location in scripture is within the range of this object. Note that
