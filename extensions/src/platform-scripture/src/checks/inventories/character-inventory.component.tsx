@@ -76,9 +76,7 @@ function CharacterInventory({
   scope,
   onScopeChange,
 }: CharacterInventoryProps) {
-  const [characterInventoryStrings] = useLocalizedStrings(
-    useMemo(() => CHARACTER_INVENTORY_STRING_KEYS, []),
-  );
+  const [characterInventoryStrings] = useLocalizedStrings(CHARACTER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
     () => characterInventoryStrings['%webView_inventory_table_header_character%'],
     [characterInventoryStrings],

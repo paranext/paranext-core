@@ -2,9 +2,9 @@
   "mainMenu": {
     "columns": {
       "platform.project": { "label": "%mainMenu_project%", "order": 1 },
-      "platform.window": { "label": "%mainMenu_Window%", "order": 2 },
-      "platform.layout": { "label": "%mainMenu_Layout%", "order": 3 },
-      "platform.help": { "label": "%mainMenu_Help%", "order": 4 },
+      "platform.window": { "label": "%mainMenu_window%", "order": 2 },
+      "platform.layout": { "label": "%mainMenu_layout%", "order": 3 },
+      "platform.help": { "label": "%mainMenu_help%", "order": 4 },
       "isExtensible": true
     },
     "groups": {
@@ -26,49 +26,35 @@
     },
     "items": [
       {
-        "label": "%mainMenu_openProject%",
-        "localizeNotes": "Application main menu > Project > Open Project",
-        "group": "platform.projectProjects",
-        "order": 1,
-        "command": "platform.openProjectDialog"
-      },
-      {
-        "label": "%downloadUpdateProjectTab_title_downloadSlashUpdateProject%",
-        "localizeNotes": "Application main menu > Project > Download/Update Project",
-        "group": "platform.projectProjects",
-        "order": 2,
-        "command": "platform.openDownloadUpdateProjectDialog"
-      },
-      {
-        "label": "%mainMenu_menuItemName_downloadSlashInstallResources%",
+        "label": "%mainMenu_downloadInstallResources%",
         "localizeNotes": "Application main menu > Project > Download/Install Resources",
         "group": "platform.projectResources",
         "order": 1,
         "command": "platform.downloadAndInstallResources"
       },
       {
-        "label": "%mainMenu_menuItemName_settings%",
+        "label": "%mainMenu_settings%",
         "localizeNotes": "Application main menu > Project > Settings",
         "group": "platform.projectSettings",
         "order": 1,
         "command": "platform.openUserSettings"
       },
       {
-        "label": "%mainMenu_menuItemName_exit%",
+        "label": "%mainMenu_exit%",
         "localizeNotes": "Application main menu > Project > Exit",
         "group": "platform.projectMisc",
         "order": 999999999,
         "command": "platform.quit"
       },
       {
-        "label": "%mainMenu_menuItemName_visitSupportBible%",
+        "label": "%mainMenu_visitSupportBible%",
         "localizeNotes": "Application main menu > Help > Visit Support.Bible",
         "group": "platform.helpMisc",
         "order": 1,
         "command": "platform.visitSupportPage"
       },
       {
-        "label": "%mainMenu_menuItemName_aboutPlatformBible%",
+        "label": "%mainMenu_aboutPlatformBible%",
         "localizeNotes": "Application main menu > Help > About Platform.Bible",
         "group": "platform.helpMisc",
         "order": 2,
@@ -78,8 +64,8 @@
   },
   "defaultWebViewTopMenu": {
     "columns": {
-      "platform.project": { "label": "%webView_menuItemName_project%", "order": 1 },
-      "platform.edit": { "label": "%webView_menuItemName_edit%", "order": 2, "isExtensible": true }
+      "platform.project": { "label": "%webView_project%", "order": 1 },
+      "platform.edit": { "label": "%webView_edit%", "order": 2, "isExtensible": true }
     },
     "groups": {
       "platform.projectTop": { "column": "platform.project", "order": 1, "isExtensible": true },
@@ -91,7 +77,7 @@
     },
     "items": [
       {
-        "label": "%webView_menuItemName_projectAssignmentsAndProgress%",
+        "label": "%webView_projectAssignmentsAndProgress%",
         "localizeNotes": "Web view main menu > Project > Assignments and progress...",
         "group": "platform.projectTop",
         "order": 2,

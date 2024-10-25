@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import {
   WebViewContentType,
   WebViewDefinition,
@@ -48,7 +48,7 @@ export default function WebView({
   const iframeRef = useRef<HTMLIFrameElement>(undefined!);
 
   const webViewKey = '%webView_defaultTitle_webView%';
-  const webViewTitleTypeFormatStr = '%webView_platformScriptureEditor_title_format%';
+  const webViewTitleTypeFormatStr = '%webView_title_type_formatString%';
   const [localizedStrings] = useLocalizedStrings(
     title && isLocalizeKey(title)
       ? [title, webViewTitleTypeFormatStr]
@@ -81,9 +81,7 @@ export default function WebView({
     ),
   );
 
-  const [scrollGroupLocalizedStrings] = useLocalizedStrings(
-    useMemo(() => scrollGroupLocalizedStringKeys, []),
-  );
+  const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   return (
     <div className="web-view-parent">

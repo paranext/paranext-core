@@ -19,8 +19,8 @@ type SettingsTabProps = {
 };
 
 export default function SettingsTab({ projectId }: SettingsTabProps) {
-  const searchProjectSettingsKey = '%settings_defaultSearchText_searchProjectSettingsEllipsis%';
-  const searchUserSettingsKey = '%settings_defaultSearchText_searchUserSettingsEllipsis%';
+  const searchProjectSettingsKey = '%settings_defaultSearchText_searchProject%';
+  const searchUserSettingsKey = '%settings_defaultSearchText_searchUserSettings%';
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => [searchProjectSettingsKey, searchUserSettingsKey], []),
   );

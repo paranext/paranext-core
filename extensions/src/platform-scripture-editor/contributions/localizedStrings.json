@@ -19,7 +19,7 @@
       "%webView_platformScriptureEditor_title_editable_indicator%": "(Editable)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",
       "%webView_platformScriptureEditor_title_editable_no_project%": "Scripture Editor",
-      "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
+      "%webView_title_type_formatString%": "{projectId} {editable}",
       "%platformScriptureEditor_dialog_openResourceViewer_title%": "Open Resource Viewer",
       "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Choose a resource to open:",
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",

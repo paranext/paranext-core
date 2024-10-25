@@ -19,7 +19,7 @@ jest.mock('@shared/services/localization.service', () => ({
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 const platformSettings: ProjectSettingsContribution = {
-  label: '%project_settings_platform_label_group1%',
+  label: '%project_settings_platform_group1_label%',
   description: '%project_settings_platform_group1_description%',
   properties: {
     'platform.fullName': {
@@ -33,7 +33,7 @@ const platformSettings: ProjectSettingsContribution = {
   },
 };
 const platformSettingsLocalized: Localized<ProjectSettingsContribution> = {
-  label: 'project_settings_platform_label_group1',
+  label: 'project_settings_platform_group1_label',
   description: 'project_settings_platform_group1_description',
   properties: {
     'platform.fullName': {

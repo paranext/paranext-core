@@ -8,7 +8,7 @@ import {
 } from 'platform-bible-utils';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
@@ -59,9 +59,7 @@ export default function PlatformBibleToolbar() {
     updateScrollGroupIdInternal,
   );
 
-  const [scrollGroupLocalizedStrings] = useLocalizedStrings(
-    useMemo(() => scrollGroupLocalizedStringKeys, []),
-  );
+  const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   return (
     <Toolbar className="toolbar" menuProvider={getMenuData} commandHandler={handleMenuCommand}>

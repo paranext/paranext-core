@@ -2,7 +2,6 @@ import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
-import { useMemo } from 'react';
 import PackageInfo from '../../../release/app/package.json';
 
 export const TAB_TYPE_ABOUT = 'about';
@@ -20,9 +19,7 @@ export default function AboutPanel() {
       '%about_versionLabel_format%': versionLabelFormat,
       '%about_licenseLabel_format%': licenseLabelFormat,
     },
-  ] = useLocalizedStrings(useMemo(() => STRING_KEYS, []));
-
-  // logger.info());
+  ] = useLocalizedStrings(STRING_KEYS);
 
   return (
     <div className="about-panel dark">
@@ -30,8 +27,8 @@ export default function AboutPanel() {
         <InlineLogoAndName width="80%" />
         <h1>{productName}</h1>
         <p>Copyright © 2022-2024 SIL International</p>
-        <p>{formatReplacementString(versionLabelFormat, PackageInfo)}</p>
-        <p>{formatReplacementString(licenseLabelFormat, PackageInfo)}</p>
+        <p>{formatReplacementString(versionLabelFormat, { version: PackageInfo.version })}</p>
+        <p>{formatReplacementString(licenseLabelFormat, { license: PackageInfo.license })}</p>
         <p>{PackageInfo.description}</p>
       </div>
     </div>

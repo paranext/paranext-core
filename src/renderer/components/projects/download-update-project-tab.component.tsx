@@ -34,11 +34,11 @@ function deleteProject(project: Project) {
 }
 
 export default function DownloadUpdateProjectTab() {
-  const downloadableProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadableProjects%';
-  const downloadableProjectsHeaderKey = '%downloadUpdateProjectTab_subheader_downloadableProjects%';
-  const downloadedProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadedProjects%';
-  const downloadedProjectsHeaderKey = '%downloadUpdateProjectTab_subheader_downloadedProjects%';
-  const deleteListItemKey = '%downloadUpdateProjectTab_listItem_delete%';
+  const downloadableProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadable%';
+  const downloadableProjectsHeaderKey = '%downloadUpdateProjectTab_listHeader_downloadable%';
+  const downloadedProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloaded%';
+  const downloadedProjectsHeaderKey = '%downloadUpdateProjectTab_listHeader_downloaded%';
+  const deleteListItemKey = '%downloadUpdateProjectTab_button_delete%';
   const [localizedStrings] = useLocalizedStrings(
     useMemo(
       () => [
@@ -107,7 +107,7 @@ export default function DownloadUpdateProjectTab() {
 export const loadDownloadUpdateProjectTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
-    tabTitle: '%downloadUpdateProjectTab_title_downloadSlashUpdateProject%',
+    tabTitle: '%downloadUpdateProjectTab_title_downloadUpdate%',
     content: <DownloadUpdateProjectTab />,
   };
 };

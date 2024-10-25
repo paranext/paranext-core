@@ -12,7 +12,7 @@ export const platformSettings: SettingsContribution = {
       default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
-      label: '%settings_platform_settingName_interfaceLanguage%',
+      label: '%settings_platform_interfaceLanguage_label%',
       description: '%settings_platform_interfaceLanguage_description%',
       default: ['eng'],
     },
