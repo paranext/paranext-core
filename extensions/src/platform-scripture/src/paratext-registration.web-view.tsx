@@ -1,10 +1,31 @@
 import { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
-import { Button, cn, Input, Spinner } from 'platform-bible-react';
-import { wait } from 'platform-bible-utils';
-import { PropsWithChildren, useEffect, useState } from 'react';
+import papi, { logger } from '@papi/frontend';
+import { AlertCircle, CircleCheck } from 'lucide-react';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  cn,
+  Input,
+  Spinner,
+  usePromise,
+} from 'platform-bible-react';
+import { getErrorMessage } from 'platform-bible-utils';
+import { PropsWithChildren, useEffect, useMemo, useState } from 'react';
 
 type GenericComponentProps = PropsWithChildren<{ className?: string }>;
+
+/** Representation of whether the user has saved changes */
+enum SaveState {
+  HasNotSaved,
+  IsSaving,
+  HasSaved,
+}
+
+const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
+const REGISTRATION_CODE_REGEX_STRING =
+  '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*)$';
 
 /** Just a div with some margins to give some space around parts of the web view */
 function Section({ children, className }: GenericComponentProps) {
@@ -25,16 +46,22 @@ function Grid({ children, className }: GenericComponentProps) {
   );
 }
 
+async function getRegistrationData() {
+  return papi.commands.sendCommand('platformScripture.getParatextRegistrationData');
+}
+
 async function saveRegistrationInformation(
   name: string,
   registrationCode: string,
   email: string,
   supporter: string,
 ) {
-  logger.debug(
-    `Pretending to save Registration Information and restart: ${name}, ${registrationCode}, ${email}, ${supporter}`,
-  );
-  return wait(1000);
+  return papi.commands.sendCommand('platformScripture.setParatextRegistrationData', {
+    name,
+    code: registrationCode,
+    email,
+    supporterName: supporter,
+  });
 }
 
 globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }: WebViewProps) {
@@ -46,80 +73,127 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
     };
   }, []);
 
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useWebViewState('hasUnsavedChanges', false);
+  const [name, setName] = useWebViewState('name', '');
+  const [registrationCode, setRegistrationCode] = useWebViewState('registrationCode', '');
+  const [email, setEmail] = useWebViewState('email', '');
+  const [supporter, setSupporter] = useWebViewState('supporter', '');
 
-  const [name, setNameInternal] = useWebViewState('name', '');
-  function setName(newName: string) {
-    setNameInternal(newName);
-    setHasUnsavedChanges(true);
-  }
-  const [registrationCode, setRegistrationCodeInternal] = useWebViewState('registrationCode', '');
-  function setRegistrationCode(newRegistrationCode: string) {
-    setRegistrationCodeInternal(newRegistrationCode);
-    setHasUnsavedChanges(true);
-  }
-  const [email, setEmailInternal] = useWebViewState('email', '');
-  function setEmail(newEmail: string) {
-    setEmailInternal(newEmail);
-    setHasUnsavedChanges(true);
-  }
-  const [supporter, setSupporterInternal] = useWebViewState('supporter', '');
-  function setSupporter(newSupporter: string) {
-    setSupporterInternal(newSupporter);
-    setHasUnsavedChanges(true);
-  }
+  const [currentRegistrationData, isLoadingCurrentRegistrationData] = usePromise(
+    getRegistrationData,
+    useMemo(
+      () => ({ name, code: registrationCode, email, supporterName: supporter }),
+      [name, registrationCode, email, supporter],
+    ),
+  );
 
-  const [isSaving, setIsSaving] = useState(false);
+  // Set the form to show the current registration data when we receive it
+  useEffect(() => {
+    setName(currentRegistrationData.name);
+    setRegistrationCode(currentRegistrationData.code);
+    setEmail(currentRegistrationData.email);
+    setSupporter(currentRegistrationData.supporterName);
+  }, [currentRegistrationData, setName, setRegistrationCode, setEmail, setSupporter]);
+
+  // How much progress the form has made in saving registration data
+  const [saveState, setSaveState] = useState(SaveState.HasNotSaved);
   const [saveError, setSaveError] = useState('');
 
   const saveAndRestart = async () => {
-    setIsSaving(true);
+    setSaveState(SaveState.IsSaving);
+    setSaveError('');
 
     try {
       await saveRegistrationInformation(name, registrationCode, email, supporter);
-      if (isMounted) setHasUnsavedChanges(false);
+      setSaveState(SaveState.HasSaved);
     } catch (e) {
       logger.warn(`Failed to save Paratext Registration information! ${e}`);
-      if (isMounted) setSaveError(`${e}`);
+      if (isMounted) {
+        setSaveError(getErrorMessage(e));
+        setSaveState(SaveState.HasNotSaved);
+      }
     }
-
-    if (isMounted) setIsSaving(false);
   };
+
+  // Whether you should be able to type into the form
+  const isFormDisabled =
+    isLoadingCurrentRegistrationData ||
+    saveState === SaveState.IsSaving ||
+    saveState === SaveState.HasSaved;
+  // whether any form fields have changed
+  const hasUnsavedChanges =
+    currentRegistrationData.name !== name ||
+    currentRegistrationData.code !== registrationCode ||
+    currentRegistrationData.email !== email ||
+    currentRegistrationData.supporterName !== supporter;
+  // whether the code seems valid according to a quick check
+  const isCodeValid = !!registrationCode.match(REGISTRATION_CODE_REGEX_STRING);
 
   return (
     <div className="tw-p-2 tw-flex tw-flex-col tw-justify-between tw-h-screen">
       <div>
-        <Section>Please enter your Paratext Registration Information.</Section>
-        <Section className="tw-mb-4">
-          <Grid>
-            <span>Registration Name</span>
-            <Input value={name} onChange={(e) => setName(e.target.value)} />
-            <span>Registration Code</span>
-            <Input value={registrationCode} onChange={(e) => setRegistrationCode(e.target.value)} />
-            <span>Your Email Address</span>
-            <Input value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Grid>
-        </Section>
-        <Section>Please specify who provides Paratext support to you:</Section>
         <Section>
           <Grid>
-            <span>Supporter Name</span>
-            <Input value={supporter} onChange={(e) => setSupporter(e.target.value)} />
+            <span>Registration Name</span>
+            <Input
+              value={name}
+              disabled={isFormDisabled}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <span>Registration Code</span>
+            <Input
+              className="tw-font-mono tw-max-w-[34ch] tw-box-content tw-h-6 invalid:tw-border-destructive"
+              maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
+              pattern={REGISTRATION_CODE_REGEX_STRING}
+              value={registrationCode}
+              disabled={isFormDisabled}
+              onChange={(e) => setRegistrationCode(e.target.value)}
+            />
+            <span>Your Email Address</span>
+            <Input
+              value={email}
+              disabled={isFormDisabled}
+              onChange={(e) => setEmail(e.target.value)}
+            />
           </Grid>
         </Section>
+        {/* UX said to remove supporter info until we are using it in P10S. Leaving here for uncommenting when the time is right */}
+        {/* <Section>Please specify who provides Paratext support to you:</Section>
+        <Section className="tw-mt-8">
+          <Grid>
+            <span>Supporter Name</span>
+            <Input value={supporter} disabled={isFormDisabled} onChange={(e) => setSupporter(e.target.value)} />
+          </Grid>
+        </Section> */}
       </div>
       <Section>
-        {saveError && <Section>{saveError}</Section>}
+        {saveState === SaveState.HasSaved && (
+          <Section className="tw-my-4">
+            <Alert>
+              <CircleCheck className="tw-h-4 tw-w-4" />
+              <AlertTitle>Updated Registration Information</AlertTitle>
+              <AlertDescription>
+                Changes applied! The application will restart in a few seconds.
+              </AlertDescription>
+            </Alert>
+          </Section>
+        )}
+        {saveError && (
+          <Section className="tw-my-4">
+            <Alert variant="destructive">
+              <AlertCircle className="tw-h-4 tw-w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{saveError}</AlertDescription>
+            </Alert>
+          </Section>
+        )}
         <Grid className="tw-grid-cols-[1fr_auto] tw-items-end">
-          <span className="tw-italic tw-text-sm">
-            Saving changes will automatically restart the application.
-          </span>
+          <span />
           <Button
             variant="destructive"
-            disabled={!hasUnsavedChanges || isSaving}
+            disabled={isFormDisabled || !hasUnsavedChanges || !isCodeValid}
             onClick={saveAndRestart}
           >
-            {isSaving ? <Spinner /> : 'Save and Restart'}
+            {saveState === SaveState.IsSaving ? <Spinner /> : 'Save and Restart'}
           </Button>
         </Grid>
       </Section>

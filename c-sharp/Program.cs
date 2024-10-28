@@ -5,6 +5,7 @@ using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 using PtxUtils;
 
@@ -34,7 +35,12 @@ public static class Program
 
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi);
-            await Task.WhenAll(paratextFactory.Initialize(), checkRunner.RegisterDataProvider());
+            var paratextRegistrationService = new ParatextRegistrationService(papi);
+            await Task.WhenAll(
+                paratextFactory.Initialize(),
+                checkRunner.RegisterDataProvider(),
+                paratextRegistrationService.Initialize()
+            );
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");

@@ -2494,7 +2494,10 @@ declare module 'papi-shared-types' {
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
+    /** Shut down the application */
     'platform.quit': () => Promise<void>;
+    /** Restart the application */
+    'platform.restart': () => Promise<void>;
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     'platform.openUserSettings': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;

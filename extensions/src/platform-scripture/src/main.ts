@@ -126,9 +126,40 @@ async function showCheckResults(webViewId: string | undefined): Promise<string |
 async function showParatextRegistration(): Promise<string | undefined> {
   return papi.webViews.getWebView(
     paratextRegistrationWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 540, height: 410 } },
+    { type: 'float', position: 'center', floatSize: { width: 540, height: 395 } },
     { existingId: '?' },
   );
+}
+
+/**
+ * Shows the registration info pane if there isn't any registration info yet. Used to help people
+ * get signed in at startup
+ *
+ * Handles its own errors. No need to await
+ */
+async function showParatextRegistrationIfNoRegistrationData(): Promise<string | undefined> {
+  try {
+    const registrationData = await papi.commands.sendCommand(
+      'platformScripture.getParatextRegistrationData',
+    );
+
+    if (
+      registrationData.name ||
+      registrationData.code ||
+      registrationData.email ||
+      registrationData.supporterName
+    )
+      return undefined;
+
+    if (!(await papi.settings.get('platformScripture.shouldShowOnStartup'))) return undefined;
+
+    return await showParatextRegistration();
+  } catch (e) {
+    logger.warn(
+      `Error while trying to determine if we need to pull up the Paratext registration info web view on startup: ${e}`,
+    );
+  }
+  return undefined;
 }
 
 export async function activate(context: ExecutionActivationContext) {
@@ -169,6 +200,10 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const includeProjectsValidatorPromise = papi.settings.registerValidator(
     'platformScripture.includeMyParatext9Projects',
+    async (newValue) => typeof newValue === 'boolean',
+  );
+  const shouldShowOnStartupValidatorPromise = papi.settings.registerValidator(
+    'platformScripture.shouldShowOnStartup',
     async (newValue) => typeof newValue === 'boolean',
   );
   const booksPresentPromise = papi.projectSettings.registerValidator(
@@ -236,6 +271,9 @@ export async function activate(context: ExecutionActivationContext) {
     paratextRegistrationWebViewProvider,
   );
 
+  // No need to wait for this; it will do its thing and handle its own errors
+  showParatextRegistrationIfNoRegistrationData();
+
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
 
@@ -243,6 +281,7 @@ export async function activate(context: ExecutionActivationContext) {
     await scriptureExtenderPdpefPromise,
     await includeProjectsCommandPromise,
     await includeProjectsValidatorPromise,
+    await shouldShowOnStartupValidatorPromise,
     await booksPresentPromise,
     await versificationPromise,
     await validCharactersPromise,

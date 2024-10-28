@@ -247,7 +247,7 @@ async function main() {
 
   // #region Register commands
 
-  // `main.ts`'s command handler declarations are in `command.service.ts` so they can be picked up
+  // `main.ts`'s command handler declarations are in `papi-shared-types.ts` so they can be picked up
   // by papi-dts
   // This map should allow any functions because commands can be any function type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -256,6 +256,10 @@ async function main() {
       restartExtensionHost();
     },
     'platform.quit': async () => {
+      app.quit();
+    },
+    'platform.restart': async () => {
+      app.relaunch();
       app.quit();
     },
   };

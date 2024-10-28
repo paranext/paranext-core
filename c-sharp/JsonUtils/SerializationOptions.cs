@@ -1,6 +1,7 @@
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
+using Paratext.Data.Users;
 
 namespace Paranext.DataProvider.JsonUtils;
 
@@ -23,6 +24,7 @@ internal static class SerializationOptions
         options.Converters.Add(new CommentConverter());
         options.Converters.Add(new MessageConverter());
         options.Converters.Add(new VerseRefConverter());
+        options.Converters.Add(new RegistrationDataConverter());
         return options;
     }
 }
