@@ -1,11 +1,8 @@
 using System.Text;
-using System.Text.Json.Nodes;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using Paranext.DataProvider.JsonUtils;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.ProjectComments;
@@ -51,27 +48,6 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         _commentManager = CommentManager.Get(
             LocalParatextProjects.GetParatextProject(projectDetails.Metadata.Id)
         );
-
-        Getters.Add("getBookUSFM", GetBookUsfm);
-        Setters.Add("setBookUSFM", SetBookUsfm);
-        Getters.Add("getChapterUSFM", GetChapterUsfm);
-        Setters.Add("setChapterUSFM", SetChapterUsfm);
-        Getters.Add("getVerseUSFM", GetVerseUsfm);
-
-        Getters.Add("getBookUSX", GetBookUsx);
-        Setters.Add("setBookUSX", SetBookUsx);
-        Getters.Add("getChapterUSX", GetChapterUsx);
-        Setters.Add("setChapterUSX", SetChapterUsx);
-        Getters.Add("getVerseUSX", GetVerseUsx);
-
-        Getters.Add("getVersePlainText", GetVersePlainText);
-
-        Getters.Add("getComments", GetComments);
-        Setters.Add("setComments", SetComments);
-
-        Getters.Add("getSetting", GetProjectSetting);
-        Setters.Add("setSetting", SetProjectSetting);
-
         RegisterSettingsValidators();
     }
 
@@ -79,12 +55,41 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #region Data Provider methods
 
-    protected override Task StartDataProvider()
+    protected override List<(string functionName, Delegate function)> GetFunctions()
+    {
+        var retVal = base.GetFunctions();
+
+        retVal.Add(("getBookUSFM", GetBookUsfm));
+        retVal.Add(("setBookUSFM", SetBookUsfm));
+        retVal.Add(("getChapterUSFM", GetChapterUsfm));
+        retVal.Add(("setChapterUSFM", SetChapterUsfm));
+        retVal.Add(("getVerseUSFM", GetVerseUsfm));
+
+        retVal.Add(("getBookUSX", GetBookUsx));
+        retVal.Add(("setBookUSX", SetBookUsx));
+        retVal.Add(("getChapterUSX", GetChapterUsx));
+        retVal.Add(("setChapterUSX", SetChapterUsx));
+        retVal.Add(("getVerseUSX", GetVerseUsx));
+
+        retVal.Add(("getVersePlainText", GetVersePlainText));
+
+        retVal.Add(("getComments", GetComments));
+        retVal.Add(("setComments", SetComments));
+
+        retVal.Add(("getSetting", GetProjectSetting));
+        retVal.Add(("setSetting", SetProjectSetting));
+
+        retVal.Add(("resetSetting", ResetProjectSetting));
+
+        return retVal;
+    }
+
+    protected override Task StartDataProviderAsync()
     {
         bool? shouldIncludePT9ProjectsOnWindows = false;
         if (OperatingSystem.IsWindows())
         {
-            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSettingValue<bool>(
+            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSetting<bool>(
                 PapiClient,
                 Settings.INCLUDE_MY_PARATEXT_9_PROJECTS
             );
@@ -97,96 +102,51 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         return Task.CompletedTask;
     }
 
-    protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
-    {
-        try
-        {
-            return functionName switch
-            {
-                "resetSetting" => ResetProjectSetting(args[0]!.ToJsonString()),
-                _ => base.HandleRequest(functionName, args),
-            };
-        }
-        catch (Exception e)
-        {
-            Console.Error.WriteLine(e.ToString());
-            return ResponseToRequest.Failed(e.ToString());
-        }
-    }
-
     #endregion
 
     #region Extension Data
 
-    public override ResponseToRequest GetExtensionData(ProjectDataScope scope)
+    public override object? GetExtensionData(ProjectDataScope scope)
     {
         if (string.IsNullOrEmpty(scope.ExtensionName))
-            return ResponseToRequest.Failed("Must provide an extension name");
+            throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
-            return ResponseToRequest.Failed("Must provide a data qualifier");
+            throw new InvalidDataException("Must provide a data qualifier");
 
-        Stream? dataStream;
-        try
-        {
-            dataStream = GetExtensionStream(scope, false);
-        }
-        catch (ArgumentException ex)
-        {
-            return ResponseToRequest.Failed(ex.Message);
-        }
-
-        if (dataStream == null)
-            return ResponseToRequest.Failed("Extension data not found");
-
+        Stream? dataStream =
+            GetExtensionStream(scope, false)
+            ?? throw new InvalidDataException("Extension data not found");
         using (dataStream)
         {
-            using TextReader textReader = new StreamReader(dataStream, Encoding.UTF8);
-            return ResponseToRequest.Succeeded(textReader.ReadToEnd());
+            return new StreamReader(dataStream, Encoding.UTF8).ReadToEnd();
         }
     }
 
-    public override ResponseToRequest SetExtensionData(ProjectDataScope scope, string data)
+    public override void SetExtensionData(ProjectDataScope scope, string data)
     {
         if (string.IsNullOrEmpty(scope.ExtensionName))
-            return ResponseToRequest.Failed("Must provide an extension name");
+            throw new InvalidDataException("Must provide an extension name");
         if (string.IsNullOrEmpty(scope.DataQualifier))
-            return ResponseToRequest.Failed("Must provide a data qualifier");
+            throw new InvalidDataException("Must provide a data qualifier");
 
-        Stream? dataStream;
-        try
-        {
-            dataStream = GetExtensionStream(scope, true);
-        }
-        catch (ArgumentException ex)
-        {
-            return ResponseToRequest.Failed(ex.Message);
-        }
-
-        if (dataStream == null)
-            return ResponseToRequest.Failed("Unable to create extension data");
+        Stream? dataStream =
+            GetExtensionStream(scope, true)
+            ?? throw new InvalidDataException("Unable to create extension data");
 
         ScrText scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-        try
-        {
-            RunWithinLock(
-                WriteScope.EntireProject(scrText),
-                writeLock =>
-                {
-                    if (!writeLock.Active)
-                        throw new InvalidOperationException("Write lock is not active");
-                    dataStream.SetLength(0);
-                    using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
-                    textWriter.Write(data);
-                    textWriter.Flush();
-                }
-            );
-            // The value of returned string is case-sensitive and cannot change unless data provider subscriptions change
-            return ResponseToRequest.Succeeded("ExtensionData");
-        }
-        catch (Exception e)
-        {
-            return ResponseToRequest.Failed(e.ToString());
-        }
+        RunWithinLock(
+            WriteScope.EntireProject(scrText),
+            writeLock =>
+            {
+                if (!writeLock.Active)
+                    throw new InvalidOperationException("Write lock is not active");
+                dataStream.SetLength(0);
+                using TextWriter textWriter = new StreamWriter(dataStream, Encoding.UTF8);
+                textWriter.Write(data);
+                textWriter.Flush();
+            }
+        );
+        SendDataUpdateEvent(ProjectDataType.EXTENSION_DATA, "extension data update event");
     }
 
     private Stream? GetExtensionStream(ProjectDataScope scope, bool createIfNotExists)
@@ -213,23 +173,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         get
         {
-            return SettingsService.GetSettingValue<bool>(PapiClient, Settings.COMMENTS_ENABLED)
+            return SettingsService.GetSetting<bool?>(PapiClient, Settings.COMMENTS_ENABLED)
                 ?? false;
         }
     }
 
-    public ResponseToRequest GetComments(string jsonSelector)
+    public List<Comment> GetComments(CommentSelector selector)
     {
         if (!CommentsEnabled)
-            return ResponseToRequest.Succeeded(Array.Empty<Comment>());
-
-        CommentSelector selector =
-            jsonSelector.DeserializeFromJson<CommentSelector>()
-            ?? throw new InvalidDataException($"Invalid selector provided: {jsonSelector}");
+            return [];
 
         List<Comment> comments = _commentManager.AllComments.ToList();
         if (comments.Count == 0)
-            return ResponseToRequest.Succeeded(comments);
+            return comments;
 
         string matchingVerseRef;
         if (selector.ChapterNum > 0 && selector.VerseNum > 0)
@@ -242,21 +198,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         comments = comments.FindAll((c) => c.VerseRefStr.StartsWith(matchingVerseRef));
         if (!string.IsNullOrEmpty(selector.CommentId))
             comments = comments.FindAll((c) => selector.CommentId == c.Id);
-        return ResponseToRequest.Succeeded(comments);
+        return comments;
     }
 
     // For now, only allow adding comments, not changing or removing existing PT 9 comments
     // Too much risk of data loss while there are other bugs related to comments floating around
-    public ResponseToRequest SetComments(string jsonSelector, string commentData)
+    public void SetComments(CommentSelector _ignore, Comment[] incomingComments)
     {
         if (!CommentsEnabled)
-            return ResponseToRequest.Succeeded();
-
-        // The selector doesn't really make sense for what we're trying to do here, but it's required. Just ignore it.
-
-        var incomingComments =
-            commentData.DeserializeFromJson<Comment[]>()
-            ?? throw new InvalidDataException($"Invalid commend data provided: {commentData}");
+            return;
 
         bool madeChange = false;
         foreach (var ic in incomingComments)
@@ -278,9 +228,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
 
         if (madeChange)
-            SendDataUpdateEvent(ProjectDataType.COMMENTS);
-
-        return ResponseToRequest.Succeeded();
+            SendDataUpdateEvent(ProjectDataType.COMMENTS, "comments data update event");
     }
 
     #endregion
@@ -325,11 +273,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
     }
 
-    public ResponseToRequest GetProjectSetting(string jsonKey)
+    public object? GetProjectSetting(string settingName)
     {
-        var settingName =
-            jsonKey.DeserializeFromJson<string>()
-            ?? throw new InvalidDataException($"No project setting provided: {jsonKey}");
         var paratextSettingName =
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
@@ -340,7 +285,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // the folder name instead of Settings.Name.
         // https://github.com/ubsicap/Paratext/blob/aaadecd828a9b02e6f55d18e4c5dda8703ce2429/ParatextData/ProjectSettingsAccess/ProjectSettings.cs#L1438
         if (paratextSettingName == ProjectSettingsNames.PT_NAME)
-            return ResponseToRequest.Succeeded(scrText.Name);
+            return scrText.Name;
 
         if (
             scrText.Settings.ParametersDictionary.TryGetValue(
@@ -354,41 +299,39 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             {
                 return settingValue switch
                 {
-                    "T" => ResponseToRequest.Succeeded(true),
-                    "F" => ResponseToRequest.Succeeded(false),
-                    _ => ResponseToRequest.Failed(
+                    "T" => true,
+                    "F" => false,
+                    _ => throw new InvalidDataException(
                         $"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"
                     ),
                 };
             }
-            return ResponseToRequest.Succeeded(settingValue);
+            return settingValue;
         }
 
         // Setting not found, so get the default value
-        string? defaultValue = ProjectSettingsService.GetDefault(PapiClient, settingName);
-        if (defaultValue == null)
-            return ResponseToRequest.Failed($"Default value for {settingName} was null");
-
-        return ResponseToRequest.Succeeded(defaultValue);
+        object? defaultValue =
+            ProjectSettingsService.GetDefault(PapiClient, settingName)
+            ?? throw new InvalidDataException($"Default value for {settingName} was null");
+        return defaultValue;
     }
 
-    public ResponseToRequest SetProjectSetting(string jsonKey, string value)
+    public void SetProjectSetting(string settingName, object? value)
     {
-        var settingName =
-            jsonKey.DeserializeFromJson<string>()
-            ?? throw new InvalidDataException($"No project setting provided: {jsonKey}");
-
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
         // If there is no Paratext setting for the name given, we'll create one lower down
-        var currentValueResponse = GetProjectSetting(jsonKey);
+        string currentValueJson = string.Empty;
+        try
+        {
+            currentValueJson = GetProjectSetting(settingName).SerializeToJson();
+        }
+        catch (Exception) { }
 
         // Make sure the value we're planning to set is valid
-        var currentValueJson = currentValueResponse.Success
-            ? currentValueResponse.Contents.SerializeToJson()
-            : "";
-        if (!ProjectSettingsService.IsValid(PapiClient, value, currentValueJson, settingName, ""))
-            return ResponseToRequest.Failed($"Validation failed for {settingName}");
+        string? newJson = value == null ? string.Empty : value.SerializeToJson();
+        if (!ProjectSettingsService.IsValid(PapiClient, newJson, currentValueJson, settingName, ""))
+            throw new InvalidDataException($"Validation failed for {settingName}");
 
         // Figure out which setting name to use
         var paratextSettingName =
@@ -414,7 +357,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 {
                     try
                     {
-                        scrText.Name = value;
+                        scrText.Name = value!.ToString();
                     }
                     catch (Exception ex)
                     {
@@ -431,7 +374,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 {
                     try
                     {
-                        scrText.Settings.SetSetting(paratextSettingName, value);
+                        scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
                         // notify in `Save`
                         scrText.Settings.Save(false);
@@ -444,25 +387,21 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             );
         }
 
-        return (errorMessage != null)
-            ? ResponseToRequest.Failed(errorMessage)
-            : ResponseToRequest.Succeeded(ProjectDataType.SETTING);
+        if (errorMessage != null)
+            throw new Exception(errorMessage);
+
+        SendDataUpdateEvent(ProjectDataType.SETTING, "project setting data update event");
     }
 
     // Typically for "reset" we would want to erase the setting and then call "getDefault" if a
     // setting is not present when "get" is called. Since we're using PT settings as the backing
     // store here, though, we want to keep all properties filled in inside of Settings.xml files
-    public ResponseToRequest ResetProjectSetting(string jsonKey)
+    public void ResetProjectSetting(string settingName)
     {
-        string settingName =
-            jsonKey.DeserializeFromJson<string>()
-            ?? throw new InvalidDataException($"No setting name provided: {jsonKey}");
-        string? defaultValue = ProjectSettingsService.GetDefault(PapiClient, settingName);
-        if (defaultValue == null)
-            return ResponseToRequest.Failed($"Default value for {settingName} was null");
-        var retVal = SetProjectSetting(jsonKey, defaultValue);
-        SendDataUpdateEvent(retVal.Contents);
-        return retVal;
+        object? defaultValue =
+            ProjectSettingsService.GetDefault(PapiClient, settingName)
+            ?? throw new InvalidDataException($"Default value for {settingName} was null");
+        SetProjectSetting(settingName, defaultValue);
     }
 
     #endregion
@@ -475,82 +414,69 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     /// </summary>
     public void SendFullProjectUpdateEvent()
     {
-        SendDataUpdateEvent("*");
+        SendDataUpdateEvent("*", "full project updated event");
     }
 
     #endregion
 
     #region USFM
 
-    public ResponseToRequest GetBookUsfm(string jsonString)
+    public string GetBookUsfm(VerseRef verseRef)
     {
         return GetFromScrText(
-            jsonString,
+            verseRef,
             (ScrText scrText, VerseRef verseRef) => scrText.GetText(verseRef, false, true)
         );
     }
 
-    public ResponseToRequest GetChapterUsfm(string jsonString)
+    public string GetChapterUsfm(VerseRef verseRef)
     {
         return GetFromScrText(
-            jsonString,
+            verseRef,
             (ScrText scrText, VerseRef verseRef) => scrText.GetText(verseRef, true, true)
         );
     }
 
-    public ResponseToRequest GetVerseUsfm(string jsonString)
+    public string GetVerseUsfm(VerseRef verseRef)
     {
         return GetFromScrText(
-            jsonString,
+            verseRef,
             (ScrText scrText, VerseRef verseRef) => scrText.Parser.GetVerseUsfmText(verseRef)
         );
     }
 
-    public ResponseToRequest SetBookUsfm(string jsonString, string data)
+    public void SetBookUsfm(VerseRef verseRef, string data)
     {
-        var verseRef = jsonString.DeserializeFromJson<VerseRef>();
         verseRef.ChapterNum = 0;
-        try
-        {
-            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-            RunWithinLock(
-                WriteScope.EntireProject(scrText),
-                _ =>
-                {
-                    BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
-                    if (
-                        !localBooksPresentSet.IsSelected(verseRef.BookNum)
-                        && !scrText.Creatable(verseRef.BookNum)
-                    )
-                        throw new InvalidOperationException($"{verseRef.Book} cannot be created");
-                    if (!scrText.Writable(verseRef.BookNum, 0))
-                        throw new InvalidOperationException($"{verseRef.Book} is not writable");
-                    if (!scrText.Settings.Editable)
-                        throw new InvalidOperationException($"{verseRef.Book} is not editable");
-                    byte[] rawData = scrText.Settings.Encoder.Convert(
-                        data,
-                        out string errorMessage
-                    );
-                    if (!string.IsNullOrEmpty(errorMessage))
-                        throw new InvalidOperationException(errorMessage);
-                    string bookFilePath = scrText.Settings.BookFileName(verseRef.BookNum, true);
-                    File.WriteAllBytes(bookFilePath, rawData);
-                    scrText.Reload();
-                }
-            );
-        }
-        catch (Exception e)
-        {
-            return ResponseToRequest.Failed(e.ToString());
-        }
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        RunWithinLock(
+            WriteScope.EntireProject(scrText),
+            _ =>
+            {
+                BookSet localBooksPresentSet = scrText.Settings.LocalBooksPresentSet;
+                if (
+                    !localBooksPresentSet.IsSelected(verseRef.BookNum)
+                    && !scrText.Creatable(verseRef.BookNum)
+                )
+                    throw new InvalidOperationException($"{verseRef.Book} cannot be created");
+                if (!scrText.Writable(verseRef.BookNum, 0))
+                    throw new InvalidOperationException($"{verseRef.Book} is not writable");
+                if (!scrText.Settings.Editable)
+                    throw new InvalidOperationException($"{verseRef.Book} is not editable");
+                byte[] rawData = scrText.Settings.Encoder.Convert(data, out string errorMessage);
+                if (!string.IsNullOrEmpty(errorMessage))
+                    throw new InvalidOperationException(errorMessage);
+                string bookFilePath = scrText.Settings.BookFileName(verseRef.BookNum, true);
+                File.WriteAllBytes(bookFilePath, rawData);
+                scrText.Reload();
+            }
+        );
 
-        // The value of returned strings are case-sensitive and cannot change unless data provider subscriptions change
-        return ResponseToRequest.Succeeded(AllScriptureDataTypes);
+        SendDataUpdateEvent(AllScriptureDataTypes, "USFM book data update event");
     }
 
-    public ResponseToRequest SetChapterUsfm(string jsonString, string data)
+    public void SetChapterUsfm(VerseRef verseRef, string data)
     {
-        var verseRef = jsonString.DeserializeFromJson<VerseRef>();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -564,59 +490,49 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         }
         catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
         {
-            return ResponseToRequest.Failed(
+            throw new InvalidDataException(
                 $"Project with ID '{ProjectDetails.Metadata.Id}' was not found"
             );
         }
 
-        // The value of returned strings are case-sensitive and cannot change unless data provider subscriptions change
-        return ResponseToRequest.Succeeded(AllScriptureDataTypes);
+        SendDataUpdateEvent(AllScriptureDataTypes, "USFM chapter data update event");
     }
 
     #endregion
 
     #region USX
 
-    public ResponseToRequest GetBookUsx(string jsonString)
+    public string GetBookUsx(VerseRef verseRef)
     {
         return GetFromScrText(
-            jsonString,
+            verseRef,
             (ScrText scrText, VerseRef verseRef) => ConvertUsfmToUsx(scrText, verseRef, false)
         );
     }
 
-    public ResponseToRequest GetChapterUsx(string jsonString)
+    public string GetChapterUsx(VerseRef verseRef)
     {
         return GetFromScrText(
-            jsonString,
+            verseRef,
             (ScrText scrText, VerseRef verseRef) => ConvertUsfmToUsx(scrText, verseRef, true)
         );
     }
 
-    public ResponseToRequest GetVerseUsx(string jsonString)
+    public string GetVerseUsx(VerseRef verseRef)
     {
-        return GetFromScrText(jsonString, ExtractVerseUsx);
+        return GetFromScrText(verseRef, ExtractVerseUsx);
     }
 
-    public ResponseToRequest SetBookUsx(string jsonString, string data)
+    public void SetBookUsx(VerseRef verseRef, string data)
     {
-        var verseRef = jsonString.DeserializeFromJson<VerseRef>();
-        try
-        {
-            // Don't need to take a write lock in this function because SetBookUsfm will do it
-            var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-            string usfm = ConvertUsxToUsfm(scrText, verseRef, data);
-            return SetBookUsfm(jsonString, usfm);
-        }
-        catch (Exception e)
-        {
-            return ResponseToRequest.Failed(e.ToString());
-        }
+        // Don't need to take a write lock in this function because SetBookUsfm will do it
+        var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        string usfm = ConvertUsxToUsfm(scrText, verseRef, data);
+        SetBookUsfm(verseRef, usfm);
     }
 
-    public ResponseToRequest SetChapterUsx(string jsonString, string data)
+    public void SetChapterUsx(VerseRef verseRef, string data)
     {
-        var verseRef = jsonString.DeserializeFromJson<VerseRef>();
         string? failedMessage = null;
         try
         {
@@ -635,19 +551,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             failedMessage = $"Project with ID '{ProjectDetails.Metadata.Id}' was not found";
         }
 
-        return failedMessage != null
-            ? ResponseToRequest.Failed(failedMessage)
-            : ResponseToRequest.Succeeded(AllScriptureDataTypes);
+        if (failedMessage != null)
+            throw new Exception(failedMessage);
+
+        SendDataUpdateEvent(AllScriptureDataTypes, "USX chapter data update event");
     }
 
     #endregion
 
     #region Plain Text
 
-    public ResponseToRequest GetVersePlainText(string jsonString)
+    public string GetVersePlainText(VerseRef verseRef)
     {
         return GetFromScrText(
-            jsonString,
+            verseRef,
             (ScrText scrText, VerseRef verseRef) => scrText.GetVerseText(verseRef)
         );
     }
@@ -656,20 +573,19 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     #region Private helper methods
 
-    private ResponseToRequest GetFromScrText(
-        string verseRefJson,
+    private string GetFromScrText(
+        VerseRef verseRef,
         Func<ScrText, VerseRef, string> getTextFromScrText
     )
     {
-        var verseRef = verseRefJson.DeserializeFromJson<VerseRef>();
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
-            return ResponseToRequest.Succeeded(getTextFromScrText(scrText, verseRef));
+            return getTextFromScrText(scrText, verseRef);
         }
         catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)
         {
-            return ResponseToRequest.Failed(
+            throw new InvalidDataException(
                 $"Project with ID '{ProjectDetails.Metadata.Id}' was not found"
             );
         }

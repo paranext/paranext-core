@@ -21,7 +21,6 @@ internal static class SerializationOptions
                 IgnoreReadOnlyProperties = false, // Need types to be serialized
             };
         options.Converters.Add(new CommentConverter());
-        options.Converters.Add(new MessageConverter());
         options.Converters.Add(new VerseRefConverter());
         return options;
     }

@@ -1,7 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text.Json.Nodes;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Services;
 
@@ -26,25 +24,24 @@ internal class DummySettingsService : DataProvider
         _settingValues.Clear();
     }
 
-    protected override Task StartDataProvider()
+    protected override Task StartDataProviderAsync()
     {
         return Task.CompletedTask;
     }
 
-    protected override List<string> GetFunctionNames()
+    protected override List<(string functionName, Delegate function)> GetFunctions()
     {
-        return _supportedFunctions;
-    }
-
-    protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
-    {
-        return functionName switch
-        {
-            "get"
-                => _settingValues.ContainsKey(args[0]!.ToString())
-                    ? ResponseToRequest.Succeeded(_settingValues[args[0]!.ToString()])
-                    : ResponseToRequest.Failed($"Could not find value for setting {args[0]}"),
-            _ => ResponseToRequest.Failed($"Unexpected function: {functionName}")
-        };
+        return
+        [
+            (
+                "get",
+                (string settingName) =>
+                {
+                    return _settingValues.ContainsKey(settingName)
+                        ? _settingValues[settingName]
+                        : throw new Exception($"Could not find value for setting {settingName}");
+                }
+            )
+        ];
     }
 }

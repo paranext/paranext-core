@@ -1,12 +1,14 @@
 using System.Text.Json;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.Services
 {
     internal static class ProjectSettingsService
     {
-        private const string PROJECT_SETTINGS_SERVICE = "object:ProjectSettingsService.function";
+        private static readonly TimeSpan s_timeout = TimeSpan.FromSeconds(1);
+
+        private const string SERVICE_OBJECT = "object:ProjectSettingsService";
+        private const string SERVICE_IS_VALID = SERVICE_OBJECT + ".isValid";
+        private const string SERVICE_GET_DEFAULT = SERVICE_OBJECT + ".getDefault";
         private const string PROJECT_SETTING_VALIDATOR = "extensionProjectSettingValidator:";
 
         internal static string GetValidatorKey(string settingKey) =>
@@ -36,37 +38,15 @@ namespace Paranext.DataProvider.Services
             string allChangesJson
         )
         {
-            bool requestSucceeded = false;
-            TaskCompletionSource taskSource = new();
-            using var validationTask = taskSource.Task;
-
-            papiClient.SendRequest(
-                PROJECT_SETTINGS_SERVICE,
-                new object[] { "isValid", key, newValueJson, currentValueJson, allChangesJson },
-                (bool success, object? returnValue) =>
-                {
-                    try
-                    {
-                        if (success)
-                        {
-                            var result = (JsonElement?)returnValue;
-                            if (result.HasValue)
-                                requestSucceeded = result.Value.GetBoolean();
-                        }
-
-                        taskSource.TrySetResult();
-                    }
-                    catch (Exception ex)
-                    {
-                        requestSucceeded = false;
-                        taskSource.TrySetException(ex);
-                    }
-                }
-            );
-
-            using var cts = new CancellationTokenSource();
-            validationTask.Wait(cts.Token);
-            return requestSucceeded;
+            string description = $"ProjectSettingService.IsValid for {key}";
+            return ThreadingUtils.GetTaskResult(
+                    papiClient.SendRequestAsync<bool?>(
+                        SERVICE_IS_VALID,
+                        [key, newValueJson, currentValueJson, allChangesJson]
+                    ),
+                    description,
+                    s_timeout
+                ) ?? throw new InvalidDataException($"{description} was null");
         }
 
         /// <summary>
@@ -82,38 +62,14 @@ namespace Paranext.DataProvider.Services
         /// request to get a project setting if the project does not have a value for the project
         /// setting requested. It should return the response from this function directly, either
         /// the returned default value or throw.</remarks>
-        public static string? GetDefault(PapiClient papiClient, string key)
+        public static object? GetDefault(PapiClient papiClient, string key)
         {
-            string? defaultValue = null;
-            TaskCompletionSource taskSource = new();
-            using var getDefaultTask = taskSource.Task;
-
-            papiClient.SendRequest(
-                PROJECT_SETTINGS_SERVICE,
-                new object[] { "getDefault", key },
-                (bool success, object? returnValue) =>
-                {
-                    try
-                    {
-                        if (success)
-                        {
-                            var result = (JsonElement?)returnValue;
-                            if (result.HasValue)
-                                defaultValue = result.Value.ToString();
-                        }
-
-                        taskSource.TrySetResult();
-                    }
-                    catch (Exception ex)
-                    {
-                        taskSource.TrySetException(ex);
-                    }
-                }
-            );
-
-            using var cts = new CancellationTokenSource();
-            getDefaultTask.Wait(cts.Token);
-            return defaultValue;
+            string description = $"ProjectSettingService.GetDefault for {key}";
+            return ThreadingUtils.GetTaskResult(
+                    papiClient.SendRequestAsync<object?>(SERVICE_GET_DEFAULT, [key]),
+                    description,
+                    s_timeout
+                ) ?? throw new InvalidDataException($"{description} was null");
         }
 
         /// <summary>
@@ -138,41 +94,29 @@ namespace Paranext.DataProvider.Services
             > validatorCallback
         )
         {
-            ResponseToRequest requestHandler(JsonElement jsonElement)
+            bool requestHandler(string newValueJson, string currentValueJson, string allChangesJson)
             {
-                // Check if the JsonElement is an array
-                if (
-                    jsonElement.ValueKind != JsonValueKind.Array
-                    || jsonElement.GetArrayLength() < 3
-                )
-                {
-                    return ResponseToRequest.Failed(
-                        $"Validator for {key} expected a JSON array with 3 items: newValueJson"
-                            + "currentValueJson, allChangesJson"
-                    );
-                }
-
-                string newValueJson = jsonElement[0].GetString() ?? "";
-                string currentValueJson = jsonElement[1].GetString() ?? "";
-                string allChangesJson = jsonElement[2].GetString() ?? "";
-
-                var validationResponse = validatorCallback(
+                var (result, error) = validatorCallback(
                     (newValueJson, currentValueJson, allChangesJson)
                 );
-                return validationResponse.result
-                    ? ResponseToRequest.Succeeded()
-                    : ResponseToRequest.Failed(
-                        validationResponse.error
-                            ?? "Parameter validation failed for {key}. Error response provided no details."
+                return result
+                    ? true
+                    : throw new InvalidDataException(
+                        error
+                            ?? $"Parameter validation failed for {key}. Error response provided no details."
                     );
             }
-            ;
 
-            var t = papiClient.RegisterRequestHandler(GetValidatorKey(key), requestHandler);
-
-            using var cts = new CancellationTokenSource();
-            t.Wait(cts.Token);
-            return t.Result;
+            string description = $"ProjectSettingService.RegisterValidator for {key}";
+            return ThreadingUtils.GetTaskResult(
+                papiClient.RegisterRequestHandlerAsync(
+                    GetValidatorKey(key),
+                    requestHandler,
+                    (int)s_timeout.TotalMilliseconds
+                ),
+                description,
+                s_timeout
+            );
         }
     }
 }
