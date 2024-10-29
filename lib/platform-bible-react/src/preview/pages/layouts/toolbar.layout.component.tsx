@@ -1,14 +1,8 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
 import Toolbar from '@/components/mui/toolbar.component';
-import { Localized, MultiColumnMenu, ScriptureReference } from 'platform-bible-utils';
+import { defaultScrRef, Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { useState } from 'react';
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
 
 export default function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);

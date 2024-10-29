@@ -7,7 +7,7 @@ import {
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
 import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
-import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
 import NavigationContentSearch from '@/components/advanced/navigation-content-search.component';
 import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
@@ -18,12 +18,6 @@ import MarketplaceExamples from './advanced/marketplace.example.component';
 import InventoryExample from './advanced/inventory-example.component';
 import SettingsListExamples from './advanced/settings-list.examples.component';
 import BookSelectorExample from './advanced/book-selector-example.component';
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
 
 function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);

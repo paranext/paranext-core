@@ -85,6 +85,12 @@
             "command": "platformScripture.openRepeatedWordsInventory"
           },
           {
+            "label": "%webView_platformScriptureEditor_markersInventory%",
+            "group": "platformScriptureEditor.inventory",
+            "order": 3,
+            "command": "platformScripture.openMarkersInventory"
+          },
+          {
             "label": "%webView_platformScriptureEditor_configureChecks%",
             "group": "platformScriptureEditor.checks",
             "order": 1,
