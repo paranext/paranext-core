@@ -1,13 +1,8 @@
-using System.Text.Json;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.Messages;
-using Paranext.DataProvider.MessageTransports;
-
 namespace Paranext.DataProvider.NetworkObjects;
 
 internal abstract class NetworkObject
 {
-    private MessageEvent? _registrationEvent = null;
+    private object? _registrationParameters = null;
 
     protected NetworkObject(PapiClient papiClient)
     {
@@ -20,36 +15,39 @@ internal abstract class NetworkObject
     /// Notify PAPI services we have a new network object they can use
     /// </summary>
     /// <param name="networkObjectName">Services access this network object using this name</param>
-    /// <param name="registrationEvent">Event for notifying the network that the object was registered</param>
-    /// <param name="requestHandler">Function that will handle calls from services to this network object</param>
+    /// <param name="functionsToRegister">List of functions to register on the network with their corresponding function names</param>
+    /// <param name="registrationParameters">Details about a network object to send onto the network after it finishes registering</param>
     /// <exception cref="Exception">Throws if the network object could not be registered properly</exception>
-    protected async Task RegisterNetworkObject(
+    protected async Task RegisterNetworkObjectAsync(
         string networkObjectName,
-        MessageEvent registrationEvent,
-        Func<JsonElement, ResponseToRequest> requestHandler
+        List<(string functionName, Delegate function)> functionsToRegister,
+        NetworkObjectCreatedDetails registrationParameters
     )
     {
-        if (_registrationEvent != null)
+        if (_registrationParameters != null)
             throw new Exception($"{networkObjectName} has already been registered on the network");
 
-        // PAPI requires network objects to expose "get" and "function" requests
-        var getReqType = $"object:{networkObjectName}.get";
-        var functionReqType = $"object:{networkObjectName}.function";
-
-        if (!await PapiClient.RegisterRequestHandler(getReqType, HandleGet))
-            throw new Exception($"Could not register GET for {networkObjectName}");
-
-        if (!await PapiClient.RegisterRequestHandler(functionReqType, requestHandler))
-            throw new Exception($"Could not register FUNCTION for {networkObjectName}");
+        // Register the network object and all functions the object will expose
+        List<Task<bool>> requests = [];
+        var objPrefix = $"object:{networkObjectName}";
+        requests.Add(
+            PapiClient.RegisterRequestHandlerAsync(
+                objPrefix,
+                new Func<bool>(() => true),
+                ThreadingUtils.DefaultTimeout
+            )
+        );
+        foreach (var (functionName, function) in functionsToRegister)
+        {
+            var req = $"{objPrefix}.{functionName}";
+            requests.Add(
+                PapiClient.RegisterRequestHandlerAsync(req, function, ThreadingUtils.DefaultTimeout)
+            );
+        }
+        await Task.WhenAll(requests);
 
         // Notify the network that we registered this network object
-        _registrationEvent = registrationEvent;
-        PapiClient.SendEvent(registrationEvent);
-    }
-
-    private ResponseToRequest HandleGet(JsonElement getRequest)
-    {
-        // Respond that this network object exists along with its registration details
-        return ResponseToRequest.Succeeded(_registrationEvent);
+        _registrationParameters = registrationParameters;
+        await PapiClient.SendEventAsync("object:onDidCreateNetworkObject", registrationParameters);
     }
 }
