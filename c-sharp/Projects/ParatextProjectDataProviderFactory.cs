@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.MessageTransports;
+using System.Text.Json;
 using Paranext.DataProvider.Services;
 
 namespace Paranext.DataProvider.Projects;
@@ -22,12 +21,12 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         _paratextProjects = paratextProjects;
     }
 
-    protected override Task StartFactory()
+    protected override Task StartFactoryAsync()
     {
         bool? shouldIncludePT9ProjectsOnWindows = false;
         if (OperatingSystem.IsWindows())
         {
-            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSettingValue<bool>(
+            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSetting<bool?>(
                 PapiClient,
                 Settings.INCLUDE_MY_PARATEXT_9_PROJECTS
             );
@@ -38,22 +37,18 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         return Task.CompletedTask;
     }
 
-    protected override ResponseToRequest GetAvailableProjects()
+    protected override List<ProjectMetadata>? GetAvailableProjects(JsonElement _ignore)
     {
-        var projectMetadata = _paratextProjects
-            .GetAllProjectDetails()
-            .Select(pd => pd.Metadata)
-            .ToList();
-        return ResponseToRequest.Succeeded(projectMetadata);
+        return _paratextProjects.GetAllProjectDetails().Select(pd => pd.Metadata).ToList();
     }
 
-    protected override ResponseToRequest GetProjectDataProviderID(string projectID)
+    public override string GetProjectDataProviderID(string projectID)
     {
         projectID = projectID.ToUpperInvariant();
 
         // If we already have a PDP for this project, just return it
         if (_pdpMap.TryGetValue(projectID, out var existingPdp))
-            return ResponseToRequest.Succeeded(existingPdp.DataProviderName);
+            return existingPdp.DataProviderName;
 
         // Prevent multiple threads from trying to create PDPs at the same time
         // This could probably be relaxed to be scoped per project ID, but this is more conservative
@@ -61,7 +56,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
         {
             // If the PDP was created while we were locked, use it
             if (_pdpMap.TryGetValue(projectID, out var existingPdpInLock))
-                return ResponseToRequest.Succeeded(existingPdpInLock.DataProviderName);
+                return existingPdpInLock.DataProviderName;
 
             ProjectDetails details;
             try
@@ -70,7 +65,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
             }
             catch (KeyNotFoundException)
             {
-                return ResponseToRequest.Failed("Unknown project ID: " + projectID);
+                throw new KeyNotFoundException("Unknown project ID: " + projectID);
             }
 
             // Create a random 30 character string containing letters A-Z
@@ -86,11 +81,15 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
                 _paratextProjects
             );
             if (!_pdpMap.TryAdd(projectID, newPdp))
-                return ResponseToRequest.Failed("Internal error adding project data provider");
+                throw new InvalidOperationException("Internal error adding project data provider");
 
             // Once the PDP has been registered, return the name of it so callers can get it
-            newPdp.RegisterDataProvider().Wait();
-            return ResponseToRequest.Succeeded(newPdp.DataProviderName);
+            ThreadingUtils.RunTask(
+                newPdp.RegisterDataProviderAsync(),
+                $"Register PDP {newPdp.DataProviderName} for project {details.Name}",
+                ThreadingUtils.DefaultTimeout
+            );
+            return newPdp.DataProviderName;
         }
     }
 

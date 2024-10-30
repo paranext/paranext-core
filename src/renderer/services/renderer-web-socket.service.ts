@@ -1,4 +1,4 @@
-import { WEBSOCKET_PORT } from '@shared/data/network-connector.model';
+import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
 
 // Allow system networking components to create web sockets that connect back to localhost at first
 let allowWebSocketsBackToPapiNetwork: boolean = true;
