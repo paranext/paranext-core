@@ -4,8 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Web;
 using System.Xml.Linq;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.Messages;
 using Paranext.DataProvider.Projects;
 using Paratext.Data;
 
@@ -268,72 +266,6 @@ namespace TestParanextDataProvider
                 doc1.Root!.ToString().Replace("\r", "").Replace("\n", ""),
                 Is.EqualTo(doc2.Root!.ToString().Replace("\r", "").Replace("\n", ""))
             );
-        }
-
-        /// <summary>
-        /// Verifies the contents of a server response message
-        /// </summary>
-        protected static void VerifyResponse(
-            Message message,
-            string? expectedErrorMessage,
-            string expectedResponseType,
-            int expectedRequestId,
-            object? expectedContents
-        )
-        {
-            Assert.Multiple(() =>
-            {
-                VerifyResponseExceptContents(
-                    message,
-                    expectedErrorMessage,
-                    expectedResponseType,
-                    expectedRequestId
-                );
-                Assert.That(((MessageResponse)message).Contents, Is.EqualTo(expectedContents));
-            });
-        }
-
-        /// <summary>
-        /// Verifies the contents of a server response message ignoring the contents
-        /// </summary>
-        protected static void VerifyResponseExceptContents(
-            Message message,
-            string? expectedErrorMessage,
-            string expectedResponseType,
-            int expectedRequestId
-        )
-        {
-            Assert.Multiple(() =>
-            {
-                Assert.That(message.Type, Is.EqualTo(MessageType.RESPONSE));
-
-                MessageResponse response = (MessageResponse)message;
-                Assert.That(response.ErrorMessage ?? "", Does.Contain(expectedErrorMessage ?? ""));
-                Assert.That(
-                    response.Success,
-                    Is.EqualTo(string.IsNullOrEmpty(expectedErrorMessage))
-                );
-                Assert.That(response.RequestType, Is.EqualTo(expectedResponseType));
-                Assert.That(response.RequestId, Is.EqualTo(expectedRequestId));
-            });
-        }
-
-        /// <summary>
-        /// Verifies a ResponseToRequest from a PDP call
-        /// </summary>
-        protected static void VerifyResponseToRequest(
-            ResponseToRequest response,
-            string? expectedErrorMessage,
-            string? expectedContents
-        )
-        {
-            Assert.Multiple(() =>
-            {
-                Assert.That(response.ErrorMessage, Is.EqualTo(expectedErrorMessage));
-                Assert.That(response.Success, Is.EqualTo(expectedErrorMessage == null));
-                string? contents = response.Contents as string;
-                Assert.That(contents, Is.EqualTo(expectedContents));
-            });
         }
 
         #endregion
