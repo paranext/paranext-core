@@ -34,11 +34,11 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     {
         // Set up commands on the PAPI
         await PapiClient.RegisterRequestHandlerAsync(
-            "command:platformScripture.getParatextRegistrationData",
+            "command:paratextRegistration.getParatextRegistrationData",
             GetParatextRegistrationData
         );
         await PapiClient.RegisterRequestHandlerAsync(
-            "command:platformScripture.setParatextRegistrationData",
+            "command:paratextRegistration.setParatextRegistrationData",
             SetParatextRegistrationData
         );
     }

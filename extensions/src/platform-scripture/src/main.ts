@@ -15,9 +15,6 @@ import CheckResultsWebViewProvider, {
   checkResultsListWebViewType,
   CheckResultsWebViewOptions,
 } from './checking-results-list.web-view-provider';
-import ParatextRegistrationWebViewProvider, {
-  paratextRegistrationWebViewType,
-} from './paratext-registration.web-view-provider';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -135,45 +132,6 @@ async function showCheckResults(webViewId: string | undefined): Promise<string |
   return papi.webViews.getWebView(checkResultsListWebViewType, { type: 'tab' }, options);
 }
 
-async function showParatextRegistration(): Promise<string | undefined> {
-  return papi.webViews.getWebView(
-    paratextRegistrationWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 540, height: 415 } },
-    { existingId: '?' },
-  );
-}
-
-/**
- * Shows the registration info pane if there isn't any registration info yet. Used to help people
- * get signed in at startup
- *
- * Handles its own errors. No need to await
- */
-async function showParatextRegistrationIfNoRegistrationData(): Promise<string | undefined> {
-  try {
-    if (!(await papi.settings.get('platformScripture.shouldShowOnStartup'))) return undefined;
-
-    const registrationData = await papi.commands.sendCommand(
-      'platformScripture.getParatextRegistrationData',
-    );
-
-    if (
-      registrationData.name ||
-      registrationData.code ||
-      registrationData.email ||
-      registrationData.supporterName
-    )
-      return undefined;
-
-    return await showParatextRegistration();
-  } catch (e) {
-    logger.warn(
-      `Error while trying to determine if we need to pull up the Paratext registration info web view on startup: ${e}`,
-    );
-  }
-  return undefined;
-}
-
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
 
@@ -200,7 +158,6 @@ export async function activate(context: ExecutionActivationContext) {
   const configureChecksWebViewProvider = new ConfigureChecksWebViewProvider(
     '%webView_configureChecks_title%',
   );
-  const paratextRegistrationWebViewProvider = new ParatextRegistrationWebViewProvider();
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
@@ -216,10 +173,6 @@ export async function activate(context: ExecutionActivationContext) {
   );
   const includeProjectsValidatorPromise = papi.settings.registerValidator(
     'platformScripture.includeMyParatext9Projects',
-    async (newValue) => typeof newValue === 'boolean',
-  );
-  const shouldShowOnStartupValidatorPromise = papi.settings.registerValidator(
-    'platformScripture.shouldShowOnStartup',
     async (newValue) => typeof newValue === 'boolean',
   );
   const booksPresentPromise = papi.projectSettings.registerValidator(
@@ -294,17 +247,6 @@ export async function activate(context: ExecutionActivationContext) {
     checkResultsListWebViewType,
     checkResultsWebViewProvider,
   );
-  const showParatextRegistrationPromise = papi.commands.registerCommand(
-    'platformScripture.showParatextRegistration',
-    showParatextRegistration,
-  );
-  const showParatextRegistrationWebViewProviderPromise = papi.webViewProviders.register(
-    paratextRegistrationWebViewType,
-    paratextRegistrationWebViewProvider,
-  );
-
-  // No need to wait for this; it will do its thing and handle its own errors
-  showParatextRegistrationIfNoRegistrationData();
 
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
@@ -313,7 +255,6 @@ export async function activate(context: ExecutionActivationContext) {
     await scriptureExtenderPdpefPromise,
     await includeProjectsCommandPromise,
     await includeProjectsValidatorPromise,
-    await shouldShowOnStartupValidatorPromise,
     await booksPresentPromise,
     await versificationPromise,
     await validCharactersPromise,
@@ -332,8 +273,6 @@ export async function activate(context: ExecutionActivationContext) {
     await configureChecksWebViewProviderPromise,
     await showCheckResultsPromise,
     await showCheckResultsWebViewProviderPromise,
-    await showParatextRegistrationPromise,
-    await showParatextRegistrationWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

@@ -3,7 +3,7 @@ import papi from '@papi/backend';
 import paratextRegistrationListWebView from './paratext-registration.web-view?inline';
 import paratextRegistrationListStyles from './tailwind.css?inline';
 
-export const paratextRegistrationWebViewType = 'platformScripture.paratextRegistration';
+export const paratextRegistrationWebViewType = 'paratextRegistration.registrationView';
 
 const titleKey = '%paratextRegistration_webView_title%';
 const tooltipKey = '%paratextRegistration_webView_tooltip%';

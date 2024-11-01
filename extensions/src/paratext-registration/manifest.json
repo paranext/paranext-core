@@ -1,5 +1,5 @@
 {
-  "name": "paranext-extension-template",
+  "name": "paratextRegistration",
   "version": "0.0.1",
   "displayData": "assets/displayData.json",
   "author": "Paranext",
@@ -7,7 +7,7 @@
   "main": "src/main.ts",
   "extensionDependencies": {},
   "elevatedPrivileges": [],
-  "types": "src/types/paranext-extension-template.d.ts",
+  "types": "src/types/paratext-registration.d.ts",
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",

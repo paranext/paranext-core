@@ -688,26 +688,6 @@ declare module 'platform-scripture' {
   };
 
   // #endregion
-
-  // #region Paratext Registration info
-
-  /**
-   * Paratext registry user information as used in `ParatextData.dll`
-   *
-   * Equivalent to C# `RegistrationData`
-   */
-  export type RegistrationData = {
-    /** Registration name */
-    name: string;
-    /** Registration code */
-    code: string;
-    /** Email address of the user if any */
-    email: string;
-    /** Name of the user's supporter if any */
-    supporterName: string;
-  };
-
-  // #endregion
 }
 
 declare module 'papi-shared-types' {
@@ -729,7 +709,6 @@ declare module 'papi-shared-types' {
     ICheckRunner,
     CheckDetails,
     CheckCreatorFunction,
-    RegistrationData,
   } from 'platform-scripture';
 
   export interface ProjectDataProviderInterfaces {
@@ -799,29 +778,6 @@ declare module 'papi-shared-types' {
     'platformScripture.showCheckResults': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
-
-    /**
-     * Show the Paratext Registration window with which the user can connect to the Paratext
-     * Registry
-     *
-     * @returns Id of the registration web view
-     */
-    'platformScripture.showParatextRegistration': () => Promise<string | undefined>;
-    /**
-     * Gets information about user's current Paratext Registry user information in
-     * `ParatextData.dll`
-     */
-    'platformScripture.getParatextRegistrationData': () => Promise<RegistrationData>;
-    /**
-     * Sets information about user's current Paratext Registry user information in
-     * `ParatextData.dll` and restarts the application.
-     *
-     * @returns If successfully changed registration data
-     * @throws If did not successfully change registration data
-     */
-    'platformScripture.setParatextRegistrationData': (
-      newRegistrationData: RegistrationData,
-    ) => Promise<void>;
   }
 
   export interface SettingTypes {
@@ -832,11 +788,6 @@ declare module 'papi-shared-types' {
      * Located at "C:\My Paratext 9 Projects"
      */
     'platformScripture.includeMyParatext9Projects': boolean;
-    /**
-     * Whether to show the form to enter Paratext Registration information when the application
-     * starts if it has not been entered previously
-     */
-    'platformScripture.shouldShowOnStartup': boolean;
   }
   export interface ProjectSettingTypes {
     /**

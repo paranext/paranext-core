@@ -1,31 +1,8 @@
 {
-  "metadata": {
-    "%paratextRegistration_commit_comment_changing_user%": {
-      "fallbackKey": "%Paratext.&quot;Before changing registered user&quot;%"
-    },
-    "%paratextRegistration_warning_invalid_email%": {
-      "fallbackKey": "%Paratext.RegistrationForm.cmdOK_Click.&quot;Enter valid email address&quot;%"
-    }
-  },
+  "metadata": {},
   "localizedStrings": {
     "en": {
       "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
-      "%mainMenu_openParatextRegistration%": "Paratext Registration Information...",
-      "%paratextRegistration_alert_updatedRegistration%": "Updated registration information",
-      "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
-      "%paratextRegistration_button_saveAndRestart%": "Save and restart",
-      "%paratextRegistration_commit_comment_changing_user%": "Before changing registered user",
-      "%paratextRegistration_label_registrationName%": "Registration name",
-      "%paratextRegistration_label_registrationCode%": "Registration code",
-      "%paratextRegistration_label_emailAddress%": "Email address",
-      "%paratextRegistration_warning_invalid_email%": "Please enter a valid email address.",
-      "%paratextRegistration_warning_invalid_registration%": "This registration code is not correct for this user.",
-      "%paratextRegistration_webView_title%": "Paratext Registration Information",
-      "%paratextRegistration_webView_tooltip%": "Enter your Paratext Registration Information into this form.",
-      "%settings_paratextRegistration_registration_internet_group_label%": "Paratext Registration and Internet Settings",
-      "%settings_paratextRegistration_registration_internet_group_description%": "Settings related to the user's Paratext Registry connection and some internet access controls",
-      "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show Paratext Registration Web View on Startup",
-      "%settings_paratextRegistration_shouldShowOnStartup_description%": "Whether to show the form to enter Paratext Registration information when the application starts if it has not been entered previously.",
       "%settings_platformScripture_paratext_group_label%": "Paratext 9-related Settings",
       "%settings_platformScripture_paratext_group_description%": "Settings related to how Platform.Bible should interact with older Paratext installations",
       "%settings_platformScripture_includeMyParatext9Projects_label%": "Include My Paratext 9 Projects",

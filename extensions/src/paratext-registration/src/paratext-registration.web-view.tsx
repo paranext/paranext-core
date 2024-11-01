@@ -26,7 +26,7 @@ enum SaveState {
 
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 const REGISTRATION_CODE_REGEX_STRING =
-  '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*{6}-\\*{6}-\\*{6}-\\*{6}-\\*{6})$';
+  '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*)$';
 
 /** Just a div with some margins to give some space around parts of the web view */
 function Section({ children, className }: GenericComponentProps) {
@@ -48,7 +48,7 @@ function Grid({ children, className }: GenericComponentProps) {
 }
 
 async function getRegistrationData() {
-  return papi.commands.sendCommand('platformScripture.getParatextRegistrationData');
+  return papi.commands.sendCommand('paratextRegistration.getParatextRegistrationData');
 }
 
 async function saveRegistrationInformation(
@@ -57,7 +57,7 @@ async function saveRegistrationInformation(
   email: string,
   supporter: string,
 ) {
-  return papi.commands.sendCommand('platformScripture.setParatextRegistrationData', {
+  return papi.commands.sendCommand('paratextRegistration.setParatextRegistrationData', {
     name,
     code: registrationCode,
     email,
@@ -87,8 +87,7 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
   const [name, setName] = useWebViewState('name', '');
-  // Not using web view state for code to avoid accidental leakages
-  const [registrationCode, setRegistrationCode] = useState('******-******-******-******-******');
+  const [registrationCode, setRegistrationCode] = useWebViewState('registrationCode', '');
   const [email, setEmail] = useWebViewState('email', '');
   const [supporter, setSupporter] = useWebViewState('supporter', '');
 
