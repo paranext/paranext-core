@@ -126,7 +126,7 @@ async function showCheckResults(webViewId: string | undefined): Promise<string |
 async function showParatextRegistration(): Promise<string | undefined> {
   return papi.webViews.getWebView(
     paratextRegistrationWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 540, height: 395 } },
+    { type: 'float', position: 'center', floatSize: { width: 540, height: 415 } },
     { existingId: '?' },
   );
 }

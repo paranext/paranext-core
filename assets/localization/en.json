@@ -3,6 +3,7 @@
   "%about_versionLabel_format%": "Version: {version}",
   "%about_licenseLabel_format%": "License: {license}",
   "%insertNote%": "Insert Note",
+  "%general_error_title%": "Error",
   "%mainMenu_about%": "About Platform.Bible",
   "%mainMenu_downloadSlashInstallResources%": "Download/Install Resources",
   "%mainMenu_downloadSlashUpdateProject%": "Download/Update Project",

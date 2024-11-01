@@ -1,5 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
+import { useLocalizedStrings } from '@papi/frontend/react';
 import { AlertCircle, CircleCheck } from 'lucide-react';
 import {
   Alert,
@@ -11,7 +12,7 @@ import {
   Spinner,
   usePromise,
 } from 'platform-bible-react';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { PropsWithChildren, useEffect, useMemo, useState } from 'react';
 
 type GenericComponentProps = PropsWithChildren<{ className?: string }>;
@@ -29,7 +30,7 @@ const REGISTRATION_CODE_REGEX_STRING =
 
 /** Just a div with some margins to give some space around parts of the web view */
 function Section({ children, className }: GenericComponentProps) {
-  return <div className={cn('tw-m-1', className)}>{children}</div>;
+  return <div className={cn('tw-m-2', className)}>{children}</div>;
 }
 
 /** Two-column grid layout div */
@@ -37,7 +38,7 @@ function Grid({ children, className }: GenericComponentProps) {
   return (
     <div
       className={cn(
-        'tw-grid tw-grid-cols-[1fr_2fr] max-[300px]:tw-grid-cols-1 tw-gap-1 tw-items-center',
+        'tw-grid tw-grid-cols-[1fr_2fr] max-[300px]:tw-grid-cols-1 tw-gap-2 tw-items-center [&>*:nth-child(odd)]:tw-justify-self-end',
         className,
       )}
     >
@@ -64,6 +65,16 @@ async function saveRegistrationInformation(
   });
 }
 
+const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  '%general_error_title%',
+  '%paratextRegistration_alert_updatedRegistration%',
+  '%paratextRegistration_alert_updatedRegistration_description%',
+  '%paratextRegistration_button_saveAndRestart%',
+  '%paratextRegistration_label_registrationName%',
+  '%paratextRegistration_label_registrationCode%',
+  '%paratextRegistration_label_emailAddress%',
+];
+
 globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }: WebViewProps) {
   const [isMounted, setIsMounted] = useState(false);
   useEffect(() => {
@@ -72,6 +83,8 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
       setIsMounted(false);
     };
   }, []);
+
+  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
   const [name, setName] = useWebViewState('name', '');
   const [registrationCode, setRegistrationCode] = useWebViewState('registrationCode', '');
@@ -133,13 +146,13 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
       <div>
         <Section>
           <Grid>
-            <span>Registration Name</span>
+            <span>{localizedStrings['%paratextRegistration_label_registrationName%']}</span>
             <Input
               value={name}
               disabled={isFormDisabled}
               onChange={(e) => setName(e.target.value)}
             />
-            <span>Registration Code</span>
+            <span>{localizedStrings['%paratextRegistration_label_registrationCode%']}</span>
             <Input
               className="tw-font-mono tw-max-w-[34ch] tw-box-content tw-h-6 invalid:tw-border-destructive"
               maxLength={REGISTRATION_CODE_LENGTH_WITH_DASHES}
@@ -148,7 +161,7 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
               disabled={isFormDisabled}
               onChange={(e) => setRegistrationCode(e.target.value)}
             />
-            <span>Your Email Address</span>
+            <span>{localizedStrings['%paratextRegistration_label_emailAddress%']}</span>
             <Input
               value={email}
               disabled={isFormDisabled}
@@ -160,7 +173,7 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
         {/* <Section>Please specify who provides Paratext support to you:</Section>
         <Section className="tw-mt-8">
           <Grid>
-            <span>Supporter Name</span>
+            <span>Supporter name</span>
             <Input value={supporter} disabled={isFormDisabled} onChange={(e) => setSupporter(e.target.value)} />
           </Grid>
         </Section> */}
@@ -170,9 +183,11 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
           <Section className="tw-my-4">
             <Alert>
               <CircleCheck className="tw-h-4 tw-w-4" />
-              <AlertTitle>Updated Registration Information</AlertTitle>
+              <AlertTitle>
+                {localizedStrings['%paratextRegistration_alert_updatedRegistration%']}
+              </AlertTitle>
               <AlertDescription>
-                Changes applied! The application will restart in a few seconds.
+                {localizedStrings['%paratextRegistration_alert_updatedRegistration_description%']}
               </AlertDescription>
             </Alert>
           </Section>
@@ -181,7 +196,7 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
           <Section className="tw-my-4">
             <Alert variant="destructive">
               <AlertCircle className="tw-h-4 tw-w-4" />
-              <AlertTitle>Error</AlertTitle>
+              <AlertTitle>{localizedStrings['%general_error_title%']}</AlertTitle>
               <AlertDescription>{saveError}</AlertDescription>
             </Alert>
           </Section>
@@ -193,7 +208,11 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
             disabled={isFormDisabled || !hasUnsavedChanges || !isCodeValid}
             onClick={saveAndRestart}
           >
-            {saveState === SaveState.IsSaving ? <Spinner /> : 'Save and Restart'}
+            {saveState === SaveState.IsSaving ? (
+              <Spinner />
+            ) : (
+              localizedStrings['%paratextRegistration_button_saveAndRestart%']
+            )}
           </Button>
         </Grid>
       </Section>

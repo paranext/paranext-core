@@ -5,8 +5,8 @@ import paratextRegistrationListStyles from './tailwind.css?inline';
 
 export const paratextRegistrationWebViewType = 'platformScripture.paratextRegistration';
 
-const titleKey = '%platformScripture_webView_paratextRegistration_title%';
-const tooltipKey = '%platformScripture_webView_paratextRegistration_tooltip%';
+const titleKey = '%paratextRegistration_webView_title%';
+const tooltipKey = '%paratextRegistration_webView_tooltip%';
 
 export default class ParatextRegistrationWebViewProvider implements IWebViewProvider {
   // needs to be a class method, not static method
