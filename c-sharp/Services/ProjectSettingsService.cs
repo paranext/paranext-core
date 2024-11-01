@@ -30,17 +30,17 @@ namespace Paranext.DataProvider.Services
         /// <returns><c>true</c> if change is valid, <c>false</c> otherwise</returns>
         public static bool IsValid(
             PapiClient papiClient,
-            string newValueJson,
-            string currentValueJson,
+            object? newValue,
+            object? currentValue,
             string key,
-            string allChangesJson
+            object? allChanges
         )
         {
             string description = $"ProjectSettingService.IsValid for {key}";
             return ThreadingUtils.GetTaskResult(
                     papiClient.SendRequestAsync<bool?>(
                         SERVICE_IS_VALID,
-                        [key, newValueJson, currentValueJson, allChangesJson]
+                        [key, newValue, currentValue, allChanges]
                     ),
                     description,
                     ThreadingUtils.DefaultTimeout

@@ -326,16 +326,15 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
 
         // If there is no Paratext setting for the name given, we'll create one lower down
-        string currentValueJson = string.Empty;
+        object? currentValue = null;
         try
         {
-            currentValueJson = GetProjectSetting(settingName).SerializeToJson();
+            currentValue = GetProjectSetting(settingName);
         }
         catch (Exception) { }
 
         // Make sure the value we're planning to set is valid
-        string? newJson = value == null ? string.Empty : value.SerializeToJson();
-        if (!ProjectSettingsService.IsValid(PapiClient, newJson, currentValueJson, settingName, ""))
+        if (!ProjectSettingsService.IsValid(PapiClient, value, currentValue, settingName, ""))
             throw new InvalidDataException($"Validation failed for {settingName}");
 
         // Figure out which setting name to use
