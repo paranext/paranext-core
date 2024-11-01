@@ -6,24 +6,7 @@ namespace TestParanextDataProvider
     [ExcludeFromCodeCoverage]
     internal class DummyPapiClient : PapiClient
     {
-        private readonly Dictionary<
-            string,
-            List<(string newValue, string oldValue)>
-        > _validSettings = [];
         private readonly Queue<(string eventType, object? eventParameters)> _sentEvents = [];
-
-        public void AddSettingValueToTreatAsValid(
-            string pbSettingName,
-            string newValue,
-            string oldValue
-        )
-        {
-            if (!_validSettings.TryGetValue(pbSettingName, out var values))
-            {
-                _validSettings[pbSettingName] = values = [];
-            }
-            values.Add((newValue, oldValue));
-        }
 
         #region Overrides of PapiClient
 
