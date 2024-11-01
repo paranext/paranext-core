@@ -151,6 +151,8 @@ async function showParatextRegistration(): Promise<string | undefined> {
  */
 async function showParatextRegistrationIfNoRegistrationData(): Promise<string | undefined> {
   try {
+    if (!(await papi.settings.get('platformScripture.shouldShowOnStartup'))) return undefined;
+
     const registrationData = await papi.commands.sendCommand(
       'platformScripture.getParatextRegistrationData',
     );
@@ -162,8 +164,6 @@ async function showParatextRegistrationIfNoRegistrationData(): Promise<string | 
       registrationData.supporterName
     )
       return undefined;
-
-    if (!(await papi.settings.get('platformScripture.shouldShowOnStartup'))) return undefined;
 
     return await showParatextRegistration();
   } catch (e) {

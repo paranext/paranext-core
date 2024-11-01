@@ -22,6 +22,7 @@ import { deserializeRequestType, SerializedRequestType } from '@shared/utils/uti
 import PapiNetworkEventEmitter from '@shared/models/papi-network-event-emitter.model';
 import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
+import logger from '@shared/services/logger.service';
 
 // #region Local event handling
 
@@ -132,8 +133,12 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
   const response = fixupResponse(await jsonRpc.request(requestType, args));
-  if (response.error)
-    throw new Error(`Request error (${response.error.code}): ${response.error.message}`);
+  if (response.error) {
+    logger.debug(`JSON-RPC Request error (${response.error.code}): ${response.error.message}`);
+    throw new Error(response.error.message, {
+      cause: `JSON-RPC Request error ${response.error.code}`,
+    });
+  }
   return response.result;
 };
 

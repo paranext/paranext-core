@@ -26,7 +26,7 @@ enum SaveState {
 
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 const REGISTRATION_CODE_REGEX_STRING =
-  '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*)$';
+  '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*{6}-\\*{6}-\\*{6}-\\*{6}-\\*{6})$';
 
 /** Just a div with some margins to give some space around parts of the web view */
 function Section({ children, className }: GenericComponentProps) {
@@ -87,7 +87,8 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
   const [name, setName] = useWebViewState('name', '');
-  const [registrationCode, setRegistrationCode] = useWebViewState('registrationCode', '');
+  // Not using web view state for code to avoid accidental leakages
+  const [registrationCode, setRegistrationCode] = useState('******-******-******-******-******');
   const [email, setEmail] = useWebViewState('email', '');
   const [supporter, setSupporter] = useWebViewState('supporter', '');
 
