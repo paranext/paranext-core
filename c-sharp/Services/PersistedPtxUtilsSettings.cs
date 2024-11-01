@@ -1,4 +1,3 @@
-using Paranext.DataProvider.MessageTransports;
 using PtxUtils;
 
 namespace Paranext.DataProvider.Services;
@@ -6,7 +5,7 @@ namespace Paranext.DataProvider.Services;
 internal class PersistedPtxUtilsSettings(PapiClient papiClient) : IPtxUtilsSettings
 {
     public SerializableStringDictionary MementoData { get; set; } =
-        SettingsService.GetSettingObject<SerializableStringDictionary>(
+        SettingsService.GetSetting<SerializableStringDictionary>(
             papiClient,
             Settings.PTX_UTILS_MEMENTO_DATA
         ) ?? [];

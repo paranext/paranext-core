@@ -10,10 +10,9 @@ import {
   CardTitle,
   Checklist,
   Label,
-  ScriptureReference,
   Spinner,
 } from 'platform-bible-react';
-import { getChaptersForBook } from 'platform-bible-utils';
+import { defaultScrRef, getChaptersForBook } from 'platform-bible-utils';
 import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
@@ -28,12 +27,6 @@ type ConfigureChecksProps = {
   selectedChecks: string[];
   activeRanges: CheckInputRange[];
   handleActiveRangesChange: (newActiveRanges: CheckInputRange[]) => void;
-};
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
 };
 
 export default function ConfigureChecks({

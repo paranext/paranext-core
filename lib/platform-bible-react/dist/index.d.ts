@@ -250,6 +250,66 @@ export interface DataTableProps<TData, TValue> {
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
 /**
+ * Status of items that appear in inventories. 'approved' and 'unapproved' items are defined in the
+ * project's `Settings.xml`. All other items are defined as 'unknown'
+ */
+export type Status = "approved" | "unapproved" | "unknown";
+/** Occurrence of item in inventory. Primarily used by table that shows occurrences */
+export type InventoryItemOccurrence = {
+	/** Reference to scripture where the item appears */
+	reference: ScriptureReference;
+	/** Snippet of scripture that contains the occurrence */
+	text: string;
+};
+/** Data structure that contains all information on an item that is shown in an inventory */
+export type InventoryTableData = {
+	/**
+	 * The item (e.g. a character in the characters inventory, a marker in the marker inventory) In
+	 * most cases the array will only have one element. In case of additional items (e.g. the
+	 * preceding marker in the markers check), the primary item should be stored in the first index.
+	 * To show additional items in the inventory, make sure to configure the `additionalItemsLabels`
+	 * prop for the Inventory component
+	 */
+	items: string[];
+	/** The number of times this item occurs in the selected scope */
+	count: number;
+	/** The status of this item (see documentation for `Status` type for more information) */
+	status: Status;
+	/** Occurrences of this item in the scripture text for the selected scope */
+	occurrences: InventoryItemOccurrence[];
+};
+/**
+ * Splits USFM string into shorter line-like segments
+ *
+ * @param text A single (likely very large) USFM string
+ * @returns An array containing the input text, split into shorter segments
+ */
+export declare const getLinesFromUSFM: (text: string) => string[];
+/**
+ * Extracts chapter or verse number from USFM strings that start with a \c or \v marker
+ *
+ * @param text USFM string that is expected to start with \c or \v marker
+ * @returns Chapter or verse number if one is found. Else returns 0.
+ */
+export declare const getNumberFromUSFM: (text: string) => number | undefined;
+/**
+ * Gets book ID from USFM string that starts with the \id marker, and returns book number for it
+ *
+ * @param text USFM string that is expected to start with \id marker
+ * @returns Book number corresponding to the \id marker in the input text. Returns 0 if no marker is
+ *   found or the marker is not valid
+ */
+export declare const getBookNumFromId: (text: string) => number;
+/**
+ * Gets the status for an item, typically used in the Inventory component
+ *
+ * @param item The item for which the status is being requested
+ * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
+ * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
+ * @returns The status for the specified item
+ */
+export declare const getStatusForItem: (item: string, approvedItems: string[], unapprovedItems: string[]) => Status;
+/**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
  * localized strings and pass them into the localizedStrings prop of this component
@@ -263,50 +323,74 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 	"%webView_inventory_scope_chapter%",
 	"%webView_inventory_scope_verse%",
 	"%webView_inventory_filter_text%",
+	"%webView_inventory_show_additional_items%",
 	"%webView_inventory_occurrences_table_header_reference%",
 	"%webView_inventory_occurrences_table_header_occurrence%"
 ];
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
+/** Scope of scripture that the inventory can operate on */
 export type Scope = "book" | "chapter" | "verse";
-export type Status = "approved" | "unapproved" | "unknown";
-export type ItemData = {
-	item: string;
-	count: number;
-	status: Status;
+/** Text labels for the inventory columns and the control components of additional inventory items */
+export type AdditionalItemsLabels = {
+	checkboxText?: string;
+	tableHeaders?: string[];
 };
-/**
- * Gets an icon that indicates the current sorting direction based on the provided input
- *
- * @param sortDirection Sorting direction. Can be ascending ('asc'), descending ('desc') or false (
- *   i.e. not sorted)
- * @returns The appropriate sorting icon for the provided sorting direction
- */
-export declare const getSortingIcon: (sortDirection: false | SortDirection) => React$1.ReactNode;
+/** Props for the Inventory component */
 export type InventoryProps = {
+	/** The scripture reference that the application is currently set to */
 	scriptureReference: ScriptureReference;
+	/** Callback function that is executed when the scripture reference is changed */
 	setScriptureReference: (scriptureReference: ScriptureReference) => void;
+	/**
+	 * Object with all localized strings that the Inventory needs to work well across multiple
+	 * languages. When using this component with Platform.Bible, you can import
+	 * `INVENTORY_STRING_KEYS` from this library, pass it in to the Platform's localization hook, and
+	 * pass the localized keys that are returned by the hook into this prop.
+	 */
 	localizedStrings: InventoryLocalizedStrings;
-	extractItems: (text: string, item?: string | undefined) => string[];
+	/**
+	 * The logic that finds the desired items in the source text. This can either be a Regular
+	 * expression that captures one or multiple items (preferred), or a custom function that builds
+	 * and return an InventoryDataTable[] manually. Note: In case the logic captures more than one
+	 * item (i.e. InventoryTableData.items has a length greater than 1), you must provide text labels
+	 * for the related columns and control elements to show by setting the `additionalItemsLabels`
+	 * prop
+	 */
+	extractItems: RegExp | ((text: string | undefined, scriptureRef: ScriptureReference, approvedItems: string[], unapprovedItems: string[]) => InventoryTableData[]);
+	/**
+	 * Text labels for control elements and additional column headers in case your Inventory has more
+	 * than one item to show (e.g. The 'Preceding Marker' in the Markers Inventory)
+	 */
+	additionalItemsLabels?: AdditionalItemsLabels;
+	/** Array of approved items, typically as defined in `Settings.xml` */
 	approvedItems: string[];
-	onApprovedItemsChange: (items: string[]) => void;
+	/** Array of unapproved items, typically as defined in `Settings.xml` */
 	unapprovedItems: string[];
-	onUnapprovedItemsChange: (items: string[]) => void;
+	/** The source scripture text that is searched for in inventory items */
 	text: string | undefined;
+	/** Scope of scripture that the inventory will operate on */
 	scope: Scope;
+	/** Callback function that is executed when the scope is changed from the Inventory */
 	onScopeChange: (scope: Scope) => void;
-	getColumns: (onStatusChange: (newItems: string[], status: Status) => void) => ColumnDef<ItemData>[];
+	/**
+	 * Column definitions for the Inventory data table. The most commonly used column definitions are
+	 * pre-configured for your convenience and can be imported (e.g. inventoryItemColumn,
+	 * inventoryAdditionalItemColumn inventoryCountColumn, and inventoryStatusColumn). If you need any
+	 * other columns you can add these yourself
+	 */
+	columns: ColumnDef<InventoryTableData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange, text, scope, onScopeChange, getColumns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
  * @param itemLabel Localized label for the item column (e.g. 'Character', 'Repeated Word', etc.)
  * @returns Column that shows the inventory items. Should be used with the DataTable component
  */
-export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<InventoryTableData>;
 /**
  * Function that creates the count column for inventories. Should be used with the DataTable
  * component.
@@ -314,16 +398,20 @@ export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<ItemD
  * @param itemLabel Localized label for the count column
  * @returns Column that shows the number of occurrences of the related inventory items
  */
-export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<ItemData>;
+export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<InventoryTableData>;
 /**
  * Function that creates the status column for inventories. Should be used with the DataTable
  * component.
  *
- * @param itemLabel Localized label for the status column
- * @param statusChangeHandler Callback function that handles status updates to selected item(s)
- * @returns Column that shows the status of the related inventory items.
+ * @param statusLabel Localized label for the status column
+ * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
+ * @param onApprovedItemsChange Callback function that stores the updated list of approved items
+ * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
+ * @param onUnapprovedItemsChange Callback function that stores the updated list of unapproved items
+ * @returns Column that shows the status buttons for the related inventory item. The button for the
+ *   current status of the item is selected
  */
-export declare const inventoryStatusColumn: (statusLabel: string, statusChangeHandler: (items: string[], status: Status) => void) => ColumnDef<ItemData>;
+export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;

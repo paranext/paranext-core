@@ -1,5 +1,5 @@
 import './test-buttons-panel.component.css';
-import { Button, TextField, useEvent } from 'platform-bible-react';
+import { Button, TextField } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
 import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
@@ -97,18 +97,6 @@ export default function TestButtonsPanel() {
       }
     },
     [updatePromiseReturn],
-  );
-
-  useEvent(
-    networkService.onDidClientConnect,
-    useCallback(
-      ({ clientId, didReconnect }) => {
-        const result = `Client with id ${clientId} ${didReconnect ? 're' : ''}connected!`;
-        logger.debug(result);
-        updatePromiseReturn(result);
-      },
-      [updatePromiseReturn],
-    ),
   );
 
   const [verseRef, setVerseRef] = useState<string>('JHN 11:35');

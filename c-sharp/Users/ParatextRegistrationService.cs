@@ -1,8 +1,3 @@
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Paranext.DataProvider.JsonUtils;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.RegistryServerAccess;
@@ -35,14 +30,14 @@ internal class ParatextRegistrationService(PapiClient papiClient)
 
     #region Public properties and methods
 
-    public async Task Initialize()
+    public async Task InitializeAsync()
     {
         // Set up commands on the PAPI
-        await PapiClient.RegisterRequestHandler(
+        await PapiClient.RegisterRequestHandlerAsync(
             "command:platformScripture.getParatextRegistrationData",
             GetParatextRegistrationData
         );
-        await PapiClient.RegisterRequestHandler(
+        await PapiClient.RegisterRequestHandlerAsync(
             "command:platformScripture.setParatextRegistrationData",
             SetParatextRegistrationData
         );
@@ -59,7 +54,7 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     /// </summary>
     /// <param name="requestContents">Contents of command request. No contents expected</param>
     /// <returns>Paratext registration information</returns>
-    protected ResponseToRequest GetParatextRegistrationData(JsonElement requestContents)
+    protected RegistrationData GetParatextRegistrationData()
     {
         try
         {
@@ -76,14 +71,12 @@ internal class ParatextRegistrationService(PapiClient papiClient)
                 SupporterName = RegistrationInfo.DefaultUser.SupportPerson,
             };
 
-            return ResponseToRequest.Succeeded(registrationData);
+            return registrationData;
         }
         catch (Exception e)
         {
             Console.WriteLine($"Getting Paratext Registration data failed! {e}");
-            return ResponseToRequest.Failed(
-                $"Getting Paratext Registration data failed! {e.Message}"
-            );
+            throw new Exception($"Getting Paratext Registration data failed! {e.Message}");
         }
     }
 
@@ -93,54 +86,27 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     /// </summary>
     /// <param name="requestContents">Contents of command request. Array whose first entry is the registration data object</param>
     /// <returns>`true` if successfully updated; `false` otherwise</returns>
-    protected ResponseToRequest SetParatextRegistrationData(JsonElement requestContents)
+    protected void SetParatextRegistrationData(RegistrationData newRegistrationData)
     {
+        bool shouldSkipAppendingToExceptionMessage = false;
         try
         {
-            RegistrationData? newRegistrationData;
-
-            try
+            // If someone submits the placeholder code, they probably meant to just change some
+            // other things about their registration. Replace the placeholder with the current
+            // code
+            if (newRegistrationData.Code == PLACEHOLDER_CODE)
+                newRegistrationData.Code = RegistrationInfo.DefaultUser.RegistrationCode;
+            else
             {
-                JsonArray contents = requestContents
-                    .Deserialize<JsonNode>(s_papiOptions)!
-                    .AsArray();
-                if (contents.Count == 0)
-                    return ResponseToRequest.Failed(
-                        "Must specify array containing registration data object"
-                    );
-                try
-                {
-                    newRegistrationData = contents[0]!.Deserialize<RegistrationData>(s_papiOptions);
-                }
-                catch (Exception e)
-                {
-                    throw new Exception($"Could not deserialize registration data object! {e}");
-                }
-                if (newRegistrationData == null)
-                    throw new Exception("Must specify registration data object");
-
-                // If someone submits the placeholder code, they probably meant to just change some
-                // other things about their registration. Replace the placeholder with the current
-                // code
-                if (newRegistrationData.Code == PLACEHOLDER_CODE)
-                    newRegistrationData.Code = RegistrationInfo.DefaultUser.RegistrationCode;
-                else
-                {
-                    // Adapted from `RegistrationForm.FormData.get`
-                    newRegistrationData.Code = newRegistrationData.Code.Trim().ToUpperInvariant(); // code is always upper case
-                    newRegistrationData.Code = newRegistrationData.Code.Replace("S", "5"); // S is never allowed; replace with 5
-                    newRegistrationData.Code = newRegistrationData.Code.Replace("I", "1"); // I is never allowed; replace with 1
-                    newRegistrationData.Code = newRegistrationData.Code.Replace("L", "1"); // L is never allowed; replace with 1
-                    newRegistrationData.Code = newRegistrationData.Code.Replace("O", "0"); // O is never allowed; replace with 0
-                    newRegistrationData.Name = newRegistrationData.Name.Trim();
-                    newRegistrationData.Email = newRegistrationData.Email.Trim();
-                    newRegistrationData.SupporterName = newRegistrationData.SupporterName.Trim();
-                }
-            }
-            catch (Exception e)
-            {
-                Console.Error.WriteLine($"Failed to parse registration data: {e}");
-                return ResponseToRequest.Failed($"Failed to parse registration data: {e.Message}");
+                // Adapted from `RegistrationForm.FormData.get`
+                newRegistrationData.Code = newRegistrationData.Code.Trim().ToUpperInvariant(); // code is always upper case
+                newRegistrationData.Code = newRegistrationData.Code.Replace("S", "5"); // S is never allowed; replace with 5
+                newRegistrationData.Code = newRegistrationData.Code.Replace("I", "1"); // I is never allowed; replace with 1
+                newRegistrationData.Code = newRegistrationData.Code.Replace("L", "1"); // L is never allowed; replace with 1
+                newRegistrationData.Code = newRegistrationData.Code.Replace("O", "0"); // O is never allowed; replace with 0
+                newRegistrationData.Name = newRegistrationData.Name.Trim();
+                newRegistrationData.Email = newRegistrationData.Email.Trim();
+                newRegistrationData.SupporterName = newRegistrationData.SupporterName.Trim();
             }
 
             if (
@@ -153,15 +119,18 @@ internal class ParatextRegistrationService(PapiClient papiClient)
 
             // Adapted from `RegistrationForm.cmdOK_Click`
 
-            // Validate the registration code
+            // Validate the registration information
             if (!StringUtils.IsValidEmail(newRegistrationData.Email))
-                return ResponseToRequest.Failed(
+            {
+                shouldSkipAppendingToExceptionMessage = true;
+                throw new Exception(
                     LocalizationService.GetLocalizedString(
                         PapiClient,
                         "%paratextRegistration_warning_invalid_email%",
                         "Please enter a valid email address."
                     )
                 );
+            }
 
             if (
                 !RegistrationInfo.IsValidRegistration(
@@ -169,13 +138,16 @@ internal class ParatextRegistrationService(PapiClient papiClient)
                     newRegistrationData.Name
                 )
             )
-                return ResponseToRequest.Failed(
+            {
+                shouldSkipAppendingToExceptionMessage = true;
+                throw new Exception(
                     LocalizationService.GetLocalizedString(
                         PapiClient,
                         "%paratextRegistration_warning_invalid_registration%",
                         "This registration code is not correct for this user."
                     )
                 );
+            }
 
             // Commit all existing changes so they are marked as being edited by the current user
             if (
@@ -199,26 +171,36 @@ internal class ParatextRegistrationService(PapiClient papiClient)
             // registration code may have changed, so reset the registry server with the new user data
             RegistryServer.Default?.ResetServer(RegistrationInfo.DefaultUser);
 
+            // No need to observe this task in any way. We are scheduling a call to restart the application then
+            // returning from this method to continue execution and properly return from this method.
+#pragma warning disable VSTHRD110 // Observe result of async calls
             // Restart the application after a delay. Don't wait for it so the response goes through
             Task.Delay(REGISTRATION_CHANGE_RESTART_DELAY_MS)
                 .ContinueWith(
-                    (Task task) =>
+                    async (Task task) =>
                     {
-                        PapiClient.SendRequest(
-                            "command:platform.restart",
-                            Array.Empty<object>(),
-                            (bool success, object? returnValue) => { }
-                        );
-                    }
+                        try
+                        {
+                            await PapiClient.SendRequestAsync("command:platform.restart", []);
+                        }
+                        catch (Exception e)
+                        {
+                            Console.WriteLine(
+                                $"Error while requesting to restart the application: {e}"
+                            );
+                        }
+                    },
+                    TaskScheduler.Default
                 );
-
-            return ResponseToRequest.Succeeded();
+#pragma warning restore VSTHRD110 // Observe result of async calls
         }
         catch (Exception e)
         {
             Console.WriteLine($"Setting Paratext Registration data failed! {e}");
-            return ResponseToRequest.Failed(
-                $"Setting Paratext Registration data failed! {e.Message}"
+            throw new Exception(
+                shouldSkipAppendingToExceptionMessage
+                    ? e.Message
+                    : $"Setting Paratext Registration data failed! {e.Message}"
             );
         }
     }
@@ -226,9 +208,6 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     #endregion
 
     #region Private properties and methods
-
-    private static readonly JsonSerializerOptions s_papiOptions =
-        SerializationOptions.CreateSerializationOptions();
 
     /// <summary>
     /// For any project with uncommitted changes on this machine, marks a point in project history in

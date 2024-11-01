@@ -1,7 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Paratext.Data.Users;
-using SIL.Scripture;
 
 namespace Paranext.DataProvider.JsonUtils;
 

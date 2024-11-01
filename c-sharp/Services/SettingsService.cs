@@ -1,107 +1,47 @@
 using System.Text.Json;
-using Paranext.DataProvider.MessageTransports;
 
 namespace Paranext.DataProvider.Services;
 
 internal static class SettingsService
 {
     public const string SETTINGS_SERVICE_NAME = "platform.settingsServiceDataProvider";
-    private const string SETTINGS_SERVICE_REQUEST = $"object:{SETTINGS_SERVICE_NAME}-data.function";
+    private const string SERVICE_OBJECT = $"object:{SETTINGS_SERVICE_NAME}-data";
+    private const string SERVICE_GET = $"{SERVICE_OBJECT}.get";
+    private const string SERVICE_SET = $"{SERVICE_OBJECT}.set";
 
-    public static JsonElement? GetSettingRaw(PapiClient papiClient, string key)
+    public static T? GetSetting<T>(PapiClient papiClient, string key)
     {
-        JsonElement? value = null;
-        TaskCompletionSource taskSource = new();
-        using var getSettingTask = taskSource.Task;
-
-        papiClient.SendRequest(
-            SETTINGS_SERVICE_REQUEST,
-            new object[] { "get", key },
-            (bool success, object? returnValue) =>
-            {
-                try
-                {
-                    if (success)
-                    {
-                        var result = (JsonElement?)returnValue;
-                        if (result.HasValue)
-                            value = result.Value;
-                    }
-
-                    taskSource.TrySetResult();
-                }
-                catch (Exception ex)
-                {
-                    taskSource.TrySetException(ex);
-                }
-            }
+        return ThreadingUtils.GetTaskResult(
+            papiClient.SendRequestAsync<T?>(SERVICE_GET, [key]),
+            $"SettingService.GetSetting for {key}",
+            ThreadingUtils.DefaultTimeout
         );
-
-        using var cts = new CancellationTokenSource();
-        getSettingTask.Wait(cts.Token);
-        return value;
-    }
-
-    public static T? GetSettingObject<T>(PapiClient papiClient, string key)
-        where T : class
-    {
-        return GetSettingRaw(papiClient, key)?.Deserialize<T>();
-    }
-
-    public static T? GetSettingValue<T>(PapiClient papiClient, string key)
-        where T : struct
-    {
-        return GetSettingRaw(papiClient, key)?.Deserialize<T>();
     }
 
     public static bool SetSetting(PapiClient papiClient, string key, object? settingData)
     {
-        TaskCompletionSource taskSource = new();
-        using var getSettingTask = taskSource.Task;
-
-        var didChangeData = false;
-
-        papiClient.SendRequest(
-            SETTINGS_SERVICE_REQUEST,
-            new object?[] { "set", key, settingData },
-            (bool success, object? returnValue) =>
-            {
-                try
-                {
-                    if (success)
-                    {
-                        var result = (JsonElement?)returnValue;
-                        if (result.HasValue)
-                        {
-                            try
-                            {
-                                if (result.Value.Deserialize<bool>())
-                                    didChangeData = true;
-                                else
-                                    didChangeData = false;
-                            }
-                            catch (JsonException)
-                            {
-                                // If they sent a string data type name or an array of them, it will
-                                // fail to deserialize. Interpret that as `didChangeData` true
-                                // because pretty much anything but `false` means the data changed.
-                                // See `DataProviderUpdateInstructions` for more info
-                                didChangeData = true;
-                            }
-                        }
-                    }
-
-                    taskSource.TrySetResult();
-                }
-                catch (Exception ex)
-                {
-                    taskSource.TrySetException(ex);
-                }
-            }
+        string description = $"SettingService.SetSetting for {key}";
+        var result = ThreadingUtils.GetTaskResult(
+            papiClient.SendRequestAsync<JsonElement?>(SERVICE_SET, [key, settingData]),
+            description,
+            ThreadingUtils.DefaultTimeout
         );
+        if (!result.HasValue)
+            throw new InvalidDataException($"{description} returned null");
 
-        using var cts = new CancellationTokenSource();
-        getSettingTask.Wait(cts.Token);
-        return didChangeData;
+        try
+        {
+            if (result.Value.Deserialize<bool>())
+                return true;
+            else
+                return false;
+        }
+        catch (JsonException)
+        {
+            // If they sent a string data type name or an array of them, it will fail to
+            // deserialize. Interpret that as `true`because pretty much anything but `false` means
+            // the data changed. See `DataProviderUpdateInstructions` for more info
+            return true;
+        }
     }
 }

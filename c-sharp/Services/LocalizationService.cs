@@ -1,13 +1,9 @@
-using System.Diagnostics;
-using System.Text.Json;
-using Paranext.DataProvider.MessageTransports;
-
 namespace Paranext.DataProvider.Services;
 
 internal static class LocalizationService
 {
-    public const string SETTINGS_SERVICE_NAME = "platform.localizationDataServiceDataProvider";
-    private const string SETTINGS_SERVICE_REQUEST = $"object:{SETTINGS_SERVICE_NAME}-data.function";
+    private const string LOC_SERVICE_NAME = "platform.localizationDataServiceDataProvider";
+    private const string LOC_SERVICE_REQUEST = $"object:{LOC_SERVICE_NAME}-data.getLocalizedString";
 
     /// <summary>
     /// Get a localized string value
@@ -20,50 +16,32 @@ internal static class LocalizationService
     public static string GetLocalizedString(
         PapiClient papiClient,
         string key,
-        string? defaultValue = null,
+        string defaultValue = "",
         bool shouldThrowErrors = false
     )
     {
-        string value = defaultValue ?? key;
-        TaskCompletionSource taskSource = new();
-        using var getSettingTask = taskSource.Task;
-
-        papiClient.SendRequest(
-            SETTINGS_SERVICE_REQUEST,
-            new object[] { "getLocalizedString", new LocalizationSelector(key) },
-            (bool success, object? returnValue) =>
-            {
-                try
-                {
-                    if (success)
-                    {
-                        var result = (JsonElement?)returnValue;
-                        if (result.HasValue)
-                        {
-                            var resultString = result.Value.Deserialize<string>();
-                            if (resultString != null && resultString != key)
-                                value = resultString;
-                        }
-                    }
-
-                    taskSource.TrySetResult();
-                }
-                catch (Exception ex)
-                {
-                    if (shouldThrowErrors)
-                        taskSource.TrySetException(ex);
-                    else
-                    {
-                        Trace.TraceError(ex.Message);
-                        taskSource.TrySetResult();
-                    }
-                }
-            }
-        );
-
-        using var cts = new CancellationTokenSource();
-        getSettingTask.Wait(cts.Token);
-        return value;
+        try
+        {
+            var retVal = ThreadingUtils.GetTaskResult(
+                papiClient.SendRequestAsync<string?>(
+                    LOC_SERVICE_REQUEST,
+                    [new LocalizationSelector(key)]
+                ),
+                $"getLocalizedString for {key}",
+                ThreadingUtils.DefaultTimeout
+            );
+            if (retVal == null)
+                return shouldThrowErrors
+                    ? throw new InvalidDataException($"Localized string for {key} was null")
+                    : defaultValue;
+            return retVal;
+        }
+        catch (Exception)
+        {
+            if (shouldThrowErrors)
+                throw;
+            return defaultValue;
+        }
     }
 }
 

@@ -10,6 +10,7 @@ import {
   SortingState,
   ColumnDef as TSColumnDef,
   Row as TSRow,
+  RowSelectionState as TSRowSelectionState,
   SortDirection as TSSortDirection,
   Table as TSTable,
   useReactTable,
@@ -32,6 +33,7 @@ export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
 export type SortDirection = TSSortDirection;
+export type RowSelectionState = TSRowSelectionState;
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
