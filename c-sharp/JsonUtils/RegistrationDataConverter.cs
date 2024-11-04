@@ -23,14 +23,19 @@ public class RegistrationDataConverter : JsonConverter<RegistrationData>
         string supporterName = "";
 
         string? lastPropertyName = null;
-        while (reader.Read())
+        // The starting token is consumed before we get the reader
+        int onObjectLevel = 1;
+        while (onObjectLevel > 0 && reader.Read())
         {
             switch (reader.TokenType)
             {
                 case JsonTokenType.StartObject:
-                case JsonTokenType.EndObject:
                 case JsonTokenType.StartArray:
+                    onObjectLevel++;
+                    break;
+                case JsonTokenType.EndObject:
                 case JsonTokenType.EndArray:
+                    onObjectLevel--;
                     break;
                 case JsonTokenType.PropertyName:
                     lastPropertyName = reader.GetString();

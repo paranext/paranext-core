@@ -26,7 +26,8 @@ enum SaveState {
 
 const REGISTRATION_CODE_LENGTH_WITH_DASHES = 34;
 const REGISTRATION_CODE_REGEX_STRING =
-  '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*-\\*\\*\\*\\*\\*\\*)$';
+  '^(?:[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}-[a-zA-Z0-9]{6}|\\*{6}-\\*{6}-\\*{6}-\\*{6}-\\*{6})$';
+const EMAIL_REGEX_STRING = '^.+@.+\\..+$';
 
 /** Just a div with some margins to give some space around parts of the web view */
 function Section({ children, className }: GenericComponentProps) {
@@ -138,8 +139,9 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
     currentRegistrationData.code !== registrationCode ||
     currentRegistrationData.email !== email ||
     currentRegistrationData.supporterName !== supporter;
-  // whether the code seems valid according to a quick check
+  // whether the code and email seem valid according to a quick check
   const isCodeValid = !!registrationCode.match(REGISTRATION_CODE_REGEX_STRING);
+  const isEmailValid = !!email.match(EMAIL_REGEX_STRING);
 
   return (
     <div className="tw-p-2 tw-flex tw-flex-col tw-justify-between tw-h-screen">
@@ -163,6 +165,8 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
             />
             <span>{localizedStrings['%paratextRegistration_label_emailAddress%']}</span>
             <Input
+              className="invalid:tw-border-destructive"
+              pattern={EMAIL_REGEX_STRING}
               value={email}
               disabled={isFormDisabled}
               onChange={(e) => setEmail(e.target.value)}
@@ -205,7 +209,7 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
           <span />
           <Button
             variant="destructive"
-            disabled={isFormDisabled || !hasUnsavedChanges || !isCodeValid}
+            disabled={isFormDisabled || !hasUnsavedChanges || !isCodeValid || !isEmailValid}
             onClick={saveAndRestart}
           >
             {saveState === SaveState.IsSaving ? (

@@ -30,6 +30,9 @@ declare module 'papi-shared-types' {
     /**
      * Gets information about user's current Paratext Registry user information in
      * `ParatextData.dll`
+     *
+     * Note that this does not return the user's registration code as it is secure information.
+     * Instead, it returns `******-******-******-******-******` in its place.
      */
     'paratextRegistration.getParatextRegistrationData': () => Promise<RegistrationData>;
     /**

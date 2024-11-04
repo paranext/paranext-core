@@ -45,16 +45,16 @@ internal class ParatextRegistrationService(PapiClient papiClient)
 
     #endregion
 
-    #region Protected properties and methods
+    #region Private properties and methods
 
-    protected PapiClient PapiClient { get; } = papiClient;
+    private PapiClient PapiClient { get; } = papiClient;
 
     /// <summary>
     /// Returns information about user's current Paratext Registry user information in ParatextData.dll
     /// </summary>
     /// <param name="requestContents">Contents of command request. No contents expected</param>
     /// <returns>Paratext registration information</returns>
-    protected RegistrationData GetParatextRegistrationData()
+    private RegistrationData GetParatextRegistrationData()
     {
         try
         {
@@ -86,7 +86,7 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     /// </summary>
     /// <param name="requestContents">Contents of command request. Array whose first entry is the registration data object</param>
     /// <returns>`true` if successfully updated; `false` otherwise</returns>
-    protected void SetParatextRegistrationData(RegistrationData newRegistrationData)
+    private void SetParatextRegistrationData(RegistrationData newRegistrationData)
     {
         bool shouldSkipAppendingToExceptionMessage = false;
         try
@@ -154,6 +154,7 @@ internal class ParatextRegistrationService(PapiClient papiClient)
                 !string.IsNullOrEmpty(RegistrationInfo.DefaultUser.Name)
                 && RegistrationInfo.DefaultUser.Name != newRegistrationData.Name
             )
+            {
                 try
                 {
                     PrepareForUserChange();
@@ -164,6 +165,7 @@ internal class ParatextRegistrationService(PapiClient papiClient)
                         $"Exception while committing existing changes to prepare to change users: {e}"
                     );
                 }
+            }
 
             // Actually change the registration info
             RegistrationInfo.ChangeRegistrationData(newRegistrationData);
@@ -171,28 +173,16 @@ internal class ParatextRegistrationService(PapiClient papiClient)
             // registration code may have changed, so reset the registry server with the new user data
             RegistryServer.Default?.ResetServer(RegistrationInfo.DefaultUser);
 
-            // No need to observe this task in any way. We are scheduling a call to restart the application then
-            // returning from this method to continue execution and properly return from this method.
-#pragma warning disable VSTHRD110 // Observe result of async calls
             // Restart the application after a delay. Don't wait for it so the response goes through
-            Task.Delay(REGISTRATION_CHANGE_RESTART_DELAY_MS)
-                .ContinueWith(
-                    async (Task task) =>
-                    {
-                        try
-                        {
-                            await PapiClient.SendRequestAsync("command:platform.restart", []);
-                        }
-                        catch (Exception e)
-                        {
-                            Console.WriteLine(
-                                $"Error while requesting to restart the application: {e}"
-                            );
-                        }
-                    },
-                    TaskScheduler.Default
-                );
-#pragma warning restore VSTHRD110 // Observe result of async calls
+            ThreadingUtils.RunTask(
+                Task.Delay(REGISTRATION_CHANGE_RESTART_DELAY_MS)
+                    .ContinueWith(
+                        async (Task task) =>
+                            await PapiClient.SendRequestAsync("command:platform.restart", []),
+                        TaskScheduler.Default
+                    ),
+                "ParatextRegistrationService sending request to restart the application"
+            );
         }
         catch (Exception e)
         {
@@ -205,15 +195,11 @@ internal class ParatextRegistrationService(PapiClient papiClient)
         }
     }
 
-    #endregion
-
-    #region Private properties and methods
-
     /// <summary>
     /// For any project with uncommitted changes on this machine, marks a point in project history in
     /// preparation for switching to a different Paratext user.
     ///
-    /// Adapted from `UserSwitchingHelper.PrepareForUserChange
+    /// Adapted from `UserSwitchingHelper.PrepareForUserChange`
     /// </summary>
     private void PrepareForUserChange()
     {
