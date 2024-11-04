@@ -94,7 +94,7 @@ declare module 'platform-scripture' {
   /** Provides information about markers */
   export type MarkerNamesProjectInterfaceDataTypes = {
     /** Gets an array of string that contain information about markers */
-    MarkerNames: DataProviderDataType<string[], string, string>;
+    MarkerNames: DataProviderDataType<number, string[], string[]>;
   };
 
   /**
@@ -474,7 +474,9 @@ declare module 'platform-scripture' {
        */
       getMarkerNames(bookNum: number): Promise<string[] | undefined>;
       /** Setting is not supported for now */
-      setMarkerNames(bookNum: number): Promise<void>;
+      setMarkerNames(
+        markerNames: string[],
+      ): Promise<DataProviderUpdateInstructions<MarkerNamesProjectInterfaceDataTypes>>;
       /**
        * Subscribe to run a callback function when marker info changed
        *

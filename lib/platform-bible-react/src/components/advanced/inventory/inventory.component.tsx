@@ -145,10 +145,8 @@ const createTableData = (
       }
     }
 
-    let match: RegExpExecArray | null = itemRegex.exec(line);
-    // RegExp.exec returns null when no match is found
-    // eslint-disable-next-line no-null/no-null
-    while (match !== null) {
+    let match: RegExpExecArray | undefined = itemRegex.exec(line) ?? undefined;
+    while (match) {
       const items: string[] = [];
       match.forEach((item) => items.push(item));
       const itemIndex = match.index;
@@ -174,7 +172,7 @@ const createTableData = (
         tableData.push(newItem);
       }
 
-      match = itemRegex.exec(line);
+      match = itemRegex.exec(line) ?? undefined;
     }
   });
 
