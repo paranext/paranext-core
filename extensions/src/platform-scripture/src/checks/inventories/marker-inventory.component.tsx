@@ -1,5 +1,4 @@
-import papi from '@papi/frontend';
-import { useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectData, useSetting } from '@papi/frontend/react';
 import {
   Button,
   ColumnDef,
@@ -23,7 +22,7 @@ import {
   ScriptureReference,
   substring,
 } from 'platform-bible-utils';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_marker%',
@@ -196,18 +195,10 @@ function MarkerInventory({
 }: MarkerInventoryProps) {
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const [markerNames, setMarkerNames] = useState<string[]>([]);
-
-  useEffect(() => {
-    const fetchStylesheet = async () => {
-      if (!projectId) return;
-      const PDP = await papi.projectDataProviders.get('platformScripture.MarkerNames', projectId);
-      const newMarkerNames = await PDP.getMarkerNames(scrRef.bookNum);
-      if (newMarkerNames) setMarkerNames(newMarkerNames);
-    };
-
-    fetchStylesheet();
-  }, [projectId, scrRef.bookNum]);
+  const [markerNames] = useProjectData(
+    'platformScripture.MarkerNames',
+    projectId ?? undefined,
+  ).MarkerNames(scrRef.bookNum, []);
 
   const [markerInventoryStrings] = useLocalizedStrings(MARKER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
