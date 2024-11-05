@@ -20,6 +20,7 @@ import {
   InternalRequestHandler,
   REGISTER_METHOD,
   RequestParams,
+  requestWithRetry,
   sendPayloadToWebSocket,
   UNREGISTER_METHOD,
 } from '@shared/data/rpc.model';
@@ -101,27 +102,33 @@ export default class RpcServer implements IRpcHandler {
   ): Promise<JSONRPCResponse> {
     const requestId = this.createNextRequestId();
     const requestToSend = createRequest(requestType, requestParams, requestId);
-    // Need to use null since it's part of the API
-    // eslint-disable-next-line no-null/no-null
-    let response: JSONRPCResponse | null = null;
-    const isLocal = this.jsonRpcServer.hasMethod(requestType);
-    if (isLocal) response = await this.jsonRpcServer.receive(requestToSend);
-    else {
-      const handler = this.rpcHandlerByMethodName.get(requestType);
-      if (handler === this) response = await this.jsonRpcClient.requestAdvanced(requestToSend);
-      else if (!handler)
+    return requestWithRetry(
+      async () => {
+        // Need to use null since it's part of the API
+        // eslint-disable-next-line no-null/no-null
+        let response: JSONRPCResponse | null = null;
+        const isLocal = this.jsonRpcServer.hasMethod(requestType);
+        if (isLocal) response = await this.jsonRpcServer.receive(requestToSend);
+        else {
+          const handler = this.rpcHandlerByMethodName.get(requestType);
+          if (handler === this) response = await this.jsonRpcClient.requestAdvanced(requestToSend);
+          else if (!handler)
+            return createErrorResponse(
+              `'${requestType}' not found`,
+              JSONRPCErrorCode.MethodNotFound,
+              requestId,
+            );
+          else return handler.request(requestType, requestParams);
+        }
+        if (response) return response;
         return createErrorResponse(
-          `'${requestType}' not found`,
-          JSONRPCErrorCode.MethodNotFound,
+          `No response from ${isLocal ? 'local' : 'remote'} RPC server`,
+          JSONRPCErrorCode.InternalError,
           requestId,
         );
-      else return handler.request(requestType, requestParams);
-    }
-    if (response) return response;
-    return createErrorResponse(
-      `No response from ${isLocal ? 'local' : 'remote'} RPC server`,
-      JSONRPCErrorCode.InternalError,
-      requestId,
+      },
+      this.name,
+      requestType,
     );
   }
 

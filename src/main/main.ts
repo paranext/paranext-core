@@ -31,6 +31,11 @@ import { startProjectLookupService } from '@main/services/project-lookup.service
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
+/**
+ * If this is `true`, we will restart soon. Not just using `isClosing` because we need to make sure
+ * we only run `relaunch` once which has a slightly different use case than `isClosing`
+ */
+let willRestart = false;
 
 async function main() {
   // The network service relies on nothing else, and other things rely on it, so start it first
@@ -259,7 +264,18 @@ async function main() {
       app.quit();
     },
     'platform.restart': async () => {
-      app.relaunch();
+      // Only set up to restart once. This could accidentally be called twice if `app.quit` is
+      // canceled or if someone requested to restart multiple times in the few seconds it takes
+      // `app.quit` to run because of the `will-quit` event
+      if (!willRestart) {
+        willRestart = true;
+
+        app.relaunch({
+          // If in portable app, relaunch properly. If not, take default action. Thanks to Araxeus at
+          // https://github.com/electron-userland/electron-builder/issues/4110#issuecomment-1050149429
+          execPath: process.env.PORTABLE_EXECUTABLE_FILE,
+        });
+      }
       app.quit();
     },
   };
