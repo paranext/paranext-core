@@ -47,7 +47,9 @@ import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
 import {
   AddWebViewEvent,
+  CloseWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   UpdateWebViewEvent,
@@ -82,6 +84,14 @@ const onDidUpdateWebViewEmitter = createNetworkEventEmitter<UpdateWebViewEvent>(
 
 /** Event that emits with webView info when a webView is added */
 export const onDidUpdateWebView = onDidUpdateWebViewEmitter.event;
+
+/** Emitter for when a webview is removed */
+const onDidCloseWebViewEmitter = createNetworkEventEmitter<CloseWebViewEvent>(
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+);
+
+/** Event that emits with webView info when a webView is removed */
+export const onDidCloseWebView = onDidCloseWebViewEmitter.event;
 
 /**
  * Alias for `window.open` because `window.open` is deleted to prevent web views from accessing it.
@@ -521,7 +531,15 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
  * @param newLayout The changed layout to save.
  */
 // TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
-const onLayoutChange: OnLayoutChangeRCDock = async (newLayout) => {
+const onLayoutChange: OnLayoutChangeRCDock = async (
+  newLayout,
+  _currentTabId,
+  direction,
+  webViewDefinition,
+) => {
+  if (direction === 'remove' && webViewDefinition)
+    onDidCloseWebViewEmitter.emit({ webView: convertWebViewDefinitionToSaved(webViewDefinition) });
+
   return saveLayout(newLayout);
 };
 
@@ -620,12 +638,12 @@ export const addTab = async <TData = unknown>(
 };
 
 /**
- * Remove a tab in the layout
+ * Closes a tab in the layout
  *
- * @param tabId ID of the tab to remove
- * @returns True if successfully found the tab to remove
+ * @param tabId ID of the tab to close
+ * @returns True if successfully found the tab to close
  */
-export const removeTab = async (tabId: string): Promise<boolean> => {
+export const closeTab = async (tabId: string): Promise<boolean> => {
   return (await getDockLayout()).removeTabFromDock(tabId);
 };
 
@@ -733,7 +751,7 @@ export function convertWebViewDefinitionToSaved(
 }
 
 /** Explanation in web-view.service-model.ts */
-async function getSavedWebViewDefinition(
+async function getOpenWebViewDefinition(
   webViewId: string,
 ): Promise<SavedWebViewDefinition | undefined> {
   const webViewDefinition = (await getDockLayout()).getWebViewDefinition(webViewId);
@@ -795,7 +813,7 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
  *   not create a WebView for this request.
  * @throws If something went wrong like the provider for the webViewType was not found
  */
-export const getWebView = async (
+export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
   options: GetWebViewOptions = {},
@@ -1300,13 +1318,16 @@ export const initialize = () => {
 const papiWebViewService: WebViewServiceType = {
   onDidAddWebView,
   onDidUpdateWebView,
-  getWebView,
-  getSavedWebViewDefinition,
+  onDidCloseWebView,
+  getWebView: openWebView,
+  openWebView,
+  getSavedWebViewDefinition: getOpenWebViewDefinition,
+  getOpenWebViewDefinition,
 };
 
 async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
-  const projectIdFromWebView = (await getSavedWebViewDefinition(webViewId))?.projectId;
+  const projectIdFromWebView = (await getOpenWebViewDefinition(webViewId))?.projectId;
 
   if (!projectIdFromWebView) return undefined;
 

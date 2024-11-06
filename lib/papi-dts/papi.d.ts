@@ -2762,11 +2762,19 @@ declare module 'shared/models/docking-framework.model' {
   export type Layout = TabLayout | FloatLayout | PanelLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
-  /** Rc-dock's onLayoutChange prop made asynchronous - resolves */
+  /**
+   * Rc-dock's onLayoutChange prop made asynchronous with `webViewDefinition` added. The dock layout
+   * component calls this on the web view service when the layout changes.
+   *
+   * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
+   *   otherwise
+   * @returns Promise that resolves when finished doing things
+   */
   export type OnLayoutChangeRCDock = (
     newLayout: LayoutBase,
     currentTabId?: string,
     direction?: DropDirection,
+    webViewDefinition?: WebViewDefinition,
   ) => Promise<void>;
   /** Properties related to the dock layout */
   export type PapiDockLayout = {
@@ -2852,6 +2860,14 @@ declare module 'shared/services/web-view.service-model' {
     onDidAddWebView: PlatformEvent<AddWebViewEvent>;
     /** Event that emits with webView info when a webView is updated */
     onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
+    /** Event that emits with webView info when a webView is closed */
+    onDidCloseWebView: PlatformEvent<CloseWebViewEvent>;
+    /** @deprecated 6 November 2024. Renamed to {@link openWebView}. */
+    getWebView: (
+      webViewType: WebViewType,
+      layout?: Layout,
+      options?: GetWebViewOptions,
+    ) => Promise<WebViewId | undefined>;
     /**
      * Creates a new web view or gets an existing one depending on if you request an existing one and
      * if the web view provider decides to give that existing one to you (it is up to the provider).
@@ -2864,25 +2880,27 @@ declare module 'shared/services/web-view.service-model' {
      *   not create a WebView for this request.
      * @throws If something went wrong like the provider for the webViewType was not found
      */
-    getWebView: (
+    openWebView: (
       webViewType: WebViewType,
       layout?: Layout,
       options?: GetWebViewOptions,
     ) => Promise<WebViewId | undefined>;
+    /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
+    getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
     /**
      * Gets the saved properties on the WebView definition with the specified ID
      *
      * Note: this only returns a representation of the current web view definition, not the actual web
      * view definition itself. Changing properties on the returned definition does not affect the
      * actual web view definition. You can possibly change the actual web view definition by calling
-     * {@link WebViewServiceType.getWebView} with certain `options`, depending on what options the web
+     * {@link WebViewServiceType.openWebView} with certain `options`, depending on what options the web
      * view provider has made available.
      *
      * @param webViewId The ID of the WebView whose saved properties to get
      * @returns Saved properties of the WebView definition with the specified ID or undefined if not
      *   found
      */
-    getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+    getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
   }
   /** Name to use when creating a network event that is fired when webViews are created */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
@@ -2895,6 +2913,12 @@ declare module 'shared/services/web-view.service-model' {
   export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: `${string}:${string}`;
   /** Event emitted when webViews are updated */
   export type UpdateWebViewEvent = {
+    webView: SavedWebViewDefinition;
+  };
+  /** Name to use when creating a network event that is fired when webViews are closed */
+  export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: `${string}:${string}`;
+  /** Event emitted when webViews are closed */
+  export type CloseWebViewEvent = {
     webView: SavedWebViewDefinition;
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';

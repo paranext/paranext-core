@@ -3,7 +3,7 @@ import { WebViewContentType, WebViewDefinition } from '@shared/models/web-view.m
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
-  getWebView,
+  openWebView,
   saveTabInfoBase,
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
   IFRAME_SANDBOX_ALLOW_SCRIPTS,
@@ -35,7 +35,7 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
  * @param data Web view definition to load
  */
 async function retrieveWebViewContent(webViewType: string, id: string): Promise<void> {
-  const loadedId = await getWebView(webViewType, undefined, {
+  const loadedId = await openWebView(webViewType, undefined, {
     existingId: id,
     createNewIfNotFound: false,
   });

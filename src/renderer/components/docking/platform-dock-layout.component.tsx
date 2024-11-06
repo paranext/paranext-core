@@ -1,7 +1,10 @@
 import { useRef, useEffect } from 'react';
 import DockLayout from 'rc-dock';
 
-import { WebViewDefinitionUpdatableProperties } from '@shared/models/web-view.model';
+import {
+  WebViewDefinition,
+  WebViewDefinitionUpdatableProperties,
+} from '@shared/models/web-view.model';
 import {
   SavedTabInfo,
   Layout,
@@ -13,8 +16,10 @@ import { DialogData } from '@shared/models/dialog-options.model';
 import testLayout from '@renderer/testing/test-layout.data';
 import { registerDockLayout } from '@renderer/services/web-view.service-host';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
+import logger from '@shared/services/logger.service';
+import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
 
-import DockLayoutWrapper from './dock-layout-wrapper.component';
+import DockLayoutWrapper from '@renderer/components/docking/dock-layout-wrapper.component';
 import {
   addTabToDock,
   addWebViewToDock,
@@ -22,8 +27,11 @@ import {
   loadTab,
   saveTab,
   updateWebViewDefinition,
-} from './platform-dock-layout-storage.util';
-import { isTab, RCDockTabInfo } from './docking-framework-internal.model';
+} from '@renderer/components/docking/platform-dock-layout-storage.util';
+import {
+  isTab,
+  RCDockTabInfo,
+} from '@renderer/components/docking/docking-framework-internal.model';
 
 export default function PlatformDockLayout() {
   // This ref will always be defined
@@ -76,20 +84,40 @@ export default function PlatformDockLayout() {
       saveTab={saveTab}
       onLayoutChange={(...args) => {
         const [, currentTabId, direction] = args;
-        // If a dialog was closed, tell the dialog service
-        if (currentTabId && direction === 'remove') {
-          // Assert the more specific type.
-          /* eslint-disable no-type-assertion/no-type-assertion */
-          const removedTab = dockLayoutRef.current.find(currentTabId) as RCDockTabInfo;
-          if ((removedTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
-            /* eslint-enable */
-            resolveDialogRequest(currentTabId, undefined, false);
+
+        let webViewDefinition: WebViewDefinition | undefined;
+
+        if (currentTabId) {
+          const currentDockItem = dockLayoutRef.current.find(currentTabId);
+          if (isTab(currentDockItem)) {
+            // Assert the more specific type.
+            /* eslint-disable no-type-assertion/no-type-assertion */
+            const currentTab = currentDockItem as RCDockTabInfo;
+
+            // If a dialog was closed, tell the dialog service
+            if (direction === 'remove') {
+              if ((currentTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
+                /* eslint-enable */
+                resolveDialogRequest(currentTabId, undefined, false);
+            }
+
+            if (currentTab.tabType === TAB_TYPE_WEBVIEW)
+              try {
+                webViewDefinition = currentTabId
+                  ? getWebViewDefinition(currentTabId, dockLayoutRef.current)
+                  : undefined;
+              } catch (e) {
+                logger.error(
+                  `dockLayout.onLayoutChange tried to get web view definition for ${currentTabId} but threw! ${e}`,
+                );
+              }
+          }
         }
 
         (async () => {
           if (onLayoutChangeRef.current) {
             try {
-              await onLayoutChangeRef.current(...args);
+              await onLayoutChangeRef.current(...args, webViewDefinition);
             } catch (e) {
               throw new Error(
                 `platform-dock-layout.component error: Failed to run onLayoutChangeRef.current! currentTabId: ${currentTabId}, direction: ${direction}`,

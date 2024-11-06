@@ -23,6 +23,16 @@ export interface WebViewServiceType {
   /** Event that emits with webView info when a webView is updated */
   onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
 
+  /** Event that emits with webView info when a webView is closed */
+  onDidCloseWebView: PlatformEvent<CloseWebViewEvent>;
+
+  /** @deprecated 6 November 2024. Renamed to {@link openWebView}. */
+  getWebView: (
+    webViewType: WebViewType,
+    layout?: Layout,
+    options?: GetWebViewOptions,
+  ) => Promise<WebViewId | undefined>;
+
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one and
    * if the web view provider decides to give that existing one to you (it is up to the provider).
@@ -35,25 +45,29 @@ export interface WebViewServiceType {
    *   not create a WebView for this request.
    * @throws If something went wrong like the provider for the webViewType was not found
    */
-  getWebView: (
+  openWebView: (
     webViewType: WebViewType,
     layout?: Layout,
     options?: GetWebViewOptions,
   ) => Promise<WebViewId | undefined>;
+
+  /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
+  getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+
   /**
    * Gets the saved properties on the WebView definition with the specified ID
    *
    * Note: this only returns a representation of the current web view definition, not the actual web
    * view definition itself. Changing properties on the returned definition does not affect the
    * actual web view definition. You can possibly change the actual web view definition by calling
-   * {@link WebViewServiceType.getWebView} with certain `options`, depending on what options the web
+   * {@link WebViewServiceType.openWebView} with certain `options`, depending on what options the web
    * view provider has made available.
    *
    * @param webViewId The ID of the WebView whose saved properties to get
    * @returns Saved properties of the WebView definition with the specified ID or undefined if not
    *   found
    */
-  getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+  getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
 }
 
 /** Prefix on requests that indicates that the request is related to webView operations */
@@ -79,6 +93,17 @@ export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW = serializeRequestType(
 
 /** Event emitted when webViews are updated */
 export type UpdateWebViewEvent = {
+  webView: SavedWebViewDefinition;
+};
+
+/** Name to use when creating a network event that is fired when webViews are closed */
+export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW = serializeRequestType(
+  CATEGORY_WEB_VIEW,
+  'onDidCloseWebView',
+);
+
+/** Event emitted when webViews are closed */
+export type CloseWebViewEvent = {
   webView: SavedWebViewDefinition;
 };
 
