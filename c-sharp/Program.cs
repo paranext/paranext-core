@@ -2,6 +2,7 @@ using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 using PtxUtils;
 
@@ -31,9 +32,11 @@ public static class Program
 
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi);
+            var paratextRegistrationService = new ParatextRegistrationService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
-                checkRunner.RegisterDataProviderAsync()
+                checkRunner.RegisterDataProviderAsync(),
+                paratextRegistrationService.InitializeAsync()
             );
 
             // Things that only run in our "noisy dev mode" go here

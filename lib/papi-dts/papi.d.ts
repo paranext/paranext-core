@@ -4,6 +4,69 @@
 /// <reference types="node" />
 /// <reference types="node" />
 /// <reference types="node" />
+declare module 'shared/utils/util' {
+  import { ProcessType } from 'shared/global-this.model';
+  /**
+   * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
+   * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
+   *
+   * WARNING: THIS IS NOT CURRENTLY CRYPTOGRAPHICALLY SECURE! TODO: Make this cryptographically
+   * random! Use some polymorphic library that works in all contexts?
+   * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
+   */
+  export function newNonce(): string;
+  /**
+   * Modules that someone might try to require in their extensions that we have similar apis for. When
+   * an extension requires these modules, an error throws that lets them know about our similar api.
+   */
+  export const MODULE_SIMILAR_APIS: Readonly<{
+    [moduleName: string]:
+      | string
+      | {
+          [process in ProcessType | 'default']?: string;
+        }
+      | undefined;
+  }>;
+  /**
+   * Get a message that says the module import was rejected and to try a similar api if available.
+   *
+   * @param moduleName Name of `require`d module that was rejected
+   * @returns String that says the import was rejected and a similar api to try
+   */
+  export function getModuleSimilarApiMessage(moduleName: string): string;
+  /** Separator between parts of a serialized request */
+  const REQUEST_TYPE_SEPARATOR = ':';
+  /** Information about a request that tells us what to do with it */
+  export type RequestType = {
+    /** The general category of request */
+    category: string;
+    /** Specific identifier for this type of request */
+    directive: string;
+  };
+  /**
+   * String version of a request type that tells us what to do with a request.
+   *
+   * Consists of two strings concatenated by a colon
+   */
+  export type SerializedRequestType = `${string}${typeof REQUEST_TYPE_SEPARATOR}${string}`;
+  /**
+   * Create a request message requestType string from a category and a directive
+   *
+   * @param category The general category of request
+   * @param directive Specific identifier for this type of request
+   * @returns Full requestType for use in network calls
+   */
+  export function serializeRequestType(category: string, directive: string): SerializedRequestType;
+  /** Split a request message requestType string into its parts */
+  export function deserializeRequestType(requestType: SerializedRequestType): RequestType;
+  /**
+   * Allow an object to bind all its class-defined functions to itself to ensure all references to
+   * "this" in its functions refer to the object rather than the caller of the function. For example,
+   * if a function on the class is provided to a callback, if "this" isn't bound to the object then
+   * "this" will refer to the entity running the callback.
+   */
+  export function bindClassMethods<T extends object>(this: T): void;
+}
 declare module 'shared/services/scroll-group.service-model' {
   import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
@@ -632,68 +695,60 @@ declare module 'shared/global-this.model' {
     ExtensionHost = 'extension-host',
   }
 }
-declare module 'shared/utils/util' {
+declare module 'shared/utils/internal-util' {
+  /** Utility functions specific to the internal technologies we are using. */
   import { ProcessType } from 'shared/global-this.model';
   /**
-   * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
-   * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
+   * Determine if running on a client process (renderer, extension-host) or on the server.
    *
-   * WARNING: THIS IS NOT CURRENTLY CRYPTOGRAPHICALLY SECURE! TODO: Make this cryptographically
-   * random! Use some polymorphic library that works in all contexts?
-   * https://developer.mozilla.org/en-US/docs/Web/API/Crypto/getRandomValues only works in browser
+   * @returns Returns true if running on a client, false otherwise
    */
-  export function newNonce(): string;
+  export const isClient: () => boolean;
   /**
-   * Modules that someone might try to require in their extensions that we have similar apis for. When
-   * an extension requires these modules, an error throws that lets them know about our similar api.
-   */
-  export const MODULE_SIMILAR_APIS: Readonly<{
-    [moduleName: string]:
-      | string
-      | {
-          [process in ProcessType | 'default']?: string;
-        }
-      | undefined;
-  }>;
-  /**
-   * Get a message that says the module import was rejected and to try a similar api if available.
+   * Determine if running on the server process (main)
    *
-   * @param moduleName Name of `require`d module that was rejected
-   * @returns String that says the import was rejected and a similar api to try
+   * @returns Returns true if running on the server, false otherwise
    */
-  export function getModuleSimilarApiMessage(moduleName: string): string;
-  /** Separator between parts of a serialized request */
-  const REQUEST_TYPE_SEPARATOR = ':';
-  /** Information about a request that tells us what to do with it */
-  export type RequestType = {
-    /** The general category of request */
-    category: string;
-    /** Specific identifier for this type of request */
-    directive: string;
+  export const isServer: () => boolean;
+  /**
+   * Determine if running on the renderer process
+   *
+   * @returns Returns true if running on the renderer, false otherwise
+   */
+  export const isRenderer: () => boolean;
+  /**
+   * Determine if running on the extension host
+   *
+   * @returns Returns true if running on the extension host, false otherwise
+   */
+  export const isExtensionHost: () => boolean;
+  /**
+   * Gets which kind of process this is (main, renderer, extension-host)
+   *
+   * @returns ProcessType for this process
+   */
+  export const getProcessType: () => ProcessType;
+}
+declare module 'shared/services/logger.service' {
+  import log from 'electron-log';
+  export const WARN_TAG = '<WARN>';
+  /**
+   * Format a string of a service message
+   *
+   * @param message Message from the service
+   * @param serviceName Name of the service to show in the log
+   * @param tag Optional tag at the end of the service name
+   * @returns Formatted string of a service message
+   */
+  export function formatLog(message: string, serviceName: string, tag?: string): string;
+  /**
+   *
+   * All extensions and services should use this logger to provide a unified output of logs
+   */
+  const logger: log.MainLogger & {
+    default: log.MainLogger;
   };
-  /**
-   * String version of a request type that tells us what to do with a request.
-   *
-   * Consists of two strings concatenated by a colon
-   */
-  export type SerializedRequestType = `${string}${typeof REQUEST_TYPE_SEPARATOR}${string}`;
-  /**
-   * Create a request message requestType string from a category and a directive
-   *
-   * @param category The general category of request
-   * @param directive Specific identifier for this type of request
-   * @returns Full requestType for use in network calls
-   */
-  export function serializeRequestType(category: string, directive: string): SerializedRequestType;
-  /** Split a request message requestType string into its parts */
-  export function deserializeRequestType(requestType: SerializedRequestType): RequestType;
-  /**
-   * Allow an object to bind all its class-defined functions to itself to ensure all references to
-   * "this" in its functions refer to the object rather than the caller of the function. For example,
-   * if a function on the class is provided to a callback, if "this" isn't bound to the object then
-   * "this" will refer to the entity running the callback.
-   */
-  export function bindClassMethods<T extends object>(this: T): void;
+  export default logger;
 }
 declare module 'shared/data/rpc.model' {
   import { SerializedRequestType } from 'shared/utils/util';
@@ -793,6 +848,21 @@ declare module 'shared/data/rpc.model' {
    * messages.
    */
   export function fixupResponse(response: JSONRPCResponse): JSONRPCResponse;
+  /**
+   * Runs the request callback and retries a number of times if `requestCallback` resolves to a method
+   * not found error
+   *
+   * @param requestCallback Function to run to send a JSON-RPC request. Should return a JSONRPC error
+   *   with code {@link JSONRPCErrorCode.MethodNotFound} if it fails to find the method
+   * @param name Name of the handler running this request for logging purposes
+   * @param requestType Type of request for logging purposes
+   * @returns The response from the request including the method not found error if it times out
+   */
+  export function requestWithRetry(
+    requestCallback: () => Promise<JSONRPCResponse>,
+    name: string,
+    requestType: string,
+  ): Promise<JSONRPCResponse>;
   /**
    * Register a method on the network so that requests of the given type are routed to your request
    * handler.
@@ -929,61 +999,6 @@ declare module 'shared/models/rpc.interface' {
     /** Unregister a method so it is no longer available to RPC requests */
     unregisterMethod: (methodName: string) => Promise<boolean>;
   }
-}
-declare module 'shared/utils/internal-util' {
-  /** Utility functions specific to the internal technologies we are using. */
-  import { ProcessType } from 'shared/global-this.model';
-  /**
-   * Determine if running on a client process (renderer, extension-host) or on the server.
-   *
-   * @returns Returns true if running on a client, false otherwise
-   */
-  export const isClient: () => boolean;
-  /**
-   * Determine if running on the server process (main)
-   *
-   * @returns Returns true if running on the server, false otherwise
-   */
-  export const isServer: () => boolean;
-  /**
-   * Determine if running on the renderer process
-   *
-   * @returns Returns true if running on the renderer, false otherwise
-   */
-  export const isRenderer: () => boolean;
-  /**
-   * Determine if running on the extension host
-   *
-   * @returns Returns true if running on the extension host, false otherwise
-   */
-  export const isExtensionHost: () => boolean;
-  /**
-   * Gets which kind of process this is (main, renderer, extension-host)
-   *
-   * @returns ProcessType for this process
-   */
-  export const getProcessType: () => ProcessType;
-}
-declare module 'shared/services/logger.service' {
-  import log from 'electron-log';
-  export const WARN_TAG = '<WARN>';
-  /**
-   * Format a string of a service message
-   *
-   * @param message Message from the service
-   * @param serviceName Name of the service to show in the log
-   * @param tag Optional tag at the end of the service name
-   * @returns Formatted string of a service message
-   */
-  export function formatLog(message: string, serviceName: string, tag?: string): string;
-  /**
-   *
-   * All extensions and services should use this logger to provide a unified output of logs
-   */
-  const logger: log.MainLogger & {
-    default: log.MainLogger;
-  };
-  export default logger;
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -2136,7 +2151,10 @@ declare module 'papi-shared-types' {
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
+    /** Shut down the application */
     'platform.quit': () => Promise<void>;
+    /** Restart the application */
+    'platform.restart': () => Promise<void>;
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     'platform.openUserSettings': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;

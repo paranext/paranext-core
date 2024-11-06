@@ -1,0 +1,13 @@
+[
+  {
+    "label": "%settings_paratextRegistration_registration_internet_group_label%",
+    "description": "%settings_paratextRegistration_registration_internet_group_description%",
+    "properties": {
+      "paratextRegistration.shouldShowOnStartup": {
+        "label": "%settings_paratextRegistration_shouldShowOnStartup_label%",
+        "description": "%settings_paratextRegistration_shouldShowOnStartup_description%",
+        "default": false
+      }
+    }
+  }
+]

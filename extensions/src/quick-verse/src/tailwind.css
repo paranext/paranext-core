@@ -2,15 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-@layer base {
-  /* Adding the preflight selector (pr-twp) to components was not changing the font as desired.
-  So this piece of code adds tw-font-sans everywhere we include preflight. */
-  .pr-twp {
-    @apply tw-font-sans;
-  }
-}
-
-/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/tailwind.css */
+/* #region shared with https://github.com/paranext/paranext-core/blob/main/lib/platform-bible-react/src/index.css */
 
 @layer base {
   @font-face {

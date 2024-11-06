@@ -134,10 +134,11 @@ internal class PapiClient : IDisposable
     }
 
     /// <summary>
-    /// Send a request to the server
+    /// Send a request to the server expecting a returned value
     /// </summary>
     /// <param name="requestType">Type of request intended for the server</param>
     /// <param name="requestContents">Objects to send as parameters to the request</param>
+    /// <returns>The request response's resulting value</returns>
     public virtual async Task<T?> SendRequestAsync<T>(
         string requestType,
         IReadOnlyList<object?>? requestContents
@@ -162,6 +163,28 @@ internal class PapiClient : IDisposable
             requestContents,
             _cancellationToken
         );
+    }
+
+    /// <summary>
+    /// Send a request to the server expecting no returned value (as if the request is pointing to a void method)
+    /// </summary>
+    /// <param name="requestType">Type of request intended for the server</param>
+    /// <param name="requestContents">Objects to send as parameters to the request</param>
+    public virtual async Task SendRequestAsync(
+        string requestType,
+        IReadOnlyList<object?>? requestContents
+    )
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+
+        if (_localMethods.TryGetValue(requestType, out Delegate? handler) && handler != null)
+            handler.DynamicInvoke(requestContents?.ToArray());
+        else
+            await _jsonRpc.InvokeWithCancellationAsync(
+                requestType,
+                requestContents,
+                _cancellationToken
+            );
     }
 
     /// <summary>

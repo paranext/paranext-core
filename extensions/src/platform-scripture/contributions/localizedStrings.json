@@ -2,6 +2,7 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
+      "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
       "%settings_platformScripture_paratext_group_label%": "Paratext 9-related Settings",
       "%settings_platformScripture_paratext_group_description%": "Settings related to how Platform.Bible should interact with older Paratext installations",
       "%settings_platformScripture_includeMyParatext9Projects_label%": "Include My Paratext 9 Projects",
@@ -23,7 +24,6 @@
       "%project_settings_platformScripture_validMarkers_description%": "List of markers that are accepted in this project.",
       "%project_settings_platformScripture_invalidMarkers_label%": "Invalid Markers",
       "%project_settings_platformScripture_invalidMarkers_description%": "List of markers that are not accepted in this project.",
-      "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
       "%webView_platformScripture_tools%": "Tools",
       "%webView_platformScripture_showCheckResults%": "Show Check Results...",
       "%webView_characterInventory_title%": "Character Inventory: {projectName}",

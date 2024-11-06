@@ -24,6 +24,7 @@ internal static class SerializationOptions
             };
         options.Converters.Add(new CommentConverter());
         options.Converters.Add(new VerseRefConverter());
+        options.Converters.Add(new RegistrationDataConverter());
         return options;
     }
 

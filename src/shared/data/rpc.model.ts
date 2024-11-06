@@ -1,3 +1,4 @@
+import logger from '@shared/services/logger.service';
 import { SerializedRequestType } from '@shared/utils/util';
 import {
   JSONRPC,
@@ -7,10 +8,15 @@ import {
   JSONRPCResponse,
   JSONRPCSuccessResponse,
 } from 'json-rpc-2.0';
-import { deserialize, serialize } from 'platform-bible-utils';
+import { deserialize, serialize, wait } from 'platform-bible-utils';
 
 /** Port to use for the WebSocket */
 export const WEBSOCKET_PORT = 8876;
+
+/** How many times to try sending a request before giving up if the request is not yet registered */
+const MAX_REQUEST_ATTEMPTS = 10;
+/** How long in ms to wait between request attempts if the request is not yet registered */
+const REQUEST_ATTEMPT_WAIT_TIME_MS = 1000;
 
 /**
  * Whether an RPC object is setting up or has finished setting up its connection and is ready to
@@ -151,6 +157,47 @@ export function fixupResponse(response: JSONRPCResponse): JSONRPCResponse {
   // eslint-disable-next-line no-null/no-null
   if ('result' in response && response.result === null) response.result = undefined;
   return response;
+}
+
+/**
+ * Runs the request callback and retries a number of times if `requestCallback` resolves to a method
+ * not found error
+ *
+ * @param requestCallback Function to run to send a JSON-RPC request. Should return a JSONRPC error
+ *   with code {@link JSONRPCErrorCode.MethodNotFound} if it fails to find the method
+ * @param name Name of the handler running this request for logging purposes
+ * @param requestType Type of request for logging purposes
+ * @returns The response from the request including the method not found error if it times out
+ */
+export async function requestWithRetry(
+  requestCallback: () => Promise<JSONRPCResponse>,
+  name: string,
+  requestType: string,
+): Promise<JSONRPCResponse> {
+  // https://github.com/paranext/paranext-core/issues/51
+  // If the request type doesn't have a registered handler yet, retry a few times to help with race
+  // conditions. This approach is hacky but works well enough for now.
+  for (let attemptsRemaining = MAX_REQUEST_ATTEMPTS; attemptsRemaining > 0; attemptsRemaining--) {
+    // Intentionally awaiting inside for loop so we attempt once at a time
+    // eslint-disable-next-line no-await-in-loop
+    const response = await requestCallback();
+
+    if (!response.error || response.error.code !== JSONRPCErrorCode.MethodNotFound) return response;
+
+    logger.debug(
+      `RPC handler ${name} could not find a request handler for requestType ${requestType} on attempt ${MAX_REQUEST_ATTEMPTS - attemptsRemaining + 1} of ${MAX_REQUEST_ATTEMPTS}. ${attemptsRemaining === 1 ? 'Giving up.' : 'Retrying...'}`,
+    );
+
+    // No need to wait again after the last attempt fails. Return the error response
+    if (attemptsRemaining === 1) return response;
+
+    // Intentionally awaiting inside for loop so we wait a bit before retrying
+    // eslint-disable-next-line no-await-in-loop
+    await wait(REQUEST_ATTEMPT_WAIT_TIME_MS);
+  }
+  throw new Error(
+    `RPC handler ${name} did not return a response after retrying to find request handler for requestType ${requestType}. This should never happen. Please investigate`,
+  );
 }
 
 /**

@@ -5,6 +5,7 @@ import {
   EventHandler,
   InternalRequestHandler,
   RequestParams,
+  requestWithRetry,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { IRpcMethodRegistrar, IRpcHandler } from '@shared/models/rpc.interface';
@@ -78,26 +79,32 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
     requestType: SerializedRequestType,
     requestParams: RequestParams,
   ): Promise<JSONRPCResponse> {
-    const handler = this.rpcHandlerByMethodName.get(requestType);
-    if (!handler)
-      return createErrorResponse(
-        `No handler found for ${requestType}`,
-        JSONRPCErrorCode.MethodNotFound,
-      );
-    if (handler !== this) return handler.request(requestType, requestParams);
-    const method = this.localMethodsByMethodName.get(requestType);
-    if (!method)
-      return createErrorResponse(
-        `Locally registered method name missing the actual method`,
-        JSONRPCErrorCode.InternalError,
-      );
-    try {
-      const result = method(requestParams);
-      const awaitedResult = result instanceof Promise ? await result : result;
-      return createSuccessResponse(awaitedResult);
-    } catch (error) {
-      return createErrorResponse(JSON.stringify(error), JSONRPCErrorCode.InternalError);
-    }
+    return requestWithRetry(
+      async () => {
+        const handler = this.rpcHandlerByMethodName.get(requestType);
+        if (!handler)
+          return createErrorResponse(
+            `No handler found for ${requestType}`,
+            JSONRPCErrorCode.MethodNotFound,
+          );
+        if (handler !== this) return handler.request(requestType, requestParams);
+        const method = this.localMethodsByMethodName.get(requestType);
+        if (!method)
+          return createErrorResponse(
+            `Locally registered method name missing the actual method`,
+            JSONRPCErrorCode.InternalError,
+          );
+        try {
+          const result = method(requestParams);
+          const awaitedResult = result instanceof Promise ? await result : result;
+          return createSuccessResponse(awaitedResult);
+        } catch (error) {
+          return createErrorResponse(JSON.stringify(error), JSONRPCErrorCode.InternalError);
+        }
+      },
+      'rpc-websocket-listener',
+      requestType,
+    );
   }
 
   async registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean> {

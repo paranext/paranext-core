@@ -9,6 +9,7 @@ import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
 import { debounce, getErrorMessage } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
+import logger from '@shared/services/logger.service';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -108,12 +109,25 @@ export default function Setting({
 
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
-  const handleChangeSetting = async (event: ChangeEvent<HTMLInputElement>) => {
+  /**
+   * Validate and change a setting
+   *
+   * @param event `ChangeEvent<HTMLInputElement>` is for `Input`; `boolean | 'indeterminate'` is for
+   *   `Checkbox`
+   */
+  const handleChangeSetting = async (
+    event: ChangeEvent<HTMLInputElement> | boolean | 'indeterminate',
+  ) => {
     let newValue: unknown;
 
-    if (event.target.type === 'checkbox') {
-      newValue = event.target.checked;
+    if (typeof event === 'string')
+      // This event came from a `Checkbox` component. It should not be indeterminate
+      logger.warn(`Setting checkbox attempted to set to 'indeterminate' for some reason`);
+    else if (typeof event === 'boolean') {
+      // This event came from a `Checkbox` component
+      newValue = event;
     } else {
+      // This event came from an `Input` component
       const { value } = event.target;
       if (typeof setting === 'number') {
         const numericValue = parseInt(value, 10);
@@ -161,7 +175,7 @@ export default function Setting({
       component = (
         <Checkbox
           key={settingKey}
-          onChange={() => debouncedHandleChange}
+          onCheckedChange={debouncedHandleChange}
           defaultChecked={setting}
         />
       );
