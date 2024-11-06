@@ -100,10 +100,10 @@ export default class RpcServer implements IRpcHandler {
     requestType: SerializedRequestType,
     requestParams: RequestParams,
   ): Promise<JSONRPCResponse> {
-    const requestId = this.createNextRequestId();
-    const requestToSend = createRequest(requestType, requestParams, requestId);
     return requestWithRetry(
       async () => {
+        const requestId = this.createNextRequestId();
+        const requestToSend = createRequest(requestType, requestParams, requestId);
         // Need to use null since it's part of the API
         // eslint-disable-next-line no-null/no-null
         let response: JSONRPCResponse | null = null;
