@@ -292,6 +292,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_NAME)
             return scrText.Name;
 
+        // Some resource projects are marked as editable in their settings, but we want to treat
+        // them as read-only projects
+        if (scrText.IsResourceProject && paratextSettingName == ProjectSettingsNames.PT_IS_EDITABLE)
+            return false;
+
         if (
             scrText.Settings.ParametersDictionary.TryGetValue(
                 paratextSettingName,
@@ -324,6 +329,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetProjectSetting(string settingName, object? value)
     {
         var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+        if (scrText.IsResourceProject)
+            throw new Exception("Cannot change settings on resources");
 
         // If there is no Paratext setting for the name given, we'll create one lower down
         object? currentValue = null;
