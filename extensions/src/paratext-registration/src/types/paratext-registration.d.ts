@@ -45,6 +45,12 @@ declare module 'papi-shared-types' {
     'paratextRegistration.setParatextRegistrationData': (
       newRegistrationData: RegistrationData,
     ) => Promise<void>;
+    /**
+     * Gets the validity status of the user's Paratext registration
+     *
+     * @returns True if the user has a valid Paratext registration, false otherwise
+     */
+    'command:paratextRegistration.doesUserHaveValidRegistration': () => Promise<boolean>;
   }
 
   export interface SettingTypes {

@@ -41,6 +41,17 @@ internal class ParatextRegistrationService(PapiClient papiClient)
             "command:paratextRegistration.setParatextRegistrationData",
             SetParatextRegistrationData
         );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.doesUserHaveValidRegistration",
+            () => RegistrationInfo.DefaultUser.IsValid
+        );
+
+        // Lookup localized strings where they may be needed by callers without access to PapiClient
+        RegistrationRequiredException.ExceptionMessage = LocalizationService.GetLocalizedString(
+            PapiClient,
+            "%paratextRegistration_exception_register_before_accessing_dbl_resources%",
+            RegistrationRequiredException.ExceptionMessage
+        );
     }
 
     #endregion
