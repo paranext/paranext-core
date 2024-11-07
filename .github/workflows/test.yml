@@ -54,8 +54,8 @@ jobs:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
-      - name: npm install
-        run: npm install
+      - name: Install packages
+        run: npm ci
 
       - name: Build
         run: npm run build
