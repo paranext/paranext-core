@@ -9,6 +9,7 @@ import {
   CloseWebViewEvent,
   UpdateWebViewEvent,
   WebViewServiceType,
+  getWebViewController,
 } from '@shared/services/web-view.service-model';
 import networkObjectService from '@shared/services/network-object.service';
 import networkObjectStatusService from './network-object-status.service';
@@ -66,6 +67,7 @@ const webViewService = createSyncProxyForAsyncObject<WebViewServiceType>(
     onDidAddWebView,
     onDidUpdateWebView,
     onDidCloseWebView,
+    getWebViewController,
   },
 );
 

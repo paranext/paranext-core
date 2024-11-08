@@ -2468,6 +2468,8 @@ declare module 'shared/services/web-view.service-model' {
   } from 'shared/models/web-view.model';
   import { Layout } from 'shared/models/docking-framework.model';
   import { PlatformEvent } from 'platform-bible-utils';
+  import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
+  import { NetworkObject } from 'shared/models/network-object.model';
   /**
    *
    * Service exposing various functions related to using webViews
@@ -2521,7 +2523,34 @@ declare module 'shared/services/web-view.service-model' {
      *   found
      */
     getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+    /**
+     * Get an existing web view controller for an open web view.
+     *
+     * A Web View Controller is a network object that represents a web view and whose methods
+     * facilitate communication between its associated web view and extensions that want to interact
+     * with it.
+     *
+     * Web View Controllers are registered on the web view provider service.
+     *
+     * @param webViewType Type of webview controller you expect to get. If the web view controller's
+     *   `webViewType` does not match this, an error will be thrown
+     * @param webViewId Id of web view for which to get the corresponding web view controller if one
+     *   exists
+     * @returns Web view controller with the given name if one exists, undefined otherwise
+     */
+    getWebViewController<WebViewType extends WebViewControllerTypes>(
+      webViewType: WebViewType,
+      webViewId: string,
+    ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   }
+  /** Gets the id for the web view controller network object with the given name */
+  export const getWebViewControllerObjectId: (webViewId: string) => string;
+  /** Network object type for web view controllers */
+  export const WEB_VIEW_CONTROLLER_OBJECT_TYPE = 'webViewController';
+  export function getWebViewController<WebViewType extends WebViewControllerTypes>(
+    webViewType: WebViewType,
+    webViewId: string,
+  ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   /** Name to use when creating a network event that is fired when webViews are created */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
   /** Event emitted when webViews are created */
@@ -2559,7 +2588,7 @@ declare module 'shared/services/web-view-provider.service' {
     IRegisteredWebViewProvider,
   } from 'shared/models/web-view-provider.model';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
-  import { DisposableNetworkObject, NetworkObject } from 'shared/models/network-object.model';
+  import { DisposableNetworkObject } from 'shared/models/network-object.model';
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
   /**
@@ -2593,10 +2622,13 @@ declare module 'shared/services/web-view-provider.service' {
   function get(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
   /**
    * Register a web view controller to represent a web view. It is expected that a web view provider
-   * calls this to register a web view controller for a web view that is being created.
+   * calls this to register a web view controller for a web view that is being created. If a web view
+   * provider extends {@link WebViewFactory}, it will call this function automatically.
    *
    * A Web View Controller is a network object that represents a web view and whose methods facilitate
    * communication between its associated web view and extensions that want to interact with it.
+   *
+   * You can get web view controllers with {@link webViewService.getWebViewController}.
    *
    * @param webViewType Type of web view for which you are providing this web view controller
    * @param webViewId Id of web view for which to register the web view controller
@@ -2612,34 +2644,16 @@ declare module 'shared/services/web-view-provider.service' {
     webViewId: string,
     webViewController: WebViewControllers[WebViewType],
   ): Promise<DisposableNetworkObject<WebViewControllers[WebViewType]>>;
-  /**
-   * Get an existing web view controller for an open web view.
-   *
-   * A Web View Controller is a network object that represents a web view and whose methods facilitate
-   * communication between its associated web view and extensions that want to interact with it.
-   *
-   * @param webViewType Type of webview controller you expect to get. If the web view controller's
-   *   `webViewType` does not match this, an error will be thrown
-   * @param webViewId Id of web view for which to get the corresponding web view controller if one
-   *   exists
-   * @returns Web view controller with the given name if one exists, undefined otherwise
-   */
-  function getWebViewController<WebViewType extends WebViewControllerTypes>(
-    webViewType: WebViewType,
-    webViewId: string,
-  ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   export interface WebViewProviderService {
     initialize: typeof initialize;
     hasKnown: typeof hasKnownWebViewProvider;
     register: typeof register;
     get: typeof get;
     registerWebViewController: typeof registerWebViewController;
-    getWebViewController: typeof getWebViewController;
   }
   export interface PapiWebViewProviderService {
     register: typeof register;
     registerWebViewController: typeof registerWebViewController;
-    getWebViewController: typeof getWebViewController;
   }
   const webViewProviderService: WebViewProviderService;
   /**

@@ -14,8 +14,12 @@ import logger from '@shared/services/logger.service';
 import { isSerializable } from 'platform-bible-utils';
 import networkObjectStatusService from '@shared/services/network-object-status.service';
 import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
-import { DisposableNetworkObject, NetworkObject } from '@shared/models/network-object.model';
-import webViewService from './web-view.service';
+import { DisposableNetworkObject } from '@shared/models/network-object.model';
+import webViewService from '@shared/services/web-view.service';
+import {
+  getWebViewControllerObjectId,
+  WEB_VIEW_CONTROLLER_OBJECT_TYPE,
+} from '@shared/services/web-view.service-model';
 
 /** Suffix on network objects that indicates that the network object is a web view provider */
 const WEB_VIEW_PROVIDER_LABEL = 'webViewProvider';
@@ -26,16 +30,6 @@ const getWebViewProviderObjectId = (webViewType: string) =>
 
 /** Network object type for web view providers */
 const WEB_VIEW_PROVIDER_OBJECT_TYPE = 'webViewProvider';
-
-/** Suffix on network objects that indicates that the network object is a web view controller */
-const WEB_VIEW_CONTROLLER_LABEL = 'webViewController';
-
-/** Gets the id for the web view controller network object with the given name */
-const getWebViewControllerObjectId = (webViewId: string) =>
-  `${WEB_VIEW_CONTROLLER_LABEL}${webViewId}`;
-
-/** Network object type for web view controllers */
-const WEB_VIEW_CONTROLLER_OBJECT_TYPE = 'webViewController';
 
 /**
  * Map of web view controllers by web view id. Used to dispose of web view controllers when their
@@ -194,10 +188,13 @@ function hasKnownWebViewController(webViewId: string): boolean {
 
 /**
  * Register a web view controller to represent a web view. It is expected that a web view provider
- * calls this to register a web view controller for a web view that is being created.
+ * calls this to register a web view controller for a web view that is being created. If a web view
+ * provider extends {@link WebViewFactory}, it will call this function automatically.
  *
  * A Web View Controller is a network object that represents a web view and whose methods facilitate
  * communication between its associated web view and extensions that want to interact with it.
+ *
+ * You can get web view controllers with {@link webViewService.getWebViewController}.
  *
  * @param webViewType Type of web view for which you are providing this web view controller
  * @param webViewId Id of web view for which to register the web view controller
@@ -241,52 +238,6 @@ async function registerWebViewController<WebViewType extends WebViewControllerTy
   return disposableWebViewController;
 }
 
-/**
- * Get an existing web view controller for an open web view.
- *
- * A Web View Controller is a network object that represents a web view and whose methods facilitate
- * communication between its associated web view and extensions that want to interact with it.
- *
- * @param webViewType Type of webview controller you expect to get. If the web view controller's
- *   `webViewType` does not match this, an error will be thrown
- * @param webViewId Id of web view for which to get the corresponding web view controller if one
- *   exists
- * @returns Web view controller with the given name if one exists, undefined otherwise
- */
-async function getWebViewController<WebViewType extends WebViewControllerTypes>(
-  webViewType: WebViewType,
-  webViewId: string,
-): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined> {
-  await initialize();
-
-  // Get the object id for this web view Controller name
-  const webViewControllerObjectId = getWebViewControllerObjectId(webViewType);
-
-  const webViewControllerDetails = await networkObjectStatusService.waitForNetworkObject(
-    { id: webViewControllerObjectId },
-    // Wait up to 20 seconds for the web view Controller to appear
-    20000,
-  );
-
-  if (
-    !webViewControllerDetails.attributes ||
-    webViewControllerDetails.attributes.webViewType !== webViewType
-  )
-    throw new Error(
-      `Found web view controller with network object id ${webViewControllerObjectId} for web view id ${webViewId}, but its type was not what was expected! Expected: ${webViewType}; received ${webViewControllerDetails.attributes?.webViewType}`,
-    );
-
-  const webViewController =
-    await networkObjectService.get<WebViewControllers[WebViewType]>(webViewControllerObjectId);
-
-  if (!webViewController) {
-    logger.info(`No WebView Controller found for WebView id ${webViewId} (type ${webViewType})`);
-    return undefined;
-  }
-
-  return webViewController;
-}
-
 // Declare interfaces for the objects we're exporting so that JSDoc comments propagate
 export interface WebViewProviderService {
   initialize: typeof initialize;
@@ -294,13 +245,11 @@ export interface WebViewProviderService {
   register: typeof register;
   get: typeof get;
   registerWebViewController: typeof registerWebViewController;
-  getWebViewController: typeof getWebViewController;
 }
 
 export interface PapiWebViewProviderService {
   register: typeof register;
   registerWebViewController: typeof registerWebViewController;
-  getWebViewController: typeof getWebViewController;
 }
 
 const webViewProviderService: WebViewProviderService = {
@@ -309,7 +258,6 @@ const webViewProviderService: WebViewProviderService = {
   register,
   get,
   registerWebViewController,
-  getWebViewController,
 };
 
 /**
@@ -320,7 +268,6 @@ const webViewProviderService: WebViewProviderService = {
 export const papiWebViewProviderService: PapiWebViewProviderService = {
   register,
   registerWebViewController,
-  getWebViewController,
 };
 
 export default webViewProviderService;

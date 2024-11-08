@@ -7,6 +7,11 @@ import {
 import { Layout } from '@shared/models/docking-framework.model';
 import { PlatformEvent } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
+import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
+import { NetworkObject } from '@shared/models/network-object.model';
+import networkObjectStatusService from '@shared/services/network-object-status.service';
+import networkObjectService from '@shared/services/network-object.service';
+import logger from '@shared/services/logger.service';
 
 /**
  * JSDOC SOURCE papiWebViewService
@@ -68,10 +73,73 @@ export interface WebViewServiceType {
    *   found
    */
   getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+
+  /**
+   * Get an existing web view controller for an open web view.
+   *
+   * A Web View Controller is a network object that represents a web view and whose methods
+   * facilitate communication between its associated web view and extensions that want to interact
+   * with it.
+   *
+   * Web View Controllers are registered on the web view provider service.
+   *
+   * @param webViewType Type of webview controller you expect to get. If the web view controller's
+   *   `webViewType` does not match this, an error will be thrown
+   * @param webViewId Id of web view for which to get the corresponding web view controller if one
+   *   exists
+   * @returns Web view controller with the given name if one exists, undefined otherwise
+   */
+  getWebViewController<WebViewType extends WebViewControllerTypes>(
+    webViewType: WebViewType,
+    webViewId: string,
+  ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
 }
 
 /** Prefix on requests that indicates that the request is related to webView operations */
 const CATEGORY_WEB_VIEW = 'webView';
+
+/** Suffix on network objects that indicates that the network object is a web view controller */
+const WEB_VIEW_CONTROLLER_LABEL = 'webViewController';
+
+/** Gets the id for the web view controller network object with the given name */
+export const getWebViewControllerObjectId = (webViewId: string) =>
+  `${WEB_VIEW_CONTROLLER_LABEL}${webViewId}`;
+
+/** Network object type for web view controllers */
+export const WEB_VIEW_CONTROLLER_OBJECT_TYPE = 'webViewController';
+
+// See `WebViewServiceType` for explanation
+export async function getWebViewController<WebViewType extends WebViewControllerTypes>(
+  webViewType: WebViewType,
+  webViewId: string,
+): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined> {
+  // Get the object id for this web view Controller name
+  const webViewControllerObjectId = getWebViewControllerObjectId(webViewType);
+
+  const webViewControllerDetails = await networkObjectStatusService.waitForNetworkObject(
+    { id: webViewControllerObjectId },
+    // Wait up to 20 seconds for the web view Controller to appear
+    20000,
+  );
+
+  if (
+    !webViewControllerDetails.attributes ||
+    webViewControllerDetails.attributes.webViewType !== webViewType
+  )
+    throw new Error(
+      `Found web view controller with network object id ${webViewControllerObjectId} for web view id ${webViewId}, but its type was not what was expected! Expected: ${webViewType}; received ${webViewControllerDetails.attributes?.webViewType}`,
+    );
+
+  const webViewController =
+    await networkObjectService.get<WebViewControllers[WebViewType]>(webViewControllerObjectId);
+
+  if (!webViewController) {
+    logger.info(`No WebView Controller found for WebView id ${webViewId} (type ${webViewType})`);
+    return undefined;
+  }
+
+  return webViewController;
+}
 
 /** Name to use when creating a network event that is fired when webViews are created */
 export const EVENT_NAME_ON_DID_ADD_WEB_VIEW = serializeRequestType(

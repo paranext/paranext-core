@@ -51,6 +51,7 @@ import {
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+  getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   UpdateWebViewEvent,
   WebViewServiceType,
@@ -792,14 +793,14 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
 
 // #endregion
 
-// #region Set up global variables to use in `getWebView`'s `imports` below
+// #region Set up global variables to use in `openWebView`'s `imports` below
 
 globalThis.getSavedWebViewDefinitionById = getSavedWebViewDefinitionSync;
 globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 
 // #endregion
 
-// #region getWebView
+// #region openWebView
 
 /**
  * Creates a new web view or gets an existing one depending on if you request an existing one and if
@@ -1323,6 +1324,7 @@ const papiWebViewService: WebViewServiceType = {
   openWebView,
   getSavedWebViewDefinition: getOpenWebViewDefinition,
   getOpenWebViewDefinition,
+  getWebViewController,
 };
 
 async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
