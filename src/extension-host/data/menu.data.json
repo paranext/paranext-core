@@ -31,7 +31,7 @@
         "localizeNotes": "Application main menu > Project > Download/Install Resources",
         "group": "platform.projectResources",
         "order": 1,
-        "command": "platform.downloadAndInstallResources"
+        "command": "paratextBibleDownloadResources.openDownloadResources"
       },
       {
         "label": "%mainMenu_settings%",

@@ -30,7 +30,7 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
       localizeNotes: 'Main application menu > Paratext column > Download/Install Resources',
       group: 'paratext.sendReceive',
       order: 1,
-      command: 'platform.downloadAndInstallResources',
+      command: 'paratextBibleDownloadResources.openDownloadResources',
     },
     {
       label: 'Open Project...',

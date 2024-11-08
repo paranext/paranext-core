@@ -1,6 +1,7 @@
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paranext.DataProvider.Services;
 using Paranext.DataProvider.Users;
 using Paratext.Data;
@@ -32,10 +33,12 @@ public static class Program
 
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi);
+            var downloadResources = new DblDownloadableDataProvider(papi);
             var paratextRegistrationService = new ParatextRegistrationService(papi);
             await Task.WhenAll(
                 paratextFactory.InitializeAsync(),
                 checkRunner.RegisterDataProviderAsync(),
+                downloadResources.InitializeAsync(),
                 paratextRegistrationService.InitializeAsync()
             );
 
