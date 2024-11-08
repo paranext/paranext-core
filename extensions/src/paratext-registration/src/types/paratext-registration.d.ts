@@ -50,7 +50,7 @@ declare module 'papi-shared-types' {
      *
      * @returns True if the user has a valid Paratext registration, false otherwise
      */
-    'command:paratextRegistration.doesUserHaveValidRegistration': () => Promise<boolean>;
+    'paratextRegistration.doesUserHaveValidRegistration': () => Promise<boolean>;
   }
 
   export interface SettingTypes {
