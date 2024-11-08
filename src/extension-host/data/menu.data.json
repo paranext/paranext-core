@@ -22,7 +22,8 @@
       "platform.projectMisc": { "column": "platform.project", "order": 4 },
       "platform.windowGroup": { "column": "platform.window", "order": 1 },
       "platform.layoutGroup": { "column": "platform.layout", "order": 1 },
-      "platform.helpMisc": { "column": "platform.help", "order": 1 }
+      "platform.helpRegistration": { "column": "platform.help", "order": 1, "isExtensible": true },
+      "platform.helpMisc": { "column": "platform.help", "order": 2 }
     },
     "items": [
       {

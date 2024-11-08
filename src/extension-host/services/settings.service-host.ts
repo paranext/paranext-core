@@ -187,16 +187,12 @@ class SettingDataProviderEngine
       // If there is no validator just let the change go through
       return true;
     }
+    const requestType = serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key);
     try {
-      return await networkService.request(
-        serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key),
-        newValue,
-        currentValue,
-        allChanges ?? {},
-      );
+      return await networkService.request(requestType, newValue, currentValue, allChanges ?? {});
     } catch (error) {
       // If there is no validator just let the change go through
-      const missingValidatorMsg = `No handler was found to process the request of type`;
+      const missingValidatorMsg = `'${requestType}' not found`;
       if (includes(`${error}`, missingValidatorMsg)) return true;
       throw error;
     }

@@ -33,7 +33,7 @@
     "appdata",
     "asyncs",
     "autodocs",
-    "BBBCCCVVV",
+    "bbbcccvvv",
     "biblionexus",
     "camelcase",
     "consts",
@@ -51,6 +51,7 @@
     "iusfm",
     "iusj",
     "iusx",
+    "jsonrpcid",
     "localizable",
     "localstorage",
     "maximizable",
@@ -73,6 +74,7 @@
     "reserialized",
     "shadcn",
     "sillsdev",
+    "sldr",
     "sonner",
     "steenwyk",
     "stringifiable",
@@ -92,7 +94,8 @@
     "usfm",
     "verseref",
     "versification",
-    "vref"
+    "vref",
+    "vsthrd"
   ],
   "ignoreWords": [],
   "import": []

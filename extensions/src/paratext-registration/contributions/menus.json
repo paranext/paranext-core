@@ -1,0 +1,25 @@
+{
+  "mainMenu": {
+    "columns": {},
+    "groups": {},
+    "items": [
+      {
+        "label": "%mainMenu_openParatextRegistration%",
+        "localizeNotes": "Application main menu > Help > Paratext Registration Information...",
+        "group": "platform.helpRegistration",
+        "order": 1006,
+        "command": "paratextRegistration.showParatextRegistration"
+      }
+    ]
+  },
+  "defaultWebViewTopMenu": {
+    "columns": {},
+    "groups": {},
+    "items": []
+  },
+  "defaultWebViewContextMenu": {
+    "groups": {},
+    "items": []
+  },
+  "webViewMenus": {}
+}

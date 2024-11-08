@@ -1,18 +1,27 @@
 import {
+  Comments,
   EditorOptions,
   Editorial,
   EditorRef,
   Marginal,
   MarginalRef,
 } from '@biblionexus-foundation/platform-editor';
-import { Usj } from '@biblionexus-foundation/scripture-utilities';
+import { MarkerContent, Usj } from '@biblionexus-foundation/scripture-utilities';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
-import { useProjectData, useProjectSetting } from '@papi/frontend/react';
-import { ScriptureReference, debounce } from 'platform-bible-utils';
+import { useProjectData, useProjectSetting, useSetting } from '@papi/frontend/react';
+import { deepClone, ScriptureReference, UsjReaderWriter } from 'platform-bible-utils';
 import { Button } from 'platform-bible-react';
+import { LegacyComment } from 'legacy-comment-manager';
+import {
+  convertEditorCommentsToLegacyComments,
+  convertLegacyCommentsToEditorThreads,
+  insertCommentAnchorsIntoUsj,
+  MILESTONE_END,
+  MILESTONE_START,
+} from './comments';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -65,12 +74,13 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useWebViewScrollGroupScrRef,
 }: WebViewProps): JSX.Element {
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
-  const Editor = isReadOnly ? Editorial : Marginal;
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
   const [scrRef, setScrRefInternal] = useWebViewScrollGroupScrRef();
+
+  const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
 
   /**
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
@@ -92,45 +102,171 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const [usj, setUsj] = useProjectData('platformScripture.USJ_Chapter', projectId).ChapterUSJ(
+  const [usjFromPdp, saveUsjToPdpRaw] = useProjectData(
+    'platformScripture.USJ_Chapter',
+    projectId,
+  ).ChapterUSJ(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
     usjDocumentDefault,
   );
 
-  const debouncedSetUsj = useMemo(() => debounce((newUsj: Usj) => setUsj?.(newUsj), 300), [setUsj]);
-
-  // Editor's current usj state
-  const editorUsj = useRef(usj);
-
-  // TODO: remove debounce when issue #826 is done.
-  const onUsjChange = useCallback(
+  const usjSentToPdp = useRef(usjFromPdp);
+  const currentlyWritingUsjToPdp = useRef(false);
+  const saveUsjToPdp = useCallback(
     (newUsj: Usj) => {
-      editorUsj.current = newUsj;
-      debouncedSetUsj(newUsj);
+      if (!saveUsjToPdpRaw) return;
+
+      // Don't start writing to the PDP again if we're in the middle of writing now
+      if (currentlyWritingUsjToPdp.current) return;
+
+      // Remove the milestones that we inserted before writing back to the PDP
+      const clonedUsj = deepClone(newUsj);
+      const usjRW = new UsjReaderWriter(clonedUsj);
+      usjRW.removeContentNodes((node: MarkerContent) => {
+        if (typeof node === 'string') return false;
+        if (node.type !== 'ms') return false;
+        return node.marker === MILESTONE_START || node.marker === MILESTONE_END;
+      });
+
+      // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
+      currentlyWritingUsjToPdp.current = true;
+      usjSentToPdp.current = clonedUsj;
+      saveUsjToPdpRaw(clonedUsj);
     },
-    [debouncedSetUsj],
+    [saveUsjToPdpRaw],
   );
 
-  // Update the editor if a change comes in
+  const [legacyCommentsFromPdp, saveLegacyCommentsToPdp] = useProjectData(
+    'legacyCommentManager.comments',
+    projectId,
+  ).Comments(
+    useMemo(() => {
+      return { bookId: Canon.bookNumberToId(scrRef.bookNum), chapterNum: scrRef.chapterNum };
+    }, [scrRef]),
+    [],
+  );
+
+  /**
+   * Write the latest comments back to the PDP. We need `usjWithAnchors` to know where (e.g., verse
+   * refs) the latest comments are in scripture text.
+   */
+  const saveCommentsToPdp = useCallback(
+    (
+      newComments: Comments | undefined,
+      usjWithAnchors: Usj | undefined = editorRef.current?.getUsj(),
+    ) => {
+      // Cannot convert between legacy and current comments without access to corresponding USJ
+      if (!usjWithAnchors) {
+        logger.warn('Updating comments without providing USJ');
+        return;
+      }
+      // We aren't currently overwriting comments, so if it's empty we have nothing to do
+      if (!newComments) {
+        logger.debug('Updating comments, but the comments are empty');
+        return;
+      }
+      // If we can't save a newly merged set of comments, we have nothing to do
+      if (!saveLegacyCommentsToPdp) {
+        logger.warn('Updating comments without a way to save the comments to a PDP');
+        return;
+      }
+
+      // Record all the IDs of previously known comments
+      const legacyCommentIds = new Set<string>();
+      legacyCommentsFromPdp.forEach((existingComment) => legacyCommentIds.add(existingComment.id));
+
+      // Determine which "new" comments are actually new
+      const usjRW = new UsjReaderWriter(usjWithAnchors);
+      const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);
+      const legacyCommentsToAdd: LegacyComment[] = [];
+      newLegacyComments.forEach((newComment) => {
+        if (!legacyCommentIds.has(newComment.id)) legacyCommentsToAdd.push(newComment);
+      });
+
+      // Nothing to do
+      if (legacyCommentsToAdd.length === 0) return;
+
+      // Save the new comments to the data provider
+      const newCommentArray = [...legacyCommentsFromPdp, ...legacyCommentsToAdd];
+      saveLegacyCommentsToPdp(newCommentArray);
+    },
+    [legacyCommentsFromPdp, scrRef, saveLegacyCommentsToPdp],
+  );
+
+  /**
+   * Modify `newUsj` to include anchors that the editor uses to highlight text where a comment
+   * should be. The source of the comments is the legacy comment PDP.
+   */
+  const insertCommentAnchors = useCallback(
+    (newUsj: Usj) => {
+      try {
+        insertCommentAnchorsIntoUsj(newUsj, legacyCommentsFromPdp);
+        // Getting more information about the error
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } catch (error: any) {
+        logger.debug(`Error inserting anchors into USJ: ${error}, stack = ${error.stack}"`);
+      }
+    },
+    [legacyCommentsFromPdp],
+  );
+
+  const onUsjAndCommentsChange = useCallback(
+    (newUsjFromEditor: Usj, newCommentsFromEditor: Comments | undefined) => {
+      saveCommentsToPdp(newCommentsFromEditor, newUsjFromEditor);
+      saveUsjToPdp(newUsjFromEditor);
+    },
+    [saveUsjToPdp, saveCommentsToPdp],
+  );
+
+  // This should only be used in the following `useEffect`
+  const mostRecentlySetLegacyComments = useRef(legacyCommentsFromPdp);
+
+  // Update the editor if a change comes in from the PDP
   useEffect(() => {
-    // Deep compare the old and current state of the usj to make sure we don't change the editor's
-    // state without a need. Note that it already does that internally using a different algorithm,
-    // but we need to compare in such a way that the same object across iframes works fine
-    if (usj && !deepEqualAcrossIframes(usj, editorUsj.current)) {
-      editorUsj.current = usj;
-      editorRef.current?.setUsj(usj);
+    if (!usjFromPdp || !legacyCommentsFromPdp || !editorRef.current) return;
+
+    // The PDP informed us of updates, so writing to it must be complete (if we were writing)
+    currentlyWritingUsjToPdp.current = false;
+
+    // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
+    const usjFromPdpWithAnchors = deepClone(usjFromPdp);
+    insertCommentAnchors(usjFromPdpWithAnchors);
+
+    // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
+    // has the best data. This could happen if the selected chapter changed or something other than
+    // the editor wrote to the PDP.
+    if (!deepEqualAcrossIframes(usjFromPdpWithAnchors, usjSentToPdp.current)) {
+      usjSentToPdp.current = usjFromPdpWithAnchors;
+      editorRef.current.setUsj(usjFromPdpWithAnchors);
     }
-  }, [usj]);
+    // If the editor has updates that the PDP hasn't recorded, save them to the PDP
+    else {
+      const editorUsj = editorRef.current.getUsj();
+      if (editorUsj && !deepEqualAcrossIframes(usjFromPdpWithAnchors, editorUsj))
+        saveUsjToPdp(editorUsj);
+    }
+
+    // Make sure the editor has the latest comment data from the PDP
+    if (
+      'setComments' in editorRef.current &&
+      !deepEqualAcrossIframes(legacyCommentsFromPdp, mostRecentlySetLegacyComments.current)
+    ) {
+      const threads = convertLegacyCommentsToEditorThreads(legacyCommentsFromPdp);
+      mostRecentlySetLegacyComments.current = legacyCommentsFromPdp;
+      // The editor's USJ needs to have anchors for these comments or the editor will error
+      editorRef.current.setComments?.(threads);
+    }
+  }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdp, usjFromPdp]);
 
   // On loading the first time, scroll the selected verse into view
   useEffect(() => {
-    if (usj && !hasFirstRetrievedScripture.current) {
+    if (usjFromPdp && !hasFirstRetrievedScripture.current) {
       hasFirstRetrievedScripture.current = true;
       // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
       setTimeout(() => scrollToScrRef(scrRef), EDITOR_LOAD_DELAY_TIME);
     }
-  }, [usj, scrRef]);
+  }, [usjFromPdp, scrRef]);
 
   // Scroll the selected verse into view
   useEffect(() => {
@@ -178,15 +314,47 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [isReadOnly, projectName, scrRef],
   );
 
+  if (isReadOnly) {
+    return (
+      <>
+        {/* Workaround to pull in platform-bible-react styles into the editor */}
+        <Button className="tw-hidden" />
+        <Editorial
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRef}
+          options={options}
+          logger={logger}
+        />
+      </>
+    );
+  }
+  if (commentsEnabled) {
+    return (
+      <>
+        {/* Workaround to pull in platform-bible-react styles into the editor */}
+        <Button className="tw-hidden" />
+        <Marginal
+          ref={editorRef}
+          scrRef={scrRef}
+          onScrRefChange={setScrRef}
+          onUsjChange={onUsjAndCommentsChange}
+          onCommentChange={saveCommentsToPdp}
+          options={options}
+          logger={logger}
+        />
+      </>
+    );
+  }
   return (
     <>
       {/* Workaround to pull in platform-bible-react styles into the editor */}
       <Button className="tw-hidden" />
-      <Editor
+      <Editorial
         ref={editorRef}
         scrRef={scrRef}
         onScrRefChange={setScrRef}
-        onUsjChange={isReadOnly ? undefined : onUsjChange}
+        onUsjChange={saveUsjToPdp}
         options={options}
         logger={logger}
       />

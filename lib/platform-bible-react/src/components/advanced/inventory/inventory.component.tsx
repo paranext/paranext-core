@@ -1,6 +1,13 @@
-import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { LocalizedStringValue, ScriptureReference } from 'platform-bible-utils';
+import DataTable, {
+  ColumnDef,
+  RowContents,
+  RowSelectionState,
+  TableContents,
+} from '@/components/advanced/data-table/data-table.component';
+import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
+import Checkbox from '@/components/shadcn-ui/checkbox';
 import { Input } from '@/components/shadcn-ui/input';
+import { Label } from '@/components/shadcn-ui/label';
 import {
   Select,
   SelectContent,
@@ -8,14 +15,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import DataTable, {
-  ColumnDef,
-  RowContents,
-  SortDirection,
-  TableContents,
-} from '@/components/advanced/data-table/data-table.component';
-import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
-import { ArrowDownIcon, ArrowUpDownIcon, ArrowUpIcon } from 'lucide-react';
+import {
+  deepEqual,
+  LocalizedStringValue,
+  ScriptureReference,
+  substring,
+} from 'platform-bible-utils';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  getBookNumFromId,
+  getLinesFromUSFM,
+  getNumberFromUSFM,
+  getStatusForItem,
+  InventoryItemOccurrence,
+  InventoryTableData,
+  Status,
+} from './inventory-utils';
+import { inventoryAdditionalItemColumn } from './inventory-columns';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -31,6 +47,7 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
   '%webView_inventory_scope_chapter%',
   '%webView_inventory_scope_verse%',
   '%webView_inventory_filter_text%',
+  '%webView_inventory_show_additional_items%',
   '%webView_inventory_occurrences_table_header_reference%',
   '%webView_inventory_occurrences_table_header_occurrence%',
 ] as const);
@@ -39,39 +56,22 @@ export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
+/** Scope of scripture that the inventory can operate on */
 export type Scope = 'book' | 'chapter' | 'verse';
 
-export type Status = 'approved' | 'unapproved' | 'unknown';
+/** Status values that the status filter can select from */
+type StatusFilter = Status | 'all';
 
-export type StatusFilter = Status | 'all';
-
-export type ItemData = {
-  item: string;
-  count: number;
-  status: Status;
+/** Text labels for the inventory columns and the control components of additional inventory items */
+type AdditionalItemsLabels = {
+  checkboxText?: string;
+  tableHeaders?: string[];
 };
 
 /**
- * Gets an icon that indicates the current sorting direction based on the provided input
+ * Filters data that is shown in the DataTable section of the Inventory
  *
- * @param sortDirection Sorting direction. Can be ascending ('asc'), descending ('desc') or false (
- *   i.e. not sorted)
- * @returns The appropriate sorting icon for the provided sorting direction
- */
-export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode => {
-  if (sortDirection === 'asc') {
-    return <ArrowUpIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
-  }
-  if (sortDirection === 'desc') {
-    return <ArrowDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
-  }
-  return <ArrowUpDownIcon className="tw-ms-2 tw-h-4 tw-w-4" />;
-};
-
-/**
- * Filters data that is shown in the DataTable section of the inventory
- *
- * @param items All items and their related information
+ * @param itemData All inventory items and their related information
  * @param statusFilter Allows filtering by status (i.e. show all items, or only items that are
  *   'approved', 'unapproved' or 'unknown')
  * @param textFilter Allows filtering by text. All items that include the filter text will be
@@ -79,11 +79,11 @@ export const getSortingIcon = (sortDirection: false | SortDirection): ReactNode 
  * @returns Array of items and their related information that are matched by the specified filters
  */
 const filterItemData = (
-  items: ItemData[],
+  itemData: InventoryTableData[],
   statusFilter: StatusFilter,
   textFilter: string,
-): ItemData[] => {
-  let filteredItemData: ItemData[] = items;
+): InventoryTableData[] => {
+  let filteredItemData: InventoryTableData[] = itemData;
 
   if (statusFilter !== 'all') {
     filteredItemData = filteredItemData.filter(
@@ -95,47 +95,88 @@ const filterItemData = (
   }
 
   if (textFilter !== '')
-    filteredItemData = filteredItemData.filter((item) => item.item.includes(textFilter));
+    filteredItemData = filteredItemData.filter((item) => item.items[0].includes(textFilter));
 
   return filteredItemData;
 };
 
 /**
- * Turns scripture text into array of inventory items, along with their count and status
+ * Turns array of strings into array of inventory items, along with their count and status
  *
- * @param text Scripture text from which the inventory items are extracted
- * @param getInventoryItems Function that provides logic for extracting inventory items from text
- * @param getStatusForItem Function that gets status for inventory item from related project
- *   settings
+ * @param text The source scripture text that is searched for inventory items
+ * @param scriptureRef The scripture reference that the application is currently set to
+ * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
+ * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
+ * @param itemRegex Regular expression that describes what items this Inventory should extract from
+ *   the provided scripture text
  * @returns Array of inventory items, along with their count and status
  */
-const convertTextToItemData = (
-  text: string,
-  getInventoryItems: (text: string) => string[],
-  getStatusForItem: (item: string) => Status,
-): ItemData[] => {
-  const itemData: ItemData[] = [];
+const createTableData = (
+  text: string | undefined,
+  scriptureRef: ScriptureReference,
+  approvedItems: string[],
+  unapprovedItems: string[],
+  itemRegex: RegExp,
+): InventoryTableData[] => {
+  if (!text) return [];
 
-  const items: string[] = getInventoryItems(text);
+  const tableData: InventoryTableData[] = [];
 
-  for (let itemIndex = 0; itemIndex < items.length; itemIndex++) {
-    const item = items[itemIndex];
-    const existingItem = itemData.find((entry) => {
-      return entry.item === item;
-    });
-    if (existingItem) {
-      existingItem.count += 1;
-    } else {
-      const newItem: ItemData = {
-        item,
-        count: 1,
-        status: getStatusForItem(item),
-      };
-      itemData.push(newItem);
+  let currentBook: number | undefined = scriptureRef.bookNum;
+  let currentChapter: number | undefined = scriptureRef.chapterNum;
+  let currentVerse: number | undefined = scriptureRef.verseNum;
+
+  const lines = getLinesFromUSFM(text);
+
+  lines.forEach((line: string) => {
+    if (line.startsWith('\\id')) {
+      currentBook = getBookNumFromId(line);
+      currentChapter = 0;
+      currentVerse = 0;
     }
-  }
+    if (line.startsWith('\\c')) {
+      currentChapter = getNumberFromUSFM(line);
+      currentVerse = 0;
+    }
+    if (line.startsWith('\\v')) {
+      currentVerse = getNumberFromUSFM(line);
+      if (currentChapter === 0) {
+        currentChapter = scriptureRef.chapterNum;
+      }
+    }
 
-  return itemData;
+    let match: RegExpExecArray | undefined = itemRegex.exec(line) ?? undefined;
+    while (match) {
+      const items: string[] = [];
+      match.forEach((item) => items.push(item));
+      const itemIndex = match.index;
+      const existingItem = tableData.find((tableEntry) => deepEqual(tableEntry.items, items));
+      const newReference: InventoryItemOccurrence = {
+        reference: {
+          bookNum: currentBook !== undefined ? currentBook : -1,
+          chapterNum: currentChapter !== undefined ? currentChapter : -1,
+          verseNum: currentVerse !== undefined ? currentVerse : -1,
+        },
+        text: substring(line, Math.max(0, itemIndex - 25), Math.min(itemIndex + 25, line.length)),
+      };
+      if (existingItem) {
+        existingItem.count += 1;
+        existingItem.occurrences.push(newReference);
+      } else {
+        const newItem: InventoryTableData = {
+          items,
+          count: 1,
+          status: getStatusForItem(items[0], approvedItems, unapprovedItems),
+          occurrences: [newReference],
+        };
+        tableData.push(newItem);
+      }
+
+      match = itemRegex.exec(line) ?? undefined;
+    }
+  });
+
+  return tableData;
 };
 
 /**
@@ -153,21 +194,57 @@ const localizeString = (
   return strings[key] ?? key;
 };
 
+/** Props for the Inventory component */
 type InventoryProps = {
+  /** The scripture reference that the application is currently set to */
   scriptureReference: ScriptureReference;
+  /** Callback function that is executed when the scripture reference is changed */
   setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  /**
+   * Object with all localized strings that the Inventory needs to work well across multiple
+   * languages. When using this component with Platform.Bible, you can import
+   * `INVENTORY_STRING_KEYS` from this library, pass it in to the Platform's localization hook, and
+   * pass the localized keys that are returned by the hook into this prop.
+   */
   localizedStrings: InventoryLocalizedStrings;
-  extractItems: (text: string, item?: string | undefined) => string[];
+  /**
+   * The logic that finds the desired items in the source text. This can either be a Regular
+   * expression that captures one or multiple items (preferred), or a custom function that builds
+   * and return an InventoryDataTable[] manually. Note: In case the logic captures more than one
+   * item (i.e. InventoryTableData.items has a length greater than 1), you must provide text labels
+   * for the related columns and control elements to show by setting the `additionalItemsLabels`
+   * prop
+   */
+  extractItems:
+    | RegExp
+    | ((
+        text: string | undefined,
+        scriptureRef: ScriptureReference,
+        approvedItems: string[],
+        unapprovedItems: string[],
+      ) => InventoryTableData[]);
+  /**
+   * Text labels for control elements and additional column headers in case your Inventory has more
+   * than one item to show (e.g. The 'Preceding Marker' in the Markers Inventory)
+   */
+  additionalItemsLabels?: AdditionalItemsLabels;
+  /** Array of approved items, typically as defined in `Settings.xml` */
   approvedItems: string[];
-  onApprovedItemsChange: (items: string[]) => void;
+  /** Array of unapproved items, typically as defined in `Settings.xml` */
   unapprovedItems: string[];
-  onUnapprovedItemsChange: (items: string[]) => void;
+  /** The source scripture text that is searched for in inventory items */
   text: string | undefined;
+  /** Scope of scripture that the inventory will operate on */
   scope: Scope;
+  /** Callback function that is executed when the scope is changed from the Inventory */
   onScopeChange: (scope: Scope) => void;
-  getColumns: (
-    onStatusChange: (newItems: string[], status: Status) => void,
-  ) => ColumnDef<ItemData>[];
+  /**
+   * Column definitions for the Inventory data table. The most commonly used column definitions are
+   * pre-configured for your convenience and can be imported (e.g. inventoryItemColumn,
+   * inventoryAdditionalItemColumn inventoryCountColumn, and inventoryStatusColumn). If you need any
+   * other columns you can add these yourself
+   */
+  columns: ColumnDef<InventoryTableData>[];
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -176,14 +253,13 @@ export default function Inventory({
   setScriptureReference,
   localizedStrings,
   extractItems,
+  additionalItemsLabels,
   approvedItems,
-  onApprovedItemsChange,
   unapprovedItems,
-  onUnapprovedItemsChange,
   text,
   scope,
   onScopeChange,
-  getColumns,
+  columns,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -193,85 +269,97 @@ export default function Inventory({
   const scopeChapterText = localizeString(localizedStrings, '%webView_inventory_scope_chapter%');
   const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
+  const showAdditionalItemsText = localizeString(
+    localizedStrings,
+    '%webView_inventory_show_additional_items%',
+  );
 
-  const [items, setItems] = useState<ItemData[]>([]);
+  const [showAdditionalItems, setShowAdditionalItems] = useState<boolean>(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [textFilter, setTextFilter] = useState<string>('');
-  const [selectedItem, setSelectedItem] = useState<string>('');
+  const [selectedItem, setSelectedItem] = useState<string[]>([]);
 
-  const statusChangeHandler = useCallback(
-    (changedItems: string[], status: Status) => {
-      setItems((prevTableData) => {
-        let tableData: ItemData[] = [];
-        changedItems.forEach((item) => {
-          tableData = prevTableData.map((tableEntry) => {
-            if (tableEntry.item === item && tableEntry.status !== status)
-              return { ...tableEntry, status };
-            return tableEntry;
-          });
+  const tableData: InventoryTableData[] = useMemo(() => {
+    if (!text) return [];
+    if (extractItems instanceof RegExp)
+      return createTableData(
+        text,
+        scriptureReference,
+        approvedItems,
+        unapprovedItems,
+        extractItems,
+      );
+    return extractItems(text, scriptureReference, approvedItems, unapprovedItems);
+  }, [text, extractItems, scriptureReference, approvedItems, unapprovedItems]);
+
+  const reducedTableData: InventoryTableData[] = useMemo(() => {
+    if (showAdditionalItems) return tableData;
+
+    const newTableData: InventoryTableData[] = [];
+
+    tableData.forEach((tableEntry) => {
+      const firstItem = tableEntry.items[0];
+
+      const existingEntry = newTableData.find(
+        (newTableEntry) => newTableEntry.items[0] === firstItem,
+      );
+
+      if (existingEntry) {
+        existingEntry.count += tableEntry.count;
+        existingEntry.occurrences = existingEntry.occurrences.concat(tableEntry.occurrences);
+      } else {
+        newTableData.push({
+          items: [firstItem],
+          count: tableEntry.count,
+          occurrences: tableEntry.occurrences,
+          status: tableEntry.status,
         });
-        return tableData;
-      });
+      }
+    });
 
-      let newApprovedItems: string[] = [...approvedItems];
-      changedItems.forEach((item) => {
-        if (status === 'approved') {
-          if (!newApprovedItems.includes(item)) {
-            newApprovedItems.push(item);
-          }
-        } else {
-          newApprovedItems = newApprovedItems.filter((validItem) => validItem !== item);
-        }
-      });
-      onApprovedItemsChange(newApprovedItems);
+    return newTableData;
+  }, [showAdditionalItems, tableData]);
 
-      let newUnapprovedItems: string[] = [...unapprovedItems];
-      changedItems.forEach((item) => {
-        if (status === 'unapproved') {
-          if (!newUnapprovedItems.includes(item)) {
-            newUnapprovedItems.push(item);
-          }
-        } else {
-          newUnapprovedItems = newUnapprovedItems.filter(
-            (unapprovedItem) => unapprovedItem !== item,
-          );
-        }
-      });
-      onUnapprovedItemsChange(newUnapprovedItems);
-    },
-    [approvedItems, onApprovedItemsChange, unapprovedItems, onUnapprovedItemsChange],
-  );
+  const filteredTableData: InventoryTableData[] = useMemo(() => {
+    return filterItemData(reducedTableData, statusFilter, textFilter);
+  }, [reducedTableData, statusFilter, textFilter]);
 
-  const getStatusForItem = useCallback(
-    (item: string): Status => {
-      if (approvedItems.includes(item)) return 'approved';
-      if (unapprovedItems.includes(item)) return 'unapproved';
-      return 'unknown';
-    },
-    [approvedItems, unapprovedItems],
-  );
+  const allColumns: ColumnDef<InventoryTableData>[] = useMemo(() => {
+    if (!showAdditionalItems) return columns;
+
+    const numberOfAdditionalItems = additionalItemsLabels?.tableHeaders?.length;
+    if (!numberOfAdditionalItems) return columns;
+
+    const additionalColumns: ColumnDef<InventoryTableData>[] = [];
+
+    for (let index = 0; index < numberOfAdditionalItems; index++) {
+      additionalColumns.push(
+        inventoryAdditionalItemColumn(
+          additionalItemsLabels?.tableHeaders?.[index] || 'Additional Item',
+          index + 1,
+        ),
+      );
+    }
+
+    return [...additionalColumns, ...columns];
+  }, [additionalItemsLabels?.tableHeaders, columns, showAdditionalItems]);
 
   useEffect(() => {
-    if (!text) return;
-    setItems(convertTextToItemData(text, extractItems, getStatusForItem));
-  }, [extractItems, text, getStatusForItem]);
+    setSelectedItem([]);
+  }, [filteredTableData]);
 
-  const filteredItemData = useMemo(() => {
-    return filterItemData(items, statusFilter, textFilter);
-  }, [items, statusFilter, textFilter]);
+  const rowClickHandler = (
+    row: RowContents<InventoryTableData>,
+    table: TableContents<InventoryTableData>,
+  ) => {
+    table.setRowSelection(() => {
+      const newSelection: RowSelectionState = {};
+      newSelection[row.index] = true;
+      return newSelection;
+    });
 
-  useEffect(() => {
-    setSelectedItem('');
-  }, [filteredItemData]);
-
-  const rowClickHandler = (row: RowContents<ItemData>, table: TableContents<ItemData>) => {
-    table.toggleAllRowsSelected(false); // this is pretty hacky, and also prevents us from selecting multiple rows
-    row.toggleSelected(undefined);
-
-    setSelectedItem(row.getValue('item'));
+    setSelectedItem(row.original.items);
   };
-
-  const columns = useMemo(() => getColumns(statusChangeHandler), [getColumns, statusChangeHandler]);
 
   const handleScopeChange = (value: string) => {
     if (value === 'book' || value === 'chapter' || value === 'verse') {
@@ -289,9 +377,21 @@ export default function Inventory({
     }
   };
 
+  const occurrenceData: InventoryItemOccurrence[] = useMemo(() => {
+    if (reducedTableData.length === 0 || selectedItem.length === 0) return [];
+    const occurrence = reducedTableData.filter((tableEntry: InventoryTableData) => {
+      return deepEqual(
+        showAdditionalItems ? tableEntry.items : [tableEntry.items[0]],
+        selectedItem,
+      );
+    });
+    if (occurrence.length > 1) throw new Error('Selected item is not unique');
+    return occurrence[0].occurrences;
+  }, [selectedItem, showAdditionalItems, reducedTableData]);
+
   return (
     <div className="pr-twp tw-flex tw-h-full tw-flex-col">
-      <div className="tw-flex">
+      <div className="tw-flex tw-items-stretch">
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
@@ -324,25 +424,35 @@ export default function Inventory({
             setTextFilter(event.target.value);
           }}
         />
+        {additionalItemsLabels && (
+          <div className="tw-m-1 tw-flex tw-items-center tw-rounded-md tw-border">
+            <Checkbox
+              className="tw-m-1"
+              checked={showAdditionalItems}
+              onCheckedChange={(checked: boolean) => {
+                setSelectedItem([]);
+                setShowAdditionalItems(checked);
+              }}
+            />
+            <Label className="tw-m-1 tw-flex-shrink-0 tw-whitespace-nowrap">
+              {additionalItemsLabels?.checkboxText ?? showAdditionalItemsText}
+            </Label>
+          </div>
+        )}
       </div>
       <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
         <DataTable
-          columns={columns}
-          data={filteredItemData}
+          columns={allColumns}
+          data={filteredTableData}
           onRowClickHandler={rowClickHandler}
           stickyHeader
         />
       </div>
-      {selectedItem !== '' && (
+      {occurrenceData.length > 0 && (
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
-            selectedItem={selectedItem}
-            text={text}
-            extractItems={extractItems}
-            scriptureReference={scriptureReference}
-            setScriptureReference={(newScriptureReference) =>
-              setScriptureReference(newScriptureReference)
-            }
+            occurrenceData={occurrenceData}
+            setScriptureReference={setScriptureReference}
             localizedStrings={localizedStrings}
           />
         </div>

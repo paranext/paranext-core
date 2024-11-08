@@ -46,7 +46,10 @@ declare module 'papi-shared-types' {
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
+    /** Shut down the application */
     'platform.quit': () => Promise<void>;
+    /** Restart the application */
+    'platform.restart': () => Promise<void>;
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     'platform.openUserSettings': () => Promise<void>;
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
@@ -113,6 +116,8 @@ declare module 'papi-shared-types' {
      * interacting with ParatextData.
      */
     'platform.paratextDataLastRegistryDataCachedTimes': { [key: string]: string };
+    /** Enable reading and writing comments in projects. This is an experimental feature. */
+    'platform.commentsEnabled': boolean;
   }
 
   /**

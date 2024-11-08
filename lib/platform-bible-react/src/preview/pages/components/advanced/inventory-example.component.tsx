@@ -4,25 +4,17 @@ import {
   inventoryItemColumn,
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
-import Inventory, {
-  ItemData,
-  Scope,
-  Status,
-} from '@/components/advanced/inventory/inventory.component';
-import { ScriptureReference } from 'platform-bible-utils';
+import { InventoryTableData } from '@/components/advanced/inventory/inventory-utils';
+import Inventory, { Scope } from '@/components/advanced/inventory/inventory.component';
+import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
-
-const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
-  chapterNum: 1,
-  verseNum: 1,
-};
 
 const localizedStrings = {
   '%webView_inventory_all%': 'All items',
   '%webView_inventory_approved%': 'Approved items',
   '%webView_inventory_filter_text%': 'Filter text...',
+  '%webView_inventory_show_additional_items%': 'Show Additional Items',
   '%webView_inventory_occurrences_table_header_occurrence%': 'Occurrence',
   '%webView_inventory_occurrences_table_header_reference%': 'Reference',
   '%webView_inventory_scope_currentBook%': 'Current book',
@@ -33,21 +25,21 @@ const localizedStrings = {
 };
 
 const createColumns = (
-  statusChangeHandler: (items: string[], status: Status) => void,
-): ColumnDef<ItemData>[] => [
+  approvedItems: string[],
+  onApprovedItemsChange: (items: string[]) => void,
+  unapprovedItems: string[],
+  onUnapprovedItemsChange: (items: string[]) => void,
+): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn('Item'),
   inventoryCountColumn('Count'),
-  inventoryStatusColumn('Status', statusChangeHandler),
+  inventoryStatusColumn(
+    'Status',
+    approvedItems,
+    onApprovedItemsChange,
+    unapprovedItems,
+    onUnapprovedItemsChange,
+  ),
 ];
-
-const extractItems = (text: string, target: string | undefined = undefined): string[] => {
-  // Finds repeated words, and captures the first occurrence of the word
-  const repeatedWords = text.match(/\b(\p{L}+)\b(?= \b\1\b)/gu) || [];
-
-  if (target) return repeatedWords?.filter((word) => word === target);
-
-  return repeatedWords;
-};
 
 function InventoryExample() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -62,25 +54,30 @@ function InventoryExample() {
         setScriptureReference={setScrRef}
         localizedStrings={localizedStrings}
         approvedItems={approvedItems}
-        onApprovedItemsChange={setApprovedItems}
         unapprovedItems={unapprovedItems}
-        onUnapprovedItemsChange={setUnapprovedItems}
         scope={scope}
         onScopeChange={setScope}
         text={scriptureSnippet}
-        getColumns={createColumns}
-        extractItems={extractItems}
+        columns={createColumns(
+          approvedItems,
+          setApprovedItems,
+          unapprovedItems,
+          setUnapprovedItems,
+        )}
+        // Matches a sequence of letters surrounded by word boundaries followed by that exact same
+        // sequence of letters surrounded by word boundaries
+        extractItems={/\b(\p{L}+)\b(?=\s\b\1\b)/gu}
       />
       Approved items:
       <ul>
         {approvedItems.map((item) => {
-          return <li>- {item}</li>;
+          return <li key={item}>- {item}</li>;
         })}
       </ul>
       Unapproved items:
       <ul>
         {unapprovedItems.map((item) => {
-          return <li>- {item}</li>;
+          return <li key={item}>- {item}</li>;
         })}
       </ul>
       <p>

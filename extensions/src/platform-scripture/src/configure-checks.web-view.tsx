@@ -71,7 +71,7 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
 
       if (selected) {
         const newCheckFeedback = await checkRunner.enableCheck(checkId, projectId);
-        if (newCheckFeedback) {
+        if (newCheckFeedback && newCheckFeedback.length > 0) {
           sonner.warning(
             `Warnings/errors occurred when trying to enable the ${checkDescription} check.
             Enabling may or may not have been successful.

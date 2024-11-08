@@ -12,15 +12,10 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
-import { ScriptureReference } from 'platform-bible-utils';
+import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 
 export default function WindowOrTabExample({ direction }: HasDirection) {
-  const defaultScrRef: ScriptureReference = {
-    bookNum: 1,
-    chapterNum: 1,
-    verseNum: 1,
-  };
   const [scrRef, setScrRef] = useState(defaultScrRef);
   return (
     <div className="tw-rounded-md tw-border">
