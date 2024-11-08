@@ -58,7 +58,10 @@ export type {
   WebViewDefinition,
   WebViewProps,
 } from '@shared/models/web-view.model';
-export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
+export type {
+  IDisposableWebViewProvider,
+  IWebViewProvider,
+} from '@shared/models/web-view-provider.model';
 export type {
   SimultaneousProjectSettingsChanges,
   ProjectSettingValidator,
