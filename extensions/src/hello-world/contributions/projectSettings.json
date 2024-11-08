@@ -1,16 +1,16 @@
 [
   {
-    "label": "%helloWorld_project_settings_helloWorld_group1_label%",
+    "label": "%project_settings_helloWorld_group1_label%",
     "properties": {
       "helloWorld.headerSize": {
-        "label": "%helloWorld_project_settings_helloWorld_headerSize_label%",
-        "description": "%helloWorld_project_settings_helloWorld_headerSize_description%",
+        "label": "%project_settings_helloWorld_headerSize_label%",
+        "description": "%project_settings_helloWorld_headerSize_description%",
         "default": 15,
         "includeProjectInterfaces": ["^helloWorld$"]
       },
       "helloWorld.headerColor": {
-        "label": "%helloWorld_project_settings_helloWorld_headerColor_label%",
-        "description": "%helloWorld_project_settings_helloWorld_headerColor_description%",
+        "label": "%project_settings_helloWorld_headerColor_label%",
+        "description": "%project_settings_helloWorld_headerColor_description%",
         "default": "Black",
         "includeProjectInterfaces": ["^helloWorld$"]
       }

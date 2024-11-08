@@ -11,7 +11,7 @@ export const platformProjectSettings: ProjectSettingsContribution = {
   properties: {
     'platform.name': {
       label: '%project_settings_platform_name_label%',
-      default: '%project_settings_platform_defaultSettingName_noName%',
+      default: '%project_name_missing%',
     },
     'platform.fullName': {
       label: '%project_settings_platform_fullName_label%',

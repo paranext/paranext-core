@@ -13,7 +13,7 @@ import platformScriptureEditorWebViewStyles from './platform-scripture-editor.we
 logger.info('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
-const projectIdTitleFormatStr = '%webView_title_projectId_formatString%';
+const projectIdTitleFormatStr = '%webView_platformScriptureEditor_title_format%';
 const editable = '%webView_platformScriptureEditor_title_editable_indicator%';
 const resourceViewer = '%webView_platformScriptureEditor_title_readonly_no_project%';
 const scriptureEditor = '%webView_platformScriptureEditor_title_editable_no_project%';

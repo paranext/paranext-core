@@ -54,7 +54,7 @@
         "command": "platform.visitSupportPage"
       },
       {
-        "label": "%mainMenu_aboutPlatformBible%",
+        "label": "%mainMenu_about%",
         "localizeNotes": "Application main menu > Help > About Platform.Bible",
         "group": "platform.helpMisc",
         "order": 2,
@@ -99,7 +99,7 @@
     },
     "items": [
       {
-        "label": "%general_insertNote%",
+        "label": "%insertNote%",
         "localizeNotes": "Web view context menu > Insert note...",
         "group": "platform.insert",
         "order": 1,

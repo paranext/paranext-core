@@ -54,7 +54,7 @@ const startingDoc = {
     },
     items: [
       {
-        label: '%general_insertNote%',
+        label: '%insertNote%',
         localizeNotes: 'Web view context menu > Insert note...',
         group: 'platform.insert',
         order: 1,
@@ -319,7 +319,7 @@ const expectedOutput = {
     },
     items: [
       {
-        label: '%general_insertNote%',
+        label: '%insertNote%',
         localizeNotes: 'Web view context menu > Insert note...',
         group: 'platform.insert',
         order: 1,
