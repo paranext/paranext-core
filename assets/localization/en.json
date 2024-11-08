@@ -36,7 +36,7 @@
   "%project_settings_platform_name_label%": "Project Short Name",
   "%selectBooks_title_selectBooks%": "Select Books",
   "%selectMultipleProjects_title_selectProjects%": "Select Projects",
-  "%helloWorld_selectProject_title_selectProject%": "Select Project",
+  "%selectProject_title%": "Select Project",
   "%settings_defaultMessage_loadingSetting%": "Loading setting",
   "%settings_defaultSearchText_searchProject%": "Search Project Settings...",
   "%settings_defaultSearchText_searchUserSettings%": "Search User Settings...",
