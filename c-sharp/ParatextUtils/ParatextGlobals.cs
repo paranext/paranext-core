@@ -24,6 +24,9 @@ namespace Paranext.DataProvider.ParatextUtils
                 if (s_initialized)
                     return;
 
+                // Override a few key functions for ScrTextCollection static methods to work
+                ScrTextCollection.Implementation = new PlatformScrTextCollection();
+
                 // Required for the Paratext.Data.Encodings.StringEncoders static constructor
                 Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
 

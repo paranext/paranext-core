@@ -1,5 +1,6 @@
 using System.Xml;
 using Paranext.DataProvider.ParatextUtils;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 using Paratext.Data.Users;
 
@@ -116,7 +117,10 @@ internal class LocalParatextProjects
 
     public IEnumerable<ProjectDetails> GetAllProjectDetails()
     {
-        return GetScrTexts().Select(scrText => scrText.GetProjectDetails());
+        var allScrTexts = GetScrTexts();
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            allScrTexts = allScrTexts.Where((scrText) => !scrText.IsResourceProject);
+        return allScrTexts.Select(scrText => scrText.GetProjectDetails());
     }
 
     public ProjectDetails GetProjectDetails(string projectId)
@@ -126,7 +130,10 @@ internal class LocalParatextProjects
 
     public static ScrText GetParatextProject(string projectId)
     {
-        return ScrTextCollection.GetById(HexId.FromStr(projectId));
+        var retVal = ScrTextCollection.GetById(HexId.FromStr(projectId));
+        if (retVal.IsResourceProject && !RegistrationInfo.DefaultUser.IsValid)
+            throw new RegistrationRequiredException();
+        return retVal;
     }
 
     public static List<string> GetParatextProjectInterfaces()

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -19,6 +19,7 @@
     <PackageProjectUrl>https://github.com/paranext</PackageProjectUrl>
     <RepositoryUrl>https://github.com/paranext/paranext-core</RepositoryUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <UserSecretsId>1860f020-31dd-4eb4-81c4-323eb0cb3e48</UserSecretsId>
     <!-- Uncomment the following lines to help with debugging into .NET core
     <DebugType>portable</DebugType>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
@@ -27,16 +28,18 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="ParatextData" Version="9.5.0.6" />
+    <PackageReference Include="icu.net" Version="2.10.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.1" />
+    <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.1" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
     <PackageReference Include="ParatextChecks" Version="9.5.0.6" />
+    <PackageReference Include="ParatextData" Version="9.5.0.6" />
     <PackageReference Include="SIL.Core" Version="14.2.0-beta0009" />
     <PackageReference Include="SIL.Scripture" Version="14.2.0-beta0009" />
     <PackageReference Include="SIL.WritingSystems" Version="14.2.0-beta0009" />
     <PackageReference Include="StreamJsonRpc" Version="2.19.27" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
-    <PackageReference Include="icu.net" Version="2.10.0" />
-    <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.1" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
   </ItemGroup>
 
   <!--
