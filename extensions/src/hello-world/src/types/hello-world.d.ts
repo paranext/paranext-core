@@ -1,4 +1,5 @@
 declare module 'hello-world' {
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import type { DataProviderDataType, MandatoryProjectDataTypes } from '@papi/core';
   import type { IBaseProjectDataProvider } from 'papi-shared-types';
 

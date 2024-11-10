@@ -25,6 +25,7 @@
   "javascript.validate.enable": false,
   "javascript.format.enable": false,
   "typescript.format.enable": false,
+  "typescript.tsdk": "node_modules/typescript/lib",
 
   "search.exclude": {
     ".git": true,
