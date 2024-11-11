@@ -15,6 +15,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         string DisplayName,
         string FullName,
         string BestLanguageName,
+        long Size,
         bool Installed,
         bool UpdateAvailable
     )
@@ -23,6 +24,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         public string DisplayName { get; set; } = DisplayName;
         public string FullName { get; set; } = FullName;
         public string BestLanguageName { get; set; } = BestLanguageName;
+        public long Size { get; set; } = Size;
         public bool Installed { get; set; } = Installed;
         public bool UpdateAvailable { get; set; } = UpdateAvailable;
     }
@@ -39,7 +41,12 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
-        return [("getDblResources", GetDblResources), ("installDblResource", InstallDblResource)];
+        return
+        [
+            ("getDblResources", GetDblResources),
+            ("installDblResource", InstallDblResource),
+            ("uninstallDblResource", UninstallDblResource),
+        ];
     }
 
     protected override Task StartDataProviderAsync()
@@ -53,7 +60,6 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
     private void FetchAvailableDBLResources()
     {
-        Console.WriteLine("Fetching");
         _resources = InstallableDBLResource.GetInstallableDBLResources(
             RegistrationInfo.DefaultUser,
             new DBLRESTClientFactory(),
@@ -61,13 +67,10 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             new DblMigrationOperations(),
             new DblResourcePasswordProvider()
         );
-        Console.WriteLine("Fetching done");
-        Console.WriteLine(_resources.First().ToString());
     }
 
     private List<DblResourceData> GetDblResources(JsonElement _ignore)
     {
-        Console.WriteLine("Rolf");
         if (!RegistrationInfo.DefaultUser.IsValid)
         {
             throw new Exception(
@@ -76,7 +79,6 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         }
 
         FetchAvailableDBLResources();
-        Console.WriteLine("Fetching done");
 
         return _resources
             .Select(resource => new DblResourceData(
@@ -84,6 +86,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
                 resource.DisplayName,
                 resource.FullName,
                 resource.BestLanguageName,
+                resource.Size,
                 resource.Installed,
                 resource.IsNewerThanCurrentlyInstalled()
             ))
@@ -105,18 +108,39 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
         if (installableResource == null)
             return false;
-        if (installableResource.Installed)
+        if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
             return true;
 
         installableResource.Install();
         // Note that we don't get any info telling if the installation succeeded or failed
 
         ScrTextCollection.RefreshScrTexts();
-        SendDataUpdateEvent("*", "DBL resources data updated");
+        SendDataUpdateEvent("DblResources", "DBL resources data updated");
+        // see paratextprojectdataprovider
         // DblResources
         return true;
+    }
 
-        // see paratextprojectdataprovider
+    private bool UninstallDblResource(string DBLEntryUid)
+    {
+        if (!TryFindResource(DBLEntryUid, out var installableResource))
+        {
+            throw new Exception($"Resource not available from DBL");
+        }
+
+        if (installableResource == null)
+            return false;
+        if (!installableResource.Installed)
+            return false;
+
+        ScrTextCollection.DeleteProject(
+            installableResource.ExistingScrText ?? installableResource.ExistingDictionary
+        // Note that we don't get any info telling if uninstalling succeeded or failed
+        );
+
+        ScrTextCollection.RefreshScrTexts();
+        SendDataUpdateEvent("*", "DBL resources data updated");
+        return true;
     }
 
     #endregion
