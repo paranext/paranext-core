@@ -72,9 +72,6 @@ type WebViewRequire = typeof webViewRequire;
 /* eslint-disable vars-on-top, no-var */
 declare global {
   var papi: Papi;
-  // @ts-expect-error ts(2300) we're declaring React here because it may not always be available in
-  // all contexts
-  var React: typeof ReactModule;
   var ReactJsxRuntime: ReactJsxRuntimeType;
   // For some reason, TypeScript throws an index signature error on assignment to
   // globalThis.ReactDOM, so this is ReactDom, not ReactDOM

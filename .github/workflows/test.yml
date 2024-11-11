@@ -57,6 +57,9 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      - name: type checking
+        run: npm run typecheck
+
       - name: Build
         run: npm run build
 

@@ -39,7 +39,8 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
-    "test": "jest --silent"
+    "test": "jest --silent",
+    "typecheck": "tsc -p ./tsconfig.json"
   },
   "peerDependencies": {
     "react": ">=18.3.1",
