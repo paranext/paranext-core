@@ -15,6 +15,8 @@ module.exports = {
 
     // #region ERB rules
 
+    // Use `noImplicitReturns` instead. See https://typescript-eslint.io/rules/consistent-return/.
+    'consistent-return': 'off',
     'import/extensions': 'off',
     // A temporary hack related to IDE not resolving correct package.json
     'import/no-extraneous-dependencies': 'off',

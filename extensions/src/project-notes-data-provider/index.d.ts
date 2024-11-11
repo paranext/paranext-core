@@ -3,6 +3,7 @@ import type {
   DataProviderDataType,
   DataProviderSubscriberOptions,
   IDataProvider,
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
 } from '@papi/core';
 import { PlatformEvent, Unsubscriber } from 'platform-bible-utils';
 

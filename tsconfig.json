@@ -38,9 +38,10 @@
     "resolveJsonModule": true,
     "outDir": ".erb/dll"
   },
-  "include": ["src", "assets"],
+  "include": ["src", "assets", "!**/*.test.{ts,tsx}"],
   "exclude": [
     "node_modules",
+    "dist",
     "test",
     "release/build",
     "release/app/dist",
