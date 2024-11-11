@@ -1,56 +1,59 @@
+using System.Text.Json;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using Paratext.Data.Users;
 
 namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 
-internal class DblDownloadableDataProvider(PapiClient papiClient)
+internal class DblResourcesDataProvider(PapiClient papiClient)
+    : NetworkObjects.DataProvider("platformBibleDownloadResources.dblResourcesProvider", papiClient)
 {
-    private readonly object _installLock = new();
+    #region Internal classes
 
-    private List<InstallableResource> _resources = new List<InstallableResource>();
-
-    #region Public properties and methods
-
-    public async Task InitializeAsync()
+    private class DblResourceData(
+        string DblEntryUid,
+        string DisplayName,
+        string FullName,
+        string BestLanguageName,
+        bool Installed,
+        bool UpdateAvailable
+    )
     {
-        // Set up commands on the PAPI
-        await PapiClient.RegisterRequestHandlerAsync(
-            "command:paratextBibleDownloadResources.getDBLResources",
-            GetDBLResources
-        );
-        await PapiClient.RegisterRequestHandlerAsync(
-            "command:paratextBibleDownloadResources.installDBLResource",
-            InstallDBLResource
-        );
+        public string DblEntryUid { get; set; } = DblEntryUid;
+        public string DisplayName { get; set; } = DisplayName;
+        public string FullName { get; set; } = FullName;
+        public string BestLanguageName { get; set; } = BestLanguageName;
+        public bool Installed { get; set; } = Installed;
+        public bool UpdateAvailable { get; set; } = UpdateAvailable;
+    }
+
+    #endregion
+
+    #region Consts and member variables
+
+    private List<InstallableResource> _resources = [];
+
+    #endregion
+
+    #region DataProvider methods
+
+    protected override List<(string functionName, Delegate function)> GetFunctions()
+    {
+        return [("getDblResources", GetDblResources)];
+    }
+
+    protected override Task StartDataProviderAsync()
+    {
+        return Task.CompletedTask;
     }
 
     #endregion
 
     #region Private properties and methods
 
-    private PapiClient PapiClient { get; } = papiClient;
-
-    private class ExtendedInstallableResource : InstallableResource
-    {
-        public ExtendedInstallableResource(
-            bool UpdateAvailable,
-            string DBLEntryUidString,
-            string BestLanguageName
-        )
-        {
-            this.UpdateAvailable = UpdateAvailable;
-            this.DBLEntryUidString = DBLEntryUidString;
-            this.BestLanguageName = BestLanguageName;
-        }
-
-        public bool UpdateAvailable { get; set; }
-        public string DBLEntryUidString { get; set; }
-        public new string BestLanguageName { get; set; }
-    }
-
     private void FetchAvailableDBLResources()
     {
+        Console.WriteLine("Fetching");
         _resources = InstallableDBLResource.GetInstallableDBLResources(
             RegistrationInfo.DefaultUser,
             new DBLRESTClientFactory(),
@@ -58,10 +61,13 @@ internal class DblDownloadableDataProvider(PapiClient papiClient)
             new DblMigrationOperations(),
             new DblResourcePasswordProvider()
         );
+        Console.WriteLine("Fetching done");
+        Console.WriteLine(_resources.First().ToString());
     }
 
-    private List<ExtendedInstallableResource> GetDBLResources()
+    private List<DblResourceData> GetDblResources(JsonElement _ignore)
     {
+        Console.WriteLine("Rolf");
         if (!RegistrationInfo.DefaultUser.IsValid)
         {
             throw new Exception(
@@ -70,17 +76,17 @@ internal class DblDownloadableDataProvider(PapiClient papiClient)
         }
 
         FetchAvailableDBLResources();
+        Console.WriteLine("Fetching done");
 
         return _resources
-            .Select(resource => new ExtendedInstallableResource(
-                resource.IsNewerThanCurrentlyInstalled(),
+            .Select(resource => new DblResourceData(
                 resource.DBLEntryUid.Id,
-                resource.BestLanguageName
-            )
-            {
-                DisplayName = resource.DisplayName,
-                FullName = resource.FullName,
-            })
+                resource.DisplayName,
+                resource.FullName,
+                resource.BestLanguageName,
+                resource.Installed,
+                resource.IsNewerThanCurrentlyInstalled()
+            ))
             .ToList();
     }
 
@@ -90,26 +96,27 @@ internal class DblDownloadableDataProvider(PapiClient papiClient)
         return resource != null;
     }
 
-    private bool InstallDBLResource(string DBLEntryUid)
+    private bool InstallDBLResource(JsonElement _ignore, string DBLEntryUid)
     {
-        Console.Write("Id:", DBLEntryUid);
-
         if (!TryFindResource(DBLEntryUid, out var installableResource))
         {
-            Console.WriteLine("Resource not found");
+            throw new Exception($"Resource not available from DBL");
+        }
+
+        if (installableResource == null)
             return false;
-        }
+        if (installableResource.Installed)
+            return true;
 
-        lock (_installLock)
-        {
-            if (installableResource.Installed)
-                return true;
+        installableResource.Install();
+        // Note that we don't get any info telling if the installation succeeded or failed
 
-            bool retVal = installableResource.Install();
-            if (retVal)
-                ScrTextCollection.RefreshScrTexts();
-            return retVal;
-        }
+        ScrTextCollection.RefreshScrTexts();
+        SendDataUpdateEvent("*", "DBL resources data updated");
+        // DblResources
+        return true;
+
+        // see paratextprojectdataprovider
     }
 
     #endregion
