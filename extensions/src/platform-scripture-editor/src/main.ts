@@ -6,16 +6,29 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 
 logger.info('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
+const projectIdTitleFormatStr = '%webView_platformScriptureEditor_title_format%';
+const editable = '%webView_platformScriptureEditor_title_editable_indicator%';
+const resourceViewer = '%webView_platformScriptureEditor_title_readonly_no_project%';
+const scriptureEditor = '%webView_platformScriptureEditor_title_editable_no_project%';
 
 interface PlatformScriptureEditorOptions extends GetWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
+}
+
+async function getLocalizations(): Promise<LanguageStrings> {
+  const localizationData = await papi.localization.getLocalizedStrings({
+    localizeKeys: [editable, projectIdTitleFormatStr, resourceViewer, scriptureEditor],
+    locales: ['en'],
+  });
+  return localizationData;
 }
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
@@ -103,16 +116,23 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
         `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
+    const localizedStrings = await getLocalizations();
+    const localizedProjectIdTitleFormatStr = localizedStrings[projectIdTitleFormatStr];
+    const localizedEditable = localizedStrings[editable];
+    const localizedResourceViewer = localizedStrings[resourceViewer];
+    const localizedScriptureEditor = localizedStrings[scriptureEditor];
+
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
     let title = '';
     if (projectId) {
       const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-      title = `${
-        (await pdp.getSetting('platform.name')) ?? projectId
-      }${isReadOnly ? '' : ' (Editable)'}`;
-    } else title = isReadOnly ? 'Resource Viewer' : 'Scripture Editor';
+      title = formatReplacementString(localizedProjectIdTitleFormatStr, {
+        projectId: (await pdp.getSetting('platform.name')) ?? projectId,
+        editable: isReadOnly ? '' : localizedEditable,
+      });
+    } else title = isReadOnly ? localizedResourceViewer : localizedScriptureEditor;
 
     return {
       title,

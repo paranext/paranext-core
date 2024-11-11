@@ -13,18 +13,19 @@ import {
   updateWebViewDefinitionSync,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
-import { getLocalizeKeysForScrollGroupIds, serialize } from 'platform-bible-utils';
 import { BookChapterControl, ScrollGroupSelector, useEvent } from 'platform-bible-react';
 import './web-view.component.css';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { getNetworkEvent } from '@shared/services/network.service';
+import {
+  formatReplacementString,
+  isLocalizeKey,
+  serialize,
+  getLocalizeKeysForScrollGroupIds,
+} from 'platform-bible-utils';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
-
-export function getTitle({ webViewType, title, contentType }: Partial<WebViewTabProps>): string {
-  return title || `${webViewType || contentType} Web View`;
-}
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
@@ -71,6 +72,22 @@ export default function WebView({
     }, [webViewType, id]),
   );
 
+  const webViewKey = '%webView_defaultTitle_webView%';
+  const webViewTitleTypeFormatStr = '%webView_title_type_formatString%';
+  const [localizedStrings] = useLocalizedStrings(
+    title && isLocalizeKey(title)
+      ? [title, webViewTitleTypeFormatStr]
+      : [webViewKey, webViewTitleTypeFormatStr],
+  );
+  const localizedWebViewTitleFormatStr = localizedStrings[webViewTitleTypeFormatStr];
+  const defaultTitle =
+    title ??
+    formatReplacementString(localizedWebViewTitleFormatStr, {
+      type: webViewType || contentType,
+      defaultTitle: localizedStrings[webViewKey],
+    });
+  const localizedTitle = title && isLocalizeKey(title) ? localizedStrings[title] : defaultTitle;
+
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
   const shouldUseSrc = contentType === WebViewContentType.URL;
 
@@ -105,7 +122,7 @@ export default function WebView({
       <iframe
         className="web-view"
         ref={iframeRef}
-        title={getTitle({ webViewType, title, contentType })}
+        title={localizedTitle}
         /**
          * Sandbox attribute for the webview - controls what resources scripts and other things can
          * access. See `ALLOWED_IFRAME_SRC_SANDBOX_VALUES` in `web-view.service.ts` for more info.
@@ -139,7 +156,7 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
     ...savedTabInfo,
     data,
     tabIconUrl: data.iconUrl,
-    tabTitle: data.title ?? 'Unknown',
+    tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',
     content: <WebView {...data} />,
   };
@@ -177,7 +194,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
     data = {
       id: savedTabInfo.id,
       webViewType: 'Unknown',
-      title: 'Unknown',
+      title: '%tab_title_unknown%',
       content: '',
       contentType: WebViewContentType.HTML,
     };

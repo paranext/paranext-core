@@ -1,4 +1,4 @@
-import { ChangeEvent, useCallback, useState } from 'react';
+import { ChangeEvent, useCallback, useMemo, useState } from 'react';
 import {
   ProjectSettingNames,
   ProjectSettingTypes,
@@ -10,6 +10,7 @@ import { debounce, getErrorMessage } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import logger from '@shared/services/logger.service';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -196,12 +197,16 @@ export default function Setting({
     );
   }, [setting, settingKey, debouncedHandleChange, errorMessage]);
 
+  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
+  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
+
   return (
     <SettingsListItem
       primary={label}
       secondary={description}
       isLoading={isLoading}
-      loadingMessage="Loading setting"
+      loadingMessage={localizedLoadingSetting}
     >
       {generateComponent()}
     </SettingsListItem>

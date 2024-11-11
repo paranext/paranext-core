@@ -21,16 +21,14 @@ export default function AboutPanel() {
     },
   ] = useLocalizedStrings(STRING_KEYS);
 
-  // logger.info());
-
   return (
     <div className="about-panel dark">
       <div className="about">
         <InlineLogoAndName width="80%" />
         <h1>{productName}</h1>
         <p>Copyright © 2022-2024 SIL International</p>
-        <p>{formatReplacementString(versionLabelFormat, PackageInfo)}</p>
-        <p>{formatReplacementString(licenseLabelFormat, PackageInfo)}</p>
+        <p>{formatReplacementString(versionLabelFormat, { version: PackageInfo.version })}</p>
+        <p>{formatReplacementString(licenseLabelFormat, { license: PackageInfo.license })}</p>
         <p>{PackageInfo.description}</p>
       </div>
     </div>
