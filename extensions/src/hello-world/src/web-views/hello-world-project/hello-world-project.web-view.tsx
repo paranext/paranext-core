@@ -68,7 +68,7 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({
       <div>
         Names:{' '}
         {names.map((name) => (
-          <span>
+          <span key={name}>
             {name}
             <button
               type="button"

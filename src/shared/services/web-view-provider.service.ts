@@ -20,6 +20,7 @@ import {
   getWebViewControllerObjectId,
   WEB_VIEW_CONTROLLER_OBJECT_TYPE,
 } from '@shared/services/web-view.service-model';
+import { WebViewId } from '@shared/models/web-view.model';
 
 /** Suffix on network objects that indicates that the network object is a web view provider */
 const WEB_VIEW_PROVIDER_LABEL = 'webViewProvider';
@@ -179,7 +180,7 @@ async function get(webViewType: string): Promise<IRegisteredWebViewProvider | un
  *
  * @param webViewType Type of webView to check for
  */
-function hasKnownWebViewController(webViewId: string): boolean {
+function hasKnownWebViewController(webViewId: WebViewId): boolean {
   return (
     networkObjectService.hasKnown(getWebViewControllerObjectId(webViewId)) ||
     webViewControllersById.has(webViewId)
@@ -207,7 +208,7 @@ function hasKnownWebViewController(webViewId: string): boolean {
  */
 async function registerWebViewController<WebViewType extends WebViewControllerTypes>(
   webViewType: WebViewType,
-  webViewId: string,
+  webViewId: WebViewId,
   webViewController: WebViewControllers[WebViewType],
 ): Promise<DisposableNetworkObject<WebViewControllers[WebViewType]>> {
   await initialize();

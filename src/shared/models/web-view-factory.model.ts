@@ -44,7 +44,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
     DisposableNetworkObject<WebViewControllers[WebViewType]>
   >();
 
-  constructor(private readonly webViewType: WebViewType) {
+  constructor(readonly webViewType: WebViewType) {
     this.webViewControllersCleanupList = new UnsubscriberAsyncList(
       `WebViewFactory for webViewType ${webViewType}`,
     );

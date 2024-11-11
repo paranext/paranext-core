@@ -676,7 +676,7 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
  * @throws If the papi dock layout has not been registered
  */
 export function updateWebViewDefinitionSync(
-  webViewId: string,
+  webViewId: WebViewId,
   webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
 ): boolean {
   const didUpdateWebView = getDockLayoutSync().updateWebViewDefinition(
@@ -753,7 +753,7 @@ export function convertWebViewDefinitionToSaved(
 
 /** Explanation in web-view.service-model.ts */
 async function getOpenWebViewDefinition(
-  webViewId: string,
+  webViewId: WebViewId,
 ): Promise<SavedWebViewDefinition | undefined> {
   const webViewDefinition = (await getDockLayout()).getWebViewDefinition(webViewId);
   if (webViewDefinition === undefined) return undefined;
@@ -770,7 +770,7 @@ async function getOpenWebViewDefinition(
  * @throws If the papi dock layout has not been registered
  */
 export function getSavedWebViewDefinitionSync(
-  webViewId: string,
+  webViewId: WebViewId,
 ): SavedWebViewDefinition | undefined {
   const webViewDefinition = getDockLayoutSync().getWebViewDefinition(webViewId);
   if (webViewDefinition === undefined) return undefined;
@@ -936,6 +936,7 @@ export const openWebView = async (
   var getWebViewStateById = window.parent.getWebViewStateById;
   var setWebViewStateById = window.parent.setWebViewStateById;
   var resetWebViewStateById = window.parent.resetWebViewStateById;
+  window.webViewId = '${webView.id}';
   window.getWebViewState = (stateKey, defaultValue) => { return getWebViewStateById('${webView.id}', stateKey, defaultValue) };
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
   window.resetWebViewState = (stateKey) => { resetWebViewStateById('${webView.id}', stateKey) };
@@ -1327,7 +1328,7 @@ const papiWebViewService: WebViewServiceType = {
   getWebViewController,
 };
 
-async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
+async function openProjectSettingsTab(webViewId: WebViewId): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
   const projectIdFromWebView = (await getOpenWebViewDefinition(webViewId))?.projectId;
 

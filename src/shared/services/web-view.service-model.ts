@@ -91,7 +91,7 @@ export interface WebViewServiceType {
    */
   getWebViewController<WebViewType extends WebViewControllerTypes>(
     webViewType: WebViewType,
-    webViewId: string,
+    webViewId: WebViewId,
   ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
 }
 
@@ -111,10 +111,10 @@ export const WEB_VIEW_CONTROLLER_OBJECT_TYPE = 'webViewController';
 // See `WebViewServiceType` for explanation
 export async function getWebViewController<WebViewType extends WebViewControllerTypes>(
   webViewType: WebViewType,
-  webViewId: string,
+  webViewId: WebViewId,
 ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined> {
   // Get the object id for this web view Controller name
-  const webViewControllerObjectId = getWebViewControllerObjectId(webViewType);
+  const webViewControllerObjectId = getWebViewControllerObjectId(webViewId);
 
   const webViewControllerDetails = await networkObjectStatusService.waitForNetworkObject(
     { id: webViewControllerObjectId },

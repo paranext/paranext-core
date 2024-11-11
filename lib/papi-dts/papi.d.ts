@@ -614,6 +614,7 @@ declare module 'shared/global-this.model' {
     UseWebViewScrollGroupScrRefHook,
     UseWebViewStateHook,
     WebViewDefinitionUpdateInfo,
+    WebViewId,
     WebViewProps,
   } from 'shared/models/web-view.model';
   /**
@@ -637,6 +638,8 @@ declare module 'shared/global-this.model' {
      * in WebView iframes.
      */
     var webViewComponent: FunctionComponent<WebViewProps>;
+    /** The id of the current web view. Only used in WebView iframes. */
+    var webViewId: WebViewId;
     /**
      *
      * A React hook for working with a state object tied to a webview. Returns a WebView state value and
@@ -2540,7 +2543,7 @@ declare module 'shared/services/web-view.service-model' {
      */
     getWebViewController<WebViewType extends WebViewControllerTypes>(
       webViewType: WebViewType,
-      webViewId: string,
+      webViewId: WebViewId,
     ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   }
   /** Gets the id for the web view controller network object with the given name */
@@ -2549,7 +2552,7 @@ declare module 'shared/services/web-view.service-model' {
   export const WEB_VIEW_CONTROLLER_OBJECT_TYPE = 'webViewController';
   export function getWebViewController<WebViewType extends WebViewControllerTypes>(
     webViewType: WebViewType,
-    webViewId: string,
+    webViewId: WebViewId,
   ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   /** Name to use when creating a network event that is fired when webViews are created */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
@@ -2589,6 +2592,7 @@ declare module 'shared/services/web-view-provider.service' {
   } from 'shared/models/web-view-provider.model';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
   import { DisposableNetworkObject } from 'shared/models/network-object.model';
+  import { WebViewId } from 'shared/models/web-view.model';
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
   /**
@@ -2641,7 +2645,7 @@ declare module 'shared/services/web-view-provider.service' {
    */
   function registerWebViewController<WebViewType extends WebViewControllerTypes>(
     webViewType: WebViewType,
-    webViewId: string,
+    webViewId: WebViewId,
     webViewController: WebViewControllers[WebViewType],
   ): Promise<DisposableNetworkObject<WebViewControllers[WebViewType]>>;
   export interface WebViewProviderService {
@@ -2695,7 +2699,7 @@ declare module 'shared/models/web-view-factory.model' {
   export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
     implements IWebViewProvider
   {
-    private readonly webViewType;
+    readonly webViewType: WebViewType;
     private readonly webViewControllersMutexMap;
     private readonly webViewControllersCleanupList;
     private readonly webViewControllersById;
@@ -5916,6 +5920,7 @@ declare module '@papi/core' {
   export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
   export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
+  export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
   export type {
     ExtensionDataScope,
     MandatoryProjectDataTypes,
@@ -7224,6 +7229,33 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   ) => [localizedStrings: LocalizationData, isLoading: boolean];
   export default useLocalizedStrings;
 }
+declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
+  import { WebViewControllers } from 'papi-shared-types';
+  import { NetworkObject } from 'shared/models/network-object.model';
+  import { WebViewId } from 'shared/models/web-view.model';
+  /**
+   * Gets a Web View Controller with specified provider name
+   *
+   * @param webViewType `webViewType` that the web view controller must support. The TypeScript type
+   *   for the returned web view controller will have the web view controller interface type
+   *   associated with this `webViewType`. If the web view controller does not implement this
+   *   `webViewType` (according to its metadata), an error will be thrown.
+   * @param webViewId Id of the web view for which to get the web view controller OR
+   *   `webViewController` (result of `useWebViewController`, if you want this hook to just return the
+   *   controller again)
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the Web View Controller if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
+   * @returns `undefined` if the Web View Controller has not been retrieved, the requested Web View
+   *   Controller if it has been retrieved and is not disposed, and undefined again if the Web View
+   *   Controller is disposed
+   */
+  const useWebViewController: <WebViewType extends keyof WebViewControllers>(
+    webViewType: WebViewType,
+    webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
+  ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
+  export default useWebViewController;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -7235,6 +7267,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
   export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
+  export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
