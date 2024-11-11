@@ -111,13 +111,11 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
             return true;
 
-        installableResource.Install();
         // Note that we don't get any info telling if the installation succeeded or failed
+        installableResource.Install();
 
         ScrTextCollection.RefreshScrTexts();
         SendDataUpdateEvent("DblResources", "DBL resources data updated");
-        // see paratextprojectdataprovider
-        // DblResources
         return true;
     }
 
@@ -134,12 +132,12 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             return false;
 
         ScrTextCollection.DeleteProject(
+            // Note that we don't get any info telling if uninstalling succeeded or failed
             installableResource.ExistingScrText ?? installableResource.ExistingDictionary
-        // Note that we don't get any info telling if uninstalling succeeded or failed
         );
 
         ScrTextCollection.RefreshScrTexts();
-        SendDataUpdateEvent("*", "DBL resources data updated");
+        SendDataUpdateEvent("DblResources", "DBL resources data updated");
         return true;
     }
 
