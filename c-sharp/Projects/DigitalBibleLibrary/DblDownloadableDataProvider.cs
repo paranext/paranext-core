@@ -39,7 +39,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
     protected override List<(string functionName, Delegate function)> GetFunctions()
     {
-        return [("getDblResources", GetDblResources)];
+        return [("getDblResources", GetDblResources), ("installDblResource", InstallDblResource)];
     }
 
     protected override Task StartDataProviderAsync()
@@ -96,7 +96,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         return resource != null;
     }
 
-    private bool InstallDBLResource(JsonElement _ignore, string DBLEntryUid)
+    private bool InstallDblResource(string DBLEntryUid)
     {
         if (!TryFindResource(DBLEntryUid, out var installableResource))
         {
