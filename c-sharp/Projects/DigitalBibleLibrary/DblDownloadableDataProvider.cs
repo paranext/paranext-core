@@ -5,8 +5,11 @@ using Paratext.Data.Users;
 
 namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 
+/// <summary>
+/// Data provider that can install, update and uninstall DBL (Digital Bible Library) resources
+/// </summary>
 internal class DblResourcesDataProvider(PapiClient papiClient)
-    : NetworkObjects.DataProvider("platformBibleDownloadResources.dblResourcesProvider", papiClient)
+    : NetworkObjects.DataProvider("paratextBibleDownloadResources.dblResourcesProvider", papiClient)
 {
     #region Internal classes
 
@@ -33,6 +36,8 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
     #region Consts and member variables
 
+    public const string DBL_RESOURCES = "DblResources";
+
     private List<InstallableResource> _resources = [];
 
     #endregion
@@ -58,6 +63,13 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
     #region Private properties and methods
 
+    /// <summary>
+    /// Fetch list DBL resources
+    /// </summary>
+    /// <returns>
+    /// A list of all available resources on the DBL, along with information about their
+    /// installation status on the local machine
+    /// </returns>
     private void FetchAvailableDBLResources()
     {
         _resources = InstallableDBLResource.GetInstallableDBLResources(
@@ -69,6 +81,14 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         );
     }
 
+    /// <summary>
+    /// Check user registration and, if registration is valid, return a list of information about
+    /// available DBL resources
+    /// </summary>
+    /// <returns>
+    /// A list with some information about all available resources on the DBL, for the purpose of
+    /// presenting the resources and their installation status on the front-end
+    /// </returns>
     private List<DblResourceData> GetDblResources(JsonElement _ignore)
     {
         if (!RegistrationInfo.DefaultUser.IsValid)
@@ -99,6 +119,12 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         return resource != null;
     }
 
+    /// <summary>
+    /// Try to install DBL resource with specified DBL id
+    /// </summary>
+    /// <returns>
+    /// True if successful. False/throws if unsuccessful.
+    /// </returns>
     private bool InstallDblResource(string DBLEntryUid)
     {
         if (!TryFindResource(DBLEntryUid, out var installableResource))
@@ -106,38 +132,63 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             throw new Exception($"Resource not available from DBL");
         }
 
-        if (installableResource == null)
-            return false;
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
+        // We've already checked if installableResource is null
         if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
-            return true;
+            throw new Exception(
+                $"Resource is already installed and up to date. Installation skipped."
+            );
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
 
         // Note that we don't get any info telling if the installation succeeded or failed
         installableResource.Install();
 
         ScrTextCollection.RefreshScrTexts();
-        SendDataUpdateEvent("DblResources", "DBL resources data updated");
+
+        if (!ScrTextCollection.IsPresent(installableResource.ExistingScrText))
+            throw new Exception($"Resource cannot be found. Installation failed.");
+
+        SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
+
         return true;
     }
 
+    /// <summary>
+    /// Try to uninstall DBL resource with specified DBL id
+    /// </summary>
+    /// <returns>
+    /// True if successful. False/throws if unsuccessful.
+    /// </returns>
     private bool UninstallDblResource(string DBLEntryUid)
     {
         if (!TryFindResource(DBLEntryUid, out var installableResource))
         {
-            throw new Exception($"Resource not available from DBL");
+            throw new Exception($"Resource not found on list of DBL resources.");
         }
 
-        if (installableResource == null)
-            return false;
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
+        // We've already checked if installableResource is null
         if (!installableResource.Installed)
-            return false;
+            throw new Exception($"Resource is not currently installed, so it can't be removed.");
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
 
-        ScrTextCollection.DeleteProject(
-            // Note that we don't get any info telling if uninstalling succeeded or failed
-            installableResource.ExistingScrText ?? installableResource.ExistingDictionary
-        );
+        var objectToBeDeleted = installableResource.ExistingScrText;
+
+        var isPresent = ScrTextCollection.IsPresent(objectToBeDeleted);
+        if (!isPresent)
+            throw new Exception($"Resource cannot be located, so it can't be removed.");
+
+        // Note that we don't get any info telling if uninstalling succeeded or failed
+        ScrTextCollection.DeleteProject(objectToBeDeleted);
 
         ScrTextCollection.RefreshScrTexts();
-        SendDataUpdateEvent("DblResources", "DBL resources data updated");
+
+        isPresent = ScrTextCollection.IsPresent(objectToBeDeleted);
+        if (isPresent)
+            throw new Exception($"Resource is still present. Removing failed.");
+
+        SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
+
         return true;
     }
 
