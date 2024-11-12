@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { WebViewContentType, WebViewDefinition } from '@shared/models/web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
@@ -75,9 +75,13 @@ export default function WebView({
   const webViewKey = '%webView_defaultTitle_webView%';
   const webViewTitleTypeFormatStr = '%webView_title_type_formatString%';
   const [localizedStrings] = useLocalizedStrings(
-    title && isLocalizeKey(title)
-      ? [title, webViewTitleTypeFormatStr]
-      : [webViewKey, webViewTitleTypeFormatStr],
+    useMemo(
+      () =>
+        title && isLocalizeKey(title)
+          ? [title, webViewTitleTypeFormatStr]
+          : [webViewKey, webViewTitleTypeFormatStr],
+      [title],
+    ),
   );
   const localizedWebViewTitleFormatStr = localizedStrings[webViewTitleTypeFormatStr];
   const defaultTitle =
