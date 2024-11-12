@@ -406,20 +406,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   papi
     .fetch('https://www.example.com')
     .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
-  try {
-    const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
-    if (peopleDataProvider) {
-      // Test subscribing to a data provider
-      const unsubGreetings = await peopleDataProvider.subscribeGreeting(
-        'Bill',
-        (billGreeting: string | undefined) => logger.debug(`Bill's greeting: ${billGreeting}`),
-      );
-
-      context.registrations.add(unsubGreetings);
-    }
-  } catch (e) {
-    logger.error(`Hello world error! Could not get people data provider ${e}`);
-  }
 
   const checkPromise = papi.commands.sendCommand(
     'platformScripture.registerCheck',
@@ -457,6 +443,21 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   papi.webViews.getWebView(htmlWebViewProvider.webViewType, undefined, { existingId: '?' });
   papi.webViews.getWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
   papi.webViews.getWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
+
+  try {
+    const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
+    if (peopleDataProvider) {
+      // Test subscribing to a data provider
+      const unsubGreetings = await peopleDataProvider.subscribeGreeting(
+        'Bill',
+        (billGreeting: string | undefined) => logger.debug(`Bill's greeting: ${billGreeting}`),
+      );
+
+      context.registrations.add(unsubGreetings);
+    }
+  } catch (e) {
+    logger.error(`Hello world error! Could not get people data provider ${e}`);
+  }
 
   logger.info('Hello World is finished activating!');
 }

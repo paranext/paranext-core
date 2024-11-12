@@ -8,7 +8,7 @@ import {
   IWebViewProvider,
   IRegisteredWebViewProvider,
 } from '@shared/models/web-view-provider.model';
-import networkObjectService from '@shared/services/network-object.service';
+import networkObjectService, { overrideDispose } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
 import logger from '@shared/services/logger.service';
 import { isSerializable } from 'platform-bible-utils';
@@ -48,7 +48,6 @@ webViewService.onDidCloseWebView(async ({ webView }) => {
 
   try {
     if (!(await webViewController.dispose())) throw new Error('dispose returned false!');
-    webViewControllersById.delete(webView.id);
   } catch (e) {
     logger.warn(
       `Web View Provider service failed to dispose of web view controller for id ${webView.id} (type ${webView.webViewType}) when the web view was closed! ${e}`,
@@ -229,6 +228,10 @@ async function registerWebViewController<WebViewType extends WebViewControllerTy
       WEB_VIEW_CONTROLLER_OBJECT_TYPE,
       { webViewType, webViewId },
     );
+
+  overrideDispose(disposableWebViewController, async () => {
+    return webViewControllersById.delete(webViewId);
+  });
 
   if (webViewControllersById.has(webViewId))
     logger.warn(
