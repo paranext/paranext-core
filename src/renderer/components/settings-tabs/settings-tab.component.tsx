@@ -7,6 +7,7 @@ import projectSettingsService, {
 } from '@shared/services/project-settings.service';
 import projectLookupService from '@shared/services/project-lookup.service';
 import settingsService from '@shared/services/settings.service';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import ProjectOrUserSettingsList from './settings-components/project-or-user-settings-list.component';
 import './settings-tab.component.scss';
 
@@ -18,6 +19,14 @@ type SettingsTabProps = {
 };
 
 export default function SettingsTab({ projectId }: SettingsTabProps) {
+  const searchProjectSettingsKey = '%settings_defaultSearchText_searchProject%';
+  const searchUserSettingsKey = '%settings_defaultSearchText_searchUserSettings%';
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => [searchProjectSettingsKey, searchUserSettingsKey], []),
+  );
+  const localizedSearchProjectSettings = localizedStrings[searchProjectSettingsKey];
+  const localizedSearchUserSettings = localizedStrings[searchUserSettingsKey];
+
   const [settingsContributions, isLoadingSettingsContributions] = usePromise(
     useCallback(async () => {
       if (projectId) {
@@ -93,7 +102,7 @@ export default function SettingsTab({ projectId }: SettingsTabProps) {
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         tabList={generateTabList() as TabKeyValueContent[]}
         onSearch={handleSearchInput}
-        searchPlaceholder={projectId ? 'Search Project Settings...' : 'Search User Settings...'}
+        searchPlaceholder={projectId ? localizedSearchProjectSettings : localizedSearchUserSettings}
         isSearchBarFullWidth
       />
     </div>
@@ -113,7 +122,7 @@ export const loadProjectSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
 
   return {
     ...savedTabInfo,
-    tabTitle: 'Project Settings',
+    tabTitle: '%settings_title_projectSettings%',
     content: <SettingsTab projectId={typedSavedTabInfo.data.projectId} />,
   };
 };
@@ -121,7 +130,7 @@ export const loadProjectSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
 export const loadUserSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
-    tabTitle: 'User Settings',
+    tabTitle: '%settings_title_userSettings%',
     content: <SettingsTab />,
   };
 };

@@ -17,6 +17,7 @@ import ProjectList, {
   Project,
 } from '@renderer/components/projects/project-list.component';
 import './download-update-project-tab.component.scss';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 export const TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG = 'download-update-project-dialog';
 
@@ -33,6 +34,29 @@ function deleteProject(project: Project) {
 }
 
 export default function DownloadUpdateProjectTab() {
+  const downloadableProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadable%';
+  const downloadableProjectsHeaderKey = '%downloadUpdateProjectTab_listHeader_downloadable%';
+  const downloadedProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloaded%';
+  const downloadedProjectsHeaderKey = '%downloadUpdateProjectTab_listHeader_downloaded%';
+  const deleteListItemKey = '%downloadUpdateProjectTab_button_delete%';
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(
+      () => [
+        downloadableProjectsAriaKey,
+        downloadableProjectsHeaderKey,
+        downloadedProjectsAriaKey,
+        downloadedProjectsHeaderKey,
+        deleteListItemKey,
+      ],
+      [],
+    ),
+  );
+  const localizedDownloadableProjectsAria = localizedStrings[downloadableProjectsAriaKey];
+  const localizedDownloadableProjectsHeader = localizedStrings[downloadableProjectsHeaderKey];
+  const localizedDownloadedProjectsAria = localizedStrings[downloadedProjectsAriaKey];
+  const localizedDownloadedProjectsHeader = localizedStrings[downloadedProjectsHeaderKey];
+  const localizedDeleteListItem = localizedStrings[deleteListItemKey];
+
   const [downloadableProjects, downloadedProjects] = useMemo(() => {
     const projects = fetchProjects();
     return [
@@ -43,10 +67,10 @@ export default function DownloadUpdateProjectTab() {
 
   return (
     <div className="download-update-project-dialog">
-      <nav aria-label="downloadable projects">
+      <nav aria-label={localizedDownloadableProjectsAria}>
         <ProjectList
           projects={downloadableProjects}
-          subheader="Downloadable Projects"
+          subheader={localizedDownloadableProjectsHeader}
           handleSelectProject={downloadProject}
         >
           <ListItemIcon>
@@ -55,9 +79,9 @@ export default function DownloadUpdateProjectTab() {
         </ProjectList>
       </nav>
 
-      <nav aria-label="downloaded projects">
+      <nav aria-label={localizedDownloadedProjectsAria}>
         <List>
-          <ListSubheader>Downloaded Projects</ListSubheader>
+          <ListSubheader>{localizedDownloadedProjectsHeader}</ListSubheader>
           {downloadedProjects.map((project) => (
             <ListItem key={project.id}>
               <ListItemButton onClick={() => updateProject(project)}>
@@ -70,7 +94,7 @@ export default function DownloadUpdateProjectTab() {
                 <ListItemIcon>
                   <DeleteIcon />
                 </ListItemIcon>
-                <ListItemText primary="Delete" />
+                <ListItemText primary={localizedDeleteListItem} />
               </ListItemButton>
             </ListItem>
           ))}
@@ -83,7 +107,7 @@ export default function DownloadUpdateProjectTab() {
 export const loadDownloadUpdateProjectTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   return {
     ...savedTabInfo,
-    tabTitle: 'Download/Update Project',
+    tabTitle: '%downloadUpdateProjectTab_title_downloadUpdate%',
     content: <DownloadUpdateProjectTab />,
   };
 };

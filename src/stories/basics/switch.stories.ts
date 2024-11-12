@@ -6,8 +6,6 @@ const meta: Meta<typeof Switch> = {
   component: Switch,
   tags: ['autodocs'],
   argTypes: {
-    isDisabled: { control: 'boolean' },
-    hasError: { control: 'boolean' },
     className: { control: 'text' },
   },
 };
@@ -27,14 +25,6 @@ export const Secondary: Story = {
   args: { className: 'secondary' },
 };
 
-export const Disabled: Story = {
-  args: { isDisabled: true },
-};
-
-export const ErrorState: Story = {
-  args: { hasError: true },
-};
-
 export const Paratext: Story = {
   args: {
     className: 'paratext',
@@ -50,8 +40,9 @@ export const ParatextBright: Story = {
 export const OnChange: Story = {
   args: {
     onChange(event) {
-      // eslint-disable-next-line no-console
-      console.log(event.target.checked);
+      // There is likely a better way to do this without using `as`.
+      // eslint-disable-next-line no-console, no-type-assertion/no-type-assertion
+      console.log((event.target as HTMLInputElement).checked);
     },
   },
 };

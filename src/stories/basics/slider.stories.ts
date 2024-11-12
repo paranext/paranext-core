@@ -6,7 +6,6 @@ const meta: Meta<typeof Slider> = {
   component: Slider,
   tags: ['autodocs'],
   argTypes: {
-    isDisabled: { control: 'boolean' },
     orientation: {
       options: [0, 1],
       mapping: ['horizontal', 'vertical'],
@@ -18,16 +17,6 @@ const meta: Meta<typeof Slider> = {
     min: { control: 'number' },
     max: { control: 'number' },
     step: { control: 'number' },
-    showMarks: { control: 'boolean' },
-    defaultValue: { control: 'number' },
-    valueLabelDisplay: {
-      options: [0, 1, 2],
-      mapping: ['on', 'auto', 'off'],
-      control: {
-        type: 'select',
-        labels: ['On', 'Auto', 'Off'],
-      },
-    },
     className: { control: 'text' },
   },
 };
@@ -39,18 +28,12 @@ export const Default: Story = {
   args: {},
 };
 
-export const Disabled: Story = {
-  args: { isDisabled: true },
-};
-
 export const DiscreteValues: Story = {
   args: {
     min: -10,
     max: 10,
     step: 2,
-    showMarks: true,
-    defaultValue: 0,
-    valueLabelDisplay: 'on',
+    defaultValue: [0],
   },
 };
 

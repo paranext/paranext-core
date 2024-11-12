@@ -2,7 +2,7 @@
   "%about_versionLabel_format%": "Versión: {version}",
   "%about_licenseLabel_format%": "Licencia: {license}",
   "%insertNote%": "Insertar Nota",
-  "%mainMenu_aboutPlatformBible%": "Acerca de Platform.Bible",
+  "%mainMenu_about%": "Acerca de Platform.Bible",
   "%mainMenu_downloadSlashInstallResources%": "Descargar/instalar recursos",
   "%mainMenu_downloadSlashUpdateProject%": "Descargar/actualizar proyecto",
   "%mainMenu_exit%": "Salir",
@@ -20,8 +20,8 @@
   "%webView_project%": "Proyecto",
   "%webView_projectAssignmentsAndProgress%": "Asignaciones y progreso",
   "%wordList%": "Lista de palabras",
-  "%settings_platform_group1_label%": "Configuraciones de Platform",
   "%settings_platform_group1_description%": "Configuraciones generales del software fundamental",
-  "%settings_platform_interfaceLanguage_label%": "Idioma de interfaz",
-  "%settings_platform_interfaceLanguage_description%": "Lista de locales usados al localizar la interfaz en orden descendente de prioridad. 'en' (inglés) siempre se añade al final, de modo que si no se encuentra una traducción en ninguno de los idiomas especificados, aparecerá en inglés."
+  "%settings_platform_interfaceLanguage_description%": "Lista de locales usados al localizar la interfaz en orden descendente de prioridad. 'en' (inglés) siempre se añade al final, de modo que si no se encuentra una traducción en ninguno de los idiomas especificados, aparecerá en inglés.",
+  "%settings_platform_label_group1%": "Configuraciones de Platform",
+  "%settings_platform_interfaceLanguage_label%": "Idioma de interfaz"
 }

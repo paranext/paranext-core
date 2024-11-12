@@ -49,7 +49,7 @@
       },
       {
         "label": "%mainMenu_about%",
-        "localizeNotes": "Application main menu > Help > About (Platform.Bible or Software white-label name)",
+        "localizeNotes": "Application main menu > Help > About Platform.Bible",
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.about"
@@ -100,7 +100,7 @@
         "command": "platform.insertNote"
       },
       {
-        "label": "%wordList%",
+        "label": "%menuItemName_wordList%",
         "localizeNotes": "Web view context menu > Word list...",
         "group": "platform.wordList",
         "order": 1,

@@ -6,10 +6,6 @@ const meta: Meta<typeof ComboBox> = {
   component: ComboBox,
   tags: ['autodocs'],
   argTypes: {
-    title: { control: 'text' },
-    isDisabled: { control: 'boolean' },
-    hasError: { control: 'boolean' },
-    isFullWidth: { control: 'boolean' },
     options: { control: 'object' },
     className: { control: 'text' },
   },
@@ -20,22 +16,6 @@ type Story = StoryObj<typeof ComboBox>;
 
 export const Default: Story = {
   args: {},
-};
-
-export const Disabled: Story = {
-  args: { isDisabled: true },
-};
-
-export const ErrorState: Story = {
-  args: { hasError: true },
-};
-
-export const FullWidth: Story = {
-  args: { isFullWidth: true },
-};
-
-export const Title: Story = {
-  args: { title: 'Combo box' },
 };
 
 export const Placeholder: Story = {

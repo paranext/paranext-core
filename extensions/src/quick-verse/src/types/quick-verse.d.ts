@@ -1,4 +1,5 @@
 declare module 'quick-verse' {
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import { DataProviderDataType, IDataProvider } from '@papi/core';
 
   export type QuickVerseSetData = string | { text: string; isHeresy: boolean };

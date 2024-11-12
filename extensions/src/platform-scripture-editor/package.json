@@ -23,7 +23,8 @@
     "lint:scripts": "eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
-    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts"
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
+    "typecheck": "tsc -p ./tsconfig.json"
   },
   "browserslist": [],
   "peerDependencies": {
@@ -35,7 +36,7 @@
     "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@biblionexus-foundation/platform-editor": "^0.6.4",
+    "@biblionexus-foundation/platform-editor": "^0.6.5",
     "@biblionexus-foundation/scripture-utilities": "^0.0.4",
     "@swc/core": "^1.7.35",
     "@tailwindcss/typography": "^0.5.15",

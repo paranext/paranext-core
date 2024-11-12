@@ -15,6 +15,7 @@ import {
 } from '@renderer/components/dialogs/dialog-definition.model';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { LocalizeKey } from 'platform-bible-utils';
 
 function SelectProjectDialog({
   prompt,
@@ -78,10 +79,12 @@ function SelectProjectDialog({
   );
 }
 
+const localizeSelectProject: LocalizeKey = '%selectProject_title%';
+
 const SELECT_PROJECT_DIALOG: DialogDefinition<typeof SELECT_PROJECT_DIALOG_TYPE> = Object.freeze({
   ...DIALOG_BASE,
   tabType: SELECT_PROJECT_DIALOG_TYPE,
-  defaultTitle: 'Select Project',
+  defaultTitle: localizeSelectProject,
   initialSize: {
     width: 500,
     height: 350,

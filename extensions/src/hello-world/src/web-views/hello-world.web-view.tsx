@@ -1,4 +1,4 @@
-﻿import { VerseRef } from '@sillsdev/scripture';
+import { VerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -48,6 +48,89 @@ globalThis.webViewComponent = function HelloWorld({
     [scrRef],
   );
 
+  const deleteKey = '%helloWorld_delete%';
+  const frenchLocalizationSubmit = '%helloWorld_frenchLocalizationSubmit%';
+  const greetingLoading = '%helloWorld_greetingLoading%';
+  const helloWorld = '%helloWorld_helloWorld%';
+  const listOfSelectedIds = '%helloWorld_listOfSelectedIds%';
+  const logoKey = '%helloWorld_logo%';
+  const noneKey = '%helloWorld_none%';
+  const openResourceViewer = '%helloWorld_openResourceViewer%';
+  const openScriptureEditor = '%helloWorld_openScriptureEditor%';
+  const option1 = '%helloWorld_option1%';
+  const option2 = '%helloWorld_option2%';
+  const quickVerseLoadingLatest = '%helloWorld_loadingLatest%';
+  const reactKey = '%helloWorld_react%';
+  const scriptureLoadingVerse = '%helloWorld_loadingVerse%';
+  const selectedProjectKey = '%helloWorld_selected_project%';
+  const selectProjectKey = '%helloWorld_select_project%';
+  const selectProjectPrompt = '%helloWorld_selectProject_prompt%';
+  const selectProjectsKey = '%helloWorld_select_projects%';
+  const selectProjectsPrompt = '%helloWorld_selectProjects_prompt%';
+  const selectProjectsTitle = '%helloWorld_selectProjects_title%';
+  const selectProjectTitle = '%helloWorld_selectProject_title%';
+  const submit = '%general_button_submit%';
+  const testException = '%helloWorld_throw_test_exception%';
+  const testMe = '%helloWorld_testMe%';
+
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(
+      () => [
+        deleteKey,
+        frenchLocalizationSubmit,
+        greetingLoading,
+        helloWorld,
+        listOfSelectedIds,
+        logoKey,
+        noneKey,
+        openResourceViewer,
+        openScriptureEditor,
+        option1,
+        option2,
+        quickVerseLoadingLatest,
+        reactKey,
+        scriptureLoadingVerse,
+        selectedProjectKey,
+        selectProjectKey,
+        selectProjectPrompt,
+        selectProjectsKey,
+        selectProjectsPrompt,
+        selectProjectsTitle,
+        selectProjectTitle,
+        submit,
+        testException,
+        testMe,
+      ],
+      [],
+    ),
+    useMemo(() => ['fr', 'en'], []),
+  );
+
+  const localizedDelete = localizedStrings[deleteKey];
+  const localizedFrenchLocalizationSubmit = localizedStrings[frenchLocalizationSubmit];
+  const localizedGreetingLoading = localizedStrings[greetingLoading];
+  const localizedHelloWorld = localizedStrings[helloWorld];
+  const localizedListOfSelectedIds = localizedStrings[listOfSelectedIds];
+  const localizedLogo = localizedStrings[logoKey];
+  const localizedNone = localizedStrings[noneKey];
+  const localizedOpenResourceViewer = localizedStrings[openResourceViewer];
+  const localizedOpenScriptureEditor = localizedStrings[openScriptureEditor];
+  const localizedOption1 = localizedStrings[option1];
+  const localizedOption2 = localizedStrings[option2];
+  const localizedQuickVerseLoadingLatest = localizedStrings[quickVerseLoadingLatest];
+  const localizedReact = localizedStrings[reactKey];
+  const localizedScriptureLoadingVerse = localizedStrings[scriptureLoadingVerse];
+  const localizedSelectedProject = localizedStrings[selectedProjectKey];
+  const localizedSelectProject = localizedStrings[selectProjectKey];
+  const localizedSelectProjectPrompt = localizedStrings[selectProjectPrompt];
+  const localizedSelectProjects = localizedStrings[selectProjectsKey];
+  const localizedSelectProjectsPrompt = localizedStrings[selectProjectsPrompt];
+  const localizedSelectProjectsTitle = localizedStrings[selectProjectsTitle];
+  const localizedSelectProjectTitle = localizedStrings[selectProjectTitle];
+  const localizedSubmit = localizedStrings[submit];
+  const localizedTestException = localizedStrings[testException];
+  const localizedTestMe = localizedStrings[testMe];
+
   // Update the clicks when we are informed helloWorld has been run
   useEvent(
     papi.network.getNetworkEvent('helloWorld.onHelloWorld'),
@@ -61,8 +144,8 @@ globalThis.webViewComponent = function HelloWorld({
 
   useEffect(() => {
     logger.debug(`Hello World WebView previous title: ${title}`);
-    updateWebViewDefinition({ title: `Hello World ${clicks}` });
-  }, [title, updateWebViewDefinition, clicks]);
+    updateWebViewDefinition({ title: `${localizedHelloWorld} ${clicks}` });
+  }, [title, updateWebViewDefinition, localizedHelloWorld, clicks]);
 
   const currentRender = useRef(-1);
   currentRender.current += 1;
@@ -72,9 +155,9 @@ globalThis.webViewComponent = function HelloWorld({
     // This is intentionally not a stable reference like `useMemo` or something because we are
     // testing below to make sure `useDialogCallback` returns the same callback every time
     {
-      prompt: `Please select a Scripture project for Hello World WebView: (Render ${currentRender.current})`,
+      prompt: `${localizedSelectProjectPrompt} ${currentRender.current})`,
       iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
-      title: 'Select Hello World Project',
+      title: localizedSelectProjectTitle,
       maximumOpenDialogs: 2,
       // Test ref parameter properly getting latest value
       currentRender: currentRender.current,
@@ -111,7 +194,7 @@ globalThis.webViewComponent = function HelloWorld({
 
   const [latestVerseText] = useData('quickVerse.quickVerse').Verse(
     'latest',
-    'Loading latest Scripture text...',
+    localizedQuickVerseLoadingLatest,
   );
 
   const [projects, setProjects] = useWebViewState<string[]>('projects', []);
@@ -120,13 +203,13 @@ globalThis.webViewComponent = function HelloWorld({
     'platform.selectMultipleProjects',
     useMemo(
       () => ({
-        prompt: 'Please select one or more Scripture projects for Hello World WebView:',
+        prompt: localizedSelectProjectsPrompt,
         iconUrl: 'papi-extension://helloWorld/assets/offline.svg',
-        title: 'Select List of Hello World Projects',
+        title: localizedSelectProjectsTitle,
         selectedProjectIds: projects,
         includeProjectInterfaces: ['platformScripture.USFM_Verse'],
       }),
-      [projects],
+      [localizedSelectProjectsPrompt, localizedSelectProjectsTitle, projects],
     ),
     useCallback(
       (selectedProjects) => {
@@ -163,34 +246,33 @@ globalThis.webViewComponent = function HelloWorld({
 
   const peopleDataProvider = useDataProvider('helloSomeone.people');
 
-  const [personGreeting] = useData('helloSomeone.people').Greeting(name, 'Greeting loading');
+  const [personGreeting] = useData('helloSomeone.people').Greeting(name, localizedGreetingLoading);
 
   const [personAge] = useData('helloSomeone.people').Age(name, -1);
 
   const [currentProjectVerse] = useProjectData(
     'platformScripture.USFM_Verse',
     projectId ?? undefined,
-  ).VerseUSFM(verseRef, 'Loading Verse');
+  ).VerseUSFM(verseRef, localizedScriptureLoadingVerse);
 
   const helloWorldProjectSettings = useHelloWorldProjectSettings(projectId);
   const { headerStyle } = helloWorldProjectSettings;
-  const [localizedStrings] = useLocalizedStrings(
-    useMemo(() => ['%submitButton%'], []),
-    useMemo(() => ['fr', 'en'], []),
-  );
 
-  const localizedString = localizedStrings['%submitButton%'];
+  const genericComboBoxOptions = useMemo(
+    () => [localizedOption1, localizedOption2],
+    [localizedOption1, localizedOption2],
+  );
 
   return (
     <div>
       <div className="title">
-        Hello World <span className="framework">React</span>
+        {localizedHelloWorld} <span className="framework">{localizedReact}</span>
         {/**
          * Note: `Logo` here is inlined into this code as a `data:` url. This is here simply for
          * demonstration purposes. Inlining as a `data:` url is generally not recommended. Rather, it is
          * generally better to use `papi-extension:` to avoid unnecessary bloat
          */}
-        <img width={16} height={16} src={`${Logo}`} alt="Hello World Logo" />
+        <img width={16} height={16} src={`${Logo}`} alt={localizedLogo} />
       </div>
       <div>
         <Button
@@ -202,7 +284,7 @@ globalThis.webViewComponent = function HelloWorld({
               .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
           }}
         >
-          Hello World {clicks}
+          {localizedHelloWorld} {clicks}
         </Button>
       </div>
       <div>
@@ -211,21 +293,25 @@ globalThis.webViewComponent = function HelloWorld({
             throw new Error(`${NAME} test exception!`);
           }}
         >
-          Throw test exception
+          {localizedTestException}
         </Button>
       </div>
       <div>{latestVerseText}</div>
       <Clock />
       <div>
         <input value={nameTemp} onChange={(e) => setName(e.target.value)} />
-        <Button onClick={() => peopleDataProvider?.deletePerson(name)}>Delete {name}</Button>
+        <Button onClick={() => peopleDataProvider?.deletePerson(name)}>
+          {localizedDelete} {name}
+        </Button>
       </div>
       <div>{personGreeting}</div>
       <div>{personAge}</div>
       <br />
-      <div>Selected Project: {projectId ?? 'None'}</div>
       <div>
-        <Button onClick={selectProject}>Select Project</Button>
+        {localizedSelectedProject}: {projectId ?? localizedNone}
+      </div>
+      <div>
+        <Button onClick={selectProject}>{localizedSelectProject}</Button>
       </div>
       <div>
         <Button
@@ -233,36 +319,36 @@ globalThis.webViewComponent = function HelloWorld({
             papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId)
           }
         >
-          Open in Scripture Editor
+          {localizedOpenScriptureEditor}
         </Button>
         <Button
           onClick={() =>
             papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId)
           }
         >
-          Open in Resource Viewer
+          {localizedOpenResourceViewer}
         </Button>
       </div>
       <h3 style={headerStyle}>{verseRef.toString()}</h3>
       <div>{currentProjectVerse}</div>
       <ProjectSettingsEditor {...helloWorldProjectSettings} />
-      <h3>List of Selected Project Id(s):</h3>
-      <div>{(projects.length > 0 ? projects : ['None']).join(', ')}</div>
+      <h3>{localizedListOfSelectedIds}:</h3>
+      <div>{(projects.length > 0 ? projects : [{ localizedNone }]).join(', ')}</div>
       <div>
-        <Button onClick={() => selectProjects()}>Select Projects</Button>
+        <Button onClick={() => selectProjects()}>{localizedSelectProjects}</Button>
       </div>
       <br />
       <div>
-        <TextField label="Test Me" />
+        <TextField label={localizedTestMe} />
         <Checkbox /> {/* no label available */}
         <Switch /> {/* no label available */}
-        <ComboBox buttonPlaceholder="Test Me" options={['option 1', 'option 2']} />
+        <ComboBox buttonPlaceholder={localizedTestMe} options={genericComboBoxOptions} />
         <Slider /> {/* no label available */}
         <BookChapterControl scrRef={scrRef} handleSubmit={(newScrRef) => setScrRef(newScrRef)} />
       </div>
       <div>
-        <h3>French localization of Submit Button:</h3>
-        <div>{localizedString}</div>
+        <h3>{localizedFrenchLocalizationSubmit}:</h3>
+        <div>{localizedSubmit}</div>
       </div>
     </div>
   );

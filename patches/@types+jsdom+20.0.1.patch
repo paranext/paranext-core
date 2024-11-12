@@ -1,0 +1,14 @@
+diff --git a/node_modules/@types/jsdom/base.d.ts b/node_modules/@types/jsdom/base.d.ts
+index 67d7514..745c643 100644
+--- a/node_modules/@types/jsdom/base.d.ts
++++ b/node_modules/@types/jsdom/base.d.ts
+@@ -191,7 +191,9 @@ declare module "jsdom" {
+ 
+         /* ECMAScript Globals */
+         globalThis: DOMWindow;
++        // @ts-ignore error TS2411: Property '["Infinity"]' of type 'number' is not assignable to 'number' index type 'Window'.
+         readonly ["Infinity"]: number;
++        // @ts-ignore error TS2411: Property '["NaN"]' of type 'number' is not assignable to 'number' index type 'Window'.
+         readonly ["NaN"]: number;
+         readonly undefined: undefined;
+ 
