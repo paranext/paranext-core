@@ -26,13 +26,6 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
   },
   items: [
     {
-      label: 'Download/Install Resources',
-      localizeNotes: 'Main application menu > Paratext column > Download/Install Resources',
-      group: 'paratext.sendReceive',
-      order: 1,
-      command: 'platform.downloadAndInstallResources',
-    },
-    {
       label: 'Open Project...',
       tooltip: 'Open project or resource text(s)',
       localizeNotes: 'Main application menu > Paratext column > Open Project',
