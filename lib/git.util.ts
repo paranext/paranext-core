@@ -1,4 +1,4 @@
-import { exec, ExecOptions } from 'child_process';
+import { exec, ExecException, ExecOptions } from 'child_process';
 import { promisify } from 'util';
 import path from 'path';
 import replaceInFile from 'replace-in-file';
@@ -42,19 +42,19 @@ const GIT_CONSTANTS = Object.freeze({
   SINGLE_TEMPLATE_BRANCH,
 });
 
+type GitConstantKeys = keyof typeof GIT_CONSTANTS;
+
 /**
  * Formats a string, replacing `GIT_CONSTANTS` values in brackets like `{MULTI_TEMPLATE_NAME}` and
  * such with their equivalent actual values
  *
  * @param str String to format
- * @param args Rest args of strings to replace `{x}` with, where x is the arg index - 1
  * @returns Formatted string
  */
 function formatGitErrorTemplate(str: string): string {
-  return str.replace(/{([^}]+)}/g, function replaceTemplateNumber(match) {
-    const matchingGitConstant = GIT_CONSTANTS[match.slice(1, -1)];
-    return matchingGitConstant !== undefined ? matchingGitConstant : match;
-  });
+  return str.replace(/{([^}]+)}/g, (match, key: GitConstantKeys) =>
+    key in GIT_CONSTANTS ? GIT_CONSTANTS[key] : match,
+  );
 }
 
 /** Error strings to be checked for in git output for various reasons */
@@ -89,10 +89,19 @@ export async function execGitCommand(
     if (!quiet && result.stdout) console.log(result.stdout);
     if (!quiet && result.stderr) console.log(result.stderr);
     return result;
-  } catch (e) {
-    throw new Error(
-      `code ${e.code}!${e.stderr ? `\n${e.stderr}` : ''}${e.stdout ? `\n${e.stdout}` : ''}`,
-    );
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      // Use the more specific type for `exec`.
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const execError = error as ExecException;
+      throw new Error(
+        `code ${execError.code}!${execError.stderr ? `\n${execError.stderr}` : ''}${
+          execError.stdout ? `\n${execError.stdout}` : ''
+        }`,
+      );
+    } else {
+      throw new Error(`An unknown error occurred while executing git command: ${error}`);
+    }
   }
 }
 
@@ -129,8 +138,14 @@ export async function fetchFromSingleTemplate() {
   // Fetch latest SINGLE_TEMPLATE_REMOTE_NAME branch
   try {
     await execGitCommand(`git fetch ${SINGLE_TEMPLATE_NAME} ${SINGLE_TEMPLATE_BRANCH}`);
-  } catch (e) {
-    console.error(`Error on git fetch on ${SINGLE_TEMPLATE_NAME}: ${e}`);
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error(`Error on git fetch on ${SINGLE_TEMPLATE_NAME}: ${error.message}`);
+    } else {
+      console.error(
+        `An unknown error occurred while fetching from ${SINGLE_TEMPLATE_NAME}: ${error}`,
+      );
+    }
     return false;
   }
   return true;
