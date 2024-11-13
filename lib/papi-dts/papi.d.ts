@@ -2406,6 +2406,10 @@ declare module 'shared/models/docking-framework.model' {
    * Rc-dock's onLayoutChange prop made asynchronous with `webViewDefinition` added. The dock layout
    * component calls this on the web view service when the layout changes.
    *
+   * @param newLayout The changed layout to save.
+   * @param currentTabId The tab being changed
+   * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
+   *   the word "direction" here loosely)
    * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
    *   otherwise
    * @returns Promise that resolves when finished doing things
@@ -2498,8 +2502,10 @@ declare module 'shared/services/web-view.service-model' {
    * HTML or React components.
    */
   export interface WebViewServiceType {
-    /** Event that emits with webView info when a webView is added */
-    onDidAddWebView: PlatformEvent<AddWebViewEvent>;
+    /** @deprecated 13 November 2024. Renamed to {@link onDidOpenWebView} */
+    onDidAddWebView: PlatformEvent<OpenWebViewEvent>;
+    /** Event that emits with webView info when a webView is created */
+    onDidOpenWebView: PlatformEvent<OpenWebViewEvent>;
     /** Event that emits with webView info when a webView is updated */
     onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
     /** Event that emits with webView info when a webView is closed */
@@ -2584,10 +2590,12 @@ declare module 'shared/services/web-view.service-model' {
     webViewType: WebViewType,
     webViewId: WebViewId,
   ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
-  /** Name to use when creating a network event that is fired when webViews are created */
+  /** @deprecated 13 November 2024. Renamed to {@link EVENT_NAME_ON_DID_OPEN_WEB_VIEW} */
   export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
+  /** Name to use when creating a network event that is fired when webViews are created */
+  export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW: `${string}:${string}`;
   /** Event emitted when webViews are created */
-  export type AddWebViewEvent = {
+  export type OpenWebViewEvent = {
     webView: SavedWebViewDefinition;
     layout: Layout;
   };
@@ -2626,14 +2634,6 @@ declare module 'shared/services/web-view-provider.service' {
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
   /**
-   * Indicate if we are aware of an existing web view provider with the given type. If a web view
-   * provider with the given type is somewhere else on the network, this function won't tell you about
-   * it unless something else in the existing process is subscribed to it.
-   *
-   * @param webViewType Type of webView to check for
-   */
-  function hasKnownWebViewProvider(webViewType: string): boolean;
-  /**
    * Register a web view provider to serve webViews for a specified type of webViews
    *
    * @param webViewType Type of web view to provide
@@ -2643,7 +2643,7 @@ declare module 'shared/services/web-view-provider.service' {
    *   WARNING: setting a webView provider mutates the provided object.
    * @returns `webViewProvider` modified to be a network object and able to be disposed with `dispose`
    */
-  function register(
+  function registerWebViewProvider(
     webViewType: string,
     webViewProvider: IWebViewProvider,
   ): Promise<IDisposableWebViewProvider>;
@@ -2653,7 +2653,7 @@ declare module 'shared/services/web-view-provider.service' {
    * @param webViewType Type of webview provider to get
    * @returns Web view provider with the given name if one exists, undefined otherwise
    */
-  function get(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
+  function getWebViewProvider(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
   /**
    * Register a web view controller to represent a web view. It is expected that a web view provider
    * calls this to register a web view controller for a web view that is being created. If a web view
@@ -2708,21 +2708,25 @@ declare module 'shared/services/web-view-provider.service' {
   ): Promise<void>;
   export interface WebViewProviderService {
     initialize: typeof initialize;
-    hasKnown: typeof hasKnownWebViewProvider;
-    register: typeof register;
-    get: typeof get;
+    registerWebViewProvider: typeof registerWebViewProvider;
+    getWebViewProvider: typeof getWebViewProvider;
     registerWebViewController: typeof registerWebViewController;
     postMessageToWebView: typeof postMessageToWebView;
   }
   export interface PapiWebViewProviderService {
-    register: typeof register;
+    /** @deprecated 13 November 2024. Renamed to {@link registerWebViewProvider} */
+    register: (
+      ...args: Parameters<typeof registerWebViewProvider>
+    ) => ReturnType<typeof registerWebViewProvider>;
+    registerWebViewProvider: typeof registerWebViewProvider;
     registerWebViewController: typeof registerWebViewController;
     postMessageToWebView: typeof postMessageToWebView;
   }
   const webViewProviderService: WebViewProviderService;
   /**
    *
-   * Interface for registering webView providers
+   * Interface for registering webView providers, registering webView controllers, and performing
+   * privileged interactions with web views
    */
   export const papiWebViewProviderService: PapiWebViewProviderService;
   export default webViewProviderService;
@@ -6328,7 +6332,8 @@ declare module '@papi/backend' {
     webViews: WebViewServiceType;
     /**
      *
-     * Interface for registering webView providers
+     * Interface for registering webView providers, registering webView controllers, and performing
+     * privileged interactions with web views
      */
     webViewProviders: PapiWebViewProviderService;
     /**
@@ -6531,7 +6536,8 @@ declare module '@papi/backend' {
   export const webViews: WebViewServiceType;
   /**
    *
-   * Interface for registering webView providers
+   * Interface for registering webView providers, registering webView controllers, and performing
+   * privileged interactions with web views
    */
   export const webViewProviders: PapiWebViewProviderService;
   /**

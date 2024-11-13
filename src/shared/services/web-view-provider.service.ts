@@ -100,7 +100,7 @@ function hasKnownWebViewProvider(webViewType: string): boolean {
  *   WARNING: setting a webView provider mutates the provided object.
  * @returns `webViewProvider` modified to be a network object and able to be disposed with `dispose`
  */
-async function register(
+async function registerWebViewProvider(
   webViewType: string,
   webViewProvider: IWebViewProvider,
 ): Promise<IDisposableWebViewProvider> {
@@ -151,7 +151,9 @@ async function register(
  * @param webViewType Type of webview provider to get
  * @returns Web view provider with the given name if one exists, undefined otherwise
  */
-async function get(webViewType: string): Promise<IRegisteredWebViewProvider | undefined> {
+async function getWebViewProvider(
+  webViewType: string,
+): Promise<IRegisteredWebViewProvider | undefined> {
   await initialize();
 
   // Get the object id for this web view provider name
@@ -175,11 +177,12 @@ async function get(webViewType: string): Promise<IRegisteredWebViewProvider | un
 }
 
 /**
- * Indicate if we are aware of an existing web view provider with the given type. If a web view
- * provider with the given type is somewhere else on the network, this function won't tell you about
- * it unless something else in the existing process is subscribed to it.
+ * Indicate if we are aware of an existing web view controller for the web view with the given id.
+ * If a web view controller for the web view with the given id is somewhere else on the network,
+ * this function won't tell you about it unless something else in the existing process is subscribed
+ * to it.
  *
- * @param webViewType Type of webView to check for
+ * @param webViewId Id of web view to check for a web view controller
  */
 function hasKnownWebViewController(webViewId: WebViewId): boolean {
   return (
@@ -281,24 +284,27 @@ async function postMessageToWebView(
 // Declare interfaces for the objects we're exporting so that JSDoc comments propagate
 export interface WebViewProviderService {
   initialize: typeof initialize;
-  hasKnown: typeof hasKnownWebViewProvider;
-  register: typeof register;
-  get: typeof get;
+  registerWebViewProvider: typeof registerWebViewProvider;
+  getWebViewProvider: typeof getWebViewProvider;
   registerWebViewController: typeof registerWebViewController;
   postMessageToWebView: typeof postMessageToWebView;
 }
 
 export interface PapiWebViewProviderService {
-  register: typeof register;
+  /** @deprecated 13 November 2024. Renamed to {@link registerWebViewProvider} */
+  // Split out the function declaration to avoid propagating the jsdoc and overwriting this deprecated message
+  register: (
+    ...args: Parameters<typeof registerWebViewProvider>
+  ) => ReturnType<typeof registerWebViewProvider>;
+  registerWebViewProvider: typeof registerWebViewProvider;
   registerWebViewController: typeof registerWebViewController;
   postMessageToWebView: typeof postMessageToWebView;
 }
 
 const webViewProviderService: WebViewProviderService = {
   initialize,
-  hasKnown: hasKnownWebViewProvider,
-  register,
-  get,
+  registerWebViewProvider,
+  getWebViewProvider,
   registerWebViewController,
   postMessageToWebView,
 };
@@ -306,10 +312,12 @@ const webViewProviderService: WebViewProviderService = {
 /**
  * JSDOC SOURCE papiWebViewProviderService
  *
- * Interface for registering webView providers
+ * Interface for registering webView providers, registering webView controllers, and performing
+ * privileged interactions with web views
  */
 export const papiWebViewProviderService: PapiWebViewProviderService = {
-  register,
+  register: registerWebViewProvider,
+  registerWebViewProvider,
   registerWebViewController,
   postMessageToWebView,
 };

@@ -46,10 +46,11 @@ import logger from '@shared/services/logger.service';
 import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
 import {
-  AddWebViewEvent,
+  OpenWebViewEvent,
   CloseWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
@@ -70,20 +71,39 @@ import {
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import THEME, { SCROLLBAR_STYLES, MUI_OVERRIDES } from '@renderer/theme';
 
-/** Emitter for when a webview is added */
-const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
+/**
+ * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
+ *   support anyone listening to this event over websocket
+ */
+const onDidAddWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
 );
 
-/** Event that emits with webView info when a webView is added */
-export const onDidAddWebView = onDidAddWebViewEmitter.event;
+/** Emitter for when a webview is created */
+const onDidOpenWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
+  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
+);
+
+/**
+ * Emits an event for when a web view is created
+ *
+ * Actually emits two updates to support backwards compatibility with deprecated
+ * {@link onDidAddWebViewEmitter}, but this will likely be removed at some point
+ */
+function emitOnDidOpenWebView(event: OpenWebViewEvent) {
+  onDidAddWebViewEmitter.emit(event);
+  onDidOpenWebViewEmitter.emit(event);
+}
+
+/** Event that emits with webView info when a webView is created */
+export const onDidOpenWebView = onDidOpenWebViewEmitter.event;
 
 /** Emitter for when a webview is updated */
 const onDidUpdateWebViewEmitter = createNetworkEventEmitter<UpdateWebViewEvent>(
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 );
 
-/** Event that emits with webView info when a webView is added */
+/** Event that emits with webView info when a webView is updated */
 export const onDidUpdateWebView = onDidUpdateWebViewEmitter.event;
 
 /** Emitter for when a webview is removed */
@@ -526,10 +546,15 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
 }
 
 /**
- * When rc-dock detects a changed layout, save it. This function is given to the registered
- * papiDockLayout to run when the dock layout changes.
+ * When rc-dock detects a changed layout, save it and do other processing as needed. This function
+ * is given to the registered papiDockLayout to run when the dock layout changes.
  *
  * @param newLayout The changed layout to save.
+ * @param _currentTabId The tab being changed
+ * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
+ *   the word "direction" here loosely)
+ * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
+ *   otherwise
  */
 // TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
 const onLayoutChange: OnLayoutChangeRCDock = async (
@@ -812,7 +837,7 @@ const webViewNoncesById = new Map<WebViewId, string>();
  * shared except with the web view provider that creates a web view. See {@link webViewNoncesById}
  * for more info.
  */
-export function getWebViewNonce(id: WebViewId) {
+function getWebViewNonce(id: WebViewId) {
   const existingNonce = webViewNoncesById.get(id);
 
   if (existingNonce) return existingNonce;
@@ -821,6 +846,18 @@ export function getWebViewNonce(id: WebViewId) {
   webViewNoncesById.set(id, nonce);
 
   return nonce;
+}
+
+/**
+ * Determine whether a nonce is valid for a specific web view
+ *
+ * @param id Id of the web view whose nonce to check against
+ * @param webViewNonce Nonce to test against the real web view nonce. See {@link webViewNoncesById}
+ *   for more info.
+ * @returns `true` if the provided `webViewNonce` is correct and valid; `false` otherwise
+ */
+export function isWebViewNonceCorrect(id: WebViewId, webViewNonce: string) {
+  return webViewNonce === getWebViewNonce(id);
 }
 
 /**
@@ -874,7 +911,7 @@ export const openWebView = async (
   // to the renderer, then search for an existing webview, then get the webview
 
   // Get the webview definition from the webview provider
-  const webViewProvider = await webViewProviderService.get(webViewType);
+  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
 
   if (!webViewProvider)
     throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
@@ -1223,7 +1260,7 @@ export const openWebView = async (
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
   if (finalLayout)
-    onDidAddWebViewEmitter.emit({
+    emitOnDidOpenWebView({
       webView: convertWebViewDefinitionToSaved(finalWebView),
       layout: finalLayout,
     });
@@ -1374,7 +1411,8 @@ export const initialize = () => {
 // #endregion
 
 const papiWebViewService: WebViewServiceType = {
-  onDidAddWebView,
+  onDidAddWebView: onDidOpenWebView,
+  onDidOpenWebView,
   onDidUpdateWebView,
   onDidCloseWebView,
   getWebView: openWebView,
