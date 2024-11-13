@@ -115,6 +115,12 @@ const MANIFEST_FILE_NAME = 'manifest.json';
 /** List of all forbidden extension names. Extensions with these names will not work */
 const FORBIDDEN_EXTENSION_NAMES = ['', PLATFORM_NAMESPACE];
 
+/**
+ * Debounce time and time to wait to restart immediately after restarting if another restart was
+ * requested
+ */
+const RESTART_DELAY_MS = 2000;
+
 /** Save the original `require` function. */
 const requireOriginal = Module.prototype.require;
 
@@ -161,6 +167,11 @@ let availableExtensions: ExtensionInfo[];
  * indicates whether it succeeded.
  */
 let reloadFinishedEventEmitter: platformBibleUtils.PlatformEventEmitter<boolean>;
+
+/** Whether we are currently reloading extensions */
+let isReloading = false;
+/** Whether we should reload extensions again once finished currently reloading */
+let shouldReload = false;
 
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
@@ -581,13 +592,11 @@ function watchForExtensionChanges(): UnsubscriberAsync {
   const reloadExtensionsDebounced = debounce(async (shouldDeactivateExtensions) => {
     try {
       logger.debug('Reload extensions from watching');
-      await reloadExtensions(shouldDeactivateExtensions);
-      reloadFinishedEventEmitter.emit(true);
+      await reloadExtensions(shouldDeactivateExtensions, true);
     } catch (e) {
-      reloadFinishedEventEmitter.emit(false);
       throw new LogError(`Reload extensions from watching failed. Investigate: ${e}`);
     }
-  });
+  }, RESTART_DELAY_MS);
 
   const watcher = chokidar
     .watch(
@@ -832,6 +841,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
  * @returns Unsubscriber that deactivates the extension.
  */
 async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
+  logger.info(`extension.service: importing ${extension.name}`);
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
   // bundle and should not be looked up in the bundle. Assert a more ambiguous type.
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
@@ -839,6 +849,7 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   const extensionModuleAmbiguous = systemRequire(
     /* webpackIgnore: true */ getPathFromUri(extension.dirUri),
   ) as AmbiguousExtensionModule;
+  logger.info(`extension.service: finished importing ${extension.name}`);
   // Some modules import with their exports directly on the module object, while others put their
   // exports in a `default` member on the module. Let's use the module object itself if `activate`
   // is on it, and let's go into `default` otherwise.
@@ -864,7 +875,9 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   Object.freeze(context);
 
   // Activate the extension
+  logger.info(`extension.service: activating ${extension.name}`);
   await extensionModule.activate(context);
+  logger.info(`extension.service: finished activating ${extension.name}`);
 
   // Add registrations that the extension didn't explicitly make itself
   if (extensionModule.deactivate) context.registrations.add(extensionModule.deactivate);
@@ -1135,41 +1148,71 @@ async function resyncContributions(
   await menuDataService.rebuildMenus();
 }
 
-async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<void> {
-  if (shouldDeactivateExtensions && availableExtensions) {
-    await deactivateExtensions(availableExtensions);
+async function reloadExtensions(
+  shouldDeactivateExtensions: boolean,
+  shouldEmitDidReloadEvent: boolean,
+): Promise<void> {
+  if (isReloading) {
+    shouldReload = true;
+    return;
   }
+  isReloading = true;
 
-  await unzipCompressedExtensionFiles();
+  let errorMessage = '';
 
-  // Get a list of all extensions found
-  const allExtensions = await getExtensions();
-
-  // Cache type declarations in development
-  if (!globalThis.isPackaged)
-    try {
-      await cacheExtensionTypeDeclarations(allExtensions);
-    } catch (e) {
-      logger.warn(`Could not cache extension type declarations: ${e}`);
+  try {
+    if (shouldDeactivateExtensions && availableExtensions) {
+      await deactivateExtensions(availableExtensions);
     }
 
-  // Save extensions that have JavaScript to run
-  // If main is an empty string, having no JavaScript is intentional. Do not load this extension
-  availableExtensions = allExtensions.filter((extension) => extension.main);
+    await unzipCompressedExtensionFiles();
 
-  // Store their base URIs in the extension storage service
-  const uriMap: Map<string, string> = new Map();
-  availableExtensions.forEach((extensionInfo) => {
-    uriMap.set(extensionInfo.name, extensionInfo.dirUri);
-    logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
-  });
-  setExtensionUris(uriMap);
+    // Get a list of all extensions found
+    const allExtensions = await getExtensions();
 
-  // Update the menus, settings, etc. - all json contributions the extensions make
-  await resyncContributions(allExtensions);
+    // Cache type declarations in development
+    if (!globalThis.isPackaged)
+      try {
+        await cacheExtensionTypeDeclarations(allExtensions);
+      } catch (e) {
+        logger.warn(`Could not cache extension type declarations: ${e}`);
+      }
 
-  // Active the extensions
-  await activateExtensions(availableExtensions);
+    // Save extensions that have JavaScript to run
+    // If main is an empty string, having no JavaScript is intentional. Do not load this extension
+    availableExtensions = allExtensions.filter((extension) => extension.main);
+
+    // Store their base URIs in the extension storage service
+    const uriMap: Map<string, string> = new Map();
+    availableExtensions.forEach((extensionInfo) => {
+      uriMap.set(extensionInfo.name, extensionInfo.dirUri);
+      logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
+    });
+    setExtensionUris(uriMap);
+
+    // Update the menus, settings, etc. - all json contributions the extensions make
+    await resyncContributions(allExtensions);
+
+    // Active the extensions
+    await activateExtensions(availableExtensions);
+  } catch (e) {
+    errorMessage = platformBibleUtils.getErrorMessage(e);
+  }
+
+  if (shouldEmitDidReloadEvent) {
+    reloadFinishedEventEmitter.emit(!errorMessage);
+  }
+
+  isReloading = false;
+  if (shouldReload) {
+    (async () => {
+      await platformBibleUtils.wait(RESTART_DELAY_MS);
+      shouldReload = false;
+      reloadExtensions(shouldDeactivateExtensions, shouldEmitDidReloadEvent);
+    })();
+  }
+
+  if (errorMessage) throw new Error(errorMessage);
 }
 
 /**
@@ -1189,7 +1232,7 @@ export const initialize = () => {
 
     await normalizeExtensionFileNames();
 
-    await reloadExtensions(false);
+    await reloadExtensions(false, false);
 
     watchForExtensionChanges();
 

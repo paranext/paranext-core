@@ -3,7 +3,7 @@ import { WebViewContentType, WebViewDefinition } from '@shared/models/web-view.m
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
-  getWebView,
+  openWebView,
   saveTabInfoBase,
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
   IFRAME_SANDBOX_ALLOW_SCRIPTS,
@@ -11,19 +11,29 @@ import {
   WEBVIEW_IFRAME_SRCDOC_SANDBOX,
   IFRAME_SANDBOX_ALLOW_POPUPS,
   updateWebViewDefinitionSync,
+  getWebViewNonce,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
-import { BookChapterControl, ScrollGroupSelector, useEvent } from 'platform-bible-react';
-import './web-view.component.css';
-import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
-import { getNetworkEvent } from '@shared/services/network.service';
 import {
   formatReplacementString,
   isLocalizeKey,
   serialize,
   getLocalizeKeysForScrollGroupIds,
 } from 'platform-bible-utils';
+import {
+  BookChapterControl,
+  ScrollGroupSelector,
+  useEvent,
+  useEventAsync,
+} from 'platform-bible-react';
+import './web-view.component.css';
+import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
+import {
+  getWebViewMessageRequestType,
+  WebViewMessageRequestHandler,
+} from '@shared/services/web-view.service-model';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -36,7 +46,7 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
  * @param data Web view definition to load
  */
 async function retrieveWebViewContent(webViewType: string, id: string): Promise<void> {
-  const loadedId = await getWebView(webViewType, undefined, {
+  const loadedId = await openWebView(webViewType, undefined, {
     existingId: id,
     createNewIfNotFound: false,
   });
@@ -55,9 +65,44 @@ export default function WebView({
   allowPopups,
   scrollGroupScrRef,
 }: WebViewTabProps) {
-  // This ref will always be defined
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const iframeRef = useRef<HTMLIFrameElement>(undefined!);
+  // React starts refs as null
+  // eslint-disable-next-line no-null/no-null
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+
+  useEventAsync(
+    useCallback(
+      (callback: (args: Parameters<WebViewMessageRequestHandler>) => void) => {
+        return registerRequestHandler(
+          getWebViewMessageRequestType(id),
+          (...args: Parameters<WebViewMessageRequestHandler>) => callback(args),
+        );
+      },
+      [id],
+    ),
+    useCallback(
+      ([webViewNonce, message, targetOrigin]: Parameters<WebViewMessageRequestHandler>) => {
+        if (webViewNonce !== getWebViewNonce(id))
+          throw new Error(
+            `Web View Component ${id} (type ${webViewType}) received a message with an invalid nonce!`,
+          );
+        if (!iframeRef.current) {
+          logger.error(
+            `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its ref was not set!`,
+          );
+          return;
+        }
+        if (!iframeRef.current.contentWindow) {
+          logger.error(
+            `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its contentWindow was falsy!`,
+          );
+          return;
+        }
+
+        iframeRef.current.contentWindow.postMessage(message, { targetOrigin });
+      },
+      [id, webViewType],
+    ),
+  );
 
   useEvent(
     getNetworkEvent('platform.onDidReloadExtensions'),

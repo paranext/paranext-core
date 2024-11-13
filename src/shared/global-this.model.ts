@@ -7,6 +7,7 @@ import {
   UseWebViewScrollGroupScrRefHook,
   UseWebViewStateHook,
   WebViewDefinitionUpdateInfo,
+  WebViewId,
   WebViewProps,
 } from '@shared/models/web-view.model';
 
@@ -33,6 +34,8 @@ declare global {
    * in WebView iframes.
    */
   var webViewComponent: FunctionComponent<WebViewProps>;
+  /** The id of the current web view. Only used in WebView iframes. */
+  var webViewId: WebViewId;
   /** JSDOC DESTINATION UseWebViewStateHook */
   var useWebViewState: UseWebViewStateHook;
   /** JSDOC DESTINATION UseWebViewScrollGroupScrRefHook */
