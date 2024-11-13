@@ -140,6 +140,10 @@ class HelloWorldProjectWebViewFactory extends WebViewFactory<
         logger.info(
           `Web View Controller with id ${webViewDefinition.id} received request to focus ${name}`,
         );
+        await papi.webViewProviders.postMessageToWebView(webViewDefinition.id, '', {
+          method: 'focusName',
+          name,
+        });
         return true;
       },
     };

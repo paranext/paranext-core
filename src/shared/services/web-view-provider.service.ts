@@ -18,7 +18,9 @@ import { DisposableNetworkObject } from '@shared/models/network-object.model';
 import webViewService from '@shared/services/web-view.service';
 import {
   getWebViewControllerObjectId,
+  getWebViewMessageRequestType,
   WEB_VIEW_CONTROLLER_OBJECT_TYPE,
+  WebViewMessageRequestHandler,
 } from '@shared/services/web-view.service-model';
 import { WebViewId } from '@shared/models/web-view.model';
 
@@ -242,6 +244,40 @@ async function registerWebViewController<WebViewType extends WebViewControllerTy
   return disposableWebViewController;
 }
 
+/**
+ * Sends a message to the specified web view. Expected to be used only by the
+ * {@link IWebViewProvider} that created the web view or the {@link WebViewControllers} that
+ * represents the web view created by the Web View Provider.
+ *
+ * [`postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage) is used to
+ * deliver the message to the web view iframe. The web view can use
+ * [`window.addEventListener("message",
+ * ...)`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#the_dispatched_event)
+ * in order to receive these messages.
+ *
+ * @param webViewId Id of the web view to which to send a message.
+ * @param webViewNonce Pass in the nonce the wb view provider received from
+ *   {@link IWebViewProvider.getWebView}'s `options`
+ * @param message Data to send to the web view. Can only send serializable information
+ * @param targetOrigin Expected origin of the web view. Does not send the message if the web view's
+ *   origin does not match. See [`postMessage`'s
+ *   `targetOrigin`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#targetorigin)
+ *   for more information. Defaults to same origin only (works automatically with React and HTML web
+ *   views)
+ */
+async function postMessageToWebView(
+  webViewId: WebViewId,
+  webViewNonce: string,
+  message: unknown,
+  targetOrigin?: string,
+): Promise<void> {
+  // TODO: check webViewNonce
+  return networkService.request<
+    Parameters<WebViewMessageRequestHandler>,
+    ReturnType<WebViewMessageRequestHandler>
+  >(getWebViewMessageRequestType(webViewId), webViewNonce, message, targetOrigin);
+}
+
 // Declare interfaces for the objects we're exporting so that JSDoc comments propagate
 export interface WebViewProviderService {
   initialize: typeof initialize;
@@ -249,11 +285,13 @@ export interface WebViewProviderService {
   register: typeof register;
   get: typeof get;
   registerWebViewController: typeof registerWebViewController;
+  postMessageToWebView: typeof postMessageToWebView;
 }
 
 export interface PapiWebViewProviderService {
   register: typeof register;
   registerWebViewController: typeof registerWebViewController;
+  postMessageToWebView: typeof postMessageToWebView;
 }
 
 const webViewProviderService: WebViewProviderService = {
@@ -262,6 +300,7 @@ const webViewProviderService: WebViewProviderService = {
   register,
   get,
   registerWebViewController,
+  postMessageToWebView,
 };
 
 /**
@@ -272,6 +311,7 @@ const webViewProviderService: WebViewProviderService = {
 export const papiWebViewProviderService: PapiWebViewProviderService = {
   register,
   registerWebViewController,
+  postMessageToWebView,
 };
 
 export default webViewProviderService;

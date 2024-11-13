@@ -1,7 +1,7 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectDataProvider } from '@papi/frontend/react';
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import useHelloWorldProjectSettings from './use-hello-world-project-settings.hook';
 import ProjectSettingsEditor from './project-settings-editor.component';
 
@@ -16,6 +16,28 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({
   projectId,
   useWebViewState,
 }: WebViewProps) {
+  const [focusedName, setFocusedName] = useWebViewState('focusedName', '');
+
+  useEffect(() => {
+    const webViewMessageListener = ({ data: { method, name } }: MessageEvent) => {
+      switch (method) {
+        case 'focusName':
+          setFocusedName(focusedName === name ? '' : name);
+          break;
+        default:
+          // Unknown method name
+          logger.info(`Received event with unknown method ${method} and name ${name}`);
+          break;
+      }
+    };
+
+    window.addEventListener('message', webViewMessageListener);
+
+    return () => {
+      window.removeEventListener('message', webViewMessageListener);
+    };
+  }, [focusedName, setFocusedName]);
+
   const [max, setMax] = useWebViewState('max', 1);
 
   const pdp = useProjectDataProvider('helloWorld', projectId);
@@ -39,7 +61,7 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({
   }, [pdp, currentName, setCurrentName]);
 
   const helloWorldProjectSettings = useHelloWorldProjectSettings(pdp);
-  const { headerStyle } = helloWorldProjectSettings;
+  const { headerStyle, headerColor } = helloWorldProjectSettings;
 
   return (
     <div className="top">
@@ -69,11 +91,15 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({
         Names:{' '}
         {names.map((name) => (
           <span key={name}>
-            {name}
+            <span style={focusedName === name ? { backgroundColor: headerColor } : undefined}>
+              {name}
+            </span>
             <button
               type="button"
               className="remove-name-button"
-              onClick={() => pdp?.removeName(name)}
+              onClick={async () => {
+                if (await pdp?.removeName(name)) setFocusedName('');
+              }}
             >
               -
             </button>

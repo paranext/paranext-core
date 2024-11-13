@@ -101,6 +101,26 @@ const CATEGORY_WEB_VIEW = 'webView';
 /** Suffix on network objects that indicates that the network object is a web view controller */
 const WEB_VIEW_CONTROLLER_LABEL = 'webViewController';
 
+/** Prefix on requests that indicate that the request is related to web view messages */
+const CATEGORY_WEB_VIEW_MESSAGE = 'webViewMessage';
+
+/** Get request type for posting a message to a web view */
+export function getWebViewMessageRequestType(webViewId: WebViewId) {
+  return serializeRequestType(CATEGORY_WEB_VIEW_MESSAGE, webViewId);
+}
+
+/**
+ * Type of function to receive messages sent to a web view.
+ *
+ * See `web-view-provider.service.ts`'s `postMessageToWebView` and `web-view.component` for
+ * information on this type
+ */
+export type WebViewMessageRequestHandler = (
+  webViewNonce: string,
+  message: unknown,
+  targetOrigin?: string,
+) => Promise<void>;
+
 /** Gets the id for the web view controller network object with the given name */
 export const getWebViewControllerObjectId = (webViewId: string) =>
   `${WEB_VIEW_CONTROLLER_LABEL}${webViewId}`;

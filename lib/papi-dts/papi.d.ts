@@ -2546,6 +2546,19 @@ declare module 'shared/services/web-view.service-model' {
       webViewId: WebViewId,
     ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
   }
+  /** Get request type for posting a message to a web view */
+  export function getWebViewMessageRequestType(webViewId: WebViewId): `${string}:${string}`;
+  /**
+   * Type of function to receive messages sent to a web view.
+   *
+   * See `web-view-provider.service.ts`'s `postMessageToWebView` and `web-view.component` for
+   * information on this type
+   */
+  export type WebViewMessageRequestHandler = (
+    webViewNonce: string,
+    message: unknown,
+    targetOrigin?: string,
+  ) => Promise<void>;
   /** Gets the id for the web view controller network object with the given name */
   export const getWebViewControllerObjectId: (webViewId: string) => string;
   /** Network object type for web view controllers */
@@ -2648,16 +2661,45 @@ declare module 'shared/services/web-view-provider.service' {
     webViewId: WebViewId,
     webViewController: WebViewControllers[WebViewType],
   ): Promise<DisposableNetworkObject<WebViewControllers[WebViewType]>>;
+  /**
+   * Sends a message to the specified web view. Expected to be used only by the
+   * {@link IWebViewProvider} that created the web view or the {@link WebViewControllers} that
+   * represents the web view created by the Web View Provider.
+   *
+   * [`postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage) is used to
+   * deliver the message to the web view iframe. The web view can use
+   * [`window.addEventListener("message",
+   * ...)`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#the_dispatched_event)
+   * in order to receive these messages.
+   *
+   * @param webViewId Id of the web view to which to send a message.
+   * @param webViewNonce Pass in the nonce the wb view provider received from
+   *   {@link IWebViewProvider.getWebView}'s `options`
+   * @param message Data to send to the web view. Can only send serializable information
+   * @param targetOrigin Expected origin of the web view. Does not send the message if the web view's
+   *   origin does not match. See [`postMessage`'s
+   *   `targetOrigin`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#targetorigin)
+   *   for more information. Defaults to same origin only (works automatically with React and HTML web
+   *   views)
+   */
+  function postMessageToWebView(
+    webViewId: WebViewId,
+    webViewNonce: string,
+    message: unknown,
+    targetOrigin?: string,
+  ): Promise<void>;
   export interface WebViewProviderService {
     initialize: typeof initialize;
     hasKnown: typeof hasKnownWebViewProvider;
     register: typeof register;
     get: typeof get;
     registerWebViewController: typeof registerWebViewController;
+    postMessageToWebView: typeof postMessageToWebView;
   }
   export interface PapiWebViewProviderService {
     register: typeof register;
     registerWebViewController: typeof registerWebViewController;
+    postMessageToWebView: typeof postMessageToWebView;
   }
   const webViewProviderService: WebViewProviderService;
   /**
