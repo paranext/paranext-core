@@ -11,7 +11,7 @@ import {
   WEBVIEW_IFRAME_SRCDOC_SANDBOX,
   IFRAME_SANDBOX_ALLOW_POPUPS,
   updateWebViewDefinitionSync,
-  getWebViewNonce,
+  isWebViewNonceCorrect,
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 import {
@@ -81,22 +81,18 @@ export default function WebView({
     ),
     useCallback(
       ([webViewNonce, message, targetOrigin]: Parameters<WebViewMessageRequestHandler>) => {
-        if (webViewNonce !== getWebViewNonce(id))
+        if (!isWebViewNonceCorrect(id, webViewNonce))
           throw new Error(
             `Web View Component ${id} (type ${webViewType}) received a message with an invalid nonce!`,
           );
-        if (!iframeRef.current) {
-          logger.error(
+        if (!iframeRef.current)
+          throw new Error(
             `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its ref was not set!`,
           );
-          return;
-        }
-        if (!iframeRef.current.contentWindow) {
-          logger.error(
+        if (!iframeRef.current.contentWindow)
+          throw new Error(
             `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its contentWindow was falsy!`,
           );
-          return;
-        }
 
         iframeRef.current.contentWindow.postMessage(message, { targetOrigin });
       },

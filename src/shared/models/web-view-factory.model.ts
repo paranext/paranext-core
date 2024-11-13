@@ -88,7 +88,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
       if (!webViewDefinition) return webViewDefinition;
 
       if (webViewDefinition.id !== webViewId)
-        logger.warn(
+        throw new Error(
           `${this.webViewType} WebViewFactory changed web view id from ${webViewId} to ${webViewDefinition.id} while in getWebViewDefinition. This is not expected and could cause problems. Attempting to continue with new id.`,
         );
 

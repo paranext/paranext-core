@@ -380,27 +380,27 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     async (newValue) => HTML_COLOR_NAMES.includes(newValue),
   );
 
-  const helloWorldProjectWebViewProviderPromise = papi.webViewProviders.register(
+  const helloWorldProjectWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     helloWorldProjectWebViewProvider.webViewType,
     helloWorldProjectWebViewProvider,
   );
 
-  const helloWorldProjectViewerProviderPromise = papi.webViewProviders.register(
+  const helloWorldProjectViewerProviderPromise = papi.webViewProviders.registerWebViewProvider(
     helloWorldProjectViewerProvider.webViewType,
     helloWorldProjectViewerProvider,
   );
 
-  const htmlWebViewProviderPromise = papi.webViewProviders.register(
+  const htmlWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     htmlWebViewProvider.webViewType,
     htmlWebViewProvider,
   );
 
-  const reactWebViewProviderPromise = papi.webViewProviders.register(
+  const reactWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     reactWebViewProvider.webViewType,
     reactWebViewProvider,
   );
 
-  const reactWebView2ProviderPromise = papi.webViewProviders.register(
+  const reactWebView2ProviderPromise = papi.webViewProviders.registerWebViewProvider(
     reactWebView2Provider.webViewType,
     reactWebView2Provider,
   );

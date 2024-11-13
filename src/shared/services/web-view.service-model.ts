@@ -22,8 +22,11 @@ import logger from '@shared/services/logger.service';
  * HTML or React components.
  */
 export interface WebViewServiceType {
-  /** Event that emits with webView info when a webView is added */
-  onDidAddWebView: PlatformEvent<AddWebViewEvent>;
+  /** @deprecated 13 November 2024. Renamed to {@link onDidOpenWebView} */
+  onDidAddWebView: PlatformEvent<OpenWebViewEvent>;
+
+  /** Event that emits with webView info when a webView is created */
+  onDidOpenWebView: PlatformEvent<OpenWebViewEvent>;
 
   /** Event that emits with webView info when a webView is updated */
   onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
@@ -161,14 +164,20 @@ export async function getWebViewController<WebViewType extends WebViewController
   return webViewController;
 }
 
-/** Name to use when creating a network event that is fired when webViews are created */
+/** @deprecated 13 November 2024. Renamed to {@link EVENT_NAME_ON_DID_OPEN_WEB_VIEW} */
 export const EVENT_NAME_ON_DID_ADD_WEB_VIEW = serializeRequestType(
   CATEGORY_WEB_VIEW,
   'onDidAddWebView',
 );
 
+/** Name to use when creating a network event that is fired when webViews are created */
+export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW = serializeRequestType(
+  CATEGORY_WEB_VIEW,
+  'onDidOpenWebView',
+);
+
 /** Event emitted when webViews are created */
-export type AddWebViewEvent = {
+export type OpenWebViewEvent = {
   webView: SavedWebViewDefinition;
   layout: Layout;
 };
