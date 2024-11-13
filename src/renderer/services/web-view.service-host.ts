@@ -47,8 +47,11 @@ import LogError from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
 import {
   AddWebViewEvent,
+  CloseWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+  getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   UpdateWebViewEvent,
   WebViewServiceType,
@@ -82,6 +85,14 @@ const onDidUpdateWebViewEmitter = createNetworkEventEmitter<UpdateWebViewEvent>(
 
 /** Event that emits with webView info when a webView is added */
 export const onDidUpdateWebView = onDidUpdateWebViewEmitter.event;
+
+/** Emitter for when a webview is removed */
+const onDidCloseWebViewEmitter = createNetworkEventEmitter<CloseWebViewEvent>(
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+);
+
+/** Event that emits with webView info when a webView is removed */
+export const onDidCloseWebView = onDidCloseWebViewEmitter.event;
 
 /**
  * Alias for `window.open` because `window.open` is deleted to prevent web views from accessing it.
@@ -521,7 +532,15 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
  * @param newLayout The changed layout to save.
  */
 // TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
-const onLayoutChange: OnLayoutChangeRCDock = async (newLayout) => {
+const onLayoutChange: OnLayoutChangeRCDock = async (
+  newLayout,
+  _currentTabId,
+  direction,
+  webViewDefinition,
+) => {
+  if (direction === 'remove' && webViewDefinition)
+    onDidCloseWebViewEmitter.emit({ webView: convertWebViewDefinitionToSaved(webViewDefinition) });
+
   return saveLayout(newLayout);
 };
 
@@ -620,12 +639,12 @@ export const addTab = async <TData = unknown>(
 };
 
 /**
- * Remove a tab in the layout
+ * Closes a tab in the layout
  *
- * @param tabId ID of the tab to remove
- * @returns True if successfully found the tab to remove
+ * @param tabId ID of the tab to close
+ * @returns True if successfully found the tab to close
  */
-export const removeTab = async (tabId: string): Promise<boolean> => {
+export const closeTab = async (tabId: string): Promise<boolean> => {
   return (await getDockLayout()).removeTabFromDock(tabId);
 };
 
@@ -657,7 +676,7 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
  * @throws If the papi dock layout has not been registered
  */
 export function updateWebViewDefinitionSync(
-  webViewId: string,
+  webViewId: WebViewId,
   webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
 ): boolean {
   const didUpdateWebView = getDockLayoutSync().updateWebViewDefinition(
@@ -733,8 +752,8 @@ export function convertWebViewDefinitionToSaved(
 }
 
 /** Explanation in web-view.service-model.ts */
-async function getSavedWebViewDefinition(
-  webViewId: string,
+async function getOpenWebViewDefinition(
+  webViewId: WebViewId,
 ): Promise<SavedWebViewDefinition | undefined> {
   const webViewDefinition = (await getDockLayout()).getWebViewDefinition(webViewId);
   if (webViewDefinition === undefined) return undefined;
@@ -751,7 +770,7 @@ async function getSavedWebViewDefinition(
  * @throws If the papi dock layout has not been registered
  */
 export function getSavedWebViewDefinitionSync(
-  webViewId: string,
+  webViewId: WebViewId,
 ): SavedWebViewDefinition | undefined {
   const webViewDefinition = getDockLayoutSync().getWebViewDefinition(webViewId);
   if (webViewDefinition === undefined) return undefined;
@@ -774,14 +793,63 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
 
 // #endregion
 
-// #region Set up global variables to use in `getWebView`'s `imports` below
+// #region webViewNonce
+
+/**
+ * Map of web view id to `webViewNonce` for that web view. `webViewNonce`s are used to perform
+ * privileged interactions with the web view such as `papi.webViewProviders.postMessageToWebView`.
+ * The web view service generates this nonce and sends it _only_ to the web view provider that
+ * creates the web view. It is generally recommended that this web view provider not share this
+ * nonce with anyone else but only use it within itself and in the web view controller created for
+ * this web view if applicable (See `papi.webViewProviders.registerWebViewController`)
+ */
+const webViewNoncesById = new Map<WebViewId, string>();
+
+/**
+ * Get an existing `webViewNonce` or generate one if one did not already exist.
+ *
+ * WARNING: DO NOT SHARE THIS VALUE. `webViewNonce`s are PRIVILEGED INFORMATION and are not to be
+ * shared except with the web view provider that creates a web view. See {@link webViewNoncesById}
+ * for more info.
+ */
+export function getWebViewNonce(id: WebViewId) {
+  const existingNonce = webViewNoncesById.get(id);
+
+  if (existingNonce) return existingNonce;
+
+  const nonce = newNonce();
+  webViewNoncesById.set(id, nonce);
+
+  return nonce;
+}
+
+/**
+ * Delete a web view nonce. Should be done when the web view is closed.
+ *
+ * @returns `true` if successfully deleted a nonce for this id; `false` if there was not a nonce for
+ *   this id
+ */
+function deleteWebViewNonce(id: WebViewId) {
+  return webViewNoncesById.delete(id);
+}
+
+onDidCloseWebView(({ webView: { id, webViewType } }) => {
+  if (!deleteWebViewNonce(id))
+    logger.warn(
+      `Tried to delete webViewNonce for web view with id ${id} (type ${webViewType}), but a nonce was not found. May not be an issue, but worth investigating`,
+    );
+});
+
+// #endregion
+
+// #region Set up global variables to use in `openWebView`'s `imports` below
 
 globalThis.getSavedWebViewDefinitionById = getSavedWebViewDefinitionSync;
 globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 
 // #endregion
 
-// #region getWebView
+// #region openWebView
 
 /**
  * Creates a new web view or gets an existing one depending on if you request an existing one and if
@@ -795,7 +863,7 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
  *   not create a WebView for this request.
  * @throws If something went wrong like the provider for the webViewType was not found
  */
-export const getWebView = async (
+export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
   options: GetWebViewOptions = {},
@@ -853,10 +921,17 @@ export const getWebView = async (
   }
 
   // Create the new webview or load if it already existed
-  const webView = await webViewProvider.getWebView(existingSavedWebView, optionsDefaulted);
+  const webView = await webViewProvider.getWebView(
+    existingSavedWebView,
+    optionsDefaulted,
+    getWebViewNonce(existingSavedWebView.id),
+  );
 
   // The web view provider didn't want to create this web view
-  if (!webView) return undefined;
+  if (!webView) {
+    deleteWebViewNonce(existingSavedWebView.id);
+    return undefined;
+  }
 
   // Set up WebViewDefinition default values
   /** WebView.contentType is assumed to be React by default. Extensions can specify otherwise */
@@ -917,6 +992,7 @@ export const getWebView = async (
   var getWebViewStateById = window.parent.getWebViewStateById;
   var setWebViewStateById = window.parent.setWebViewStateById;
   var resetWebViewStateById = window.parent.resetWebViewStateById;
+  window.webViewId = '${webView.id}';
   window.getWebViewState = (stateKey, defaultValue) => { return getWebViewStateById('${webView.id}', stateKey, defaultValue) };
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
   window.resetWebViewState = (stateKey) => { resetWebViewStateById('${webView.id}', stateKey) };
@@ -1300,13 +1376,17 @@ export const initialize = () => {
 const papiWebViewService: WebViewServiceType = {
   onDidAddWebView,
   onDidUpdateWebView,
-  getWebView,
-  getSavedWebViewDefinition,
+  onDidCloseWebView,
+  getWebView: openWebView,
+  openWebView,
+  getSavedWebViewDefinition: getOpenWebViewDefinition,
+  getOpenWebViewDefinition,
+  getWebViewController,
 };
 
-async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
+async function openProjectSettingsTab(webViewId: WebViewId): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
-  const projectIdFromWebView = (await getSavedWebViewDefinition(webViewId))?.projectId;
+  const projectIdFromWebView = (await getOpenWebViewDefinition(webViewId))?.projectId;
 
   if (!projectIdFromWebView) return undefined;
 

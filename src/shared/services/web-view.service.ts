@@ -3,10 +3,13 @@ import { getNetworkEvent } from '@shared/services/network.service';
 import {
   AddWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  CloseWebViewEvent,
   UpdateWebViewEvent,
   WebViewServiceType,
+  getWebViewController,
 } from '@shared/services/web-view.service-model';
 import networkObjectService from '@shared/services/network-object.service';
 import networkObjectStatusService from './network-object-status.service';
@@ -17,6 +20,10 @@ const onDidAddWebView: PlatformEvent<AddWebViewEvent> = getNetworkEvent<AddWebVi
 
 const onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent> = getNetworkEvent<UpdateWebViewEvent>(
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+);
+
+const onDidCloseWebView: PlatformEvent<CloseWebViewEvent> = getNetworkEvent<CloseWebViewEvent>(
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
 );
 
 let networkObject: WebViewServiceType;
@@ -59,6 +66,8 @@ const webViewService = createSyncProxyForAsyncObject<WebViewServiceType>(
   {
     onDidAddWebView,
     onDidUpdateWebView,
+    onDidCloseWebView,
+    getWebViewController,
   },
 );
 

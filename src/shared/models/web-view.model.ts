@@ -32,7 +32,61 @@ type WebViewDefinitionBase = {
   webViewType: WebViewType;
   /** Unique ID among webviews specific to this webview instance. */
   id: WebViewId;
-  /** The code for the WebView that papi puts into an iframe */
+  /**
+   * The content for the WebView that papi puts into an iframe. This field differs significantly
+   * depending on which `contentType` you use in your `WebViewDefinition` as described below. If you
+   * are using a React or HTML WebView, you will probably want to use a bundler to bundle your code
+   * together and provide it here.
+   * [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template) is set
+   * up for this use case. Feel free to use it for your extension!
+   *
+   *     ---
+   *
+   * **For React WebViews (default):** string containing all the code you want to run in the iframe
+   * on the frontend. You should set a function component to `globalThis.webViewComponent` in this
+   * code.
+   *
+   * For example, you could pass the bundled output of the following code to as your React Web View
+   * `content`:
+   *
+   * ```tsx
+   * globalThis.webViewComponent = function MyWebView() {
+   *  return <div>Hello World!! This is my React WebView!</div>;
+   * }
+   * ```
+   *
+   * **For HTML WebViews:** string containing all the code you want to run in the iframe on the
+   * frontend. This should be a complete HTML document. Usually,
+   *
+   * For example, you could pass the following string as your HTML Web View `content`:
+   *
+   * ```html
+   * <html>
+   *   <head>
+   *     <style>
+   *       .title {
+   *         color: darkgreen;
+   *       }
+   *     </style>
+   *   </head>
+   *   <body>
+   *     <div class="title">Hello World!! This is my HTML Web View!</div>
+   *   </body>
+   * </html>
+   * ```
+   *
+   *     ---
+   *
+   * **For URL WebViews:** the url you want to load into the iframe on the frontend.
+   *
+   * Note: URL WebViews must have `papi-extension:` or `https:` urls.
+   *
+   * For example, you could pass the following string as your URL Web View `content`:
+   *
+   * ```plain
+   * https://example.com/
+   * ```
+   */
   content: string;
   /**
    * Url of image to show on the title bar of the tab

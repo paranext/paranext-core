@@ -189,8 +189,10 @@ export default class RpcServer implements IRpcHandler {
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
     this.rpcHandlerByMethodName.forEach((handler, methodName) => {
+      if (handler !== this) return;
+
       logger.info(`Method '${methodName}' removed since websocket ${this.name} closed`);
-      if (handler === this) this.rpcHandlerByMethodName.delete(methodName);
+      this.rpcHandlerByMethodName.delete(methodName);
     });
   }
 

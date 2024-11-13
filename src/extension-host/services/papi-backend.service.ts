@@ -46,6 +46,7 @@ import { ISettingsService } from '@shared/services/settings.service-model';
 import settingsService from '@shared/services/settings.service';
 import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
 import projectSettingsService from '@shared/services/project-settings.service';
+import { WebViewFactory as PapiWebViewFactory } from '@shared/models/web-view-factory.model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -65,6 +66,8 @@ const papi = {
   BaseProjectDataProviderEngine: PapiBaseProjectDataProviderEngine,
   /** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
   LayeringProjectDataProviderEngineFactory: PapiLayeringProjectDataProviderEngineFactory,
+  /** JSDOC DESTINATION WebViewFactory */
+  WebViewFactory: PapiWebViewFactory,
 
   // Functions
   /** This is just an alias for internet.fetch */
@@ -130,6 +133,9 @@ Object.freeze(papi.BaseProjectDataProviderEngine);
 /** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
 export const { LayeringProjectDataProviderEngineFactory } = papi;
 Object.freeze(papi.LayeringProjectDataProviderEngineFactory);
+/** JSDOC DESTINATION WebViewFactory */
+export const { WebViewFactory } = papi;
+Object.freeze(papi.WebViewFactory);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);
