@@ -239,8 +239,8 @@ async function registerWebViewController<WebViewType extends WebViewControllerTy
   });
 
   if (webViewControllersById.has(webViewId))
-    logger.warn(
-      `Web view provider service is setting web view controller with id ${webViewId} (type ${webViewType}) in the map over an existing web view. This is not expected.`,
+    throw new Error(
+      `Web view provider service tried to set web view controller with id ${webViewId} (type ${webViewType}) in the map over an existing web view.`,
     );
   webViewControllersById.set(webViewId, disposableWebViewController);
 

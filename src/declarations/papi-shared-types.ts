@@ -489,6 +489,7 @@ declare module 'papi-shared-types' {
    * ```
    */
   export interface DataProviders {
+    // These are examples. Feel free to take them out if we actually need to provide real ones in core
     'platform.stuff': IDataProvider<StuffDataTypes>;
     'platform.placeholder': IDataProvider<PlaceholderDataTypes>;
   }
@@ -574,6 +575,7 @@ declare module 'papi-shared-types' {
    * ```
    */
   export interface WebViewControllers {
+    // These are examples. Feel free to take them out if we actually need to provide real ones in core
     'platform.stuffWebView': NetworkableObject<{ doStuff(thing: string): Promise<boolean> }>;
     'platform.placeholderWebView': NetworkableObject<{
       runPlaceholderStuff(thing: string): Promise<boolean>;

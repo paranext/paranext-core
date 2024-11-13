@@ -88,7 +88,6 @@ async function restartExtensionHost(maxWaitTimeInMS: number) {
   }
   // Tells nodemon to restart the process https://github.com/remy/nodemon/blob/HEAD/doc/events.md#using-nodemon-as-child-process
   extensionHost?.send('restart');
-  return undefined;
 }
 
 function hardKillExtensionHost() {

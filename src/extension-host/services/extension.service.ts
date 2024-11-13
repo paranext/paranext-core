@@ -1206,9 +1206,13 @@ async function reloadExtensions(
   isReloading = false;
   if (shouldReload) {
     (async () => {
-      await platformBibleUtils.wait(RESTART_DELAY_MS);
-      shouldReload = false;
-      reloadExtensions(shouldDeactivateExtensions, shouldEmitDidReloadEvent);
+      try {
+        await platformBibleUtils.wait(RESTART_DELAY_MS);
+        shouldReload = false;
+        await reloadExtensions(shouldDeactivateExtensions, shouldEmitDidReloadEvent);
+      } catch (e) {
+        logger.error(`Subsequent reload after initial reload extensions failed! ${e}`);
+      }
     })();
   }
 
