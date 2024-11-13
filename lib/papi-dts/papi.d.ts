@@ -147,7 +147,61 @@ declare module 'shared/models/web-view.model' {
     webViewType: WebViewType;
     /** Unique ID among webviews specific to this webview instance. */
     id: WebViewId;
-    /** The code for the WebView that papi puts into an iframe */
+    /**
+     * The content for the WebView that papi puts into an iframe. This field differs significantly
+     * depending on which `contentType` you use in your `WebViewDefinition` as described below. If you
+     * are using a React or HTML WebView, you will probably want to use a bundler to bundle your code
+     * together and provide it here.
+     * [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template) is set
+     * up for this use case. Feel free to use it for your extension!
+     *
+     *     ---
+     *
+     * **For React WebViews (default):** string containing all the code you want to run in the iframe
+     * on the frontend. You should set a function component to `globalThis.webViewComponent` in this
+     * code.
+     *
+     * For example, you could pass the bundled output of the following code to as your React Web View
+     * `content`:
+     *
+     * ```tsx
+     * globalThis.webViewComponent = function MyWebView() {
+     *  return <div>Hello World!! This is my React WebView!</div>;
+     * }
+     * ```
+     *
+     * **For HTML WebViews:** string containing all the code you want to run in the iframe on the
+     * frontend. This should be a complete HTML document. Usually,
+     *
+     * For example, you could pass the following string as your HTML Web View `content`:
+     *
+     * ```html
+     * <html>
+     *   <head>
+     *     <style>
+     *       .title {
+     *         color: darkgreen;
+     *       }
+     *     </style>
+     *   </head>
+     *   <body>
+     *     <div class="title">Hello World!! This is my HTML Web View!</div>
+     *   </body>
+     * </html>
+     * ```
+     *
+     *     ---
+     *
+     * **For URL WebViews:** the url you want to load into the iframe on the frontend.
+     *
+     * Note: URL WebViews must have `papi-extension:` or `https:` urls.
+     *
+     * For example, you could pass the following string as your URL Web View `content`:
+     *
+     * ```plain
+     * https://example.com/
+     * ```
+     */
     content: string;
     /**
      * Url of image to show on the title bar of the tab
@@ -563,6 +617,7 @@ declare module 'shared/global-this.model' {
     UseWebViewScrollGroupScrRefHook,
     UseWebViewStateHook,
     WebViewDefinitionUpdateInfo,
+    WebViewId,
     WebViewProps,
   } from 'shared/models/web-view.model';
   /**
@@ -586,6 +641,8 @@ declare module 'shared/global-this.model' {
      * in WebView iframes.
      */
     var webViewComponent: FunctionComponent<WebViewProps>;
+    /** The id of the current web view. Only used in WebView iframes. */
+    var webViewId: WebViewId;
     /**
      *
      * A React hook for working with a state object tied to a webview. Returns a WebView state value and
@@ -2112,6 +2169,688 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
             : never;
   export default ExtractDataProviderDataTypes;
 }
+declare module 'shared/models/web-view-provider.model' {
+  import {
+    GetWebViewOptions,
+    WebViewDefinition,
+    SavedWebViewDefinition,
+  } from 'shared/models/web-view.model';
+  import {
+    DisposableNetworkObject,
+    NetworkObject,
+    NetworkableObject,
+  } from 'shared/models/network-object.model';
+  /**
+   * An object associated with a specific `webViewType` that provides a {@link WebViewDefinition} when
+   * the PAPI wants to open a web view with that `webViewType`. An extension registers a web view
+   * provider with `papi.webViewProviders.register`.
+   *
+   * Web View Providers provide the contents of all web views in Platform.Bible.
+   *
+   * If you want to provide {@link WebViewControllers} to facilitate interaction between your web views
+   * and extensions, you can extend the abstract class {@link WebViewFactory} to make the process
+   * easier. Alternatively, if you want to manage web view controllers manually, you can register them
+   * in {@link IWebViewProvider.getWebView}.
+   */
+  export interface IWebViewProvider extends NetworkableObject {
+    /**
+     * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
+     * providing the contents of the web view and other properties that are important for displaying
+     * the web view.
+     *
+     * The PAPI calls this method as part of opening a new web view or (re)loading an existing web
+     * view. If you want to create {@link WebViewControllers} for the web views the PAPI creates from
+     * this method, you should register it using `papi.webViewProviders.registerWebViewController`
+     * before returning from this method (resolving the returned promise). The {@link WebViewFactory}
+     * abstract class handles this for you, so please consider extending it.
+     *
+     * @param savedWebViewDefinition The saved web view information from which to build a complete web
+     *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
+     *   web view if an existing webview is being called for (matched by ID). Just provides the
+     *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
+     *   the web view with the existing ID was not found.
+     * @param getWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+     *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
+     *   on the options, then those options are passed directly through to this method. That way, if
+     *   you want to adjust what this method does based on the contents of the options passed to
+     *   `papi.WebViews.openWebView`, you can. You can even read other properties on these options if
+     *   someone passes options with other properties to `papi.webViews.openWebView`.
+     * @param webViewNonce Nonce used to perform privileged interactions with the web view created
+     *   from this method's returned {@link WebViewDefinition} such as
+     *   `papi.webViewProviders.postMessageToWebView`. The web view service generates this nonce and
+     *   sends it _only here_ to this web view provider that creates the web view with this id. It is
+     *   generally recommended that this web view provider not share this nonce with anyone else but
+     *   only use it within itself and in the web view controller created for this web view if
+     *   applicable (See `papi.webViewProviders.registerWebViewController`).
+     * @returns Full {@link WebViewDefinition} including the content and other important display
+     *   properties based on the {@link SavedWebViewDefinition} provided
+     */
+    getWebView(
+      savedWebViewDefinition: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
+      webViewNonce: string,
+    ): Promise<WebViewDefinition | undefined>;
+  }
+  /**
+   * A web view provider that has been registered with the PAPI.
+   *
+   * This is what the papi gives on `webViewProviderService.get` (not exposed on the PAPI). Basically
+   * a layer over NetworkObject
+   *
+   * This type is internal to core and is not used by extensions
+   */
+  export interface IRegisteredWebViewProvider extends NetworkObject<IWebViewProvider> {}
+  /**
+   * A web view provider that has been registered with the PAPI and returned to the extension that
+   * registered it. It is able to be disposed with `dispose`.
+   *
+   * The PAPI returns this type from `papi.webViewProviders.register`.
+   */
+  export interface IDisposableWebViewProvider extends DisposableNetworkObject<IWebViewProvider> {}
+}
+declare module 'shared/models/network-object-status.service-model' {
+  import { NetworkObjectDetails } from 'shared/models/network-object.model';
+  export interface NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get details about all available network objects
+     *
+     * @returns Object whose keys are the names of the network objects and whose values are the
+     *   {@link NetworkObjectDetails} for each network object
+     */
+    getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
+  }
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
+    /**
+     * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
+     *
+     * @param objectDetailsToMatch Subset of object details on the network object to wait for.
+     *   Compared to object details using {@link isSubset}
+     * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
+     *   indefinitely
+     * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
+     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
+     *   reached before the network object is registered
+     */
+    waitForNetworkObject: (
+      objectDetailsToMatch: Partial<NetworkObjectDetails>,
+      timeoutInMS?: number,
+    ) => Promise<NetworkObjectDetails>;
+  }
+  export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
+}
+declare module 'shared/services/network-object-status.service' {
+  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  const networkObjectStatusService: NetworkObjectStatusServiceType;
+  export default networkObjectStatusService;
+}
+declare module 'shared/models/docking-framework.model' {
+  import { MutableRefObject, ReactNode } from 'react';
+  import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
+  import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
+  import { LocalizeKey } from 'platform-bible-utils';
+  /**
+   * Saved information used to recreate a tab.
+   *
+   * - {@link TabLoader} loads this into {@link TabInfo}
+   * - {@link TabSaver} saves {@link TabInfo} into this
+   */
+  export type SavedTabInfo = {
+    /**
+     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this ID will
+     * match the `WebViewDefinition.id`
+     */
+    id: string;
+    /** Type of tab - indicates what kind of built-in tab this info represents */
+    tabType: string;
+    /** Data needed to load the tab */
+    data?: unknown;
+  };
+  /**
+   * Information that Paranext uses to create a tab in the dock layout.
+   *
+   * - {@link TabLoader} loads {@link SavedTabInfo} into this
+   * - {@link TabSaver} saves this into {@link SavedTabInfo}
+   */
+  export type TabInfo = SavedTabInfo & {
+    /**
+     * Url of image to show on the title bar of the tab
+     *
+     * Defaults to the software's standard logo.
+     */
+    tabIconUrl?: string;
+    /**
+     * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
+     * tab
+     */
+    tabTitle: string | LocalizeKey;
+    /** Text to show when hovering over the title bar of the tab */
+    tabTooltip?: string;
+    /** Content to show inside the tab. */
+    content: ReactNode;
+    /** (optional) Minimum width that the tab can become in CSS `px` units */
+    minWidth?: number;
+    /** (optional) Minimum height that the tab can become in CSS `px` units */
+    minHeight?: number;
+  };
+  /**
+   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
+   * must provide a {@link TabLoader}.
+   *
+   * For now all tab creators must do their own data type verification
+   */
+  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
+  /**
+   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
+   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
+   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
+   *
+   * @param tabInfo The Paranext tab to save
+   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
+   */
+  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
+  /** Information about a tab in a panel */
+  interface TabLayout {
+    type: 'tab';
+  }
+  /**
+   * Indicates where to display a floating window
+   *
+   * - `cascade` - place the window a bit below and to the right of the previously created floating
+   *   window
+   * - `center` - center the window in the dock layout
+   */
+  type FloatPosition = 'cascade' | 'center';
+  /** The dimensions for a floating tab in CSS `px` units */
+  export type FloatSize = {
+    width: number;
+    height: number;
+  };
+  /** Information about a floating window */
+  export interface FloatLayout {
+    type: 'float';
+    floatSize?: FloatSize;
+    /** Where to display the floating window. Defaults to `cascade` */
+    position?: FloatPosition;
+  }
+  export type PanelDirection =
+    | 'left'
+    | 'right'
+    | 'bottom'
+    | 'top'
+    | 'before-tab'
+    | 'after-tab'
+    | 'maximize'
+    | 'move'
+    | 'active'
+    | 'update';
+  /** Information about a panel */
+  interface PanelLayout {
+    type: 'panel';
+    direction?: PanelDirection;
+    /** If undefined, it will add in the `direction` relative to the previously added tab. */
+    targetTabId?: string;
+  }
+  /** Information about how a Paranext tab fits into the dock layout */
+  export type Layout = TabLayout | FloatLayout | PanelLayout;
+  /** Props that are passed to the web view tab component */
+  export type WebViewTabProps = WebViewDefinition;
+  /**
+   * Rc-dock's onLayoutChange prop made asynchronous with `webViewDefinition` added. The dock layout
+   * component calls this on the web view service when the layout changes.
+   *
+   * @param newLayout The changed layout to save.
+   * @param currentTabId The tab being changed
+   * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
+   *   the word "direction" here loosely)
+   * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
+   *   otherwise
+   * @returns Promise that resolves when finished doing things
+   */
+  export type OnLayoutChangeRCDock = (
+    newLayout: LayoutBase,
+    currentTabId?: string,
+    direction?: DropDirection,
+    webViewDefinition?: WebViewDefinition,
+  ) => Promise<void>;
+  /** Properties related to the dock layout */
+  export type PapiDockLayout = {
+    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
+    dockLayout: DockLayout;
+    /**
+     * A ref to a function that runs when the layout changes. We set this ref to our
+     * {@link onLayoutChange} function
+     */
+    onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
+    /**
+     * Add or update a tab in the layout
+     *
+     * @param savedTabInfo Info for tab to add or update
+     * @param layout Information about where to put a new tab
+     * @returns If tab added, final layout used to display the new tab. If existing tab updated,
+     *   `undefined`
+     */
+    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
+    /**
+     * Add or update a webview in the layout
+     *
+     * @param webView Web view to add or update
+     * @param layout Information about where to put a new webview
+     * @returns If WebView added, final layout used to display the new webView. If existing webView
+     *   updated, `undefined`
+     */
+    addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => Layout | undefined;
+    /**
+     * Remove a tab in the layout
+     *
+     * @param tabId ID of the tab to remove
+     */
+    removeTabFromDock: (tabId: string) => boolean;
+    /**
+     * Gets the WebView definition for the web view with the specified ID
+     *
+     * @param webViewId The ID of the WebView whose web view definition to get
+     * @returns WebView definition with the specified ID or undefined if not found
+     */
+    getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
+    /**
+     * Updates the WebView with the specified ID with the specified properties
+     *
+     * @param webViewId The ID of the WebView to update
+     * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
+     *   same
+     * @returns True if successfully found the WebView to update; false otherwise
+     */
+    updateWebViewDefinition: (
+      webViewId: string,
+      updateInfo: WebViewDefinitionUpdateInfo,
+    ) => boolean;
+    /**
+     * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
+     *
+     * TODO: This should be removed and the `testLayout` imported directly in this file once this
+     * service is refactored to split the code between processes. The only reason this is passed from
+     * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
+     * service is currently all shared code. Refactor should happen in #203
+     */
+    testLayout: LayoutBase;
+  };
+}
+declare module 'shared/services/web-view.service-model' {
+  import {
+    GetWebViewOptions,
+    SavedWebViewDefinition,
+    WebViewId,
+    WebViewType,
+  } from 'shared/models/web-view.model';
+  import { Layout } from 'shared/models/docking-framework.model';
+  import { PlatformEvent } from 'platform-bible-utils';
+  import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
+  import { NetworkObject } from 'shared/models/network-object.model';
+  /**
+   *
+   * Service exposing various functions related to using webViews
+   *
+   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
+   * HTML or React components.
+   */
+  export interface WebViewServiceType {
+    /** @deprecated 13 November 2024. Renamed to {@link onDidOpenWebView} */
+    onDidAddWebView: PlatformEvent<OpenWebViewEvent>;
+    /** Event that emits with webView info when a webView is created */
+    onDidOpenWebView: PlatformEvent<OpenWebViewEvent>;
+    /** Event that emits with webView info when a webView is updated */
+    onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
+    /** Event that emits with webView info when a webView is closed */
+    onDidCloseWebView: PlatformEvent<CloseWebViewEvent>;
+    /** @deprecated 6 November 2024. Renamed to {@link openWebView}. */
+    getWebView: (
+      webViewType: WebViewType,
+      layout?: Layout,
+      options?: GetWebViewOptions,
+    ) => Promise<WebViewId | undefined>;
+    /**
+     * Creates a new web view or gets an existing one depending on if you request an existing one and
+     * if the web view provider decides to give that existing one to you (it is up to the provider).
+     *
+     * @param webViewType Type of WebView to create
+     * @param layout Information about where you want the web view to go. Defaults to adding as a tab
+     * @param options Options that affect what this function does. For example, you can provide an
+     *   existing web view ID to request an existing web view with that ID.
+     * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
+     *   not create a WebView for this request.
+     * @throws If something went wrong like the provider for the webViewType was not found
+     */
+    openWebView: (
+      webViewType: WebViewType,
+      layout?: Layout,
+      options?: GetWebViewOptions,
+    ) => Promise<WebViewId | undefined>;
+    /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
+    getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+    /**
+     * Gets the saved properties on the WebView definition with the specified ID
+     *
+     * Note: this only returns a representation of the current web view definition, not the actual web
+     * view definition itself. Changing properties on the returned definition does not affect the
+     * actual web view definition. You can possibly change the actual web view definition by calling
+     * {@link WebViewServiceType.openWebView} with certain `options`, depending on what options the web
+     * view provider has made available.
+     *
+     * @param webViewId The ID of the WebView whose saved properties to get
+     * @returns Saved properties of the WebView definition with the specified ID or undefined if not
+     *   found
+     */
+    getOpenWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
+    /**
+     * Get an existing web view controller for an open web view.
+     *
+     * A Web View Controller is a network object that represents a web view and whose methods
+     * facilitate communication between its associated web view and extensions that want to interact
+     * with it.
+     *
+     * Web View Controllers are registered on the web view provider service.
+     *
+     * @param webViewType Type of webview controller you expect to get. If the web view controller's
+     *   `webViewType` does not match this, an error will be thrown
+     * @param webViewId Id of web view for which to get the corresponding web view controller if one
+     *   exists
+     * @returns Web view controller with the given name if one exists, undefined otherwise
+     */
+    getWebViewController<WebViewType extends WebViewControllerTypes>(
+      webViewType: WebViewType,
+      webViewId: WebViewId,
+    ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
+  }
+  /** Get request type for posting a message to a web view */
+  export function getWebViewMessageRequestType(webViewId: WebViewId): `${string}:${string}`;
+  /**
+   * Type of function to receive messages sent to a web view.
+   *
+   * See `web-view-provider.service.ts`'s `postMessageToWebView` and `web-view.component` for
+   * information on this type
+   */
+  export type WebViewMessageRequestHandler = (
+    webViewNonce: string,
+    message: unknown,
+    targetOrigin?: string,
+  ) => Promise<void>;
+  /** Gets the id for the web view controller network object with the given name */
+  export const getWebViewControllerObjectId: (webViewId: string) => string;
+  /** Network object type for web view controllers */
+  export const WEB_VIEW_CONTROLLER_OBJECT_TYPE = 'webViewController';
+  export function getWebViewController<WebViewType extends WebViewControllerTypes>(
+    webViewType: WebViewType,
+    webViewId: WebViewId,
+  ): Promise<NetworkObject<WebViewControllers[WebViewType]> | undefined>;
+  /** @deprecated 13 November 2024. Renamed to {@link EVENT_NAME_ON_DID_OPEN_WEB_VIEW} */
+  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
+  /** Name to use when creating a network event that is fired when webViews are created */
+  export const EVENT_NAME_ON_DID_OPEN_WEB_VIEW: `${string}:${string}`;
+  /** Event emitted when webViews are created */
+  export type OpenWebViewEvent = {
+    webView: SavedWebViewDefinition;
+    layout: Layout;
+  };
+  /** Name to use when creating a network event that is fired when webViews are updated */
+  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: `${string}:${string}`;
+  /** Event emitted when webViews are updated */
+  export type UpdateWebViewEvent = {
+    webView: SavedWebViewDefinition;
+  };
+  /** Name to use when creating a network event that is fired when webViews are closed */
+  export const EVENT_NAME_ON_DID_CLOSE_WEB_VIEW: `${string}:${string}`;
+  /** Event emitted when webViews are closed */
+  export type CloseWebViewEvent = {
+    webView: SavedWebViewDefinition;
+  };
+  export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
+}
+declare module 'shared/services/web-view.service' {
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
+  const webViewService: WebViewServiceType;
+  export default webViewService;
+}
+declare module 'shared/services/web-view-provider.service' {
+  /**
+   * Handles registering web view providers and serving web views around the papi. Exposed on the
+   * papi.
+   */
+  import {
+    IDisposableWebViewProvider,
+    IWebViewProvider,
+    IRegisteredWebViewProvider,
+  } from 'shared/models/web-view-provider.model';
+  import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
+  import { DisposableNetworkObject } from 'shared/models/network-object.model';
+  import { WebViewId } from 'shared/models/web-view.model';
+  /** Sets up the service. Only runs once and always returns the same promise after that */
+  const initialize: () => Promise<void>;
+  /**
+   * Register a web view provider to serve webViews for a specified type of webViews
+   *
+   * @param webViewType Type of web view to provide
+   * @param webViewProvider Object to register as a webView provider including control over disposing
+   *   of it.
+   *
+   *   WARNING: setting a webView provider mutates the provided object.
+   * @returns `webViewProvider` modified to be a network object and able to be disposed with `dispose`
+   */
+  function registerWebViewProvider(
+    webViewType: string,
+    webViewProvider: IWebViewProvider,
+  ): Promise<IDisposableWebViewProvider>;
+  /**
+   * Get a web view provider that has previously been set up
+   *
+   * @param webViewType Type of webview provider to get
+   * @returns Web view provider with the given name if one exists, undefined otherwise
+   */
+  function getWebViewProvider(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
+  /**
+   * Register a web view controller to represent a web view. It is expected that a web view provider
+   * calls this to register a web view controller for a web view that is being created. If a web view
+   * provider extends {@link WebViewFactory}, it will call this function automatically.
+   *
+   * A Web View Controller is a network object that represents a web view and whose methods facilitate
+   * communication between its associated web view and extensions that want to interact with it.
+   *
+   * You can get web view controllers with {@link webViewService.getWebViewController}.
+   *
+   * @param webViewType Type of web view for which you are providing this web view controller
+   * @param webViewId Id of web view for which to register the web view controller
+   * @param webViewController Object to register as a web view controller including control over
+   *   disposing of it. Note: the web view controller will be disposed automatically when the web view
+   *   is closed
+   *
+   *   WARNING: setting a web view controller mutates the provided object.
+   * @returns `webViewController` modified to be a network object
+   */
+  function registerWebViewController<WebViewType extends WebViewControllerTypes>(
+    webViewType: WebViewType,
+    webViewId: WebViewId,
+    webViewController: WebViewControllers[WebViewType],
+  ): Promise<DisposableNetworkObject<WebViewControllers[WebViewType]>>;
+  /**
+   * Sends a message to the specified web view. Expected to be used only by the
+   * {@link IWebViewProvider} that created the web view or the {@link WebViewControllers} that
+   * represents the web view created by the Web View Provider.
+   *
+   * [`postMessage`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage) is used to
+   * deliver the message to the web view iframe. The web view can use
+   * [`window.addEventListener("message",
+   * ...)`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#the_dispatched_event)
+   * in order to receive these messages.
+   *
+   * @param webViewId Id of the web view to which to send a message.
+   * @param webViewNonce Nonce used to perform privileged interactions with the web view. Pass in the
+   *   nonce the web view provider received from {@link IWebViewProvider.getWebView}'s `webViewNonce`
+   *   parameter or from {@link WebViewFactory.createWebViewController}'s `webViewNonce` parameter
+   * @param message Data to send to the web view. Can only send serializable information
+   * @param targetOrigin Expected origin of the web view. Does not send the message if the web view's
+   *   origin does not match. See [`postMessage`'s
+   *   `targetOrigin`](https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#targetorigin)
+   *   for more information. Defaults to same origin only (works automatically with React and HTML web
+   *   views)
+   */
+  function postMessageToWebView(
+    webViewId: WebViewId,
+    webViewNonce: string,
+    message: unknown,
+    targetOrigin?: string,
+  ): Promise<void>;
+  export interface WebViewProviderService {
+    initialize: typeof initialize;
+    registerWebViewProvider: typeof registerWebViewProvider;
+    getWebViewProvider: typeof getWebViewProvider;
+    registerWebViewController: typeof registerWebViewController;
+    postMessageToWebView: typeof postMessageToWebView;
+  }
+  export interface PapiWebViewProviderService {
+    /** @deprecated 13 November 2024. Renamed to {@link registerWebViewProvider} */
+    register: (
+      ...args: Parameters<typeof registerWebViewProvider>
+    ) => ReturnType<typeof registerWebViewProvider>;
+    registerWebViewProvider: typeof registerWebViewProvider;
+    registerWebViewController: typeof registerWebViewController;
+    postMessageToWebView: typeof postMessageToWebView;
+  }
+  const webViewProviderService: WebViewProviderService;
+  /**
+   *
+   * Interface for registering webView providers, registering webView controllers, and performing
+   * privileged interactions with web views
+   */
+  export const papiWebViewProviderService: PapiWebViewProviderService;
+  export default webViewProviderService;
+}
+declare module 'shared/models/web-view-factory.model' {
+  import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
+  import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+  import {
+    SavedWebViewDefinition,
+    GetWebViewOptions,
+    WebViewDefinition,
+  } from 'shared/models/web-view.model';
+  /**
+   *
+   * A partial implementation of {@link IWebViewProvider} that includes creating
+   * {@link WebViewControllers} for each web view served by the web view provider. This class handles
+   * registering, disposing, and making sure there is only one web view controller for each web view
+   * for you.
+   *
+   * You can create a new class extending this abstract class to create a web view provider that
+   * serves web views and web view controllers of a specific `webViewType` to facilitate interaction
+   * between those web views and other extensions. You can register it with the PAPI using
+   * `papi.webViewProviders.register`.
+   *
+   * If you want to change your existing `IWebViewProvider` from a plain object to extending this
+   * class, you will need to change your object's existing method named `getWebView`
+   * ({@link IWebViewProvider.getWebView}) to be named `getWebViewDefinition`
+   * ({@link WebViewFactory.getWebViewDefinition}), which is a drop-in replacement. You likely do NOT
+   * want to overwrite this class's `getWebView` because that will eliminate most of the benefits
+   * associated with using this class.
+   *
+   * @see {@link IWebViewProvider} for more information on extending this class.
+   */
+  export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
+    implements IWebViewProvider
+  {
+    readonly webViewType: WebViewType;
+    private readonly webViewControllersMutexMap;
+    private readonly webViewControllersCleanupList;
+    private readonly webViewControllersById;
+    constructor(webViewType: WebViewType);
+    /**
+     * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
+     * providing the contents of the web view and other properties that are important for displaying
+     * the web view.
+     *
+     * WARNING: This method must NOT be overridden if you want any of the benefits of this class. You
+     * are probably looking for {@link WebViewFactory.getWebViewDefinition}.
+     *
+     * If you are transferring a web view provider using a plain object to extending this class, you
+     * should rename your existing `getWebView` to `getWebViewDefinition`.
+     */
+    getWebView(
+      savedWebViewDefinition: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
+      webViewNonce: string,
+    ): Promise<WebViewDefinition | undefined>;
+    /** Disposes of all WVCs that were created by this provider */
+    dispose(): Promise<boolean>;
+    /**
+     * Receives a {@link SavedWebViewDefinition} and fills it out into a full {@link WebViewDefinition},
+     * providing the contents of the web view and other properties that are important for displaying
+     * the web view.
+     *
+     * {@link WebViewFactory} calls this as part of its {@link getWebView}, which is called by the PAPI
+     * as part of opening a new web view. It will also create a web view controller after running this
+     * if applicable.
+     *
+     * See {@link IWebViewProvider.getWebView} for more information on how this method works.
+     *
+     * @param savedWebViewDefinition The saved web view information from which to build a complete web
+     *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
+     *   web view if an existing webview is being called for (matched by ID). Just provides the
+     *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
+     *   the web view with the existing ID was not found.
+     * @param getWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+     *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
+     *   on the options, then those options are passed directly through to this method. That way, if
+     *   you want to adjust what this method does based on the contents of the options passed to
+     *   `papi.WebViews.openWebView`, you can. You can even read other properties on these options if
+     *   someone passes options with other properties to `papi.webViews.openWebView`.
+     * @param webViewNonce Nonce used to perform privileged interactions with the web view created
+     *   from this method's returned {@link WebViewDefinition} such as
+     *   `papi.webViewProviders.postMessageToWebView`. The web view service generates this nonce and
+     *   sends it _only here_ to this web view provider that creates the web view with this id. It is
+     *   generally recommended that this web view provider not share this nonce with anyone else but
+     *   only use it within itself and in the web view controller created for this web view if
+     *   applicable (See `papi.webViewProviders.registerWebViewController`).
+     * @returns Full {@link WebViewDefinition} including the content and other important display
+     *   properties based on the {@link SavedWebViewDefinition} provided
+     */
+    abstract getWebViewDefinition(
+      savedWebViewDefinition: SavedWebViewDefinition,
+      getWebViewOptions: GetWebViewOptions,
+      webViewNonce: string,
+    ): Promise<WebViewDefinition | undefined>;
+    /**
+     * Creates a {@link WebViewController} that corresponds to the {@link WebViewDefinition} provided.
+     * {@link WebViewFactory} calls this as part of its {@link getWebView}. {@link WebViewFactory} will
+     * automatically register this controller with the web view provider service
+     * (`papi.webViewProviders.registerWebViewController`), run its `dispose` when the web view is
+     * closed or this `WebViewFactory` is disposed, and make sure just one web view controller is
+     * created for each web view.
+     *
+     * Alternatively, if you do not want to create web view controllers (or a controller for a
+     * specific web view), feel free to return `undefined` from this method.
+     *
+     * @param webViewDefinition The definition for the web view for which to create a web view
+     *   controller
+     * @param webViewNonce Nonce used to perform privileged interactions with the web view created
+     *   from the `webViewDefinition` parameter such as `papi.webViewProviders.postMessageToWebView`.
+     *   The web view service generates this nonce and sends it _only here_ to this web view provider
+     *   that creates the web view with this id. It is generally recommended that this web view
+     *   provider not share this nonce with anyone else but only use it within itself and here in the
+     *   web view controller created for this web view.
+     * @returns Web view controller for the web view with the `webViewDefinition` provided. Or
+     *   `undefined` if you do not want to create a web view controller for this web view.
+     */
+    abstract createWebViewController(
+      webViewDefinition: WebViewDefinition,
+      webViewNonce: string,
+    ): Promise<WebViewControllers[WebViewType]>;
+  }
+}
 declare module 'papi-shared-types' {
   import type { ScriptureReference, UnsubscriberAsync } from 'platform-bible-utils';
   import type {
@@ -2128,6 +2867,7 @@ declare module 'papi-shared-types' {
   import type { IDisposableDataProvider } from 'shared/models/data-provider.interface';
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
+  import type { NetworkableObject } from 'shared/models/network-object.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -2612,6 +3352,59 @@ declare module 'papi-shared-types' {
       DataProviders[DataProviderName]
     >;
   };
+  /**
+   * {@link NetworkableObject} types for each web view controller supported by PAPI. A Web View
+   * Controller is a network object that represents a web view and whose methods facilitate
+   * communication between its associated web view and extensions that want to interact with it.
+   * `WebViewControllers` can be created by {@link IWebViewProvider} of the same `webViewType`.
+   * Extensions can add web view controllers with corresponding `webViewType`s by adding details to
+   * their `.d.ts` file and registering a web view controller in their web view provider's
+   * `getWebView` function with `papi.webViewProviders.registerWebViewController`. If you want to
+   * create web view controllers, we recommend you create a class derived from the abstract class
+   * {@link WebViewFactory}, which automatically manage the lifecycle of the web view controllers for
+   * you.
+   *
+   * Note: The keys of this interface are the `webViewType`s for the web views associated with these
+   * web view controllers. They must consist of two strings separated by at least one period. We
+   * recommend one period and lower camel case in case we expand the api in the future to allow dot
+   * notation.
+   *
+   * An extension can extend this interface to add a type for the web view controller it registers
+   * by adding the following to its `.d.ts` file (in this example, we are adding the
+   * `'helloSomeone.peopleWebView'` web view controller type):
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export type PeopleWebViewController = NetworkableObject<{
+   *     setSelectedPerson(name: string): Promise<boolean>;
+   *     testRandomMethod(things: string): Promise<string>;
+   *   }>;
+   *
+   *   export interface WebViewControllers {
+   *     'helloSomeone.peopleWebView': PeopleWebViewController;
+   *   }
+   * }
+   * ```
+   */
+  interface WebViewControllers {
+    'platform.stuffWebView': NetworkableObject<{
+      doStuff(thing: string): Promise<boolean>;
+    }>;
+    'platform.placeholderWebView': NetworkableObject<{
+      runPlaceholderStuff(thing: string): Promise<boolean>;
+    }>;
+  }
+  /**
+   * `webViewType`s for each web view controller available on the papi.
+   *
+   * Automatically includes all extensions' web view controllers that are added to
+   * {@link WebViewControllers}.
+   *
+   * @example 'platform.placeholderWebView'
+   */
+  type WebViewControllerTypes = keyof WebViewControllers;
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -2657,390 +3450,6 @@ declare module 'shared/services/command.service' {
    * other services and extensions that have registered commands.
    */
   export type moduleSummaryComments = {};
-}
-declare module 'shared/models/docking-framework.model' {
-  import { MutableRefObject, ReactNode } from 'react';
-  import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
-  import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
-  import { LocalizeKey } from 'platform-bible-utils';
-  /**
-   * Saved information used to recreate a tab.
-   *
-   * - {@link TabLoader} loads this into {@link TabInfo}
-   * - {@link TabSaver} saves {@link TabInfo} into this
-   */
-  export type SavedTabInfo = {
-    /**
-     * Tab ID - a unique identifier that identifies this tab. If this tab is a WebView, this ID will
-     * match the `WebViewDefinition.id`
-     */
-    id: string;
-    /** Type of tab - indicates what kind of built-in tab this info represents */
-    tabType: string;
-    /** Data needed to load the tab */
-    data?: unknown;
-  };
-  /**
-   * Information that Paranext uses to create a tab in the dock layout.
-   *
-   * - {@link TabLoader} loads {@link SavedTabInfo} into this
-   * - {@link TabSaver} saves this into {@link SavedTabInfo}
-   */
-  export type TabInfo = SavedTabInfo & {
-    /**
-     * Url of image to show on the title bar of the tab
-     *
-     * Defaults to the software's standard logo.
-     */
-    tabIconUrl?: string;
-    /**
-     * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
-     * tab
-     */
-    tabTitle: string | LocalizeKey;
-    /** Text to show when hovering over the title bar of the tab */
-    tabTooltip?: string;
-    /** Content to show inside the tab. */
-    content: ReactNode;
-    /** (optional) Minimum width that the tab can become in CSS `px` units */
-    minWidth?: number;
-    /** (optional) Minimum height that the tab can become in CSS `px` units */
-    minHeight?: number;
-  };
-  /**
-   * Function that takes a {@link SavedTabInfo} and creates a Paranext tab out of it. Each type of tab
-   * must provide a {@link TabLoader}.
-   *
-   * For now all tab creators must do their own data type verification
-   */
-  export type TabLoader = (savedTabInfo: SavedTabInfo) => TabInfo;
-  /**
-   * Function that takes a Paranext tab and creates a saved tab out of it. Each type of tab can
-   * provide a {@link TabSaver}. If they do not provide one, the properties added by `TabInfo` are
-   * stripped from TabInfo by `saveTabInfoBase` before saving (so it is just a {@link SavedTabInfo}).
-   *
-   * @param tabInfo The Paranext tab to save
-   * @returns The saved tab info for Paranext to persist. If `undefined`, does not save the tab
-   */
-  export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
-  /** Information about a tab in a panel */
-  interface TabLayout {
-    type: 'tab';
-  }
-  /**
-   * Indicates where to display a floating window
-   *
-   * - `cascade` - place the window a bit below and to the right of the previously created floating
-   *   window
-   * - `center` - center the window in the dock layout
-   */
-  type FloatPosition = 'cascade' | 'center';
-  /** The dimensions for a floating tab in CSS `px` units */
-  export type FloatSize = {
-    width: number;
-    height: number;
-  };
-  /** Information about a floating window */
-  export interface FloatLayout {
-    type: 'float';
-    floatSize?: FloatSize;
-    /** Where to display the floating window. Defaults to `cascade` */
-    position?: FloatPosition;
-  }
-  export type PanelDirection =
-    | 'left'
-    | 'right'
-    | 'bottom'
-    | 'top'
-    | 'before-tab'
-    | 'after-tab'
-    | 'maximize'
-    | 'move'
-    | 'active'
-    | 'update';
-  /** Information about a panel */
-  interface PanelLayout {
-    type: 'panel';
-    direction?: PanelDirection;
-    /** If undefined, it will add in the `direction` relative to the previously added tab. */
-    targetTabId?: string;
-  }
-  /** Information about how a Paranext tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout;
-  /** Props that are passed to the web view tab component */
-  export type WebViewTabProps = WebViewDefinition;
-  /** Rc-dock's onLayoutChange prop made asynchronous - resolves */
-  export type OnLayoutChangeRCDock = (
-    newLayout: LayoutBase,
-    currentTabId?: string,
-    direction?: DropDirection,
-  ) => Promise<void>;
-  /** Properties related to the dock layout */
-  export type PapiDockLayout = {
-    /** The rc-dock dock layout React element ref. Used to perform operations on the layout */
-    dockLayout: DockLayout;
-    /**
-     * A ref to a function that runs when the layout changes. We set this ref to our
-     * {@link onLayoutChange} function
-     */
-    onLayoutChangeRef: MutableRefObject<OnLayoutChangeRCDock | undefined>;
-    /**
-     * Add or update a tab in the layout
-     *
-     * @param savedTabInfo Info for tab to add or update
-     * @param layout Information about where to put a new tab
-     * @returns If tab added, final layout used to display the new tab. If existing tab updated,
-     *   `undefined`
-     */
-    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
-    /**
-     * Add or update a webview in the layout
-     *
-     * @param webView Web view to add or update
-     * @param layout Information about where to put a new webview
-     * @returns If WebView added, final layout used to display the new webView. If existing webView
-     *   updated, `undefined`
-     */
-    addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => Layout | undefined;
-    /**
-     * Remove a tab in the layout
-     *
-     * @param tabId ID of the tab to remove
-     */
-    removeTabFromDock: (tabId: string) => boolean;
-    /**
-     * Gets the WebView definition for the web view with the specified ID
-     *
-     * @param webViewId The ID of the WebView whose web view definition to get
-     * @returns WebView definition with the specified ID or undefined if not found
-     */
-    getWebViewDefinition: (webViewId: string) => WebViewDefinition | undefined;
-    /**
-     * Updates the WebView with the specified ID with the specified properties
-     *
-     * @param webViewId The ID of the WebView to update
-     * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
-     *   same
-     * @returns True if successfully found the WebView to update; false otherwise
-     */
-    updateWebViewDefinition: (
-      webViewId: string,
-      updateInfo: WebViewDefinitionUpdateInfo,
-    ) => boolean;
-    /**
-     * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
-     *
-     * TODO: This should be removed and the `testLayout` imported directly in this file once this
-     * service is refactored to split the code between processes. The only reason this is passed from
-     * `platform-dock-layout.component.tsx` is that we cannot import `testLayout` here since this
-     * service is currently all shared code. Refactor should happen in #203
-     */
-    testLayout: LayoutBase;
-  };
-}
-declare module 'shared/services/web-view.service-model' {
-  import {
-    GetWebViewOptions,
-    SavedWebViewDefinition,
-    WebViewId,
-    WebViewType,
-  } from 'shared/models/web-view.model';
-  import { Layout } from 'shared/models/docking-framework.model';
-  import { PlatformEvent } from 'platform-bible-utils';
-  /**
-   *
-   * Service exposing various functions related to using webViews
-   *
-   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-   * HTML or React components.
-   */
-  export interface WebViewServiceType {
-    /** Event that emits with webView info when a webView is added */
-    onDidAddWebView: PlatformEvent<AddWebViewEvent>;
-    /** Event that emits with webView info when a webView is updated */
-    onDidUpdateWebView: PlatformEvent<UpdateWebViewEvent>;
-    /**
-     * Creates a new web view or gets an existing one depending on if you request an existing one and
-     * if the web view provider decides to give that existing one to you (it is up to the provider).
-     *
-     * @param webViewType Type of WebView to create
-     * @param layout Information about where you want the web view to go. Defaults to adding as a tab
-     * @param options Options that affect what this function does. For example, you can provide an
-     *   existing web view ID to request an existing web view with that ID.
-     * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
-     *   not create a WebView for this request.
-     * @throws If something went wrong like the provider for the webViewType was not found
-     */
-    getWebView: (
-      webViewType: WebViewType,
-      layout?: Layout,
-      options?: GetWebViewOptions,
-    ) => Promise<WebViewId | undefined>;
-    /**
-     * Gets the saved properties on the WebView definition with the specified ID
-     *
-     * Note: this only returns a representation of the current web view definition, not the actual web
-     * view definition itself. Changing properties on the returned definition does not affect the
-     * actual web view definition. You can possibly change the actual web view definition by calling
-     * {@link WebViewServiceType.getWebView} with certain `options`, depending on what options the web
-     * view provider has made available.
-     *
-     * @param webViewId The ID of the WebView whose saved properties to get
-     * @returns Saved properties of the WebView definition with the specified ID or undefined if not
-     *   found
-     */
-    getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
-  }
-  /** Name to use when creating a network event that is fired when webViews are created */
-  export const EVENT_NAME_ON_DID_ADD_WEB_VIEW: `${string}:${string}`;
-  /** Event emitted when webViews are created */
-  export type AddWebViewEvent = {
-    webView: SavedWebViewDefinition;
-    layout: Layout;
-  };
-  /** Name to use when creating a network event that is fired when webViews are updated */
-  export const EVENT_NAME_ON_DID_UPDATE_WEB_VIEW: `${string}:${string}`;
-  /** Event emitted when webViews are updated */
-  export type UpdateWebViewEvent = {
-    webView: SavedWebViewDefinition;
-  };
-  export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
-}
-declare module 'shared/models/network-object-status.service-model' {
-  import { NetworkObjectDetails } from 'shared/models/network-object.model';
-  export interface NetworkObjectStatusRemoteServiceType {
-    /**
-     * Get details about all available network objects
-     *
-     * @returns Object whose keys are the names of the network objects and whose values are the
-     *   {@link NetworkObjectDetails} for each network object
-     */
-    getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
-  }
-  /**
-   *
-   * Provides functions related to the set of available network objects
-   */
-  export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
-    /**
-     * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
-     *
-     * @param objectDetailsToMatch Subset of object details on the network object to wait for.
-     *   Compared to object details using {@link isSubset}
-     * @param timeoutInMS Max duration to wait for the network object. If not provided, it will wait
-     *   indefinitely
-     * @returns Promise that either resolves to the {@link NetworkObjectDetails} for a network object
-     *   once the network object is registered, or rejects if a timeout is provided and the timeout is
-     *   reached before the network object is registered
-     */
-    waitForNetworkObject: (
-      objectDetailsToMatch: Partial<NetworkObjectDetails>,
-      timeoutInMS?: number,
-    ) => Promise<NetworkObjectDetails>;
-  }
-  export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
-}
-declare module 'shared/services/network-object-status.service' {
-  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
-  /**
-   *
-   * Provides functions related to the set of available network objects
-   */
-  const networkObjectStatusService: NetworkObjectStatusServiceType;
-  export default networkObjectStatusService;
-}
-declare module 'shared/services/web-view.service' {
-  import { WebViewServiceType } from 'shared/services/web-view.service-model';
-  const webViewService: WebViewServiceType;
-  export default webViewService;
-}
-declare module 'shared/models/web-view-provider.model' {
-  import {
-    GetWebViewOptions,
-    WebViewDefinition,
-    SavedWebViewDefinition,
-  } from 'shared/models/web-view.model';
-  import {
-    DisposableNetworkObject,
-    NetworkObject,
-    NetworkableObject,
-  } from 'shared/models/network-object.model';
-  import { CanHaveOnDidDispose } from 'platform-bible-utils';
-  export interface IWebViewProvider extends NetworkableObject {
-    /**
-     * @param savedWebView Filled out if an existing webview is being called for (matched by ID). Just
-     *   ID if this is a new request or if the web view with the existing ID was not found
-     * @param getWebViewOptions
-     */
-    getWebView(
-      savedWebView: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
-    ): Promise<WebViewDefinition | undefined>;
-  }
-  export interface WebViewProvider
-    extends NetworkObject<NetworkableObject>,
-      CanHaveOnDidDispose<IWebViewProvider> {}
-  export interface DisposableWebViewProvider
-    extends DisposableNetworkObject<NetworkableObject>,
-      Omit<WebViewProvider, 'dispose'> {}
-}
-declare module 'shared/services/web-view-provider.service' {
-  /**
-   * Handles registering web view providers and serving web views around the papi. Exposed on the
-   * papi.
-   */
-  import {
-    DisposableWebViewProvider,
-    IWebViewProvider,
-    WebViewProvider,
-  } from 'shared/models/web-view-provider.model';
-  /** Sets up the service. Only runs once and always returns the same promise after that */
-  const initialize: () => Promise<void>;
-  /**
-   * Indicate if we are aware of an existing web view provider with the given type. If a web view
-   * provider with the given type is somewhere else on the network, this function won't tell you about
-   * it unless something else in the existing process is subscribed to it.
-   *
-   * @param webViewType Type of webView to check for
-   */
-  function hasKnown(webViewType: string): boolean;
-  /**
-   * Register a web view provider to serve webViews for a specified type of webViews
-   *
-   * @param webViewType Type of web view to provide
-   * @param webViewProvider Object to register as a webView provider including control over disposing
-   *   of it.
-   *
-   *   WARNING: setting a webView provider mutates the provided object.
-   * @returns `webViewProvider` modified to be a network object
-   */
-  function register(
-    webViewType: string,
-    webViewProvider: IWebViewProvider,
-  ): Promise<DisposableWebViewProvider>;
-  /**
-   * Get a web view provider that has previously been set up
-   *
-   * @param webViewType Type of webview provider to get
-   * @returns Web view provider with the given name if one exists, undefined otherwise
-   */
-  function get(webViewType: string): Promise<WebViewProvider | undefined>;
-  export interface WebViewProviderService {
-    initialize: typeof initialize;
-    hasKnown: typeof hasKnown;
-    register: typeof register;
-    get: typeof get;
-  }
-  export interface PapiWebViewProviderService {
-    register: typeof register;
-  }
-  const webViewProviderService: WebViewProviderService;
-  /**
-   *
-   * Interface for registering webView providers
-   */
-  export const papiWebViewProviderService: PapiWebViewProviderService;
-  export default webViewProviderService;
 }
 declare module 'shared/services/internet.service' {
   /** Our shim over fetch. Allows us to control internet access. */
@@ -5593,6 +6002,7 @@ declare module '@papi/core' {
   export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
   export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
+  export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
   export type {
     ExtensionDataScope,
     MandatoryProjectDataTypes,
@@ -5626,7 +6036,10 @@ declare module '@papi/core' {
     WebViewDefinition,
     WebViewProps,
   } from 'shared/models/web-view.model';
-  export type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+  export type {
+    IDisposableWebViewProvider,
+    IWebViewProvider,
+  } from 'shared/models/web-view-provider.model';
   export type {
     SimultaneousProjectSettingsChanges,
     ProjectSettingValidator,
@@ -5823,6 +6236,7 @@ declare module '@papi/backend' {
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
+  import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
   const papi: {
     /**
      *
@@ -5877,6 +6291,28 @@ declare module '@papi/backend' {
      * requirements.
      */
     LayeringProjectDataProviderEngineFactory: typeof PapiLayeringProjectDataProviderEngineFactory;
+    /**
+     *
+     * A partial implementation of {@link IWebViewProvider} that includes creating
+     * {@link WebViewControllers} for each web view served by the web view provider. This class handles
+     * registering, disposing, and making sure there is only one web view controller for each web view
+     * for you.
+     *
+     * You can create a new class extending this abstract class to create a web view provider that
+     * serves web views and web view controllers of a specific `webViewType` to facilitate interaction
+     * between those web views and other extensions. You can register it with the PAPI using
+     * `papi.webViewProviders.register`.
+     *
+     * If you want to change your existing `IWebViewProvider` from a plain object to extending this
+     * class, you will need to change your object's existing method named `getWebView`
+     * ({@link IWebViewProvider.getWebView}) to be named `getWebViewDefinition`
+     * ({@link WebViewFactory.getWebViewDefinition}), which is a drop-in replacement. You likely do NOT
+     * want to overwrite this class's `getWebView` because that will eliminate most of the benefits
+     * associated with using this class.
+     *
+     * @see {@link IWebViewProvider} for more information on extending this class.
+     */
+    WebViewFactory: typeof PapiWebViewFactory;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
     /**
@@ -5896,7 +6332,8 @@ declare module '@papi/backend' {
     webViews: WebViewServiceType;
     /**
      *
-     * Interface for registering webView providers
+     * Interface for registering webView providers, registering webView controllers, and performing
+     * privileged interactions with web views
      */
     webViewProviders: PapiWebViewProviderService;
     /**
@@ -6058,6 +6495,28 @@ declare module '@papi/backend' {
    * requirements.
    */
   export const LayeringProjectDataProviderEngineFactory: typeof PapiLayeringProjectDataProviderEngineFactory;
+  /**
+   *
+   * A partial implementation of {@link IWebViewProvider} that includes creating
+   * {@link WebViewControllers} for each web view served by the web view provider. This class handles
+   * registering, disposing, and making sure there is only one web view controller for each web view
+   * for you.
+   *
+   * You can create a new class extending this abstract class to create a web view provider that
+   * serves web views and web view controllers of a specific `webViewType` to facilitate interaction
+   * between those web views and other extensions. You can register it with the PAPI using
+   * `papi.webViewProviders.register`.
+   *
+   * If you want to change your existing `IWebViewProvider` from a plain object to extending this
+   * class, you will need to change your object's existing method named `getWebView`
+   * ({@link IWebViewProvider.getWebView}) to be named `getWebViewDefinition`
+   * ({@link WebViewFactory.getWebViewDefinition}), which is a drop-in replacement. You likely do NOT
+   * want to overwrite this class's `getWebView` because that will eliminate most of the benefits
+   * associated with using this class.
+   *
+   * @see {@link IWebViewProvider} for more information on extending this class.
+   */
+  export const WebViewFactory: typeof PapiWebViewFactory;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
   /**
@@ -6077,7 +6536,8 @@ declare module '@papi/backend' {
   export const webViews: WebViewServiceType;
   /**
    *
-   * Interface for registering webView providers
+   * Interface for registering webView providers, registering webView controllers, and performing
+   * privileged interactions with web views
    */
   export const webViewProviders: PapiWebViewProviderService;
   /**
@@ -6853,6 +7313,33 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   ) => [localizedStrings: LocalizationData, isLoading: boolean];
   export default useLocalizedStrings;
 }
+declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
+  import { WebViewControllers } from 'papi-shared-types';
+  import { NetworkObject } from 'shared/models/network-object.model';
+  import { WebViewId } from 'shared/models/web-view.model';
+  /**
+   * Gets a Web View Controller with specified provider name
+   *
+   * @param webViewType `webViewType` that the web view controller must support. The TypeScript type
+   *   for the returned web view controller will have the web view controller interface type
+   *   associated with this `webViewType`. If the web view controller does not implement this
+   *   `webViewType` (according to its metadata), an error will be thrown.
+   * @param webViewId Id of the web view for which to get the web view controller OR
+   *   `webViewController` (result of `useWebViewController`, if you want this hook to just return the
+   *   controller again)
+   * @param pdpFactoryId Optional ID of the PDP factory from which to get the Web View Controller if
+   *   the PDP factory supports this project id and project interface. If not provided, then look in
+   *   all available PDP factories for the given project ID.
+   * @returns `undefined` if the Web View Controller has not been retrieved, the requested Web View
+   *   Controller if it has been retrieved and is not disposed, and undefined again if the Web View
+   *   Controller is disposed
+   */
+  const useWebViewController: <WebViewType extends keyof WebViewControllers>(
+    webViewType: WebViewType,
+    webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
+  ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
+  export default useWebViewController;
+}
 declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
   export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
@@ -6864,6 +7351,7 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
   export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
+  export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';

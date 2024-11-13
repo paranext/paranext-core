@@ -88,7 +88,7 @@ export function resolveDialogRequest<TReturn>(
     // We're not awaiting closing it. Doesn't really matter right now if we do or don't successfully close it
     (async () => {
       try {
-        const didClose = await webViewService.removeTab(id);
+        const didClose = await webViewService.closeTab(id);
         if (!didClose)
           logger.error(
             `DialogService error: dialog ${id} that was resolved with data ${serialize(
@@ -132,7 +132,7 @@ export function rejectDialogRequest(id: string, message: string) {
   // We're not awaiting closing it. Doesn't really matter right now if we do or don't successfully close it
   (async () => {
     try {
-      const didClose = await webViewService.removeTab(id);
+      const didClose = await webViewService.closeTab(id);
       if (!didClose)
         logger.error(
           `DialogService error: dialog ${id} that was rejected with error message ${message} was not found in the dock layout in order to close. Please investigate`,

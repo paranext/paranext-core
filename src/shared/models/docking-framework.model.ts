@@ -119,11 +119,23 @@ export type Layout = TabLayout | FloatLayout | PanelLayout;
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;
 
-/** Rc-dock's onLayoutChange prop made asynchronous - resolves */
+/**
+ * Rc-dock's onLayoutChange prop made asynchronous with `webViewDefinition` added. The dock layout
+ * component calls this on the web view service when the layout changes.
+ *
+ * @param newLayout The changed layout to save.
+ * @param currentTabId The tab being changed
+ * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
+ *   the word "direction" here loosely)
+ * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
+ *   otherwise
+ * @returns Promise that resolves when finished doing things
+ */
 export type OnLayoutChangeRCDock = (
   newLayout: LayoutBase,
   currentTabId?: string,
   direction?: DropDirection,
+  webViewDefinition?: WebViewDefinition,
 ) => Promise<void>;
 
 /** Properties related to the dock layout */

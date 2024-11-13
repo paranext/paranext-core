@@ -1,6 +1,10 @@
 declare module 'hello-world' {
-  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
-  import type { DataProviderDataType, MandatoryProjectDataTypes } from '@papi/core';
+  import type {
+    DataProviderDataType,
+    MandatoryProjectDataTypes,
+    NetworkableObject,
+    // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
+  } from '@papi/core';
   import type { IBaseProjectDataProvider } from 'papi-shared-types';
 
   export type HelloWorldProjectDataTypes = MandatoryProjectDataTypes & {
@@ -36,6 +40,16 @@ declare module 'hello-world' {
      */
     times: number;
   };
+
+  export type HelloWorldProjectWebViewController = NetworkableObject<{
+    /**
+     * Attempts to focus a specific name in the web view
+     *
+     * @returns `true` if the name is in the project associated with this web view; `false`
+     *   otherwise
+     */
+    focusName: (name: string) => Promise<boolean>;
+  }>;
 
   /** All html color names according to https://htmlcolorcodes.com/color-names/ */
   type HTMLColorNames =
@@ -183,7 +197,11 @@ declare module 'hello-world' {
 }
 
 declare module 'papi-shared-types' {
-  import type { IHelloWorldProjectDataProvider, HTMLColorNames } from 'hello-world';
+  import type {
+    IHelloWorldProjectDataProvider,
+    HelloWorldProjectWebViewController,
+    HTMLColorNames,
+  } from 'hello-world';
 
   export interface CommandHandlers {
     'helloWorld.helloWorld': () => string;
@@ -251,5 +269,9 @@ declare module 'papi-shared-types' {
      * name](https://htmlcolorcodes.com/color-names/))
      */
     'helloWorld.headerColor': HTMLColorNames;
+  }
+
+  export interface WebViewControllers {
+    'helloWorld.projectWebView': HelloWorldProjectWebViewController;
   }
 }

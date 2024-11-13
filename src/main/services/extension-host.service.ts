@@ -80,6 +80,16 @@ async function waitForExtensionHost(maxWaitTimeInMS: number) {
   if (!didExit) logger.warn(`Extension host did not exit within ${maxWaitTimeInMS.toString()} ms`);
 }
 
+async function restartExtensionHost(maxWaitTimeInMS: number) {
+  if (globalThis.isPackaged) {
+    await waitForExtensionHost(maxWaitTimeInMS);
+    logger.debug('Extension host closed, restarting now');
+    return startExtensionHost();
+  }
+  // Tells nodemon to restart the process https://github.com/remy/nodemon/blob/HEAD/doc/events.md#using-nodemon-as-child-process
+  extensionHost?.send('restart');
+}
+
 function hardKillExtensionHost() {
   if (!extensionHost) return;
 
@@ -165,7 +175,7 @@ async function startExtensionHost() {
         ...sharedArgs,
       ],
       {
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
         env: { ...process.env, NODE_ENV: 'development' },
       },
     );
@@ -198,6 +208,7 @@ const extensionHostService = {
   start: startExtensionHost,
   kill: hardKillExtensionHost,
   waitForClose: waitForExtensionHost,
+  restart: restartExtensionHost,
 };
 
 export default extensionHostService;
