@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Archiving;
 using Paratext.Data.Users;
@@ -94,7 +95,11 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         if (!RegistrationInfo.DefaultUser.IsValid)
         {
             throw new Exception(
-                $"User registration is not valid. Cannot retrieve resources from DBL"
+                LocalizationService.GetLocalizedString(
+                    PapiClient,
+                    "%downloadResources_errorRegistrationInvalid%",
+                    $"User registration is not valid. Cannot retrieve resources from DBL."
+                )
             );
         }
 
@@ -113,32 +118,40 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             .ToList();
     }
 
-    private bool TryFindResource(string dblEntryUid, out InstallableResource? resource)
+    private void FindResource(
+        string dblEntryUid,
+        string messageToThrowIfNotFound,
+        out InstallableResource resource
+    )
     {
-        resource = _resources?.FirstOrDefault(r => r.DBLEntryUid.Id == dblEntryUid);
-        return resource != null;
+        resource =
+            _resources?.FirstOrDefault(r => r.DBLEntryUid.Id == dblEntryUid)
+            ?? throw new Exception(messageToThrowIfNotFound);
     }
 
     /// <summary>
     /// Try to install DBL resource with specified DBL id
     /// </summary>
-    /// <returns>
-    /// True if successful. False/throws if unsuccessful.
-    /// </returns>
-    private bool InstallDblResource(string DBLEntryUid)
+    private void InstallDblResource(string DBLEntryUid)
     {
-        if (!TryFindResource(DBLEntryUid, out var installableResource))
-        {
-            throw new Exception($"Resource not available from DBL");
-        }
+        FindResource(
+            DBLEntryUid,
+            LocalizationService.GetLocalizedString(
+                PapiClient,
+                "%downloadResources_errorInstallResource_resourceNotFound%",
+                $"Resource not available from DBL."
+            ),
+            out var installableResource
+        );
 
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-        // We've already checked if installableResource is null
         if (installableResource.Installed && !installableResource.IsNewerThanCurrentlyInstalled())
             throw new Exception(
-                $"Resource is already installed and up to date. Installation skipped."
+                LocalizationService.GetLocalizedString(
+                    PapiClient,
+                    "%downloadResources_errorInstallResource_resourceAlreadyInstalled%",
+                    $"Resource is already installed and up to date. Installation skipped."
+                )
             );
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
 
         // Note that we don't get any info telling if the installation succeeded or failed
         installableResource.Install();
@@ -146,37 +159,52 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         ScrTextCollection.RefreshScrTexts();
 
         if (!ScrTextCollection.IsPresent(installableResource.ExistingScrText))
-            throw new Exception($"Resource cannot be found. Installation failed.");
+            throw new Exception(
+                LocalizationService.GetLocalizedString(
+                    PapiClient,
+                    "%downloadResources_errorInstallResource_installationFailed%",
+                    $"Resource cannot be found after attempted installation. Installation failed."
+                )
+            );
 
         SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
-
-        return true;
     }
 
     /// <summary>
     /// Try to uninstall DBL resource with specified DBL id
     /// </summary>
-    /// <returns>
-    /// True if successful. False/throws if unsuccessful.
-    /// </returns>
-    private bool UninstallDblResource(string DBLEntryUid)
+    private void UninstallDblResource(string DBLEntryUid)
     {
-        if (!TryFindResource(DBLEntryUid, out var installableResource))
-        {
-            throw new Exception($"Resource not found on list of DBL resources.");
-        }
+        FindResource(
+            DBLEntryUid,
+            LocalizationService.GetLocalizedString(
+                PapiClient,
+                "%downloadResources_errorUninstallResource_resourceNotFound%",
+                $"Resource not found on list of DBL resources."
+            ),
+            out var installableResource
+        );
 
-#pragma warning disable CS8602 // Dereference of a possibly null reference.
-        // We've already checked if installableResource is null
         if (!installableResource.Installed)
-            throw new Exception($"Resource is not currently installed, so it can't be removed.");
-#pragma warning restore CS8602 // Dereference of a possibly null reference.
+            throw new Exception(
+                LocalizationService.GetLocalizedString(
+                    PapiClient,
+                    "%downloadResources_errorUninstallResource_resourceNotInstalled%",
+                    $"Resource is not currently installed, so it can't be removed."
+                )
+            );
 
         var objectToBeDeleted = installableResource.ExistingScrText;
 
         var isPresent = ScrTextCollection.IsPresent(objectToBeDeleted);
         if (!isPresent)
-            throw new Exception($"Resource cannot be located, so it can't be removed.");
+            throw new Exception(
+                LocalizationService.GetLocalizedString(
+                    PapiClient,
+                    "%downloadResources_errorUninstallResource_localResourceNotFound%",
+                    $"Resource cannot be located, so it can't be removed."
+                )
+            );
 
         // Note that we don't get any info telling if uninstalling succeeded or failed
         ScrTextCollection.DeleteProject(objectToBeDeleted);
@@ -185,11 +213,15 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
         isPresent = ScrTextCollection.IsPresent(objectToBeDeleted);
         if (isPresent)
-            throw new Exception($"Resource is still present. Removing failed.");
+            throw new Exception(
+                LocalizationService.GetLocalizedString(
+                    PapiClient,
+                    "%downloadResources_errorUninstallResource_localResourceStillPresent%",
+                    $"Resource is still present. Removing failed."
+                )
+            );
 
         SendDataUpdateEvent(DBL_RESOURCES, "DBL resources data updated");
-
-        return true;
     }
 
     #endregion
