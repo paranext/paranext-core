@@ -35,7 +35,7 @@ class HelloCheck implements Check {
     return true;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   getCheckDetails(): CheckDetails {
     return checkDetails;
   }

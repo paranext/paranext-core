@@ -243,7 +243,7 @@ class LocalizationDataProviderEngine
   implements IDataProviderEngine<LocalizationDataDataTypes>
 {
   // This method legitimately does not need to call anything else in this class as of now
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getLocalizedString({ localizeKey, locales = [] }: LocalizationSelector) {
     const languages = locales.length > 0 ? [...locales] : await getDefaultLanguages();
 
@@ -300,13 +300,13 @@ class LocalizationDataProviderEngine
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
     throw new Error('setLocalizedString disabled');
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
     throw new Error('setLocalizedStrings disabled');
   }

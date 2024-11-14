@@ -32,7 +32,11 @@ module.exports = {
     // Rules in each section are generally in alphabetical order. However, several
     // `@typescript-eslint` rules require disabling the equivalent ESLint rule. So in these cases
     // each ESLint rule is turned off immediately above the corresponding `@typescript-eslint` rule.
-    'import/no-anonymous-default-export': ['error', { allowCallExpression: false }],
+    'class-methods-use-this': 'off',
+    '@typescript-eslint/class-methods-use-this': [
+      'error',
+      { ignoreOverrideMethods: true, ignoreClassesThatImplementAnInterface: false },
+    ],
     '@typescript-eslint/explicit-member-accessibility': ['error', { accessibility: 'no-public' }],
     'lines-between-class-members': 'off',
     '@typescript-eslint/lines-between-class-members': [
@@ -75,6 +79,7 @@ module.exports = {
     'no-useless-constructor': 'off',
     '@typescript-eslint/no-useless-constructor': 'error',
     'comma-dangle': ['error', 'always-multiline'],
+    'import/no-anonymous-default-export': ['error', { allowCallExpression: false }],
     indent: 'off',
     'jsx-a11y/label-has-associated-control': [
       'error',

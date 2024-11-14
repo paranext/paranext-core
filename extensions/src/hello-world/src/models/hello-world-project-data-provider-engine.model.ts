@@ -128,7 +128,8 @@ class HelloWorldProjectDataProviderEngine
     return newNumber;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  // Required method since this is a data provider engine
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setNames(): Promise<
     DataProviderUpdateInstructions<ProjectInterfaceDataTypes['helloWorld']>
   > {

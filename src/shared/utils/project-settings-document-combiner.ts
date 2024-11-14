@@ -93,8 +93,6 @@ export default class ProjectSettingsDocumentCombiner extends SettingsDocumentCom
     >;
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override performSchemaValidation(document: JsonDocumentLike, docType: string): void {
     performSchemaValidation(document, docType);
   }

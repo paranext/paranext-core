@@ -276,8 +276,6 @@ export default class MenuDocumentCombiner extends DocumentCombiner {
     return retVal;
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
     // The starting document has to validate against the output schema, too
     performSchemaValidation(baseDocument, 'starting');
@@ -343,8 +341,6 @@ export default class MenuDocumentCombiner extends DocumentCombiner {
     // TODO: Validate that extensions only add to objects that are marked as extensible
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateOutput(output: JsonDocumentLike): void {
     performSchemaValidation(output, 'output');
     // Once the schema has been validated, we know the type should match
@@ -371,8 +367,6 @@ export default class MenuDocumentCombiner extends DocumentCombiner {
   }
 
   // Combine the webview menu defaults for any web views that indicate that is desired
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformFinalOutputBeforeValidation(
     finalOutput: JsonDocumentLike,
   ): JsonDocumentLike {
