@@ -24,6 +24,7 @@ import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
+import TooltipExamples from './basics/tooltip.examples.component';
 
 function Basics({ direction }: HasDirection) {
   return (
@@ -52,6 +53,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Tabs">Tabs</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Table">Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Toggle Group">Toggle Group</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Tooltip">Tooltip</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Alert">
@@ -131,6 +133,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Toggle Group">
           <ToggleGroupExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Tooltip">
+          <TooltipExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

@@ -1,11 +1,18 @@
-import { Tooltip } from '@mui/material';
-import { CommandHandler, HamburgerMenuButton } from 'platform-bible-react';
-import './platform-tab-title.component.scss';
-import menuDataService from '@shared/services/menu-data.service';
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { useCallback, useMemo, useRef } from 'react';
+import menuDataService from '@shared/services/menu-data.service';
+import {
+  Button,
+  CommandHandler,
+  HamburgerMenuButton,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
+import { useCallback, useMemo, useRef } from 'react';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
+import './platform-tab-title.component.scss';
 
 type PlatformTabTitleProps = {
   /** What type of WebView this is. Unique to all other WebView definitions */
@@ -54,8 +61,6 @@ export default function PlatformTabTitle({
 
   const [webViewMenu, , isLoading] = menuInfo;
 
-  const tooltipDiv = tooltip ? <div className="tooltip">{tooltip}</div> : '';
-
   const icon = (
     <div
       className="tab-menu-icon"
@@ -81,23 +86,32 @@ export default function PlatformTabTitle({
   );
 
   return (
-    <Tooltip title={tooltipDiv}>
-      <div ref={containerRef} className="title">
-        {isLoading || !webViewMenu?.topMenu ? (
-          icon
-        ) : (
-          <HamburgerMenuButton
-            commandHandler={commandHandler}
-            normalMenu={webViewMenu?.topMenu}
-            className="tab-menu-button"
-            aria-label={tabLabel}
-            containerRef={containerRef}
-          >
-            {icon}
-          </HamburgerMenuButton>
-        )}
-        <span>{title}</span>
-      </div>
-    </Tooltip>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button>
+            <div ref={containerRef} className="title">
+              {isLoading || !webViewMenu?.topMenu ? (
+                icon
+              ) : (
+                <HamburgerMenuButton
+                  commandHandler={commandHandler}
+                  normalMenu={webViewMenu?.topMenu}
+                  className="tab-menu-button"
+                  aria-label={tabLabel}
+                  containerRef={containerRef}
+                >
+                  {icon}
+                </HamburgerMenuButton>
+              )}
+              <span>{title}</span>
+            </div>
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }

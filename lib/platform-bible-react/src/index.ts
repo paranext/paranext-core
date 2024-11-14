@@ -115,6 +115,12 @@ export {
   VerticalTabsTrigger,
 } from './components/basics/tabs-vertical';
 export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-group';
+export {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from './components/shadcn-ui/tooltip';
 
 export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
 export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
