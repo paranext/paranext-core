@@ -18,6 +18,7 @@ import MarketplaceExamples from './advanced/marketplace.example.component';
 import InventoryExample from './advanced/inventory-example.component';
 import SettingsListExamples from './advanced/settings-list.examples.component';
 import BookSelectorExample from './advanced/book-selector-example.component';
+import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
 
 function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -80,6 +81,7 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Scroll Group Selector">
             Scroll Group Selector
           </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
@@ -146,6 +148,10 @@ function Compositions({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Settings List">
           <SettingsListExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Markdown Renderer">
+          <MarkdownRendererExample />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
