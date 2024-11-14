@@ -161,6 +161,6 @@ export abstract class DataProviderEngine<TDataTypes extends DataProviderDataType
   // @ts-expect-error ts(6133) `updateInstructions` is not used in this method, but we don't care
   // because we want inheriting classes to be able to get this method with Intellisense without
   // an underscore that indicates to TypeScript that we aren't using the parameter
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this, @typescript-eslint/no-unused-vars
   notifyUpdate(updateInstructions?: DataProviderUpdateInstructions<TDataTypes>): void {}
 }

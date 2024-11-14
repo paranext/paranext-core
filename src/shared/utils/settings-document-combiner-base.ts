@@ -189,14 +189,10 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     return this.localizedOutputPromise;
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
     this.performSchemaValidation(baseDocument, PLATFORM_NAMESPACE);
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformBaseDocumentAfterValidation(
     baseDocument: JsonDocumentLike,
   ): JsonDocumentLike {
@@ -208,8 +204,6 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateContribution(documentName: string, document: JsonDocumentLike): void {
     // Make sure it is a SettingsContribution
     this.performSchemaValidation(document, documentName);
@@ -241,8 +235,6 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformContributionAfterValidation(
     documentName: string,
     document: JsonDocumentLike,
@@ -255,8 +247,6 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateOutput(): void {
     // We already validated input documents and built the output ourselves, so we don't have any more
     // validating to do. Unless someday we want to double check we have a properly formatted

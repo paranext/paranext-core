@@ -87,14 +87,10 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     ) as T extends string ? LanguageStrings | undefined : LocalizedStringDataContribution;
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
     performSchemaValidation(baseDocument, PLATFORM_NAMESPACE);
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformBaseDocumentAfterValidation(
     baseDocument: JsonDocumentLike,
   ): JsonDocumentLike {
@@ -105,14 +101,10 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateContribution(_documentName: string, document: JsonDocumentLike): void {
     performSchemaValidation(document, PLATFORM_NAMESPACE);
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformContributionAfterValidation(
     _documentName: string,
     document: JsonDocumentLike,
@@ -124,8 +116,6 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateOutput(output: JsonDocumentLike): void {
     performSchemaValidation(output, 'output');
   }
