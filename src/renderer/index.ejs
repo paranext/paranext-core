@@ -66,6 +66,7 @@
         https: communicate with secure networks
         ws: communicate with webSockets
           TODO: try to template the specific url from ClientNetworkConnector in. paranext-core#89
+        localhost:* communicate with local servers that extensions launch
       img-src load images
         'self' so images can be loaded from us
         papi-extension: so images can be loaded from installed extensions
@@ -100,7 +101,7 @@
         object-src 'none';
         worker-src 'self';
         manifest-src 'self';
-        connect-src 'self' https: ws:;
+        connect-src 'self' https: ws: localhost:*;
         img-src 'self' papi-extension: https: data:;
         media-src 'self' papi-extension: https: data:;
         font-src 'self' papi-extension: https: data:;

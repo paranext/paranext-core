@@ -1,5 +1,6 @@
 import { cn } from '@/utils/shadcn-ui.util';
-import Markdown from 'markdown-to-jsx';
+import Markdown, { MarkdownToJSX } from 'markdown-to-jsx';
+import { useMemo } from 'react';
 
 interface MarkdownRendererProps {
   /** Optional unique identifier */
@@ -7,6 +8,12 @@ interface MarkdownRendererProps {
   /** The markdown string to render */
   markdown: string;
   className?: string;
+  /**
+   * The [`target` attribute for `a` html
+   * tags](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#target). Defaults to not
+   * adding a `target` to `a` tags
+   */
+  anchorTarget?: string;
 }
 
 /**
@@ -17,10 +24,27 @@ interface MarkdownRendererProps {
  * @param id Optional unique identifier
  * @returns A div containing the rendered markdown content.
  */
-export default function MarkdownRenderer({ id, markdown, className }: MarkdownRendererProps) {
+export default function MarkdownRenderer({
+  id,
+  markdown,
+  className,
+  anchorTarget,
+}: MarkdownRendererProps) {
+  const options: MarkdownToJSX.Options = useMemo(
+    () => ({
+      overrides: {
+        a: {
+          props: {
+            target: anchorTarget,
+          },
+        },
+      },
+    }),
+    [anchorTarget],
+  );
   return (
     <div id={id} className={cn('pr-twp tw-prose', className)}>
-      <Markdown>{markdown}</Markdown>
+      <Markdown options={options}>{markdown}</Markdown>
     </div>
   );
 }

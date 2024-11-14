@@ -1191,6 +1191,12 @@ export interface MarkdownRendererProps {
 	/** The markdown string to render */
 	markdown: string;
 	className?: string;
+	/**
+	 * The [`target` attribute for `a` html
+	 * tags](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#target). Defaults to not
+	 * adding a `target` to `a` tags
+	 */
+	anchorTarget?: string;
 }
 /**
  * This component renders markdown content given a markdown string. It uses typography styles from
@@ -1200,7 +1206,7 @@ export interface MarkdownRendererProps {
  * @param id Optional unique identifier
  * @returns A div containing the rendered markdown content.
  */
-export function MarkdownRenderer({ id, markdown, className }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export function MarkdownRenderer({ id, markdown, className, anchorTarget, }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
 export declare enum DropdownMenuItemType {
 	Check = 0,
 	Radio = 1
