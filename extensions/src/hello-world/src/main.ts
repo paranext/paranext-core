@@ -108,9 +108,7 @@ class HelloWorldProjectWebViewFactory extends WebViewFactory<
     super(HELLO_WORLD_PROJECT_WEB_VIEW_TYPE);
   }
 
-  // No need to use `this` and implementing an abstract method so can't be static
-  // eslint-disable-next-line class-methods-use-this
-  async getWebViewDefinition(
+  override async getWebViewDefinition(
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: HelloWorldProjectOptions,
   ): Promise<WebViewDefinition | undefined> {
@@ -130,9 +128,7 @@ class HelloWorldProjectWebViewFactory extends WebViewFactory<
     };
   }
 
-  // No need to use `this` and implementing an abstract method so can't be static
-  // eslint-disable-next-line class-methods-use-this
-  async createWebViewController(
+  override async createWebViewController(
     webViewDefinition: WebViewDefinition,
     webViewNonce: string,
   ): Promise<HelloWorldProjectWebViewController> {

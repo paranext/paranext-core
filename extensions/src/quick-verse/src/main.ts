@@ -230,7 +230,7 @@ class QuickVerseDataProviderEngine
    * @returns False meaning do not update anything
    */
   // Does nothing, so we don't need to use `this`
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setChapter() {
     // We are not supporting setting chapters now, so don't update anything
     return false;

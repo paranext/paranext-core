@@ -26,7 +26,7 @@ class CheckDataProviderEngine
   lastRangesSet: CheckInputRange[] = [];
 
   // Required method since this is a data provider engine
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setAvailableChecks(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
     throw new Error('setAvailableChecks disabled');
   }
@@ -46,7 +46,7 @@ class CheckDataProviderEngine
   }
 
   // Required method since this is a data provider engine
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setCheckResults(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
     throw new Error('setCheckResults disabled');
   }

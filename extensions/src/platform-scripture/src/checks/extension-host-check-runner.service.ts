@@ -72,7 +72,7 @@ class CheckRunnerEngine
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setAvailableChecks(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
     throw new Error('setAvailableChecks disabled - use enableCheck and disableCheck');
   }
@@ -221,7 +221,7 @@ class CheckRunnerEngine
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setCheckResults(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
     throw new Error('setCheckResults disabled');
   }

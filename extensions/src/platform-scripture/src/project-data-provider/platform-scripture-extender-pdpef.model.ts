@@ -31,7 +31,7 @@ class ScriptureExtenderProjectDataProviderEngineFactory
   providedProjectInterfaces = SCRIPTURE_EXTENDER_PROJECT_INTERFACES;
 
   // Implementing an interface method, so can't be static
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async createProjectDataProviderEngine(
     projectId: string,
   ): Promise<IProjectDataProviderEngine<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>> {

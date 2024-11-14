@@ -138,9 +138,10 @@ class SettingDataProviderEngine
     );
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  /* eslint-disable @typescript-eslint/class-methods-use-this */
   @dataProviders.decorators.ignore
   async getLocalizedSettingsContributionInfo(): Promise<
+    /* eslint-enable */
     LocalizedSettingsContributionInfo | undefined
   > {
     return settingsDocumentCombiner.getLocalizedSettingsContributionInfo();
@@ -174,7 +175,7 @@ class SettingDataProviderEngine
     return true;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async validateSetting<SettingName extends SettingNames>(
     key: SettingName,
     newValue: SettingTypes[SettingName],
