@@ -65,7 +65,7 @@
     "lint": "cross-env NODE_OPTIONS=\"--max-old-space-size=4096\" npm run build:types && npm run lint:scripts && npm run lint:styles && cd lib/papi-dts && npm run lint && cd ../../extensions && npm run lint",
     "lint:config": "cross-env NODE_ENV=development eslint --print-config .eslintrc.js > .eslintConfig.json",
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
-    "lint:staged": "npm run build:types && lint-staged -q && cd lib/papi-dts && npm run lint:staged && cd ../../extensions && npm run lint:staged",
+    "lint:staged": "lint-staged -q && npm run lint:staged --workspaces --if-present",
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run build:types && npm run lint-fix:scripts && npm run lint-fix:styles && cd lib/papi-dts && npm run lint-fix && cd ../../extensions && npm run lint-fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
@@ -96,7 +96,7 @@
     "typecheck:platform-bible-utils": "cd lib/platform-bible-utils && npm run typecheck"
   },
   "lint-staged": {
-    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
+    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write"],
     "*.json": ["prettier --parser json --write"],
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
     "*.{html,md,yml}": ["prettier --single-quote --write"]
