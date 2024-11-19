@@ -36,7 +36,7 @@
     "typecheck": "tsc -p ./tsconfig.lint.json"
   },
   "lint-staged": {
-    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write", "cross-env NODE_ENV=development eslint --cache"],
+    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write"],
     "*.json": ["prettier --parser json --write"],
     "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
