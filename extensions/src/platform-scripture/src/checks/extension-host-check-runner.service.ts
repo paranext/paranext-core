@@ -2,15 +2,19 @@ import papi, { DataProviderEngine, dataProviders, logger } from '@papi/backend';
 import { Mutex, MutexMap, UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
 import {
   DataProviderUpdateInstructions,
+  ExtensionDataScope,
   IDataProviderEngine,
   IDisposableDataProvider,
+  MandatoryProjectDataTypes,
 } from '@papi/core';
 import {
   Check,
   CheckCreatorFunction,
   CheckDetails,
   CheckDetailsWithCheckId,
+  CheckEnablerDisabler,
   CheckInputRange,
+  CheckResultClassifier,
   CheckRunResult,
   CheckRunnerCheckDetails,
   CheckRunnerDataTypes,
@@ -19,7 +23,9 @@ import {
   IUSFMBookProjectDataProvider,
 } from 'platform-scripture';
 import { VerseRef } from '@sillsdev/scripture';
+import type { IBaseProjectDataProvider } from 'papi-shared-types';
 import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
+import { PersistedCheckRunResults } from './persisted-check-run-result.model';
 
 /** Details about a check that include a way to create the check */
 type CheckDetailsWithCreator = CheckDetailsWithCheckId & {
@@ -36,14 +42,25 @@ type DetailsAboutCheckInProject = {
   latestResults: CheckRunResult[];
 };
 
+type CheckRunnerPdps = {
+  usfmBookPdp: IUSFMBookProjectDataProvider;
+  basePdp: IBaseProjectDataProvider<MandatoryProjectDataTypes>;
+};
+
+const deniedDataScope: ExtensionDataScope = {
+  extensionName: 'extension-host',
+  dataQualifier: 'deniedResultsList',
+};
+
 class CheckRunnerEngine
   extends DataProviderEngine<CheckRunnerDataTypes>
-  implements IDataProviderEngine<CheckRunnerDataTypes>
+  implements IDataProviderEngine<CheckRunnerDataTypes>, CheckEnablerDisabler, CheckResultClassifier
 {
-  activeRanges: CheckInputRange[] = [];
-  mutexesPerCheck = new MutexMap();
-  enabledChecksByProjectId = new Map<string, DetailsAboutCheckInProject[]>();
-  subscribedProjects = new Map<string, IUSFMBookProjectDataProvider>();
+  private activeRanges: CheckInputRange[] = [];
+  private mutexesPerCheck = new MutexMap();
+  private enabledChecksByProjectId = new Map<string, DetailsAboutCheckInProject[]>();
+  private subscribedProjects = new Map<string, CheckRunnerPdps>();
+  private deniedCheckResultsByProjectId = new Map<string, PersistedCheckRunResults>();
 
   // #region Checks
 
@@ -77,9 +94,8 @@ class CheckRunnerEngine
     throw new Error('setAvailableChecks disabled - use enableCheck and disableCheck');
   }
 
-  async enableCheck(checkId: string, projectId: string): Promise<string[]> {
-    const lock = this.mutexesPerCheck.get(checkId);
-    const retVal = await lock.runExclusive(async () => {
+  async enableCheck(checkId: string, projectId: string): Promise<void> {
+    await this.mutexesPerCheck.get(checkId).runExclusive(async () => {
       let checksForProject = this.enabledChecksByProjectId.get(projectId);
       // If the check is already enabled for this project, there is nothing to do
       if (
@@ -91,7 +107,7 @@ class CheckRunnerEngine
         logger.debug(
           `Re-enabling check ${checkId} for project ${projectId} that was already enabled`,
         );
-        return [];
+        return;
       }
 
       // Make sure we know about the check
@@ -124,12 +140,17 @@ class CheckRunnerEngine
       // Automatically rebuild results when project data changes
       if (!this.subscribedProjects.has(projectId)) {
         // This is assuming that whenever project data changes, this PDP will see an update.
-        const pdp = await papi.projectDataProviders.get('platformScripture.USFM_Book', projectId);
-        // We should check a second time since we `await`ed on the previous line
+        const usfmBookPdp = await papi.projectDataProviders.get(
+          'platformScripture.USFM_Book',
+          projectId,
+        );
+        const basePdp = await papi.projectDataProviders.get('platform.base', projectId);
+        const pdps: CheckRunnerPdps = { usfmBookPdp, basePdp };
+        // We should check a second time since we `await`ed a few lines back
         if (!this.subscribedProjects.has(projectId)) {
-          this.subscribedProjects.set(projectId, pdp);
+          this.subscribedProjects.set(projectId, pdps);
           // We just need something to tell us when project data changes
-          await pdp.subscribeBookUSFM(
+          await usfmBookPdp.subscribeBookUSFM(
             new VerseRef(1, 1, 1),
             async () => {
               // Ideally we'd want to check if the text that changed is inside of an active range
@@ -145,7 +166,7 @@ class CheckRunnerEngine
             { retrieveDataImmediately: false, whichUpdates: '*' },
           );
 
-          pdp.onDidDispose(() => {
+          usfmBookPdp.onDidDispose(() => {
             this.enabledChecksByProjectId.get(projectId)?.forEach((enabledCheckDetails) => {
               this.disableCheck(enabledCheckDetails.checkId, projectId);
             });
@@ -155,10 +176,10 @@ class CheckRunnerEngine
         }
       }
 
-      return warnings;
+      if (warnings.length > 0)
+        logger.warn(`Warnings when enabling check ${checkId}: ${JSON.stringify(warnings)}`);
     });
     await this.rebuildResults(projectId);
-    return retVal;
   }
 
   async disableCheck(checkId: string, projectId?: string): Promise<void> {
@@ -210,6 +231,44 @@ class CheckRunnerEngine
 
   // #region Results
 
+  async denyCheckResult(
+    _checkId: string,
+    checkResultType: string,
+    projectId: string,
+    verseRef: VerseRef,
+    selectedText: string,
+    checkResultUniqueId?: string,
+  ): Promise<boolean> {
+    const deniedResults = await this.loadDeniedResults(projectId);
+    const retVal = deniedResults.addResult({
+      checkResultType,
+      verseRef,
+      selectedText,
+      checkResultUniqueId,
+    });
+    if (retVal) await this.saveDeniedResults(projectId);
+    return retVal;
+  }
+
+  async allowCheckResult(
+    _checkId: string,
+    checkResultType: string,
+    projectId: string,
+    verseRef: VerseRef,
+    selectedText: string,
+    checkResultUniqueId?: string,
+  ): Promise<boolean> {
+    const deniedResults = await this.loadDeniedResults(projectId);
+    const retVal = deniedResults.removeResult({
+      checkResultType,
+      verseRef,
+      selectedText,
+      checkResultUniqueId,
+    });
+    if (retVal) await this.saveDeniedResults(projectId);
+    return retVal;
+  }
+
   async getCheckResults(): Promise<CheckRunResult[]> {
     const retVal: CheckRunResult[] = [];
     this.enabledChecksByProjectId.forEach((checkDetails) => {
@@ -217,13 +276,37 @@ class CheckRunnerEngine
         retVal.push(...oneCheckDetails.latestResults);
       });
     });
-    return retVal;
+    return Promise.all(
+      retVal.map(async (checkRunResult) => {
+        const deniedResults = await this.loadDeniedResults(checkRunResult.projectId);
+        checkRunResult.isDenied = deniedResults.containsResult(checkRunResult);
+        return checkRunResult;
+      }),
+    );
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setCheckResults(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
     throw new Error('setCheckResults disabled');
+  }
+
+  async loadDeniedResults(projectId: string): Promise<PersistedCheckRunResults> {
+    let deniedResults = this.deniedCheckResultsByProjectId.get(projectId);
+    if (!deniedResults) {
+      deniedResults = new PersistedCheckRunResults(
+        await this.subscribedProjects.get(projectId)?.basePdp.getExtensionData(deniedDataScope),
+      );
+      this.deniedCheckResultsByProjectId.set(projectId, deniedResults);
+    }
+    return deniedResults;
+  }
+
+  async saveDeniedResults(projectId: string): Promise<void> {
+    const deniedResults = this.deniedCheckResultsByProjectId.get(projectId);
+    if (!deniedResults) return;
+    const data = deniedResults.serialize();
+    await this.subscribedProjects.get(projectId)?.basePdp.setExtensionData(deniedDataScope, data);
   }
 
   async rebuildResults(projectId?: string): Promise<void> {

@@ -495,7 +495,7 @@ declare module 'platform-scripture' {
 
   // #endregion
 
-  // #region Check Data Types
+  // #region Check Types
 
   /** Details about a check provided by the check itself */
   export type CheckDetails = {
@@ -589,8 +589,14 @@ declare module 'platform-scripture' {
   export type CheckRunResult = {
     /** ID of the check that produced this result */
     checkId?: string;
+    /** Identifies a distinct class of check results that a check produced */
+    checkResultType: string;
+    /** Distinct ID for this check result if it might occur more than once in a single verse */
+    checkResultUniqueId?: string;
     /** ID of the project evaluated by the check */
     projectId: string;
+    /** Project text that was selected in the check result */
+    selectedText: string;
     /**
      * Format string or {@link LocalizeKey} of the format string to display regarding the range of
      * text referenced in this result. A format string should be of the form "... {arg1} ... {arg2}
@@ -609,6 +615,10 @@ declare module 'platform-scripture' {
      * @example {name: Layla}
      */
     formatStringArguments?: { [key: string]: string };
+    /** Indicates if the user decided this check result should considered incorrect going forward */
+    isDenied: boolean;
+    /** VerseRef that most closely identifies a single place where the check applies */
+    verseRef: VerseRef;
     /** Starting point where the check result applies in the document */
     start: CheckLocation;
     /** Ending point where the check result applies in the document */
@@ -617,13 +627,19 @@ declare module 'platform-scripture' {
 
   // #endregion
 
-  // #region Check Runner Data Types
+  // #region Check Runner Types
 
   /** Details about a check provided by a {@link ICheckRunner} */
   export type CheckRunnerCheckDetails = CheckDetailsWithCheckId & {
     /** List of project IDs that one particular check is enabled to evaluate */
     enabledProjectIds: string[];
   };
+
+  /** Details about a check that can be set on a subscription by the subscription owner */
+  export type SettableCheckDetails = Omit<
+    Omit<CheckRunnerCheckDetails, 'checkName'>,
+    'checkDescription'
+  >;
 
   /** Data types provided by a service that runs checks */
   export type CheckRunnerDataTypes = {
@@ -632,28 +648,49 @@ declare module 'platform-scripture' {
     CheckResults: DataProviderDataType<undefined, CheckRunResult[], never>;
   };
 
+  export type CheckEnablerDisabler = {
+    /** Enable the check with the given checkId to run on the given project */
+    enableCheck: (checkId: string, projectId: string) => Promise<void>;
+
+    /** Disable the check with the given checkId from producing results for the given project */
+    disableCheck: (checkId: string, projectId?: string) => Promise<void>;
+  };
+
+  export type CheckResultClassifier = {
+    /**
+     * Mark one particular check result as "denied", meaning the user has marked it as incorrect for
+     * the given text
+     */
+    denyCheckResult: (
+      checkId: string,
+      checkResultType: string,
+      projectId: string,
+      verseRef: VerseRef,
+      selectedText: string,
+      checkResultUniqueId?: string,
+    ) => Promise<boolean>;
+    /** Reverse the denial of one particular check result */
+    allowCheckResult: (
+      checkId: string,
+      checkResultType: string,
+      projectId: string,
+      verseRef: VerseRef,
+      selectedText: string,
+      checkResultUniqueId?: string,
+    ) => Promise<boolean>;
+  };
+
   /**
    * All processes that can run checks are expected to implement this type in a data provider
    * registered with object type 'checkRunner'
    */
-  export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> & {
-    /**
-     * Enable the check with the given checkId to run on the given project. Note that no results
-     * will be returned unless `getCheckResults` is run before or after the check has been enabled.
-     * `getCheckResults` is used to indicate what project content should be checked within each
-     * project. `enableCheck` is used to indicate which checks should be enabled on which projects.
-     *
-     * @returns Warnings from the check that indicate results might not be what the user desires
-     */
-    enableCheck: (checkId: string, projectId: string) => Promise<string[]>;
-
-    /** Disable the check with the given checkId from producing results for the given project. */
-    disableCheck: (checkId: string, projectId?: string) => Promise<void>;
-  };
+  export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> &
+    CheckEnablerDisabler &
+    CheckResultClassifier;
 
   // #endregion
 
-  // #region Check Hosting (in the Extension Host) Data Types
+  // #region Check Hosting (in the Extension Host) Types
 
   /**
    * Service for hosting TS/JS checks inside the extension host that are registered using the
@@ -677,7 +714,37 @@ declare module 'platform-scripture' {
 
   // #endregion
 
-  // #region Check Aggregator Data Types
+  // #region Check Aggregator Types
+
+  /** Uniquely identifies one subscriber to the check service */
+  export type CheckSubscriptionId = string;
+
+  export type CheckSubscriptionManager = {
+    /** Create a new subscription keyed by the returned subscription ID */
+    createSubscription: () => Promise<CheckSubscriptionId>;
+
+    /**
+     * Deactivate and throw away the subscription with the given ID
+     *
+     * @returns `true` if the subscription could be deleted, `false` otherwise
+     */
+    deleteSubscription: (subscriptionId: CheckSubscriptionId) => Promise<boolean>;
+  };
+
+  /**
+   * Data types provided by a service that aggregates check results for multiple callers across
+   * multiple ICheckRunner instances
+   */
+  export type CheckAggregatorDataTypes = {
+    AvailableChecks: DataProviderDataType<
+      CheckSubscriptionId,
+      CheckRunnerCheckDetails[],
+      SettableCheckDetails[]
+    >;
+    ActiveRanges: DataProviderDataType<CheckSubscriptionId, CheckInputRange[], CheckInputRange[]>;
+    IncludeDeniedResults: DataProviderDataType<CheckSubscriptionId, boolean, boolean>;
+    CheckResults: DataProviderDataType<CheckSubscriptionId, CheckRunResult[], never>;
+  };
 
   /**
    * Service that multiplexes/demultiplexes calls across all {@link ICheckRunner} data providers so
@@ -686,9 +753,11 @@ declare module 'platform-scripture' {
    *
    * Use the "platformScripture.checkAggregator" data provider name to access the service.
    */
-  export type ICheckAggregatorService = ICheckRunner & {
-    dataProviderName: string;
-  };
+  export type ICheckAggregatorService = IDataProvider<CheckAggregatorDataTypes> &
+    CheckResultClassifier &
+    CheckSubscriptionManager & {
+      dataProviderName: string;
+    };
 
   // #endregion
 }
@@ -731,7 +800,11 @@ declare module 'papi-shared-types' {
   export interface DataProviders {
     /** Use this to work with checks that are running in any process */
     'platformScripture.checkAggregator': ICheckAggregatorService;
-    /** Use this to work with checks that are explicitly hosted in the extension host */
+    /**
+     * You should probably use 'platformScripture.checkAggregator' instead. This data provider only
+     * includes checks registered with this one particular {@link ICheckRunner}. The aggregator
+     * includes all checks registered with all {@link ICheckRunner} instances.
+     */
     'platformScripture.extensionHostCheckRunner': ICheckRunner;
   }
 

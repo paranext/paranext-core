@@ -31,10 +31,13 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
         CheckRunResults.Add(
             new CheckRunResult(
                 checkId,
+                messageId.InternalValue,
                 projectId,
                 message,
                 // ParatextData adds a space at the end sometimes that isn't in the text
                 token.Text.TrimEnd(),
+                false,
+                token.VerseRef,
                 // Actual offsets will be calculated below after results have been filtered
                 new CheckLocation(token.VerseRef, offset),
                 new CheckLocation(token.VerseRef, 0)
@@ -55,10 +58,13 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
         CheckRunResults.Add(
             new CheckRunResult(
                 checkId,
+                messageId.InternalValue,
                 projectId,
                 message,
                 // ParatextData adds a space at the end sometimes that isn't in the text
                 text.TrimEnd(),
+                false,
+                vref,
                 // Actual offsets will be calculated below after results have been filtered
                 new CheckLocation(vref, selectionStart),
                 new CheckLocation(vref, 0)
@@ -87,42 +93,85 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
     }
 
     /// <summary>
-    /// Remove all results that are not within the given range
+    /// After a check as finished running, filter and complete filling in data on the results found.
+    /// This will:<br/>
+    /// 1. Remove all results that are not within the given ranges<br/>
+    /// 2. Lookup whether each check result was previously denied<br/>
+    /// 3. Calculate actual offsets for each result
     /// </summary>
-    public void FilterResults(CheckInputRange range)
+    public void PostProcessResults(
+        CheckInputRange[]? ranges,
+        ErrorMessageDenials? denials,
+        UsfmBookIndexer? indexer
+    )
     {
         for (int i = CheckRunResults.Count - 1; i >= 0; i--)
         {
             var result = CheckRunResults[i];
-            var verseRef = result.Start.VerseRef;
-            if (!range.IsWithinRange(result.ProjectId, verseRef.BookNum, verseRef.ChapterNum))
-                CheckRunResults.RemoveAt(i);
-        }
-    }
 
-    /// <summary>
-    /// Given an indexed view of USFM text, determine the actual offsets to include for each result
-    /// </summary>
-    public void CalculateActualOffsets(UsfmBookIndexer indexer)
-    {
-        foreach (var result in CheckRunResults)
-        {
-            var verseIndex = indexer.GetIndex(result.Start.VerseRef);
-            if (!verseIndex.HasValue)
+            // Filter by ranges first to throw out whatever we can
+            if (ranges != null)
             {
-                result.Start.Offset = 0;
-                continue;
+                var vref = result.Start.VerseRef;
+                bool isWithinAnyRange = false;
+                foreach (var range in ranges)
+                {
+                    if (range.IsWithinRange(result.ProjectId, vref.BookNum, vref.ChapterNum))
+                    {
+                        isWithinAnyRange = true;
+                        break;
+                    }
+                }
+                if (!isWithinAnyRange)
+                {
+                    CheckRunResults.RemoveAt(i);
+                    continue;
+                }
             }
 
-            var textIndex = indexer.Usfm.IndexOf(result.Text, verseIndex.Value);
-            if (textIndex < 0)
+            // Lookup whether a check was previously denied
+            if (denials != null)
             {
-                result.Start.Offset = 0;
-                continue;
+                var isDenied = denials.IsDenied(
+                    new Enum<MessageId>(result.CheckResultType),
+                    result.VerseRef,
+                    result.MessageFormatString,
+                    result.Text
+                );
+                if (isDenied != result.IsDenied)
+                    CheckRunResults[i] = new CheckRunResult(
+                        result.CheckId,
+                        result.CheckResultType,
+                        result.ProjectId,
+                        result.MessageFormatString,
+                        result.Text,
+                        isDenied,
+                        result.VerseRef,
+                        result.Start,
+                        result.End
+                    );
             }
 
-            result.Start.Offset += textIndex - verseIndex.Value;
-            result.End.Offset = result.Start.Offset + result.Text.Length;
+            // Calculate actual offsets
+            if (indexer != null)
+            {
+                var verseIndex = indexer.GetIndex(result.Start.VerseRef);
+                if (!verseIndex.HasValue)
+                {
+                    result.Start.Offset = 0;
+                    continue;
+                }
+
+                var textIndex = indexer.Usfm.IndexOf(result.Text, verseIndex.Value);
+                if (textIndex < 0)
+                {
+                    result.Start.Offset = 0;
+                    continue;
+                }
+
+                result.Start.Offset += textIndex - verseIndex.Value;
+                result.End.Offset = result.Start.Offset + result.Text.Length;
+            }
         }
     }
 }

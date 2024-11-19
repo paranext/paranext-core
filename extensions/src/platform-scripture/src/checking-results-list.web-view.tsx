@@ -1,6 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import { Label, ResultsSet, ScriptureResultsViewer, usePromise } from 'platform-bible-react';
-import { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useData, useLocalizedStrings } from '@papi/frontend/react';
 import { CheckRunnerCheckDetails, CheckRunResult } from 'platform-scripture';
 import { Canon } from '@sillsdev/scripture';
@@ -92,9 +92,18 @@ global.webViewComponent = function CheckingResultsListWebView({
   projectId,
   updateWebViewDefinition,
 }: WebViewProps) {
-  const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(undefined, []);
+  const [subscriptionId, setSubscriptionId] = useState('');
+
+  const handleSubscriptionIdChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSubscriptionId(event.target.value);
+  };
+
+  const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(
+    subscriptionId,
+    [],
+  );
   const [availableChecks] = useData('platformScripture.checkAggregator').AvailableChecks(
-    undefined,
+    subscriptionId,
     [],
   );
 
@@ -162,6 +171,16 @@ global.webViewComponent = function CheckingResultsListWebView({
   return (
     <div className="checking-results-list">
       {label && <Label className="checking-results-list-label">{label}</Label>}
+      {/* Really we don't want a separate place for subscription input. The check results UI should
+          be tied to the subscription configuration so they share the same subscription ID. */}
+      <div className="subscription-input">
+        <input
+          type="text"
+          value={subscriptionId}
+          onChange={handleSubscriptionIdChange}
+          placeholder="Enter subscription ID"
+        />
+      </div>
       <ScriptureResultsViewer sources={viewableResults} />
     </div>
   );

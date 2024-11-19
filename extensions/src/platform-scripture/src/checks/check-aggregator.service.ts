@@ -1,4 +1,4 @@
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
 import {
   DataProviderUpdateInstructions,
   IDataProviderEngine,
@@ -6,87 +6,357 @@ import {
 } from '@papi/core';
 import papi, { DataProviderEngine, logger } from '@papi/backend';
 import {
+  CheckAggregatorDataTypes,
   CheckInputRange,
+  CheckResultClassifier,
   CheckRunResult,
   CheckRunnerCheckDetails,
-  CheckRunnerDataTypes,
+  CheckSubscriptionId,
+  CheckSubscriptionManager,
   ICheckAggregatorService,
   ICheckRunner,
+  ScriptureRange,
+  SettableCheckDetails,
 } from 'platform-scripture';
+import { VerseRef } from '@sillsdev/scripture';
 import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
 
-class CheckDataProviderEngine
-  extends DataProviderEngine<CheckRunnerDataTypes>
-  implements IDataProviderEngine<CheckRunnerDataTypes>
+type SubscriptionData = {
+  enabledProjectsByCheckId: Map<string, Set<string>>;
+  ranges: CheckInputRange[];
+  includeDeniedResults: boolean;
+};
+
+// #region Static helpers for CheckAggregatorDataProviderEngine
+
+function aggregateRanges(subscriptions: Map<CheckSubscriptionId, SubscriptionData>) {
+  const retVal: CheckInputRange[] = [];
+  subscriptions.forEach((subscription) => {
+    subscription.ranges.forEach((range) => {
+      const overlappingRange = retVal.find((aggregatedRange) =>
+        rangesAreOverlapping(aggregatedRange, range),
+      );
+      if (overlappingRange) mergeRanges(overlappingRange, range);
+      else retVal.push({ ...range });
+    });
+  });
+  return retVal;
+}
+
+function isWithinRange(range: ScriptureRange, verseRef: VerseRef): boolean {
+  const startBookNum = range.start.bookNum;
+  const endBookNum = range.end?.bookNum ?? startBookNum;
+  if (verseRef.bookNum < startBookNum || verseRef.bookNum > endBookNum) return false;
+
+  const startChapterNum = range.start.chapterNum;
+  const endChapterNum = range.end?.chapterNum ?? 999;
+  if (verseRef.chapterNum < startChapterNum || verseRef.chapterNum > endChapterNum) return false;
+
+  // Don't worry about verse numbers for now since the UI only works at the chapter level
+  return true;
+}
+
+function rangesAreOverlapping(existingRange: CheckInputRange, newRange: CheckInputRange) {
+  // Don't worry about verse numbers for now since the UI only works at the chapter level
+  const existingStart = existingRange.start.BBBCCC;
+  const existingEnd = existingRange.end?.BBBCCC ?? existingRange.start.bookNum * 1000 + 999;
+  const newStart = newRange.start.BBBCCC;
+  const newEnd = newRange.end?.BBBCCC ?? newRange.start.bookNum * 1000 + 999;
+  return (
+    newRange.projectId === existingRange.projectId &&
+    ((newStart >= existingStart && newStart <= existingEnd) ||
+      (newEnd >= existingStart && newEnd <= existingEnd) ||
+      (newStart <= existingStart && newEnd >= existingEnd))
+  );
+}
+
+function mergeRanges(existingRange: CheckInputRange, newRange: CheckInputRange): CheckInputRange {
+  const start =
+    newRange.start.BBBCCC < existingRange.start.BBBCCC ? newRange.start : existingRange.start;
+  let end: VerseRef | undefined;
+  if (existingRange.end && newRange.end)
+    end = newRange.end.BBBCCC > existingRange.end.BBBCCC ? newRange.end : existingRange.end;
+  return { start, end, projectId: existingRange.projectId };
+}
+
+function aggregateProjectIdsByCheckId(
+  subscriptions: Map<CheckSubscriptionId, SubscriptionData>,
+): Map<string, Set<string>> {
+  const retVal = new Map<string, Set<string>>();
+  subscriptions.forEach((subscription) => {
+    subscription.enabledProjectsByCheckId.forEach((projects, checkId) => {
+      const aggregatedProjects = retVal.get(checkId);
+      if (!aggregatedProjects) retVal.set(checkId, new Set(projects));
+      else projects.forEach((project) => aggregatedProjects.add(project));
+    });
+  });
+  return retVal;
+}
+
+// #endregion
+
+class CheckAggregatorDataProviderEngine
+  extends DataProviderEngine<CheckAggregatorDataTypes>
+  implements
+    IDataProviderEngine<CheckAggregatorDataTypes>,
+    CheckResultClassifier,
+    CheckSubscriptionManager
 {
   // Maps check runner IDs to their ICheckRunner objects
   checkRunners = new Map<string, ICheckRunner>();
 
-  // The most recent values that were set via `setActiveRanges`
-  lastRangesSet: CheckInputRange[] = [];
+  // Maps subscription IDs that we created to data about the subscription
+  subscriptionsBySubscriptionId = new Map<CheckSubscriptionId, SubscriptionData>();
 
-  // Required method since this is a data provider engine
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async setAvailableChecks(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
-    throw new Error('setAvailableChecks disabled');
-  }
+  // #region Checks
 
-  async setActiveRanges(
-    _ignore: undefined,
-    ranges: CheckInputRange[],
-  ): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
-    this.lastRangesSet = ranges;
-    await this.refreshCheckRunners();
-    await Promise.all(
-      [...this.checkRunners.values()].map(async (checkRunner) => {
-        await checkRunner.setActiveRanges(undefined, ranges);
-      }),
-    );
-    return 'ActiveRanges';
-  }
+  async getAvailableChecks(
+    subscriptionId: CheckSubscriptionId,
+  ): Promise<CheckRunnerCheckDetails[]> {
+    if (!subscriptionId) return [];
+    const subscriptionData = this.findSubscription(subscriptionId);
 
-  // Required method since this is a data provider engine
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async setCheckResults(): Promise<DataProviderUpdateInstructions<CheckRunnerDataTypes>> {
-    throw new Error('setCheckResults disabled');
-  }
-
-  async getAvailableChecks(): Promise<CheckRunnerCheckDetails[]> {
+    // Gather up all checks that are currently registered
     await this.refreshCheckRunners();
     const retVal: CheckRunnerCheckDetails[] = [];
     await Promise.all(
       [...this.checkRunners.values()].map(async (checkRunner) => {
         const checksAvailable = await checkRunner.getAvailableChecks(undefined);
         if (checksAvailable.length === 0) return;
-        logger.debug(`Checks available ${JSON.stringify(checksAvailable)}`);
         retVal.push(...checksAvailable);
       }),
     );
+
+    // Mark which projects this subscription is using for each check
+    const { enabledProjectsByCheckId } = subscriptionData;
+    retVal.forEach((checkDetails) => {
+      checkDetails.enabledProjectIds = [
+        ...(enabledProjectsByCheckId.get(checkDetails.checkId) ?? []),
+      ];
+    });
+
     return retVal;
   }
 
-  async getActiveRanges(): Promise<CheckInputRange[]> {
-    return this.lastRangesSet;
+  async setAvailableChecks(
+    subscriptionId: CheckSubscriptionId,
+    newAvailableChecks: SettableCheckDetails[],
+  ): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
+    if (!subscriptionId) return false;
+    const subscriptionData = this.findSubscription(subscriptionId);
+
+    // Take a snapshot
+    const beforeUpdate = aggregateProjectIdsByCheckId(this.subscriptionsBySubscriptionId);
+
+    // Update the subscription
+    subscriptionData.enabledProjectsByCheckId.clear();
+    newAvailableChecks.forEach((singleCheckDetails) => {
+      subscriptionData.enabledProjectsByCheckId.set(
+        singleCheckDetails.checkId,
+        new Set(singleCheckDetails.enabledProjectIds),
+      );
+    });
+
+    // Take another snapshot
+    const afterUpdate = aggregateProjectIdsByCheckId(this.subscriptionsBySubscriptionId);
+
+    // Enable checks that weren't previously enabled
+    const toEnable: { checkId: string; projectId: string }[] = [];
+    afterUpdate.forEach((projectIds, checkId) => {
+      projectIds.forEach((projectId) => {
+        const beforeProjectIds = beforeUpdate.get(checkId);
+        if (!beforeProjectIds || !beforeProjectIds.has(projectId))
+          toEnable.push({ checkId, projectId });
+      });
+    });
+    await Promise.all(toEnable.map((x) => this.enableCheck(x.checkId, x.projectId)));
+
+    // Disable checks that are no longer enabled
+    const toDisable: { checkId: string; projectId: string }[] = [];
+    beforeUpdate.forEach((projectIds, checkId) => {
+      projectIds.forEach((projectId) => {
+        const afterProjectIds = afterUpdate.get(checkId);
+        if (!afterProjectIds || !afterProjectIds.has(projectId))
+          toDisable.push({ checkId, projectId });
+      });
+    });
+    await Promise.all(toDisable.map((x) => this.disableCheck(x.checkId, x.projectId)));
+
+    return 'AvailableChecks';
   }
 
-  async getCheckResults(): Promise<CheckRunResult[]> {
-    const retVal: CheckRunResult[] = [];
+  // #endregion
+
+  // #region Active Ranges
+
+  async getActiveRanges(subscriptionId: CheckSubscriptionId): Promise<CheckInputRange[]> {
+    if (!subscriptionId) return [];
+    return this.findSubscription(subscriptionId).ranges;
+  }
+
+  async setActiveRanges(
+    subscriptionId: CheckSubscriptionId,
+    ranges: CheckInputRange[],
+  ): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
+    if (!subscriptionId) return false;
+
+    // Update the subscription
+    this.findSubscription(subscriptionId).ranges = ranges;
+
+    // Aggregate all ranges from all subscriptions
+    const aggregatedRanges = aggregateRanges(this.subscriptionsBySubscriptionId);
+
+    // Push the single, aggregated view of ranges into all of the active check runners
+    await this.refreshCheckRunners();
     await Promise.all(
       [...this.checkRunners.values()].map(async (checkRunner) => {
+        await checkRunner.setActiveRanges(undefined, aggregatedRanges);
+      }),
+    );
+    return 'ActiveRanges';
+  }
+
+  // #endregion
+
+  // #region Include Denied Results
+
+  async getIncludeDeniedResults(subscriptionId: CheckSubscriptionId): Promise<boolean> {
+    if (!subscriptionId) return false;
+    return this.findSubscription(subscriptionId).includeDeniedResults;
+  }
+
+  async setIncludeDeniedResults(
+    subscriptionId: CheckSubscriptionId,
+    newIncludeDeniedResults: boolean,
+  ): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
+    if (!subscriptionId) return false;
+    this.findSubscription(subscriptionId).includeDeniedResults = newIncludeDeniedResults;
+    return ['IncludeDeniedResults', 'CheckResults'];
+  }
+
+  // #endregion
+
+  // #region Check Results
+
+  async getCheckResults(subscriptionId: CheckSubscriptionId): Promise<CheckRunResult[]> {
+    if (!subscriptionId) return [];
+
+    // Find all applicable check runners for our subscription
+    const subscription = this.findSubscription(subscriptionId);
+    const checkIdsForSubscription = Array.from(subscription.enabledProjectsByCheckId.keys());
+    const checkRunners = new Set<ICheckRunner>();
+    await Promise.all(
+      checkIdsForSubscription.map(async (checkId: string) => {
+        const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+        checkRunners.add(checkRunner);
+      }),
+    );
+
+    // Get results from all applicable check runners and filter based on the subscription
+    const retVal: CheckRunResult[] = [];
+    await Promise.all(
+      [...checkRunners].map(async (checkRunner) => {
         const results = await checkRunner.getCheckResults(undefined);
-        if (results.length === 0) return;
-        retVal.push(...results);
+        results.forEach((result) => {
+          // Filter by "denied"
+          if (result.isDenied && !subscription.includeDeniedResults) return;
+
+          // Filter by range
+          const { verseRef } = result;
+          if (!subscription.ranges.some((range) => isWithinRange(range, verseRef))) return;
+
+          // Filter by check + project
+          if (!result.checkId) return;
+          const projects = subscription.enabledProjectsByCheckId.get(result.checkId);
+          if (projects?.has(result.projectId)) retVal.push(result);
+        });
       }),
     );
     return retVal;
   }
 
-  async enableCheck(checkId: string, projectId: string): Promise<string[]> {
+  // Required method since this is a data provider engine
+  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/class-methods-use-this
+  async setCheckResults(): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
+    throw new Error('setCheckResults disabled');
+  }
+
+  // #endregion
+
+  // #region Deny/Allow Individual Results
+
+  async allowCheckResult(
+    checkId: string,
+    checkResultType: string,
+    projectId: string,
+    verseRef: VerseRef,
+    selectedText: string,
+    checkResultUniqueId?: string,
+  ): Promise<boolean> {
+    const checkRunner = await this.findCheckRunnerForCheckId(checkResultType);
+    const retVal = checkRunner.allowCheckResult(
+      checkId,
+      checkResultType,
+      projectId,
+      verseRef,
+      selectedText,
+      checkResultUniqueId,
+    );
+    this.notifyUpdate('CheckResults');
+    return retVal;
+  }
+
+  async denyCheckResult(
+    checkId: string,
+    checkResultType: string,
+    projectId: string,
+    verseRef: VerseRef,
+    selectedText: string,
+    checkResultUniqueId?: string,
+  ): Promise<boolean> {
+    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+    const retVal = checkRunner.denyCheckResult(
+      checkId,
+      checkResultType,
+      projectId,
+      verseRef,
+      selectedText,
+      checkResultUniqueId,
+    );
+    this.notifyUpdate('CheckResults');
+    return retVal;
+  }
+
+  // #endregion
+
+  // #region Subscriptions
+
+  async createSubscription(): Promise<CheckSubscriptionId> {
+    const retVal = newGuid();
+    this.subscriptionsBySubscriptionId.set(retVal, {
+      enabledProjectsByCheckId: new Map<string, Set<string>>(),
+      ranges: [],
+      includeDeniedResults: true,
+    });
+    logger.debug(`Created check subscription: ${retVal}`);
+    return retVal;
+  }
+
+  async deleteSubscription(subscriptionId: CheckSubscriptionId): Promise<boolean> {
+    logger.debug(`Deleted check subscription: ${subscriptionId}`);
+    return this.subscriptionsBySubscriptionId.delete(subscriptionId);
+  }
+
+  // #endregion
+
+  // #region Helper methods
+
+  private async enableCheck(checkId: string, projectId: string): Promise<void> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
     return checkRunner.enableCheck(checkId, projectId);
   }
 
-  async disableCheck(checkId: string, projectId?: string): Promise<void> {
+  private async disableCheck(checkId: string, projectId?: string): Promise<void> {
     const checkRunner = await this.findCheckRunnerForCheckId(checkId);
     return checkRunner.disableCheck(checkId, projectId);
   }
@@ -121,7 +391,10 @@ class CheckDataProviderEngine
         this.checkRunners.set(checkRunnerDetails.id, checkRunner);
 
         // Make sure the new check runner has the correct ranges set
-        await checkRunner.setActiveRanges(undefined, this.lastRangesSet);
+        await checkRunner.setActiveRanges(
+          undefined,
+          aggregateRanges(this.subscriptionsBySubscriptionId),
+        );
 
         // Pass along updated results from check runners
         const resultsUnsubscriber = await checkRunner.subscribeCheckResults(
@@ -147,6 +420,13 @@ class CheckDataProviderEngine
         });
       }),
     );
+  }
+
+  private findSubscription(subscriptionId: CheckSubscriptionId) {
+    // Find this subscription
+    const retVal = this.subscriptionsBySubscriptionId.get(subscriptionId);
+    if (!retVal) throw new Error(`Subscription ID not found: ${subscriptionId}`);
+    return retVal;
   }
 
   // Try to find the one check runner that is hosting the desired check ID
@@ -190,6 +470,8 @@ class CheckDataProviderEngine
 
     return retVal;
   }
+
+  // #endregion
 }
 
 /**
@@ -207,7 +489,7 @@ async function initialize(): Promise<void> {
         try {
           dataProvider = await papi.dataProviders.registerEngine(
             checkAggregatorServiceProviderName,
-            new CheckDataProviderEngine(),
+            new CheckAggregatorDataProviderEngine(),
           );
           resolve();
         } catch (error) {

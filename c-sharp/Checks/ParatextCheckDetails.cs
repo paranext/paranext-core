@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Paratext.Data.Checking;
 using PtxUtils;
 
@@ -12,5 +13,5 @@ public sealed class ParatextCheckDetails(Enum<CheckType> checkType)
     public string CheckName { get; } = checkType.ToString();
     public string CheckDescription { get; } = checkType.ToLocalizedString();
     public string CheckId { get; } = checkType.InternalValue;
-    public List<string> EnabledProjectIds { get; } = [];
+    public ConcurrentHashSet<string> EnabledProjectIds { get; } = new ConcurrentHashSet<string>();
 }
