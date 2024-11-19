@@ -13,6 +13,10 @@ module.exports = {
     },
   ],
   rules: {
+    // Disable Stylelint's indentation control
+    '@stylistic/indentation': null,
+    // Let Prettier handle selector list formatting
+    '@stylistic/selector-list-comma-newline-after': null,
     'color-named': null,
     'max-nesting-depth': 2,
     'no-descending-specificity': null,

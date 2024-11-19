@@ -500,7 +500,7 @@ i.send {
 }
 
 .CommentPlugin_CommentsPanel_List_Thread_Comments
-.CommentPlugin_CommentsPanel_List_Comment:first-child {
+  .CommentPlugin_CommentsPanel_List_Comment:first-child {
   /* stylelint-disable-next-line declaration-property-value-disallowed-list */
   border: none;
   margin-left: 0;
@@ -508,7 +508,7 @@ i.send {
 }
 
 .CommentPlugin_CommentsPanel_List_Thread_Comments
-.CommentPlugin_CommentsPanel_List_Comment:first-child.CommentPlugin_CommentsPanel_List_Comment:last-child {
+  .CommentPlugin_CommentsPanel_List_Comment:first-child.CommentPlugin_CommentsPanel_List_Comment:last-child {
   padding-bottom: 5px;
 }
 
@@ -536,7 +536,7 @@ i.send {
 .CommentPlugin_CommentsPanel_DeletedComment,
 .CommentPlugin_CommentsPanel_List_Comment:hover .CommentPlugin_CommentsPanel_List_DeleteButton,
 .CommentPlugin_CommentsPanel_List_Thread_QuoteBox:hover
-.CommentPlugin_CommentsPanel_List_DeleteButton {
+  .CommentPlugin_CommentsPanel_List_DeleteButton {
   opacity: 0.5;
 }
 

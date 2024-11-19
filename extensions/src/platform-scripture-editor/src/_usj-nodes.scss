@@ -18,29 +18,29 @@
   text-align: end;
 }
 @font-face {
-  font-family: "Charis SIL";
-  src: local("Charis SIL"), local("Charis SIL Bold"), local("Charis SIL Bold Italic"),
-    local("Charis SIL Italic"), url("file:///C:/Windows/Fonts/CharisSIL-B.ttf");
+  font-family: 'Charis SIL';
+  src: local('Charis SIL'), local('Charis SIL Bold'), local('Charis SIL Bold Italic'),
+    local('Charis SIL Italic'), url('file:///C:/Windows/Fonts/CharisSIL-B.ttf');
   font-weight: normal;
 }
 @font-face {
-  font-family: "Charis SIL";
-  src: local("Charis SIL Bold");
+  font-family: 'Charis SIL';
+  src: local('Charis SIL Bold');
   font-weight: bold;
 }
 @font-face {
-  font-family: "Charis SIL";
-  src: local("Charis SIL Italic");
+  font-family: 'Charis SIL';
+  src: local('Charis SIL Italic');
   font-style: italic;
 }
 @font-face {
-  font-family: "Charis SIL";
-  src: local("Charis SIL Bold Italic");
+  font-family: 'Charis SIL';
+  src: local('Charis SIL Bold Italic');
   font-weight: bold;
   font-style: italic;
 }
 .formatted-font .usfm {
-  font-family: "Charis SIL";
+  font-family: 'Charis SIL';
   font-size: 12pt;
 }
 
@@ -51,7 +51,7 @@
 }
 
 .book[data-code]::before {
-  content: attr(data-code) " ";
+  content: attr(data-code) ' ';
 }
 
 /* ChapterNode, ImmutableChapterNode */
@@ -315,50 +315,50 @@
 .formatted-font .usfm_io {
   font-size: 100%;
 }
-.text-spacing[dir="ltr"] .usfm_io {
+.text-spacing[dir='ltr'] .usfm_io {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_io {
+.text-spacing[dir='rtl'] .usfm_io {
   margin-right: 10vw;
 }
 
 .formatted-font .usfm_io1 {
   font-size: 100%;
 }
-.text-spacing[dir="ltr"] .usfm_io1 {
+.text-spacing[dir='ltr'] .usfm_io1 {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_io1 {
+.text-spacing[dir='rtl'] .usfm_io1 {
   margin-right: 10vw;
 }
 
 .formatted-font .usfm_io2 {
   font-size: 100%;
 }
-.text-spacing[dir="ltr"] .usfm_io2 {
+.text-spacing[dir='ltr'] .usfm_io2 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_io2 {
+.text-spacing[dir='rtl'] .usfm_io2 {
   margin-right: 15vw;
 }
 
 .formatted-font .usfm_io3 {
   font-size: 100%;
 }
-.text-spacing[dir="ltr"] .usfm_io3 {
+.text-spacing[dir='ltr'] .usfm_io3 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_io3 {
+.text-spacing[dir='rtl'] .usfm_io3 {
   margin-right: 20vw;
 }
 
 .formatted-font .usfm_io4 {
   font-size: 100%;
 }
-.text-spacing[dir="ltr"] .usfm_io4 {
+.text-spacing[dir='ltr'] .usfm_io4 {
   margin-left: 25vw;
 }
-.text-spacing[dir="rtl"] .usfm_io4 {
+.text-spacing[dir='rtl'] .usfm_io4 {
   margin-right: 25vw;
 }
 
@@ -402,10 +402,10 @@
 .text-spacing .usfm_ili {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_ili {
+.text-spacing[dir='ltr'] .usfm_ili {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_ili {
+.text-spacing[dir='rtl'] .usfm_ili {
   margin-right: 10vw;
 }
 
@@ -415,10 +415,10 @@
 .text-spacing .usfm_ili1 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_ili1 {
+.text-spacing[dir='ltr'] .usfm_ili1 {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_ili1 {
+.text-spacing[dir='rtl'] .usfm_ili1 {
   margin-right: 10vw;
 }
 
@@ -428,10 +428,10 @@
 .text-spacing .usfm_ili2 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_ili2 {
+.text-spacing[dir='ltr'] .usfm_ili2 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_ili2 {
+.text-spacing[dir='rtl'] .usfm_ili2 {
   margin-right: 15vw;
 }
 
@@ -478,10 +478,10 @@
 .text-spacing .usfm_iq {
   text-indent: -15vw;
 }
-.text-spacing[dir="ltr"] .usfm_iq {
+.text-spacing[dir='ltr'] .usfm_iq {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_iq {
+.text-spacing[dir='rtl'] .usfm_iq {
   margin-right: 20vw;
 }
 
@@ -493,10 +493,10 @@
 .text-spacing .usfm_iq1 {
   text-indent: -15vw;
 }
-.text-spacing[dir="ltr"] .usfm_iq1 {
+.text-spacing[dir='ltr'] .usfm_iq1 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_iq1 {
+.text-spacing[dir='rtl'] .usfm_iq1 {
   margin-right: 20vw;
 }
 
@@ -508,10 +508,10 @@
 .text-spacing .usfm_iq2 {
   text-indent: -10vw;
 }
-.text-spacing[dir="ltr"] .usfm_iq2 {
+.text-spacing[dir='ltr'] .usfm_iq2 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_iq2 {
+.text-spacing[dir='rtl'] .usfm_iq2 {
   margin-right: 20vw;
 }
 
@@ -523,10 +523,10 @@
 .text-spacing .usfm_iq3 {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_iq3 {
+.text-spacing[dir='ltr'] .usfm_iq3 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_iq3 {
+.text-spacing[dir='rtl'] .usfm_iq3 {
   margin-right: 20vw;
 }
 
@@ -661,11 +661,11 @@
 .text-spacing .usfm_pi2 {
   text-indent: 2.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_pi2 {
+.text-spacing[dir='ltr'] .usfm_pi2 {
   margin-left: 10vw;
   margin-right: 5vw;
 }
-.text-spacing[dir="rtl"] .usfm_pi2 {
+.text-spacing[dir='rtl'] .usfm_pi2 {
   margin-left: 5vw;
   margin-right: 10vw;
 }
@@ -676,11 +676,11 @@
 .text-spacing .usfm_pi3 {
   text-indent: 2.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_pi3 {
+.text-spacing[dir='ltr'] .usfm_pi3 {
   margin-left: 15vw;
   margin-right: 5vw;
 }
-.text-spacing[dir="rtl"] .usfm_pi3 {
+.text-spacing[dir='rtl'] .usfm_pi3 {
   margin-left: 5vw;
   margin-right: 15vw;
 }
@@ -711,10 +711,10 @@
 .text-spacing .usfm_q {
   text-indent: -10vw;
 }
-.text-spacing[dir="ltr"] .usfm_q {
+.text-spacing[dir='ltr'] .usfm_q {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_q {
+.text-spacing[dir='rtl'] .usfm_q {
   margin-right: 15vw;
 }
 
@@ -724,10 +724,10 @@
 .text-spacing .usfm_q1 {
   text-indent: -10vw;
 }
-.text-spacing[dir="ltr"] .usfm_q1 {
+.text-spacing[dir='ltr'] .usfm_q1 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_q1 {
+.text-spacing[dir='rtl'] .usfm_q1 {
   margin-right: 15vw;
 }
 
@@ -737,10 +737,10 @@
 .text-spacing .usfm_q2 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_q2 {
+.text-spacing[dir='ltr'] .usfm_q2 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_q2 {
+.text-spacing[dir='rtl'] .usfm_q2 {
   margin-right: 15vw;
 }
 
@@ -750,10 +750,10 @@
 .text-spacing .usfm_q3 {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_q3 {
+.text-spacing[dir='ltr'] .usfm_q3 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_q3 {
+.text-spacing[dir='rtl'] .usfm_q3 {
   margin-right: 15vw;
 }
 
@@ -763,10 +763,10 @@
 .text-spacing .usfm_q4 {
   text-indent: -2.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_q4 {
+.text-spacing[dir='ltr'] .usfm_q4 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_q4 {
+.text-spacing[dir='rtl'] .usfm_q4 {
   margin-right: 15vw;
 }
 
@@ -795,10 +795,10 @@
 .text-spacing .usfm_qm {
   text-indent: -15vw;
 }
-.text-spacing[dir="ltr"] .usfm_qm {
+.text-spacing[dir='ltr'] .usfm_qm {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_qm {
+.text-spacing[dir='rtl'] .usfm_qm {
   margin-right: 20vw;
 }
 
@@ -808,10 +808,10 @@
 .text-spacing .usfm_qm1 {
   text-indent: -15vw;
 }
-.text-spacing[dir="ltr"] .usfm_qm1 {
+.text-spacing[dir='ltr'] .usfm_qm1 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_qm1 {
+.text-spacing[dir='rtl'] .usfm_qm1 {
   margin-right: 20vw;
 }
 
@@ -821,10 +821,10 @@
 .text-spacing .usfm_qm2 {
   text-indent: -10vw;
 }
-.text-spacing[dir="ltr"] .usfm_qm2 {
+.text-spacing[dir='ltr'] .usfm_qm2 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_qm2 {
+.text-spacing[dir='rtl'] .usfm_qm2 {
   margin-right: 20vw;
 }
 
@@ -834,10 +834,10 @@
 .text-spacing .usfm_qm3 {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_qm3 {
+.text-spacing[dir='ltr'] .usfm_qm3 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_qm3 {
+.text-spacing[dir='rtl'] .usfm_qm3 {
   margin-right: 20vw;
 }
 
@@ -845,10 +845,10 @@
   font-size: 100%;
   font-style: italic;
 }
-.text-spacing[dir="ltr"] .usfm_qd {
+.text-spacing[dir='ltr'] .usfm_qd {
   margin-left: 5vw;
 }
-.text-spacing[dir="rtl"] .usfm_qd {
+.text-spacing[dir='rtl'] .usfm_qd {
   margin-right: 5vw;
 }
 
@@ -1105,10 +1105,10 @@
 .text-spacing .usfm_li {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_li {
+.text-spacing[dir='ltr'] .usfm_li {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_li {
+.text-spacing[dir='rtl'] .usfm_li {
   margin-right: 10vw;
 }
 
@@ -1118,10 +1118,10 @@
 .text-spacing .usfm_li1 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_li1 {
+.text-spacing[dir='ltr'] .usfm_li1 {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_li1 {
+.text-spacing[dir='rtl'] .usfm_li1 {
   margin-right: 10vw;
 }
 
@@ -1131,10 +1131,10 @@
 .text-spacing .usfm_li2 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_li2 {
+.text-spacing[dir='ltr'] .usfm_li2 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_li2 {
+.text-spacing[dir='rtl'] .usfm_li2 {
   margin-right: 15vw;
 }
 
@@ -1144,10 +1144,10 @@
 .text-spacing .usfm_li3 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_li3 {
+.text-spacing[dir='ltr'] .usfm_li3 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_li3 {
+.text-spacing[dir='rtl'] .usfm_li3 {
   margin-right: 20vw;
 }
 
@@ -1157,10 +1157,10 @@
 .text-spacing .usfm_li4 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_li4 {
+.text-spacing[dir='ltr'] .usfm_li4 {
   margin-left: 25vw;
 }
-.text-spacing[dir="rtl"] .usfm_li4 {
+.text-spacing[dir='rtl'] .usfm_li4 {
   margin-right: 25vw;
 }
 
@@ -1174,11 +1174,11 @@
 .text-spacing .usfm_lim {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_lim {
+.text-spacing[dir='ltr'] .usfm_lim {
   margin-left: 15vw;
   margin-right: 5vw;
 }
-.text-spacing[dir="rtl"] .usfm_lim {
+.text-spacing[dir='rtl'] .usfm_lim {
   margin-left: 5vw;
   margin-right: 15vw;
 }
@@ -1189,11 +1189,11 @@
 .text-spacing .usfm_lim1 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_lim1 {
+.text-spacing[dir='ltr'] .usfm_lim1 {
   margin-left: 15vw;
   margin-right: 5vw;
 }
-.text-spacing[dir="rtl"] .usfm_lim1 {
+.text-spacing[dir='rtl'] .usfm_lim1 {
   margin-left: 5vw;
   margin-right: 15vw;
 }
@@ -1204,10 +1204,10 @@
 .text-spacing .usfm_lim2 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_lim2 {
+.text-spacing[dir='ltr'] .usfm_lim2 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_lim2 {
+.text-spacing[dir='rtl'] .usfm_lim2 {
   margin-right: 20vw;
 }
 
@@ -1217,10 +1217,10 @@
 .text-spacing .usfm_lim3 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_lim3 {
+.text-spacing[dir='ltr'] .usfm_lim3 {
   margin-left: 25vw;
 }
-.text-spacing[dir="rtl"] .usfm_lim3 {
+.text-spacing[dir='rtl'] .usfm_lim3 {
   margin-right: 25vw;
 }
 
@@ -1230,10 +1230,10 @@
 .text-spacing .usfm_lim4 {
   text-indent: -7.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_lim4 {
+.text-spacing[dir='ltr'] .usfm_lim4 {
   margin-left: 30vw;
 }
-.text-spacing[dir="rtl"] .usfm_lim4 {
+.text-spacing[dir='rtl'] .usfm_lim4 {
   margin-right: 30vw;
 }
 
@@ -1251,10 +1251,10 @@
 .text-spacing .usfm_ph {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_ph {
+.text-spacing[dir='ltr'] .usfm_ph {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_ph {
+.text-spacing[dir='rtl'] .usfm_ph {
   margin-right: 10vw;
 }
 
@@ -1264,10 +1264,10 @@
 .text-spacing .usfm_ph1 {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_ph1 {
+.text-spacing[dir='ltr'] .usfm_ph1 {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_ph1 {
+.text-spacing[dir='rtl'] .usfm_ph1 {
   margin-right: 10vw;
 }
 
@@ -1277,10 +1277,10 @@
 .text-spacing .usfm_ph2 {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_ph2 {
+.text-spacing[dir='ltr'] .usfm_ph2 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_ph2 {
+.text-spacing[dir='rtl'] .usfm_ph2 {
   margin-right: 15vw;
 }
 
@@ -1290,10 +1290,10 @@
 .text-spacing .usfm_ph3 {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_ph3 {
+.text-spacing[dir='ltr'] .usfm_ph3 {
   margin-left: 20vw;
 }
-.text-spacing[dir="rtl"] .usfm_ph3 {
+.text-spacing[dir='rtl'] .usfm_ph3 {
   margin-right: 20vw;
 }
 
@@ -1639,10 +1639,10 @@
 .text-spacing .usfm_p2 {
   text-indent: 2.5vw;
 }
-.text-spacing[dir="ltr"] .usfm_p2 {
+.text-spacing[dir='ltr'] .usfm_p2 {
   margin-left: 2.5vw;
 }
-.text-spacing[dir="rtl"] .usfm_p2 {
+.text-spacing[dir='rtl'] .usfm_p2 {
   margin-right: 2.5vw;
 }
 
@@ -1732,10 +1732,10 @@
 .text-spacing .usfm_tr {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_tr {
+.text-spacing[dir='ltr'] .usfm_tr {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_tr {
+.text-spacing[dir='rtl'] .usfm_tr {
   margin-right: 10vw;
 }
 
@@ -1942,10 +1942,10 @@
 .text-spacing .usfm_tr1 {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_tr1 {
+.text-spacing[dir='ltr'] .usfm_tr1 {
   margin-left: 10vw;
 }
-.text-spacing[dir="rtl"] .usfm_tr1 {
+.text-spacing[dir='rtl'] .usfm_tr1 {
   margin-right: 10vw;
 }
 
@@ -1955,10 +1955,10 @@
 .text-spacing .usfm_tr2 {
   text-indent: -5vw;
 }
-.text-spacing[dir="ltr"] .usfm_tr2 {
+.text-spacing[dir='ltr'] .usfm_tr2 {
   margin-left: 15vw;
 }
-.text-spacing[dir="rtl"] .usfm_tr2 {
+.text-spacing[dir='rtl'] .usfm_tr2 {
   margin-right: 15vw;
 }
 
@@ -2101,7 +2101,7 @@ body {
   background-color: inherit;
 }
 
-.immutable-note-caller[data-caller="-"] {
+.immutable-note-caller[data-caller='-'] {
   display: none;
 }
 
