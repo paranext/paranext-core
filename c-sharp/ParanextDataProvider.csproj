@@ -70,6 +70,15 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="icon.ico" />
+    <!--
+      IP-Country.zip is a file containing information about the country of origin for many ip
+      ranges. As of 18 Nov 2024, this file is copied from a Paratext 9.4 installation. See
+      `Paratext/ResourceCreator/Program.cs` and `Paratext/ParatextData/GeoLocationData.cs` for more
+      information on this file and how to generate it.
+    -->
+    <Content Include="IP-Country.zip">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
