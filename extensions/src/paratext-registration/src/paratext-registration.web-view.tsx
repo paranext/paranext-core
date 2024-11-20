@@ -85,7 +85,7 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
     };
   }, []);
 
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRING_KEYS, []));
+  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
   const [name, setName] = useWebViewState('name', '');
   const [registrationCode, setRegistrationCode] = useWebViewState('registrationCode', '');
