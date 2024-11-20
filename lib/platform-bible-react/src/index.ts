@@ -39,7 +39,12 @@ export {
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,
-} from './components/advanced/navigation-content-search.component';
+} from './components/advanced/tab-navigation-content-search.component';
+export {
+  default as SettingsSidebar,
+  type SettingsSidebarProps,
+} from './components/advanced/settings-components/settings-sidebar.component';
+export { default as SettingsSidebarContentSearch } from './components/advanced/settings-components/settings-sidebar-content-search.component';
 export { default as ScriptureResultsViewer } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export type {
   ResultsSet,
@@ -58,7 +63,7 @@ export {
   SettingsListHeader,
   SettingsListItem,
 } from './components/advanced/settings-components/settings-list.component';
-
+export { default as SettingsCard } from './components/advanced/settings-components/settings-card.component';
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
 export { default as Checklist } from './components/basics/checklist.component';

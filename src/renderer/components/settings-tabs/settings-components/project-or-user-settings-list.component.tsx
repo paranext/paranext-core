@@ -1,5 +1,5 @@
 import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
-import { SettingsList, SettingsListHeader } from 'platform-bible-react';
+import { SettingsCard } from 'platform-bible-react';
 import { useMemo } from 'react';
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
 import UserSetting from './user-setting.component';
@@ -47,10 +47,13 @@ export default function ProjectOrUserSettingsList({
   }, [searchQuery, settingProperties]);
 
   return (
-    <SettingsList key={groupLabel}>
-      {Object.keys(filteredSettingsProperties).length > 0 ? (
-        <SettingsListHeader primary={groupLabel} secondary={groupDescription} includeSeparator />
-      ) : undefined}
+    <SettingsCard
+      settingsGroupLabel={groupLabel}
+      settingsGroupDescription={groupDescription ?? 'None'}
+    >
+      {/* // {Object.keys(filteredSettingsProperties).length > 0 ? ( */}
+      {/* //   <SettingsListHeader primary={groupLabel} secondary={groupDescription} includeSeparator /> */}
+      {/* // ) : undefined} */}
       <div>
         {Object.entries(filteredSettingsProperties).map(([key, property]) =>
           projectId ? (
@@ -81,6 +84,6 @@ export default function ProjectOrUserSettingsList({
           ),
         )}
       </div>
-    </SettingsList>
+    </SettingsCard>
   );
 }

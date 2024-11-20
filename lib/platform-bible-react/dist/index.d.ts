@@ -417,7 +417,7 @@ export type TabKeyValueContent = {
 	value: string;
 	content: React$1.ReactNode;
 };
-export type NavigationContentSearchProps = {
+export type TabNavigationContentSearchProps = {
 	/** List of values and keys for each tab this component should provide */
 	tabList: TabKeyValueContent[];
 	/** Handler to run when the value of the search bar changes */
@@ -431,7 +431,23 @@ export type NavigationContentSearchProps = {
 	/** Text direction ltr or rtl */
 	direction?: "ltr" | "rtl";
 };
-export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export type SettingsSidebarProps = {
+	/** Optional id */
+	id?: string;
+	/** Extension labels to list in sidebar */
+	extensionLabels: string[];
+	/** Project labels to list in sidebar */
+	handleSelectSidebarItem: (key: string, isProjectSetting: boolean) => void;
+};
+export function SettingsSidebar({ id, extensionLabels, handleSelectSidebarItem, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export type SettingsSidebarContentSearchProps = {
+	/** Text direction ltr or rtl */
+	direction?: "ltr" | "rtl";
+	extensionLabels: string[];
+	handleSelectSidebarItem: (key: string, isProjectSetting: boolean) => void;
+} & React$1.PropsWithChildren;
+export function SettingsSidebarContentSearch({ direction, extensionLabels, children, handleSelectSidebarItem, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -622,6 +638,11 @@ export type SettingsListHeaderProps = {
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
+export type SettingsCardProps = React$1.PropsWithChildren & {
+	settingsGroupLabel: string;
+	settingsGroupDescription: string;
+};
+export function SettingsCard({ settingsGroupLabel, settingsGroupDescription, children, }: SettingsCardProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
@@ -1468,6 +1489,7 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 export declare function cn(...inputs: ClassValue[]): string;
 
 export {
+	TabNavigationContentSearch as NavigationContentSearch,
 	sonner,
 };
 

@@ -5,7 +5,7 @@ import {
   SettingNames,
   SettingTypes,
 } from 'papi-shared-types';
-import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
+import { Input, SettingsListItem, Switch } from 'platform-bible-react';
 import { debounce, getErrorMessage } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
@@ -174,11 +174,7 @@ export default function Setting({
       );
     else if (typeof setting === 'boolean')
       component = (
-        <Checkbox
-          key={settingKey}
-          onCheckedChange={debouncedHandleChange}
-          defaultChecked={setting}
-        />
+        <Switch key={settingKey} onCheckedChange={debouncedHandleChange} defaultChecked={setting} />
       );
     else if (typeof setting === 'object')
       component = (

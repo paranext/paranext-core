@@ -17,6 +17,7 @@ import DropdownExamples from './basics/dropdown.examples.component';
 import InputExamples from './basics/input.examples.component';
 import RadioGroupExamples from './basics/radio-group.examples';
 import SelectExamples from './basics/select.examples.component';
+import SidebarExamples from './basics/sidebar.examples.component';
 import SliderExamples from './basics/slider.examples.component';
 import SonnerExamples from './basics/sonner.examples.component';
 import SpinnerExamples from './basics/spinner.examples.component';
@@ -45,6 +46,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Sidebar">Sidebar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Sonner">Sonner</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Spinner">Spinner</VerticalTabsTrigger>
@@ -99,6 +101,12 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Select">
           <SelectExamples direction={direction} />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Sidebar">
+          <div className="tw-relative tw-overflow-hidden">
+            <SidebarExamples />
+          </div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Slider">
