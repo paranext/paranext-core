@@ -1,6 +1,5 @@
 using Paranext.DataProvider.Services;
 using Paratext.Data;
-using Paratext.Data.RegistryServerAccess;
 using Paratext.Data.Repository;
 using Paratext.Data.Users;
 using PtxUtils;
@@ -15,16 +14,15 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     #region Constructors, consts, and fields
 
     /// <summary>
-    /// Time in milliseconds to wait before restarting the application after changing Paratext
-    /// registration information
-    /// </summary>
-    private const int REGISTRATION_CHANGE_RESTART_DELAY_MS = 5 * 1000;
-
-    /// <summary>
     /// Placeholder to show instead of real registration code so we aren't giving out the real
     /// registration code
     /// </summary>
     private const string PLACEHOLDER_CODE = "******-******-******-******-******";
+
+    /// <summary>
+    /// Placeholder to show instead of real passwords so we aren't giving out real passwords
+    /// </summary>
+    private const string PLACEHOLDER_PASSWORD = "********";
 
     #endregion
 
@@ -45,6 +43,14 @@ internal class ParatextRegistrationService(PapiClient papiClient)
             "command:paratextRegistration.doesUserHaveValidRegistration",
             () => RegistrationInfo.DefaultUser.IsValid
         );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.getParatextDataInternetSettings",
+            GetParatextDataInternetSettings
+        );
+        await PapiClient.RegisterRequestHandlerAsync(
+            "command:paratextRegistration.setParatextDataInternetSettings",
+            SetParatextDataInternetSettings
+        );
 
         // Lookup localized strings where they may be needed by callers without access to PapiClient
         RegistrationRequiredException.ExceptionMessage = LocalizationService.GetLocalizedString(
@@ -63,7 +69,6 @@ internal class ParatextRegistrationService(PapiClient papiClient)
     /// <summary>
     /// Returns information about user's current Paratext Registry user information in ParatextData.dll
     /// </summary>
-    /// <param name="requestContents">Contents of command request. No contents expected</param>
     /// <returns>Paratext registration information</returns>
     private RegistrationData GetParatextRegistrationData()
     {
@@ -93,10 +98,8 @@ internal class ParatextRegistrationService(PapiClient papiClient)
 
     /// <summary>
     /// Sets information about user's current Paratext Registry user information in ParatextData.dll
-    /// and restarts the application
     /// </summary>
-    /// <param name="requestContents">Contents of command request. Array whose first entry is the registration data object</param>
-    /// <returns>`true` if successfully updated; `false` otherwise</returns>
+    /// <param name="newRegistrationData">registration data object for updating registration</param>
     private void SetParatextRegistrationData(RegistrationData newRegistrationData)
     {
         bool shouldSkipAppendingToExceptionMessage = false;
@@ -182,17 +185,8 @@ internal class ParatextRegistrationService(PapiClient papiClient)
             RegistrationInfo.ChangeRegistrationData(newRegistrationData);
 
             // registration code may have changed, so reset the registry server with the new user data
-            RegistryServer.Default?.ResetServer(RegistrationInfo.DefaultUser);
-
-            // Restart the application after a delay. Don't wait for it so the response goes through
-            ThreadingUtils.RunTask(
-                Task.Delay(REGISTRATION_CHANGE_RESTART_DELAY_MS)
-                    .ContinueWith(
-                        async (Task task) =>
-                            await PapiClient.SendRequestAsync("command:platform.restart", []),
-                        TaskScheduler.Default
-                    ),
-                "ParatextRegistrationService sending request to restart the application"
+            Paratext.Data.RegistryServerAccess.RegistryServer.Default?.ResetServer(
+                RegistrationInfo.DefaultUser
             );
         }
         catch (Exception e)
@@ -203,6 +197,106 @@ internal class ParatextRegistrationService(PapiClient papiClient)
                     ? e.Message
                     : $"Setting Paratext Registration data failed! {e.Message}"
             );
+        }
+    }
+
+    /// <summary>
+    /// Returns information about user's current ParatextData.dll internet settings
+    /// </summary>
+    /// <param name="requestContents">Contents of command request. No contents expected</param>
+    /// <returns>Paratext registration information</returns>
+    private InternetAccess.InternetSettingsMemento GetParatextDataInternetSettings()
+    {
+        try
+        {
+            var internetSettings = new InternetAccess.InternetSettingsMemento
+            {
+                SelectedServer = InternetAccess.SelectedServers,
+                PermittedInternetUse = InternetAccess.RawStatus,
+                ProxyHost = InternetAccess.ProxyHost,
+                ProxyPort = InternetAccess.ProxyPort,
+                ProxyUsername = InternetAccess.ProxyUsername,
+                ProxyPassword = !string.IsNullOrEmpty(InternetAccess.ProxyPassword)
+                    ? PLACEHOLDER_PASSWORD
+                    : null,
+                ProxyMode = InternetAccess.ProxyMode,
+                OverrideDBLServer = InternetAccess.OverrideDBLServer,
+                OverrideDBLApiServer = InternetAccess.OverrideDBLApiServer,
+                OverrideGbcServer = InternetAccess.OverrideGbcServer,
+                DBLEmail = InternetAccess.DBLEmail,
+                DBLPassword = !string.IsNullOrEmpty(InternetAccess.DBLPassword)
+                    ? PLACEHOLDER_PASSWORD
+                    : null,
+            };
+            return internetSettings;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Getting ParatextData InternetSettings failed! {e}");
+            throw new Exception($"Getting ParatextData InternetSettings failed! {e.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Sets information about user's current ParatextData.dll internet settings
+    /// </summary>
+    /// <param name="newInternetSettings">internet settings object for updating ParatextData.dll internet settings</param>
+    private void SetParatextDataInternetSettings(
+        InternetAccess.InternetSettingsMemento newInternetSettings
+    )
+    {
+        try
+        {
+            // Set empty strings to null (except proxy-related settings since they are handled by
+            // SetProxy) so they are removed from `InternetSettings.xml` as it happens in PT9
+            if (newInternetSettings.OverrideDBLServer == "")
+                newInternetSettings.OverrideDBLServer = null;
+            if (newInternetSettings.OverrideDBLApiServer == "")
+                newInternetSettings.OverrideDBLApiServer = null;
+            if (newInternetSettings.OverrideGbcServer == "")
+                newInternetSettings.OverrideGbcServer = null;
+            if (newInternetSettings.DBLEmail == "")
+                newInternetSettings.DBLEmail = null;
+            if (newInternetSettings.DBLPassword == "")
+                newInternetSettings.DBLPassword = null;
+
+            // Unfortunately, `InternetAccess.SetProxy` is the only way to set proxy properties, and
+            // it does some weird stuff. Make sure `ProxyHost` is `null` if not using a proxy. Then
+            // `InternetAccess.SetProxy` will set the proxy properties to `null`. But it will also
+            // set `RawStatus` to `InternetUse.Disabled`, so set that back to whatever the user
+            // selected if they selected something that is not `InternetUse.ProxyOnly`. But we want
+            // to leave it disabled if they selected `InternetUse.ProxyOnly` but provided no host
+            if (newInternetSettings.PermittedInternetUse != InternetUse.ProxyOnly)
+                newInternetSettings.ProxyHost = null;
+            InternetAccess.SetProxy(
+                newInternetSettings.ProxyHost,
+                newInternetSettings.ProxyPort,
+                newInternetSettings.ProxyUsername,
+                newInternetSettings.ProxyPassword != PLACEHOLDER_PASSWORD
+                    ? newInternetSettings.ProxyPassword
+                    : InternetAccess.ProxyPassword,
+                newInternetSettings.ProxyMode
+            );
+            if (
+                InternetAccess.RawStatus == InternetUse.Disabled
+                && newInternetSettings.PermittedInternetUse != InternetUse.Disabled
+                && newInternetSettings.PermittedInternetUse != InternetUse.ProxyOnly
+            )
+                InternetAccess.RawStatus = newInternetSettings.PermittedInternetUse;
+
+            InternetAccess.SelectedServers = newInternetSettings.SelectedServer;
+
+            InternetAccess.OverrideDBLServer = newInternetSettings.OverrideDBLServer;
+            InternetAccess.OverrideDBLApiServer = newInternetSettings.OverrideDBLApiServer;
+            InternetAccess.OverrideGbcServer = newInternetSettings.OverrideGbcServer;
+            InternetAccess.DBLEmail = newInternetSettings.DBLEmail;
+            if (newInternetSettings.DBLPassword != PLACEHOLDER_PASSWORD)
+                InternetAccess.DBLPassword = newInternetSettings.DBLPassword;
+        }
+        catch (Exception e)
+        {
+            Console.WriteLine($"Setting ParatextData InternetSettings failed! {e}");
+            throw new Exception($"Setting Paratext Registration data failed! {e.Message}");
         }
     }
 

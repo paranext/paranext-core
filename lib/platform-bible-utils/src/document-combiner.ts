@@ -188,7 +188,7 @@ export default class DocumentCombiner {
    */
   // We just don't need `this` here. This is basically a no-op function that is available to child
   // classes to override
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   protected transformBaseDocumentAfterValidation(baseDocument: JsonDocumentLike): JsonDocumentLike {
     return baseDocument;
   }
@@ -207,7 +207,7 @@ export default class DocumentCombiner {
    */
   // We just don't need `this` here. This is basically a no-op function that is available to child
   // classes to override
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   protected transformContributionAfterValidation(
     // @ts-expect-error this parameter is unused but may be used in child classes
     documentName: string,
@@ -223,7 +223,7 @@ export default class DocumentCombiner {
    */
   // no-op intended to be overridden by child classes. Can't be static
   // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this, @typescript-eslint/no-unused-vars
   protected validateBaseDocument(baseDocument: JsonDocumentLike): void {}
 
   /**
@@ -234,7 +234,7 @@ export default class DocumentCombiner {
    */
   // no-op intended to be overridden by child classes. Can't be static
   // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this, @typescript-eslint/no-unused-vars
   protected validateContribution(documentName: string, document: JsonDocumentLike): void {}
 
   /**
@@ -244,7 +244,7 @@ export default class DocumentCombiner {
    */
   // no-op intended to be overridden by child classes. Can't be static
   // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this, @typescript-eslint/no-unused-vars
   protected validateOutput(output: JsonDocumentLike): void {}
 
   /**
@@ -256,7 +256,7 @@ export default class DocumentCombiner {
    *   means no further contribution documents will be merged.
    */
   // no-op intended to be overridden by child classes. Can't be static
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike {
     return finalOutput;
   }

@@ -24,7 +24,12 @@ internal class LocalParatextProjects
     private bool _isInitialized = false;
     private readonly object _initializationLock = new();
 
-    private readonly List<string> _requiredProjectRootFiles = ["usfm.sty", "Attribution.md"];
+    private readonly List<string> _requiredProjectRootFiles =
+    [
+        "usfm.sty",
+        "Attribution.md",
+        "CountryStatuses.xml",
+    ];
 
     private static readonly List<string> s_paratextProjectInterfaces =
     [
