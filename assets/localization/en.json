@@ -1,6 +1,9 @@
 {
   "%about_versionLabel_format%": "Version: {version}",
   "%about_licenseLabel_format%": "License: {license}",
+  "%about_db_ip_attribution_format%": "{intro} {websiteLink} ({license}, {terms})",
+  "%about_db_ip_attribution_intro%": "Internet safety features use data from",
+  "%about_db_ip_attribution_terms%": "Terms",
   "%downloadResources_errorRegistrationInvalid%": "User registration is not valid. Cannot retrieve resources from DBL.",
   "%downloadResources_errorInstallResource_resourceNotFound%": "Resource not available from DBL",
   "%downloadResources_errorInstallResource_resourceAlreadyInstalled%": "Resource is already installed and up to date. Installation skipped.",

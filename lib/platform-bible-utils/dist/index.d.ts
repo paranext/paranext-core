@@ -1239,6 +1239,53 @@ export declare function codePointAt(string: string, index: number): number | und
  */
 export declare function endsWith(string: string, searchString: string, endPosition?: number): boolean;
 /**
+ * Formats a string into an array of objects (adjacent strings are concatenated in one array entry),
+ * replacing `{replacer key}` with the value in the `replacers` at that replacer key (or multiple
+ * replacer values if there are multiple in the string). Will also remove \ before curly braces if
+ * curly braces are escaped with a backslash in order to preserve the curly braces. E.g. 'Hi, this
+ * is {name}! I like `\{curly braces\}`! would become Hi, this is Jim! I like {curly braces}!
+ *
+ * If the key in unescaped braces is not found, returns the key without the braces. Empty unescaped
+ * curly braces will just return a string without the braces e.g. ('I am {Nemo}', { 'name': 'Jim'})
+ * would return 'I am Nemo'.
+ *
+ * Note: React elements can be used as replacer values.
+ *
+ * @example
+ *
+ * ```tsx
+ * <p>
+ *   {formatReplacementStringToArray('Hi {other}! I am {name}.', {
+ *     other: 'Billy',
+ *     name: <span className="tw-text-red-500">Jim</span>,
+ *   })}
+ * </p>
+ * ```
+ *
+ * @example
+ *
+ * ```typescript
+ * formatReplacementStringToArray(
+ *   'Hi, this is {name}! I like \{curly braces\}! I have a {carInfo} car. My favorite food is {food}.',
+ *   { name: ['Bill'], carInfo: { year: 2015, color: 'blue' } }
+ * );
+ *
+ * =>
+ *
+ * ['Hi, this is ', ['Bill'], '! I like {curly braces}! I have a ', { year: 2015, color: 'blue' }, ' car. My favorite food is food.']
+ * ```
+ *
+ * @param str String to format and break out into an array of objects
+ * @param replacers Object whose keys are replacer keys and whose values are the values with which
+ *   to replace `{replacer key}`s found in the string to format. If the replacer value is a string,
+ *   it will be concatenated into existing strings in the array. Otherwise, the replacer value will
+ *   be added as a new entry in the array
+ * @returns Array of formatted strings and replaced objects
+ */
+export declare function formatReplacementStringToArray<T = unknown>(str: string, replacers: {
+	[key: string | number]: T;
+} | object): (string | T)[];
+/**
  * Formats a string, replacing `{replacer key}` with the value in the `replacers` at that replacer
  * key (or multiple replacer values if there are multiple in the string). Will also remove \ before
  * curly braces if curly braces are escaped with a backslash in order to preserve the curly braces.
