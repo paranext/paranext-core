@@ -3,20 +3,27 @@ import { CardContent } from '@mui/material';
 import { PropsWithChildren } from 'react';
 
 type SettingsCardProps = PropsWithChildren & {
+  /** Optional id for testing */
+  id?: string;
+
+  /** Label of the settings group */
   settingsGroupLabel: string;
-  settingsGroupDescription: string;
+
+  /** Optional description of the settings group */
+  settingsGroupDescription?: string;
 };
 
 export default function SettingsCard({
+  id,
   settingsGroupLabel,
   settingsGroupDescription,
   children,
 }: SettingsCardProps) {
   return (
-    <Card>
+    <Card id={id}>
       <CardHeader>
         <CardTitle>{settingsGroupLabel}</CardTitle>
-        <CardDescription>{settingsGroupDescription}</CardDescription>
+        {settingsGroupDescription && <CardDescription>{settingsGroupDescription}</CardDescription>}
       </CardHeader>
       <CardContent className="tw-space-y-4">{children}</CardContent>
     </Card>

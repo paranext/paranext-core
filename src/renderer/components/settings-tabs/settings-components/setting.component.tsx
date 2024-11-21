@@ -1,16 +1,16 @@
-import { ChangeEvent, useCallback, useMemo, useState } from 'react';
+import { ChangeEvent, useCallback, useState } from 'react';
 import {
   ProjectSettingNames,
   ProjectSettingTypes,
   SettingNames,
   SettingTypes,
 } from 'papi-shared-types';
-import { Input, SettingsListItem, Switch } from 'platform-bible-react';
+import { Input, Label, Switch } from 'platform-bible-react';
 import { debounce, getErrorMessage } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import logger from '@shared/services/logger.service';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+// import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -28,10 +28,10 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
  * Combines properties and controls with optional validation functions for both project and user
  * settings
  */
-type SettingProps<TProps, TControls, TValidateProject, TValidateUser> = TProps &
+type SettingProps<TProps, TControls, TValidateProject, TValidateOther> = TProps &
   TControls & {
     validateProjectSetting?: TValidateProject;
-    validateUserSetting?: TValidateUser;
+    validateOtherSetting?: TValidateOther;
   };
 
 /** Values of ProjectSettingTypes */
@@ -53,14 +53,14 @@ type ProjectSettingsControls = {
 };
 
 /** Values of SettingTypes */
-export type UserSettingValues = SettingTypes[keyof SettingTypes];
+export type OtherSettingValues = SettingTypes[keyof SettingTypes];
 
 /** Props for the UserSetting component */
-export type UserSettingProps = BaseSettingProps<SettingNames, UserSettingValues>;
+export type OtherSettingProps = BaseSettingProps<SettingNames, OtherSettingValues>;
 
 /** Values from the useSetting hook to manage the setting */
-type UserSettingsControls = {
-  setting: UserSettingValues;
+type OtherSettingsControls = {
+  setting: OtherSettingValues;
   // Necessary for flexibility in handleChangeSetting, ProjectSettingValues and
   // UserSettingValues are not the same so it couldn't assign
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,8 +83,8 @@ type CombinedSettingProps =
       never
     >
   | SettingProps<
-      Omit<UserSettingProps, 'defaultSetting'>,
-      UserSettingsControls,
+      Omit<OtherSettingProps, 'defaultSetting'>,
+      OtherSettingsControls,
       never,
       // Necessary for flexibility in handleChangeSetting, couldn't use unknown
       // and keep types in ProjectSetting component
@@ -100,13 +100,13 @@ export default function Setting({
   settingKey,
   setting,
   setSetting,
-  isLoading,
-  validateUserSetting,
+  // isLoading,
+  validateOtherSetting,
   validateProjectSetting,
   label,
-  description,
+  // description,
 }: CombinedSettingProps) {
-  const validateSetting = validateUserSetting || validateProjectSetting;
+  const validateSetting = validateOtherSetting || validateProjectSetting;
 
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
@@ -193,18 +193,14 @@ export default function Setting({
     );
   }, [setting, settingKey, debouncedHandleChange, errorMessage]);
 
-  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
-  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
+  // const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
+  // const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
+  // const localizedLoadingSetting = localizedStrings[loadingSettingKey];
 
   return (
-    <SettingsListItem
-      primary={label}
-      secondary={description}
-      isLoading={isLoading}
-      loadingMessage={localizedLoadingSetting}
-    >
+    <div>
+      <Label htmlFor={settingKey}>{label}</Label>
       {generateComponent()}
-    </SettingsListItem>
+    </div>
   );
 }

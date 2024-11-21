@@ -1,34 +1,32 @@
 import { SidebarInset, SidebarProvider } from '@/components/shadcn-ui/sidebar';
-// import { ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
 import { PropsWithChildren } from 'react';
-import SettingsSidebar from './settings-sidebar.component';
+import SettingsSidebar, { SettingsSidebarProps } from './settings-sidebar.component';
 
-export type SettingsSidebarContentSearchProps = {
-  /** Text direction ltr or rtl */
-  direction?: 'ltr' | 'rtl';
+export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
+  PropsWithChildren & {
+    /** Optional id for testing */
+    id?: string;
 
-  extensionLabels: string[];
-  // projectLabels: string[];
-  handleSelectSidebarItem: (key: string, isProjectSetting: boolean) => void;
-  // renderSettingsProperties: (extension: string) => SettingProperties;
-  // renderProjectSettingsProperties: (project: string) => ProjectSettingProperties;
-} & PropsWithChildren;
+    /** Text direction ltr or rtl */
+    direction?: 'ltr' | 'rtl';
+  };
 
 export default function SettingsSidebarContentSearch({
+  id,
   direction = 'ltr',
   extensionLabels,
-  // projectLabels,
+  projectOptions,
   children,
   handleSelectSidebarItem,
-  // renderSettingsProperties,
-  // renderProjectSettingsProperties.
+  selectedSidebarItem,
 }: SettingsSidebarContentSearchProps) {
   return (
-    <SidebarProvider dir={direction}>
+    <SidebarProvider dir={direction} id={id}>
       <SettingsSidebar
         extensionLabels={extensionLabels}
-        // projectLabels={projectLabels}
+        projectOptions={projectOptions}
         handleSelectSidebarItem={handleSelectSidebarItem}
+        selectedSidebarItem={selectedSidebarItem}
       />
       <SidebarInset>{children}</SidebarInset>
     </SidebarProvider>

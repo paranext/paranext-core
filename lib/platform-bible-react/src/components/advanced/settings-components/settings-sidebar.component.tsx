@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import ComboBox, { ComboBoxOption } from '@/components/basics/combo-box.component';
 import {
   Sidebar,
   SidebarContent,
@@ -8,33 +8,54 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-} from '../../shadcn-ui/sidebar';
+} from '@/components/shadcn-ui/sidebar';
+import { useCallback } from 'react';
+
+export type SelectedSettingsSidebarItem = {
+  label: string;
+  projectId?: string;
+};
+
+export type ProjectOptions = { projectId: string; projectName: string };
 
 export type SettingsSidebarProps = {
-  /** Optional id */
+  /** Optional id for testing */
   id?: string;
 
-  /** Extension labels to list in sidebar */
+  /** Extension labels from contribution */
   extensionLabels: string[];
 
-  /** Project labels to list in sidebar */
-  // projectLabels: string[];
+  /** Project names and ids */
+  projectOptions: ProjectOptions[];
 
-  handleSelectSidebarItem: (key: string, isProjectSetting: boolean) => void;
+  /** Handler for selecting a sidebar item */
+  handleSelectSidebarItem: (key: string, projectId?: string) => void;
+
+  /** The current selected value in the sidebar */
+  selectedSidebarItem: SelectedSettingsSidebarItem | undefined;
 };
 
 export default function SettingsSidebar({
   id,
   extensionLabels,
-  // projectLabels,
+  projectOptions,
   handleSelectSidebarItem,
+  selectedSidebarItem,
 }: SettingsSidebarProps) {
-  const [selectedItem, setSelectedItem] = useState<string>();
+  const handleSelectItem = useCallback(
+    (item: string, projectId?: string) => {
+      handleSelectSidebarItem(item, projectId);
+    },
+    [handleSelectSidebarItem],
+  );
 
-  const handleSelectItem = (item: string, isProjectSetting: boolean) => {
-    setSelectedItem(item);
-    handleSelectSidebarItem(item, isProjectSetting);
-  };
+  const getProjectNameFromProjectId = useCallback(
+    (projectId: string) => {
+      const project = projectOptions.find((option) => option.projectId === projectId);
+      return project ? project.projectName : projectId;
+    },
+    [projectOptions],
+  );
 
   return (
     <Sidebar id={id} collapsible="offcanvas" variant="sidebar">
@@ -46,8 +67,10 @@ export default function SettingsSidebar({
               {extensionLabels.map((label) => (
                 <SidebarMenuItem key={label}>
                   <SidebarMenuButton
-                    onClick={() => handleSelectItem(label, false)}
-                    isActive={label === selectedItem}
+                    onClick={() => handleSelectItem(label)}
+                    isActive={
+                      !selectedSidebarItem?.projectId && label === selectedSidebarItem?.label
+                    }
                   >
                     {label}
                   </SidebarMenuButton>
@@ -56,24 +79,26 @@ export default function SettingsSidebar({
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
-
-        {/* <SidebarGroup>
+        <SidebarGroup>
           <SidebarGroupLabel>Projects</SidebarGroupLabel>
           <SidebarGroupContent>
-            <SidebarMenu>
-              {projectLabels.map((label) => (
-                <SidebarMenuItem key={label}>
-                  <SidebarMenuButton
-                    onClick={() => handleSelectItem(label)}
-                    isActive={label === selectedItem}
-                  >
-                    {label}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
+            <ComboBox
+              popoverContentClassName="tw-z-[1000]"
+              options={projectOptions.flatMap((option) => option.projectId)}
+              getOptionLabel={(projectId: ComboBoxOption) => {
+                // This function expects a ComboBoxOption, but we know it is a string
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                return getProjectNameFromProjectId(projectId as string);
+              }}
+              buttonPlaceholder="Type or select project"
+              onChange={(projectId: string) => {
+                const selectedProjectName = getProjectNameFromProjectId(projectId);
+                handleSelectItem(selectedProjectName, projectId);
+              }}
+              value={selectedSidebarItem?.projectId ?? undefined}
+            />
           </SidebarGroupContent>
-        </SidebarGroup> */}
+        </SidebarGroup>
       </SidebarContent>
     </Sidebar>
   );

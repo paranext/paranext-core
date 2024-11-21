@@ -432,22 +432,34 @@ export type TabNavigationContentSearchProps = {
 	direction?: "ltr" | "rtl";
 };
 declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
-export type SettingsSidebarProps = {
-	/** Optional id */
-	id?: string;
-	/** Extension labels to list in sidebar */
-	extensionLabels: string[];
-	/** Project labels to list in sidebar */
-	handleSelectSidebarItem: (key: string, isProjectSetting: boolean) => void;
+export type SelectedSettingsSidebarItem = {
+	label: string;
+	projectId?: string;
 };
-export function SettingsSidebar({ id, extensionLabels, handleSelectSidebarItem, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
-export type SettingsSidebarContentSearchProps = {
+export type ProjectOptions = {
+	projectId: string;
+	projectName: string;
+};
+export type SettingsSidebarProps = {
+	/** Optional id for testing */
+	id?: string;
+	/** Extension labels from contribution */
+	extensionLabels: string[];
+	/** Project names and ids */
+	projectOptions: ProjectOptions[];
+	/** Handler for selecting a sidebar item */
+	handleSelectSidebarItem: (key: string, projectId?: string) => void;
+	/** The current selected value in the sidebar */
+	selectedSidebarItem: SelectedSettingsSidebarItem | undefined;
+};
+export function SettingsSidebar({ id, extensionLabels, projectOptions, handleSelectSidebarItem, selectedSidebarItem, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
+	/** Optional id for testing */
+	id?: string;
 	/** Text direction ltr or rtl */
 	direction?: "ltr" | "rtl";
-	extensionLabels: string[];
-	handleSelectSidebarItem: (key: string, isProjectSetting: boolean) => void;
-} & React$1.PropsWithChildren;
-export function SettingsSidebarContentSearch({ direction, extensionLabels, children, handleSelectSidebarItem, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+};
+export function SettingsSidebarContentSearch({ id, direction, extensionLabels, projectOptions, children, handleSelectSidebarItem, selectedSidebarItem, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -639,10 +651,14 @@ export type SettingsListHeaderProps = {
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
 export type SettingsCardProps = React$1.PropsWithChildren & {
+	/** Optional id for testing */
+	id?: string;
+	/** Label of the settings group */
 	settingsGroupLabel: string;
-	settingsGroupDescription: string;
+	/** Optional description of the settings group */
+	settingsGroupDescription?: string;
 };
-export function SettingsCard({ settingsGroupLabel, settingsGroupDescription, children, }: SettingsCardProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsCard({ id, settingsGroupLabel, settingsGroupDescription, children, }: SettingsCardProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
@@ -687,8 +703,10 @@ export type ComboBoxProps<T> = {
 	/** Text label title for combobox */
 	/** List of available options for the dropdown menu */
 	options?: readonly T[];
-	/** Additional css classes to help with unique styling of the combo box */
-	className?: string;
+	/** Additional css classes to help with unique styling of the combo box button */
+	buttonClassName?: string;
+	/** Additional css classes to help with unique styling of the combo box popover */
+	popoverContentClassName?: string;
 	/**
 	 * The selected value that the combo box currently holds. Must be shallow equal to one of the
 	 * options entries.
@@ -718,7 +736,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;

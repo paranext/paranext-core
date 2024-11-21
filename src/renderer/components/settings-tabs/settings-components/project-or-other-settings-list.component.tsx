@@ -2,12 +2,12 @@ import { Localized, ProjectSettingProperties, SettingProperties } from 'platform
 import { SettingsCard } from 'platform-bible-react';
 import { useMemo } from 'react';
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
-import UserSetting from './user-setting.component';
+import OtherSetting from './other-setting.component';
 import ProjectSetting from './project-setting.component';
-import { ProjectSettingValues, UserSettingValues } from './setting.component';
+import { ProjectSettingValues, OtherSettingValues } from './setting.component';
 
 /** Properties for a settings list component that displays either project or user settings */
-type ProjectOrUserSettingsListProps = {
+type ProjectOrOtherSettingsListProps = {
   /** Properties for either a project setting group or user setting group */
   settingProperties: Localized<ProjectSettingProperties> | Localized<SettingProperties>;
   /** Optional projectId, supplied if the list is for project settings */
@@ -24,13 +24,13 @@ type ProjectOrUserSettingsListProps = {
  * Filters and displays a list of settings based on a search query and whether it's for project or
  * user settings, rendering either `ProjectSetting` or `UserSetting` components accordingly.
  */
-export default function ProjectOrUserSettingsList({
+export default function ProjectOrOtherSettingsList({
   settingProperties,
   projectId,
   searchQuery,
   groupLabel,
   groupDescription,
-}: ProjectOrUserSettingsListProps) {
+}: ProjectOrOtherSettingsListProps) {
   const filteredSettingsProperties = useMemo(():
     | Localized<ProjectSettingProperties>
     | Localized<SettingProperties> => {
@@ -47,13 +47,7 @@ export default function ProjectOrUserSettingsList({
   }, [searchQuery, settingProperties]);
 
   return (
-    <SettingsCard
-      settingsGroupLabel={groupLabel}
-      settingsGroupDescription={groupDescription ?? 'None'}
-    >
-      {/* // {Object.keys(filteredSettingsProperties).length > 0 ? ( */}
-      {/* //   <SettingsListHeader primary={groupLabel} secondary={groupDescription} includeSeparator /> */}
-      {/* // ) : undefined} */}
+    <SettingsCard settingsGroupLabel={groupLabel} settingsGroupDescription={groupDescription}>
       <div>
         {Object.entries(filteredSettingsProperties).map(([key, property]) =>
           projectId ? (
@@ -70,7 +64,7 @@ export default function ProjectOrUserSettingsList({
               defaultSetting={property.default as ProjectSettingValues}
             />
           ) : (
-            <UserSetting
+            <OtherSetting
               key={key}
               // Key is a string technically, but it has to be a settingKey to access the setting
               // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -79,7 +73,7 @@ export default function ProjectOrUserSettingsList({
               description={property.description}
               // Default is unknown technically, but we know it has to be a setting value
               // eslint-disable-next-line no-type-assertion/no-type-assertion
-              defaultSetting={property.default as UserSettingValues}
+              defaultSetting={property.default as OtherSettingValues}
             />
           ),
         )}

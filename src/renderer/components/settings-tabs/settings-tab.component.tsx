@@ -1,35 +1,29 @@
 import { useCallback, useMemo, useState } from 'react';
-import { SettingsSidebarContentSearch, usePromise } from 'platform-bible-react';
+import {
+  ProjectOptions,
+  SelectedSettingsSidebarItem,
+  SettingsSidebarContentSearch,
+  usePromise,
+} from 'platform-bible-react';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import projectSettingsService from '@shared/services/project-settings.service';
+import projectSettingsService, {
+  filterProjectSettingsContributionsByProjectInterfaces,
+} from '@shared/services/project-settings.service';
 import settingsService from '@shared/services/settings.service';
-// import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import ProjectOrUserSettingsList from './settings-components/project-or-user-settings-list.component';
 import './settings-tab.component.scss';
+import projectLookupService from '@shared/services/project-lookup.service';
+import { projectDataProviders } from '@renderer/services/papi-frontend.service';
+import ProjectOrOtherSettingsList from './settings-components/project-or-other-settings-list.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
 
 type SettingsTabProps = {
   /** Optional project Id, when passed in, will only show settings for that project */
   projectId?: string;
-  /** Optional setting key, when passed in, will scroll to that selected setting in the dialog */
-  // settingKey?: string;
-};
-
-type SelectedSidebarItem = {
-  label: string;
-  isProjectSetting: boolean;
 };
 
 export default function SettingsTab({ projectId }: SettingsTabProps) {
-  // const searchProjectSettingsKey = '%settings_defaultSearchText_searchProject%';
-  // const searchUserSettingsKey = '%settings_defaultSearchText_searchUserSettings%';
-  // const [localizedStrings] = useLocalizedStrings(
-  //   useMemo(() => [searchProjectSettingsKey, searchUserSettingsKey], []),
-  // );
-  // const localizedSearchProjectSettings = localizedStrings[searchProjectSettingsKey];
-  // const localizedSearchUserSettings = localizedStrings[searchUserSettingsKey];
-  const [selectedSidebarItem, setSelectedSidebarItem] = useState<SelectedSidebarItem>();
+  const [selectedSidebarItem, setSelectedSidebarItem] = useState<SelectedSettingsSidebarItem>();
 
   const [settingsContributions, isLoadingSettingsContributions] = usePromise(
     useCallback(async () => {
@@ -46,7 +40,6 @@ export default function SettingsTab({ projectId }: SettingsTabProps) {
 
       setSelectedSidebarItem({
         label: Object.keys(filteredContributions)[0],
-        isProjectSetting: false,
       });
 
       return filteredContributions;
@@ -75,74 +68,88 @@ export default function SettingsTab({ projectId }: SettingsTabProps) {
     }, []),
   );
 
-  // const getFilteredProjectSettingKeys = useMemo(() => {
-  //   const objectKeys = Object.keys(projectSettingsContributions);
+  const [filteredProjectSettingsContributions] = usePromise(
+    useCallback(async () => {
+      if (!selectedSidebarItem || !selectedSidebarItem.projectId) return undefined;
 
-  //   objectKeys.filter((key) => );
-  // }, []);
+      const projectInterfacesFromProjectId = (
+        await projectLookupService.getMetadataForProject(selectedSidebarItem.projectId)
+      ).projectInterfaces;
 
-  // const getProjectSettingLabels = () => {
-  //   if (!projectSettingsContributions) return;
+      const filteredContributionsByInterface =
+        await filterProjectSettingsContributionsByProjectInterfaces(
+          projectSettingsContributions,
+          projectInterfacesFromProjectId,
+        );
 
-  //   const projectContributionKeysAndLabels: { [projectName: string]: string } = {};
+      return filteredContributionsByInterface;
+    }, [projectSettingsContributions, selectedSidebarItem]),
+    useMemo(() => undefined, []),
+  );
 
-  //   Object.entries(projectSettingsContributions).map(
-  //     ([projectName, settingsGroups]) =>
-  //       settingsGroups &&
-  //       Object.entries(settingsGroups).map(
-  //         // eslint-disable-next-line no-return-assign
-  //         ([, settingsGroup]) =>
-  //           (projectContributionKeysAndLabels[projectName] = settingsGroup.label),
-  //       ),
-  //   );
-  // };
+  const [allProjectIdsFromMetadata] = usePromise(
+    useCallback(async () => {
+      const allMetadata = await projectLookupService.getMetadataForAllProjects();
+      return allMetadata.flatMap((metadata) => metadata.id);
+    }, []),
+    useMemo(() => [], []),
+  );
 
-  // const getExtensionSettingLabels = () => {
-  //   if (!settingsContributions) return;
+  const projectNameCache: { [projectId: string]: string } = useMemo(() => {
+    return {};
+  }, []);
 
-  //   const contributionKeysAndLabels: { [extensionName: string]: string } = {};
+  const getProjectName = useCallback(
+    async (projectIdToGetName: string) => {
+      if (projectNameCache[projectIdToGetName]) {
+        return projectNameCache[projectIdToGetName];
+      }
 
-  //   Object.entries(settingsContributions).map(
-  //     ([extensionName, settingsGroups]) =>
-  //       settingsGroups &&
-  //       Object.entries(settingsGroups).map(
-  //         // eslint-disable-next-line no-return-assign
-  //         ([, settingsGroup]) => (contributionKeysAndLabels[extensionName] = settingsGroup.label),
-  //       ),
-  //   );
-  // };
+      const pdp = await projectDataProviders.get('platform.base', projectIdToGetName);
+      const projectName = await pdp.getSetting('platform.name');
 
-  const currentlySelectedSettingGroup = useMemo(() => {
-    if (!selectedSidebarItem) return undefined;
+      projectNameCache[projectIdToGetName] = projectName;
 
-    let selectedSettingGroup;
-    if (!selectedSidebarItem.isProjectSetting && settingsContributions)
-      selectedSettingGroup = settingsContributions[selectedSidebarItem.label];
-    else if (selectedSidebarItem.isProjectSetting && projectSettingsContributions)
-      selectedSettingGroup = projectSettingsContributions[selectedSidebarItem.label];
+      return projectName;
+    },
+    [projectNameCache],
+  );
 
-    return selectedSettingGroup;
-  }, [projectSettingsContributions, selectedSidebarItem, settingsContributions]);
+  const [allProjectOptions]: [ProjectOptions[], boolean] = usePromise(
+    useCallback(async () => {
+      const projectOptions = await Promise.all(
+        allProjectIdsFromMetadata.map(async (id) => ({
+          projectId: id,
+          projectName: await getProjectName(id),
+        })),
+      );
+      return projectOptions;
+    }, [allProjectIdsFromMetadata, getProjectName]),
+    useMemo(() => [], []),
+  );
 
   if (!settingsContributions) return <div className="settings-tab">No Settings</div>;
-  if (!projectSettingsContributions) return <div className="settings-tab">No project settings</div>;
   if (isLoadingSettingsContributions || isLoadingProjectSettingsContributions)
     return <div className="settings-tab">Loading Settings</div>;
 
   // TODO: fix
-  if (projectId) {
-    const specificProjectContribution = projectSettingsContributions[projectId];
-
+  if (projectId && filteredProjectSettingsContributions) {
     return (
-      <div>
-        {specificProjectContribution?.forEach((group) => (
-          <ProjectOrUserSettingsList
-            projectId={projectId}
-            settingProperties={group.properties}
-            groupLabel={group.label}
-            searchQuery=""
-          />
-        )) || <div />}
+      <div className="settings-tab">
+        {Object.entries(filteredProjectSettingsContributions).map(
+          ([, settingsGroups]) =>
+            settingsGroups &&
+            Object.entries(settingsGroups).map(([, settingsGroup]) => (
+              <ProjectOrOtherSettingsList
+                key={settingsGroup.label}
+                settingProperties={settingsGroup.properties}
+                projectId={projectId}
+                groupLabel={settingsGroup.label}
+                groupDescription={settingsGroup.description}
+                searchQuery=""
+              />
+            )),
+        )}
       </div>
     );
   }
@@ -152,21 +159,39 @@ export default function SettingsTab({ projectId }: SettingsTabProps) {
       <div className="sidebar-container">
         <SettingsSidebarContentSearch
           extensionLabels={Object.keys(settingsContributions)}
-          // projectLabels={Object.keys(projectSettingsContributions)}
-          handleSelectSidebarItem={(key: string, isProjectSetting: boolean) =>
-            setSelectedSidebarItem({ label: key, isProjectSetting })
+          projectOptions={allProjectOptions}
+          handleSelectSidebarItem={(key: string, projId?: string) =>
+            setSelectedSidebarItem({ label: key, projectId: projId })
           }
-          // selectedSidebarItem={selectedSidebarItem} // TODO: Needed to set the active item
+          selectedSidebarItem={selectedSidebarItem}
         >
-          {currentlySelectedSettingGroup && Array.isArray(currentlySelectedSettingGroup)
-            ? currentlySelectedSettingGroup.map((group) => (
-                <ProjectOrUserSettingsList
-                  settingProperties={group.properties}
-                  groupLabel={group.label}
-                  searchQuery=""
-                />
-              ))
-            : undefined}
+          {/* eslint-disable-next-line no-nested-ternary */}
+          {selectedSidebarItem?.projectId && filteredProjectSettingsContributions
+            ? Object.entries(filteredProjectSettingsContributions).map(
+                ([, settingsGroups]) =>
+                  settingsGroups &&
+                  Object.entries(settingsGroups).map(([, settingsGroup]) => (
+                    <ProjectOrOtherSettingsList
+                      key={settingsGroup.label}
+                      settingProperties={settingsGroup.properties}
+                      projectId={selectedSidebarItem?.projectId}
+                      groupLabel={settingsGroup.label}
+                      groupDescription={settingsGroup.description}
+                      searchQuery=""
+                    />
+                  )),
+              )
+            : selectedSidebarItem?.label && settingsContributions
+              ? settingsContributions[selectedSidebarItem.label]?.map((group) => (
+                  <ProjectOrOtherSettingsList
+                    key={group.label}
+                    groupLabel={group.label}
+                    groupDescription={group.description}
+                    settingProperties={group.properties}
+                    searchQuery=""
+                  />
+                ))
+              : undefined}
         </SettingsSidebarContentSearch>
       </div>
     </div>
