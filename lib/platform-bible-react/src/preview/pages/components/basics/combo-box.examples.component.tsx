@@ -10,19 +10,15 @@ export default function ComboBoxExamples({ direction }: HasDirection) {
   const [comboBox4Value, setComboBox4Value] = useState<string[] | undefined>(undefined);
 
   const handleComboBox4Change = (newValue: string) => {
-    if (!comboBox4Value || comboBox4Value.length === 0) {
-      setComboBox4Value([newValue]);
-      return;
-    }
+    setComboBox4Value((prevValue) => {
+      if (!prevValue || prevValue.length === 0) {
+        return [newValue];
+      }
 
-    let newSelection: string[] = [];
-
-    if (comboBox4Value.includes(newValue)) {
-      newSelection = comboBox4Value.filter((value) => value !== newValue);
-    } else {
-      newSelection = [...comboBox4Value, newValue];
-    }
-    setComboBox4Value(newSelection);
+      return prevValue.includes(newValue)
+        ? prevValue.filter((value) => value !== newValue)
+        : [...prevValue, newValue];
+    });
   };
 
   return (
