@@ -24,10 +24,10 @@ export type ComboBoxProps<T> = {
   /** Additional css classes to help with unique styling of the combo box */
   className?: string;
   /**
-   * The selected value that the combo box currently holds. Must be shallow equal to one of the
-   * options entries.
+   * The selected value(s) that the combo box currently holds. Must be shallow equal to one or more
+   * of the options entries.
    */
-  value?: T;
+  value?: T | T[];
   /** Triggers when content of textfield is changed */
   onChange?: (newValue: T) => void;
   /** Used to determine the string value for a given option. */
@@ -40,6 +40,8 @@ export type ComboBoxProps<T> = {
   commandEmptyMessage?: string;
   /** Variant of button */
   buttonVariant?: ButtonProps['variant'];
+  /** Option boolean to set if popover should stay open after clicking an entry */
+  keepOpen?: boolean;
   /** Text direction ltr or rtl */
   dir?: Direction;
   /** Optional boolean to set if trigger should be disabled */
@@ -56,6 +58,19 @@ function getOptionLabelDefault(option: ComboBoxOption): string {
     return option.toString();
   }
   return option.label;
+}
+
+function getButtonLabel<T extends ComboBoxOption>(
+  value: T | T[] | undefined,
+  buttonPlaceholder: string,
+  getOptionLabel: (option: ComboBoxOption) => string,
+): string {
+  if (!value) return buttonPlaceholder;
+  if (Array.isArray(value)) {
+    if (value.length === 0) return buttonPlaceholder;
+    return value.map((entry) => getOptionLabel(entry)).join(', ');
+  }
+  return getOptionLabel(value);
 }
 
 /**
@@ -75,6 +90,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   textPlaceholder = '',
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
+  keepOpen = false,
   dir = 'ltr',
   isDisabled = false,
   ...props
@@ -93,7 +109,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           disabled={isDisabled}
         >
           <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
-            {value ? getOptionLabel(value) : buttonPlaceholder}
+            {getButtonLabel(value, buttonPlaceholder, getOptionLabel)}
           </span>
           <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
@@ -109,12 +125,14 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
                 value={getOptionLabel(option)}
                 onSelect={() => {
                   onChange(option);
-                  setOpen(false);
+                  setOpen(keepOpen);
                 }}
               >
                 <Check
                   className={cn('tw-me-2 tw-h-4 tw-w-4', {
-                    'tw-opacity-0': !value || getOptionLabel(value) !== getOptionLabel(option),
+                    'tw-opacity-0': Array.isArray(value)
+                      ? !value.includes(option)
+                      : !value || getOptionLabel(value) !== getOptionLabel(option),
                   })}
                 />
                 {getOptionLabel(option)}
