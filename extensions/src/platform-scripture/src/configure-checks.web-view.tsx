@@ -1,9 +1,15 @@
 import { WebViewProps } from '@papi/core';
 import { useData, useDataProvider } from '@papi/frontend/react';
-import { CheckInputRange, CheckRunnerCheckDetails } from 'platform-scripture';
+import {
+  CheckInputRange,
+  CheckRunnerCheckDetails,
+  CheckSubscriptionId,
+  SettableCheckDetails,
+} from 'platform-scripture';
 import { Canon, VerseRef } from '@sillsdev/scripture';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sonner, sonner } from 'platform-bible-react';
+import { logger } from '@papi/frontend';
 import ConfigureChecks from './checks/configure-checks/configure-checks.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
@@ -32,19 +38,34 @@ const prettyPrintVerseRef = (verseRef: VerseRef): string => {
 };
 
 global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebViewProps) {
-  const checkRunner = useDataProvider('platformScripture.checkAggregator');
+  const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
-  const [availableChecks, , availableChecksIsLoading] = useData(
+  // Obtain a subscription ID and cleanup old subscriptions
+  const [subscriptionId, setSubscriptionId] = useState<CheckSubscriptionId>('');
+  const subscriptionIdRef = useRef<CheckSubscriptionId>('');
+  useEffect(() => {
+    const fetchSubscriptionId = async () => {
+      const subId = await checkAggregator?.createSubscription();
+      if (subId) {
+        logger.debug(`Created check subscription: ${subId}`);
+        setSubscriptionId(subId);
+        subscriptionIdRef.current = subId;
+      }
+    };
+
+    fetchSubscriptionId();
+
+    return () => {
+      if (subscriptionIdRef.current) {
+        checkAggregator?.deleteSubscription(subscriptionIdRef.current);
+        logger.debug(`Deleted check subscription: ${subscriptionIdRef.current}`);
+      }
+    };
+  }, [checkAggregator]);
+
+  const [availableChecks, setAvailableChecks, availableChecksIsLoading] = useData(
     'platformScripture.checkAggregator',
-  ).AvailableChecks(undefined, [defaultCheckRunnerCheckDetails]);
-
-  const selectedChecks = useMemo((): string[] => {
-    if (!projectId) return [];
-    const enabledChecks = availableChecks.filter((check) =>
-      check.enabledProjectIds.includes(projectId),
-    );
-    return enabledChecks.map((check) => check.checkDescription);
-  }, [availableChecks, projectId]);
+  ).AvailableChecks(subscriptionId, [defaultCheckRunnerCheckDetails]);
 
   const defaultScriptureRange: CheckInputRange = useMemo(() => {
     return {
@@ -54,13 +75,13 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
   }, [projectId]);
 
   const [activeRanges, setActiveRanges] = useData('platformScripture.checkAggregator').ActiveRanges(
-    undefined,
+    subscriptionId,
     useMemo(() => [defaultScriptureRange], [defaultScriptureRange]),
   );
 
   const updateSelectedChecks = useCallback(
     async (checkDescription: string, selected: boolean) => {
-      if (!checkRunner || !projectId) return;
+      if (!setAvailableChecks || !projectId) return;
       if (availableChecksIsLoading) {
         sonner.warning(`${selected ? 'Enabling' : 'Disabling'} check failed.`, {
           description: 'Please try again later.',
@@ -69,26 +90,23 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
       const checkId = findCheckIdFromDescription(availableChecks, checkDescription);
       if (!checkId) throw new Error(`No available check found with checkLabel ${checkDescription}`);
 
-      if (selected) {
-        const newCheckFeedback = await checkRunner.enableCheck(checkId, projectId);
-        if (newCheckFeedback && newCheckFeedback.length > 0) {
-          sonner.warning(
-            `Warnings/errors occurred when trying to enable the ${checkDescription} check.
-            Enabling may or may not have been successful.
-            The following warning/errors have been encountered:`,
-            {
-              description: `${newCheckFeedback.map((feedback) => ` ${feedback}`)}`,
-            },
-          );
-        } else {
-          sonner.success(`Successfully enabled ${checkDescription} check`);
-        }
-      } else {
-        checkRunner.disableCheck(checkId, projectId);
-        sonner.success(`Successfully disabled ${checkDescription} check`);
-      }
+      const checksToSet = availableChecks.map(
+        (checkDetails: CheckRunnerCheckDetails): SettableCheckDetails => {
+          const retVal = {
+            checkId: checkDetails.checkId,
+            enabledProjectIds: [...checkDetails.enabledProjectIds],
+          };
+          if (checkId !== retVal.checkId) return retVal;
+          if (selected) retVal.enabledProjectIds.push(projectId);
+          else retVal.enabledProjectIds = retVal.enabledProjectIds.filter((id) => id !== projectId);
+          return retVal;
+        },
+      );
+      await setAvailableChecks(checksToSet);
+
+      sonner.success(`Successfully ${selected ? 'enabled' : 'disabled'} ${checkDescription} check`);
     },
-    [availableChecks, availableChecksIsLoading, checkRunner, projectId],
+    [availableChecks, availableChecksIsLoading, projectId, setAvailableChecks],
   );
 
   const updateActiveRanges = useCallback(
@@ -115,7 +133,6 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
         projectId={projectId}
         availableChecks={availableChecks}
         handleSelectCheck={updateSelectedChecks}
-        selectedChecks={selectedChecks}
         activeRanges={activeRanges}
         handleActiveRangesChange={updateActiveRanges}
       />
