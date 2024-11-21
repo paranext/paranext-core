@@ -19,6 +19,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         string DisplayName,
         string FullName,
         string BestLanguageName,
+        ResourceType Type,
         long Size,
         bool Installed,
         bool UpdateAvailable,
@@ -29,6 +30,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         public string DisplayName { get; set; } = DisplayName;
         public string FullName { get; set; } = FullName;
         public string BestLanguageName { get; set; } = BestLanguageName;
+        public string Type { get; set; } = Type.ToString();
         public long Size { get; set; } = Size;
         public bool Installed { get; set; } = Installed;
         public bool UpdateAvailable { get; set; } = UpdateAvailable;
@@ -113,6 +115,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
                 resource.DisplayName,
                 resource.FullName,
                 resource.BestLanguageName,
+                resource.Type,
                 resource.Size,
                 resource.Installed,
                 resource.IsNewerThanCurrentlyInstalled(),
