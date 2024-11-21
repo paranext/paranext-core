@@ -51,6 +51,8 @@ export type ComboBoxProps<T> = {
   buttonVariant?: ButtonProps['variant'];
   /** Option boolean to set if popover should stay open after clicking an entry */
   keepOpen?: boolean;
+  /** Control how the popover menu should be aligned. Defaults to center */
+  alignMenu?: 'start' | 'center' | 'end';
   /** Text direction ltr or rtl */
   dir?: Direction;
   /** Optional boolean to set if trigger should be disabled */
@@ -103,6 +105,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
   keepOpen = false,
+  alignMenu = 'center',
   dir = 'ltr',
   isDisabled = false,
   ...props
@@ -136,7 +139,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[200px] tw-p-0" dir={dir}>
+      <PopoverContent align={alignMenu} className="tw-w-[200px] tw-p-0" dir={dir}>
         <Command>
           <CommandInput dir={dir} placeholder={textPlaceholder} className="tw-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
