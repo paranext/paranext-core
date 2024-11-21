@@ -1,5 +1,6 @@
 import ComboBox from '@/components/basics/combo-box.component';
 import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 
 export default function ComboBoxExamples({ direction }: HasDirection) {
@@ -74,14 +75,18 @@ export default function ComboBoxExamples({ direction }: HasDirection) {
       <div>
         <p>Combobox with multi-select</p>
         <ComboBox
+          className="tw-w-30"
           dir={direction}
           options={['Option1', 'Option2', 'Option3']}
           textPlaceholder="Text Placeholder"
-          buttonPlaceholder="Button Placeholder"
+          buttonPlaceholder="Select"
+          buttonIcon={<BookOpen />}
           commandEmptyMessage="Empty Message"
           value={comboBox4Value}
           onChange={handleComboBox4Change}
           keepOpen
+          hideChevrons
+          alwaysShowPlaceholderOnButton
         />
       </div>
     </div>
