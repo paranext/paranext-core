@@ -87,6 +87,7 @@ export default function ComboBoxExamples({ direction }: HasDirection) {
           keepOpen
           hideChevrons
           alwaysShowPlaceholderOnButton
+          alignMenu="start"
         />
       </div>
     </div>

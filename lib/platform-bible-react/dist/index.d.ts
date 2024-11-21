@@ -696,6 +696,8 @@ export type ComboBoxProps<T> = {
 	buttonVariant?: ButtonProps["variant"];
 	/** Option boolean to set if popover should stay open after clicking an entry */
 	keepOpen?: boolean;
+	/** Control how the popover menu should be aligned. Defaults to center */
+	alignMenu?: "start" | "center" | "end";
 	/** Text direction ltr or rtl */
 	dir?: Direction;
 	/** Optional boolean to set if trigger should be disabled */
@@ -708,7 +710,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonIcon, buttonPlaceholder, textPlaceholder, alwaysShowPlaceholderOnButton, hideChevrons, commandEmptyMessage, buttonVariant, keepOpen, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonIcon, buttonPlaceholder, textPlaceholder, alwaysShowPlaceholderOnButton, hideChevrons, commandEmptyMessage, buttonVariant, keepOpen, alignMenu, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
