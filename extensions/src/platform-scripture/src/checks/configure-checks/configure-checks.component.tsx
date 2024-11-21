@@ -24,7 +24,6 @@ type ConfigureChecksProps = {
   projectId: string | undefined;
   availableChecks: CheckRunnerCheckDetails[];
   handleSelectCheck: (checkLabel: string, selected: boolean) => void;
-  selectedChecks: string[];
   activeRanges: CheckInputRange[];
   handleActiveRangesChange: (newActiveRanges: CheckInputRange[]) => void;
 };
@@ -33,7 +32,6 @@ export default function ConfigureChecks({
   projectId,
   availableChecks,
   handleSelectCheck,
-  selectedChecks,
   activeRanges,
   handleActiveRangesChange,
 }: ConfigureChecksProps) {
@@ -164,7 +162,13 @@ export default function ConfigureChecks({
           <CardContent className="configure-checks-check-names">
             <Checklist
               listItems={availableChecks.map((check) => check.checkDescription)}
-              selectedListItems={selectedChecks}
+              selectedListItems={
+                projectId
+                  ? availableChecks
+                      .filter((check) => check.enabledProjectIds.includes(projectId))
+                      .map((check) => check.checkDescription)
+                  : []
+              }
               handleSelectListItem={handleSelectCheck}
             />
           </CardContent>
