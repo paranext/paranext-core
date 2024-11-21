@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
@@ -32,10 +32,19 @@ export type ComboBoxProps<T> = {
   onChange?: (newValue: T) => void;
   /** Used to determine the string value for a given option. */
   getOptionLabel?: (option: ComboBoxOption) => string;
+  /** Icon to be displayed on the button */
+  buttonIcon?: ReactNode;
   /** Text displayed on button if `value` is undefined */
   buttonPlaceholder?: string;
   /** Placeholder text for text field */
   textPlaceholder?: string;
+  /**
+   * Normally the selected value, if any, will be shown on the button. Enable this if you always
+   * want the button to show placeholder text
+   */
+  alwaysShowPlaceholderOnButton?: boolean;
+  /** Allows hiding of the Chevrons on the right of the button */
+  hideChevrons?: boolean;
   /** Text to display when no options match input */
   commandEmptyMessage?: string;
   /** Variant of button */
@@ -86,8 +95,11 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   value,
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
+  buttonIcon = undefined,
   buttonPlaceholder = '',
   textPlaceholder = '',
+  alwaysShowPlaceholderOnButton = false,
+  hideChevrons = false,
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
   keepOpen = false,
@@ -105,13 +117,23 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           role="combobox"
           aria-expanded={open}
           id={id}
-          className={cn('tw-w-[200px] tw-justify-between', className)}
+          className={cn(
+            'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
+            className,
+          )}
           disabled={isDisabled}
         >
-          <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
-            {getButtonLabel(value, buttonPlaceholder, getOptionLabel)}
-          </span>
-          <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+          <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
+            {buttonIcon && <div className="tw-pr-2">{buttonIcon}</div>}
+            <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
+              {alwaysShowPlaceholderOnButton
+                ? buttonPlaceholder
+                : getButtonLabel(value, buttonPlaceholder, getOptionLabel)}
+            </span>
+          </div>
+          {!hideChevrons && (
+            <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="tw-w-[200px] tw-p-0" dir={dir}>
