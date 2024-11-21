@@ -677,10 +677,19 @@ export type ComboBoxProps<T> = {
 	onChange?: (newValue: T) => void;
 	/** Used to determine the string value for a given option. */
 	getOptionLabel?: (option: ComboBoxOption) => string;
+	/** Icon to be displayed on the button */
+	buttonIcon?: React$1.ReactNode;
 	/** Text displayed on button if `value` is undefined */
 	buttonPlaceholder?: string;
 	/** Placeholder text for text field */
 	textPlaceholder?: string;
+	/**
+	 * Normally the selected value, if any, will be shown on the button. Enable this if you always
+	 * want the button to show placeholder text
+	 */
+	alwaysShowPlaceholderOnButton?: boolean;
+	/** Allows hiding of the Chevrons on the right of the button */
+	hideChevrons?: boolean;
 	/** Text to display when no options match input */
 	commandEmptyMessage?: string;
 	/** Variant of button */
@@ -699,7 +708,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, keepOpen, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonIcon, buttonPlaceholder, textPlaceholder, alwaysShowPlaceholderOnButton, hideChevrons, commandEmptyMessage, buttonVariant, keepOpen, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
