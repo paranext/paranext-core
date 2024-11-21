@@ -26,6 +26,25 @@
       "%settings_paratextRegistration_registration_internet_group_description%": "Settings related to the user's Paratext Registry connection and some internet access controls",
       "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show Paratext Registration Web View on Startup",
       "%settings_paratextRegistration_shouldShowOnStartup_description%": "Whether to show the form to enter Paratext Registration information when the application starts if it has not been entered previously."
+    },
+    "es": {
+      "%mainMenu_openParatextRegistration%": "Información de registro de paratexto...",
+      "%paratextRegistration_alert_updatedRegistration%": "Información de registro de Paratext",
+      "%paratextRegistration_alert_updatedRegistration_description%": "Cambios aplicados! La aplicación se reiniciará en unos segundos.",
+      "%paratextRegistration_button_saveAndRestart%": "Guardar y reiniciar",
+      "%paratextRegistration_commit_comment_changing_user%": "Antes de cambiar de usuario registrado",
+      "%paratextRegistration_label_registrationName%": "Nombre de registro",
+      "%paratextRegistration_label_registrationCode%": "Código de registro",
+      "%paratextRegistration_label_emailAddress%": "Dirección de Correo Electrónico",
+      "%paratextRegistration_warning_invalid_email%": "Por favor, introduce una dirección de correo electrónico válida.",
+      "%paratextRegistration_warning_invalid_registration%": "Este código de registro no es correcto para este usuario.",
+      "%paratextRegistration_webView_title%": "Información de Registro de Paratexto",
+      "%paratextRegistration_webView_tooltip%": "Ingrese su información de registro de Paratext en este formulario.",
+      "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "Debe proporcionar un registro de Paratext válido antes de abrir recursos de la Biblioteca Bíblica Digital.",
+      "%settings_paratextRegistration_registration_internet_group_label%": "Registro de Paratext y Configuración de Internet",
+      "%settings_paratextRegistration_registration_internet_group_description%": "Configuraciones relacionadas con la conexión del Registro Paratext del usuario y algunos controles de acceso a Internet",
+      "%settings_paratextRegistration_shouldShowOnStartup_label%": "Mostrar la Vista Web de Registro de Paratext al Iniciar",
+      "%settings_paratextRegistration_shouldShowOnStartup_description%": "Si se debe mostrar el formulario para ingresar la información de registro de Paratext cuando se inicia la aplicación si no se ha ingresado previamente."
     }
   }
 }
