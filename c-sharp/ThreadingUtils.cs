@@ -23,7 +23,7 @@ public static class ThreadingUtils
     /// timeout is provided, then the task is not waited on at all.</param>
     /// <returns>true if the task completed within the given timeout (or immediately if no timeout
     /// is provided), false otherwise</returns>
-    public static bool RunTask(Task task, string description = "task", TimeSpan? timeout = null)
+    public static bool RunTask(Task task, string description, TimeSpan? timeout = null)
     {
         bool taskCompleted = task.IsCompleted;
         if (taskCompleted)
