@@ -19,18 +19,22 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         string DisplayName,
         string FullName,
         string BestLanguageName,
+        ResourceType Type,
         long Size,
         bool Installed,
-        bool UpdateAvailable
+        bool UpdateAvailable,
+        string ProjectId
     )
     {
         public string DblEntryUid { get; set; } = DblEntryUid;
         public string DisplayName { get; set; } = DisplayName;
         public string FullName { get; set; } = FullName;
         public string BestLanguageName { get; set; } = BestLanguageName;
+        public string Type { get; set; } = Type.ToString();
         public long Size { get; set; } = Size;
         public bool Installed { get; set; } = Installed;
         public bool UpdateAvailable { get; set; } = UpdateAvailable;
+        public string ProjectId { get; set; } = ProjectId;
     }
 
     #endregion
@@ -111,9 +115,13 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
                 resource.DisplayName,
                 resource.FullName,
                 resource.BestLanguageName,
+                resource.Type,
                 resource.Size,
                 resource.Installed,
-                resource.IsNewerThanCurrentlyInstalled()
+                resource.IsNewerThanCurrentlyInstalled(),
+                resource.ExistingScrText?.Guid.ToString().ToUpperInvariant()
+                    ?? resource.ExistingDictionary?.Guid.ToString().ToUpperInvariant()
+                    ?? ""
             ))
             .ToList();
     }

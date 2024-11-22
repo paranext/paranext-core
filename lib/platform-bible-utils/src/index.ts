@@ -53,6 +53,7 @@ export {
   endsWith,
   escapeStringRegexp,
   formatReplacementString,
+  formatReplacementStringToArray,
   includes,
   indexOf,
   isLocalizeKey,
