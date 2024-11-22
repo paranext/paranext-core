@@ -150,6 +150,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%paratextRegistration_button_saveAndRestart%',
   '%paratextRegistration_description_internetUse_disclaimer%',
   ...INTERNET_USE_OPTIONS.map(getLocalizeKeyForInternetUse),
+  '%paratextRegistration_description_shared_with_paratext_9%',
   '%paratextRegistration_label_emailAddress%',
   '%paratextRegistration_label_proxyHost%',
   '%paratextRegistration_label_proxyMode%',
@@ -307,6 +308,9 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
   return (
     <div className="tw-p-2 tw-flex tw-flex-col tw-justify-between tw-h-screen">
       <div>
+        <div className="tw-ms-2 tw-text-sm tw-text-muted-foreground">
+          {localizedStrings['%paratextRegistration_description_shared_with_paratext_9%']}
+        </div>
         <Grid>
           <span>{localizedStrings['%paratextRegistration_label_registrationName%']}</span>
           <Input value={name} disabled={isFormDisabled} onChange={(e) => setName(e.target.value)} />
