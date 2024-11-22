@@ -25,6 +25,31 @@
       "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Choose a resource to open:",
       "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Open Scripture Editor",
       "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Choose a project to open:"
+    },
+    "es": {
+      "%mainMenu_openPlatformScriptureEditor%": "Abrir el Editor de Escrituras",
+      "%mainMenu_openPlatformResourceViewer%": "Abrir el Visor de Recursos",
+      "%webView_platformScriptureEditor_options%": "Opciones",
+      "%webView_platformScriptureEditor_tools%": "Herramientas",
+      "%webView_platformScriptureEditor_info%": "Información",
+      "%webView_platformScriptureEditor_backgroundColor%": "Color de Fondo",
+      "%webView_platformScriptureEditor_textColor%": "Color del Texto",
+      "%webView_platformScriptureEditor_thickBorders%": "Bordes Gruesos",
+      "%webView_platformScriptureEditor_charactersInventory%": "Inventario: Caracteres...",
+      "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventario: Palabras Repetidas...",
+      "%webView_platformScriptureEditor_markersInventory%": "Inventario: Marcadores...",
+      "%webView_platformScriptureEditor_configureChecks%": "Configurar Verificaciones...",
+      "%webView_platformScriptureEditor_showCheckResults%": "Mostrar Resultados de Verificación...",
+      "%webView_platformScriptureEditor_publisherInfo%": "Información del Editor",
+      "%webView_platformScriptureEditor_copyrightInfo%": "Información de Copyright",
+      "%webView_platformScriptureEditor_title_editable_indicator%": "(Editable)",
+      "%webView_platformScriptureEditor_title_readonly_no_project%": "Visor de Recursos",
+      "%webView_platformScriptureEditor_title_editable_no_project%": "Editor de Escrituras",
+      "%webView_platformScriptureEditor_title_format%": "{projectId} {editable}",
+      "%platformScriptureEditor_dialog_openResourceViewer_title%": "Abrir Visor de Recursos",
+      "%platformScriptureEditor_dialog_openResourceViewer_prompt%": "Elija un recurso para abrir:",
+      "%platformScriptureEditor_dialog_openScriptureEditor_title%": "Abrir el Editor de Escrituras",
+      "%platformScriptureEditor_dialog_openScriptureEditor_prompt%": "Elige un proyecto para abrir:"
     }
   }
 }

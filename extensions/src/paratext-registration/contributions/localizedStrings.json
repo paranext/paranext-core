@@ -3,6 +3,45 @@
     "%paratextRegistration_commit_comment_changing_user%": {
       "fallbackKey": "%Paratext.&quot;Before changing registered user&quot;%"
     },
+    "%paratextRegistration_description_internetUse_option_Enabled%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[0]%"
+    },
+    "%paratextRegistration_description_internetUse_option_Disabled%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[2]%"
+    },
+    "%paratextRegistration_description_internetUse_option_VpnRequired%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.cmbxInternetUse.Items[1]%"
+    },
+    "%paratextRegistration_label_proxyHost%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label2.Text%"
+    },
+    "%paratextRegistration_label_proxyMode_option_Http%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.rbHttpProxy.Text%"
+    },
+    "%paratextRegistration_label_proxyMode_option_Socks%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.rbSocksProxy.Text%"
+    },
+    "%paratextRegistration_label_proxyPassword%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label5.Text%"
+    },
+    "%paratextRegistration_label_proxyUsername%": {
+      "fallbackKey": "%Paratext.ToolsMenu.OptionsForm.label4.Text%"
+    },
+    "%paratextRegistration_label_selectedServer%": {
+      "fallbackKey": "%Paratext.MainForm.selectServerGroup.Text%"
+    },
+    "%paratextRegistration_label_serverType_option_Development%": {
+      "fallbackKey": "%Paratext.MainForm.developmentServerMenuItem.Text%"
+    },
+    "%paratextRegistration_label_serverType_option_Production%": {
+      "fallbackKey": "%Paratext.MainForm.productionServerMenuItem.Text%"
+    },
+    "%paratextRegistration_label_serverType_option_QualityAssurance%": {
+      "fallbackKey": "%Paratext.MainForm.qualityAssuranceServerMenuItem.Text%"
+    },
+    "%paratextRegistration_label_serverType_option_Test%": {
+      "fallbackKey": "%Paratext.MainForm.testServerToolStripMenuItem.Text%"
+    },
     "%paratextRegistration_warning_invalid_email%": {
       "fallbackKey": "%Paratext.RegistrationForm.cmdOK_Click.&quot;Enter valid email address&quot;%"
     }
@@ -14,9 +53,29 @@
       "%paratextRegistration_alert_updatedRegistration_description%": "Changes applied! The application will restart in a few seconds.",
       "%paratextRegistration_button_saveAndRestart%": "Save and restart",
       "%paratextRegistration_commit_comment_changing_user%": "Before changing registered user",
-      "%paratextRegistration_label_registrationName%": "Registration name",
-      "%paratextRegistration_label_registrationCode%": "Registration code",
+      "%paratextRegistration_description_internetUse_disclaimer%": "The following Internet settings only affect connection to Paratext services like registry, send/receive, and download resources",
+      "%paratextRegistration_description_internetUse_option_Enabled%": "Allow unrestricted Internet use",
+      "%paratextRegistration_description_internetUse_option_Disabled%": "Disable all Internet use",
+      "%paratextRegistration_description_internetUse_option_ProxyOnly%": "Use a proxy",
+      "%paratextRegistration_description_internetUse_option_VpnRequired%": "Disable Internet use in sensitive locations",
       "%paratextRegistration_label_emailAddress%": "Email address",
+      "%paratextRegistration_label_proxyHost%": "Host",
+      "%paratextRegistration_label_proxyMode%": "Mode",
+      "%paratextRegistration_label_proxyMode_option_Http%": "HTTP Proxy",
+      "%paratextRegistration_label_proxyMode_option_Socks%": "SOCKS Proxy",
+      "%paratextRegistration_label_proxyPassword%": "Password",
+      "%paratextRegistration_label_proxyPort%": "Port",
+      "%paratextRegistration_label_proxyUsername%": "Username",
+      "%paratextRegistration_label_registrationCode%": "Registration code",
+      "%paratextRegistration_label_registrationName%": "Registration name",
+      "%paratextRegistration_label_selectedServer%": "Paratext servers",
+      "%paratextRegistration_label_serverType_option_Development%": "Development",
+      "%paratextRegistration_label_serverType_option_Production%": "Production",
+      "%paratextRegistration_label_serverType_option_QualityAssurance%": "Quality Assurance",
+      "%paratextRegistration_label_serverType_option_Test%": "Test",
+      "%paratextRegistration_section_internetSettings%": "Internet Settings",
+      "%paratextRegistration_section_internetSettings_tooltip%": "These internet settings only apply to some operations, not to the whole application",
+      "%paratextRegistration_section_proxySettings%": "Proxy Settings",
       "%paratextRegistration_warning_invalid_email%": "Please enter a valid email address.",
       "%paratextRegistration_warning_invalid_registration%": "This registration code is not correct for this user.",
       "%paratextRegistration_webView_title%": "Paratext Registration Information",
@@ -26,6 +85,25 @@
       "%settings_paratextRegistration_registration_internet_group_description%": "Settings related to the user's Paratext Registry connection and some internet access controls",
       "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show Paratext Registration Web View on Startup",
       "%settings_paratextRegistration_shouldShowOnStartup_description%": "Whether to show the form to enter Paratext Registration information when the application starts if it has not been entered previously."
+    },
+    "es": {
+      "%mainMenu_openParatextRegistration%": "Información de registro de paratexto...",
+      "%paratextRegistration_alert_updatedRegistration%": "Información de registro de Paratext",
+      "%paratextRegistration_alert_updatedRegistration_description%": "Cambios aplicados! La aplicación se reiniciará en unos segundos.",
+      "%paratextRegistration_button_saveAndRestart%": "Guardar y reiniciar",
+      "%paratextRegistration_commit_comment_changing_user%": "Antes de cambiar de usuario registrado",
+      "%paratextRegistration_label_registrationName%": "Nombre de registro",
+      "%paratextRegistration_label_registrationCode%": "Código de registro",
+      "%paratextRegistration_label_emailAddress%": "Dirección de Correo Electrónico",
+      "%paratextRegistration_warning_invalid_email%": "Por favor, introduce una dirección de correo electrónico válida.",
+      "%paratextRegistration_warning_invalid_registration%": "Este código de registro no es correcto para este usuario.",
+      "%paratextRegistration_webView_title%": "Información de Registro de Paratexto",
+      "%paratextRegistration_webView_tooltip%": "Ingrese su información de registro de Paratext en este formulario.",
+      "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "Debe proporcionar un registro de Paratext válido antes de abrir recursos de la Biblioteca Bíblica Digital.",
+      "%settings_paratextRegistration_registration_internet_group_label%": "Registro de Paratext y Configuración de Internet",
+      "%settings_paratextRegistration_registration_internet_group_description%": "Configuraciones relacionadas con la conexión del Registro Paratext del usuario y algunos controles de acceso a Internet",
+      "%settings_paratextRegistration_shouldShowOnStartup_label%": "Mostrar la Vista Web de Registro de Paratext al Iniciar",
+      "%settings_paratextRegistration_shouldShowOnStartup_description%": "Si se debe mostrar el formulario para ingresar la información de registro de Paratext cuando se inicia la aplicación si no se ha ingresado previamente."
     }
   }
 }

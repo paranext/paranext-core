@@ -16,7 +16,9 @@ const validate = ajv.compile(localizedStringsDocumentSchema);
 
 function performSchemaValidation(document: JsonDocumentLike, docType: string): void {
   if (!validate(document))
-    throw new Error(`Invalid ${docType} settings document: ${ajv.errorsText(validate.errors)}`);
+    throw new Error(
+      `Invalid ${docType} localized strings document: ${ajv.errorsText(validate.errors)}`,
+    );
 }
 
 /** Modifies the input localized string contribution by canonizing the locales */

@@ -10,9 +10,9 @@ class TestDocumentCombiner extends DocumentCombiner {
     return this.latestOutput;
   }
 
-  // Implementing an abstract base class method
-  // eslint-disable-next-line class-methods-use-this
-  protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike {
+  protected override transformFinalOutputBeforeValidation(
+    finalOutput: JsonDocumentLike,
+  ): JsonDocumentLike {
     return finalOutput;
   }
 }
@@ -25,33 +25,25 @@ class DocumentCombinerWithoutValidation extends TestDocumentCombiner {
     super(startingDocument, optionsWithDefault);
   }
 
-  // We have the implement this abstract function but don't want it to do anything
-  // eslint-disable-next-line class-methods-use-this
-  protected validateBaseDocument(): void {}
+  protected override validateBaseDocument(): void {}
 
-  // We have the implement this abstract function but don't want it to do anything
-  // eslint-disable-next-line class-methods-use-this
-  protected validateContribution(): void {}
+  protected override validateContribution(): void {}
 
-  // We have the implement this abstract function but don't want it to do anything
-  // eslint-disable-next-line class-methods-use-this
-  protected validateOutput(): void {}
+  protected override validateOutput(): void {}
 }
 
 /** Combine array and non-array contributions to make a final array of contributions */
 class ArrayDocumentCombiner extends DocumentCombinerWithoutValidation {
-  // We just don't need `this` here
-  // eslint-disable-next-line class-methods-use-this
-  protected transformContributionAfterValidation(
+  protected override transformContributionAfterValidation(
     _documentName: string,
     document: JsonDocumentLike,
   ): JsonDocumentLike {
     return Array.isArray(document) ? document : [document];
   }
 
-  // We just don't need `this` here
-  // eslint-disable-next-line class-methods-use-this
-  protected transformBaseDocumentAfterValidation(baseDocument: JsonDocumentLike): JsonDocumentLike {
+  protected override transformBaseDocumentAfterValidation(
+    baseDocument: JsonDocumentLike,
+  ): JsonDocumentLike {
     return Array.isArray(baseDocument) ? baseDocument : [baseDocument];
   }
 }
@@ -62,18 +54,15 @@ class AlwaysThrowingCombiner extends TestDocumentCombiner {
     super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateBaseDocument(): void {
+  protected override validateBaseDocument(): void {
     throw new Error();
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateContribution(): void {
+  protected override validateContribution(): void {
     throw new Error();
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateOutput(): void {
+  protected override validateOutput(): void {
     throw new Error();
   }
 }
@@ -106,14 +95,11 @@ class OutputThrowingCombiner extends TestDocumentCombiner {
     super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateBaseDocument(): void {}
+  protected override validateBaseDocument(): void {}
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateContribution(): void {}
+  protected override validateContribution(): void {}
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateOutput(): void {
+  protected override validateOutput(): void {
     throw new Error();
   }
 }
