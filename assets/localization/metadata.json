@@ -5,5 +5,11 @@
   },
   "%submit%": {
     "fallbackKey": "%yes%"
+  },
+  "%about_db_ip_attribution_intro%": {
+    "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;  Internet safety features use data&#xA;from &quot;%"
+  },
+  "%about_db_ip_attribution_terms%": {
+    "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;Terms&quot;%"
   }
 }
