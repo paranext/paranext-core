@@ -6,7 +6,12 @@ import {
   Marginal,
   MarginalRef,
 } from '@biblionexus-foundation/platform-editor';
-import { MarkerContent, Usj } from '@biblionexus-foundation/scripture-utilities';
+import {
+  MarkerContent,
+  USJ_TYPE,
+  USJ_VERSION,
+  Usj,
+} from '@biblionexus-foundation/scripture-utilities';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
@@ -32,7 +37,7 @@ const VERSE_NUMBER_SCROLL_OFFSET = 80;
  */
 const EDITOR_LOAD_DELAY_TIME = 100;
 
-const usjDocumentDefault: Usj = { type: 'USJ', version: '0.2.1', content: [] };
+const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -107,7 +112,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     projectId,
   ).ChapterUSJ(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
-    usjDocumentDefault,
+    defaultUsj,
   );
 
   const usjSentToPdp = useRef(usjFromPdp);
