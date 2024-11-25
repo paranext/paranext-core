@@ -48,7 +48,7 @@ export default function ProjectOrOtherSettingsList({
 
   return (
     <SettingsCard settingsGroupLabel={groupLabel} settingsGroupDescription={groupDescription}>
-      <div>
+      <div className="tw-space-y-4">
         {Object.entries(filteredSettingsProperties).map(([key, property]) =>
           projectId ? (
             <ProjectSetting

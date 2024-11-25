@@ -1,5 +1,10 @@
-import { Card, CardDescription, CardHeader, CardTitle } from '@/components/shadcn-ui/card';
-import { CardContent } from '@mui/material';
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardContent,
+} from '@/components/shadcn-ui/card';
 import { PropsWithChildren } from 'react';
 
 type SettingsCardProps = PropsWithChildren & {
@@ -25,7 +30,7 @@ export default function SettingsCard({
         <CardTitle>{settingsGroupLabel}</CardTitle>
         {settingsGroupDescription && <CardDescription>{settingsGroupDescription}</CardDescription>}
       </CardHeader>
-      <CardContent className="tw-space-y-4">{children}</CardContent>
+      <CardContent>{children}</CardContent>
     </Card>
   );
 }

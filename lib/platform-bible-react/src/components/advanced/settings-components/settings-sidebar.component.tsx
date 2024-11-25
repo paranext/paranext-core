@@ -9,6 +9,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/shadcn-ui/sidebar';
+import { cn } from '@/utils/shadcn-ui.util';
 import { useCallback } from 'react';
 
 export type SelectedSettingsSidebarItem = {
@@ -32,7 +33,7 @@ export type SettingsSidebarProps = {
   handleSelectSidebarItem: (key: string, projectId?: string) => void;
 
   /** The current selected value in the sidebar */
-  selectedSidebarItem: SelectedSettingsSidebarItem | undefined;
+  selectedSidebarItem: SelectedSettingsSidebarItem;
 };
 
 export default function SettingsSidebar({
@@ -57,22 +58,34 @@ export default function SettingsSidebar({
     [projectOptions],
   );
 
+  const getIsActive: (label: string) => boolean = useCallback(
+    (label: string) => !selectedSidebarItem.projectId && label === selectedSidebarItem.label,
+    [selectedSidebarItem],
+  );
+
   return (
-    <Sidebar id={id} collapsible="offcanvas" variant="sidebar">
+    <Sidebar
+      id={id}
+      collapsible="none"
+      variant="inset"
+      className="tw-w-96 tw-gap-2 tw-overflow-y-auto tw-rounded tw-bg-slate-100"
+    >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Extensions</SidebarGroupLabel>
+          <SidebarGroupLabel className="tw-text-sm tw-text-gray-400">Extensions</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {extensionLabels.map((label) => (
                 <SidebarMenuItem key={label}>
                   <SidebarMenuButton
-                    onClick={() => handleSelectItem(label)}
-                    isActive={
-                      !selectedSidebarItem?.projectId && label === selectedSidebarItem?.label
-                    }
+                    className={cn(
+                      'tw-rounded tw-py-2 tw-text-sm tw-text-gray-500 hover:tw-bg-white hover:tw-text-gray-900 hover:tw-shadow-sm active:tw-bg-white',
+                      { 'tw-bg-white tw-text-gray-900 tw-shadow-sm': getIsActive(label) },
+                    )}
+                    onClick={() => handleSelectItem(label, undefined)}
+                    isActive={getIsActive(label)}
                   >
-                    {label}
+                    <span className="tw-pl-3">{label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -80,8 +93,8 @@ export default function SettingsSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel>Projects</SidebarGroupLabel>
-          <SidebarGroupContent>
+          <SidebarGroupLabel className="tw-text-sm tw-text-gray-400">Projects</SidebarGroupLabel>
+          <SidebarGroupContent className="tw-pl-3">
             <ComboBox
               popoverContentClassName="tw-z-[1000]"
               options={projectOptions.flatMap((option) => option.projectId)}

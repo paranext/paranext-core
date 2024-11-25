@@ -450,7 +450,7 @@ export type SettingsSidebarProps = {
 	/** Handler for selecting a sidebar item */
 	handleSelectSidebarItem: (key: string, projectId?: string) => void;
 	/** The current selected value in the sidebar */
-	selectedSidebarItem: SelectedSettingsSidebarItem | undefined;
+	selectedSidebarItem: SelectedSettingsSidebarItem;
 };
 export function SettingsSidebar({ id, extensionLabels, projectOptions, handleSelectSidebarItem, selectedSidebarItem, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
@@ -458,8 +458,10 @@ export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.P
 	id?: string;
 	/** Text direction ltr or rtl */
 	direction?: "ltr" | "rtl";
+	/** Handler to run when the value of the search bar changes */
+	onSearch: (searchQuery: string) => void;
 };
-export function SettingsSidebarContentSearch({ id, direction, extensionLabels, projectOptions, children, handleSelectSidebarItem, selectedSidebarItem, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebarContentSearch({ id, direction, extensionLabels, projectOptions, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -925,6 +927,7 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
 export type SearchBarProps = {
+	className?: string;
 	/**
 	 * Callback fired to handle the search query when button pressed
 	 *
@@ -936,7 +939,7 @@ export type SearchBarProps = {
 	/** Optional boolean to set the input base to full width */
 	isFullWidth?: boolean;
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ className, onSearch, placeholder, isFullWidth, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {

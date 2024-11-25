@@ -100,11 +100,9 @@ export default function Setting({
   settingKey,
   setting,
   setSetting,
-  // isLoading,
   validateOtherSetting,
   validateProjectSetting,
   label,
-  // description,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -166,7 +164,7 @@ export default function Setting({
   const debouncedHandleChange = debounce(handleChangeSetting, 500);
 
   const generateComponent = useCallback(() => {
-    let component = <p>No setting component</p>;
+    let component = <p>No setting component</p>; // isLoading ? <p>Loading setting</p> :
 
     if (typeof setting === 'string' || typeof setting === 'number')
       component = (
@@ -186,9 +184,9 @@ export default function Setting({
       );
 
     return (
-      <div>
+      <div className="tw-w-1/3">
         {component}
-        {errorMessage && <div style={{ color: 'red' }}>{errorMessage}</div>}
+        {errorMessage && <Label className="tw-text-red-600 tw-pt-4">{errorMessage}</Label>}
       </div>
     );
   }, [setting, settingKey, debouncedHandleChange, errorMessage]);
@@ -198,8 +196,10 @@ export default function Setting({
   // const localizedLoadingSetting = localizedStrings[loadingSettingKey];
 
   return (
-    <div>
-      <Label htmlFor={settingKey}>{label}</Label>
+    <div className="tw-flex tw-items-center tw-justify-center">
+      <Label htmlFor={settingKey} className="tw-w-1/3 tw-text-right tw-pr-4">
+        {label}
+      </Label>
       {generateComponent()}
     </div>
   );
