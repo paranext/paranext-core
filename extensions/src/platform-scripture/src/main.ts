@@ -114,13 +114,16 @@ async function configureChecks(webViewId: string | undefined): Promise<string | 
 }
 
 async function showCheckResults(webViewId: string | undefined): Promise<string | undefined> {
+  let editorWebViewId: string | undefined;
   let projectId: string | undefined;
 
   logger.debug('Running checks');
 
   if (webViewId) {
-    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
+    if (webViewDefinition?.webViewType === 'platformScriptureEditor.react')
+      editorWebViewId = webViewId;
   }
 
   if (!projectId) {
@@ -128,8 +131,8 @@ async function showCheckResults(webViewId: string | undefined): Promise<string |
     return undefined;
   }
 
-  const options: CheckResultsWebViewOptions = { projectId };
-  return papi.webViews.getWebView(checkResultsListWebViewType, { type: 'tab' }, options);
+  const options: CheckResultsWebViewOptions = { editorWebViewId, projectId };
+  return papi.webViews.openWebView(checkResultsListWebViewType, { type: 'tab' }, options);
 }
 
 export async function activate(context: ExecutionActivationContext) {

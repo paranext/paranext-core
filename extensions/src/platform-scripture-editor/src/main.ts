@@ -1,4 +1,4 @@
-﻿import papi, { logger } from '@papi/backend';
+﻿import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
   GetWebViewOptions,
@@ -6,7 +6,17 @@ import type {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  LanguageStrings,
+  serialize,
+  UsjReaderWriter,
+} from 'platform-bible-utils';
+import {
+  EditorWebViewMessage,
+  PlatformScriptureEditorWebViewController,
+} from 'platform-scripture-editor';
+import { Canon, VerseRef } from '@sillsdev/scripture';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 
@@ -100,14 +110,18 @@ async function open(
     };
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
-    return papi.webViews.getWebView(scriptureEditorWebViewType, undefined, options);
+    return papi.webViews.openWebView(scriptureEditorWebViewType, undefined, options);
   }
   return undefined;
 }
 
 /** Simple web view provider that provides Resource web views when papi requests them */
-const scriptureEditorWebViewProvider: IWebViewProvider = {
-  async getWebView(
+class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEditorWebViewType> {
+  constructor() {
+    super(scriptureEditorWebViewType);
+  }
+
+  override async getWebViewDefinition(
     savedWebView: SavedWebViewDefinition,
     getWebViewOptions: PlatformScriptureEditorOptions,
   ): Promise<WebViewDefinition | undefined> {
@@ -145,8 +159,166 @@ const scriptureEditorWebViewProvider: IWebViewProvider = {
       },
       projectId,
     };
-  },
-};
+  }
+
+  override async createWebViewController(
+    webViewDefinition: WebViewDefinition,
+    webViewNonce: string,
+  ): Promise<PlatformScriptureEditorWebViewController> {
+    let currentWebViewDefinition: SavedWebViewDefinition = webViewDefinition;
+    const unsubFromWebViewUpdates = papi.webViews.onDidUpdateWebView(({ webView }) => {
+      if (webView.id === currentWebViewDefinition.id) currentWebViewDefinition = webView;
+    });
+    return {
+      async selectRange(range) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to selectRange ${serialize(range)}`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          let targetScrRef = { bookNum: 0, chapterNum: 0, verseNum: 0 };
+
+          // Figure out the book and chapter
+          if ('jsonPath' in range.start && 'jsonPath' in range.end) {
+            // Use the chapter and verse number from the range
+            if (
+              range.start.bookNum !== range.end.bookNum ||
+              range.start.chapterNum !== range.end.chapterNum
+            ) {
+              throw new Error(
+                'Could not get targetScrRef from jsonPaths! Selection range cannot (yet) span chapters or books',
+              );
+            }
+
+            targetScrRef.bookNum = range.start.bookNum;
+            targetScrRef.chapterNum = range.start.chapterNum;
+          } else {
+            // At least one range location is USFM specification. Will convert to USJ for jsonPath
+            if (
+              'scrRef' in range.start &&
+              'scrRef' in range.end &&
+              (range.start.scrRef.bookNum !== range.end.scrRef.bookNum ||
+                range.start.scrRef.chapterNum !== range.end.scrRef.chapterNum)
+            ) {
+              throw new Error(
+                'Could not get targetScrRef from scrRefs! Selection range cannot (yet) span chapters or books',
+              );
+            }
+
+            // Establish the book and chapter we're working with by what the range says
+            if ('scrRef' in range.start) {
+              targetScrRef = range.start.scrRef;
+            } else if ('scrRef' in range.end) {
+              targetScrRef = range.end.scrRef;
+            } else
+              throw new Error('Could not determine target scrRef to convert scrRef to jsonPath');
+          }
+
+          // Get the USJ chapter we're on so we can determine some things
+          const pdp = await papi.projectDataProviders.get(
+            'platformScripture.USJ_Chapter',
+            currentWebViewDefinition.projectId,
+          );
+          const usjChapter = await pdp.getChapterUSJ(
+            new VerseRef(targetScrRef.bookNum, targetScrRef.chapterNum, targetScrRef.verseNum),
+          );
+
+          if (!usjChapter)
+            throw new Error(
+              `USJ Chapter for project id ${currentWebViewDefinition.projectId} target scrRef ${serialize(targetScrRef)} is undefined!`,
+            );
+
+          const usjRW = new UsjReaderWriter(usjChapter);
+
+          // Convert the range now - easy conversion if already jsonPath, but need to run conversion
+          // if in USFM verse ref
+          let startJsonPath: string;
+          let endJsonPath: string;
+          // Assume offset is 0 if not provided
+          let startOffset = 0;
+          let endOffset = 0;
+
+          if ('scrRef' in range.start) {
+            const startContentLocation = usjRW.verseRefToUsjContentLocation(
+              new VerseRef(
+                range.start.scrRef.bookNum,
+                range.start.scrRef.chapterNum,
+                range.start.scrRef.verseNum,
+              ),
+              range.start.offset,
+            );
+            startJsonPath = startContentLocation.jsonPath;
+            startOffset = startContentLocation.offset;
+          } else {
+            startJsonPath = range.start.jsonPath;
+            if (range.start.offset !== undefined) startOffset = range.start.offset;
+          }
+
+          if ('scrRef' in range.end) {
+            const endContentLocation = usjRW.verseRefToUsjContentLocation(
+              new VerseRef(
+                range.end.scrRef.bookNum,
+                range.end.scrRef.chapterNum,
+                range.end.scrRef.verseNum,
+              ),
+              range.end.offset,
+            );
+            endJsonPath = endContentLocation.jsonPath;
+            endOffset = endContentLocation.offset;
+
+            if (endOffset < (range.end.offset ?? 0) - 50) {
+              logger.warn(
+                `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} converted range to jsonPath, and calculated endOffset ${endOffset} was over 50 less than the original ${range.end.offset ?? 0}! Setting end position to start position`,
+              );
+              endJsonPath = startJsonPath;
+              endOffset = startOffset + 1;
+            }
+          } else {
+            endJsonPath = range.end.jsonPath;
+            if (range.end.offset !== undefined) endOffset = range.end.offset;
+            else if (range.start.offset !== undefined) endOffset = range.start.offset;
+          }
+
+          const convertedRange = {
+            start: { jsonPath: startJsonPath, offset: startOffset },
+            end: { jsonPath: endJsonPath, offset: endOffset },
+          };
+
+          // Figure out which verse we're on using the jsonPath
+          // Note: we could just use the verse if we receive a scrRef in the range, but our
+          // verseRefToUsjContentLocation doesn't always get the conversion right. So might as well
+          // use whatever verse it ends up on
+          const targetScrRefFromJsonPath = usjRW.jsonPathToVerseRefAndOffset(
+            convertedRange.start.jsonPath,
+            Canon.bookNumberToId(targetScrRef.bookNum),
+          );
+          targetScrRef.verseNum = targetScrRefFromJsonPath.verseRef.verseNum;
+
+          const message: EditorWebViewMessage = {
+            method: 'selectRange',
+            scrRef: targetScrRef,
+            range: convertedRange,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running selectRange! ${e}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async dispose() {
+        return unsubFromWebViewUpdates();
+      },
+    };
+  }
+}
+const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Scripture editor is activating!');
