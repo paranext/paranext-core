@@ -12,6 +12,8 @@ import checkingResultsListStyles from './checking-results-list.web-view.scss?inl
 export const checkResultsListWebViewType = 'platformScripture.checkingResults';
 
 export interface CheckResultsWebViewOptions extends GetWebViewOptions {
+  /** Id of the editor web view that opened this results list */
+  editorWebViewId?: string | undefined;
   projectId: string | undefined;
 }
 
@@ -69,6 +71,7 @@ export default class CheckResultsWebViewProvider implements IWebViewProvider {
       state: {
         ...savedWebView.state,
         webViewType: this.webViewType,
+        editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
       },
     };
   }

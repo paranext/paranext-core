@@ -17,9 +17,17 @@ import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectSetting, useSetting } from '@papi/frontend/react';
-import { deepClone, ScriptureReference, UsjReaderWriter } from 'platform-bible-utils';
+import {
+  compareScrRefs,
+  deepClone,
+  ScriptureReference,
+  serialize,
+  UsjReaderWriter,
+} from 'platform-bible-utils';
 import { Button } from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
+import { EditorWebViewMessage } from 'platform-scripture-editor';
+import type { SelectionRange } from 'shared-react/annotation/selection.model';
 import {
   convertEditorCommentsToLegacyComments,
   convertLegacyCommentsToEditorThreads,
@@ -83,7 +91,41 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
-  const [scrRef, setScrRefInternal] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+
+  const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
+
+  // listen to messages from the web view controller
+  useEffect(() => {
+    const webViewMessageListener = ({
+      data: { method, scrRef: targetScrRef, range },
+    }: MessageEvent<EditorWebViewMessage>) => {
+      switch (method) {
+        case 'selectRange':
+          logger.info(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
+
+          if (compareScrRefs(scrRef, targetScrRef) !== 0) {
+            // Need to update scr ref. Give it some time before setting the range
+            setScrRefWithScroll(targetScrRef);
+            nextSelectionRange.current = range;
+          }
+          // We're on the right scr ref. Go ahead and set the selection
+          else editorRef.current?.setSelection(range);
+
+          break;
+        default:
+          // Unknown method name
+          logger.info(`Received event with unknown method ${method}`);
+          break;
+      }
+    };
+
+    window.addEventListener('message', webViewMessageListener);
+
+    return () => {
+      window.removeEventListener('message', webViewMessageListener);
+    };
+  }, [scrRef, setScrRefWithScroll]);
 
   const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
 
@@ -93,12 +135,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const internallySetScrRefRef = useRef<ScriptureReference | undefined>(undefined);
 
-  const setScrRef = useCallback(
+  const setScrRefNoScroll = useCallback(
     (newScrRef: ScriptureReference) => {
       internallySetScrRefRef.current = newScrRef;
-      return setScrRefInternal(newScrRef);
+      return setScrRefWithScroll(newScrRef);
     },
-    [setScrRefInternal],
+    [setScrRefWithScroll],
   );
 
   /**
@@ -273,7 +315,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [usjFromPdp, scrRef]);
 
-  // Scroll the selected verse into view
+  // Scroll the selected verse and selection range into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
@@ -288,6 +330,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     let highlightedVerseElement: HTMLElement | undefined;
 
+    // Queue up the next selection range to be set and clear it so we don't accidentally set the
+    // range to the wrong thing
+    const nextRange = nextSelectionRange.current;
+    nextSelectionRange.current = undefined;
+
     // Wait before scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
@@ -296,6 +343,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       highlightedVerseElement?.classList.add('highlighted');
 
       internallySetScrRefRef.current = undefined;
+
+      // Set the selection if the selection was set to something as part of this scr ref change
+      if (nextRange) editorRef.current?.setSelection(nextRange);
     }, EDITOR_LOAD_DELAY_TIME);
 
     return () => {
@@ -327,7 +377,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Editorial
           ref={editorRef}
           scrRef={scrRef}
-          onScrRefChange={setScrRef}
+          onScrRefChange={setScrRefNoScroll}
           options={options}
           logger={logger}
         />
@@ -342,7 +392,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Marginal
           ref={editorRef}
           scrRef={scrRef}
-          onScrRefChange={setScrRef}
+          onScrRefChange={setScrRefNoScroll}
           onUsjChange={onUsjAndCommentsChange}
           onCommentChange={saveCommentsToPdp}
           options={options}
@@ -358,7 +408,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <Editorial
         ref={editorRef}
         scrRef={scrRef}
-        onScrRefChange={setScrRef}
+        onScrRefChange={setScrRefNoScroll}
         onUsjChange={saveUsjToPdp}
         options={options}
         logger={logger}

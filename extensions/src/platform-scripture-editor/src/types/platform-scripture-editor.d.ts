@@ -1,6 +1,71 @@
-declare module 'platform-scripture-editor' {}
+declare module 'platform-scripture-editor' {
+  import type { SelectionRange } from 'shared-react/annotation/selection.model';
+  // Used in JSDocs
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import type { CheckLocation } from 'platform-scripture';
+  import type { NetworkableObject } from '@papi/core';
+  import type { ScriptureReference } from 'platform-bible-utils';
+
+  /** Messages sent to the editor web view */
+  export type EditorWebViewMessage = {
+    method: 'selectRange';
+    /** Goes to this Scripture Reference before setting the selection */
+    scrRef: ScriptureReference;
+    /** Endpoints of the selection. Should start at the same place as the scrRef */
+    range: SelectionRange;
+  };
+
+  /**
+   * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
+   * {@link CheckLocation} but using a `ScriptureReference` instead of a `VerseRef` since `VerseRef`
+   * doesn't travel across processes well
+   *
+   * Also added `bookNum` and `chapterNum` to the `jsonPath` result
+   */
+  export type ScriptureLocation =
+    | {
+        /** To which book this jsonPath is relative */
+        bookNum: number;
+        /** To which chapter this jsonPath is relative */
+        chapterNum: number;
+        /** JSONPath expression pointing to a location within USJ data */
+        jsonPath: string;
+        /**
+         * Offset to apply to the content inside of the property indicated by `jsonPath` to
+         * determine the start of the range.
+         *
+         * @example Given the following USJ, if the offset is 1, then this is pointing to the "a" in
+         * Matthew. If no offset is provided, then the entire object with type "para" is being
+         * pointed to.
+         *
+         * { "type": "para", "marker": "h", "content": [ "Matthew" ] }
+         */
+        offset?: number;
+      }
+    | {
+        /** Verse reference to a location with the document */
+        scrRef: ScriptureReference;
+        /** Offset to apply to start of the verse indicated by `verseRef` */
+        offset?: number;
+      };
+
+  /** A pair of Scripture positions that are either in USFM or USJ format */
+  export type ScriptureRange = {
+    /** Starting point where the check result applies in the document */
+    start: ScriptureLocation;
+    /** Ending point where the check result applies in the document */
+    end: ScriptureLocation;
+  };
+
+  export type PlatformScriptureEditorWebViewController = NetworkableObject<{
+    /** Set the current selection on the editor */
+    selectRange(range: ScriptureRange): Promise<void>;
+  }>;
+}
 
 declare module 'papi-shared-types' {
+  import type { PlatformScriptureEditorWebViewController } from 'platform-scripture-editor';
+
   export interface CommandHandlers {
     /**
      * Opens a new editor WebView and returns the WebView id
@@ -25,5 +90,9 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.openResourceViewer': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+  }
+
+  export interface WebViewControllers {
+    'platformScriptureEditor.react': PlatformScriptureEditorWebViewController;
   }
 }
