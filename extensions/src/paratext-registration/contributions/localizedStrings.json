@@ -58,6 +58,7 @@
       "%paratextRegistration_description_internetUse_option_Disabled%": "Disable all Internet use",
       "%paratextRegistration_description_internetUse_option_ProxyOnly%": "Use a proxy",
       "%paratextRegistration_description_internetUse_option_VpnRequired%": "Disable Internet use in sensitive locations",
+      "%paratextRegistration_description_shared_with_paratext_9%": "Theses settings also apply to Paratext 9.",
       "%paratextRegistration_label_emailAddress%": "Email address",
       "%paratextRegistration_label_proxyHost%": "Host",
       "%paratextRegistration_label_proxyMode%": "Mode",
