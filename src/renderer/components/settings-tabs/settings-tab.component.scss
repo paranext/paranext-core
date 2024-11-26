@@ -3,7 +3,19 @@
   height: inherit;
 }
 
+.project-settings-tab {
+  padding: 2%;
+  display: flex;
+  flex-direction: column;
+  gap: 5%;
+  overflow-y: auto;
+}
+
 .sidebar {
   position: relative;
   overflow: hidden;
+}
+
+.sidebar-container {
+  height: 100%;
 }

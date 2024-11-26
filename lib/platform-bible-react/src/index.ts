@@ -65,7 +65,6 @@ export {
   SettingsListHeader,
   SettingsListItem,
 } from './components/advanced/settings-components/settings-list.component';
-export { default as SettingsCard } from './components/advanced/settings-components/settings-card.component';
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
 export { default as Checklist } from './components/basics/checklist.component';

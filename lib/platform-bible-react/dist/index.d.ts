@@ -652,15 +652,6 @@ export type SettingsListHeaderProps = {
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
-export type SettingsCardProps = React$1.PropsWithChildren & {
-	/** Optional id for testing */
-	id?: string;
-	/** Label of the settings group */
-	settingsGroupLabel: string;
-	/** Optional description of the settings group */
-	settingsGroupDescription?: string;
-};
-export function SettingsCard({ id, settingsGroupLabel, settingsGroupDescription, children, }: SettingsCardProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;

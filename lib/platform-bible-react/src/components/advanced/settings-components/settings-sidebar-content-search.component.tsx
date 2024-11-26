@@ -26,7 +26,7 @@ export default function SettingsSidebarContentSearch({
   onSearch,
 }: SettingsSidebarContentSearchProps) {
   return (
-    <div className="tw-h-full tw-p-3">
+    <div className="tw-flex tw-h-full tw-flex-col tw-p-3 tw-pb-2">
       <div className="tw-flex tw-items-center tw-justify-center tw-py-4">
         <SearchBar
           className="tw-w-9/12"
@@ -34,7 +34,7 @@ export default function SettingsSidebarContentSearch({
           placeholder="Search app settings, extension settings, and project settings"
         />
       </div>
-      <SidebarProvider dir={direction} id={id} className="tw-gap-4">
+      <SidebarProvider dir={direction} id={id} className="tw-h-full tw-flex-1 tw-gap-4">
         <SettingsSidebar
           extensionLabels={extensionLabels}
           projectOptions={projectOptions}

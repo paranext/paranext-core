@@ -1430,13 +1430,13 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
       id: settingsTabId,
       tabType: TAB_TYPE_SETTINGS_TAB,
       data: {
-        projectId: projectIdFromWebView,
+        projectIdToLimitSettings: projectIdFromWebView,
       },
     },
     {
       type: 'float',
       position: 'center',
-      floatSize: { height: 400, width: 500 },
+      floatSize: { height: 575, width: 950 },
     },
   );
 }

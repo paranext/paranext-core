@@ -1,5 +1,5 @@
 import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
-import { SettingsCard } from 'platform-bible-react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'platform-bible-react';
 import { useMemo } from 'react';
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
 import OtherSetting from './other-setting.component';
@@ -47,37 +47,43 @@ export default function ProjectOrOtherSettingsList({
   }, [searchQuery, settingProperties]);
 
   return (
-    <SettingsCard settingsGroupLabel={groupLabel} settingsGroupDescription={groupDescription}>
-      <div className="tw-space-y-4">
-        {Object.entries(filteredSettingsProperties).map(([key, property]) =>
-          projectId ? (
-            <ProjectSetting
-              key={key}
-              // Key is a string technically, but it has to be a settingKey to access the setting
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              settingKey={key as ProjectSettingNames}
-              description={property.description}
-              label={property.label}
-              projectId={projectId}
-              // Default is unknown technically but we know it has to be a project setting value
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              defaultSetting={property.default as ProjectSettingValues}
-            />
-          ) : (
-            <OtherSetting
-              key={key}
-              // Key is a string technically, but it has to be a settingKey to access the setting
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              settingKey={key as SettingNames}
-              label={property.label}
-              description={property.description}
-              // Default is unknown technically, but we know it has to be a setting value
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              defaultSetting={property.default as OtherSettingValues}
-            />
-          ),
-        )}
-      </div>
-    </SettingsCard>
+    <Card>
+      <CardHeader>
+        <CardTitle>{groupLabel}</CardTitle>
+        {groupDescription && <CardDescription>{groupDescription}</CardDescription>}
+      </CardHeader>
+      <CardContent>
+        <div className="tw-space-y-4">
+          {Object.entries(filteredSettingsProperties).map(([key, property]) =>
+            projectId ? (
+              <ProjectSetting
+                key={key}
+                // Key is a string technically, but it has to be a settingKey to access the setting
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                settingKey={key as ProjectSettingNames}
+                description={property.description}
+                label={property.label}
+                projectId={projectId}
+                // Default is unknown technically but we know it has to be a project setting value
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                defaultSetting={property.default as ProjectSettingValues}
+              />
+            ) : (
+              <OtherSetting
+                key={key}
+                // Key is a string technically, but it has to be a settingKey to access the setting
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                settingKey={key as SettingNames}
+                label={property.label}
+                description={property.description}
+                // Default is unknown technically, but we know it has to be a setting value
+                // eslint-disable-next-line no-type-assertion/no-type-assertion
+                defaultSetting={property.default as OtherSettingValues}
+              />
+            ),
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }

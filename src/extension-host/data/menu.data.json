@@ -76,6 +76,13 @@
         "group": "platform.projectTop",
         "order": 2,
         "command": "platform.assignments"
+      },
+      {
+        "label": "%webview_openProjectSettings%",
+        "localizeNotes": "Web view main menu > Project > Open Project Settings...",
+        "group": "platform.projectTop",
+        "order": 3,
+        "command": "platform.openSettings"
       }
     ]
   },
