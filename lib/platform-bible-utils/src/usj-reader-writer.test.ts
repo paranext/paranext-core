@@ -1,4 +1,4 @@
-import { Usj } from '@biblionexus-foundation/scripture-utilities';
+import { Usj, USJ_TYPE, USJ_VERSION } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
 import UsjReaderWriter from './usj-reader-writer';
 
@@ -848,9 +848,11 @@ test('Correct VerseRefs and offsets are found using findVerseRefAndOffset', () =
   }).toThrow('No result found for JSONPath query: $.content[9999]');
 
   expect(() => {
-    new UsjReaderWriter({ type: 'USJ', version: '0.2.1', content: [] }).jsonPathToVerseRefAndOffset(
-      '',
-    );
+    new UsjReaderWriter({
+      type: USJ_TYPE,
+      version: USJ_VERSION,
+      content: [],
+    }).jsonPathToVerseRefAndOffset('');
   }).toThrow('Not able to determine the book ID');
 });
 
@@ -926,8 +928,8 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
 
   expect(() => {
     new UsjReaderWriter({
-      type: 'USJ',
-      version: '0.2.1',
+      type: USJ_TYPE,
+      version: USJ_VERSION,
       content: [],
     }).verseRefToUsjContentLocation(new VerseRef('JHN 1:1'), 0);
   }).toThrow('Could not find JHN chapter 1');
