@@ -34,6 +34,12 @@ export type SettingsSidebarProps = {
 
   /** The current selected value in the sidebar */
   selectedSidebarItem: SelectedSettingsSidebarItem;
+
+  /** Label for the group of extensions setting groups */
+  extensionsSidebarGroupLabel: string;
+
+  /** Label for the group of projects settings */
+  projectsSidebarGroupLabel: string;
 };
 
 export default function SettingsSidebar({
@@ -42,6 +48,8 @@ export default function SettingsSidebar({
   projectOptions,
   handleSelectSidebarItem,
   selectedSidebarItem,
+  extensionsSidebarGroupLabel,
+  projectsSidebarGroupLabel,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
     (item: string, projectId?: string) => {
@@ -72,7 +80,9 @@ export default function SettingsSidebar({
     >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="tw-text-sm tw-text-gray-400">Extensions</SidebarGroupLabel>
+          <SidebarGroupLabel className="tw-text-sm tw-text-gray-400">
+            {extensionsSidebarGroupLabel}
+          </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
               {extensionLabels.map((label) => (
@@ -93,7 +103,9 @@ export default function SettingsSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel className="tw-text-sm tw-text-gray-400">Projects</SidebarGroupLabel>
+          <SidebarGroupLabel className="tw-text-sm tw-text-gray-400">
+            {projectsSidebarGroupLabel}
+          </SidebarGroupLabel>
           <SidebarGroupContent className="tw-pl-3">
             <ComboBox
               popoverContentClassName="tw-z-[1000]"

@@ -13,8 +13,8 @@ import settingsService from '@shared/services/settings.service';
 import './settings-tab.component.scss';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
-// import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
-// import { Localized } from 'platform-bible-utils';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { LocalizeKey } from 'platform-bible-utils';
 import ProjectOrOtherSettingsList from './settings-components/project-or-other-settings-list.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
@@ -36,6 +36,13 @@ async function getProjectName(projectIdToGetName: string) {
   return projectName;
 }
 
+const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
+  '%settings_defaultMessage_loadingSettings%',
+  '%settings_defaultMessage_noSettingsForThisProject%',
+  '%settings_sidebar_extensionsLabel%',
+  '%settings_sidebar_projectsLabel%',
+];
+
 export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   const [selectedSidebarItem, setSelectedSidebarItem] = useState<SelectedSettingsSidebarItem>({
     label: '',
@@ -46,6 +53,8 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
   const handleSearchInput = (newSearchTerm: string) => {
     setSearchQuery(newSearchTerm);
   };
+
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 
   const [settingsContributions, isLoadingSettingsContributions] = usePromise(
     useCallback(async () => {
@@ -125,32 +134,10 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
     [],
   );
 
-  // const renderProjectSettingsList = (
-  //   contributions: Localized<ProjectSettingsContributionInfo['contributions']> | undefined,
-  //   projectId: string,
-  // ) => {
-  //   if (!contributions) return <div>No settings available for this project.</div>;
-
-  //   return Object.entries(contributions).flatMap(([, settingsGroups]) =>
-  //     settingsGroups
-  //       ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
-  //           <ProjectOrOtherSettingsList
-  //             key={settingsGroup.label}
-  //             settingProperties={settingsGroup.properties}
-  //             projectId={projectId}
-  //             groupLabel={settingsGroup.label}
-  //             groupDescription={settingsGroup.description}
-  //             searchQuery={searchQuery}
-  //           />
-  //         ))
-  //       : [],
-  //   );
-  // };
-
   const renderProjectSettingsList = useCallback(
     (projectId: string) => {
       if (!filteredProjectSettingsContributions)
-        return <div>No settings available for this project.</div>;
+        return <div>{localizedStrings['%settings_defaultMessage_noSettingsForThisProject%']}</div>;
 
       return Object.entries(filteredProjectSettingsContributions).flatMap(([, settingsGroups]) =>
         settingsGroups
@@ -167,7 +154,7 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
           : [],
       );
     },
-    [filteredProjectSettingsContributions, searchQuery],
+    [filteredProjectSettingsContributions, localizedStrings, searchQuery],
   );
 
   if (projectIdToLimitSettings) {
@@ -176,14 +163,18 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
         {filteredProjectSettingsContributions ? (
           renderProjectSettingsList(projectIdToLimitSettings)
         ) : (
-          <div>Loading settings...</div>
+          <div>{localizedStrings['%settings_defaultMessage_loadingSettings%']}</div>
         )}
       </div>
     );
   }
 
   if (isLoadingSettingsContributions || isLoadingProjectSettingsContributions)
-    return <div className="settings-tab">Loading Settings</div>;
+    return (
+      <div className="settings-tab">
+        {localizedStrings['%settings_defaultMessage_loadingSettings%']}
+      </div>
+    );
 
   if (!settingsContributions) return <div className="settings-tab">No Settings</div>;
 
@@ -198,6 +189,8 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
           }
           selectedSidebarItem={selectedSidebarItem}
           onSearch={handleSearchInput}
+          extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_extensionsLabel%']}
+          projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectsLabel%']}
         >
           <div className="tw-space-y-4">
             {selectedSidebarItem.projectId
@@ -225,7 +218,9 @@ export const loadSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const tabData: SettingsTabData = savedTabInfo.data as SettingsTabData;
 
-  const title = tabData.projectIdToLimitSettings ? 'Project Settings' : 'Settings';
+  const title = tabData.projectIdToLimitSettings
+    ? '%settings_title_projectSettings%'
+    : '%settings_title%';
 
   return {
     ...savedTabInfo,

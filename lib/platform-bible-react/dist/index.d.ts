@@ -451,8 +451,12 @@ export type SettingsSidebarProps = {
 	handleSelectSidebarItem: (key: string, projectId?: string) => void;
 	/** The current selected value in the sidebar */
 	selectedSidebarItem: SelectedSettingsSidebarItem;
+	/** Label for the group of extensions setting groups */
+	extensionsSidebarGroupLabel: string;
+	/** Label for the group of projects settings */
+	projectsSidebarGroupLabel: string;
 };
-export function SettingsSidebar({ id, extensionLabels, projectOptions, handleSelectSidebarItem, selectedSidebarItem, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebar({ id, extensionLabels, projectOptions, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;
@@ -461,7 +465,7 @@ export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.P
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
 };
-export function SettingsSidebarContentSearch({ id, direction, extensionLabels, projectOptions, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebarContentSearch({ id, direction, extensionLabels, projectOptions, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.

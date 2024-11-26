@@ -6,7 +6,7 @@ import {
   SettingTypes,
 } from 'papi-shared-types';
 import { Input, Label, Switch } from 'platform-bible-react';
-import { debounce, getErrorMessage } from 'platform-bible-utils';
+import { debounce, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import logger from '@shared/services/logger.service';
@@ -92,6 +92,14 @@ type CombinedSettingProps =
       (settingKey: any, newValue: any, currentValue: any) => Promise<boolean>
     >;
 
+const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
+  '%settings_defaultMessage_loadingOneSetting%',
+  '%settings_defaultMessage_noSettingComponent%',
+  '%settings_errorMessages_invalidNumber%',
+  '%settings_errorMessages_invalidJSON%',
+  '%settings_errorMessages_invalidValue%',
+];
+
 /**
  * Renders a setting component based on the type of setting (string, number, boolean, or object) and
  * includes validating the setting and displaying errors
@@ -108,6 +116,8 @@ export default function Setting({
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 
   /**
    * Validate and change a setting
@@ -132,7 +142,7 @@ export default function Setting({
       if (typeof setting === 'number') {
         const numericValue = parseInt(value, 10);
         if (Number.isNaN(numericValue)) {
-          setErrorMessage('Invalid number');
+          setErrorMessage(localizedStrings['%settings_errorMessages_invalidNumber%']);
           return;
         }
         newValue = numericValue;
@@ -142,7 +152,7 @@ export default function Setting({
         try {
           newValue = JSON.parse(value);
         } catch {
-          setErrorMessage('Invalid JSON');
+          setErrorMessage(localizedStrings['%settings_errorMessages_invalidJSON%']);
           return;
         }
       } else {
@@ -155,7 +165,7 @@ export default function Setting({
         setErrorMessage(undefined);
         if (setSetting) setSetting(newValue);
       } else {
-        setErrorMessage('Invalid value');
+        setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
       }
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -165,7 +175,7 @@ export default function Setting({
   const debouncedHandleChange = debounce(handleChangeSetting, 500);
 
   const generateComponent = useCallback(() => {
-    let component = <p>No setting component</p>; // isLoading ? <p>Loading setting</p> :
+    let component = <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>;
 
     if (typeof setting === 'string' || typeof setting === 'number')
       component = (
@@ -190,16 +200,14 @@ export default function Setting({
         {errorMessage && <Label className="tw-text-red-600 tw-pt-4">{errorMessage}</Label>}
       </div>
     );
-  }, [setting, settingKey, debouncedHandleChange, errorMessage]);
-
-  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
-  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
+  }, [localizedStrings, setting, settingKey, debouncedHandleChange, errorMessage]);
 
   return (
     <div>
       {isLoading ? (
-        <Label className="tw-text-sm tw-text-muted-foreground">{localizedLoadingSetting}</Label>
+        <Label className="tw-text-sm tw-text-muted-foreground">
+          {localizedStrings['%settings_defaultMessage_loadingOneSetting%']}
+        </Label>
       ) : (
         <div className="tw-flex tw-items-center tw-justify-center">
           <Label htmlFor={settingKey} className="tw-w-1/3 tw-text-right tw-pr-4">

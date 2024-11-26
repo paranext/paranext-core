@@ -24,6 +24,8 @@ export default function SettingsSidebarContentSearch({
   handleSelectSidebarItem,
   selectedSidebarItem,
   onSearch,
+  extensionsSidebarGroupLabel,
+  projectsSidebarGroupLabel,
 }: SettingsSidebarContentSearchProps) {
   return (
     <div className="tw-flex tw-h-full tw-flex-col tw-p-3 tw-pb-2">
@@ -40,6 +42,8 @@ export default function SettingsSidebarContentSearch({
           projectOptions={projectOptions}
           handleSelectSidebarItem={handleSelectSidebarItem}
           selectedSidebarItem={selectedSidebarItem}
+          extensionsSidebarGroupLabel={extensionsSidebarGroupLabel}
+          projectsSidebarGroupLabel={projectsSidebarGroupLabel}
         />
         <SidebarInset className="tw-overflow-y-auto">{children}</SidebarInset>
       </SidebarProvider>
