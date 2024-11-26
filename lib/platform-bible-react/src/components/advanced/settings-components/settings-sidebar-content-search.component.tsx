@@ -26,17 +26,22 @@ export default function SettingsSidebarContentSearch({
   onSearch,
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
+  buttonPlaceholder,
 }: SettingsSidebarContentSearchProps) {
   return (
-    <div className="tw-flex tw-h-full tw-flex-col tw-p-3 tw-pb-2">
-      <div className="tw-flex tw-items-center tw-justify-center tw-py-4">
+    <div className="tw-box-border tw-flex tw-h-full tw-flex-col tw-p-3">
+      <div className="tw-box-border tw-flex tw-items-center tw-justify-center tw-py-4">
         <SearchBar
           className="tw-w-9/12"
           onSearch={onSearch}
           placeholder="Search app settings, extension settings, and project settings"
         />
       </div>
-      <SidebarProvider dir={direction} id={id} className="tw-h-full tw-flex-1 tw-gap-4">
+      <SidebarProvider
+        dir={direction}
+        id={id}
+        className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto"
+      >
         <SettingsSidebar
           extensionLabels={extensionLabels}
           projectOptions={projectOptions}
@@ -44,6 +49,7 @@ export default function SettingsSidebarContentSearch({
           selectedSidebarItem={selectedSidebarItem}
           extensionsSidebarGroupLabel={extensionsSidebarGroupLabel}
           projectsSidebarGroupLabel={projectsSidebarGroupLabel}
+          buttonPlaceholder={buttonPlaceholder}
         />
         <SidebarInset className="tw-overflow-y-auto">{children}</SidebarInset>
       </SidebarProvider>

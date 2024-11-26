@@ -1,6 +1,7 @@
 .settings-tab {
   padding: 2%;
-  height: inherit;
+  height: 100%;
+  box-sizing: border-box;
 }
 
 .project-settings-tab {
@@ -18,4 +19,5 @@
 
 .sidebar-container {
   height: 100%;
+  box-sizing: border-box;
 }

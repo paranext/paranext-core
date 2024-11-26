@@ -41,9 +41,12 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_noSettingsForThisProject%',
   '%settings_sidebar_extensionsLabel%',
   '%settings_sidebar_projectsLabel%',
+  '%settings_sidebar_projectsComboBoxPlaceholder%',
 ];
 
 export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
+
   const [selectedSidebarItem, setSelectedSidebarItem] = useState<SelectedSettingsSidebarItem>({
     label: '',
     projectId: undefined,
@@ -53,8 +56,6 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
   const handleSearchInput = (newSearchTerm: string) => {
     setSearchQuery(newSearchTerm);
   };
-
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 
   const [settingsContributions, isLoadingSettingsContributions] = usePromise(
     useCallback(async () => {
@@ -191,8 +192,9 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
           onSearch={handleSearchInput}
           extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_extensionsLabel%']}
           projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectsLabel%']}
+          buttonPlaceholder={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
         >
-          <div className="tw-space-y-4">
+          <div className="tw-space-y-4 tw-box-border">
             {selectedSidebarItem.projectId
               ? renderProjectSettingsList(selectedSidebarItem.projectId)
               : settingsContributions[selectedSidebarItem.label]?.map((group) => (

@@ -59,6 +59,7 @@
   "%settings_errorMessages_invalidJSON%": "Invalid JSON",
   "%settings_errorMessages_invalidValue%": "Invalid value",
   "%settings_sidebar_extensionsLabel%": "Extensions",
+  "%settings_sidebar_projectsComboBoxPlaceholder%": "Type or select project",
   "%settings_sidebar_projectsLabel%": "Projects",
   "%settings_title_projectSettings%": "Project Settings",
   "%settings_title%": "Settings",

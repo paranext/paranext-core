@@ -40,6 +40,9 @@ export type SettingsSidebarProps = {
 
   /** Label for the group of projects settings */
   projectsSidebarGroupLabel: string;
+
+  /** Placeholder for the button */
+  buttonPlaceholder: string;
 };
 
 export default function SettingsSidebar({
@@ -50,6 +53,7 @@ export default function SettingsSidebar({
   selectedSidebarItem,
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
+  buttonPlaceholder,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
     (item: string, projectId?: string) => {
@@ -115,7 +119,7 @@ export default function SettingsSidebar({
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
                 return getProjectNameFromProjectId(projectId as string);
               }}
-              buttonPlaceholder="Type or select project"
+              buttonPlaceholder={buttonPlaceholder}
               onChange={(projectId: string) => {
                 const selectedProjectName = getProjectNameFromProjectId(projectId);
                 handleSelectItem(selectedProjectName, projectId);
