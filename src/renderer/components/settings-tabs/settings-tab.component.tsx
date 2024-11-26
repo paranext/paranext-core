@@ -13,8 +13,8 @@ import settingsService from '@shared/services/settings.service';
 import './settings-tab.component.scss';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
-import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
-import { Localized } from 'platform-bible-utils';
+// import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
+// import { Localized } from 'platform-bible-utils';
 import ProjectOrOtherSettingsList from './settings-components/project-or-other-settings-list.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
@@ -23,6 +23,11 @@ type SettingsTabProps = {
   /** Optional project Id, when passed in, will only show settings for that project */
   projectIdToLimitSettings?: string;
 };
+
+async function getAllProjectIdsFromMetadata() {
+  const allMetadata = await projectLookupService.getMetadataForAllProjects();
+  return allMetadata.flatMap((metadata) => metadata.id);
+}
 
 async function getProjectName(projectIdToGetName: string) {
   const pdp = await projectDataProviders.get('platform.base', projectIdToGetName);
@@ -89,6 +94,7 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
       const projectId = projectIdToLimitSettings || selectedSidebarItem.projectId;
 
       const projectInterfacesFromProjectId =
+        // We check for a valid projectId above
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         (await projectLookupService.getMetadataForProject(projectId!)).projectInterfaces;
 
@@ -100,16 +106,14 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
     useMemo(() => undefined, []),
   );
 
-  const [allProjectIdsFromMetadata] = usePromise(
-    useCallback(async () => {
-      const allMetadata = await projectLookupService.getMetadataForAllProjects();
-      return allMetadata.flatMap((metadata) => metadata.id);
-    }, []),
-    useMemo(() => [], []),
-  );
-
   const [allProjectOptions]: [ProjectOptions[], boolean] = usePromise(
     useCallback(async () => {
+      const allProjectIdsFromMetadata = await getAllProjectIdsFromMetadata();
+
+      if (allProjectIdsFromMetadata.length === 0) {
+        return [];
+      }
+
       const projectOptions = await Promise.all(
         allProjectIdsFromMetadata.map(async (id) => ({
           projectId: id,
@@ -117,37 +121,60 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
         })),
       );
       return projectOptions;
-    }, [allProjectIdsFromMetadata]),
-    useMemo(() => [], []),
+    }, []),
+    [],
   );
 
-  const renderProjectSettingsList = (
-    contributions: Localized<ProjectSettingsContributionInfo['contributions']> | undefined,
-    projectId: string,
-  ) => {
-    if (!contributions) return <div>No settings available for this project.</div>;
+  // const renderProjectSettingsList = (
+  //   contributions: Localized<ProjectSettingsContributionInfo['contributions']> | undefined,
+  //   projectId: string,
+  // ) => {
+  //   if (!contributions) return <div>No settings available for this project.</div>;
 
-    return Object.entries(contributions).flatMap(([, settingsGroups]) =>
-      settingsGroups
-        ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
-            <ProjectOrOtherSettingsList
-              key={settingsGroup.label}
-              settingProperties={settingsGroup.properties}
-              projectId={projectId}
-              groupLabel={settingsGroup.label}
-              groupDescription={settingsGroup.description}
-              searchQuery={searchQuery}
-            />
-          ))
-        : [],
-    );
-  };
+  //   return Object.entries(contributions).flatMap(([, settingsGroups]) =>
+  //     settingsGroups
+  //       ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
+  //           <ProjectOrOtherSettingsList
+  //             key={settingsGroup.label}
+  //             settingProperties={settingsGroup.properties}
+  //             projectId={projectId}
+  //             groupLabel={settingsGroup.label}
+  //             groupDescription={settingsGroup.description}
+  //             searchQuery={searchQuery}
+  //           />
+  //         ))
+  //       : [],
+  //   );
+  // };
+
+  const renderProjectSettingsList = useCallback(
+    (projectId: string) => {
+      if (!filteredProjectSettingsContributions)
+        return <div>No settings available for this project.</div>;
+
+      return Object.entries(filteredProjectSettingsContributions).flatMap(([, settingsGroups]) =>
+        settingsGroups
+          ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
+              <ProjectOrOtherSettingsList
+                key={settingsGroup.label}
+                settingProperties={settingsGroup.properties}
+                projectId={projectId}
+                groupLabel={settingsGroup.label}
+                groupDescription={settingsGroup.description}
+                searchQuery={searchQuery}
+              />
+            ))
+          : [],
+      );
+    },
+    [filteredProjectSettingsContributions, searchQuery],
+  );
 
   if (projectIdToLimitSettings) {
     return (
       <div className="project-settings-tab">
         {filteredProjectSettingsContributions ? (
-          renderProjectSettingsList(filteredProjectSettingsContributions, projectIdToLimitSettings)
+          renderProjectSettingsList(projectIdToLimitSettings)
         ) : (
           <div>Loading settings...</div>
         )}
@@ -173,18 +200,15 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
           onSearch={handleSearchInput}
         >
           <div className="tw-space-y-4">
-            {selectedSidebarItem.projectId && filteredProjectSettingsContributions
-              ? renderProjectSettingsList(
-                  filteredProjectSettingsContributions,
-                  selectedSidebarItem.projectId,
-                )
+            {selectedSidebarItem.projectId
+              ? renderProjectSettingsList(selectedSidebarItem.projectId)
               : settingsContributions[selectedSidebarItem.label]?.map((group) => (
                   <ProjectOrOtherSettingsList
                     key={group.label}
                     groupLabel={group.label}
                     groupDescription={group.description}
                     settingProperties={group.properties}
-                    searchQuery=""
+                    searchQuery={searchQuery}
                   />
                 ))}
           </div>

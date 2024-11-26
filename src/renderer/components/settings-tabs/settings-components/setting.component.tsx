@@ -1,4 +1,4 @@
-import { ChangeEvent, useCallback, useState } from 'react';
+import { ChangeEvent, useCallback, useMemo, useState } from 'react';
 import {
   ProjectSettingNames,
   ProjectSettingTypes,
@@ -10,7 +10,7 @@ import { debounce, getErrorMessage } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import logger from '@shared/services/logger.service';
-// import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -100,6 +100,7 @@ export default function Setting({
   settingKey,
   setting,
   setSetting,
+  isLoading,
   validateOtherSetting,
   validateProjectSetting,
   label,
@@ -191,16 +192,22 @@ export default function Setting({
     );
   }, [setting, settingKey, debouncedHandleChange, errorMessage]);
 
-  // const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
-  // const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
-  // const localizedLoadingSetting = localizedStrings[loadingSettingKey];
+  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
+  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
 
   return (
-    <div className="tw-flex tw-items-center tw-justify-center">
-      <Label htmlFor={settingKey} className="tw-w-1/3 tw-text-right tw-pr-4">
-        {label}
-      </Label>
-      {generateComponent()}
+    <div>
+      {isLoading ? (
+        <Label className="tw-text-sm tw-text-muted-foreground">{localizedLoadingSetting}</Label>
+      ) : (
+        <div className="tw-flex tw-items-center tw-justify-center">
+          <Label htmlFor={settingKey} className="tw-w-1/3 tw-text-right tw-pr-4">
+            {label}
+          </Label>
+          {generateComponent()}
+        </div>
+      )}
     </div>
   );
 }
