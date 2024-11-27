@@ -1,21 +1,19 @@
-import { ListItemIcon } from '@mui/material';
-import { useCallback, useMemo, useState } from 'react';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import { Check } from 'lucide-react';
-import ProjectList, {
-  ProjectMetadataDisplay,
-} from '@renderer/components/projects/project-list.component';
-import '@renderer/components/dialogs/select-multiple-projects.dialog.scss';
-import projectLookupService from '@shared/services/project-lookup.service';
-import { Button, LocalizeKey, usePromise } from 'platform-bible-react';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
   DialogTypes,
   SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
-import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import '@renderer/components/dialogs/select-multiple-projects.dialog.scss';
+import ProjectList, {
+  ProjectMetadataDisplay,
+} from '@renderer/components/projects/project-list.component';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import projectLookupService from '@shared/services/project-lookup.service';
+import { Check, FolderOpenIcon } from 'lucide-react';
+import { Button, LocalizeKey, usePromise } from 'platform-bible-react';
+import { useCallback, useMemo, useState } from 'react';
 
 function SelectMultipleProjectsDialog({
   prompt,
@@ -89,9 +87,7 @@ function SelectMultipleProjectsDialog({
           isMultiselect
           isCheckable
         >
-          <ListItemIcon>
-            <FolderOpenIcon />
-          </ListItemIcon>
+          <FolderOpenIcon className="select-multiple-projects-folder-icon" />
         </ProjectList>
       )}
       <div className="select-multiple-projects-submit-button">

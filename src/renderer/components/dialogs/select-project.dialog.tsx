@@ -1,21 +1,20 @@
-import { ListItemIcon } from '@mui/material';
-import FolderOpenIcon from '@mui/icons-material/FolderOpen';
-import '@renderer/components/dialogs/select-project.dialog.scss';
-import { useCallback, useMemo } from 'react';
-import ProjectList, {
-  ProjectMetadataDisplay,
-} from '@renderer/components/projects/project-list.component';
-import { usePromise } from 'platform-bible-react';
-import projectLookupService from '@shared/services/project-lookup.service';
 import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
   DialogTypes,
   SELECT_PROJECT_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
-import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import '@renderer/components/dialogs/select-project.dialog.scss';
+import ProjectList, {
+  ProjectMetadataDisplay,
+} from '@renderer/components/projects/project-list.component';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
+import projectLookupService from '@shared/services/project-lookup.service';
+import { FolderOpenIcon } from 'lucide-react';
+import { usePromise } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
+import { useCallback, useMemo } from 'react';
 
 function SelectProjectDialog({
   prompt,
@@ -70,9 +69,7 @@ function SelectProjectDialog({
         <div>Loading Projects</div>
       ) : (
         <ProjectList projects={projects} handleSelectProject={submitDialog}>
-          <ListItemIcon>
-            <FolderOpenIcon />
-          </ListItemIcon>
+          <FolderOpenIcon className="select-multiple-projects-folder-icon" />
         </ProjectList>
       )}
     </div>
