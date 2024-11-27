@@ -36,15 +36,20 @@ export default function ProjectOrOtherSettingsList({
     | Localized<SettingProperties> => {
     const filteredProperties: Localized<ProjectSettingProperties> | Localized<SettingProperties> =
       Object.fromEntries(
-        Object.entries(settingProperties).filter(
-          ([, property]) =>
-            property.label.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            property.description?.toLowerCase().includes(searchQuery.toLowerCase()),
+        Object.entries(settingProperties).filter(([, property]) =>
+          property.label.toLowerCase().includes(searchQuery.toLowerCase()),
         ),
       );
 
     return filteredProperties;
   }, [searchQuery, settingProperties]);
+
+  const hasFilteredProperties = useMemo(
+    () => Object.keys(filteredSettingsProperties).length > 0,
+    [filteredSettingsProperties],
+  );
+
+  if (!hasFilteredProperties) return undefined;
 
   return (
     <Card>

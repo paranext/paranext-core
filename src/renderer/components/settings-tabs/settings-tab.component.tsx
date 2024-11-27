@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  ProjectOptions,
   SelectedSettingsSidebarItem,
   SettingsSidebarContentSearch,
   usePromise,
@@ -97,26 +96,27 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
     useMemo(() => undefined, []),
   );
 
-  const [filteredProjectSettingsContributions] = usePromise(
-    useCallback(async () => {
-      if (!projectIdToLimitSettings && !selectedSidebarItem.projectId) return undefined;
+  const [filteredProjectSettingsContributions, isLoadingFilteredProjectSettingsContributions] =
+    usePromise(
+      useCallback(async () => {
+        if (!projectIdToLimitSettings && !selectedSidebarItem.projectId) return undefined;
 
-      const projectId = projectIdToLimitSettings || selectedSidebarItem.projectId;
+        const projectId = projectIdToLimitSettings || selectedSidebarItem.projectId;
 
-      const projectInterfacesFromProjectId =
-        // We check for a valid projectId above
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        (await projectLookupService.getMetadataForProject(projectId!)).projectInterfaces;
+        const projectInterfacesFromProjectId =
+          // We check for a valid projectId above
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          (await projectLookupService.getMetadataForProject(projectId!)).projectInterfaces;
 
-      return filterProjectSettingsContributionsByProjectInterfaces(
-        projectSettingsContributions,
-        projectInterfacesFromProjectId,
-      );
-    }, [projectIdToLimitSettings, selectedSidebarItem.projectId, projectSettingsContributions]),
-    useMemo(() => undefined, []),
-  );
+        return filterProjectSettingsContributionsByProjectInterfaces(
+          projectSettingsContributions,
+          projectInterfacesFromProjectId,
+        );
+      }, [projectIdToLimitSettings, selectedSidebarItem.projectId, projectSettingsContributions]),
+      useMemo(() => undefined, []),
+    );
 
-  const [allProjectOptions]: [ProjectOptions[], boolean] = usePromise(
+  const [allProjectOptions, isLoadingAllProjectOptions] = usePromise(
     useCallback(async () => {
       const allProjectIdsFromMetadata = await getAllProjectIdsFromMetadata();
 
@@ -170,7 +170,12 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
     );
   }
 
-  if (isLoadingSettingsContributions || isLoadingProjectSettingsContributions)
+  if (
+    isLoadingSettingsContributions ||
+    isLoadingProjectSettingsContributions ||
+    isLoadingAllProjectOptions ||
+    isLoadingFilteredProjectSettingsContributions
+  )
     return (
       <div className="settings-tab">
         {localizedStrings['%settings_defaultMessage_loadingSettings%']}
