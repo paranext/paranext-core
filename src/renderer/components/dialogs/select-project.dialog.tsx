@@ -69,7 +69,7 @@ function SelectProjectDialog({
         <div>Loading Projects</div>
       ) : (
         <ProjectList projects={projects} handleSelectProject={submitDialog}>
-          <FolderOpenIcon className="select-multiple-projects-folder-icon" />
+          <FolderOpenIcon className="select-project-folder-icon" />
         </ProjectList>
       )}
     </div>
