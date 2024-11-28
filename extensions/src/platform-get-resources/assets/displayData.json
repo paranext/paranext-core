@@ -4,8 +4,8 @@
   "supportUrl": "",
   "localizedDisplayInfo": {
     "en": {
-      "displayName": "Paranext Extension Template",
-      "shortSummary": "Base template for a Platform.Bible Extension",
+      "displayName": "Platform Get Resources",
+      "shortSummary": "Get resources extension for Platform.Bible",
       "description": "assets/descriptions/description-en.md"
     }
   }

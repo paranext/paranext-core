@@ -1,6 +1,6 @@
-# paranext-extension-template
+# platform-get-resources
 
-Basic extension template for Platform.Bible
+Get resources extension for Platform.Bible
 
 <!-- <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info). -->
 

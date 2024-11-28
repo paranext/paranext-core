@@ -1,6 +1,32 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%getResources_action%": "Action",
+      "%getResources_dialog_subtitle%": "Add resources to Home",
+      "%getResources_dialog_title%": "Get Resources",
+      "%getResources_filterInput%": "Search by name, language, type",
+      "%getResources_fullName%": "Full Name",
+      "%getResources_get%": "Get",
+      "%getResources_installed%": "Installed",
+      "%getResources_language%": "Language",
+      "%getResources_languageFilter%": "Filter by language",
+      "%getResources_loadingResources%": "Loading resources...",
+      "%getResources_noResults%": "No results found",
+      "%getResources_open%": "Open",
+      "%getResources_remove%": "Remove",
+      "%getResources_size%": "Size",
+      "%getResources_type%": "Type",
+      "%getResources_type_DBL%": "DBL Resource",
+      "%getResources_type_ER%": "Enhanced Resource",
+      "%getResources_type_SLR%": "Source Language Text",
+      "%getResources_type_XR%": "XML Resource",
+      "%getResources_type_unknown%": "Unknown resource type",
+      "%getResources_update%": "Update",
+      "%home_dialog_title%": "Home",
+      "%home_name%": "Name",
+      "%mainMenu_openGetResources%": "Get Resources...",
+      "%mainMenu_openHome%": "Open Home Dialog..."
+    }
   }
 }
