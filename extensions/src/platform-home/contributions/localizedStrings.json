@@ -1,6 +1,10 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%home_dialog_title%": "Home",
+      "%home_name%": "Name",
+      "%mainMenu_openHome%": "Open Home Dialog..."
+    }
   }
 }

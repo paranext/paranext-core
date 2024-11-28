@@ -1,3 +1,3 @@
-Extension template for Platform.Bible. Powered by webpack.
+Home screen extension for Platform.Bible.
 
-This is a webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs.
+This extension will be a landing page when Platform.Bible opens, and will let the user quickly navigate to their projects and resources.
