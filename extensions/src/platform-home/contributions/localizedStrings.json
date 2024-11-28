@@ -2,9 +2,13 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
-      "%home_dialog_title%": "Home",
+      "%home_action%": "Action",
+      "%home_getResources%": "Get Resources",
+      "%home_language%": "Language",
+      "%home_loadingProjectsAndResources%": "Loading Projects and Resources",
+      "%home_dialogTitle%": "Home",
       "%home_name%": "Name",
-      "%mainMenu_openHome%": "Open Home Dialog..."
+      "%mainMenu_openHome%": "Home..."
     }
   }
 }

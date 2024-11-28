@@ -23,10 +23,7 @@
       "%getResources_type_XR%": "XML Resource",
       "%getResources_type_unknown%": "Unknown resource type",
       "%getResources_update%": "Update",
-      "%home_dialog_title%": "Home",
-      "%home_name%": "Name",
-      "%mainMenu_openGetResources%": "Get Resources...",
-      "%mainMenu_openHome%": "Open Home Dialog..."
+      "%mainMenu_openGetResources%": "Get Resources"
     }
   }
 }
