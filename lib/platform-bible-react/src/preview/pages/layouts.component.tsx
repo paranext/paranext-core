@@ -8,6 +8,7 @@ import { HasDirection } from '@/preview/preview-components/direction-toggle.comp
 import WindowOrTabExample from './layouts/window.layout.component';
 import Dashboard5Examples from './layouts/dashboard5.layout.component';
 import ToolbarExamples from './layouts/toolbar.layout.component';
+import DialogExamples from './layouts/dialog.layout.component';
 
 function Layouts({ direction }: HasDirection) {
   return (
@@ -19,11 +20,12 @@ function Layouts({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Toolbar">MUI Toolbar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Settings">Settings (n/a)</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Shadcn Dashboard 5">Shadcn Dashboard 5</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Dialog">Dialog</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Window">
           <div className="tw-mb-2 tw-flex tw-gap-2">
-            <WindowOrTabExample direction={direction} />
+            <WindowOrTabExample direction={direction} isFocused />
             <WindowOrTabExample direction={direction} />
           </div>
           <WindowOrTabExample direction={direction} />
@@ -39,6 +41,10 @@ function Layouts({ direction }: HasDirection) {
           <div className="tw-h-[405px] tw-rounded-md tw-border">
             <Dashboard5Examples direction={direction} />
           </div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Dialog">
+          <DialogExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
