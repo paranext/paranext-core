@@ -669,14 +669,16 @@ export type ComboBoxProps<T> = {
 	/** Additional css classes to help with unique styling of the combo box */
 	className?: string;
 	/**
-	 * The selected value that the combo box currently holds. Must be shallow equal to one of the
-	 * options entries.
+	 * The selected value(s) that the combo box currently holds. Must be shallow equal to one or more
+	 * of the options entries.
 	 */
 	value?: T;
 	/** Triggers when content of textfield is changed */
 	onChange?: (newValue: T) => void;
 	/** Used to determine the string value for a given option. */
 	getOptionLabel?: (option: ComboBoxOption) => string;
+	/** Icon to be displayed on the trigger */
+	icon?: React$1.ReactNode;
 	/** Text displayed on button if `value` is undefined */
 	buttonPlaceholder?: string;
 	/** Placeholder text for text field */
@@ -685,6 +687,8 @@ export type ComboBoxProps<T> = {
 	commandEmptyMessage?: string;
 	/** Variant of button */
 	buttonVariant?: ButtonProps["variant"];
+	/** Control how the popover menu should be aligned. Defaults to start */
+	alignDropDown?: "start" | "center" | "end";
 	/** Text direction ltr or rtl */
 	dir?: Direction;
 	/** Optional boolean to set if trigger should be disabled */
@@ -697,7 +701,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -896,8 +900,10 @@ export type SearchBarProps = {
 	placeholder?: string;
 	/** Optional boolean to set the input base to full width */
 	isFullWidth?: boolean;
+	/** ClassName for the input */
+	className?: string;
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {
@@ -972,6 +978,12 @@ export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttrib
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
 export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const badgeVariants: (props?: ({
+	variant?: "default" | "outline" | "destructive" | "secondary" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
+}
+export declare function Badge({ className, variant, ...props }: BadgeProps): import("react/jsx-runtime").JSX.Element;
 export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;

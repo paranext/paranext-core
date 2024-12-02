@@ -15,8 +15,15 @@ import { HasDirection } from '@/preview/preview-components/direction-toggle.comp
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 
-export default function WindowOrTabExample({ direction }: HasDirection) {
+export type HasIsFocused = {
+  isFocused?: boolean;
+};
+
+export default function WindowOrTabExample({ direction, isFocused }: HasDirection & HasIsFocused) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
+  const highlightClassName = isFocused
+    ? 'tw-bg-primary tw-text-primary-foreground'
+    : 'tw-bg-secondary tw-text-secondary-foreground';
   return (
     <div className="tw-rounded-md tw-border">
       <div className="tw-flex tw-flex-row tw-rounded-se-md tw-bg-muted/50">
@@ -117,12 +124,13 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
         </p>
         <br />
         <p>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
-          ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
-          ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in
-          reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur
-          sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id
-          est laborum.
+          Lorem{' '}
+          <span className={highlightClassName}>ipsum dolor sit amet, consectetur adipiscing</span>{' '}
+          elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+          veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+          Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat
+          nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia
+          deserunt mollit anim id est laborum.
         </p>
         <br />
         <p>
