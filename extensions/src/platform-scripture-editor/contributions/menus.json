@@ -103,6 +103,12 @@
             "command": "platformScripture.showCheckResults"
           },
           {
+            "label": "%webView_platformScriptureEditor_openChecksSidePanel%",
+            "group": "platformScriptureEditor.checks",
+            "order": 3,
+            "command": "platform.openChecksSidePanel"
+          },
+          {
             "label": "%webView_platformScriptureEditor_thickBorders%",
             "group": "platformScriptureEditor.layout",
             "order": 1,

@@ -70,6 +70,10 @@ import {
   TAB_TYPE_USER_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import THEME, { SCROLLBAR_STYLES, MUI_OVERRIDES } from '@renderer/theme';
+import {
+  ChecksSidePanelTabData,
+  TAB_TYPE_CHECKS_SIDE_PANEL,
+} from '@renderer/components/checks/checks-side-panel-tab.component';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -1461,6 +1465,24 @@ async function openUserSettingsTab(): Promise<Layout | undefined> {
   );
 }
 
+async function openChecksSidePanelTab(webViewId: WebViewId): Promise<Layout | undefined> {
+  const checksSidePanelId = newGuid();
+  const tabIdFromWebViewId = (await getOpenWebViewDefinition(webViewId))?.id;
+
+  return addTab<ChecksSidePanelTabData>(
+    {
+      id: checksSidePanelId,
+      tabType: TAB_TYPE_CHECKS_SIDE_PANEL,
+      data: { webViewId },
+    },
+    {
+      type: 'panel',
+      direction: 'right',
+      targetTabId: tabIdFromWebViewId,
+    },
+  );
+}
+
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewService(): Promise<void> {
@@ -1475,6 +1497,7 @@ export async function startWebViewService(): Promise<void> {
   const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
     'platform.openProjectSettings': openProjectSettingsTab,
     'platform.openUserSettings': openUserSettingsTab,
+    'platform.openChecksSidePanel': openChecksSidePanelTab,
   };
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
