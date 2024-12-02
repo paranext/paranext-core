@@ -18,7 +18,7 @@
     "zip": "zip-build dist release --template '%NAME%_%VERSION%.%EXT%' --override",
     "package": "npm run build:production && npm run zip",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
-    "start:core": "cd ../paranext-core && npm run start",
+    "start:core": "cd ../../.. && npm run start",
     "start": "cross-env MAIN_ARGS=\"--extensions $INIT_CWD/dist\" concurrently \"npm:watch\" \"npm:start:core\"",
     "start:production": "cross-env MAIN_ARGS=\"--extensions $INIT_CWD/dist\" concurrently \"npm:watch:production\" \"npm:start:core\"",
     "lint": "npm run lint:scripts && npm run lint:styles",
@@ -34,7 +34,7 @@
   },
   "dependencies": {
     "@sillsdev/scripture": "^2.0.2",
-    "platform-bible-utils": "file:../paranext-core/lib/platform-bible-utils"
+    "platform-bible-utils": "file:../../../lib/platform-bible-utils"
   },
   "devDependencies": {
     "@swc/core": "^1.7.35",
@@ -66,8 +66,8 @@
     "eslint-plugin-react-hooks": "^4.6.2",
     "glob": "^10.4.5",
     "lucide-react": "^0.452.0",
-    "papi-dts": "file:../paranext-core/lib/papi-dts",
-    "platform-bible-react": "file:../paranext-core/lib/platform-bible-react",
+    "papi-dts": "file:../../../lib/papi-dts",
+    "platform-bible-react": "file:../../../lib/platform-bible-react",
     "postcss": "^8.4.47",
     "postcss-loader": "^8.1.1",
     "prettier": "^3.3.3",

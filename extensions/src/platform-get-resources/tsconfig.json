@@ -25,9 +25,9 @@
       // Include default type declarations
       "node_modules/@types",
       // Include papi-dts type declarations (for papi.d.ts)
-      "../paranext-core/lib",
+      "../../../lib",
       // Include core extensions' type declarations
-      "../paranext-core/extensions/src",
+      "../../../extensions/src",
       // Include this extension's type declarations. It's in this location so there aren't any
       // unexpected files there for typeRoots to include
       "src/types",
@@ -48,7 +48,7 @@
 
       // Include cached extension type declarations in case this extension needs to depend on them
       // These are last, so any modules in the above typeRoots take precedence.
-      "../paranext-core/dev-appdata/cache/extension-types"
+      "../../../dev-appdata/cache/extension-types"
     ],
     // Papi exposes decorators for use in classes
     "experimentalDecorators": true,
