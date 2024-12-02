@@ -10,7 +10,6 @@ import {
   Loader,
   Search,
 } from 'lucide-react';
-import type { DblResourceData, ResourceType } from 'platform-get-resources';
 import {
   Button,
   Card,
@@ -37,6 +36,7 @@ import {
   TableRow,
 } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
+import type { DblResourceData, ResourceType } from 'platform-get-resources';
 import { useEffect, useMemo, useState } from 'react';
 
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
