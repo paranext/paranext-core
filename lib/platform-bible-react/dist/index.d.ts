@@ -412,6 +412,22 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  *   current status of the item is selected
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
+export type MultiSelectComboBoxEntry = {
+	value: string;
+	label: string;
+	starred?: boolean;
+};
+export interface MultiSelectComboboxProps {
+	options: MultiSelectComboBoxEntry[];
+	selected: string[];
+	onChange: (values: string[]) => void;
+	placeholder: string;
+	customSelectedText?: string;
+	sortSelected?: boolean;
+	isTypeCombobox?: boolean;
+	icon?: React$1.ReactNode;
+}
+export declare function MultiSelectComboBox({ options, selected, onChange, placeholder, customSelectedText, sortSelected, isTypeCombobox, icon, }: MultiSelectComboboxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;

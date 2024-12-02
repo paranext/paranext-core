@@ -22,7 +22,7 @@ import {
 } from '@/components/shadcn-ui/table';
 import { cn } from '@/utils/shadcn-ui.util';
 import { DialogTitle } from '@radix-ui/react-dialog';
-import MultiSelectCombobox from '@/components/advanced/multi-select-combo-box';
+import MultiSelectComboBox from '@/components/advanced/multi-select-combo-box';
 
 type MultiSelectComboBoxEntry = {
   value: string;
@@ -242,7 +242,7 @@ export default function GetResourcesExample() {
             className={cn({ 'tw-border-primary': searchQuery })}
           />
 
-          <MultiSelectCombobox
+          <MultiSelectComboBox
             options={types}
             selected={selectedTypes}
             onChange={setSelectedTypes}
@@ -251,7 +251,7 @@ export default function GetResourcesExample() {
             icon={<Blocks />}
           />
 
-          <MultiSelectCombobox
+          <MultiSelectComboBox
             options={languages}
             selected={selectedLanguages}
             onChange={setSelectedLanguages}
