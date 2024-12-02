@@ -1,4 +1,5 @@
 declare module 'platform-get-resources' {
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import { DataProviderDataType, IDataProvider } from '@papi/core';
 
   export type ResourceType = 'DBL' | 'EnhancedResource' | 'XmlResource' | 'SourceLanguageResource';
