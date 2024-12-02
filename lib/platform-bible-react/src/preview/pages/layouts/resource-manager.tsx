@@ -312,7 +312,8 @@ function MultiSelectCombobox({
                     <div className="tw-w-4">
                       {option.starred && <Star className="tw-h-4 tw-w-4" />}
                     </div>
-                    {option.label} ({count})
+                    <div className="tw-flex-grow">{option.label}</div>
+                    <div className="tw-w-10 tw-text-right tw-text-muted-foreground">{count}</div>
                   </CommandItem>
                 );
               })}
@@ -434,14 +435,16 @@ export default function ResourceManager() {
             <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
               <span className="tw-text-sm tw-text-muted-foreground">Types:</span>
               {selectedTypes.map((type) => (
-                <Badge
-                  key={type}
-                  variant="muted"
-                  className="tw-flex tw-cursor-pointer tw-items-center tw-gap-1"
-                  onClick={() => removeType(type)}
-                >
+                <Badge key={type} variant="muted" className="tw-flex tw-items-center tw-gap-1">
                   {types.find((t) => t.value === type)?.label}
-                  <X className="tw-h-3 tw-w-3" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tw-h-4 tw-w-4 tw-p-0 hover:tw-bg-transparent"
+                    onClick={() => removeType(type)}
+                  >
+                    <X className="tw-h-3 tw-w-3" />
+                  </Button>
                 </Badge>
               ))}
             </div>
@@ -456,13 +459,20 @@ export default function ResourceManager() {
                   <Badge
                     key={language}
                     variant="muted"
-                    className="tw-flex tw-cursor-pointer tw-items-center tw-gap-1"
+                    className="tw-flex tw-items-center tw-gap-1"
                     onClick={() => removeLanguage(language)}
                   >
                     {langInfo?.starred && <Star className="tw-h-3 tw-w-3" />}
                     {langInfo?.label}
 
-                    <X className="tw-h-3 tw-w-3" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="tw-h-4 tw-w-4 tw-p-0 hover:tw-bg-transparent"
+                      onClick={() => removeLanguage(language)}
+                    >
+                      <X className="tw-h-3 tw-w-3" />
+                    </Button>
                   </Badge>
                 );
               })}
