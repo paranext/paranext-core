@@ -547,7 +547,9 @@ export default function ResourceManager() {
                 onClick={(e) => {
                   setSelectedTypes(types.map((t) => t.value));
                   setSelectedLanguages([]);
-                  (e.target as HTMLButtonElement).closest('dialog')?.close();
+                  if (e.target instanceof Element) {
+                    e.target.closest('dialog')?.close();
+                  }
                 }}
               >
                 Show all results
