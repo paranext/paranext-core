@@ -27,32 +27,23 @@ export type ComboBoxProps<T> = {
    * The selected value(s) that the combo box currently holds. Must be shallow equal to one or more
    * of the options entries.
    */
-  value?: T | T[];
+  value?: T;
   /** Triggers when content of textfield is changed */
   onChange?: (newValue: T) => void;
   /** Used to determine the string value for a given option. */
   getOptionLabel?: (option: ComboBoxOption) => string;
-  /** Icon to be displayed on the button */
-  buttonIcon?: ReactNode;
+  /** Icon to be displayed on the trigger */
+  icon?: ReactNode;
   /** Text displayed on button if `value` is undefined */
   buttonPlaceholder?: string;
   /** Placeholder text for text field */
   textPlaceholder?: string;
-  /**
-   * Normally the selected value, if any, will be shown on the button. Enable this if you always
-   * want the button to show placeholder text
-   */
-  alwaysShowPlaceholderOnButton?: boolean;
-  /** Allows hiding of the Chevrons on the right of the button */
-  hideChevrons?: boolean;
   /** Text to display when no options match input */
   commandEmptyMessage?: string;
   /** Variant of button */
   buttonVariant?: ButtonProps['variant'];
-  /** Option boolean to set if popover should stay open after clicking an entry */
-  keepOpen?: boolean;
-  /** Control how the popover menu should be aligned. Defaults to center */
-  alignMenu?: 'start' | 'center' | 'end';
+  /** Control how the popover menu should be aligned. Defaults to start */
+  alignDropDown?: 'start' | 'center' | 'end';
   /** Text direction ltr or rtl */
   dir?: Direction;
   /** Optional boolean to set if trigger should be disabled */
@@ -71,19 +62,6 @@ function getOptionLabelDefault(option: ComboBoxOption): string {
   return option.label;
 }
 
-function getButtonLabel<T extends ComboBoxOption>(
-  value: T | T[] | undefined,
-  buttonPlaceholder: string,
-  getOptionLabel: (option: ComboBoxOption) => string,
-): string {
-  if (!value) return buttonPlaceholder;
-  if (Array.isArray(value)) {
-    if (value.length === 0) return buttonPlaceholder;
-    return value.map((entry) => getOptionLabel(entry)).join(', ');
-  }
-  return getOptionLabel(value);
-}
-
 /**
  * Autocomplete input and command palette with a list of suggestions.
  *
@@ -97,15 +75,12 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   value,
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
-  buttonIcon = undefined,
+  icon = undefined,
   buttonPlaceholder = '',
   textPlaceholder = '',
-  alwaysShowPlaceholderOnButton = false,
-  hideChevrons = false,
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
-  keepOpen = false,
-  alignMenu = 'center',
+  alignDropDown = 'start',
   dir = 'ltr',
   isDisabled = false,
   ...props
@@ -127,19 +102,16 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           disabled={isDisabled}
         >
           <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
-            {buttonIcon && <div className="tw-pr-2">{buttonIcon}</div>}
+            {icon && <div className="tw-pr-2">{icon}</div>}
             <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
-              {alwaysShowPlaceholderOnButton
-                ? buttonPlaceholder
-                : getButtonLabel(value, buttonPlaceholder, getOptionLabel)}
+              {value ? getOptionLabel(value) : buttonPlaceholder}
             </span>
           </div>
-          {!hideChevrons && (
-            <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
-          )}
+
+          <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align={alignMenu} className="tw-w-[200px] tw-p-0" dir={dir}>
+      <PopoverContent align={alignDropDown} className="tw-w-[200px] tw-p-0" dir={dir}>
         <Command>
           <CommandInput dir={dir} placeholder={textPlaceholder} className="tw-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
@@ -150,14 +122,12 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
                 value={getOptionLabel(option)}
                 onSelect={() => {
                   onChange(option);
-                  setOpen(keepOpen);
+                  setOpen(false);
                 }}
               >
                 <Check
                   className={cn('tw-me-2 tw-h-4 tw-w-4', {
-                    'tw-opacity-0': Array.isArray(value)
-                      ? !value.includes(option)
-                      : !value || getOptionLabel(value) !== getOptionLabel(option),
+                    'tw-opacity-0': !value || getOptionLabel(value) !== getOptionLabel(option),
                   })}
                 />
                 {getOptionLabel(option)}

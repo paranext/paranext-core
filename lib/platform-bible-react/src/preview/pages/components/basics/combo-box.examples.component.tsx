@@ -7,19 +7,7 @@ export default function ComboBoxExamples({ direction }: HasDirection) {
   const [comboBox1Value, setComboBox1Value] = useState<string | undefined>(undefined);
   const [comboBox2Value, setComboBox2Value] = useState<string | undefined>(undefined);
   const [comboBox3Value, setComboBox3Value] = useState<string | undefined>(undefined);
-  const [comboBox4Value, setComboBox4Value] = useState<string[] | undefined>(undefined);
-
-  const handleComboBox4Change = (newValue: string) => {
-    setComboBox4Value((prevValue) => {
-      if (!prevValue || prevValue.length === 0) {
-        return [newValue];
-      }
-
-      return prevValue.includes(newValue)
-        ? prevValue.filter((value) => value !== newValue)
-        : [...prevValue, newValue];
-    });
-  };
+  const [comboBox4Value, setComboBox4Value] = useState<string | undefined>(undefined);
 
   return (
     <div className="tw-space-y-4">
@@ -52,7 +40,7 @@ export default function ComboBoxExamples({ direction }: HasDirection) {
         />
       </div>
       <div>
-        <p>Popover can stay open after selecting entry</p>
+        <p>An icon can be shown on the trigger button</p>
         <ComboBox
           dir={direction}
           options={[
@@ -65,25 +53,25 @@ export default function ComboBoxExamples({ direction }: HasDirection) {
           commandEmptyMessage="Empty Message"
           value={comboBox3Value}
           onChange={setComboBox3Value}
-          keepOpen
+          icon={<BookOpen />}
         />
       </div>
       <div>
-        <p>Combobox with multi-select</p>
+        <p>Alignment of dropdown menu can be controlled</p>
         <ComboBox
-          className="tw-w-30"
           dir={direction}
-          options={['Option1', 'Option2', 'Option3']}
-          textPlaceholder="Text Placeholder"
-          buttonPlaceholder="Select"
-          buttonIcon={<BookOpen />}
+          options={[
+            '08/24/24 05:50PM - Revision author',
+            '08/24/24 05:30PM - Revision author',
+            '08/24/24 05:45PM - Revision author',
+          ]}
+          textPlaceholder="Select revision ..."
+          buttonPlaceholder="Select revision ..."
           commandEmptyMessage="Empty Message"
           value={comboBox4Value}
-          onChange={handleComboBox4Change}
-          keepOpen
-          hideChevrons
-          alwaysShowPlaceholderOnButton
-          alignMenu="start"
+          onChange={setComboBox4Value}
+          className="tw-w-[400px]"
+          alignDropDown="end"
         />
       </div>
     </div>

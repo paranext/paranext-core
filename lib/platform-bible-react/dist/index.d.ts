@@ -672,32 +672,23 @@ export type ComboBoxProps<T> = {
 	 * The selected value(s) that the combo box currently holds. Must be shallow equal to one or more
 	 * of the options entries.
 	 */
-	value?: T | T[];
+	value?: T;
 	/** Triggers when content of textfield is changed */
 	onChange?: (newValue: T) => void;
 	/** Used to determine the string value for a given option. */
 	getOptionLabel?: (option: ComboBoxOption) => string;
-	/** Icon to be displayed on the button */
-	buttonIcon?: React$1.ReactNode;
+	/** Icon to be displayed on the trigger */
+	icon?: React$1.ReactNode;
 	/** Text displayed on button if `value` is undefined */
 	buttonPlaceholder?: string;
 	/** Placeholder text for text field */
 	textPlaceholder?: string;
-	/**
-	 * Normally the selected value, if any, will be shown on the button. Enable this if you always
-	 * want the button to show placeholder text
-	 */
-	alwaysShowPlaceholderOnButton?: boolean;
-	/** Allows hiding of the Chevrons on the right of the button */
-	hideChevrons?: boolean;
 	/** Text to display when no options match input */
 	commandEmptyMessage?: string;
 	/** Variant of button */
 	buttonVariant?: ButtonProps["variant"];
-	/** Option boolean to set if popover should stay open after clicking an entry */
-	keepOpen?: boolean;
-	/** Control how the popover menu should be aligned. Defaults to center */
-	alignMenu?: "start" | "center" | "end";
+	/** Control how the popover menu should be aligned. Defaults to start */
+	alignDropDown?: "start" | "center" | "end";
 	/** Text direction ltr or rtl */
 	dir?: Direction;
 	/** Optional boolean to set if trigger should be disabled */
@@ -710,7 +701,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonIcon, buttonPlaceholder, textPlaceholder, alwaysShowPlaceholderOnButton, hideChevrons, commandEmptyMessage, buttonVariant, keepOpen, alignMenu, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -909,8 +900,10 @@ export type SearchBarProps = {
 	placeholder?: string;
 	/** Optional boolean to set the input base to full width */
 	isFullWidth?: boolean;
+	/** ClassName for the input */
+	className?: string;
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {
