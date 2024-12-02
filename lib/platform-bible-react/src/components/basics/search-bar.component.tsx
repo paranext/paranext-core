@@ -2,6 +2,7 @@ import { Input } from '@/components/shadcn-ui/input';
 import { cn } from '@/utils/shadcn-ui.util';
 import { useState } from 'react';
 
+/** Props for the SearchBar component. */
 export type SearchBarProps = {
   className?: string;
   /**

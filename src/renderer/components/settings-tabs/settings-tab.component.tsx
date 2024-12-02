@@ -41,6 +41,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_sidebar_extensionsLabel%',
   '%settings_sidebar_projectsLabel%',
   '%settings_sidebar_projectsComboBoxPlaceholder%',
+  '%settings_defaultMessage_noSettings%',
 ];
 
 export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
@@ -182,7 +183,10 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
       </div>
     );
 
-  if (!settingsContributions) return <div className="settings-tab">No Settings</div>;
+  if (!settingsContributions)
+    return (
+      <div className="settings-tab">{localizedStrings['%settings_defaultMessage_noSettings%']}</div>
+    );
 
   return (
     <div className="settings-tab">

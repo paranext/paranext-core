@@ -8,16 +8,12 @@ export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
     /** Optional id for testing */
     id?: string;
 
-    /** Text direction ltr or rtl */
-    direction?: 'ltr' | 'rtl';
-
     /** Handler to run when the value of the search bar changes */
     onSearch: (searchQuery: string) => void;
   };
 
 export default function SettingsSidebarContentSearch({
   id,
-  direction = 'ltr',
   extensionLabels,
   projectOptions,
   children,
@@ -26,7 +22,7 @@ export default function SettingsSidebarContentSearch({
   onSearch,
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
-  buttonPlaceholder,
+  buttonPlaceholderText,
 }: SettingsSidebarContentSearchProps) {
   return (
     <div className="tw-box-border tw-flex tw-h-full tw-flex-col tw-p-3">
@@ -37,11 +33,7 @@ export default function SettingsSidebarContentSearch({
           placeholder="Search app settings, extension settings, and project settings"
         />
       </div>
-      <SidebarProvider
-        dir={direction}
-        id={id}
-        className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto"
-      >
+      <SidebarProvider id={id} className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto">
         <SettingsSidebar
           extensionLabels={extensionLabels}
           projectOptions={projectOptions}
@@ -49,7 +41,7 @@ export default function SettingsSidebarContentSearch({
           selectedSidebarItem={selectedSidebarItem}
           extensionsSidebarGroupLabel={extensionsSidebarGroupLabel}
           projectsSidebarGroupLabel={projectsSidebarGroupLabel}
-          buttonPlaceholder={buttonPlaceholder}
+          buttonPlaceholderText={buttonPlaceholderText}
         />
         <SidebarInset className="tw-overflow-y-auto">{children}</SidebarInset>
       </SidebarProvider>

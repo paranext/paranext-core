@@ -43,7 +43,7 @@ export {
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
-  type ProjectOptions,
+  type ProjectInfo as ProjectOptions,
   type SelectedSettingsSidebarItem,
 } from './components/advanced/settings-components/settings-sidebar.component';
 export { default as SettingsSidebarContentSearch } from './components/advanced/settings-components/settings-sidebar-content-search.component';

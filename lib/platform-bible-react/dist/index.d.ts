@@ -436,7 +436,7 @@ export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
 };
-export type ProjectOptions = {
+type ProjectInfo = {
 	projectId: string;
 	projectName: string;
 };
@@ -446,7 +446,7 @@ export type SettingsSidebarProps = {
 	/** Extension labels from contribution */
 	extensionLabels: string[];
 	/** Project names and ids */
-	projectOptions: ProjectOptions[];
+	projectOptions: ProjectInfo[];
 	/** Handler for selecting a sidebar item */
 	handleSelectSidebarItem: (key: string, projectId?: string) => void;
 	/** The current selected value in the sidebar */
@@ -455,19 +455,17 @@ export type SettingsSidebarProps = {
 	extensionsSidebarGroupLabel: string;
 	/** Label for the group of projects settings */
 	projectsSidebarGroupLabel: string;
-	/** Placeholder for the button */
-	buttonPlaceholder: string;
+	/** Placeholder text for the button */
+	buttonPlaceholderText: string;
 };
-export function SettingsSidebar({ id, extensionLabels, projectOptions, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholder, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebar({ id, extensionLabels, projectOptions, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;
-	/** Text direction ltr or rtl */
-	direction?: "ltr" | "rtl";
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
 };
-export function SettingsSidebarContentSearch({ id, direction, extensionLabels, projectOptions, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholder, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebarContentSearch({ id, extensionLabels, projectOptions, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -923,6 +921,7 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
+/** Props for the SearchBar component. */
 export type SearchBarProps = {
 	className?: string;
 	/**
@@ -1507,6 +1506,7 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 export declare function cn(...inputs: ClassValue[]): string;
 
 export {
+	ProjectInfo as ProjectOptions,
 	TabNavigationContentSearch as NavigationContentSearch,
 	sonner,
 };

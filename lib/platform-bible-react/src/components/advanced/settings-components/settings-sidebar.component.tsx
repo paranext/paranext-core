@@ -17,7 +17,7 @@ export type SelectedSettingsSidebarItem = {
   projectId?: string;
 };
 
-export type ProjectOptions = { projectId: string; projectName: string };
+export type ProjectInfo = { projectId: string; projectName: string };
 
 export type SettingsSidebarProps = {
   /** Optional id for testing */
@@ -27,7 +27,7 @@ export type SettingsSidebarProps = {
   extensionLabels: string[];
 
   /** Project names and ids */
-  projectOptions: ProjectOptions[];
+  projectOptions: ProjectInfo[];
 
   /** Handler for selecting a sidebar item */
   handleSelectSidebarItem: (key: string, projectId?: string) => void;
@@ -41,8 +41,8 @@ export type SettingsSidebarProps = {
   /** Label for the group of projects settings */
   projectsSidebarGroupLabel: string;
 
-  /** Placeholder for the button */
-  buttonPlaceholder: string;
+  /** Placeholder text for the button */
+  buttonPlaceholderText: string;
 };
 
 export default function SettingsSidebar({
@@ -53,7 +53,7 @@ export default function SettingsSidebar({
   selectedSidebarItem,
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
-  buttonPlaceholder,
+  buttonPlaceholderText,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
     (item: string, projectId?: string) => {
@@ -96,7 +96,7 @@ export default function SettingsSidebar({
                       'tw-rounded tw-py-2 tw-text-sm tw-text-gray-500 hover:tw-bg-white hover:tw-text-gray-900 hover:tw-shadow-sm active:tw-bg-white',
                       { 'tw-bg-white tw-text-gray-900 tw-shadow-sm': getIsActive(label) },
                     )}
-                    onClick={() => handleSelectItem(label, undefined)}
+                    onClick={() => handleSelectItem(label)}
                     isActive={getIsActive(label)}
                   >
                     <span className="tw-pl-3">{label}</span>
@@ -119,7 +119,7 @@ export default function SettingsSidebar({
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
                 return getProjectNameFromProjectId(projectId as string);
               }}
-              buttonPlaceholder={buttonPlaceholder}
+              buttonPlaceholder={buttonPlaceholderText}
               onChange={(projectId: string) => {
                 const selectedProjectName = getProjectNameFromProjectId(projectId);
                 handleSelectItem(selectedProjectName, projectId);

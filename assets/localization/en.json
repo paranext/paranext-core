@@ -51,6 +51,7 @@
   "%selectProject_title%": "Select Project",
   "%settings_defaultMessage_loadingOneSetting%": "Loading setting",
   "%settings_defaultMessage_loadingSettings%": "Loading settings...",
+  "%settings_defaultMessage_noSettings%": "No settings",
   "%settings_defaultMessage_noSettingComponent%": "No setting component",
   "%settings_defaultMessage_noSettingsForThisProject%": "No settings available for this project.",
   "%settings_defaultSearchText_searchProject%": "Search Project Settings...",
