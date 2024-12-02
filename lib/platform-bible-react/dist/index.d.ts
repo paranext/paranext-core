@@ -896,8 +896,10 @@ export type SearchBarProps = {
 	placeholder?: string;
 	/** Optional boolean to set the input base to full width */
 	isFullWidth?: boolean;
+	/** ClassName for the input */
+	className?: string;
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {
