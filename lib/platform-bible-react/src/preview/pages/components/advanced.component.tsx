@@ -73,6 +73,9 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Multi-select Combo Box">
+            Multi-select Combo Box
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Navigation Content Search">
             Navigation Content Search
           </VerticalTabsTrigger>
@@ -125,6 +128,10 @@ function Compositions({ direction }: HasDirection) {
               <MarketplaceExamples />
             </VerticalTabsContent>
           </VerticalTabs>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Multi-select Combo Box">
+          {`Check the 'Get Resources' example layout to see the Multi-select Combo Box in action`}
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Result List">

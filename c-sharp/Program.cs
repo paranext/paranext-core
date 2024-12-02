@@ -16,6 +16,14 @@ public static class Program
         Console.WriteLine("Paranext data provider starting up");
         Thread.CurrentThread.Name = "Main";
 
+        // Turn on additional logging to help diagnose failures on macOS
+        if (OperatingSystem.IsMacOS())
+        {
+            System.Diagnostics.Trace.Listeners.Add(new System.Diagnostics.ConsoleTraceListener());
+            System.Diagnostics.Trace.AutoFlush = true;
+            System.Diagnostics.Trace.WriteLine("Trace logging enabled");
+        }
+
         using PapiClient papi = new();
         try
         {

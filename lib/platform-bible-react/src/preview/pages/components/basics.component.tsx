@@ -7,6 +7,7 @@ import {
 } from '@/components/basics/tabs-vertical';
 import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import ExampleAlerts from './basics/alert.examples.component';
+import BadgeExamples from './basics/badge.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
 import ChapterRangeSelectorExample from './basics/chapter-range-example.component';
@@ -32,6 +33,7 @@ function Basics({ direction }: HasDirection) {
       <VerticalTabs defaultValue="Button" dir={direction}>
         <VerticalTabsList>
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Badge">Badge</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Chapter Range Selector">
@@ -56,6 +58,10 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Alert">
           <ExampleAlerts />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Badge">
+          <BadgeExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Button">

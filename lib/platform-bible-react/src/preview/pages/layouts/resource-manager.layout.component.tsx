@@ -384,10 +384,12 @@ export default function GetResourcesExample() {
             </DialogHeader>
             <DialogFooter>
               <Button
-                onClick={(e) => {
+                onClick={(e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
                   setSelectedTypes(types.map((t) => t.value));
                   setSelectedLanguages([]);
-                  (e.target as HTMLButtonElement).closest('dialog')?.close();
+                  if (e.target instanceof Element) {
+                    e.target.closest('dialog')?.close();
+                  }
                 }}
               >
                 Show all results
