@@ -29,7 +29,7 @@ interface MultiSelectComboboxProps {
   icon?: ReactNode;
 }
 
-function MultiSelectCombobox({
+function MultiSelectComboBox({
   options,
   selected,
   onChange,
@@ -135,4 +135,4 @@ function MultiSelectCombobox({
   );
 }
 
-export default MultiSelectCombobox;
+export default MultiSelectComboBox;
