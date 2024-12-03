@@ -216,10 +216,10 @@ Platform.Bible WebViews must be treated differently than other code, so this pro
 
 ### Built-in Tailwind CSS support
 
-This project is equipped with [Tailwind CSS](https://tailwindcss.com/) configured the same way it is configured in Platform.Bible's React component library `platform-bible-react` to enable WebViews to match Platform.Bible's look and feel. To add Tailwind CSS to your WebView, simply import your extension's `./src/tailwind.css` file into your WebView's style `.scss` file (note that you should not add the `.css` extension when importing local CSS files into `.scss` files):
+This project is equipped with [Tailwind CSS](https://tailwindcss.com/) configured the same way it is configured in Platform.Bible's React component library `platform-bible-react` to enable WebViews to match Platform.Bible's look and feel. To add Tailwind CSS to your WebView, simply use your extension's `./src/tailwind.css` file in your WebView's style `.scss` file (note that you should not add the `.css` extension when using local CSS files into `.scss` files):
 
 ```scss
-@import './path/to/src/tailwind';
+@use './path/to/src/tailwind';
 ```
 
 Adding this import to your WebView's styles enables Tailwind CSS in the WebView. Alternatively, you can directly use `./src/tailwind.css` as your WebView's style file if you do not need any additional CSS. Important Tailwind configuration notes:
