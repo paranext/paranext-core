@@ -58,6 +58,8 @@ declare module 'papi-shared-types' {
     'platform.quit': () => Promise<void>;
     /** Restart the application */
     'platform.restart': () => Promise<void>;
+    /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
+    'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
