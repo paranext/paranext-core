@@ -1,19 +1,17 @@
-import { Button } from '@/components/shadcn-ui/button';
 import {
   Sidebar,
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarInset,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
   SidebarRail,
+  SidebarTrigger,
 } from '@/components/shadcn-ui/sidebar';
-import { Slider, Switch } from '@/index';
 import { useState } from 'react';
 
 type SidebarExamplesProps = {
@@ -23,48 +21,39 @@ type SidebarExamplesProps = {
 export default function SidebarExamples({ direction = 'ltr' }: SidebarExamplesProps) {
   const [sidebarSelection, setSidebarSelection] = useState('button');
 
-  function renderSidebarContent() {
-    switch (sidebarSelection) {
-      case 'button':
-        return <Button>This is a button</Button>;
-      case 'switch':
-        return <Switch />;
-      case 'slider':
-        return <Slider />;
-      default:
-        return <p>No content</p>;
-    }
-  }
+  const sidebarItems: { [title: string]: string } = {
+    Home: 'This is the Home page',
+    Inbox: 'This is the Inbox page',
+    Calendar: 'This is the Calendar page',
+    Search: 'This is the Search page',
+    Settings: 'This is the Settings page',
+  };
 
   return (
     <SidebarProvider dir={direction}>
-      <Sidebar collapsible="offcanvas" variant="sidebar">
-        <SidebarHeader>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <span className="font-semibold">Example Sidebar</span>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
+      <Sidebar>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>Components</SidebarGroupLabel>
+            <SidebarGroupLabel>Application</SidebarGroupLabel>
             <SidebarGroupContent>
-              <SidebarMenuButton variant="default" onClick={() => setSidebarSelection('button')}>
-                Button
-              </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => setSidebarSelection('slider')}>
-                Slider
-              </SidebarMenuButton>
-              <SidebarMenuButton onClick={() => setSidebarSelection('switch')}>
-                Switch
-              </SidebarMenuButton>
+              <SidebarMenu>
+                {Object.keys(sidebarItems).map((item) => (
+                  <SidebarMenuItem key={item}>
+                    <SidebarMenuButton onClick={() => setSidebarSelection(item)}>
+                      {item}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
         <SidebarRail />
       </Sidebar>
-      <SidebarInset>{renderSidebarContent()}</SidebarInset>
+      <SidebarInset>
+        <SidebarTrigger />
+        {sidebarItems[sidebarSelection]}
+      </SidebarInset>
     </SidebarProvider>
   );
 }

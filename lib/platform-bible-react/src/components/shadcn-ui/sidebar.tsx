@@ -6,7 +6,6 @@ import { PanelLeft } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { Separator } from '@/components/shadcn-ui/separator';
-import { Sheet, SheetContent } from '@/components/shadcn-ui/sheet';
 import { Skeleton } from '@/components/shadcn-ui/skeleton';
 import {
   Tooltip,
@@ -14,13 +13,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import useIsMobile from '@/components/hooks/use-mobile';
 import { cn } from '@/utils/shadcn-ui.util';
 
-const SIDEBAR_COOKIE_NAME = 'sidebar:state';
-const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
+/**
+ * Changes from the original code from Shadcn- Removed uses of useIsMobile, Sheet, and SheetContent.
+ * Also removed the parts setting COOKIES.
+ */
+
 const SIDEBAR_WIDTH = '16rem';
-const SIDEBAR_WIDTH_MOBILE = '18rem';
 const SIDEBAR_WIDTH_ICON = '3rem';
 const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
@@ -28,9 +28,6 @@ type SidebarContextProps = {
   state: 'expanded' | 'collapsed';
   open: boolean;
   setOpen: (open: boolean) => void;
-  openMobile: boolean;
-  setOpenMobile: (open: boolean) => void;
-  isMobile: boolean;
   toggleSidebar: () => void;
 };
 
@@ -65,9 +62,6 @@ const SidebarProvider = React.forwardRef<
     },
     ref,
   ) => {
-    const isMobile = useIsMobile();
-    const [openMobile, setOpenMobile] = React.useState(false);
-
     // This is the internal state of the sidebar.
     // We use openProp and setOpenProp for control from outside the component.
     const [_open, _setOpen] = React.useState(defaultOpen);
@@ -80,17 +74,14 @@ const SidebarProvider = React.forwardRef<
         } else {
           _setOpen(openState);
         }
-
-        // This sets the cookie to keep the sidebar state.
-        document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`;
       },
       [setOpenProp, isOpen],
     );
 
     // Helper to toggle the sidebar.
     const toggleSidebar = React.useCallback(() => {
-      return isMobile ? setOpenMobile((open) => !open) : setOpen((open) => !open);
-    }, [isMobile, setOpen, setOpenMobile]);
+      return setOpen((open) => !open);
+    }, [setOpen]);
 
     // Adds a keyboard shortcut to toggle the sidebar.
     React.useEffect(() => {
@@ -114,12 +105,9 @@ const SidebarProvider = React.forwardRef<
         state,
         open: isOpen,
         setOpen,
-        isMobile,
-        openMobile,
-        setOpenMobile,
         toggleSidebar,
       }),
-      [state, isOpen, setOpen, isMobile, openMobile, setOpenMobile, toggleSidebar],
+      [state, isOpen, setOpen, toggleSidebar],
     );
 
     return (
@@ -170,7 +158,7 @@ const Sidebar = React.forwardRef<
     },
     ref,
   ) => {
-    const { isMobile, state, openMobile, setOpenMobile } = useSidebar();
+    const { state } = useSidebar();
 
     if (collapsible === 'none') {
       return (
@@ -184,27 +172,6 @@ const Sidebar = React.forwardRef<
         >
           {children}
         </div>
-      );
-    }
-
-    if (isMobile) {
-      return (
-        <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
-          <SheetContent
-            data-sidebar="sidebar"
-            data-mobile="true"
-            className="tw-w-[--sidebar-width] tw-bg-sidebar tw-p-0 tw-text-sidebar-foreground [&>button]:tw-hidden"
-            style={
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              {
-                '--sidebar-width': SIDEBAR_WIDTH_MOBILE,
-              } as React.CSSProperties
-            }
-            side={side}
-          >
-            <div className="tw-flex tw-h-full tw-w-full tw-flex-col">{children}</div>
-          </SheetContent>
-        </Sheet>
       );
     }
 
@@ -545,7 +512,7 @@ const SidebarMenuButton = React.forwardRef<
     ref,
   ) => {
     const Comp = asChild ? Slot : 'button';
-    const { isMobile, state } = useSidebar();
+    const { state } = useSidebar();
 
     const button = (
       <Comp
@@ -572,12 +539,7 @@ const SidebarMenuButton = React.forwardRef<
     return (
       <Tooltip>
         <TooltipTrigger asChild>{button}</TooltipTrigger>
-        <TooltipContent
-          side="right"
-          align="center"
-          hidden={state !== 'collapsed' || isMobile}
-          {...tooltip}
-        />
+        <TooltipContent side="right" align="center" hidden={state !== 'collapsed'} {...tooltip} />
       </Tooltip>
     );
   },
