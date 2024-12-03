@@ -700,6 +700,8 @@ export type ComboBoxProps<T> = {
 	/** Text label title for combobox */
 	/** List of available options for the dropdown menu */
 	options?: readonly T[];
+	/** @deprecated 3 December 2024. Renamed to {@link buttonClassName} */
+	className?: string;
 	/** Additional css classes to help with unique styling of the combo box button */
 	buttonClassName?: string;
 	/** Additional css classes to help with unique styling of the combo box popover */

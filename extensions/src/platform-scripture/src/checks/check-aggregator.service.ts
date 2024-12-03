@@ -17,7 +17,7 @@ import {
   ICheckRunner,
   SettableCheckDetails,
 } from 'platform-scripture';
-import { VerseRef } from '@sillsdev/scripture';
+import { Canon, ScrVers, VerseRef } from '@sillsdev/scripture';
 import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
 import {
   aggregateProjectIdsByCheckId,
@@ -130,6 +130,32 @@ class CheckAggregatorDataProviderEngine
     ranges: CheckInputRange[],
   ): Promise<DataProviderUpdateInstructions<CheckAggregatorDataTypes>> {
     if (!subscriptionId) return false;
+
+    // Fix problems when range objects are VerseRefs but not working as expected
+    ranges.forEach((range) => {
+      if (!(range.start instanceof VerseRef)) {
+        // TS says range.start is of type "never", but treat it as a VerseRef with the wrong prototype
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const start = range.start as VerseRef;
+        range.start = new VerseRef(
+          Canon.bookIdToNumber(start.book),
+          start.chapterNum,
+          start.verseNum,
+          start.versificationStr ? new ScrVers(start.versificationStr) : undefined,
+        );
+      }
+      if (range.end && !(range.end instanceof VerseRef)) {
+        // TS says range.end is of type "never", but treat it as a VerseRef with the wrong prototype
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const end = range.end as VerseRef;
+        range.end = new VerseRef(
+          Canon.bookIdToNumber(end.book),
+          end.chapterNum,
+          end.verseNum,
+          end.versificationStr ? new ScrVers(end.versificationStr) : undefined,
+        );
+      }
+    });
 
     // Update the subscription
     this.findSubscription(subscriptionId).ranges = ranges;
