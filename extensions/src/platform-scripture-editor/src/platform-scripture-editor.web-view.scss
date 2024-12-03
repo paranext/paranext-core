@@ -1,7 +1,7 @@
-@import './usj-nodes';
-@import './commenting';
-@import './editor';
-@import './editor-overrides';
+@use './usj-nodes';
+@use './commenting';
+@use './editor';
+@use './editor-overrides';
 
 body {
   background-color: hsl(var(--background));

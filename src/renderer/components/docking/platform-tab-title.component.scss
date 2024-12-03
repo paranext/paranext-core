@@ -1,4 +1,4 @@
-@import '../../styles/vars';
+@use '../../styles/vars';
 
 .title {
   display: flex;
@@ -7,14 +7,14 @@
 
 .tab-menu-icon {
   margin: 0;
-  margin-right: $space--xs;
+  margin-right: vars.$space--xs;
   padding: 0;
   border: 0;
   background: transparent;
   background-image: url('/assets/icon.png');
   background-size: 100%;
-  width: $space--m;
-  height: $space--m;
+  width: vars.$space--m;
+  height: vars.$space--m;
   vertical-align: middle;
 }
 
