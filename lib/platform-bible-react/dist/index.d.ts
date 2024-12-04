@@ -1340,6 +1340,44 @@ export interface FooterProps {
  * @returns The rendered Footer component
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
+	"%webView_uiLanguageSelector_selectFallbackLanguages%"
+];
+export type UiLanguageSelectorLocalizedStrings = {
+	[localizedInventoryKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+export type LanguageInfo = {
+	/** IETF BCP-47 language tag */
+	tag: string;
+	/** The name of the language to be displayed (in its native script) */
+	autonym: string;
+	/**
+	 * The name of the language in other languages, so that the language can also be displayed in the
+	 * current UI language, if known.
+	 */
+	uiNames?: Record<string, string>;
+	/**
+	 * Other known names of the language (for searching). This can include pejorative names and should
+	 * never be displayed unless typed by the user.
+	 */
+	otherNames?: string[];
+};
+export type UiLanguageSelectorProps = {
+	/** Full list of known languages to display. */
+	knownUiLanguages: LanguageInfo[];
+	/** IETF BCP-47 language tag of the current primary UI language. `undefined` => 'en' */
+	primaryLanguage: LanguageInfo | undefined;
+	/**
+	 * Ordered list of fallback language tags to use if the localization key can't be found in the
+	 * current primary UI language. This list never contains English because it is the ultimate
+	 * fallback.
+	 */
+	fallbackLanguages: LanguageInfo[] | undefined;
+	handlePrimaryLanguageChange: (newUiLanguage: string) => void;
+	handleFallbackLanguagesChange: (newFallbackLanguages: string[]) => void;
+	localizedStrings: UiLanguageSelectorLocalizedStrings;
+};
+export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, handlePrimaryLanguageChange, handleFallbackLanguagesChange, localizedStrings, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

@@ -136,7 +136,11 @@ export {
   type VersionHistoryType,
 } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
-
+export {
+  default as UiLanguageSelector,
+  type LanguageInfo,
+  type UiLanguageSelectorProps,
+} from './components/advanced/ui-language-selector.component';
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';

@@ -19,6 +19,7 @@ import InventoryExample from './advanced/inventory-example.component';
 import SettingsListExamples from './advanced/settings-list.examples.component';
 import BookSelectorExample from './advanced/book-selector-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
+import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
 
 function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -82,6 +83,9 @@ function Compositions({ direction }: HasDirection) {
             Scroll Group Selector
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="UI Language Selector">
+            UI Language Selector
+          </VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
@@ -91,6 +95,10 @@ function Compositions({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Book Selector">
           <BookSelectorExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="UI Language Selector">
+          <UiLanguageSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Scroll Group Selector">
