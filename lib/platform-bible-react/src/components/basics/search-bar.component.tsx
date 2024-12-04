@@ -4,6 +4,7 @@ import { useState } from 'react';
 
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
+  /** Additional css classes to help with unique styling of the search bar */
   className?: string;
   /**
    * Callback fired to handle the search query when button pressed

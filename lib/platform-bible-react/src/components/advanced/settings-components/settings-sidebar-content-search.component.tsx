@@ -15,7 +15,7 @@ export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
 export default function SettingsSidebarContentSearch({
   id,
   extensionLabels,
-  projectOptions,
+  projectInfo,
   children,
   handleSelectSidebarItem,
   selectedSidebarItem,
@@ -36,7 +36,7 @@ export default function SettingsSidebarContentSearch({
       <SidebarProvider id={id} className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto">
         <SettingsSidebar
           extensionLabels={extensionLabels}
-          projectOptions={projectOptions}
+          projectInfo={projectInfo}
           handleSelectSidebarItem={handleSelectSidebarItem}
           selectedSidebarItem={selectedSidebarItem}
           extensionsSidebarGroupLabel={extensionsSidebarGroupLabel}

@@ -27,7 +27,7 @@ export type SettingsSidebarProps = {
   extensionLabels: string[];
 
   /** Project names and ids */
-  projectOptions: ProjectInfo[];
+  projectInfo: ProjectInfo[];
 
   /** Handler for selecting a sidebar item */
   handleSelectSidebarItem: (key: string, projectId?: string) => void;
@@ -48,7 +48,7 @@ export type SettingsSidebarProps = {
 export default function SettingsSidebar({
   id,
   extensionLabels,
-  projectOptions,
+  projectInfo,
   handleSelectSidebarItem,
   selectedSidebarItem,
   extensionsSidebarGroupLabel,
@@ -64,10 +64,10 @@ export default function SettingsSidebar({
 
   const getProjectNameFromProjectId = useCallback(
     (projectId: string) => {
-      const project = projectOptions.find((option) => option.projectId === projectId);
+      const project = projectInfo.find((info) => info.projectId === projectId);
       return project ? project.projectName : projectId;
     },
-    [projectOptions],
+    [projectInfo],
   );
 
   const getIsActive: (label: string) => boolean = useCallback(
@@ -113,7 +113,7 @@ export default function SettingsSidebar({
           <SidebarGroupContent className="tw-pl-3">
             <ComboBox
               popoverContentClassName="tw-z-[1000]"
-              options={projectOptions.flatMap((option) => option.projectId)}
+              options={projectInfo.flatMap((info) => info.projectId)}
               getOptionLabel={(projectId: ComboBoxOption) => {
                 // This function expects a ComboBoxOption, but we know it is a string
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
