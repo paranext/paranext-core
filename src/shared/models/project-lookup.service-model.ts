@@ -19,6 +19,7 @@ import {
   slice,
   transformAndEnsureRegExpArray,
   transformAndEnsureRegExpRegExpArray,
+  wait,
 } from 'platform-bible-utils';
 
 export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
@@ -335,6 +336,17 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
 // #region Project Lookup Service utility functions
 
 /**
+ * How long since start of the current process to count as time that the PDPFs possibly still
+ * haven't all started up
+ */
+const LOAD_TIME_GRACE_PERIOD_MS = 30 * 1000;
+/**
+ * How long to wait in-between attempts to get project metadata during the time since the current
+ * process started
+ */
+const GRACE_PERIOD_WAIT_TIME_MS = 5 * 1000;
+
+/**
  * Note: If there are multiple PDPs available whose metadata matches the conditions provided by the
  * parameters, their project metadata will all be combined, so all available `projectInterface`s
  * provided by the PDP Factory with the matching id (or all PDP Factories if no id is specified) for
@@ -353,7 +365,7 @@ async function internalGetMetadata(
     excludePdpFactoryIds,
   } = ensurePopulatedMetadataFilter(options);
 
-  // Get all registered PDP factories
+  // Get all registered PDP factories and filter down to just the included ones
   const networkObjects = await networkObjectStatusService.getAllNetworkObjectDetails();
   const pdpFactoryIds = Object.keys(networkObjects)
     .filter((pdpfNetworkObjectName) => {
@@ -452,6 +464,31 @@ async function internalGetMetadata(
         includeProjectInterfaces,
         excludeProjectInterfaces,
       ),
+    );
+  }
+
+  // If we're in the first little while of the process, there's a chance not all the PDPFs have
+  // loaded. Let's wait a bit and try again if we got no matching project metadata
+  let retryTimes = 0;
+  while (allProjectsMetadataArray.length === 0 && performance.now() < LOAD_TIME_GRACE_PERIOD_MS) {
+    logger.debug(
+      `Did not find any project metadata around ${performance.now()} for ${JSON.stringify(options)}. Will retry`,
+    );
+    // Intentionally stopping this method execution to wait some time
+    // eslint-disable-next-line no-await-in-loop
+    await wait(GRACE_PERIOD_WAIT_TIME_MS);
+    // Intentionally stopping this method execution to try getting project metadata again
+    // eslint-disable-next-line no-await-in-loop
+    allProjectsMetadataArray = await internalGetMetadata(options);
+    retryTimes += 1;
+    if (allProjectsMetadataArray.length > 0)
+      logger.debug(
+        `Finally found project metadata on retry ${retryTimes} around ${performance.now()} for ${JSON.stringify(options)}! ${JSON.stringify(allProjectsMetadataArray)}`,
+      );
+  }
+  if (allProjectsMetadataArray.length === 0) {
+    logger.warn(
+      `Did not find any project metadata${retryTimes > 0 ? ` on retry ${retryTimes}` : ''} for ${JSON.stringify(options)} after the grace period. If you expected to find projects for these filters, this probably indicates a problem. Maybe not all PDPFs loaded in time.`,
     );
   }
 
@@ -670,6 +707,7 @@ export const testingProjectLookupService = {
   internalGetMetadata,
   compareProjectDataProviderFactoryMetadataInfoMinimalMatch,
   transformGetMetadataForProjectParametersToFilter,
+  LOAD_TIME_GRACE_PERIOD_MS,
 };
 
 // #endregion

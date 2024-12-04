@@ -4111,6 +4111,7 @@ declare module 'shared/models/project-lookup.service-model' {
     internalGetMetadata: typeof internalGetMetadata;
     compareProjectDataProviderFactoryMetadataInfoMinimalMatch: typeof compareProjectDataProviderFactoryMetadataInfoMinimalMatch;
     transformGetMetadataForProjectParametersToFilter: typeof transformGetMetadataForProjectParametersToFilter;
+    LOAD_TIME_GRACE_PERIOD_MS: number;
   };
 }
 declare module 'shared/services/project-lookup.service' {
