@@ -25,7 +25,6 @@ interface MultiSelectComboboxProps {
   placeholder: string;
   customSelectedText?: string;
   sortSelected?: boolean;
-  isTypeCombobox?: boolean;
   icon?: ReactNode;
 }
 
@@ -36,7 +35,6 @@ function MultiSelectComboBox({
   placeholder,
   customSelectedText,
   sortSelected = false,
-  isTypeCombobox = false,
   icon = undefined,
 }: MultiSelectComboboxProps) {
   const [open, setOpen] = useState(false);
@@ -55,10 +53,10 @@ function MultiSelectComboBox({
   );
 
   const getPlaceholderText = () => {
-    if (selected.length === 0) return placeholder;
-    if (isTypeCombobox && selected.length === options.length) return 'All types';
+    if (selected.length === 1)
+      return options.find((option) => option.value === selected[0])?.label ?? placeholder;
     if (customSelectedText) return customSelectedText;
-    return `${selected.length} ${placeholder.toLowerCase().split(' ')[1]}`;
+    return placeholder;
   };
 
   const sortedOptions = useMemo(() => {
@@ -87,7 +85,10 @@ function MultiSelectComboBox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="tw-w-full tw-justify-between"
+          className={cn(
+            'tw-w-full tw-justify-between',
+            selected.length > 0 && selected.length < options.length && 'tw-border-primary',
+          )}
         >
           <div className="tw-flex tw-items-center tw-gap-2">
             <div className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50">
@@ -106,27 +107,31 @@ function MultiSelectComboBox({
           <CommandList>
             <CommandEmpty>No item found.</CommandEmpty>
             <CommandGroup>
-              {sortedOptions.map((option) => (
-                <CommandItem
-                  key={option.value}
-                  value={option.value}
-                  onSelect={handleSelect}
-                  className="tw-flex tw-items-center tw-gap-2"
-                >
-                  <div className="w-4">
-                    <Check
-                      className={cn(
-                        'tw-h-4 tw-w-4',
-                        selected.includes(option.value) ? 'tw-opacity-100' : 'tw-opacity-0',
-                      )}
-                    />
-                  </div>
-                  <div className="tw-w-4">
-                    {option.starred && <Star className="tw-h-4 tw-w-4 tw-text-yellow-500" />}
-                  </div>
-                  {option.label}
-                </CommandItem>
-              ))}
+              {sortedOptions.map((option) => {
+                const count = sortedOptions.length;
+                return (
+                  <CommandItem
+                    key={option.value}
+                    value={option.value}
+                    onSelect={handleSelect}
+                    className="tw-flex tw-items-center tw-gap-2"
+                  >
+                    <div className="w-4">
+                      <Check
+                        className={cn(
+                          'tw-h-4 tw-w-4',
+                          selected.includes(option.value) ? 'tw-opacity-100' : 'tw-opacity-0',
+                        )}
+                      />
+                    </div>
+                    <div className="tw-w-4">
+                      {option.starred && <Star className="tw-h-4 tw-w-4" />}
+                    </div>
+                    <div className="tw-flex-grow">{option.label}</div>
+                    <div className="tw-w-10 tw-text-right tw-text-muted-foreground">{count}</div>
+                  </CommandItem>
+                );
+              })}
             </CommandGroup>
           </CommandList>
         </Command>
