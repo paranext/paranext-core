@@ -4050,6 +4050,8 @@ declare module 'shared/models/project-lookup.service-model' {
   /** Local object of functions to run locally on each process as part of the project lookup service */
   export const projectLookupServiceBase: ProjectLookupServiceType;
   /**
+   * Gets project metadata from PDPFs filtered down by various filtering options
+   *
    * Note: If there are multiple PDPs available whose metadata matches the conditions provided by the
    * parameters, their project metadata will all be combined, so all available `projectInterface`s
    * provided by the PDP Factory with the matching id (or all PDP Factories if no id is specified) for
@@ -4111,6 +4113,7 @@ declare module 'shared/models/project-lookup.service-model' {
     internalGetMetadata: typeof internalGetMetadata;
     compareProjectDataProviderFactoryMetadataInfoMinimalMatch: typeof compareProjectDataProviderFactoryMetadataInfoMinimalMatch;
     transformGetMetadataForProjectParametersToFilter: typeof transformGetMetadataForProjectParametersToFilter;
+    LOAD_TIME_GRACE_PERIOD_MS: number;
   };
 }
 declare module 'shared/services/project-lookup.service' {

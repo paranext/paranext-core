@@ -23,23 +23,15 @@ import logger from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
 import path from 'path';
 import settingsService from '@shared/services/settings.service';
-import LocalizedStringsDocumentCombiner from '@shared/utils/localized-strings-document-combiner';
+import {
+  localizedStringsDocumentCombiner,
+  waitForResyncContributions,
+} from '@extension-host/services/contribution.service';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
 // BCP 47 validation regex from https://stackoverflow.com/questions/7035825/regular-expression-for-a-language-tag-as-defined-by-bcp47
 const LANGUAGE_CODE_REGEX =
   /^(?<grandfathered>(?:en-GB-oed|i-(?:ami|bnn|default|enochian|hak|klingon|lux|mingo|navajo|pwn|t(?:a[oy]|su))|sgn-(?:BE-(?:FR|NL)|CH-DE))|(?:art-lojban|cel-gaulish|no-(?:bok|nyn)|zh-(?:guoyu|hakka|min(?:-nan)?|xiang)))|(?:(?<language>(?:[A-Za-z]{2,3}(?:-(?<extlang>[A-Za-z]{3}(?:-[A-Za-z]{3}){0,2}))?)|[A-Za-z]{4}|[A-Za-z]{5,8})(?:-(?<script>[A-Za-z]{4}))?(?:-(?<region>[A-Za-z]{2}|[0-9]{3}))?(?:-(?<variant>[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*(?:-(?<extension>[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+))*)(?:-(?<privateUse>x(?:-[A-Za-z0-9]{1,8})+))?$/;
-
-/**
- * Object that keeps track of all localized string contributions in the platform. To listen to
- * updates to the localized string contributions, subscribe to its `onDidRebuild` event (consider
- * debouncing as each contribution will trigger a rebuild).
- *
- * Keeping this object separate from the data provider and disabling the `set` calls in the data
- * provider prevents random services from changing system localized string contributions
- * unexpectedly.
- */
-export const localizedStringsDocumentCombiner = new LocalizedStringsDocumentCombiner({});
 
 function getFileNameFromUri(uriToMatch: string): string {
   const file = path.parse(uriToMatch);
@@ -148,12 +140,14 @@ async function moveToFirstLanguageWithData(languages: string[]) {
   if (languages.length === 0) return undefined;
 
   const standardizedLanguageCode = await getCanonicalLocale(languages[0]);
+  await waitForResyncContributions();
   if (localizedStringsDocumentCombiner.getLocalizedStringData(standardizedLanguageCode))
     return standardizedLanguageCode;
 
   // Try to get data for base language by stripping the region from the language code
   // (e.g. en-US becomes en)
   const baseLanguage = await getBaseLanguageCode(languages[0]);
+  await waitForResyncContributions();
   if (localizedStringsDocumentCombiner.getLocalizedStringData(baseLanguage)) return baseLanguage;
 
   // If no language data can be found for a language or its base, then we should remove it from
@@ -170,6 +164,7 @@ async function getNextDefinedLanguageData(languages: string[]) {
     return undefined;
   }
 
+  await waitForResyncContributions();
   const languageData =
     localizedStringsDocumentCombiner.getLocalizedStringData(standardizedLanguage);
   // Note: This should never happen thanks to the english fallback, but is here just in case
@@ -181,6 +176,7 @@ async function getNextDefinedLanguageData(languages: string[]) {
 }
 
 async function getMetadata(localizeKey: LocalizeKey) {
+  await waitForResyncContributions();
   if (!localizedStringsDocumentCombiner.getLocalizedStringData().metadata) {
     logger.warn(`Metadata missing`);
     return undefined;
