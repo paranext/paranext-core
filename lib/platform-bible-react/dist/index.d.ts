@@ -417,17 +417,17 @@ export type MultiSelectComboBoxEntry = {
 	label: string;
 	starred?: boolean;
 };
-export interface MultiSelectComboboxProps {
+export interface MultiSelectComboBoxProps {
 	options: MultiSelectComboBoxEntry[];
+	getOptionsCount?: (option: MultiSelectComboBoxEntry) => number;
 	selected: string[];
 	onChange: (values: string[]) => void;
 	placeholder: string;
 	customSelectedText?: string;
 	sortSelected?: boolean;
-	isTypeCombobox?: boolean;
 	icon?: React$1.ReactNode;
 }
-export declare function MultiSelectComboBox({ options, selected, onChange, placeholder, customSelectedText, sortSelected, isTypeCombobox, icon, }: MultiSelectComboboxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ options, getOptionsCount, selected, onChange, placeholder, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -995,7 +995,7 @@ export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttrib
 export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
 export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "destructive" | "secondary" | null | undefined;
+	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | null | undefined;
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
 export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
 }

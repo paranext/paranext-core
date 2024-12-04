@@ -181,6 +181,7 @@ export default function GetResourcesExample() {
   };
 
   const removeLanguage = (value: string) => {
+    if (selectedLanguages.length === 1) return;
     setSelectedLanguages(selectedLanguages.filter((lang) => lang !== value));
   };
 
@@ -278,7 +279,7 @@ export default function GetResourcesExample() {
             <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
               <span className="tw-text-sm tw-text-muted-foreground">Types:</span>
               {selectedTypes.map((type) => (
-                <Badge key={type} variant="outline" className="tw-flex tw-items-center tw-gap-1">
+                <Badge key={type} variant="muted" className="tw-flex tw-items-center tw-gap-1">
                   {types.find((t) => t.value === type)?.label}
                   <Button
                     variant="ghost"
@@ -301,9 +302,8 @@ export default function GetResourcesExample() {
                 return (
                   <Badge
                     key={language}
-                    variant="outline"
+                    variant="muted"
                     className="tw-flex tw-items-center tw-gap-1"
-                    onClick={() => removeLanguage(language)}
                   >
                     {langInfo?.starred && <Star className="tw-h-3 tw-w-3" />}
                     {langInfo?.label}

@@ -18,8 +18,9 @@ type MultiSelectComboBoxEntry = {
   starred?: boolean;
 };
 
-interface MultiSelectComboboxProps {
+interface MultiSelectComboBoxProps {
   options: MultiSelectComboBoxEntry[];
+  getOptionsCount?: (option: MultiSelectComboBoxEntry) => number;
   selected: string[];
   onChange: (values: string[]) => void;
   placeholder: string;
@@ -30,13 +31,14 @@ interface MultiSelectComboboxProps {
 
 function MultiSelectComboBox({
   options,
+  getOptionsCount = undefined,
   selected,
   onChange,
   placeholder,
   customSelectedText,
   sortSelected = false,
   icon = undefined,
-}: MultiSelectComboboxProps) {
+}: MultiSelectComboBoxProps) {
   const [open, setOpen] = useState(false);
 
   const handleSelect = useCallback(
@@ -108,7 +110,9 @@ function MultiSelectComboBox({
             <CommandEmpty>No item found.</CommandEmpty>
             <CommandGroup>
               {sortedOptions.map((option) => {
-                const count = sortedOptions.length;
+                const count: number | undefined = getOptionsCount
+                  ? getOptionsCount(option)
+                  : undefined;
                 return (
                   <CommandItem
                     key={option.value}
@@ -128,7 +132,9 @@ function MultiSelectComboBox({
                       {option.starred && <Star className="tw-h-4 tw-w-4" />}
                     </div>
                     <div className="tw-flex-grow">{option.label}</div>
-                    <div className="tw-w-10 tw-text-right tw-text-muted-foreground">{count}</div>
+                    {getOptionsCount && (
+                      <div className="tw-w-10 tw-text-right tw-text-muted-foreground">{count}</div>
+                    )}
                   </CommandItem>
                 );
               })}
