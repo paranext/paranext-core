@@ -193,7 +193,7 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
       <div className="sidebar-container">
         <SettingsSidebarContentSearch
           extensionLabels={Object.keys(settingsContributions)}
-          projectOptions={allProjectOptions}
+          projectInfo={allProjectOptions}
           handleSelectSidebarItem={(key: string, projId?: string) =>
             setSelectedSidebarItem({ label: key, projectId: projId })
           }
@@ -201,7 +201,7 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
           onSearch={handleSearchInput}
           extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_extensionsLabel%']}
           projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectsLabel%']}
-          buttonPlaceholder={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
+          buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
         >
           <div className="tw-space-y-4 tw-box-border">
             {selectedSidebarItem.projectId
