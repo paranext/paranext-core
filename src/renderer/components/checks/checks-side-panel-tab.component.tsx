@@ -5,13 +5,24 @@ export const TAB_TYPE_CHECKS_SIDE_PANEL = 'checks-side-panel';
 
 export default function ChecksSidePanelTab() {
   return (
-    // Project dropdown
-    // Chapter filter
-    // Checks filter
-    // Filter button
-    // Sort button
-    <div className="tw-p-4">
-      <CheckCard />
+    <div style={{ overflowY: 'auto', padding: '2px' }}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          padding: '0px',
+          gap: '12px',
+        }}
+      >
+        <CheckCard isFailed />
+        <CheckCard isSelected isFailed />
+        <CheckCard isWaiting />
+        <CheckCard isSelected isWaiting />
+        <CheckCard isFixed />
+        <CheckCard isSelected isFixed />
+      </div>
     </div>
   );
 }

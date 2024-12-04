@@ -972,6 +972,12 @@ export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttrib
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
 export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const badgeVariants: (props?: ({
+	variant?: "default" | "outline" | "destructive" | "secondary" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
+}
+export declare function Badge({ className, variant, ...props }: BadgeProps): import("react/jsx-runtime").JSX.Element;
 export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
