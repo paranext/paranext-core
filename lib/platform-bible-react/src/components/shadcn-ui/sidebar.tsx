@@ -22,7 +22,8 @@ import { cn } from '@/utils/shadcn-ui.util';
 
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_WIDTH_ICON = '3rem';
-const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
+// Commented this out pending a discussion with UX about keyboard shortcuts
+// const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed';
@@ -83,18 +84,19 @@ const SidebarProvider = React.forwardRef<
       return setOpen((open) => !open);
     }, [setOpen]);
 
+    // Commented this out pending a discussion with UX about keyboard shortcuts
     // Adds a keyboard shortcut to toggle the sidebar.
-    React.useEffect(() => {
-      const handleKeyDown = (event: KeyboardEvent) => {
-        if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
-          event.preventDefault();
-          toggleSidebar();
-        }
-      };
+    // React.useEffect(() => {
+    //   const handleKeyDown = (event: KeyboardEvent) => {
+    //     if (event.key === SIDEBAR_KEYBOARD_SHORTCUT && (event.metaKey || event.ctrlKey)) {
+    //       event.preventDefault();
+    //       toggleSidebar();
+    //     }
+    //   };
 
-      window.addEventListener('keydown', handleKeyDown);
-      return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [toggleSidebar]);
+    //   window.addEventListener('keydown', handleKeyDown);
+    //   return () => window.removeEventListener('keydown', handleKeyDown);
+    // }, [toggleSidebar]);
 
     // We add a state so that we can do data-state="expanded" or "collapsed".
     // This makes it easier to style the sidebar with Tailwind classes.

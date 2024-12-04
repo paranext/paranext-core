@@ -1436,7 +1436,7 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
     {
       type: 'float',
       position: 'center',
-      floatSize: { height: 575, width: 950 },
+      floatSize: { height: 600, width: 900 },
     },
   );
 }
