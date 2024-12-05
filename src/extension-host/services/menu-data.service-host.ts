@@ -14,19 +14,10 @@ import {
   ReferencedItem,
   WebViewMenu,
   Localized,
+  Unsubscriber,
 } from 'platform-bible-utils';
-import menuDataObject from '@extension-host/data/menu.data.json';
 import logger from '@shared/services/logger.service';
-import MenuDocumentCombiner from '@shared/utils/menu-document-combiner';
-
-/**
- * Object that keeps track of all active menus in the platform. Call
- * {@link MenuDataDataProviderEngine.rebuildMenus} in the service host after updating this object.
- *
- * Keeping this object separate from the data provider and disabling the `set` calls in the data
- * provider prevents random services from changing system menus unexpectedly.
- */
-export const menuDocumentCombiner = new MenuDocumentCombiner(menuDataObject);
+import { menuDocumentCombiner, onDidResyncContributions } from './contribution.service';
 
 class MenuDataDataProviderEngine
   extends DataProviderEngine<MenuDataDataTypes>
@@ -34,10 +25,12 @@ class MenuDataDataProviderEngine
 {
   private mainMenu: Localized<MultiColumnMenu> = { groups: {}, items: [], columns: {} };
   private webViewMenusMap = new Map<ReferencedItem, Localized<WebViewMenu>>();
+  private unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
 
   constructor(menuData: Localized<PlatformMenus>) {
     super();
     this.#loadAllMenuData(menuData);
+    onDidResyncContributions(() => this.rebuildMenus());
   }
 
   async rebuildMenus(): Promise<void> {
@@ -73,6 +66,15 @@ class MenuDataDataProviderEngine
     throw new Error('setWebViewMenu disabled');
   }
 
+  async dispose(): Promise<boolean> {
+    if (this.unsubscribeOnDidResyncContributions) {
+      const success = this.unsubscribeOnDidResyncContributions();
+      this.unsubscribeOnDidResyncContributions = undefined;
+      return success;
+    }
+    return true;
+  }
+
   #loadAllMenuData(menuData: Localized<PlatformMenus>): void {
     this.mainMenu = { groups: {}, items: [], columns: {} };
     this.webViewMenusMap.clear();
@@ -100,9 +102,13 @@ export async function initialize(): Promise<void> {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
+          if (!menuDocumentCombiner.rawOutput)
+            throw new Error(
+              'Menu data service host initialization error: Menu Document Combiner output was null!',
+            );
           dataProvider = await dataProviderService.registerEngine(
             menuDataServiceProviderName,
-            new MenuDataDataProviderEngine(menuDataObject),
+            new MenuDataDataProviderEngine(menuDocumentCombiner.rawOutput),
           );
           resolve();
         } catch (error) {
