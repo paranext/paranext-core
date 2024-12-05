@@ -99,7 +99,7 @@ export default function UiLanguageSelector({
   }; */
 
   return (
-    <div className="pr-twp tw-p-4 tw-max-w-sm">
+    <div className="pr-twp tw-max-w-sm tw-p-4">
       {/* Language Selector */}
       <Select name="uiLanguage" value={selectedLanguage} onValueChange={handleLanguageChange}>
         <SelectTrigger>

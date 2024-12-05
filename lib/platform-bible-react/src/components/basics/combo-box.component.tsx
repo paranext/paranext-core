@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
@@ -32,6 +32,8 @@ export type ComboBoxProps<T> = {
   onChange?: (newValue: T) => void;
   /** Used to determine the string value for a given option. */
   getOptionLabel?: (option: ComboBoxOption) => string;
+  /** Icon to be displayed on the trigger */
+  icon?: ReactNode;
   /** Text displayed on button if `value` is undefined */
   buttonPlaceholder?: string;
   /** Placeholder text for text field */
@@ -40,6 +42,8 @@ export type ComboBoxProps<T> = {
   commandEmptyMessage?: string;
   /** Variant of button */
   buttonVariant?: ButtonProps['variant'];
+  /** Control how the popover menu should be aligned. Defaults to start */
+  alignDropDown?: 'start' | 'center' | 'end';
   /** Text direction ltr or rtl */
   dir?: Direction;
   /** Optional boolean to set if trigger should be disabled */
@@ -71,10 +75,12 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   value,
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
+  icon = undefined,
   buttonPlaceholder = '',
   textPlaceholder = '',
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
+  alignDropDown = 'start',
   dir = 'ltr',
   isDisabled = false,
   ...props
@@ -89,16 +95,23 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           role="combobox"
           aria-expanded={open}
           id={id}
-          className={cn('tw-w-[200px] tw-justify-between', className)}
+          className={cn(
+            'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
+            className,
+          )}
           disabled={isDisabled}
         >
-          <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
-            {value ? getOptionLabel(value) : buttonPlaceholder}
-          </span>
+          <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
+            {icon && <div className="tw-pr-2">{icon}</div>}
+            <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
+              {value ? getOptionLabel(value) : buttonPlaceholder}
+            </span>
+          </div>
+
           <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[200px] tw-p-0" dir={dir}>
+      <PopoverContent align={alignDropDown} className="tw-w-[200px] tw-p-0" dir={dir}>
         <Command>
           <CommandInput dir={dir} placeholder={textPlaceholder} className="tw-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>

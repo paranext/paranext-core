@@ -14,7 +14,7 @@ export const platformSettings: SettingsContribution = {
     'platform.interfaceLanguage': {
       label: '%settings_platform_interfaceLanguage_label%',
       description: '%settings_platform_interfaceLanguage_description%',
-      default: ['eng'],
+      default: ['en'],
     },
     'platform.ptxUtilsMementoData': {
       label: '%settings_platform_ptxUtilsMementoData_label%',
@@ -49,7 +49,7 @@ export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = 
   );
 };
 
-// TODO: Validate that strings in the array to match BCP 47 values once the i18n code is ready
+// TODO: Validate that strings in the array match BCP 47 values once the i18n code is ready
 const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'> = async (
   newValue: string[],
 ): Promise<boolean> => {

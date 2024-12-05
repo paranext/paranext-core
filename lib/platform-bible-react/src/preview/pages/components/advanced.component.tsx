@@ -19,6 +19,7 @@ import InventoryExample from './advanced/inventory-example.component';
 import SettingsListExamples from './advanced/settings-list.examples.component';
 import BookSelectorExample from './advanced/book-selector-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
+import MultiSelectComboBoxExample from './advanced/multi-select-combo-box-example';
 import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
 
 function Compositions({ direction }: HasDirection) {
@@ -74,6 +75,9 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Multi-select Combo Box">
+            Multi-select Combo Box
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Navigation Content Search">
             Navigation Content Search
           </VerticalTabsTrigger>
@@ -133,6 +137,10 @@ function Compositions({ direction }: HasDirection) {
               <MarketplaceExamples />
             </VerticalTabsContent>
           </VerticalTabs>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Multi-select Combo Box">
+          <MultiSelectComboBoxExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Result List">
