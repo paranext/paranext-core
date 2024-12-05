@@ -244,7 +244,7 @@ export default function GetResourcesExample() {
           />
 
           <MultiSelectComboBox
-            options={types}
+            entries={types}
             selected={selectedTypes}
             onChange={setSelectedTypes}
             placeholder="Select types"
@@ -257,7 +257,7 @@ export default function GetResourcesExample() {
           />
 
           <MultiSelectComboBox
-            options={languages}
+            entries={languages}
             selected={selectedLanguages}
             onChange={setSelectedLanguages}
             placeholder="Select languages"

@@ -1,16 +1,15 @@
-import { cn } from '@/utils/shadcn-ui.util';
-import { Check, ChevronsUpDown, Star } from 'lucide-react';
-import { ReactNode, useCallback, useMemo, useState } from 'react';
-import { Button } from '../shadcn-ui/button';
+import { Button } from '@/components/shadcn-ui/button';
 import {
   Command,
-  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
   CommandList,
-} from '../shadcn-ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '../shadcn-ui/popover';
+} from '@/components/shadcn-ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import { cn } from '@/utils/shadcn-ui.util';
+import { Check, ChevronsUpDown, Star } from 'lucide-react';
+import { ReactNode, useCallback, useMemo, useState } from 'react';
 
 type MultiSelectComboBoxEntry = {
   value: string;
@@ -19,8 +18,8 @@ type MultiSelectComboBoxEntry = {
 };
 
 interface MultiSelectComboBoxProps {
-  options: MultiSelectComboBoxEntry[];
-  getOptionsCount?: (option: MultiSelectComboBoxEntry) => number;
+  entries: MultiSelectComboBoxEntry[];
+  getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
   selected: string[];
   onChange: (values: string[]) => void;
   placeholder: string;
@@ -30,8 +29,8 @@ interface MultiSelectComboBoxProps {
 }
 
 function MultiSelectComboBox({
-  options,
-  getOptionsCount = undefined,
+  entries,
+  getEntriesCount = undefined,
   selected,
   onChange,
   placeholder,
@@ -52,18 +51,18 @@ function MultiSelectComboBox({
 
   const getPlaceholderText = () => {
     if (selected.length === 1)
-      return options.find((option) => option.value === selected[0])?.label ?? placeholder;
+      return entries.find((option) => option.value === selected[0])?.label ?? placeholder;
     if (customSelectedText) return customSelectedText;
     return placeholder;
   };
 
   const sortedOptions = useMemo(() => {
-    if (!sortSelected) return options;
+    if (!sortSelected) return entries;
 
-    const starredItems = options
+    const starredItems = entries
       .filter((opt) => opt.starred)
       .sort((a, b) => a.label.localeCompare(b.label));
-    const nonStarredItems = options
+    const nonStarredItems = entries
       .filter((opt) => !opt.starred)
       .sort((a, b) => {
         const aSelected = selected.includes(a.value);
@@ -74,7 +73,7 @@ function MultiSelectComboBox({
       });
 
     return [...starredItems, ...nonStarredItems];
-  }, [options, selected, sortSelected]);
+  }, [entries, selected, sortSelected]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -85,7 +84,7 @@ function MultiSelectComboBox({
           aria-expanded={open}
           className={cn(
             'tw-w-full tw-justify-between',
-            selected.length > 0 && selected.length < options.length && 'tw-border-primary',
+            selected.length > 0 && selected.length < entries.length && 'tw-border-primary',
           )}
         >
           <div className="tw-flex tw-items-center tw-gap-2">
@@ -94,7 +93,13 @@ function MultiSelectComboBox({
                 {icon}
               </span>
             </div>
-            {getPlaceholderText()}
+            <div
+              className={cn(
+                (selected.length === 0 || selected.length === entries.length) && 'tw-text-muted',
+              )}
+            >
+              {getPlaceholderText()}
+            </div>
           </div>
           <ChevronsUpDown className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
@@ -103,11 +108,10 @@ function MultiSelectComboBox({
         <Command>
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
           <CommandList>
-            <CommandEmpty>No item found.</CommandEmpty>
             <CommandGroup>
               {sortedOptions.map((option) => {
-                const count: number | undefined = getOptionsCount
-                  ? getOptionsCount(option)
+                const count: number | undefined = getEntriesCount
+                  ? getEntriesCount(option)
                   : undefined;
                 return (
                   <CommandItem
@@ -128,7 +132,7 @@ function MultiSelectComboBox({
                       {option.starred && <Star className="tw-h-4 tw-w-4" />}
                     </div>
                     <div className="tw-flex-grow">{option.label}</div>
-                    {getOptionsCount && (
+                    {getEntriesCount && (
                       <div className="tw-w-10 tw-text-right tw-text-muted-foreground">{count}</div>
                     )}
                   </CommandItem>

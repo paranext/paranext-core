@@ -134,8 +134,8 @@ function MultiSelectComboBoxExample() {
     <div className="tw-flex tw-flex-col tw-gap-4">
       <div className="tw-w-[300px]">
         <MultiSelectComboBox
-          options={types}
-          getOptionsCount={getOptionsCount}
+          entries={types}
+          getEntriesCount={getOptionsCount}
           selected={selectedTypes}
           onChange={setSelectedTypes}
           placeholder="Select types"
