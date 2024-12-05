@@ -418,8 +418,8 @@ export type MultiSelectComboBoxEntry = {
 	starred?: boolean;
 };
 export interface MultiSelectComboBoxProps {
-	options: MultiSelectComboBoxEntry[];
-	getOptionsCount?: (option: MultiSelectComboBoxEntry) => number;
+	entries: MultiSelectComboBoxEntry[];
+	getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
 	selected: string[];
 	onChange: (values: string[]) => void;
 	placeholder: string;
@@ -427,7 +427,7 @@ export interface MultiSelectComboBoxProps {
 	sortSelected?: boolean;
 	icon?: React$1.ReactNode;
 }
-export declare function MultiSelectComboBox({ options, getOptionsCount, selected, onChange, placeholder, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -685,8 +685,8 @@ export type ComboBoxProps<T> = {
 	/** Additional css classes to help with unique styling of the combo box */
 	className?: string;
 	/**
-	 * The selected value(s) that the combo box currently holds. Must be shallow equal to one or more
-	 * of the options entries.
+	 * The selected value that the combo box currently holds. Must be shallow equal to one of the
+	 * options entries.
 	 */
 	value?: T;
 	/** Triggers when content of textfield is changed */

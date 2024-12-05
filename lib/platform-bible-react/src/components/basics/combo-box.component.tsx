@@ -24,8 +24,8 @@ export type ComboBoxProps<T> = {
   /** Additional css classes to help with unique styling of the combo box */
   className?: string;
   /**
-   * The selected value(s) that the combo box currently holds. Must be shallow equal to one or more
-   * of the options entries.
+   * The selected value that the combo box currently holds. Must be shallow equal to one of the
+   * options entries.
    */
   value?: T;
   /** Triggers when content of textfield is changed */
