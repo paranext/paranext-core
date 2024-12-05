@@ -423,11 +423,12 @@ export interface MultiSelectComboBoxProps {
 	selected: string[];
 	onChange: (values: string[]) => void;
 	placeholder: string;
+	commandEmptyMessage?: string;
 	customSelectedText?: string;
 	sortSelected?: boolean;
 	icon?: React$1.ReactNode;
 }
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
