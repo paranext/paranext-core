@@ -36,6 +36,7 @@ export {
   inventoryCountColumn,
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
+export { default as MultiSelectComboBox } from './components/advanced/multi-select-combo-box';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,
@@ -93,6 +94,7 @@ export { default as Toolbar } from './components/mui/toolbar.component';
 export type { ToolbarProps } from './components/mui/toolbar.component';
 
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
+export { Badge, type BadgeProps, badgeVariants } from './components/shadcn-ui/badge';
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export {
   Card,

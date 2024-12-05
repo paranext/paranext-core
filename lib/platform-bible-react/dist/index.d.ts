@@ -412,6 +412,23 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  *   current status of the item is selected
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
+export type MultiSelectComboBoxEntry = {
+	value: string;
+	label: string;
+	starred?: boolean;
+};
+export interface MultiSelectComboBoxProps {
+	entries: MultiSelectComboBoxEntry[];
+	getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
+	selected: string[];
+	onChange: (values: string[]) => void;
+	placeholder: string;
+	commandEmptyMessage?: string;
+	customSelectedText?: string;
+	sortSelected?: boolean;
+	icon?: React$1.ReactNode;
+}
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -715,6 +732,8 @@ export type ComboBoxProps<T> = {
 	onChange?: (newValue: T) => void;
 	/** Used to determine the string value for a given option. */
 	getOptionLabel?: (option: ComboBoxOption) => string;
+	/** Icon to be displayed on the trigger */
+	icon?: React$1.ReactNode;
 	/** Text displayed on button if `value` is undefined */
 	buttonPlaceholder?: string;
 	/** Placeholder text for text field */
@@ -723,6 +742,8 @@ export type ComboBoxProps<T> = {
 	commandEmptyMessage?: string;
 	/** Variant of button */
 	buttonVariant?: ButtonProps["variant"];
+	/** Control how the popover menu should be aligned. Defaults to start */
+	alignDropDown?: "start" | "center" | "end";
 	/** Text direction ltr or rtl */
 	dir?: Direction;
 	/** Optional boolean to set if trigger should be disabled */
@@ -735,7 +756,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -925,8 +946,6 @@ export type IconButtonProps = React$1.PropsWithChildren<{
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
-	/** Additional css classes to help with unique styling of the search bar */
-	className?: string;
 	/**
 	 * Callback fired to handle the search query when button pressed
 	 *
@@ -937,8 +956,10 @@ export type SearchBarProps = {
 	placeholder?: string;
 	/** Optional boolean to set the input base to full width */
 	isFullWidth?: boolean;
+	/** Additional css classes to help with unique styling of the search bar */
+	className?: string;
 };
-export function SearchBar({ className, onSearch, placeholder, isFullWidth, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {
@@ -1013,6 +1034,12 @@ export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttrib
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
 export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const badgeVariants: (props?: ({
+	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
+}
+export declare function Badge({ className, variant, ...props }: BadgeProps): import("react/jsx-runtime").JSX.Element;
 export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
