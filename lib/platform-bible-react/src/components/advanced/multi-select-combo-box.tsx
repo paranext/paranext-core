@@ -1,6 +1,7 @@
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Command,
+  CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
@@ -23,6 +24,7 @@ interface MultiSelectComboBoxProps {
   selected: string[];
   onChange: (values: string[]) => void;
   placeholder: string;
+  commandEmptyMessage?: string;
   customSelectedText?: string;
   sortSelected?: boolean;
   icon?: ReactNode;
@@ -34,6 +36,7 @@ function MultiSelectComboBox({
   selected,
   onChange,
   placeholder,
+  commandEmptyMessage = 'No entries found',
   customSelectedText,
   sortSelected = false,
   icon = undefined,
@@ -108,6 +111,7 @@ function MultiSelectComboBox({
         <Command>
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
           <CommandList>
+            <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
             <CommandGroup>
               {sortedOptions.map((option) => {
                 const count: number | undefined = getEntriesCount
