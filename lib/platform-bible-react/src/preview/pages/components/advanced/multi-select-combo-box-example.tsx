@@ -140,8 +140,8 @@ function MultiSelectComboBoxExample() {
           onChange={setSelectedTypes}
           placeholder="Select types"
           customSelectedText={
-            selectedTypes.length === types.length
-              ? 'Any resource type'
+            selectedTypes.length === types.length || selectedTypes.length === 0
+              ? 'Any type'
               : `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`
           }
           icon={<Blocks />}
@@ -151,7 +151,7 @@ function MultiSelectComboBoxExample() {
       <p>Resources:</p>
       <ul>
         {resources
-          .filter((resource) => selectedTypes.includes(resource.type))
+          .filter((resource) => selectedTypes.length === 0 || selectedTypes.includes(resource.type))
           .map((resource) => (
             <li key={resource.id}>
               <b>{resource.type}</b> {resource.name} ({resource.language}) - {resource.size}
