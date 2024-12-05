@@ -1454,6 +1454,8 @@ export async function startWebViewService(): Promise<void> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
     'platform.openSettings': openSettingsTab,
+    'platform.openProjectSettings': openSettingsTab,
+    'platform.openUserSettings': openSettingsTab,
   };
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {

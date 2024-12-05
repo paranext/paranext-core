@@ -71,6 +71,7 @@ function getOptionLabelDefault(option: ComboBoxOption): string {
 function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   id,
   options = [],
+  className,
   buttonClassName,
   popoverContentClassName,
   value,
@@ -94,7 +95,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           role="combobox"
           aria-expanded={open}
           id={id}
-          className={cn('tw-w-[200px] tw-justify-between', buttonClassName)}
+          className={cn('tw-w-[200px] tw-justify-between', buttonClassName ?? className)}
           disabled={isDisabled}
         >
           <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
