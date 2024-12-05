@@ -19,6 +19,7 @@ import InventoryExample from './advanced/inventory-example.component';
 import SettingsListExamples from './advanced/settings-list.examples.component';
 import BookSelectorExample from './advanced/book-selector-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
+import MultiSelectComboBoxExample from './advanced/multi-select-combo-box-example';
 
 function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -131,7 +132,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Multi-select Combo Box">
-          {`Check the 'Get Resources' example layout to see the Multi-select Combo Box in action`}
+          <MultiSelectComboBoxExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Result List">

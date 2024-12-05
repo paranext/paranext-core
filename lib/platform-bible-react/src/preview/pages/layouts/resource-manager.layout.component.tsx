@@ -181,6 +181,7 @@ export default function GetResourcesExample() {
   };
 
   const removeLanguage = (value: string) => {
+    if (selectedLanguages.length === 1) return;
     setSelectedLanguages(selectedLanguages.filter((lang) => lang !== value));
   };
 
@@ -239,7 +240,7 @@ export default function GetResourcesExample() {
           <SearchBar
             onSearch={setSearchQuery}
             placeholder="Search by name, language, type..."
-            className={cn({ 'tw-border-primary': searchQuery })}
+            className={cn('tw-pl-8 tw-pr-8', searchQuery && 'tw-border-primary')}
           />
 
           <MultiSelectComboBox
@@ -247,7 +248,11 @@ export default function GetResourcesExample() {
             selected={selectedTypes}
             onChange={setSelectedTypes}
             placeholder="Select types"
-            isTypeCombobox
+            customSelectedText={
+              selectedTypes.length === types.length
+                ? 'Any resource type'
+                : `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`
+            }
             icon={<Blocks />}
           />
 
@@ -262,7 +267,7 @@ export default function GetResourcesExample() {
               selectedLanguages.includes('hebrew') &&
               selectedLanguages.includes('greek')
                 ? 'My languages'
-                : undefined
+                : `${selectedLanguages.length} language${selectedLanguages.length > 1 ? 's' : ''}`
             }
             sortSelected
             icon={<Languages />}
@@ -274,14 +279,16 @@ export default function GetResourcesExample() {
             <div className="tw-flex tw-flex-wrap tw-items-center tw-gap-2">
               <span className="tw-text-sm tw-text-muted-foreground">Types:</span>
               {selectedTypes.map((type) => (
-                <Badge
-                  key={type}
-                  variant="outline"
-                  className="tw-flex tw-cursor-pointer tw-items-center tw-gap-1"
-                  onClick={() => removeType(type)}
-                >
+                <Badge key={type} variant="muted" className="tw-flex tw-items-center tw-gap-1">
                   {types.find((t) => t.value === type)?.label}
-                  <X className="tw-h-3 tw-w-3" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="tw-h-4 tw-w-4 tw-p-0 hover:tw-bg-transparent"
+                    onClick={() => removeType(type)}
+                  >
+                    <X className="tw-h-3 tw-w-3" />
+                  </Button>
                 </Badge>
               ))}
             </div>
@@ -295,14 +302,20 @@ export default function GetResourcesExample() {
                 return (
                   <Badge
                     key={language}
-                    variant="outline"
-                    className="tw-flex tw-cursor-pointer tw-items-center tw-gap-1"
-                    onClick={() => removeLanguage(language)}
+                    variant="muted"
+                    className="tw-flex tw-items-center tw-gap-1"
                   >
                     {langInfo?.starred && <Star className="tw-h-3 tw-w-3" />}
                     {langInfo?.label}
 
-                    <X className="tw-h-3 tw-w-3" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="tw-h-4 tw-w-4 tw-p-0 hover:tw-bg-transparent"
+                      onClick={() => removeLanguage(language)}
+                    >
+                      <X className="tw-h-3 tw-w-3" />
+                    </Button>
                   </Badge>
                 );
               })}
