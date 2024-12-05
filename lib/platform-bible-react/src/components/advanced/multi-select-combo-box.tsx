@@ -43,10 +43,6 @@ function MultiSelectComboBox({
 
   const handleSelect = useCallback(
     (value: string) => {
-      if (selected.includes(value) && selected.length === 1) {
-        return;
-      }
-
       onChange(
         selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value],
       );
