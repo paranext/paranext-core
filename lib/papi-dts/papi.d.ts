@@ -2901,6 +2901,8 @@ declare module 'papi-shared-types' {
     'platform.restart': () => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
+    /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
+    'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
