@@ -31,10 +31,8 @@ import {
   loadDownloadUpdateProjectTab,
 } from '@renderer/components/projects/download-update-project-tab.component';
 import {
-  TAB_TYPE_PROJECT_SETTINGS_TAB,
-  loadProjectSettingsTab,
-  TAB_TYPE_USER_SETTINGS_TAB,
-  loadUserSettingsTab,
+  TAB_TYPE_SETTINGS_TAB,
+  loadSettingsTab,
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import {
   TAB_TYPE_WEBVIEW,
@@ -67,8 +65,7 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
     [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
-    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
-    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
+    [TAB_TYPE_SETTINGS_TAB, loadSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition
@@ -82,8 +79,7 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
     [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
-    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
-    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
+    [TAB_TYPE_SETTINGS_TAB, loadSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition

@@ -21,8 +21,12 @@ export type ComboBoxProps<T> = {
   /** Text label title for combobox */
   /** List of available options for the dropdown menu */
   options?: readonly T[];
-  /** Additional css classes to help with unique styling of the combo box */
+  /** @deprecated 3 December 2024. Renamed to {@link buttonClassName} */
   className?: string;
+  /** Additional css classes to help with unique styling of the combo box button */
+  buttonClassName?: string;
+  /** Additional css classes to help with unique styling of the combo box popover */
+  popoverContentClassName?: string;
   /**
    * The selected value that the combo box currently holds. Must be shallow equal to one of the
    * options entries.
@@ -72,6 +76,8 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   id,
   options = [],
   className,
+  buttonClassName,
+  popoverContentClassName,
   value,
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
@@ -97,7 +103,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           id={id}
           className={cn(
             'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
-            className,
+            buttonClassName ?? className,
           )}
           disabled={isDisabled}
         >
@@ -111,7 +117,11 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align={alignDropDown} className="tw-w-[200px] tw-p-0" dir={dir}>
+      <PopoverContent
+        align={alignDropDown}
+        className={cn('tw-w-[200px] tw-p-0', popoverContentClassName)}
+        dir={dir}
+      >
         <Command>
           <CommandInput dir={dir} placeholder={textPlaceholder} className="tw-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>

@@ -4,6 +4,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { Search, X } from 'lucide-react';
 import { useState } from 'react';
 
+/** Props for the SearchBar component. */
 export type SearchBarProps = {
   /**
    * Callback fired to handle the search query when button pressed
@@ -18,7 +19,7 @@ export type SearchBarProps = {
   /** Optional boolean to set the input base to full width */
   isFullWidth?: boolean;
 
-  /** ClassName for the input */
+  /** Additional css classes to help with unique styling of the search bar */
   className?: string;
 };
 

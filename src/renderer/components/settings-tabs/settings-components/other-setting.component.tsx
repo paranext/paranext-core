@@ -1,27 +1,24 @@
 import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import settingsService from '@shared/services/settings.service';
-import Setting, { UserSettingProps, UserSettingValues } from './setting.component';
+import Setting, { OtherSettingProps, OtherSettingValues } from './setting.component';
 
-/**
- * Provides a user-specific setting component by utilizing the `Setting` component with
- * user-specific validation
- */
-export default function UserSetting({
+/** Provides a non-project setting component by utilizing the `Setting` component validation */
+export default function OtherSetting({
   settingKey,
   label,
   description,
   defaultSetting,
-}: UserSettingProps) {
+}: OtherSettingProps) {
   const [setting, setSetting, , isLoading] = useSetting<keyof SettingTypes>(
     settingKey,
     defaultSetting,
   );
 
-  const validateUserSetting = async (
+  const validateOtherSetting = async (
     currentSettingKey: SettingNames,
-    newValue: UserSettingValues,
-    currentValue: UserSettingValues,
+    newValue: OtherSettingValues,
+    currentValue: OtherSettingValues,
   ) => {
     return settingsService.validateSetting(currentSettingKey, newValue, currentValue);
   };
@@ -32,7 +29,7 @@ export default function UserSetting({
       setting={setting}
       setSetting={setSetting}
       isLoading={isLoading}
-      validateUserSetting={validateUserSetting}
+      validateOtherSetting={validateOtherSetting}
       label={label}
       description={description}
     />

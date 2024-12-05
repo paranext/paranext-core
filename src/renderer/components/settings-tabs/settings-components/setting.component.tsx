@@ -5,8 +5,8 @@ import {
   SettingNames,
   SettingTypes,
 } from 'papi-shared-types';
-import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
-import { debounce, getErrorMessage } from 'platform-bible-utils';
+import { Input, Label, Switch } from 'platform-bible-react';
+import { debounce, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import logger from '@shared/services/logger.service';
@@ -28,10 +28,10 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
  * Combines properties and controls with optional validation functions for both project and user
  * settings
  */
-type SettingProps<TProps, TControls, TValidateProject, TValidateUser> = TProps &
+type SettingProps<TProps, TControls, TValidateProject, TValidateOther> = TProps &
   TControls & {
     validateProjectSetting?: TValidateProject;
-    validateUserSetting?: TValidateUser;
+    validateOtherSetting?: TValidateOther;
   };
 
 /** Values of ProjectSettingTypes */
@@ -53,14 +53,14 @@ type ProjectSettingsControls = {
 };
 
 /** Values of SettingTypes */
-export type UserSettingValues = SettingTypes[keyof SettingTypes];
+export type OtherSettingValues = SettingTypes[keyof SettingTypes];
 
 /** Props for the UserSetting component */
-export type UserSettingProps = BaseSettingProps<SettingNames, UserSettingValues>;
+export type OtherSettingProps = BaseSettingProps<SettingNames, OtherSettingValues>;
 
 /** Values from the useSetting hook to manage the setting */
-type UserSettingsControls = {
-  setting: UserSettingValues;
+type OtherSettingsControls = {
+  setting: OtherSettingValues;
   // Necessary for flexibility in handleChangeSetting, ProjectSettingValues and
   // UserSettingValues are not the same so it couldn't assign
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,14 +83,22 @@ type CombinedSettingProps =
       never
     >
   | SettingProps<
-      Omit<UserSettingProps, 'defaultSetting'>,
-      UserSettingsControls,
+      Omit<OtherSettingProps, 'defaultSetting'>,
+      OtherSettingsControls,
       never,
       // Necessary for flexibility in handleChangeSetting, couldn't use unknown
       // and keep types in ProjectSetting component
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (settingKey: any, newValue: any, currentValue: any) => Promise<boolean>
     >;
+
+const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
+  '%settings_defaultMessage_loadingOneSetting%',
+  '%settings_defaultMessage_noSettingComponent%',
+  '%settings_errorMessages_invalidNumber%',
+  '%settings_errorMessages_invalidJSON%',
+  '%settings_errorMessages_invalidValue%',
+];
 
 /**
  * Renders a setting component based on the type of setting (string, number, boolean, or object) and
@@ -101,14 +109,15 @@ export default function Setting({
   setting,
   setSetting,
   isLoading,
-  validateUserSetting,
+  validateOtherSetting,
   validateProjectSetting,
   label,
-  description,
 }: CombinedSettingProps) {
-  const validateSetting = validateUserSetting || validateProjectSetting;
+  const validateSetting = validateOtherSetting || validateProjectSetting;
 
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 
   /**
    * Validate and change a setting
@@ -133,7 +142,7 @@ export default function Setting({
       if (typeof setting === 'number') {
         const numericValue = parseInt(value, 10);
         if (Number.isNaN(numericValue)) {
-          setErrorMessage('Invalid number');
+          setErrorMessage(localizedStrings['%settings_errorMessages_invalidNumber%']);
           return;
         }
         newValue = numericValue;
@@ -143,7 +152,7 @@ export default function Setting({
         try {
           newValue = JSON.parse(value);
         } catch {
-          setErrorMessage('Invalid JSON');
+          setErrorMessage(localizedStrings['%settings_errorMessages_invalidJSON%']);
           return;
         }
       } else {
@@ -156,7 +165,7 @@ export default function Setting({
         setErrorMessage(undefined);
         if (setSetting) setSetting(newValue);
       } else {
-        setErrorMessage('Invalid value');
+        setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
       }
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -166,7 +175,7 @@ export default function Setting({
   const debouncedHandleChange = debounce(handleChangeSetting, 500);
 
   const generateComponent = useCallback(() => {
-    let component = <p>No setting component</p>;
+    let component = <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>;
 
     if (typeof setting === 'string' || typeof setting === 'number')
       component = (
@@ -174,11 +183,7 @@ export default function Setting({
       );
     else if (typeof setting === 'boolean')
       component = (
-        <Checkbox
-          key={settingKey}
-          onCheckedChange={debouncedHandleChange}
-          defaultChecked={setting}
-        />
+        <Switch key={settingKey} onCheckedChange={debouncedHandleChange} defaultChecked={setting} />
       );
     else if (typeof setting === 'object')
       component = (
@@ -190,25 +195,27 @@ export default function Setting({
       );
 
     return (
-      <div>
+      <div className="tw-w-1/3">
         {component}
-        {errorMessage && <div style={{ color: 'red' }}>{errorMessage}</div>}
+        {errorMessage && <Label className="tw-text-red-600 tw-pt-4">{errorMessage}</Label>}
       </div>
     );
-  }, [setting, settingKey, debouncedHandleChange, errorMessage]);
-
-  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
-  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
+  }, [localizedStrings, setting, settingKey, debouncedHandleChange, errorMessage]);
 
   return (
-    <SettingsListItem
-      primary={label}
-      secondary={description}
-      isLoading={isLoading}
-      loadingMessage={localizedLoadingSetting}
-    >
-      {generateComponent()}
-    </SettingsListItem>
+    <div>
+      {isLoading ? (
+        <Label className="tw-text-sm tw-text-muted-foreground">
+          {localizedStrings['%settings_defaultMessage_loadingOneSetting%']}
+        </Label>
+      ) : (
+        <div className="tw-flex tw-items-center tw-justify-center">
+          <Label htmlFor={settingKey} className="tw-w-1/3 tw-text-right tw-pr-4">
+            {label}
+          </Label>
+          {generateComponent()}
+        </div>
+      )}
+    </div>
   );
 }

@@ -81,7 +81,7 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
       localizeNotes: 'Main application menu > Paratext column > Settings',
       group: 'platform.misc',
       order: 1,
-      command: 'platform.openUserSettings',
+      command: 'platform.openSettings',
     },
     {
       label: 'Reload Extensions',

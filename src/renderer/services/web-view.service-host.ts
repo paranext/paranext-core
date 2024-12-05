@@ -66,8 +66,7 @@ import { registerCommand } from '@shared/services/command.service';
 import { CommandNames } from 'papi-shared-types';
 import {
   type SettingsTabData,
-  TAB_TYPE_PROJECT_SETTINGS_TAB,
-  TAB_TYPE_USER_SETTINGS_TAB,
+  TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import THEME, { SCROLLBAR_STYLES, MUI_OVERRIDES } from '@renderer/theme';
 
@@ -1422,41 +1421,22 @@ const papiWebViewService: WebViewServiceType = {
   getWebViewController,
 };
 
-async function openProjectSettingsTab(webViewId: WebViewId): Promise<Layout | undefined> {
+async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
   const projectIdFromWebView = (await getOpenWebViewDefinition(webViewId))?.projectId;
-
-  if (!projectIdFromWebView) return undefined;
 
   return addTab<SettingsTabData>(
     {
       id: settingsTabId,
-      tabType: TAB_TYPE_PROJECT_SETTINGS_TAB,
+      tabType: TAB_TYPE_SETTINGS_TAB,
       data: {
-        projectId: projectIdFromWebView,
+        projectIdToLimitSettings: projectIdFromWebView,
       },
     },
     {
       type: 'float',
       position: 'center',
-      floatSize: { height: 400, width: 500 },
-    },
-  );
-}
-
-async function openUserSettingsTab(): Promise<Layout | undefined> {
-  const settingsTabId = newGuid();
-
-  return addTab<SettingsTabData>(
-    {
-      id: settingsTabId,
-      tabType: TAB_TYPE_USER_SETTINGS_TAB,
-      data: {},
-    },
-    {
-      type: 'float',
-      position: 'center',
-      floatSize: { height: 400, width: 500 },
+      floatSize: { height: 600, width: 900 },
     },
   );
 }
@@ -1473,8 +1453,9 @@ export async function startWebViewService(): Promise<void> {
   // This map should allow any functions because commands can be any function type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
-    'platform.openProjectSettings': openProjectSettingsTab,
-    'platform.openUserSettings': openUserSettingsTab,
+    'platform.openSettings': openSettingsTab,
+    'platform.openProjectSettings': openSettingsTab,
+    'platform.openUserSettings': openSettingsTab,
   };
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {

@@ -182,7 +182,7 @@
   "%settings_platform_verseRef_description%": "Referencia de Verso Actual para el Grupo de Desplazamiento A. Obsoleto - Por favor use `papi.scrollGroups` y `useWebViewScrollGroupScrRef`",
   "%settings_platform_verseRef_label%": "Referencia de Verso Actual para el Grupo de Desplazamiento A (Obsoleto)",
   "%settings_title_projectSettings%": "Configuración del Proyecto",
-  "%settings_title_userSettings%": "Configuración del Usuario",
+  "%settings_title%": "Configuración",
   "%some_localization_key%": "Esto es el texto en español para %some_localization_key%.",
   "%submitButton%": "Enviar",
   "%tab_aria_tab%": "Pestaña",

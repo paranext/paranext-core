@@ -7,7 +7,7 @@ const meta: Meta<typeof ComboBox> = {
   tags: ['autodocs'],
   argTypes: {
     options: { control: 'object' },
-    className: { control: 'text' },
+    buttonClassName: { control: 'text' },
   },
 };
 export default meta;
@@ -26,12 +26,12 @@ export const Placeholder: Story = {
 
 export const Paratext: Story = {
   args: {
-    className: 'paratext',
+    buttonClassName: 'paratext',
   },
 };
 
 export const ParatextBright: Story = {
   args: {
-    className: 'paratext bright',
+    buttonClassName: 'paratext bright',
   },
 };
