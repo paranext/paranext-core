@@ -127,6 +127,7 @@ export type {
   Localized,
 } from './menus.model';
 export { menuDocumentSchema } from './menus.model';
+export type { DblResourceData, ResourceType } from './resources.model';
 export type {
   ExtensionControlledProjectSetting,
   ExtensionControlledSetting,

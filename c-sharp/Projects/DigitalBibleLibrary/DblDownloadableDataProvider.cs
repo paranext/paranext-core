@@ -10,7 +10,7 @@ namespace Paranext.DataProvider.Projects.DigitalBibleLibrary;
 /// Data provider that can install, update and uninstall DBL (Digital Bible Library) resources
 /// </summary>
 internal class DblResourcesDataProvider(PapiClient papiClient)
-    : NetworkObjects.DataProvider("paratextBibleDownloadResources.dblResourcesProvider", papiClient)
+    : NetworkObjects.DataProvider("platformGetResources.dblResourcesProvider", papiClient)
 {
     #region Internal classes
 
@@ -30,7 +30,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         public string DisplayName { get; set; } = DisplayName;
         public string FullName { get; set; } = FullName;
         public string BestLanguageName { get; set; } = BestLanguageName;
-        public string Type { get; set; } = Type.ToString();
+        public string Type { get; set; } = Type.ToString() + "Resource";
         public long Size { get; set; } = Size;
         public bool Installed { get; set; } = Installed;
         public bool UpdateAvailable { get; set; } = UpdateAvailable;
@@ -101,7 +101,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
-                    "%downloadResources_errorRegistrationInvalid%",
+                    "%getResources_errorRegistrationInvalid%",
                     $"User registration is not valid. Cannot retrieve resources from DBL."
                 )
             );
@@ -146,7 +146,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             DBLEntryUid,
             LocalizationService.GetLocalizedString(
                 PapiClient,
-                "%downloadResources_errorInstallResource_resourceNotFound%",
+                "%getResources_errorInstallResource_resourceNotFound%",
                 $"Resource not available from DBL."
             ),
             out var installableResource
@@ -156,7 +156,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
-                    "%downloadResources_errorInstallResource_resourceAlreadyInstalled%",
+                    "%getResources_errorInstallResource_resourceAlreadyInstalled%",
                     $"Resource is already installed and up to date. Installation skipped."
                 )
             );
@@ -170,7 +170,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
-                    "%downloadResources_errorInstallResource_installationFailed%",
+                    "%getResources_errorInstallResource_installationFailed%",
                     $"Resource cannot be found after attempted installation. Installation failed."
                 )
             );
@@ -187,7 +187,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             DBLEntryUid,
             LocalizationService.GetLocalizedString(
                 PapiClient,
-                "%downloadResources_errorUninstallResource_resourceNotFound%",
+                "%getResources_errorUninstallResource_resourceNotFound%",
                 $"Resource not found on list of DBL resources."
             ),
             out var installableResource
@@ -197,7 +197,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
-                    "%downloadResources_errorUninstallResource_resourceNotInstalled%",
+                    "%getResources_errorUninstallResource_resourceNotInstalled%",
                     $"Resource is not currently installed, so it can't be removed."
                 )
             );
@@ -209,7 +209,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
-                    "%downloadResources_errorUninstallResource_localResourceNotFound%",
+                    "%getResources_errorUninstallResource_localResourceNotFound%",
                     $"Resource cannot be located, so it can't be removed."
                 )
             );
@@ -224,7 +224,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             throw new Exception(
                 LocalizationService.GetLocalizedString(
                     PapiClient,
-                    "%downloadResources_errorUninstallResource_localResourceStillPresent%",
+                    "%getResources_errorUninstallResource_localResourceStillPresent%",
                     $"Resource is still present. Removing failed."
                 )
             );
