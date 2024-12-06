@@ -22,7 +22,7 @@ const homeWebViewProvider: IWebViewProvider = {
     return {
       allowPopups: true,
       title: await papi.localization.getLocalizedString({
-        localizeKey: '%home_dialog_title%',
+        localizeKey: '%resources_dialog_title%',
       }),
       ...savedWebView,
       content: homeDialogReact,

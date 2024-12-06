@@ -192,6 +192,18 @@ export type LocalizedStringValue = string;
 export interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
+export type ResourceType = "DBLResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
+export type DblResourceData = {
+	dblEntryUid: string;
+	displayName: string;
+	fullName: string;
+	bestLanguageName: string;
+	type: ResourceType;
+	size: number;
+	installed: boolean;
+	updateAvailable: boolean;
+	projectId: string;
+};
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -1369,6 +1381,20 @@ export interface FooterProps {
  * @returns The rendered Footer component
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export declare const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[];
+export type FilterableResourceListProps = {
+	localizedStrings: LanguageStrings;
+	dblResources: DblResourceData[];
+	isLoadingDblResources: boolean;
+	typeFilter: ResourceType[];
+	setTypeFilter: (stateValue: ResourceType[]) => void;
+	languageFilter: string[];
+	setLanguageFilter: (stateValue: string[]) => void;
+	openResource: (projectId: string) => void;
+	installResource: ((uid: string) => Promise<void>) | undefined;
+	uninstallResource: ((uid: string) => Promise<void>) | undefined;
+};
+export declare function FilterableResourceList({ localizedStrings, dblResources, isLoadingDblResources, typeFilter, setTypeFilter, languageFilter, setLanguageFilter, openResource, installResource, uninstallResource, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

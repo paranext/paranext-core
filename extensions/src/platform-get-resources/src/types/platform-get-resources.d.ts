@@ -1,24 +1,7 @@
 declare module 'platform-get-resources' {
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import { DataProviderDataType, IDataProvider } from '@papi/core';
-
-  export type ResourceType = 'DBL' | 'EnhancedResource' | 'XmlResource' | 'SourceLanguageResource';
-
-  /**
-   * Contains small amount of information about DBL resources, for the purpose of presenting a list
-   * of available resources to the user
-   */
-  export type DblResourceData = {
-    dblEntryUid: string;
-    displayName: string;
-    fullName: string;
-    bestLanguageName: string;
-    type: ResourceType;
-    size: number;
-    installed: boolean;
-    updateAvailable: boolean;
-    projectId: string;
-  };
+  import type { DblResourceData } from 'platform-bible-utils';
 
   export type GetResourcesDataTypes = {
     /** List of information about resources that are available from the DBL */
