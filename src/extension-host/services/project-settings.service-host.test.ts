@@ -42,6 +42,11 @@ jest.mock('@shared/services/localization.service', () => ({
     },
   },
 }));
+jest.mock('@extension-host/services/contribution.service', () => ({
+  ...jest.requireActual('@extension-host/services/contribution.service'),
+  // Don't actually wait because we're not syncing any contributions in these tests
+  waitForResyncContributions: async () => {},
+}));
 
 describe('isValid', () => {
   it('should return true', async () => {

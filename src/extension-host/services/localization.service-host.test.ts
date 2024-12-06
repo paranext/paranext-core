@@ -58,6 +58,11 @@ jest.mock('@shared/services/logger.service', () => ({
     warn: jest.fn(() => {}),
   },
 }));
+jest.mock('@extension-host/services/contribution.service', () => ({
+  ...jest.requireActual('@extension-host/services/contribution.service'),
+  // Don't actually wait because we're not syncing any contributions in these tests
+  waitForResyncContributions: async () => {},
+}));
 
 let localizationDataProviderEngine: Awaited<
   ReturnType<typeof testingLocalizationService.implementLocalizationDataProviderEngine>
