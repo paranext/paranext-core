@@ -1376,8 +1376,6 @@ export type UiLanguageSelectorLocalizedStrings = {
 	[localizedInventoryKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 export type LanguageInfo = {
-	/** IETF BCP-47 language tag */
-	tag: string;
 	/** The name of the language to be displayed (in its native script) */
 	autonym: string;
 	/**
@@ -1392,21 +1390,34 @@ export type LanguageInfo = {
 	otherNames?: string[];
 };
 export type UiLanguageSelectorProps = {
-	/** Full list of known languages to display. */
-	knownUiLanguages: LanguageInfo[];
+	/** Full set of known languages to display. */
+	knownUiLanguages: Record<string, LanguageInfo>;
 	/** IETF BCP-47 language tag of the current primary UI language. `undefined` => 'en' */
-	primaryLanguage: LanguageInfo | undefined;
+	primaryLanguage: string;
 	/**
 	 * Ordered list of fallback language tags to use if the localization key can't be found in the
-	 * current primary UI language. This list never contains English because it is the ultimate
+	 * current primary UI language. This list never contains English ('en') because it is the ultimate
 	 * fallback.
 	 */
-	fallbackLanguages: LanguageInfo[] | undefined;
-	handlePrimaryLanguageChange: (newUiLanguage: string) => void;
-	handleFallbackLanguagesChange: (newFallbackLanguages: string[]) => void;
+	fallbackLanguages: string[] | undefined;
+	/**
+	 * Handler for when either the primary or the fallback languages change (or both). For this
+	 * handler, the primary UI language is the first one in the array, followed by the fallback
+	 * languages in order of decreasing preference.
+	 */
+	handleLanguageChanges?: (newUiLanguages: string[]) => void;
+	/**
+	 * Handler for the primary language changes.
+	 */
+	handlePrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
+	/**
+	 * Handler for when the fallback languages change. The array contains the fallback languages in
+	 * order of decreasing preference.
+	 */
+	handleFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
 	localizedStrings: UiLanguageSelectorLocalizedStrings;
 };
-export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, handlePrimaryLanguageChange, handleFallbackLanguagesChange, localizedStrings, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, handleLanguageChanges, handlePrimaryLanguageChange, handleFallbackLanguagesChange, localizedStrings, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

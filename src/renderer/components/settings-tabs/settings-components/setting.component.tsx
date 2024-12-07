@@ -1,3 +1,4 @@
+import localizationDataService from '@shared/services/localization.service';
 import { ChangeEvent, useCallback, useMemo, useState } from 'react';
 import {
   ProjectSettingNames,
@@ -5,12 +6,19 @@ import {
   SettingNames,
   SettingTypes,
 } from 'papi-shared-types';
-import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
+import {
+  Checkbox,
+  Input,
+  LanguageInfo,
+  SettingsListItem,
+  UiLanguageSelector,
+} from 'platform-bible-react';
 import { debounce, getErrorMessage } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import logger from '@shared/services/logger.service';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { projectSettings } from '@extension-host/services/papi-backend.service';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -107,7 +115,14 @@ export default function Setting({
   description,
 }: CombinedSettingProps) {
   const validateSetting = validateUserSetting || validateProjectSetting;
-
+  const defaultLanguages: Record<string, LanguageInfo> = {
+    en: { autonym: 'English' },
+    es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
+    fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
+  };
+  const [languages, , isLoadingLanguages] = useData(
+    localizationDataService.dataProviderName,
+  ).AvailableInterfaceLanguages(undefined, defaultLanguages);
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
   /**
@@ -164,6 +179,9 @@ export default function Setting({
   };
 
   const debouncedHandleChange = debounce(handleChangeSetting, 500);
+  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
+  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
 
   const generateComponent = useCallback(() => {
     let component = <p>No setting component</p>;
@@ -181,13 +199,27 @@ export default function Setting({
         />
       );
     else if (typeof setting === 'object')
-      component = (
-        <Input
-          key={settingKey}
-          onChange={debouncedHandleChange}
-          defaultValue={JSON.stringify(setting, undefined, 2)}
-        />
-      );
+      if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+        component = (
+          <UiLanguageSelector
+            knownUiLanguages={languages}
+            primaryLanguage={setting[0]}
+            fallbackLanguages={setting.slice(1)}
+            handleLanguageChanges={(newUiLanguages) => {
+              if (!isLoadingLanguages) setSetting(newUiLanguages);
+            }}
+            localizedStrings={localizedStrings}
+          />
+        );
+      } else {
+        component = (
+          <Input
+            key={settingKey}
+            onChange={debouncedHandleChange}
+            defaultValue={JSON.stringify(setting, undefined, 2)}
+          />
+        );
+      }
 
     return (
       <div>
@@ -195,11 +227,16 @@ export default function Setting({
         {errorMessage && <div style={{ color: 'red' }}>{errorMessage}</div>}
       </div>
     );
-  }, [setting, settingKey, debouncedHandleChange, errorMessage]);
-
-  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
-  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
+  }, [
+    setting,
+    settingKey,
+    debouncedHandleChange,
+    errorMessage,
+    languages,
+    isLoadingLanguages,
+    localizedStrings,
+    setSetting,
+  ]);
 
   return (
     <SettingsListItem

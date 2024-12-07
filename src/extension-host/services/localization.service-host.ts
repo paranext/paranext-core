@@ -24,6 +24,7 @@ import { joinUriPaths } from '@node/utils/util';
 import path from 'path';
 import settingsService from '@shared/services/settings.service';
 import LocalizedStringsDocumentCombiner from '@shared/utils/localized-strings-document-combiner';
+import { LanguageInfo } from 'platform-bible-react';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
 // BCP 47 validation regex from https://stackoverflow.com/questions/7035825/regular-expression-for-a-language-tag-as-defined-by-bcp47
@@ -299,6 +300,21 @@ class LocalizationDataProviderEngine
     return Object.fromEntries(localizations);
   }
 
+  // This method legitimately does not need to call anything else in this class as of now
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async getAvailableInterfaceLanguages() {
+    const languages: Record<string, LanguageInfo> = {
+      en: { autonym: 'English' },
+      es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
+      fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
+      de: { autonym: 'Deutsch', uiNames: { en: 'German', es: 'alemán', fr: 'Allemand' } },
+      zh: { autonym: '中文', uiNames: { en: 'Chinese', es: 'chino' } },
+      hi: { autonym: 'हिन्दी', uiNames: { en: 'Hindi', es: 'hindi' } },
+      ar: { autonym: 'العربية', uiNames: { en: 'Arabic', es: 'árabe' } },
+    };
+    return languages;
+  }
+
   // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
@@ -309,6 +325,14 @@ class LocalizationDataProviderEngine
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
     throw new Error('setLocalizedStrings disabled');
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setAvailableInterfaceLanguages(): Promise<
+    DataProviderUpdateInstructions<LocalizationDataDataTypes>
+  > {
+    throw new Error('setAvailableInterfaceLanguages disabled');
   }
 }
 

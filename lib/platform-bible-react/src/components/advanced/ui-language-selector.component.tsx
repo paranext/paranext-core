@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { LocalizedStringValue } from 'platform-bible-utils';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn-ui/select';
 import { Label } from '../shadcn-ui/label';
@@ -32,8 +32,6 @@ const localizeString = (
 };
 
 export type LanguageInfo = {
-  /** IETF BCP-47 language tag */
-  tag: string;
   /** The name of the language to be displayed (in its native script) */
   autonym: string;
   /**
@@ -49,31 +47,37 @@ export type LanguageInfo = {
 };
 
 export type UiLanguageSelectorProps = {
-  /** Full list of known languages to display. */
-  knownUiLanguages: LanguageInfo[];
+  /** Full set of known languages to display. */
+  knownUiLanguages: Record<string, LanguageInfo>;
   /** IETF BCP-47 language tag of the current primary UI language. `undefined` => 'en' */
-  primaryLanguage: LanguageInfo | undefined;
+  primaryLanguage: string;
   /**
    * Ordered list of fallback language tags to use if the localization key can't be found in the
-   * current primary UI language. This list never contains English because it is the ultimate
+   * current primary UI language. This list never contains English ('en') because it is the ultimate
    * fallback.
    */
-  fallbackLanguages: LanguageInfo[] | undefined;
-  handlePrimaryLanguageChange: (newUiLanguage: string) => void;
-  handleFallbackLanguagesChange: (newFallbackLanguages: string[]) => void;
+  fallbackLanguages: string[] | undefined;
+  /**
+   * Handler for when either the primary or the fallback languages change (or both). For this
+   * handler, the primary UI language is the first one in the array, followed by the fallback
+   * languages in order of decreasing preference.
+   */
+  handleLanguageChanges?: (newUiLanguages: string[]) => void;
+  /** Handler for the primary language changes. */
+  handlePrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
+  /**
+   * Handler for when the fallback languages change. The array contains the fallback languages in
+   * order of decreasing preference.
+   */
+  handleFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
   localizedStrings: UiLanguageSelectorLocalizedStrings;
-};
-
-const getLanguageDisplayName = (lang: LanguageInfo, uiLang: string) => {
-  const altName = uiLang !== lang.tag ? (lang.uiNames?.[uiLang] ?? lang.uiNames?.en) : undefined;
-
-  return altName ? `${lang.autonym} (${altName})` : lang.autonym;
 };
 
 export default function UiLanguageSelector({
   knownUiLanguages,
-  primaryLanguage = { tag: 'en', autonym: 'English' },
+  primaryLanguage = 'en',
   fallbackLanguages = [],
+  handleLanguageChanges,
   handlePrimaryLanguageChange,
   handleFallbackLanguagesChange,
   localizedStrings,
@@ -82,17 +86,30 @@ export default function UiLanguageSelector({
     localizedStrings,
     '%webView_uiLanguageSelector_selectFallbackLanguages%',
   );
-  const [selectedLanguage, setSelectedLanguage] = useState(primaryLanguage.tag);
+  const [selectedLanguage, setSelectedLanguage] = useState(primaryLanguage);
+  const [isOpen, setIsOpen] = useState(false);
 
   const handleLanguageChange = (code: string) => {
     setSelectedLanguage(code);
-    handlePrimaryLanguageChange(code);
+    if (handlePrimaryLanguageChange) handlePrimaryLanguageChange(code);
+    // REVIEW: Should fallback languages be preserved when primary language changes?
+    if (handleLanguageChanges)
+      handleLanguageChanges([code, ...fallbackLanguages.filter((lang) => lang !== code)]);
+    if (handleFallbackLanguagesChange && fallbackLanguages.find((l) => l == code))
+      handleFallbackLanguagesChange([...fallbackLanguages.filter((lang) => lang !== code)]);
+    setIsOpen(false); // Close the dropdown when a selection is made
   };
 
-  useEffect(() => {
-    // Temporary no-op usage to suppress warning
-    handleFallbackLanguagesChange([]);
-  }, [handleFallbackLanguagesChange]);
+  const getLanguageDisplayName = (lang: string, uiLang: string) => {
+    const altName =
+      uiLang !== lang
+        ? (knownUiLanguages[lang]?.uiNames?.[uiLang] ?? knownUiLanguages[lang]?.uiNames?.en)
+        : undefined;
+
+    return altName
+      ? `${knownUiLanguages[lang]?.autonym} (${altName})`
+      : knownUiLanguages[lang]?.autonym;
+  };
 
   /*   const handleFallbackLanguageClick = () => {
     handleFallbackLanguagesChange([]);
@@ -101,16 +118,24 @@ export default function UiLanguageSelector({
   return (
     <div className="pr-twp tw-max-w-sm tw-p-4">
       {/* Language Selector */}
-      <Select name="uiLanguage" value={selectedLanguage} onValueChange={handleLanguageChange}>
+      <Select
+        name="uiLanguage"
+        value={selectedLanguage}
+        onValueChange={handleLanguageChange}
+        open={isOpen}
+        onOpenChange={(open) => setIsOpen(open)}
+      >
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {knownUiLanguages.map((lang) => (
-            <SelectItem key={lang.tag} value={lang.tag}>
-              {getLanguageDisplayName(lang, primaryLanguage.tag)}
-            </SelectItem>
-          ))}
+          {Object.keys(knownUiLanguages).map((key) => {
+            return (
+              <SelectItem key={key} value={key}>
+                {getLanguageDisplayName(key, primaryLanguage)}
+              </SelectItem>
+            );
+          })}
         </SelectContent>
       </Select>
 
@@ -118,7 +143,7 @@ export default function UiLanguageSelector({
       {selectedLanguage !== 'en' && (
         <>
           <Label className="tw-ml-3">{selectFallbackLanguagesText}</Label>
-          {fallbackLanguages.map((f) => getLanguageDisplayName(f, primaryLanguage.tag))}
+          {fallbackLanguages.map((f) => getLanguageDisplayName(f, primaryLanguage))}
           {/* <MultiSelector>
 
           </MultiSelector> */}

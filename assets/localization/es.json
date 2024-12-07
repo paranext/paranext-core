@@ -174,7 +174,7 @@
   "%settings_defaultSearchText_searchUserSettings%": "Buscar Configuración del Usuario...",
   "%settings_platform_group1_description%": "Configuraciones generales del software fundamental",
   "%settings_platform_group1_label%": "Configuración de la Plataforma",
-  "%settings_platform_interfaceLanguage_description%": "Lista de locales usados al localizar la interfaz en orden descendente de prioridad. 'en' (inglés) siempre se añade al final, de modo que si no se encuentra una traducción en ninguno de los idiomas especificados, aparecerá en inglés.",
+  "%settings_platform_interfaceLanguage_description%": "El idioma principal de interfaz, más cualquier selección de idiomas adicionales que sirven como respaldo al localizar la interfaz. 'en' (inglés) siempre es el último idioma de respaldo de modo que si no se encuentra una traducción en ninguno de los idiomas especificados, aparecerá en inglés.",
   "%settings_platform_label_group1%": "Configuraciones de Platform",
   "%settings_platform_interfaceLanguage_label%": "Idioma de interfaz",
   "%settings_platform_paratextDataLastRegistryDataCachedTimes_label%": "ParatextData Últimos Datos del Registro Almacenados en Caché",
