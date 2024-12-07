@@ -6,7 +6,7 @@
  * using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, shell, ipcMain } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -22,7 +22,6 @@ import extensionAssetProtocolService from '@main/services/extension-asset-protoc
 import { wait, serialize } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
@@ -205,25 +204,14 @@ async function main() {
     }
   });
 
-  /** Map from ipc channel to handler function. Use with ipcRenderer.invoke */
-  const ipcHandlers: {
-    [ipcChannel: SerializedRequestType]: (
-      event: IpcMainInvokeEvent,
-      // We don't know the exact parameter types since ipc handlers can be anything
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...args: any[]
-    ) => Promise<unknown> | unknown;
-  } = {
-    'electronAPI:env.test': (_event, message: string) => `From main.ts: test ${message}`,
-  };
-
   app
     .whenReady()
     // eslint-disable-next-line promise/always-return
     .then(() => {
       // Set up ipc handlers
-      Object.entries(ipcHandlers).forEach(([ipcChannel, ipcHandler]) =>
-        ipcMain.handle(ipcChannel, ipcHandler),
+      ipcMain.handle(
+        'electronAPI:env.test',
+        (_event, message: string) => `From main.ts: test ${message}`,
       );
 
       createWindow();
@@ -237,33 +225,39 @@ async function main() {
     })
     .catch(logger.info);
 
-  Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-    networkService.registerRequestHandler(
-      // Re-assert type after passing through `forEach`.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      ipcHandle as SerializedRequestType,
-      // Handle with an empty event.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      async (...args: unknown[]) => handler({} as IpcMainInvokeEvent, ...args),
-    );
-  });
-
   // #endregion
 
   // #region Register commands
 
-  // `main.ts`'s command handler declarations are in `papi-shared-types.ts` so they can be picked up
-  // by papi-dts
-  // This map should allow any functions because commands can be any function type
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
-    'platform.restartExtensionHost': async () => {
-      restartExtensionHost();
+  // `main.ts`'s command handler declarations are in `papi-shared-types.ts` so papi-dts sees them
+
+  commandService.registerCommand('platform.restartExtensionHost', restartExtensionHost, {
+    description: 'Restart the extension host which reloads and reinitializes all TS/JS extensions',
+    params: [],
+    result: {
+      name: 'return value',
+      schema: { type: 'null' },
     },
-    'platform.quit': async () => {
+  });
+
+  commandService.registerCommand(
+    'platform.quit',
+    async () => {
       app.quit();
     },
-    'platform.restart': async () => {
+    {
+      description: 'Close the platform, including all processes started by it',
+      params: [],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.restart',
+    async () => {
       // Only set up to restart once. This could accidentally be called twice if `app.quit` is
       // canceled or if someone requested to restart multiple times in the few seconds it takes
       // `app.quit` to run because of the `will-quit` event
@@ -278,13 +272,15 @@ async function main() {
       }
       app.quit();
     },
-  };
-
-  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-    // Re-assert type after passing through `forEach`.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    commandService.registerCommand(commandName as CommandNames, handler);
-  });
+    {
+      description: 'Restart the platform, including all processes started by it',
+      params: [],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
+    },
+  );
 
   // #endregion
 
@@ -361,7 +357,8 @@ async function main() {
     setTimeout(async () => {
       logger.info(
         `Available network objects after 30 seconds: ${serialize(
-          await networkObjectStatusService.getAllNetworkObjectDetails(),
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          await networkService.request('rpc.discover' as SerializedRequestType, {}),
         )}`,
       );
     }, 30000);

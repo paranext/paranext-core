@@ -933,8 +933,11 @@ declare module 'shared/data/rpc.model' {
    * your request handler.
    */
   export const UNREGISTER_METHOD = 'network:unregisterMethod';
-  /** Get all methods that are currently registered on the network. */
-  export const GET_METHODS = 'network:getMethods';
+  /**
+   * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by
+   * the OpenRPC specification.
+   */
+  export const GET_METHODS = 'rpc.discover';
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
 }
@@ -980,6 +983,130 @@ declare module 'shared/models/papi-network-event-emitter.model' {
     dispose: () => Promise<boolean>;
   }
 }
+declare module 'shared/models/openrpc.model' {
+  import type { JSONSchema7 } from 'json-schema';
+  /**
+   * Describes APIs available to call using JSON-RPC 2.0
+   *
+   * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.2 aligns with OpenRPC 1.2.6.
+   * https://github.com/open-rpc/meta-schema/releases/download/1.14.2/open-rpc-meta-schema.json
+   *
+   * We don't want to go past 1.2.6 because https://playground.open-rpc.org/ doesn't support anything
+   * past 1.2.6 for now.
+   */
+  export type OpenRpc = {
+    openrpc: string;
+    info: Info;
+    servers?: Server[];
+    methods: Method[];
+    components?: Components;
+    externalDocs?: ExternalDocumentation;
+  };
+  export type Info = {
+    title: string;
+    version: string;
+    description?: string;
+    termsOfService?: string;
+    contact?: Contact;
+    license?: License;
+  };
+  export type Contact = {
+    name?: string;
+    url?: string;
+    email?: string;
+  };
+  export type License = {
+    name: string;
+    url?: string;
+  };
+  export type Server = {
+    url: string;
+    name?: string;
+    description?: string;
+    summary?: string;
+    variables?: {
+      [key: string]: ServerVariable;
+    };
+  };
+  export type ServerVariable = {
+    default: string;
+    description?: string;
+    enum?: string[];
+  };
+  export type Method = {
+    name: string;
+    description?: string;
+    params?: ContentDescriptor[];
+    result: ContentDescriptor;
+    deprecated?: boolean;
+    servers?: Server[];
+    errors?: Error[];
+    links?: Link[];
+    examples?: Example[];
+    tags?: Tag[];
+    externalDocs?: ExternalDocumentation;
+  };
+  export type ContentDescriptor = {
+    name: string;
+    required?: boolean;
+    summary?: string;
+    description?: string;
+    deprecated?: boolean;
+    schema: Schema;
+  };
+  export type Schema = JSONSchema7;
+  export type Error = {
+    code: number;
+    message: string;
+    data?: any;
+  };
+  export type Link = {
+    name: string;
+    description?: string;
+    method: string;
+    params?: {
+      [key: string]: any;
+    };
+  };
+  export type Example = {
+    name: string;
+    description?: string;
+    params: {
+      [key: string]: any;
+    };
+    result: any;
+  };
+  export type Tag = {
+    name: string;
+    description?: string;
+    externalDocs?: ExternalDocumentation;
+  };
+  export type ExternalDocumentation = {
+    description?: string;
+    url: string;
+  };
+  export type Components = {
+    schemas?: {
+      [key: string]: Schema;
+    };
+    contentDescriptors?: {
+      [key: string]: ContentDescriptor;
+    };
+    examples?: {
+      [key: string]: Example;
+    };
+    links?: {
+      [key: string]: Link;
+    };
+    errors?: {
+      [key: string]: Error;
+    };
+    tags?: {
+      [key: string]: Tag;
+    };
+  };
+  export function createEmptyOpenRpc(): OpenRpc;
+}
 declare module 'shared/models/rpc.interface' {
   import {
     ConnectionStatus,
@@ -987,6 +1114,7 @@ declare module 'shared/models/rpc.interface' {
     InternalRequestHandler,
     RequestParams,
   } from 'shared/data/rpc.model';
+  import { Method } from 'shared/models/openrpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   /**
@@ -1055,10 +1183,18 @@ declare module 'shared/models/rpc.interface' {
    */
   export interface IRpcMethodRegistrar extends IRpcHandler {
     /** Register a method that will be called if an RPC request is made */
-    registerMethod: (methodName: string, method: InternalRequestHandler) => Promise<boolean>;
+    registerMethod: (
+      methodName: string,
+      method: InternalRequestHandler,
+      methodDocs?: Method,
+    ) => Promise<boolean>;
     /** Unregister a method so it is no longer available to RPC requests */
     unregisterMethod: (methodName: string) => Promise<boolean>;
   }
+  export type RegisteredRpcMethodDetails = {
+    handler: IRpcHandler;
+    methodDocs?: Method;
+  };
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1137,6 +1273,7 @@ declare module 'client/services/rpc-client' {
     RequestParams,
   } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { Method } from 'shared/models/openrpc.model';
   /**
    * Manages the JSON-RPC protocol on the client end of a websocket that connects to main
    *
@@ -1164,7 +1301,11 @@ declare module 'client/services/rpc-client' {
       requestParams: RequestParams,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
-    registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean>;
+    registerMethod(
+      methodName: string,
+      method: InternalRequestHandler,
+      methodDocs?: Method,
+    ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
     private createNextRequestId;
     private addEventListenersToWebSocket;
@@ -1176,9 +1317,10 @@ declare module 'client/services/rpc-client' {
 }
 declare module 'main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcHandler } from 'shared/models/rpc.interface';
+  import { IRpcHandler, RegisteredRpcMethodDetails } from 'shared/models/rpc.interface';
   import { ConnectionStatus, RequestParams } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { Method } from 'shared/models/openrpc.model';
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
   /**
    * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
@@ -1197,14 +1339,14 @@ declare module 'main/services/rpc-server' {
     private readonly jsonRpcServer;
     /** Refers to any process that connected to main over the websocket */
     private readonly jsonRpcClient;
-    private readonly rpcHandlerByMethodName;
+    private readonly rpcMethodDetailsByMethodName;
     /** Called by an RpcServer when all other RpcServers should emit an event over the network */
     private readonly propagateEventMethod;
     constructor(
       name: string,
       webSocket: WebSocket,
       propagateEventMethod: PropagateEventMethod,
-      rpcHandlerByMethodName: Map<string, IRpcHandler>,
+      rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -1213,7 +1355,7 @@ declare module 'main/services/rpc-server' {
       requestParams: RequestParams,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
-    registerRemoteMethod(methodName: string): boolean;
+    registerRemoteMethod(methodName: string, methodDocs?: Method): boolean;
     unregisterRemoteMethod(methodName: string): boolean;
     private createNextRequestId;
     private addMethodToRpcServer;
@@ -1236,6 +1378,7 @@ declare module 'main/services/rpc-websocket-listener' {
   import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { Method, OpenRpc } from 'shared/models/openrpc.model';
   /**
    * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
    * connects, an RpcServer is created in this same process to service that connection.
@@ -1254,7 +1397,7 @@ declare module 'main/services/rpc-websocket-listener' {
     private nextSocketNumber;
     private readonly connectionMutex;
     private readonly rpcServerBySocket;
-    private readonly rpcHandlerByMethodName;
+    private readonly rpcMethodDetailsByMethodName;
     private readonly localMethodsByMethodName;
     constructor();
     get nextSocketId(): string;
@@ -1264,8 +1407,13 @@ declare module 'main/services/rpc-websocket-listener' {
       requestType: SerializedRequestType,
       requestParams: RequestParams,
     ): Promise<JSONRPCResponse>;
-    registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean>;
+    registerMethod(
+      methodName: string,
+      method: InternalRequestHandler,
+      methodDocs?: Method,
+    ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
+    generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
     private onClientConnect;
@@ -1286,6 +1434,7 @@ declare module 'shared/services/network.service' {
   import { InternalRequestHandler } from 'shared/data/rpc.model';
   import { UnsubscriberAsync, PlatformEventEmitter, PlatformEvent } from 'platform-bible-utils';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { Method } from 'shared/models/openrpc.model';
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1311,6 +1460,7 @@ declare module 'shared/services/network.service' {
   export function registerRequestHandler(
     requestType: SerializedRequestType,
     requestHandler: InternalRequestHandler,
+    requestDocs?: Omit<Method, 'name'>,
   ): Promise<UnsubscriberAsync>;
   /**
    * Creates a function that is a request function with a baked requestType. This is also nice because
@@ -3409,6 +3559,7 @@ declare module 'papi-shared-types' {
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
   import { CommandHandlers } from 'papi-shared-types';
+  import { Method } from 'shared/models/openrpc.model';
   /**
    * Register a command on the papi to be handled here
    *
@@ -3424,6 +3575,7 @@ declare module 'shared/services/command.service' {
   export const registerCommand: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
     handler: CommandHandlers[CommandName],
+    commandDocs?: Omit<Method, 'name'>,
   ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
   export const sendCommand: <CommandName extends keyof CommandHandlers>(
@@ -5060,7 +5212,7 @@ declare module 'shared/services/dialog.service-model' {
       options?: DialogTypes[DialogTabType]['options'],
     ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined>;
     /**
-     * Shows a select project dialog to the user and prompts the user to select a dialog
+     * Shows a select project dialog to the user and prompts the user to select a project
      *
      * @param options Various options for configuring the dialog that shows
      * @returns Returns the user's selected project id or `undefined` if the user cancels

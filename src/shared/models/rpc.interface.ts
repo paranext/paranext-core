@@ -4,6 +4,7 @@ import {
   InternalRequestHandler,
   RequestParams,
 } from '@shared/data/rpc.model';
+import { Method } from '@shared/models/openrpc.model';
 import { SerializedRequestType } from '@shared/utils/util';
 import { JSONRPCResponse } from 'json-rpc-2.0';
 
@@ -74,7 +75,13 @@ export interface IRpcHandler {
  */
 export interface IRpcMethodRegistrar extends IRpcHandler {
   /** Register a method that will be called if an RPC request is made */
-  registerMethod: (methodName: string, method: InternalRequestHandler) => Promise<boolean>;
+  registerMethod: (
+    methodName: string,
+    method: InternalRequestHandler,
+    methodDocs?: Method,
+  ) => Promise<boolean>;
   /** Unregister a method so it is no longer available to RPC requests */
   unregisterMethod: (methodName: string) => Promise<boolean>;
 }
+
+export type RegisteredRpcMethodDetails = { handler: IRpcHandler; methodDocs?: Method };

@@ -430,8 +430,21 @@ const set = async <T extends NetworkableObject>(
 
     // Check if there is a network object with this ID remotely by trying to register it
     const unsubPromises = [
-      networkService.registerRequestHandler(getNetworkObjectRequestType(id), () =>
-        Promise.resolve(true),
+      networkService.registerRequestHandler(
+        getNetworkObjectRequestType(id),
+        () => Promise.resolve(true),
+        {
+          description: `Check if network object "${id}" exists`,
+          params: [],
+          result: {
+            name: 'return value',
+            summary: 'Does the network object exist?',
+            required: true,
+            schema: {
+              type: 'boolean',
+            },
+          },
+        },
       ),
     ];
 
@@ -447,10 +460,21 @@ const set = async <T extends NetworkableObject>(
 
     netObjDetails.functionNames.forEach((functionName) => {
       const requestType = getNetworkObjectRequestType(id, functionName);
-      const unsub = networkService.registerRequestHandler(requestType, (...args: unknown[]) =>
+      const docs = {
+        name: functionName,
+        description: 'TBD',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: {},
+        },
+      };
+      const unsub = networkService.registerRequestHandler(
+        requestType,
         // Assert as any to allow indexing on the function name
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-        Promise.resolve((objectToShare as any)[functionName](...args)),
+        (...args: unknown[]) => Promise.resolve((objectToShare as any)[functionName](...args)),
+        docs,
       );
       unsubPromises.push(unsub);
     });

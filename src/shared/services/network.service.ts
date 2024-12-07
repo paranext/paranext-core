@@ -23,6 +23,7 @@ import PapiNetworkEventEmitter from '@shared/models/papi-network-event-emitter.m
 import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import logger from '@shared/services/logger.service';
+import { Method } from '@shared/models/openrpc.model';
 
 // #region Local event handling
 
@@ -112,6 +113,7 @@ function validateCommandFormatting(commandName: string) {
 
 /** Check to make sure the request follows any request registration rules */
 function validateRequestTypeFormatting(requestType: SerializedRequestType) {
+  if (requestType.startsWith('rpc.')) return;
   const { category, directive } = deserializeRequestType(requestType);
   if (category === CATEGORY_COMMAND) {
     validateCommandFormatting(directive);
@@ -153,10 +155,12 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
 export async function registerRequestHandler(
   requestType: SerializedRequestType,
   requestHandler: InternalRequestHandler,
+  requestDocs?: Omit<Method, 'name'>,
 ): Promise<UnsubscriberAsync> {
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
-  const success = await jsonRpc.registerMethod(requestType, requestHandler);
+  const docsWithName = requestDocs ? { name: requestType, ...requestDocs } : undefined;
+  const success = await jsonRpc.registerMethod(requestType, requestHandler, docsWithName);
   if (!success) throw new Error(`Could not register request handler for ${requestType}`);
   return async () => {
     if (!jsonRpc) return false;
