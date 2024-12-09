@@ -234,7 +234,7 @@
     "webpack-merge": "^6.0.1",
     "yalc": "^1.0.0-pre.53"
   },
-  "devEngines": {
+  "engines": {
     "node": ">=18.12.x",
     "npm": ">=7.x"
   },
@@ -244,6 +244,6 @@
   },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
-    "node": "20.18.0"
+    "node": "22.12.0"
   }
 }
