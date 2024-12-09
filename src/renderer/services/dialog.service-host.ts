@@ -2,7 +2,7 @@ import {
   DIALOG_OPTIONS_LOCALIZABLE_PROPERTY_KEYS,
   DialogData,
 } from '@shared/models/dialog-options.model';
-import { CATEGORY_DIALOG, DialogService } from '@shared/services/dialog.service-model';
+import { CATEGORY_DIALOG } from '@shared/services/dialog.service-model';
 import * as networkService from '@shared/services/network.service';
 import {
   aggregateUnsubscriberAsyncs,
@@ -10,12 +10,17 @@ import {
   serialize,
   newGuid,
   LocalizeKey,
+  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import * as webViewService from '@renderer/services/web-view.service-host';
 import { serializeRequestType } from '@shared/utils/util';
 import logger from '@shared/services/logger.service';
 import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
-import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
+import {
+  DialogTabTypes,
+  type DialogTypes,
+} from '@renderer/components/dialogs/dialog-definition.model';
+import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
 import localizationService from '@shared/services/localization.service';
 
@@ -240,18 +245,96 @@ async function selectProject(
   return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
-const dialogService: DialogService = {
-  showDialog,
-  selectProject,
-};
-
 /** Register the commands that back the PAPI dialog service */
 export async function startDialogService(): Promise<void> {
   await initialize();
 
   // register functions as requests
-  const unsubPromises = Object.entries(dialogService).map(([fnName, handler]) =>
-    networkService.registerRequestHandler(serializeRequestType(CATEGORY_DIALOG, fnName), handler),
+  const unsubPromises: Promise<UnsubscriberAsync>[] = [];
+  unsubPromises.push(
+    networkService.registerRequestHandler(
+      serializeRequestType(CATEGORY_DIALOG, 'showDialog'),
+      showDialog,
+      {
+        method: {
+          summary: 'Shows a dialog to the user and prompts the user to respond',
+          params: [
+            {
+              name: 'dialogType',
+              required: true,
+              summary: 'The type of dialog to show the user',
+              schema: {
+                enum: Object.values(DialogTypesValues),
+              },
+            },
+            {
+              name: 'options',
+              required: false,
+              summary: 'Various options for configuring the dialog that shows',
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  iconUrl: { type: 'string' },
+                  prompt: { type: 'string' },
+                  includeProjectIds: { type: 'array', items: { type: 'string' } },
+                  excludeProjectIds: { type: 'array', items: { type: 'string' } },
+                  selectedProjectIds: { type: 'array', items: { type: 'string' } },
+                  selectedBookIds: { type: 'array', items: { type: 'string' } },
+                },
+              },
+            },
+          ],
+          result: {
+            name: 'return value',
+            summary: 'Response from user',
+            schema: {
+              oneOf: [
+                { type: 'string' },
+                { type: 'array', items: { type: 'string' } },
+                { type: 'null' },
+              ],
+            },
+          },
+        },
+      },
+    ),
+  );
+  unsubPromises.push(
+    networkService.registerRequestHandler(
+      serializeRequestType(CATEGORY_DIALOG, 'selectProject'),
+      selectProject,
+      {
+        method: {
+          summary:
+            'Shows a select project dialog to the user and prompts the user to select a project',
+          params: [
+            {
+              name: 'options',
+              summary: 'Various options for configuring the dialog that shows',
+              required: false,
+              schema: {
+                type: 'object',
+                properties: {
+                  title: { type: 'string' },
+                  iconUrl: { type: 'string' },
+                  prompt: { type: 'string' },
+                  includeProjectIds: { type: 'array', items: { type: 'string' } },
+                  excludeProjectIds: { type: 'array', items: { type: 'string' } },
+                },
+              },
+            },
+          ],
+          result: {
+            name: 'return value',
+            summary: "The user's selected project id or nothing if the user cancels",
+            schema: {
+              oneOf: [{ type: 'string' }, { type: 'null' }],
+            },
+          },
+        },
+      },
+    ),
   );
 
   // Wait to successfully register all requests

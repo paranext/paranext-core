@@ -9,6 +9,7 @@ import {
   CATEGORY_COMMAND,
   InternalRequestHandler,
   fixupResponse,
+  GET_METHODS,
 } from '@shared/data/rpc.model';
 import {
   stringLength,
@@ -23,6 +24,7 @@ import PapiNetworkEventEmitter from '@shared/models/papi-network-event-emitter.m
 import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import logger from '@shared/services/logger.service';
+import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
 // #region Local event handling
 
@@ -112,6 +114,8 @@ function validateCommandFormatting(commandName: string) {
 
 /** Check to make sure the request follows any request registration rules */
 function validateRequestTypeFormatting(requestType: SerializedRequestType) {
+  // This request type doesn't conform to the normal format but is required by OpenRPC
+  if (requestType.toString() === GET_METHODS) return;
   const { category, directive } = deserializeRequestType(requestType);
   if (category === CATEGORY_COMMAND) {
     validateCommandFormatting(directive);
@@ -153,10 +157,11 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
 export async function registerRequestHandler(
   requestType: SerializedRequestType,
   requestHandler: InternalRequestHandler,
+  requestDocs?: SingleMethodDocumentation,
 ): Promise<UnsubscriberAsync> {
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
-  const success = await jsonRpc.registerMethod(requestType, requestHandler);
+  const success = await jsonRpc.registerMethod(requestType, requestHandler, requestDocs);
   if (!success) throw new Error(`Could not register request handler for ${requestType}`);
   return async () => {
     if (!jsonRpc) return false;

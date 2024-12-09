@@ -1,19 +1,28 @@
+import { app } from 'electron';
 import {
   ConnectionStatus,
   createErrorResponse,
   createSuccessResponse,
   EventHandler,
+  GET_METHODS,
   InternalRequestHandler,
+  REGISTER_METHOD,
   RequestParams,
   requestWithRetry,
+  UNREGISTER_METHOD,
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
-import { IRpcMethodRegistrar, IRpcHandler } from '@shared/models/rpc.interface';
+import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import { Mutex } from 'platform-bible-utils';
 import { WebSocketServer } from 'ws';
 import logger from '@shared/services/logger.service';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
+import {
+  createEmptyOpenRpc,
+  OpenRpc,
+  SingleMethodDocumentation,
+} from '@shared/models/openrpc.model';
 import RpcServer from './rpc-server';
 
 /**
@@ -34,7 +43,7 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
   private nextSocketNumber = 1;
   private readonly connectionMutex = new Mutex();
   private readonly rpcServerBySocket = new Map<WebSocket, RpcServer>();
-  private readonly rpcHandlerByMethodName = new Map<string, IRpcHandler>();
+  private readonly rpcMethodDetailsByMethodName = new Map<string, RegisteredRpcMethodDetails>();
   private readonly localMethodsByMethodName = new Map<string, InternalRequestHandler>();
 
   constructor() {
@@ -51,6 +60,18 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
     return this.connectionMutex.runExclusive(() => {
       if (this.connectionStatus !== ConnectionStatus.Disconnected) return false;
       this.localEventHandler = localEventHandler;
+      this.registerMethod(GET_METHODS, this.generateOpenRpcSchema, {
+        method: {
+          summary: 'Get documentation for all available methods on the PAPI websocket',
+          params: [],
+          result: {
+            name: 'return value',
+            schema: {
+              type: 'object',
+            },
+          },
+        },
+      });
 
       this.webSocketServer = new WebSocketServer({ port: WEBSOCKET_PORT });
       this.webSocketServer.addListener('connection', this.onClientConnect);
@@ -81,12 +102,13 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
   ): Promise<JSONRPCResponse> {
     return requestWithRetry(
       async () => {
-        const handler = this.rpcHandlerByMethodName.get(requestType);
-        if (!handler)
+        const methodDetails = this.rpcMethodDetailsByMethodName.get(requestType);
+        if (!methodDetails)
           return createErrorResponse(
             `No handler found for ${requestType}`,
             JSONRPCErrorCode.MethodNotFound,
           );
+        const { handler } = methodDetails;
         if (handler !== this) return handler.request(requestType, requestParams);
         const method = this.localMethodsByMethodName.get(requestType);
         if (!method)
@@ -107,24 +129,122 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
     );
   }
 
-  async registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean> {
+  async registerMethod(
+    methodName: string,
+    method: InternalRequestHandler,
+    methodDocs?: SingleMethodDocumentation,
+  ): Promise<boolean> {
     if (
-      this.rpcHandlerByMethodName.has(methodName) ||
+      this.rpcMethodDetailsByMethodName.has(methodName) ||
       this.localMethodsByMethodName.has(methodName)
     )
       return false;
 
-    this.rpcHandlerByMethodName.set(methodName, this);
+    this.rpcMethodDetailsByMethodName.set(methodName, { handler: this, methodDocs });
     this.localMethodsByMethodName.set(methodName, method);
     return true;
   }
 
   async unregisterMethod(methodName: string): Promise<boolean> {
-    const handler = this.rpcHandlerByMethodName.get(methodName);
-    if (handler !== this) return false;
-    this.rpcHandlerByMethodName.delete(methodName);
+    const methodDetails = this.rpcMethodDetailsByMethodName.get(methodName);
+    if (!methodDetails || methodDetails.handler !== this) return false;
+    this.rpcMethodDetailsByMethodName.delete(methodName);
     this.localMethodsByMethodName.delete(methodName);
     return true;
+  }
+
+  generateOpenRpcSchema(): OpenRpc {
+    const openRpcSchema = createEmptyOpenRpc(app.getVersion());
+    openRpcSchema.methods = [
+      {
+        name: REGISTER_METHOD,
+        summary: 'Register a method on the network',
+        params: [
+          {
+            name: 'methodName',
+            required: true,
+            summary: 'Name of the method to register',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'methodDocs',
+            required: false,
+            summary: 'Documentation for the method in OpenRPC format',
+            schema: { type: 'object' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Whether the method was successfully registered',
+          schema: { type: 'boolean' },
+        },
+      },
+      {
+        name: UNREGISTER_METHOD,
+        summary: 'Unregister a method on the network',
+        params: [
+          {
+            name: 'methodName',
+            required: true,
+            summary: 'Name of the method to unregister',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'Whether the method was successfully unregistered',
+          schema: { type: 'boolean' },
+        },
+      },
+    ];
+    this.rpcMethodDetailsByMethodName.forEach((details, methodName) => {
+      if (details.methodDocs) {
+        const newDocs = { name: methodName, ...details.methodDocs.method };
+        newDocs.name = methodName;
+        openRpcSchema.methods.push(newDocs);
+        if (details.methodDocs.components) {
+          openRpcSchema.components = {
+            schemas: {
+              ...details.methodDocs.components.schemas,
+              ...openRpcSchema.components?.schemas,
+            },
+            contentDescriptors: {
+              ...details.methodDocs.components.contentDescriptors,
+              ...openRpcSchema.components?.contentDescriptors,
+            },
+            examples: {
+              ...details.methodDocs.components.examples,
+              ...openRpcSchema.components?.examples,
+            },
+            links: {
+              ...details.methodDocs.components.links,
+              ...openRpcSchema.components?.links,
+            },
+            errors: {
+              ...details.methodDocs.components.errors,
+              ...openRpcSchema.components?.errors,
+            },
+            tags: {
+              ...details.methodDocs.components.tags,
+              ...openRpcSchema.components?.tags,
+            },
+          };
+        }
+      } else {
+        openRpcSchema.methods.push({
+          name: methodName,
+          summary: '',
+          description: 'No documentation provided',
+          params: [],
+          result: {
+            name: 'return value',
+            schema: {},
+          },
+        });
+      }
+    });
+    openRpcSchema.methods.sort((a, b) => a.name.localeCompare(b.name));
+    return openRpcSchema;
   }
 
   emitEventOnNetwork<T>(eventType: string, event: T): void {
@@ -148,7 +268,7 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
       this.nextSocketId,
       webSocket,
       this.propagateEvent,
-      this.rpcHandlerByMethodName,
+      this.rpcMethodDetailsByMethodName,
     );
     rpcServer.connect();
     this.rpcServerBySocket.set(webSocket, rpcServer);

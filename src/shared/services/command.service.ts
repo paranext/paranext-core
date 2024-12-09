@@ -8,6 +8,7 @@ import { UnsubscriberAsync } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
 import { CommandHandlers, CommandNames } from 'papi-shared-types';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
+import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
 /**
  * Register a command on the papi to be handled here
@@ -24,10 +25,12 @@ import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 export const registerCommand = <CommandName extends CommandNames>(
   commandName: CommandName,
   handler: CommandHandlers[CommandName],
+  commandDocs?: SingleMethodDocumentation,
 ): Promise<UnsubscriberAsync> => {
   return networkService.registerRequestHandler(
     serializeRequestType(CATEGORY_COMMAND, commandName),
     handler,
+    commandDocs,
   );
 };
 

@@ -326,11 +326,47 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const openPlatformScriptureEditorPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openScriptureEditor',
     openPlatformScriptureEditor,
+    {
+      method: {
+        summary: 'Open the scripture editor for a project',
+        params: [
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project ID to open the scripture editor for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
 
   const openPlatformResourceViewerPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openResourceViewer',
     openPlatformResourceViewer,
+    {
+      method: {
+        summary: 'Open the scripture editor in read-only mode for a project',
+        params: [
+          {
+            name: 'projectId',
+            required: false,
+            summary: 'The project ID to open the scripture editor for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
 
   const scriptureEditorWebViewProviderPromise = papi.webViewProviders.register(

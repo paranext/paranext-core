@@ -75,6 +75,44 @@ export default function WebView({
         return registerRequestHandler(
           getWebViewMessageRequestType(id),
           (...args: Parameters<WebViewMessageRequestHandler>) => callback(args),
+          {
+            method: {
+              summary: `Post a message to a WebView with id "${id}". Expected to be used only by the Web View Provider that created the web view or the Web View Controller that represents the web view created by the Web View Provider.`,
+              params: [
+                {
+                  name: 'webViewNonce',
+                  required: true,
+                  summary: 'A nonce to ensure that the message is coming from the correct source',
+                  schema: {
+                    type: 'string',
+                  },
+                },
+                {
+                  name: 'message',
+                  required: true,
+                  summary: 'The message to send to the WebView',
+                  schema: {
+                    type: 'string',
+                  },
+                },
+                {
+                  name: 'targetOrigin',
+                  required: false,
+                  summary:
+                    'Expected origin of the web view. Does not send the message if the web view origin does not match. See https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#targetorigin for more information. Defaults to same origin only (works automatically with React and HTML web views)',
+                  schema: {
+                    type: 'string',
+                  },
+                },
+              ],
+              result: {
+                name: 'return value',
+                schema: {
+                  type: 'null',
+                },
+              },
+            },
+          },
         );
       },
       [id],
