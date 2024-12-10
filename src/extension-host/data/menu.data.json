@@ -31,7 +31,7 @@
         "localizeNotes": "Application main menu > Project > Settings",
         "group": "platform.projectSettings",
         "order": 1,
-        "command": "platform.openUserSettings"
+        "command": "platform.openSettings"
       },
       {
         "label": "%mainMenu_exit%",
@@ -82,7 +82,7 @@
         "localizeNotes": "Web view main menu > Project > Open Project Settings...",
         "group": "platform.projectTop",
         "order": 3,
-        "command": "platform.openProjectSettings"
+        "command": "platform.openSettings"
       }
     ]
   },
