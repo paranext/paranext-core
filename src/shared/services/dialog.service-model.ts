@@ -23,7 +23,7 @@ export interface DialogService {
     options?: DialogTypes[DialogTabType]['options'],
   ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined>;
   /**
-   * Shows a select project dialog to the user and prompts the user to select a dialog
+   * Shows a select project dialog to the user and prompts the user to select a project
    *
    * @param options Various options for configuring the dialog that shows
    * @returns Returns the user's selected project id or `undefined` if the user cancels

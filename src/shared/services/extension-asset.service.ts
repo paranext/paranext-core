@@ -48,10 +48,35 @@ const initialize = async () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
     getAsset = (await import('@extension-host/services/asset-retrieval.service')).default;
+    const requestType = serializeRequestType(CATEGORY_EXTENSION_ASSET, GET_EXTENSION_ASSET_REQUEST);
     await networkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_EXTENSION_ASSET, GET_EXTENSION_ASSET_REQUEST),
+      requestType,
       async (extensionName: string, assetName: string) => {
         return getExtensionAsset(extensionName, assetName);
+      },
+      {
+        method: {
+          summary: 'Get an asset from an extension',
+          params: [
+            {
+              name: 'extensionName',
+              required: true,
+              summary: 'Name of the extension to get the asset from',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'assetName',
+              required: true,
+              summary: 'Name of the asset to get',
+              schema: { type: 'string' },
+            },
+          ],
+          result: {
+            name: 'return value',
+            summary: 'Base64 encoded asset if it exists',
+            schema: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+          },
+        },
       },
     );
 

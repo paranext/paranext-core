@@ -25,6 +25,7 @@ import {
 import { createWebSocket } from '@client/services/web-socket.factory';
 import { AsyncVariable, Mutex, MutexMap } from 'platform-bible-utils';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
+import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
 /**
  * Manages the JSON-RPC protocol on the client end of a websocket that connects to main
@@ -147,15 +148,19 @@ export default class RpcClient implements IRpcMethodRegistrar {
     this.jsonRpcClient.notify(eventType, [event]);
   }
 
-  async registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean> {
+  async registerMethod(
+    methodName: string,
+    method: InternalRequestHandler,
+    methodDocs?: SingleMethodDocumentation,
+  ): Promise<boolean> {
     if (this.jsonRpcServer.hasMethod(methodName)) return false;
     const mutex = this.registrationMutexMap.get(methodName);
     return mutex.runExclusive(async () => {
       if (this.jsonRpcServer.hasMethod(methodName)) return false;
-      const successful = await this.jsonRpcClient.request(REGISTER_METHOD, [methodName]);
-      if (successful)
+      const success = await this.jsonRpcClient.request(REGISTER_METHOD, [methodName, methodDocs]);
+      if (success)
         this.jsonRpcServer.addMethod(methodName, (params: RequestParams) => method(...params));
-      return successful;
+      return success;
     });
   }
 
