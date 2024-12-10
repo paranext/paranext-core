@@ -406,7 +406,18 @@ async function initialize(): Promise<void> {
           );
           unsubscribers.add(dataProvider.dispose);
           unsubscribers.add(
-            await papi.commands.registerCommand('platformScripture.registerCheck', registerCheck),
+            await papi.commands.registerCommand('platformScripture.registerCheck', registerCheck, {
+              method: {
+                summary: 'Register a new check to run on the platform',
+                description:
+                  'This will only run properly within the extension host. Do not call this from the websocket. Instead implement a check runner.',
+                params: [],
+                result: {
+                  name: 'return value',
+                  schema: {},
+                },
+              },
+            }),
           );
           resolve();
         } catch (error) {
