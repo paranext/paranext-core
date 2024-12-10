@@ -42,10 +42,6 @@ import {
   saveWebViewTab,
   updateWebViewTab,
 } from '@renderer/components/web-view.component';
-import {
-  TAB_TYPE_CHECKS_SIDE_PANEL,
-  loadChecksSidePanelTab,
-} from '@renderer/components/checks/checks-side-panel-tab.component';
 
 import { TAB_TYPE_ABOUT, loadAboutTab } from '@renderer/testing/about-panel.component';
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
@@ -73,7 +69,6 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
     [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
     [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
-    [TAB_TYPE_CHECKS_SIDE_PANEL, loadChecksSidePanelTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition
@@ -89,7 +84,6 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
     [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
     [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
-    [TAB_TYPE_CHECKS_SIDE_PANEL, loadChecksSidePanelTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition

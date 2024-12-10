@@ -1,0 +1,13 @@
+.checks-side-panel-web-view {
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.check-card-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 0;
+  gap: 12px;
+}

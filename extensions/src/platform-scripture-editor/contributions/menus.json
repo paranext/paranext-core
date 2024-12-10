@@ -106,7 +106,7 @@
             "label": "%webView_platformScriptureEditor_openChecksSidePanel%",
             "group": "platformScriptureEditor.checks",
             "order": 3,
-            "command": "platform.openChecksSidePanel"
+            "command": "platformScripture.openChecksSidePanel"
           },
           {
             "label": "%webView_platformScriptureEditor_thickBorders%",

@@ -857,6 +857,7 @@ declare module 'papi-shared-types' {
     'platformScripture.showCheckResults': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+    'platformScripture.openChecksSidePanel': (projectId: string) => Promise<string | undefined>;
   }
 
   export interface SettingTypes {
