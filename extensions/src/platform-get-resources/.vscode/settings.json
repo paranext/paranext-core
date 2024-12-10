@@ -1,0 +1,59 @@
+{
+  "css.customData": [".vscode/tailwindcss.json"],
+
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true,
+  "editor.rulers": [100],
+  "editor.wordWrapColumn": 100,
+
+  "eslint.validate": ["javascript", "javascriptreact", "html", "typescriptreact"],
+
+  "files.associations": {
+    ".eslintignore": "ignore",
+    ".prettierignore": "ignore",
+    ".stylelintignore": "ignore"
+  },
+  "files.eol": "\n",
+
+  "javascript.validate.enable": false,
+  "javascript.format.enable": false,
+  "typescript.format.enable": false,
+
+  "search.exclude": {
+    ".git": true,
+    ".eslintcache": true,
+    "node_modules": true,
+    "npm-debug.log.*": true,
+    "package-lock.json": true,
+    "*.{css,sass,scss}.d.ts": true
+  },
+
+  "json.schemas": [
+    {
+      "fileMatch": ["*tsconfig*.json"],
+      "url": "http://json.schemastore.org/tsconfig"
+    }
+  ],
+
+  "todohighlight.keywords": [
+    {
+      "text": "WARNING:",
+      "isWholeLine": true,
+      "color": "#FF0000",
+      "backgroundColor": "none",
+      "overviewRulerColor": "#FF000000"
+    },
+    {
+      "text": "#region",
+      "color": "#6cf5ff",
+      "backgroundColor": "none",
+      "overviewRulerColor": "#6cf5ff60"
+    },
+    {
+      "text": "#endregion",
+      "color": "#6cf5ff",
+      "backgroundColor": "none",
+      "overviewRulerColor": "#6cf5ff60"
+    }
+  ]
+}
