@@ -301,6 +301,23 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     (name: string) => {
       return `Hello ${name}!`;
     },
+    {
+      method: {
+        summary: 'Say hello to someone',
+        params: [
+          {
+            name: 'name',
+            required: true,
+            summary: 'Name of the person to say hello to',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'greeting',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
 
   // Create a webview or get the existing webview if ours already exists
