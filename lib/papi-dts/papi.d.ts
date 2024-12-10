@@ -2868,6 +2868,7 @@ declare module 'papi-shared-types' {
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from 'shared/models/network-object.model';
+  import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -2898,8 +2899,11 @@ declare module 'papi-shared-types' {
     'platform.quit': () => Promise<void>;
     /** Restart the application */
     'platform.restart': () => Promise<void>;
+    /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
+    /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
+    'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
