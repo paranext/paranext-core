@@ -91,6 +91,6 @@
     "zip-build": "^1.8.0"
   },
   "volta": {
-    "node": "20.18.0"
+    "extends": "../../package.json"
   }
 }
