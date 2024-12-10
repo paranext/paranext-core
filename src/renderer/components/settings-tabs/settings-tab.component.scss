@@ -1,5 +1,18 @@
 .settings-tab {
-  padding: 0 2% 2%;
-  height: inherit;
+  padding: 2%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.project-settings-tab {
+  padding: 2%;
+  display: flex;
+  flex-direction: column;
+  gap: 5%;
   overflow-y: auto;
+}
+
+.sidebar-container {
+  height: 100%;
+  box-sizing: border-box;
 }
