@@ -19,6 +19,7 @@ import CheckResultsWebViewProvider, {
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
 const markersInventoryWebViewType = 'platformScripture.markersInventory';
+const punctuationInventoryWebViewType = 'platformScripture.punctuationInventory';
 
 // #region Project Setting Validators
 
@@ -47,6 +48,11 @@ const markersValidator: ProjectSettingValidator<
   'platformScripture.validMarkers' | 'platformScripture.invalidMarkers'
 > = async (newValue) => typeof newValue === 'string';
 
+// A marker can be any string value
+const punctuationValidator: ProjectSettingValidator<
+  'platformScripture.validPunctuation' | 'platformScripture.invalidPunctuation'
+> = async (newValue) => typeof newValue === 'string';
+
 // #endregion
 
 async function openPlatformCharactersInventory(
@@ -65,6 +71,12 @@ async function openPlatformMarkersInventory(
   webViewId: string | undefined,
 ): Promise<string | undefined> {
   return openInventory(webViewId, markersInventoryWebViewType);
+}
+
+async function openPlatformPunctuationInventory(
+  webViewId: string | undefined,
+): Promise<string | undefined> {
+  return openInventory(webViewId, punctuationInventoryWebViewType);
 }
 
 async function openInventory(
@@ -157,6 +169,10 @@ export async function activate(context: ExecutionActivationContext) {
     '%webView_markersInventory_title%',
     markersInventoryWebViewType,
   );
+  const punctuationInventoryWebViewProvider = new InventoryWebViewProvider(
+    '%webView_punctuationInventory_title%',
+    punctuationInventoryWebViewType,
+  );
   const checkResultsWebViewProvider = new CheckResultsWebViewProvider();
   const configureChecksWebViewProvider = new ConfigureChecksWebViewProvider(
     '%webView_configureChecks_title%',
@@ -198,7 +214,7 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.openCharactersInventory',
     openPlatformCharactersInventory,
   );
-  const characterInventoryWebViewProviderPromise = papi.webViewProviders.register(
+  const characterInventoryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     characterInventoryWebViewType,
     characterInventoryWebViewProvider,
   );
@@ -214,10 +230,11 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.openRepeatedWordsInventory',
     openPlatformRepeatedWordsInventory,
   );
-  const repeatableWordsInventoryWebViewProviderPromise = papi.webViewProviders.register(
-    repeatedWordsInventoryWebViewType,
-    repeatedWordsInventoryWebViewProvider,
-  );
+  const repeatableWordsInventoryWebViewProviderPromise =
+    papi.webViewProviders.registerWebViewProvider(
+      repeatedWordsInventoryWebViewType,
+      repeatedWordsInventoryWebViewProvider,
+    );
   const validMarkersPromise = papi.projectSettings.registerValidator(
     'platformScripture.validMarkers',
     markersValidator,
@@ -230,9 +247,25 @@ export async function activate(context: ExecutionActivationContext) {
     'platformScripture.openMarkersInventory',
     openPlatformMarkersInventory,
   );
-  const markersInventoryWebViewProviderPromise = papi.webViewProviders.register(
+  const markersInventoryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     markersInventoryWebViewType,
     markersInventoryWebViewProvider,
+  );
+  const validPunctuationPromise = papi.projectSettings.registerValidator(
+    'platformScripture.validPunctuation',
+    punctuationValidator,
+  );
+  const invalidPunctuationPromise = papi.projectSettings.registerValidator(
+    'platformScripture.invalidPunctuation',
+    punctuationValidator,
+  );
+  const openPunctuationInventoryPromise = papi.commands.registerCommand(
+    'platformScripture.openPunctuationInventory',
+    openPlatformPunctuationInventory,
+  );
+  const punctuationInventoryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    punctuationInventoryWebViewType,
+    punctuationInventoryWebViewProvider,
   );
   const configureChecksPromise = papi.commands.registerCommand(
     'platformScripture.openConfigureChecks',
@@ -272,6 +305,10 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidMarkersPromise,
     await openMarkersInventoryPromise,
     await markersInventoryWebViewProviderPromise,
+    await validPunctuationPromise,
+    await invalidPunctuationPromise,
+    await openPunctuationInventoryPromise,
+    await punctuationInventoryWebViewProviderPromise,
     await configureChecksPromise,
     await configureChecksWebViewProviderPromise,
     await showCheckResultsPromise,

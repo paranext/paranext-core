@@ -9,6 +9,7 @@ import papi from '@papi/frontend';
 import CharacterInventory from './checks/inventories/character-inventory.component';
 import RepeatedWordsInventory from './checks/inventories/repeated-words-inventory.component';
 import MarkerInventory from './checks/inventories/marker-inventory.component';
+import PunctuationInventory from './checks/inventories/punctuation-inventory.component';
 
 /**
  * Get scripture text for the provided scope and reference for the specified projectId
@@ -77,6 +78,11 @@ global.webViewComponent = function InventoryWebView({
       InventoryVariant = MarkerInventory;
       validItemsSetting = 'platformScripture.validMarkers';
       invalidItemsSetting = 'platformScripture.invalidMarkers';
+      break;
+    case 'platformScripture.punctuationInventory':
+      InventoryVariant = PunctuationInventory;
+      validItemsSetting = 'platformScripture.validPunctuation';
+      invalidItemsSetting = 'platformScripture.invalidPunctuation';
       break;
     default:
       throw new Error(`${webViewType} is not a valid inventory type`);

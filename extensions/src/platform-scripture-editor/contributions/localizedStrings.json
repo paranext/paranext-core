@@ -13,6 +13,7 @@
       "%webView_platformScriptureEditor_charactersInventory%": "Inventory: Characters...",
       "%webView_platformScriptureEditor_repeatedWordsInventory%": "Inventory: Repeated Words...",
       "%webView_platformScriptureEditor_markersInventory%": "Inventory: Markers...",
+      "%webView_platformScriptureEditor_punctuationInventory%": "Inventory: Punctuation...",
       "%webView_platformScriptureEditor_configureChecks%": "Configure Checks...",
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
       "%webView_platformScriptureEditor_publisherInfo%": "Publisher Info",

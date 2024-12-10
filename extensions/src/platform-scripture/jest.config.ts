@@ -6,6 +6,7 @@ module.exports = {
   transform: {
     '\\.(ts|tsx|js|jsx)$': 'ts-jest',
   },
+  transformIgnorePatterns: ['node_modules/(?!@thetypefounders/unicode-classifier/.*)'],
   moduleNameMapper: {
     '^@platform-scripture/(.*)$': '$1',
   },
