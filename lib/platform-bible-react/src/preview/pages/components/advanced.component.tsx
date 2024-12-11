@@ -9,7 +9,7 @@ import {
 import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
-import NavigationContentSearch from '@/components/advanced/navigation-content-search.component';
+import TabNavigationContentSearch from '@/components/advanced/tab-navigation-content-search.component';
 import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
 import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
 import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
@@ -152,7 +152,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Navigation Content Search">
-          <NavigationContentSearch
+          <TabNavigationContentSearch
             headerTitle={`Testing the NavigationContentSearch, current search value: ${searchValue}`}
             tabList={tabList}
             onSearch={handleSearchChange}

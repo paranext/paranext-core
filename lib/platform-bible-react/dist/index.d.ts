@@ -434,7 +434,7 @@ export type TabKeyValueContent = {
 	value: string;
 	content: React$1.ReactNode;
 };
-export type NavigationContentSearchProps = {
+export type TabNavigationContentSearchProps = {
 	/** List of values and keys for each tab this component should provide */
 	tabList: TabKeyValueContent[];
 	/** Handler to run when the value of the search bar changes */
@@ -448,7 +448,41 @@ export type NavigationContentSearchProps = {
 	/** Text direction ltr or rtl */
 	direction?: "ltr" | "rtl";
 };
-export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export type SelectedSettingsSidebarItem = {
+	label: string;
+	projectId?: string;
+};
+export type ProjectInfo = {
+	projectId: string;
+	projectName: string;
+};
+export type SettingsSidebarProps = {
+	/** Optional id for testing */
+	id?: string;
+	/** Extension labels from contribution */
+	extensionLabels: string[];
+	/** Project names and ids */
+	projectInfo: ProjectInfo[];
+	/** Handler for selecting a sidebar item */
+	handleSelectSidebarItem: (key: string, projectId?: string) => void;
+	/** The current selected value in the sidebar */
+	selectedSidebarItem: SelectedSettingsSidebarItem;
+	/** Label for the group of extensions setting groups */
+	extensionsSidebarGroupLabel: string;
+	/** Label for the group of projects settings */
+	projectsSidebarGroupLabel: string;
+	/** Placeholder text for the button */
+	buttonPlaceholderText: string;
+};
+export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
+	/** Optional id for testing */
+	id?: string;
+	/** Handler to run when the value of the search bar changes */
+	onSearch: (searchQuery: string) => void;
+};
+export function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -683,8 +717,12 @@ export type ComboBoxProps<T> = {
 	/** Text label title for combobox */
 	/** List of available options for the dropdown menu */
 	options?: readonly T[];
-	/** Additional css classes to help with unique styling of the combo box */
+	/** @deprecated 3 December 2024. Renamed to {@link buttonClassName} */
 	className?: string;
+	/** Additional css classes to help with unique styling of the combo box button */
+	buttonClassName?: string;
+	/** Additional css classes to help with unique styling of the combo box popover */
+	popoverContentClassName?: string;
 	/**
 	 * The selected value that the combo box currently holds. Must be shallow equal to one of the
 	 * options entries.
@@ -718,7 +756,7 @@ export type Direction = "ltr" | "rtl";
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -906,6 +944,7 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
+/** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed
@@ -917,7 +956,7 @@ export type SearchBarProps = {
 	placeholder?: string;
 	/** Optional boolean to set the input base to full width */
 	isFullWidth?: boolean;
-	/** ClassName for the input */
+	/** Additional css classes to help with unique styling of the search bar */
 	className?: string;
 };
 export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
@@ -1550,6 +1589,7 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 export declare function cn(...inputs: ClassValue[]): string;
 
 export {
+	TabNavigationContentSearch as NavigationContentSearch,
 	sonner,
 };
 

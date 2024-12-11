@@ -88,6 +88,7 @@ function MultiSelectComboBox({
           className={cn(
             'tw-w-full tw-justify-between',
             selected.length > 0 && selected.length < entries.length && 'tw-border-primary',
+            'tw-group',
           )}
         >
           <div className="tw-flex tw-items-center tw-gap-2">
@@ -97,9 +98,10 @@ function MultiSelectComboBox({
               </span>
             </div>
             <div
-              className={cn(
-                (selected.length === 0 || selected.length === entries.length) && 'tw-text-muted',
-              )}
+              className={cn({
+                'tw-text-muted-foreground group-hover:tw-text-secondary-foreground':
+                  selected.length === 0 || selected.length === entries.length,
+              })}
             >
               {getPlaceholderText()}
             </div>
