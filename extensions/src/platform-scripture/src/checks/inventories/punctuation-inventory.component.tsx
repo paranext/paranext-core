@@ -180,10 +180,16 @@ function getPunctuationContext(
  * @param unicodeValueLabel Localized label for the Unicode Value column
  * @param countLabel Localized label for the count column
  * @param statusLabel Localized label for the status column
+ * @param isolatedLabel Localized label for the context when punctuation appears in isolation
+ * @param wordInitialLabel Localized label for the context when punctuation appears word initial
+ * @param wordFinalLabel Localized label for the context when punctuation appears word final
+ * @param wordMedialLabel Localized label for the context when punctuation appears word medial
  * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
  * @param onApprovedItemsChange Callback function that stores the updated list of approved items
  * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
  * @param onUnapprovedItemsChange Callback function that stores the updated list of unapproved items
+ * @param showSequences True if inventory shows sequences of punctuation. False if it only considers
+ *   single punctuation characters
  * @returns An array of columns that can be passed into the inventory component
  */
 const createColumns = (
@@ -200,18 +206,9 @@ const createColumns = (
   onApprovedItemsChange: (items: string[]) => void,
   unapprovedItems: string[],
   onUnapprovedItemsChange: (items: string[]) => void,
-): ColumnDef<InventoryTableData>[] => [
-  inventoryItemColumn(itemLabel),
-  {
-    accessorKey: 'unicodeValue',
-    header: () => <Button variant="ghost">{unicodeValueLabel}</Button>,
-    cell: ({ row }) => {
-      const item: string = row.getValue('item');
-      return item.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
-    },
-  },
-  inventoryCountColumn(countLabel),
-  {
+  showSequences: boolean,
+): ColumnDef<InventoryTableData>[] => {
+  const contextColumn: ColumnDef<InventoryTableData> = {
     accessorKey: 'context',
     header: () => <Button variant="ghost">{contextLabel}</Button>,
     cell: ({ row }) => {
@@ -224,15 +221,29 @@ const createColumns = (
         wordMedialLabel,
       );
     },
-  },
-  inventoryStatusColumn(
-    statusLabel,
-    approvedItems,
-    onApprovedItemsChange,
-    unapprovedItems,
-    onUnapprovedItemsChange,
-  ),
-];
+  };
+
+  return [
+    inventoryItemColumn(itemLabel),
+    {
+      accessorKey: 'unicodeValue',
+      header: () => <Button variant="ghost">{unicodeValueLabel}</Button>,
+      cell: ({ row }) => {
+        const item: string = row.getValue('item');
+        return item.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0');
+      },
+    },
+    inventoryCountColumn(countLabel),
+    ...(showSequences ? [] : [contextColumn]),
+    inventoryStatusColumn(
+      statusLabel,
+      approvedItems,
+      onApprovedItemsChange,
+      unapprovedItems,
+      onUnapprovedItemsChange,
+    ),
+  ];
+};
 
 type PunctuationInventoryProps = {
   scriptureReference: ScriptureReference;
@@ -326,6 +337,7 @@ function PunctuationInventory({
         onApprovedItemsChange,
         unapprovedItems,
         onUnapprovedItemsChange,
+        showSequences,
       ),
     [
       itemLabel,
@@ -341,6 +353,7 @@ function PunctuationInventory({
       onApprovedItemsChange,
       unapprovedItems,
       onUnapprovedItemsChange,
+      showSequences,
     ],
   );
 
