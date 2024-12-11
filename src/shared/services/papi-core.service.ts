@@ -27,6 +27,12 @@ export type { default as IDataProviderEngine } from '@shared/models/data-provide
 export type { DialogOptions } from '@shared/models/dialog-options.model';
 export type { NetworkableObject, NetworkObject } from '@shared/models/network-object.model';
 export type {
+  Components as ComponentsDocumentation,
+  MethodDocumentationWithoutName,
+  NetworkObjectDocumentation,
+  SingleMethodDocumentation,
+} from '@shared/models/openrpc.model';
+export type {
   ExtensionDataScope,
   MandatoryProjectDataTypes,
 } from '@shared/models/project-data-provider.model';

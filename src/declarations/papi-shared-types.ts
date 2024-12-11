@@ -58,6 +58,8 @@ declare module 'papi-shared-types' {
     'platform.quit': () => Promise<void>;
     /** Restart the application */
     'platform.restart': () => Promise<void>;
+    /** Open a browser to the platform's OpenRPC documentation */
+    'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */

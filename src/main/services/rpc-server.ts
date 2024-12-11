@@ -10,7 +10,7 @@ import {
   JSONRPCServer,
 } from 'json-rpc-2.0';
 import logger from '@shared/services/logger.service';
-import { IRpcHandler } from '@shared/models/rpc.interface';
+import { IRpcHandler, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import {
   ConnectionStatus,
   createErrorResponse,
@@ -25,6 +25,7 @@ import {
   UNREGISTER_METHOD,
 } from '@shared/data/rpc.model';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
+import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
@@ -45,7 +46,7 @@ export default class RpcServer implements IRpcHandler {
   private readonly jsonRpcServer: JSONRPCServer;
   /** Refers to any process that connected to main over the websocket */
   private readonly jsonRpcClient: JSONRPCClient;
-  private readonly rpcHandlerByMethodName: Map<string, IRpcHandler>;
+  private readonly rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>;
   /** Called by an RpcServer when all other RpcServers should emit an event over the network */
   private readonly propagateEventMethod: PropagateEventMethod;
 
@@ -53,7 +54,7 @@ export default class RpcServer implements IRpcHandler {
     name: string,
     webSocket: WebSocket,
     propagateEventMethod: PropagateEventMethod,
-    rpcHandlerByMethodName: Map<string, IRpcHandler>,
+    rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
   ) {
     bindClassMethods.call(this);
     this.name = name;
@@ -74,7 +75,7 @@ export default class RpcServer implements IRpcHandler {
       (payload) => sendPayloadToWebSocket(this.ws, payload),
       this.createNextRequestId,
     );
-    this.rpcHandlerByMethodName = rpcHandlerByMethodName;
+    this.rpcMethodDetailsByMethodName = rpcMethodDetailsByMethodName;
 
     this.addMethodToRpcServer(REGISTER_METHOD, this.registerRemoteMethod);
     this.addMethodToRpcServer(UNREGISTER_METHOD, this.unregisterRemoteMethod);
@@ -110,14 +111,15 @@ export default class RpcServer implements IRpcHandler {
         const isLocal = this.jsonRpcServer.hasMethod(requestType);
         if (isLocal) response = await this.jsonRpcServer.receive(requestToSend);
         else {
-          const handler = this.rpcHandlerByMethodName.get(requestType);
-          if (handler === this) response = await this.jsonRpcClient.requestAdvanced(requestToSend);
-          else if (!handler)
+          const methodDetails = this.rpcMethodDetailsByMethodName.get(requestType);
+          if (!methodDetails)
             return createErrorResponse(
               `'${requestType}' not found`,
               JSONRPCErrorCode.MethodNotFound,
               requestId,
             );
+          const { handler } = methodDetails;
+          if (handler === this) response = await this.jsonRpcClient.requestAdvanced(requestToSend);
           else return handler.request(requestType, requestParams);
         }
         if (response) return response;
@@ -137,17 +139,17 @@ export default class RpcServer implements IRpcHandler {
     this.jsonRpcClient.notify(eventType, [event]);
   }
 
-  registerRemoteMethod(methodName: string): boolean {
-    if (this.rpcHandlerByMethodName.has(methodName)) return false;
-    this.rpcHandlerByMethodName.set(methodName, this);
+  registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean {
+    if (this.rpcMethodDetailsByMethodName.has(methodName)) return false;
+    this.rpcMethodDetailsByMethodName.set(methodName, { handler: this, methodDocs });
     return true;
   }
 
   unregisterRemoteMethod(methodName: string): boolean {
     // Don't allow one client to tell us to unregister a method from a different client
-    const registeredHandler = this.rpcHandlerByMethodName.get(methodName);
-    const handlersMatch = registeredHandler === this;
-    if (handlersMatch) this.rpcHandlerByMethodName.delete(methodName);
+    const methodDetails = this.rpcMethodDetailsByMethodName.get(methodName);
+    const handlersMatch = !!methodDetails && methodDetails.handler === this;
+    if (handlersMatch) this.rpcMethodDetailsByMethodName.delete(methodName);
     return handlersMatch;
   }
 
@@ -188,11 +190,11 @@ export default class RpcServer implements IRpcHandler {
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
-    this.rpcHandlerByMethodName.forEach((handler, methodName) => {
+    this.rpcMethodDetailsByMethodName.forEach(({ handler }, methodName) => {
       if (handler !== this) return;
 
       logger.info(`Method '${methodName}' removed since websocket ${this.name} closed`);
-      this.rpcHandlerByMethodName.delete(methodName);
+      this.rpcMethodDetailsByMethodName.delete(methodName);
     });
   }
 
