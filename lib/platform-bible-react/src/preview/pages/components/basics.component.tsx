@@ -114,7 +114,7 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Sidebar">
           <div className="tw-relative tw-overflow-hidden">
-            <SettingsSidebarExamples />
+            <SettingsSidebarExamples direction={direction} />
           </div>
         </VerticalTabsContent>
 

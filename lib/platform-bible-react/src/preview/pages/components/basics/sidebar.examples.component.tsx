@@ -18,7 +18,7 @@ type SidebarExamplesProps = {
   direction?: string;
 };
 
-export default function SidebarExamples({ direction = 'ltr' }: SidebarExamplesProps) {
+export default function SidebarExamples({ direction }: SidebarExamplesProps) {
   const [sidebarSelection, setSidebarSelection] = useState('button');
 
   const sidebarItems: { [title: string]: string } = {
@@ -31,7 +31,7 @@ export default function SidebarExamples({ direction = 'ltr' }: SidebarExamplesPr
 
   return (
     <SidebarProvider dir={direction}>
-      <Sidebar>
+      <Sidebar side={direction === 'rtl' ? 'right' : 'left'}>
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupLabel>Application</SidebarGroupLabel>
