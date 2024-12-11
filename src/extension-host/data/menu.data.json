@@ -53,6 +53,13 @@
         "group": "platform.helpMisc",
         "order": 2,
         "command": "platform.about"
+      },
+      {
+        "label": "%mainMenu_openDeveloperDocumentation%",
+        "localizeNotes": "Application main menu > Help > Open Developer Documentation",
+        "group": "platform.helpMisc",
+        "order": 3,
+        "command": "platform.openDeveloperDocumentationUrl"
       }
     ]
   },

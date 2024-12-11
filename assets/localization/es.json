@@ -141,6 +141,7 @@
   "%mainMenu_exit%": "Salir",
   "%mainMenu_help%": "Ayuda",
   "%mainMenu_layout%": "Diseño",
+  "%mainMenu_openDeveloperDocumentation%": "Abrir documentación para desarrolladores",
   "%mainMenu_openProject%": "Abrir proyecto",
   "%mainMenu_project%": "Proyecto",
   "%mainMenu_settings%": "Configuración",
