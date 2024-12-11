@@ -18,7 +18,6 @@ import { DataProviderUpdateInstructions } from '@shared/models/data-provider.mod
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import logger from '@shared/services/logger.service';
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { projectSettings } from '@extension-host/services/papi-backend.service';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -180,7 +179,11 @@ export default function Setting({
 
   const debouncedHandleChange = debounce(handleChangeSetting, 500);
   const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
+  const selectFallbackLanguagesKey = '%settings_uiLanguageSelector_selectFallbackLanguages%';
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => [loadingSettingKey, selectFallbackLanguagesKey], []),
+  );
+
   const localizedLoadingSetting = localizedStrings[loadingSettingKey];
 
   const generateComponent = useCallback(() => {
@@ -202,6 +205,8 @@ export default function Setting({
       if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
         component = (
           <UiLanguageSelector
+            key={settingKey}
+            className="tw-w-64"
             knownUiLanguages={languages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}

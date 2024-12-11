@@ -183,6 +183,7 @@
   "%settings_platform_verseRef_label%": "Referencia de Verso Actual para el Grupo de Desplazamiento A (Obsoleto)",
   "%settings_title_projectSettings%": "Configuración del Proyecto",
   "%settings_title_userSettings%": "Configuración del Usuario",
+  "%settings_uiLanguageSelector_selectFallbackLanguages%": "Selecionar Idioma de respaldo de Interfaz",
   "%some_localization_key%": "Esto es el texto en español para %some_localization_key%.",
   "%submitButton%": "Enviar",
   "%tab_aria_tab%": "Pestaña",

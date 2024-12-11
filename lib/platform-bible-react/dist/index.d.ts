@@ -221,7 +221,7 @@ export declare const BOOK_SELECTOR_STRING_KEYS: readonly [
 	"%webView_bookSelector_chooseBooks%"
 ];
 export type BookSelectorLocalizedStrings = {
-	[localizedInventoryKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+	[localizedBookSelectorKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 export type BookSelectorProps = ChapterRangeSelectorProps & {
 	handleBookSelectionModeChange: (newMode: BookSelectionMode) => void;
@@ -1370,10 +1370,10 @@ export interface FooterProps {
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
-	"%webView_uiLanguageSelector_selectFallbackLanguages%"
+	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];
 export type UiLanguageSelectorLocalizedStrings = {
-	[localizedInventoryKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+	[localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 export type LanguageInfo = {
 	/** The name of the language to be displayed (in its native script) */
@@ -1406,18 +1406,22 @@ export type UiLanguageSelectorProps = {
 	 * languages in order of decreasing preference.
 	 */
 	handleLanguageChanges?: (newUiLanguages: string[]) => void;
-	/**
-	 * Handler for the primary language changes.
-	 */
+	/** Handler for the primary language changes. */
 	handlePrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
 	/**
 	 * Handler for when the fallback languages change. The array contains the fallback languages in
 	 * order of decreasing preference.
 	 */
 	handleFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
+	/**
+	 * Map whose keys are localized string keys as contained in UI_LANGUAGE_SELECTOR_STRING_KEYS and
+	 * whose values are the localized strings (in the current UI language).
+	 */
 	localizedStrings: UiLanguageSelectorLocalizedStrings;
+	/** Additional css classes to help with unique styling of the control */
+	className?: string;
 };
-export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, handleLanguageChanges, handlePrimaryLanguageChange, handleFallbackLanguagesChange, localizedStrings, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, handleLanguageChanges, handlePrimaryLanguageChange, handleFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

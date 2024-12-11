@@ -54,6 +54,7 @@
   "%settings_defaultSearchText_searchUserSettings%": "Search User Settings...",
   "%settings_title_projectSettings%": "Project Settings",
   "%settings_title_userSettings%": "User Settings",
+  "%settings_uiLanguageSelector_selectFallbackLanguages%": "Select Fallback Language",
   "%submitButton%": "Submit",
   "%scrollGroup_undefined%": "Ø",
   "%scrollGroup_0%": "A",

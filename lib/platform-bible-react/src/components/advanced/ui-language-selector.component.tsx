@@ -1,19 +1,20 @@
 import { useState } from 'react';
 import { LocalizedStringValue } from 'platform-bible-utils';
+import { cn } from '@/utils/shadcn-ui.util';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../shadcn-ui/select';
 import { Label } from '../shadcn-ui/label';
 
 /**
- * Object containing all keys used for localization in this component. If you're using this
+ * Immutable array containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
  * localized strings and pass them into the localizedStrings prop of this component
  */
 export const UI_LANGUAGE_SELECTOR_STRING_KEYS = Object.freeze([
-  '%webView_uiLanguageSelector_selectFallbackLanguages%',
+  '%settings_uiLanguageSelector_selectFallbackLanguages%',
 ] as const);
 
 export type UiLanguageSelectorLocalizedStrings = {
-  [localizedInventoryKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+  [localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
 /**
@@ -70,7 +71,13 @@ export type UiLanguageSelectorProps = {
    * order of decreasing preference.
    */
   handleFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
+  /**
+   * Map whose keys are localized string keys as contained in UI_LANGUAGE_SELECTOR_STRING_KEYS and
+   * whose values are the localized strings (in the current UI language).
+   */
   localizedStrings: UiLanguageSelectorLocalizedStrings;
+  /** Additional css classes to help with unique styling of the control */
+  className?: string;
 };
 
 export default function UiLanguageSelector({
@@ -81,10 +88,11 @@ export default function UiLanguageSelector({
   handlePrimaryLanguageChange,
   handleFallbackLanguagesChange,
   localizedStrings,
+  className,
 }: UiLanguageSelectorProps) {
   const selectFallbackLanguagesText = localizeString(
     localizedStrings,
-    '%webView_uiLanguageSelector_selectFallbackLanguages%',
+    '%settings_uiLanguageSelector_selectFallbackLanguages%',
   );
   const [selectedLanguage, setSelectedLanguage] = useState(primaryLanguage);
   const [isOpen, setIsOpen] = useState(false);
@@ -95,7 +103,7 @@ export default function UiLanguageSelector({
     // REVIEW: Should fallback languages be preserved when primary language changes?
     if (handleLanguageChanges)
       handleLanguageChanges([code, ...fallbackLanguages.filter((lang) => lang !== code)]);
-    if (handleFallbackLanguagesChange && fallbackLanguages.find((l) => l == code))
+    if (handleFallbackLanguagesChange && fallbackLanguages.find((l) => l === code))
       handleFallbackLanguagesChange([...fallbackLanguages.filter((lang) => lang !== code)]);
     setIsOpen(false); // Close the dropdown when a selection is made
   };
@@ -116,7 +124,7 @@ export default function UiLanguageSelector({
   }; */
 
   return (
-    <div className="pr-twp tw-max-w-sm tw-p-4">
+    <div className={cn('pr-twp tw-max-w-sm tw-p-4', className)}>
       {/* Language Selector */}
       <Select
         name="uiLanguage"
@@ -128,7 +136,10 @@ export default function UiLanguageSelector({
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent
+          // Need to get over the floating web view z-index 200
+          style={{ zIndex: 250 }}
+        >
           {Object.keys(knownUiLanguages).map((key) => {
             return (
               <SelectItem key={key} value={key}>
@@ -143,10 +154,20 @@ export default function UiLanguageSelector({
       {selectedLanguage !== 'en' && (
         <>
           <Label className="tw-ml-3">{selectFallbackLanguagesText}</Label>
-          {fallbackLanguages.map((f) => getLanguageDisplayName(f, primaryLanguage))}
-          {/* <MultiSelector>
+          <div>
+            {/* Do not localize or "improve". This label is temporary. */}
+            <Label>
+              Currently:{'\u00A0'}
+              {fallbackLanguages?.length > 0
+                ? `${fallbackLanguages
+                    .map((f) => getLanguageDisplayName(f, primaryLanguage))
+                    .join(', ')}`
+                : `${knownUiLanguages.en.autonym}`}
+            </Label>
+            {/* <MultiSelector>
 
           </MultiSelector> */}
+          </div>
         </>
       )}
     </div>
