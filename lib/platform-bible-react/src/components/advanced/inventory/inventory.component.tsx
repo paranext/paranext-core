@@ -245,6 +245,8 @@ type InventoryProps = {
    * other columns you can add these yourself
    */
   columns: ColumnDef<InventoryTableData>[];
+  /** Text and layout direction */
+  direction?: 'rtl' | 'ltr';
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -260,6 +262,7 @@ export default function Inventory({
   scope,
   onScopeChange,
   columns,
+  direction,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -395,6 +398,7 @@ export default function Inventory({
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
+          dir={direction}
         >
           <SelectTrigger className="tw-m-1">
             <SelectValue placeholder="Select filter" />
@@ -406,7 +410,11 @@ export default function Inventory({
             <SelectItem value="unknown">{unknownItemsText}</SelectItem>
           </SelectContent>
         </Select>
-        <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope}>
+        <Select
+          onValueChange={(value) => handleScopeChange(value)}
+          defaultValue={scope}
+          dir={direction}
+        >
           <SelectTrigger className="tw-m-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>

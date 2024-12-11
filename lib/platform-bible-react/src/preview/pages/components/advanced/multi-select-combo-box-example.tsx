@@ -1,4 +1,5 @@
 import MultiSelectComboBox from '@/components/advanced/multi-select-combo-box';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { Blocks } from 'lucide-react';
 import { useState } from 'react';
 
@@ -123,7 +124,7 @@ const resources = [
   },
 ];
 
-function MultiSelectComboBoxExample() {
+function MultiSelectComboBoxExample({ direction }: HasDirection) {
   const [selectedTypes, setSelectedTypes] = useState<string[]>(types.map((type) => type.value));
 
   const getOptionsCount = (option: MultiSelectComboBoxEntry): number => {
@@ -145,6 +146,7 @@ function MultiSelectComboBoxExample() {
               : `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`
           }
           icon={<Blocks />}
+          direction={direction}
         />
       </div>
 

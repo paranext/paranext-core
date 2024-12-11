@@ -108,7 +108,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           disabled={isDisabled}
         >
           <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
-            {icon && <div className="tw-pr-2">{icon}</div>}
+            {icon && <div className="tw-pe-2">{icon}</div>}
             <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
               {value ? getOptionLabel(value) : buttonPlaceholder}
             </span>

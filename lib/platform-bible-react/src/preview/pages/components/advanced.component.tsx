@@ -93,12 +93,12 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} direction={direction} />
           <div>{JSON.stringify(scrRef)}</div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Book Selector">
-          <BookSelectorExample />
+          <BookSelectorExample direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="UI Language Selector">
@@ -140,15 +140,11 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Multi-select Combo Box">
-          <MultiSelectComboBoxExample />
-        </VerticalTabsContent>
-
-        <VerticalTabsContent value="Result List">
-          <ScriptureResultsViewerExample direction={direction} />
+          <MultiSelectComboBoxExample direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Inventory">
-          <InventoryExample />
+          <InventoryExample direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Navigation Content Search">
@@ -162,8 +158,22 @@ function Compositions({ direction }: HasDirection) {
           />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Result List">
+          <ScriptureResultsViewerExample direction={direction} />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Settings List">
           <SettingsListExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Scroll Group Selector">
+          <ScrollGroupSelector
+            availableScrollGroupIds={[undefined, ...Array(5).keys()]}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            direction={direction}
+          />
+          <div>Scroll Group Id: {`${scrollGroupId}`}</div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Markdown Renderer">

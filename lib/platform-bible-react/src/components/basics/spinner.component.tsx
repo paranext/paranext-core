@@ -4,11 +4,22 @@ import { forwardRef } from 'react';
 
 export type SpinnerProps = LucideProps;
 
-const Spinner = forwardRef<SVGSVGElement, SpinnerProps>(({ className, ...props }, ref) => {
-  return (
-    <LoaderCircle size={35} className={cn('tw-animate-spin', className)} {...props} ref={ref} />
-  );
-});
+const Spinner = forwardRef<SVGSVGElement, SpinnerProps>(
+  ({ className, direction, ...props }, ref) => {
+    return (
+      <LoaderCircle
+        size={35}
+        className={cn(
+          'tw-animate-spin',
+          { 'tw-direction-reverse': direction === 'rtl' },
+          className,
+        )}
+        {...props}
+        ref={ref}
+      />
+    );
+  },
+);
 
 Spinner.displayName = 'Spinner';
 

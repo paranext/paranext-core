@@ -379,6 +379,7 @@ export default function ScriptureResultsViewer({
           onValueChange={(value) => {
             handleSelectChange(value);
           }}
+          dir={direction}
         >
           <SelectTrigger className="tw-mb-1 tw-mt-2">
             <SelectValue />

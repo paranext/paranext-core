@@ -9,6 +9,8 @@ export type ChapterRangeSelectorProps = {
   handleSelectEndChapter: (chapter: number) => void;
   isDisabled?: boolean;
   chapterCount: number;
+  /** Text and layout direction */
+  direction?: 'rtl' | 'ltr';
 };
 
 export default function ChapterRangeSelector({
@@ -18,6 +20,7 @@ export default function ChapterRangeSelector({
   handleSelectEndChapter,
   isDisabled = false,
   chapterCount,
+  direction = 'ltr',
 }: ChapterRangeSelectorProps) {
   const chapterOptions = useMemo(
     () => Array.from({ length: chapterCount }, (_, index) => index + 1),
@@ -44,22 +47,24 @@ export default function ChapterRangeSelector({
       <ComboBox
         isDisabled={isDisabled}
         onChange={onChangeStartChapter}
-        buttonClassName="tw-ml-2 tw-mr-2 tw-w-20"
+        buttonClassName="tw-me-2 tw-ms-2 tw-w-20"
         key="start chapter"
         options={chapterOptions}
         getOptionLabel={(option) => option.toString()}
         value={startChapter}
+        dir={direction}
       />
 
       <Label htmlFor="end-chapters-combobox">to</Label>
       <ComboBox
         isDisabled={isDisabled}
         onChange={onChangeEndChapter}
-        buttonClassName="tw-ml-2 tw-w-20"
+        buttonClassName="tw-ms-2 tw-w-20"
         key="end chapter"
         options={chapterOptions}
         getOptionLabel={(option) => option.toString()}
         value={endChapter}
+        dir={direction}
       />
     </>
   );
