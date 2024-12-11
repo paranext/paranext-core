@@ -62,6 +62,7 @@ export default function BookSelector({
   startChapter,
   handleSelectStartChapter,
   localizedStrings,
+  direction,
 }: BookSelectorProps) {
   const currentBookText = localizeString(localizedStrings, '%webView_bookSelector_currentBook%');
   const chooseText = localizeString(localizedStrings, '%webView_bookSelector_choose%');
@@ -83,12 +84,13 @@ export default function BookSelector({
       // value is always a string but we need it to be BookSelectionMode
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       onValueChange={(value: string) => onSelectionModeChange(value as BookSelectionMode)}
+      dir={direction}
     >
       <div className="tw-flex tw-w-full tw-flex-col tw-gap-4">
         <div className="tw-grid tw-grid-cols-[25%,25%,50%]">
           <div className="tw-flex tw-items-center">
             <RadioGroupItem value={BookSelectionMode.CURRENT_BOOK} />
-            <Label className="tw-ml-1">{currentBookText}</Label>
+            <Label className="tw-ms-1">{currentBookText}</Label>
           </div>
           <Label className="tw-flex tw-items-center">{currentBookName}</Label>
           <div className="tw-flex tw-items-center tw-justify-end">
@@ -99,13 +101,14 @@ export default function BookSelector({
               chapterCount={chapterCount}
               startChapter={startChapter}
               endChapter={endChapter}
+              direction={direction}
             />
           </div>
         </div>
         <div className="tw-grid tw-grid-cols-[25%,50%,25%]">
           <div className="tw-flex tw-items-center">
             <RadioGroupItem value={BookSelectionMode.CHOOSE_BOOKS} />
-            <Label className="tw-ml-1">{chooseBooksText}</Label>
+            <Label className="tw-ms-1">{chooseBooksText}</Label>
           </div>
           <Label className="tw-flex tw-items-center">
             {selectedBookIds.map((bookId: string) => Canon.bookIdToEnglishName(bookId)).join(', ')}

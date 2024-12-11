@@ -23,6 +23,7 @@ import {
 import { cn } from '@/utils/shadcn-ui.util';
 import { DialogTitle } from '@radix-ui/react-dialog';
 import MultiSelectComboBox from '@/components/advanced/multi-select-combo-box';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 
 type MultiSelectComboBoxEntry = {
   value: string;
@@ -164,7 +165,7 @@ const tableData = [
   },
 ];
 
-export default function GetResourcesExample() {
+export default function GetResourcesExample({ direction }: HasDirection) {
   const [selectedTypes, setSelectedTypes] = React.useState<string[]>(
     types.map((type) => type.value),
   );
@@ -240,7 +241,8 @@ export default function GetResourcesExample() {
           <SearchBar
             onSearch={setSearchQuery}
             placeholder="Search by name, language, type..."
-            className={cn('tw-pl-8 tw-pr-8', searchQuery && 'tw-border-primary')}
+            className={cn('tw-px-8', searchQuery && 'tw-border-primary')}
+            direction={direction}
           />
 
           <MultiSelectComboBox
@@ -254,6 +256,7 @@ export default function GetResourcesExample() {
                 : `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`
             }
             icon={<Blocks />}
+            direction={direction}
           />
 
           <MultiSelectComboBox
@@ -271,6 +274,7 @@ export default function GetResourcesExample() {
             }
             sortSelected
             icon={<Languages />}
+            direction={direction}
           />
         </div>
 

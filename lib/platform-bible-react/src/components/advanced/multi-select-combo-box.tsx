@@ -28,6 +28,8 @@ interface MultiSelectComboBoxProps {
   customSelectedText?: string;
   sortSelected?: boolean;
   icon?: ReactNode;
+  /** Text and layout direction */
+  direction?: 'rtl' | 'ltr';
 }
 
 function MultiSelectComboBox({
@@ -40,6 +42,7 @@ function MultiSelectComboBox({
   customSelectedText,
   sortSelected = false,
   icon = undefined,
+  direction = 'ltr',
 }: MultiSelectComboBoxProps) {
   const [open, setOpen] = useState(false);
 
@@ -109,7 +112,7 @@ function MultiSelectComboBox({
           <ChevronsUpDown className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="tw-w-full tw-p-0">
+      <PopoverContent align="start" className="tw-w-full tw-p-0" dir={direction}>
         <Command>
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
           <CommandList>
@@ -139,7 +142,7 @@ function MultiSelectComboBox({
                     </div>
                     <div className="tw-flex-grow">{option.label}</div>
                     {getEntriesCount && (
-                      <div className="tw-w-10 tw-text-right tw-text-muted-foreground">{count}</div>
+                      <div className="tw-w-10 tw-text-end tw-text-muted-foreground">{count}</div>
                     )}
                   </CommandItem>
                 );

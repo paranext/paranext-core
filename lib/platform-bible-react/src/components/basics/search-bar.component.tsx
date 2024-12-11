@@ -21,6 +21,9 @@ export type SearchBarProps = {
 
   /** Additional css classes to help with unique styling of the search bar */
   className?: string;
+
+  /** Text and layout direction */
+  direction?: 'rtl' | 'ltr';
 };
 
 export default function SearchBar({
@@ -28,6 +31,7 @@ export default function SearchBar({
   placeholder,
   isFullWidth,
   className,
+  direction = 'ltr',
 }: SearchBarProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -38,12 +42,17 @@ export default function SearchBar({
 
   return (
     <div className="tw-relative">
-      <Search className="tw-absolute tw-left-3 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50" />
+      <Search
+        className={cn(
+          'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50',
+          { 'tw-right-3': direction === 'rtl' },
+          { 'tw-left-3': direction === 'ltr' },
+        )}
+      />
       <Input
         className={cn(
-          'tw-flex tw-h-10 tw-w-full tw-text-ellipsis tw-rounded-md tw-border tw-border-input tw-bg-background tw-py-2 tw-pe-3 tw-ps-9 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-[color:hsl(240,5%,64.9%)] focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
+          'tw-flex tw-h-10 tw-w-full tw-text-ellipsis tw-rounded-md tw-border tw-border-input tw-bg-background tw-py-2 tw-pe-3 tw-pe-9 tw-ps-9 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-[color:hsl(240,5%,64.9%)] focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
           { 'tw-w-full': isFullWidth },
-          { 'tw-pe-9': searchQuery },
           className,
         )}
         placeholder={placeholder}
@@ -54,7 +63,11 @@ export default function SearchBar({
         <Button
           variant="ghost"
           size="icon"
-          className="tw-absolute tw-right-0 tw-top-1/2 tw-h-7 tw--translate-y-1/2 tw-transform hover:tw-bg-transparent"
+          className={cn(
+            'tw-absolute tw-top-1/2 tw-h-7 tw--translate-y-1/2 tw-transform hover:tw-bg-transparent',
+            { 'tw-left-0': direction === 'rtl' },
+            { 'tw-right-0': direction === 'ltr' },
+          )}
         >
           <X
             className="tw-h-4 tw-w-4"

@@ -1,4 +1,3 @@
-import SearchBar from '@/components/basics/search-bar.component';
 import {
   VerticalTabs,
   VerticalTabsContent,
@@ -17,6 +16,7 @@ import ComboBoxExamples from './basics/combo-box.examples.component';
 import DropdownExamples from './basics/dropdown.examples.component';
 import InputExamples from './basics/input.examples.component';
 import RadioGroupExamples from './basics/radio-group.examples';
+import SearchBarExamples from './basics/search.examples.component';
 import SelectExamples from './basics/select.examples.component';
 import SettingsSidebarExamples from './basics/sidebar.examples.component';
 import SliderExamples from './basics/slider.examples.component';
@@ -26,6 +26,7 @@ import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
+import DialogExamples from './basics/dialog.examples.component';
 
 function Basics({ direction }: HasDirection) {
   return (
@@ -43,6 +44,7 @@ function Basics({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checklist">Checklist</VerticalTabsTrigger>
           <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Dialog">Dialog</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
@@ -75,7 +77,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Chapter Range Selector">
-          <ChapterRangeSelectorExample />
+          <ChapterRangeSelectorExample direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Checkbox">
@@ -90,19 +92,20 @@ function Basics({ direction }: HasDirection) {
           <ComboBoxExamples direction={direction} />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Dialog">
+          <DialogExamples direction={direction} />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Input">
           <InputExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Radio Group">
-          <RadioGroupExamples />
+          <RadioGroupExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Search Bar">
-          <div className="tw-flex tw-gap-2">
-            <SearchBar onSearch={(search) => alert(`you searched for ${search}`)} />{' '}
-            {direction === 'rtl' ? <>&rarr;</> : <>&larr;</>} type here
-          </div>
+          <SearchBarExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Select">
@@ -116,7 +119,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Slider">
-          <SliderExamples />
+          <SliderExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Sonner">
@@ -124,11 +127,11 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Spinner">
-          <SpinnerExamples />
+          <SpinnerExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Switch">
-          <SwitchExamples />
+          <SwitchExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
@@ -144,7 +147,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Toggle Group">
-          <ToggleGroupExamples />
+          <ToggleGroupExamples direction={direction} />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
