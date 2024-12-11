@@ -212,8 +212,11 @@ export const REGISTER_METHOD = 'network:registerMethod';
  */
 export const UNREGISTER_METHOD = 'network:unregisterMethod';
 
-/** Get all methods that are currently registered on the network. */
-export const GET_METHODS = 'network:getMethods';
+/**
+ * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by
+ * the OpenRPC specification.
+ */
+export const GET_METHODS = 'rpc.discover';
 
 /** Prefix on requests that indicates that the request is a command */
 export const CATEGORY_COMMAND = 'command';
