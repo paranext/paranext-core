@@ -15,7 +15,7 @@ import {
   inventoryStatusColumn,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 
 const PUNCTUATION_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
@@ -27,117 +27,128 @@ const PUNCTUATION_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_punctuation_context_wordInitial%',
   '%webView_inventory_table_punctuation_context_wordFinal%',
   '%webView_inventory_table_punctuation_context_wordMedial%',
+  '%webView_inventory_table_punctuation_showSequences%',
+  '%webView_inventory_table_punctuation_showSinglePunctuationCharacter%',
 ];
 
 const extractPunctuation = (
+  showSequences: boolean,
+): ((
   text: string | undefined,
   scriptureRef: ScriptureReference,
   approvedItems: string[],
   unapprovedItems: string[],
-): InventoryTableData[] => {
-  if (!text) return [];
+) => InventoryTableData[]) => {
+  return (
+    text: string | undefined,
+    scriptureRef: ScriptureReference,
+    approvedItems: string[],
+    unapprovedItems: string[],
+  ) => {
+    if (!text) return [];
 
-  const tableData: InventoryTableData[] = [];
+    const tableData: InventoryTableData[] = [];
 
-  let currentBook: number | undefined = scriptureRef.bookNum;
-  let currentChapter: number | undefined = scriptureRef.chapterNum;
-  let currentVerse: number | undefined = scriptureRef.verseNum;
+    let currentBook: number | undefined = scriptureRef.bookNum;
+    let currentChapter: number | undefined = scriptureRef.chapterNum;
+    let currentVerse: number | undefined = scriptureRef.verseNum;
 
-  // Matches all punctuation characters
-  const punctuationRegex: RegExp = /[\p{P}]/gu;
+    // Matches all punctuation characters
+    const punctuationRegex: RegExp = showSequences ? /[\p{P}]+/gu : /[\p{P}]/gu;
 
-  const lines = getLinesFromUSFM(text);
+    const lines = getLinesFromUSFM(text);
 
-  lines.forEach((line: string) => {
-    if (line.startsWith('\\id')) {
-      currentBook = getBookNumFromId(line);
-      currentChapter = 0;
-      currentVerse = 0;
-    }
-    if (line.startsWith('\\c')) {
-      currentChapter = getNumberFromUSFM(line);
-      currentVerse = 0;
-    }
-    if (line.startsWith('\\v')) {
-      currentVerse = getNumberFromUSFM(line);
-      if (currentChapter === 0) {
-        currentChapter = scriptureRef.chapterNum;
+    lines.forEach((line: string) => {
+      if (line.startsWith('\\id')) {
+        currentBook = getBookNumFromId(line);
+        currentChapter = 0;
+        currentVerse = 0;
       }
-    }
-
-    let match: RegExpExecArray | undefined = punctuationRegex.exec(line) ?? undefined;
-    while (match) {
-      // For this code to work correctly we need our regular expression to match a single
-      // punctuation character per match
-      if (match.length > 1)
-        throw new Error('Multiple punctuation characters found in a single match');
-
-      const punctuation = match[0];
-      const { index } = match;
-
-      let prefix = '';
-      let suffix = '';
-
-      // Check if preceding character is whitespace or not
-      if (index === 0) {
-        prefix = '_';
-      } else {
-        for (let i = index - 1; i >= 0; i--) {
-          const precedingChar = line[i];
-          if (/\s/.test(precedingChar)) {
-            prefix = '_';
-            break;
-          } else if (!/[\p{P}]/u.test(precedingChar)) {
-            break;
-          }
+      if (line.startsWith('\\c')) {
+        currentChapter = getNumberFromUSFM(line);
+        currentVerse = 0;
+      }
+      if (line.startsWith('\\v')) {
+        currentVerse = getNumberFromUSFM(line);
+        if (currentChapter === 0) {
+          currentChapter = scriptureRef.chapterNum;
         }
       }
 
-      // Check if following character is whitespace or not
-      if (index === line.length - 1) {
-        suffix = '_';
-      } else {
-        for (let i = index + 1; i < line.length; i++) {
-          const followingChar = line[i];
-          if (/\s/.test(followingChar)) {
-            suffix = '_';
-            break;
-          } else if (!/[\p{P}]/u.test(followingChar)) {
-            break;
+      let match: RegExpExecArray | undefined = punctuationRegex.exec(line) ?? undefined;
+      while (match) {
+        // For this code to work correctly we need our regular expression to match a single
+        // punctuation character per match
+        if (match.length > 1)
+          throw new Error('Multiple punctuation characters found in a single match');
+
+        const punctuation = match[0];
+        const { index } = match;
+
+        let prefix = '';
+        let suffix = '';
+
+        // Check if preceding character is whitespace or not
+        if (index === 0) {
+          prefix = '_';
+        } else {
+          for (let i = index - 1; i >= 0; i--) {
+            const precedingChar = line[i];
+            if (/\s/.test(precedingChar)) {
+              prefix = '_';
+              break;
+            } else if (!/[\p{P}]/u.test(precedingChar)) {
+              break;
+            }
           }
         }
-      }
 
-      const item = `${prefix}${punctuation}${suffix}`;
+        // Check if following character is whitespace or not
+        if (index === line.length - punctuation.length) {
+          suffix = '_';
+        } else {
+          for (let i = index + punctuation.length; i < line.length; i++) {
+            const followingChar = line[i];
+            if (/\s/.test(followingChar)) {
+              suffix = '_';
+              break;
+            } else if (!/[\p{P}]/u.test(followingChar)) {
+              break;
+            }
+          }
+        }
 
-      const itemIndex = match.index;
-      const existingItem = tableData.find((tableEntry) => tableEntry.items[0] === item);
-      const newReference: InventoryItemOccurrence = {
-        reference: {
-          bookNum: currentBook !== undefined ? currentBook : -1,
-          chapterNum: currentChapter !== undefined ? currentChapter : -1,
-          verseNum: currentVerse !== undefined ? currentVerse : -1,
-        },
-        text: substring(line, Math.max(0, itemIndex - 25), Math.min(itemIndex + 25, line.length)),
-      };
-      if (existingItem) {
-        existingItem.count += 1;
-        existingItem.occurrences.push(newReference);
-      } else {
-        const newItem: InventoryTableData = {
-          items: [item],
-          count: 1,
-          status: getStatusForItem(item, approvedItems, unapprovedItems),
-          occurrences: [newReference],
+        const item = `${prefix}${punctuation}${suffix}`;
+
+        const itemIndex = match.index;
+        const existingItem = tableData.find((tableEntry) => tableEntry.items[0] === item);
+        const newReference: InventoryItemOccurrence = {
+          reference: {
+            bookNum: currentBook !== undefined ? currentBook : -1,
+            chapterNum: currentChapter !== undefined ? currentChapter : -1,
+            verseNum: currentVerse !== undefined ? currentVerse : -1,
+          },
+          text: substring(line, Math.max(0, itemIndex - 25), Math.min(itemIndex + 25, line.length)),
         };
-        tableData.push(newItem);
+        if (existingItem) {
+          existingItem.count += 1;
+          existingItem.occurrences.push(newReference);
+        } else {
+          const newItem: InventoryTableData = {
+            items: [item],
+            count: 1,
+            status: getStatusForItem(item, approvedItems, unapprovedItems),
+            occurrences: [newReference],
+          };
+          tableData.push(newItem);
+        }
+
+        match = punctuationRegex.exec(line) ?? undefined;
       }
+    });
 
-      match = punctuationRegex.exec(line) ?? undefined;
-    }
-  });
-
-  return tableData;
+    return tableData;
+  };
 };
 
 function getPunctuationContext(
@@ -285,6 +296,19 @@ function PunctuationInventory({
     () => punctuationInventoryStrings['%webView_inventory_table_punctuation_context_wordMedial%'],
     [punctuationInventoryStrings],
   );
+  const showSequencesLabel = useMemo(
+    () => punctuationInventoryStrings['%webView_inventory_table_punctuation_showSequences%'],
+    [punctuationInventoryStrings],
+  );
+  const showSinglePunctuationCharacterLabel = useMemo(
+    () =>
+      punctuationInventoryStrings[
+        '%webView_inventory_table_punctuation_showSinglePunctuationCharacter%'
+      ],
+    [punctuationInventoryStrings],
+  );
+
+  const [showSequences, setShowSequences] = useState<boolean>(false);
 
   const columns = useMemo(
     () =>
@@ -321,18 +345,29 @@ function PunctuationInventory({
   );
 
   return (
-    <Inventory
-      scriptureReference={scriptureReference}
-      setScriptureReference={setScriptureReference}
-      localizedStrings={localizedStrings}
-      extractItems={extractPunctuation}
-      approvedItems={approvedItems}
-      unapprovedItems={unapprovedItems}
-      text={text}
-      scope={scope}
-      onScopeChange={onScopeChange}
-      columns={columns}
-    />
+    <div className="tw-flex tw-flex-col">
+      <Button
+        className="tw-m-1"
+        variant="outline"
+        onClick={() => {
+          setShowSequences((currentValue) => !currentValue);
+        }}
+      >
+        {showSequences ? showSinglePunctuationCharacterLabel : showSequencesLabel}
+      </Button>
+      <Inventory
+        scriptureReference={scriptureReference}
+        setScriptureReference={setScriptureReference}
+        localizedStrings={localizedStrings}
+        extractItems={extractPunctuation(showSequences)}
+        approvedItems={approvedItems}
+        unapprovedItems={unapprovedItems}
+        text={text}
+        scope={scope}
+        onScopeChange={onScopeChange}
+        columns={columns}
+      />
+    </div>
   );
 }
 

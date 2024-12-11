@@ -69,6 +69,8 @@
       "%webView_inventory_table_punctuation_context_wordInitial%": "Word Initial",
       "%webView_inventory_table_punctuation_context_wordFinal%": "Word Final",
       "%webView_inventory_table_punctuation_context_wordMedial%": "Word Medial",
+      "%webView_inventory_table_punctuation_showSequences%": "Show Sequences",
+      "%webView_inventory_table_punctuation_showSinglePunctuationCharacter%": "Show Single Punctuation Character",
       "%webView_inventory_show_preceding_marker%": "Show Preceding Marker",
       "%webView_inventory_unknown_marker%": "Unknown Marker",
       "%webView_inventory_occurrences_table_header_reference%": "Reference",
