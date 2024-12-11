@@ -204,9 +204,9 @@ export declare class DocumentCombiner {
 	/**
 	 * Add or update one of the contribution documents for the composition process
 	 *
-	 * Note: the order in which contribution documents are added can be considered to be indeterminate
-	 * as it is currently ordered by however `Map.forEach` provides the contributions. The order
-	 * matters when merging two arrays into one. Also, when `options.ignoreDuplicateProperties` is
+	 * Note: the order in which contribution documents are added can be considered indeterminate as it
+	 * depends on the order in which `Map.forEach` iterates over the contributions. However, the order
+	 * matters when merging two arrays into one. Also, when `options.ignoreDuplicateProperties` is is
 	 * `true`, the order also matters when adding the same property to an object that is already
 	 * provided previously. Please let us know if you have trouble because of indeterminate
 	 * contribution ordering.

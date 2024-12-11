@@ -41,6 +41,21 @@ const LANGUAGE_CODE_REGEX =
  * unexpectedly.
  */
 export const localizedStringsDocumentCombiner = new LocalizedStringsDocumentCombiner({});
+const loadedLocales: Record<string, LanguageInfo> = {};
+
+const languageDetails: Record<string, LanguageInfo> = {
+  en: {
+    autonym: 'English',
+    uiNames: { es: 'inglés', de: 'Englisch', fr: 'Anglais', km: 'ភាសាអង់គ្លេស' },
+  },
+  es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
+  fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
+  de: { autonym: 'Deutsch', uiNames: { en: 'German', es: 'alemán', fr: 'Allemand' } },
+  km: { autonym: 'ខ្មែរ', uiNames: { en: 'Khmer', es: 'jemer', de: 'Khmer', fr: 'Khmer' } },
+  zh: { autonym: '中文', uiNames: { en: 'Chinese', es: 'chino' } },
+  hi: { autonym: 'हिन्दी', uiNames: { en: 'Hindi', es: 'hindi' } },
+  ar: { autonym: 'العربية', uiNames: { en: 'Arabic', es: 'árabe' } },
+};
 
 function getFileNameFromUri(uriToMatch: string): string {
   const file = path.parse(uriToMatch);
@@ -86,9 +101,9 @@ function convertToLocalizedStringMetadata(jsonString: string): StringsMetadata {
 }
 
 async function getLocalizedFileUris(): Promise<string[]> {
-  const entries = await nodeFS.readDir(LOCALIZATION_ROOT_URI);
-  if (!entries) throw new Error('No entries found in localization folder');
-  return entries.file;
+  const entries = (await nodeFS.readDir(LOCALIZATION_ROOT_URI))?.file;
+  if (!entries?.length) throw new Error('No files found in localization folder');
+  return entries;
 }
 
 /** Load the contents of all localization files from disk */
@@ -112,6 +127,14 @@ async function loadAllLocalizationData() {
           localizeFileString,
           fileName,
         );
+
+        // ENHANCE: instead of creating a hardcoded languageDetails and using that, see if we can
+        // get all the needed info from SLDR.
+        if (!loadedLocales[fileName]) {
+          loadedLocales[fileName] = languageDetails[fileName] || {
+            autonym: fileName,
+          };
+        }
       } catch (error) {
         logger.warn(error);
       }
@@ -303,16 +326,7 @@ class LocalizationDataProviderEngine
   // This method legitimately does not need to call anything else in this class as of now
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getAvailableInterfaceLanguages() {
-    const languages: Record<string, LanguageInfo> = {
-      en: { autonym: 'English' },
-      es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
-      fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
-      de: { autonym: 'Deutsch', uiNames: { en: 'German', es: 'alemán', fr: 'Allemand' } },
-      zh: { autonym: '中文', uiNames: { en: 'Chinese', es: 'chino' } },
-      hi: { autonym: 'हिन्दी', uiNames: { en: 'Hindi', es: 'hindi' } },
-      ar: { autonym: 'العربية', uiNames: { en: 'Arabic', es: 'árabe' } },
-    };
-    return languages;
+    return loadedLocales;
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
