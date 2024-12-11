@@ -124,7 +124,7 @@ export default function UiLanguageSelector({
   }; */
 
   return (
-    <div className={cn('pr-twp tw-max-w-sm tw-p-4', className)}>
+    <div className={cn('pr-twp tw-max-w-sm', className)}>
       {/* Language Selector */}
       <Select
         name="uiLanguage"
@@ -154,7 +154,7 @@ export default function UiLanguageSelector({
       {selectedLanguage !== 'en' && (
         <>
           <Label className="tw-ml-3">{selectFallbackLanguagesText}</Label>
-          <div>
+          <div className="tw-ml-3">
             {/* Do not localize or "improve". This label is temporary. */}
             <Label>
               Currently:{'\u00A0'}
