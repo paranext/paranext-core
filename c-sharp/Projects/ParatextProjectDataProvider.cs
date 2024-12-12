@@ -620,7 +620,28 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         var scrStylesheet = scrText.ScrStylesheet(verseRef.BookNum);
         string usfmData = scrText.GetText(verseRef, chapterOnly, true) ?? string.Empty;
-        XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(scrStylesheet, usfmData, false);
+
+        XmlDocument xmlDocOld = UsfmToUsx.ConvertToXmlDocument(scrStylesheet, usfmData, false);
+
+        // Adapted from UsfmToUsx.ConvertToXmlDocument
+        var xmlDoc = new XmlDocument();
+        using (XmlWriter? xmlWriter = xmlDoc.CreateNavigator()?.AppendChild())
+        {
+            if (xmlWriter == null)
+                throw new Exception(
+                    "Could not create XPathNavigator for new xmlDoc while running ConvertUsfmToUsx!"
+                );
+            // Adapted from UsfmToUsx.ConvertToXmlWriter
+            List<UsfmToken> tokens = UsfmToken.Tokenize(
+                scrStylesheet,
+                usfmData,
+                UsfmToken.WhitespacePreservationType.PreserveConsecutiveSpacesInTextTokens
+            );
+            UsfmToUsx.ConvertToXmlWriter(scrStylesheet, tokens, xmlWriter, false);
+
+            xmlWriter.Flush();
+        }
+
         return xmlDoc.OuterXml;
     }
 
@@ -640,7 +661,50 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             out string usfm
         );
 
-        return UsfmToken.NormalizeUsfm(scrText, verseRef.BookNum, usfm);
+        var normalizedOld = UsfmToken.NormalizeUsfm(scrText, verseRef.BookNum, usfm);
+        var normalizedPreserveWhitespace = UsfmToken.NormalizeUsfm(
+            scrText.ScrStylesheet(verseRef.BookNum),
+            usfm,
+            true,
+            scrText.RightToLeft,
+            scrText
+        );
+
+        // Adapted from UsfmToken.NormalizeUsfm
+        // Build usfm string from tokens
+        string dest;
+
+        List<UsfmToken> tokensWithoutWhitespace = UsfmToken.Tokenize(
+            scrText.ScrStylesheet(verseRef.BookNum),
+            usfm,
+            false
+        );
+
+        List<UsfmToken> tokensWithWhitespace = UsfmToken.Tokenize(
+            scrText.ScrStylesheet(verseRef.BookNum),
+            usfm,
+            true
+        );
+        var destWitWhitespaceOld = UsfmToken.NormalizeTokenUsfm(
+            tokensWithWhitespace,
+            scrText,
+            true
+        );
+
+        List<UsfmToken> tokens = UsfmToken.Tokenize(
+            scrText.ScrStylesheet(verseRef.BookNum),
+            usfm,
+            UsfmToken.WhitespacePreservationType.PreserveConsecutiveSpacesInTextTokens
+        );
+        dest = UsfmToken.NormalizeTokenUsfm(tokens, scrText);
+
+        var normalizedPreserveSomeWhitespace = UsfmToken.AddDirectionMarksAsNeeded(
+            dest,
+            scrText.RightToLeft,
+            scrText
+        );
+
+        return normalizedPreserveSomeWhitespace;
     }
 
     // This does an imperfect job at extracting a verse's USX because the USX standard itself may
