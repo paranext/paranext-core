@@ -117,13 +117,28 @@ export default function Setting({
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
   const defaultLanguages: Record<string, LanguageInfo> = {
-    en: { autonym: 'English' },
-    es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
-    fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
+    en: { autonym: 'English', uiNames: { es: 'inglés' } },
   };
-  const [languages, , isLoadingLanguages] = useData(
-    localizationDataService.dataProviderName,
-  ).AvailableInterfaceLanguages(undefined, defaultLanguages);
+
+  // Although the full set of languages is likely to load more-or-less instantaneously, if there is
+  // a delay, we want to be sure to at least include any language(s) currently selected, so the user
+  // can't get into the weird state of dropping down the list and not seeing the current selection
+  // in the list.
+  if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+    // We'll go ahead and hard-code something reasonable for the the two most common localizations.
+    defaultLanguages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
+    defaultLanguages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
+    setting.forEach((lang) => {
+      if (!defaultLanguages[lang]) {
+        defaultLanguages[lang] = { autonym: lang }; // autonym is required, but we don't know it.
+      }
+    });
+  }
+
+  const [languages] = useData(localizationDataService.dataProviderName).AvailableInterfaceLanguages(
+    undefined,
+    defaultLanguages,
+  );
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
 
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
@@ -135,7 +150,7 @@ export default function Setting({
    *   `Switch`
    */
   const handleChangeSetting = async (
-    event: ChangeEvent<HTMLInputElement> | boolean | 'indeterminate',
+    event: ChangeEvent<HTMLInputElement> | string[] | boolean | 'indeterminate',
   ) => {
     let newValue: unknown;
 
@@ -144,6 +159,9 @@ export default function Setting({
       logger.warn(`Setting checkbox attempted to set to 'indeterminate' for some reason`);
     else if (typeof event === 'boolean') {
       // This event came from a `Switch` component
+      newValue = event;
+    } else if (Array.isArray(event)) {
+      // This event came from a `UiLanguageSelector` component
       newValue = event;
     } else {
       // This event came from an `Input` component
@@ -203,9 +221,7 @@ export default function Setting({
             knownUiLanguages={languages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}
-            handleLanguageChanges={(newUiLanguages) => {
-              if (!isLoadingLanguages) setSetting(newUiLanguages);
-            }}
+            onLanguageChanges={debouncedHandleChange}
             localizedStrings={localizedStrings}
           />
         );
@@ -225,16 +241,7 @@ export default function Setting({
         {errorMessage && <Label className="tw-text-red-600 tw-pt-4">{errorMessage}</Label>}
       </div>
     );
-  }, [
-    setting,
-    settingKey,
-    debouncedHandleChange,
-    errorMessage,
-    languages,
-    isLoadingLanguages,
-    localizedStrings,
-    setSetting,
-  ]);
+  }, [setting, settingKey, debouncedHandleChange, errorMessage, languages, localizedStrings]);
 
   return (
     <div>

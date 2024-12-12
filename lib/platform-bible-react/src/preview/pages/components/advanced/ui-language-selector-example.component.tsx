@@ -91,18 +91,16 @@ function UiLanguageSelectorExample() {
                                     knownUiLanguages={languages}
                                     primaryLanguage={primary}
                                     fallbackLanguages={fallback}
-                                    handleLanguageChanges={(newUiLanguages: string[]) => {
+                                    onLanguageChanges={(newUiLanguages: string[]) => {
                                       console.log(`Total count: ${newUiLanguages.length}`);
                                     }}
-                                    handlePrimaryLanguageChange={(
-                                      newPrimaryUiLanguageTag: string,
-                                    ) => {
+                                    onPrimaryLanguageChange={(newPrimaryUiLanguageTag: string) => {
                                       setPrimary(newPrimaryUiLanguageTag);
                                       console.log(
                                         `New primary UI language: ${languages[newPrimaryUiLanguageTag]?.autonym || newPrimaryUiLanguageTag}`,
                                       );
                                     }}
-                                    handleFallbackLanguagesChange={(newFallbacks) => {
+                                    onFallbackLanguagesChange={(newFallbacks) => {
                                       const fallbackList = newFallbacks.map(
                                         (tag) => languages[tag]?.autonym || tag,
                                       );

@@ -48,7 +48,7 @@ export type LanguageInfo = {
 };
 
 export type UiLanguageSelectorProps = {
-  /** Full set of known languages to display. */
+  /** Full set of known languages to display. The keys are valid BCP-47 tags. */
   knownUiLanguages: Record<string, LanguageInfo>;
   /** IETF BCP-47 language tag of the current primary UI language. `undefined` => 'en' */
   primaryLanguage: string;
@@ -63,14 +63,14 @@ export type UiLanguageSelectorProps = {
    * handler, the primary UI language is the first one in the array, followed by the fallback
    * languages in order of decreasing preference.
    */
-  handleLanguageChanges?: (newUiLanguages: string[]) => void;
+  onLanguageChanges?: (newUiLanguages: string[]) => void;
   /** Handler for the primary language changes. */
-  handlePrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
+  onPrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
   /**
    * Handler for when the fallback languages change. The array contains the fallback languages in
    * order of decreasing preference.
    */
-  handleFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
+  onFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
   /**
    * Map whose keys are localized string keys as contained in UI_LANGUAGE_SELECTOR_STRING_KEYS and
    * whose values are the localized strings (in the current UI language).
@@ -84,9 +84,9 @@ export default function UiLanguageSelector({
   knownUiLanguages,
   primaryLanguage = 'en',
   fallbackLanguages = [],
-  handleLanguageChanges,
-  handlePrimaryLanguageChange,
-  handleFallbackLanguagesChange,
+  onLanguageChanges,
+  onPrimaryLanguageChange,
+  onFallbackLanguagesChange,
   localizedStrings,
   className,
 }: UiLanguageSelectorProps) {
@@ -99,15 +99,26 @@ export default function UiLanguageSelector({
 
   const handleLanguageChange = (code: string) => {
     setSelectedLanguage(code);
-    if (handlePrimaryLanguageChange) handlePrimaryLanguageChange(code);
+    if (onPrimaryLanguageChange) onPrimaryLanguageChange(code);
     // REVIEW: Should fallback languages be preserved when primary language changes?
-    if (handleLanguageChanges)
-      handleLanguageChanges([code, ...fallbackLanguages.filter((lang) => lang !== code)]);
-    if (handleFallbackLanguagesChange && fallbackLanguages.find((l) => l === code))
-      handleFallbackLanguagesChange([...fallbackLanguages.filter((lang) => lang !== code)]);
+    if (onLanguageChanges)
+      onLanguageChanges([code, ...fallbackLanguages.filter((lang) => lang !== code)]);
+    if (onFallbackLanguagesChange && fallbackLanguages.find((l) => l === code))
+      onFallbackLanguagesChange([...fallbackLanguages.filter((lang) => lang !== code)]);
     setIsOpen(false); // Close the dropdown when a selection is made
   };
 
+  /**
+   * Gets the display name for the given language. This will typically include the autonym (in the
+   * native script), along with the name of the language in the current UI locale if known, with a
+   * fallback to the English name (if known).
+   *
+   * @param {string} lang - The BCP-47 code of the language whose display name is being requested.
+   * @param {string} uiLang - The BCP-47 code of the current user-interface language used used to
+   *   try to look up the name of the language in a form that is likely to be helpful to the user if
+   *   they do not recognize the autonym.
+   * @returns {string} The display name of the language.
+   */
   const getLanguageDisplayName = (lang: string, uiLang: string) => {
     const altName =
       uiLang !== lang
@@ -118,10 +129,6 @@ export default function UiLanguageSelector({
       ? `${knownUiLanguages[lang]?.autonym} (${altName})`
       : knownUiLanguages[lang]?.autonym;
   };
-
-  /*   const handleFallbackLanguageClick = () => {
-    handleFallbackLanguagesChange([]);
-  }; */
 
   return (
     <div className={cn('pr-twp tw-max-w-sm', className)}>
@@ -137,8 +144,7 @@ export default function UiLanguageSelector({
           <SelectValue />
         </SelectTrigger>
         <SelectContent
-          // Need to get over the floating web view z-index 200
-          style={{ zIndex: 250 }}
+          className="tw-z-[250]" // Need to get over the floating web view z-index 200
         >
           {Object.keys(knownUiLanguages).map((key) => {
             return (
@@ -165,7 +171,7 @@ export default function UiLanguageSelector({
                 : `${knownUiLanguages.en.autonym}`}
             </Label>
             {/* <MultiSelector>
-
+              Something like this will be added once UX decides exactly what they want.
           </MultiSelector> */}
           </div>
         </>

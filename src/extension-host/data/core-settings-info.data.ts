@@ -1,3 +1,4 @@
+import localizationService from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
 import { isString, ScriptureReference, SettingsContribution } from 'platform-bible-utils';
 
@@ -49,15 +50,18 @@ export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = 
   );
 };
 
-// TODO: Validate that strings in the array match BCP 47 values once the i18n code is ready
+// TODO: Validate that strings in the array match BCP 47 values once the i18n code is ready. Or maybe
+// now that we're validating against actual locales read in by the localization service, that check
+// should instead be done as part of reading the localization files.
 const interfaceLanguageValidator: SettingValidator<'platform.interfaceLanguage'> = async (
   newValue: string[],
 ): Promise<boolean> => {
+  const validLanguages = await localizationService.getAvailableInterfaceLanguages();
   return (
     typeof newValue === 'object' &&
     Array.isArray(newValue) &&
     newValue.length > 0 &&
-    typeof newValue[0] === 'string'
+    newValue.every((v) => typeof v === 'string' && v in validLanguages)
   );
 };
 
