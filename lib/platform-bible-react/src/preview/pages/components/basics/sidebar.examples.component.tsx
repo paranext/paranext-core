@@ -30,8 +30,8 @@ export default function SidebarExamples({ direction }: SidebarExamplesProps) {
   };
 
   return (
-    <SidebarProvider dir={direction}>
-      <Sidebar side={direction === 'rtl' ? 'right' : 'left'}>
+    <SidebarProvider dir={direction} side={direction === 'rtl' ? 'right' : 'left'}>
+      <Sidebar>
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupLabel>Application</SidebarGroupLabel>
