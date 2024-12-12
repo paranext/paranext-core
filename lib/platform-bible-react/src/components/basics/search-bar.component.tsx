@@ -50,11 +50,7 @@ export default function SearchBar({
         )}
       />
       <Input
-        className={cn(
-          'tw-flex tw-h-10 tw-w-full tw-text-ellipsis tw-rounded-md tw-border tw-border-input tw-bg-background tw-py-2 tw-pe-3 tw-pe-9 tw-ps-9 tw-text-sm tw-ring-offset-background file:tw-border-0 file:tw-bg-transparent file:tw-text-sm file:tw-font-medium placeholder:tw-text-muted-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-[color:hsl(240,5%,64.9%)] focus-visible:tw-ring-offset-2 disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
-          { 'tw-w-full': isFullWidth },
-          className,
-        )}
+        className={cn('tw-text-ellipsis tw-pe-9 tw-ps-9', { 'tw-w-full': isFullWidth }, className)}
         placeholder={placeholder}
         value={searchQuery}
         onChange={(e) => handleInputChange(e.target.value)}
