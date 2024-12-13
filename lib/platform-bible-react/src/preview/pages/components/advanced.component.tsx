@@ -102,7 +102,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="UI Language Selector">
-          <UiLanguageSelectorExample />
+          <UiLanguageSelectorExample direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Scroll Group Selector">

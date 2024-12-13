@@ -1,6 +1,8 @@
 import UiLanguageSelector, {
   LanguageInfo,
 } from '@/components/advanced/ui-language-selector.component';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+import { dir } from 'console';
 import { useState } from 'react';
 
 const localizedStrings = {
@@ -19,13 +21,13 @@ const languages: Record<string, LanguageInfo> = {
 
 /* This is intentionally a little overcomplicated in order to easily illustrate the problem
  described in issue #1377 */
-function UiLanguageSelectorExample() {
+function UiLanguageSelectorExample({ direction }: HasDirection) {
   const [primary, setPrimary] = useState('fr');
   const [fallback, setFallback] = useState<string[] | undefined>(undefined);
 
   return (
-    <div className="pr-twp tw-space-y-4 tw-bg-gray-100 tw-p-4">
-      <div className="pr-twp tw-space-y-4 tw-bg-gray-100 tw-p-4">
+    <div className="tw-space-y-4">
+      <div className="pr-twp tw-space-y-4 tw-rounded-md tw-bg-muted/50 tw-p-4">
         <h1 className="tw-text-xl tw-font-bold">UI Language Selector Example</h1>
         <div>
           <p>Demonstrates selecting a primary and fallback UI language.</p>
@@ -83,7 +85,7 @@ function UiLanguageSelectorExample() {
                                   </p>
                                 </div>
                                 <div
-                                  className="pr-twp tw-h-40 tw-bg-slate-300"
+                                  className="pr-twp tw-h-40 tw-rounded-md tw-bg-muted"
                                   style={{ zIndex: 200 }}
                                 >
                                   <UiLanguageSelector
@@ -108,6 +110,7 @@ function UiLanguageSelectorExample() {
                                       console.log(`New fallback UI languages:`, fallbackList);
                                     }}
                                     localizedStrings={localizedStrings}
+                                    direction={direction}
                                   />
                                 </div>
                               </div>
@@ -124,7 +127,7 @@ function UiLanguageSelectorExample() {
         </div>
       </div>
 
-      <div className="pr-twp tw-rounded-md tw-bg-gray-200 tw-p-4">
+      <div className="pr-twp tw-rounded-md tw-bg-muted tw-p-4">
         <p>
           <strong>Current Selections:</strong>
         </p>
@@ -134,6 +137,29 @@ function UiLanguageSelectorExample() {
           {fallback?.map((tag) => languages[tag]?.autonym || tag).join(', ') || 'None'}
         </p>
       </div>
+
+      <UiLanguageSelector
+        className="tw-w-64"
+        knownUiLanguages={languages}
+        primaryLanguage={primary}
+        fallbackLanguages={fallback}
+        onLanguageChanges={(newUiLanguages: string[]) => {
+          console.log(`Total count: ${newUiLanguages.length}`);
+        }}
+        onPrimaryLanguageChange={(newPrimaryUiLanguageTag: string) => {
+          setPrimary(newPrimaryUiLanguageTag);
+          console.log(
+            `New primary UI language: ${languages[newPrimaryUiLanguageTag]?.autonym || newPrimaryUiLanguageTag}`,
+          );
+        }}
+        onFallbackLanguagesChange={(newFallbacks) => {
+          const fallbackList = newFallbacks.map((tag) => languages[tag]?.autonym || tag);
+          setFallback(newFallbacks);
+          console.log(`New fallback UI languages:`, fallbackList);
+        }}
+        localizedStrings={localizedStrings}
+        direction={direction}
+      />
     </div>
   );
 }
