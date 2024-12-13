@@ -149,7 +149,7 @@ export default function UiLanguageSelector({
           {Object.keys(knownUiLanguages).map((key) => {
             return (
               <SelectItem key={key} value={key}>
-                {getLanguageDisplayName(key, primaryLanguage)}
+                {getLanguageDisplayName(key, selectedLanguage)}
               </SelectItem>
             );
           })}
@@ -166,9 +166,9 @@ export default function UiLanguageSelector({
               Currently:{'\u00A0'}
               {fallbackLanguages?.length > 0
                 ? `${fallbackLanguages
-                    .map((f) => getLanguageDisplayName(f, primaryLanguage))
+                    .map((f) => getLanguageDisplayName(f, selectedLanguage))
                     .join(', ')}`
-                : `${knownUiLanguages.en.autonym}`}
+                : `default (${knownUiLanguages.en.autonym})`}
             </Label>
             {/* <MultiSelector>
               Something like this will be added once UX decides exactly what they want.
