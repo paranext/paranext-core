@@ -78,6 +78,8 @@ export type UiLanguageSelectorProps = {
   localizedStrings: UiLanguageSelectorLocalizedStrings;
   /** Additional css classes to help with unique styling of the control */
   className?: string;
+  /** Interface direction */
+  direction?: 'ltr' | 'rtl';
 };
 
 export default function UiLanguageSelector({
@@ -89,6 +91,7 @@ export default function UiLanguageSelector({
   onFallbackLanguagesChange,
   localizedStrings,
   className,
+  direction = 'ltr',
 }: UiLanguageSelectorProps) {
   const selectFallbackLanguagesText = localizeString(
     localizedStrings,
@@ -137,12 +140,14 @@ export default function UiLanguageSelector({
         onValueChange={handleLanguageChange}
         open={isOpen}
         onOpenChange={(open) => setIsOpen(open)}
+        dir={direction}
       >
         <SelectTrigger>
           <SelectValue />
         </SelectTrigger>
         <SelectContent
           className="tw-z-[250]" // Need to get over the floating web view z-index 200
+          dir={direction}
         >
           {Object.keys(knownUiLanguages).map((key) => {
             return (

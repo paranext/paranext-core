@@ -1,7 +1,9 @@
 import UiLanguageSelector, {
   LanguageInfo,
 } from '@/components/advanced/ui-language-selector.component';
-import { useState } from 'react';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+import { Label } from '@radix-ui/react-dropdown-menu';
+import { useEffect, useState } from 'react';
 
 const localizedStrings = {
   '%settings_uiLanguageSelector_selectFallbackLanguages%': 'Pick yer Fallback languages',
@@ -17,15 +19,49 @@ const languages: Record<string, LanguageInfo> = {
   ar: { autonym: 'العربية', uiNames: { en: 'Arabic', es: 'árabe' } },
 };
 
+const languagesWithInvalidOption: Record<string, LanguageInfo> = {
+  invalid: { autonym: 'Invalid Language', uiNames: { en: 'Invalid', es: 'Inválido' } },
+  ...languages,
+};
+
 /* This is intentionally a little overcomplicated in order to easily illustrate the problem
  described in issue #1377 */
-function UiLanguageSelectorExample() {
+function UiLanguageSelectorExample({ direction }: HasDirection) {
   const [primary, setPrimary] = useState('fr');
+  const [invalidSelection, setInvalidSelection] = useState(false);
   const [fallback, setFallback] = useState<string[] | undefined>(undefined);
+  const [independent, setIndependent] = useState<string[]>(['es']);
+
+  const validateAndSetPrimary = (newPrimaryUiLanguageTag: string) => {
+    if (newPrimaryUiLanguageTag === 'invalid') {
+      setInvalidSelection(true);
+    } else {
+      setPrimary(newPrimaryUiLanguageTag);
+      setInvalidSelection(false);
+      console.log(
+        `New primary UI language: ${languages[newPrimaryUiLanguageTag]?.autonym || newPrimaryUiLanguageTag}`,
+      );
+    }
+  };
+
+  const validateAndSetFallbacks = (newFallbacks: string[] | undefined) => {
+    const fallbackList = newFallbacks?.map((tag) => languages[tag]?.autonym || tag);
+    setFallback(newFallbacks);
+    console.log(`New fallback UI languages:`, fallbackList);
+  };
+
+  // Reset the invalid selection after 2 seconds
+  useEffect(() => {
+    if (invalidSelection) {
+      const timer = setTimeout(() => setInvalidSelection(false), 2000); // 2-second duration
+      return () => clearTimeout(timer); // Cleanup on component unmount or when invalidSelection changes
+    }
+    return undefined;
+  }, [invalidSelection]);
 
   return (
-    <div className="pr-twp tw-space-y-4 tw-bg-gray-100 tw-p-4">
-      <div className="pr-twp tw-space-y-4 tw-bg-gray-100 tw-p-4">
+    <div className="tw-space-y-4">
+      <div className="pr-twp tw-space-y-4 tw-rounded-md tw-bg-muted/50 tw-p-4">
         <h1 className="tw-text-xl tw-font-bold">UI Language Selector Example</h1>
         <div>
           <p>Demonstrates selecting a primary and fallback UI language.</p>
@@ -83,31 +119,21 @@ function UiLanguageSelectorExample() {
                                   </p>
                                 </div>
                                 <div
-                                  className="pr-twp tw-h-40 tw-bg-slate-300"
+                                  className="pr-twp tw-h-40 tw-rounded-md tw-bg-muted"
                                   style={{ zIndex: 200 }}
                                 >
                                   <UiLanguageSelector
-                                    className="tw-w-64"
+                                    className={`tw-w-64 ${invalidSelection ? 'tw-text-red-600 tw-transition-colors tw-duration-500' : ''}`}
                                     knownUiLanguages={languages}
                                     primaryLanguage={primary}
                                     fallbackLanguages={fallback}
                                     onLanguagesChange={(newUiLanguages: string[]) => {
                                       console.log(`Total count: ${newUiLanguages.length}`);
                                     }}
-                                    onPrimaryLanguageChange={(newPrimaryUiLanguageTag: string) => {
-                                      setPrimary(newPrimaryUiLanguageTag);
-                                      console.log(
-                                        `New primary UI language: ${languages[newPrimaryUiLanguageTag]?.autonym || newPrimaryUiLanguageTag}`,
-                                      );
-                                    }}
-                                    onFallbackLanguagesChange={(newFallbacks) => {
-                                      const fallbackList = newFallbacks.map(
-                                        (tag) => languages[tag]?.autonym || tag,
-                                      );
-                                      setFallback(newFallbacks);
-                                      console.log(`New fallback UI languages:`, fallbackList);
-                                    }}
+                                    onPrimaryLanguageChange={validateAndSetPrimary}
+                                    onFallbackLanguagesChange={validateAndSetFallbacks}
                                     localizedStrings={localizedStrings}
+                                    direction={direction}
                                   />
                                 </div>
                               </div>
@@ -124,7 +150,7 @@ function UiLanguageSelectorExample() {
         </div>
       </div>
 
-      <div className="pr-twp tw-rounded-md tw-bg-gray-200 tw-p-4">
+      <div className="pr-twp tw-rounded-md tw-bg-muted tw-p-4">
         <p>
           <strong>Current Selections:</strong>
         </p>
@@ -134,6 +160,34 @@ function UiLanguageSelectorExample() {
           {fallback?.map((tag) => languages[tag]?.autonym || tag).join(', ') || 'None'}
         </p>
       </div>
+
+      <UiLanguageSelector
+        className={`tw-w-64 ${invalidSelection ? 'tw-text-red-600 tw-transition-colors tw-duration-500' : ''}`}
+        knownUiLanguages={languagesWithInvalidOption}
+        primaryLanguage={primary}
+        fallbackLanguages={fallback}
+        onLanguagesChange={(newUiLanguages: string[]) => {
+          console.log(`Total count: ${newUiLanguages.length}`);
+        }}
+        onPrimaryLanguageChange={validateAndSetPrimary}
+        onFallbackLanguagesChange={validateAndSetFallbacks}
+        localizedStrings={localizedStrings}
+        direction={direction}
+      />
+      <Label>Independent UI Language for some other purpose:</Label>
+
+      <UiLanguageSelector
+        className="tw-w-64"
+        knownUiLanguages={languages}
+        primaryLanguage={independent[0]}
+        fallbackLanguages={independent.slice(1)}
+        onLanguagesChange={(newUiLanguages: string[]) => {
+          console.log(`Total count (independent): ${newUiLanguages.length}`);
+          setIndependent(newUiLanguages);
+        }}
+        localizedStrings={localizedStrings}
+        direction={independent[0] === 'ar' ? 'rtl' : direction}
+      />
     </div>
   );
 }
