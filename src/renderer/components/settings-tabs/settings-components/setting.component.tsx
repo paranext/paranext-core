@@ -116,24 +116,31 @@ export default function Setting({
   label,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
-  const defaultLanguages: Record<string, LanguageInfo> = {
-    en: { autonym: 'English', uiNames: { es: 'inglés' } },
-  };
 
   // Although the full set of languages is likely to load more-or-less instantaneously, if there is
-  // a delay, we want to be sure to at least include any language(s) currently selected, so the user
+  // a delay, we want to be sure to include at least any language(s) currently selected, so the user
   // can't get into the weird state of dropping down the list and not seeing the current selection
   // in the list.
-  if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
-    // We'll go ahead and hard-code something reasonable for the the two most common localizations.
-    defaultLanguages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
-    defaultLanguages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
-    setting.forEach((lang) => {
-      if (!defaultLanguages[lang]) {
-        defaultLanguages[lang] = { autonym: lang }; // autonym is required, but we don't know it.
-      }
-    });
-  }
+  const defaultLanguages = useMemo(() => {
+    const languages: Record<string, LanguageInfo> = {
+      en: { autonym: 'English', uiNames: { es: 'inglés' } },
+    };
+
+    if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+      // Add hardcoded languages
+      languages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
+      languages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
+
+      // Add dynamic languages from setting
+      setting.forEach((lang) => {
+        if (!languages[lang]) {
+          languages[lang] = { autonym: lang }; // Autonym is required, but we don't know it.
+        }
+      });
+    }
+
+    return languages;
+  }, [setting, settingKey]);
 
   const [languages] = useData(localizationDataService.dataProviderName).AvailableInterfaceLanguages(
     undefined,
