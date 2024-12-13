@@ -97,11 +97,9 @@ export default function UiLanguageSelector({
     localizedStrings,
     '%settings_uiLanguageSelector_selectFallbackLanguages%',
   );
-  const [selectedLanguage, setSelectedLanguage] = useState(primaryLanguage);
   const [isOpen, setIsOpen] = useState(false);
 
   const handleLanguageChange = (code: string) => {
-    setSelectedLanguage(code);
     if (onPrimaryLanguageChange) onPrimaryLanguageChange(code);
     // REVIEW: Should fallback languages be preserved when primary language changes?
     if (onLanguagesChange)
@@ -138,7 +136,7 @@ export default function UiLanguageSelector({
       {/* Language Selector */}
       <Select
         name="uiLanguage"
-        value={selectedLanguage}
+        value={primaryLanguage}
         onValueChange={handleLanguageChange}
         open={isOpen}
         onOpenChange={(open) => setIsOpen(open)}
@@ -162,7 +160,7 @@ export default function UiLanguageSelector({
       </Select>
 
       {/* Fallback Language Button */}
-      {selectedLanguage !== 'en' && (
+      {primaryLanguage !== 'en' && (
         <>
           <Label className="tw-ml-3">{selectFallbackLanguagesText}</Label>
           <div className="tw-ml-3">
@@ -173,7 +171,7 @@ export default function UiLanguageSelector({
                 ? `${fallbackLanguages
                     .map((f) => getLanguageDisplayName(f, primaryLanguage))
                     .join(', ')}`
-                : `${knownUiLanguages.en.autonym}`}
+                : `default (${knownUiLanguages.en.autonym})`}
             </Label>
             {/* <MultiSelector>
               Something like this will be added once UX decides exactly what they want.
