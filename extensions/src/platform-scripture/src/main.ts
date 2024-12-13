@@ -78,7 +78,7 @@ async function openInventory(
   let projectId: string | undefined;
 
   if (webViewId) {
-    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
   }
 
@@ -87,7 +87,7 @@ async function openInventory(
   }
 
   const options: InventoryWebViewOptions = { projectId };
-  return papi.webViews.getWebView(
+  return papi.webViews.openWebView(
     webViewType,
     { type: 'float', floatSize: { width: 700, height: 800 } },
     options,
@@ -100,7 +100,7 @@ async function configureChecks(webViewId: string | undefined): Promise<string | 
   logger.debug('Configuring checks');
 
   if (webViewId) {
-    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
   }
 
@@ -110,7 +110,7 @@ async function configureChecks(webViewId: string | undefined): Promise<string | 
   }
 
   const options: ConfigureChecksWebViewOptions = { projectId };
-  return papi.webViews.getWebView(
+  return papi.webViews.openWebView(
     configureChecksWebViewType,
     { type: 'float', floatSize: { width: 700, height: 800 } },
     options,
@@ -149,6 +149,9 @@ async function openChecksSidePanel(webViewId: string | undefined): Promise<strin
     const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
     tabIdFromWebViewId = webViewDefinition?.id;
+  } else {
+    logger.debug('No editor web view!');
+    return undefined;
   }
 
   if (!projectId) {
@@ -156,7 +159,7 @@ async function openChecksSidePanel(webViewId: string | undefined): Promise<strin
     return undefined;
   }
 
-  const options: ChecksSidePanelWebViewOptions = { projectId };
+  const options: ChecksSidePanelWebViewOptions = { projectId, editorWebViewId: webViewId };
   return papi.webViews.openWebView(
     checksSidePanelWebViewType,
     { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },

@@ -1,18 +1,43 @@
-/* eslint-disable no-console */
 import { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckInputRange,
+  CheckRunnerCheckDetails,
   CheckRunResult,
   CheckSubscriptionId,
   SettableCheckDetails,
 } from 'platform-scripture';
+// import { ScriptureLocation, ScriptureRange } from 'platform-scripture-editor';
 import { useData, useDataProvider } from '@papi/frontend/react';
 import { VerseRef } from '@sillsdev/scripture';
+import { getChaptersForBook, ScriptureReference } from 'platform-bible-utils';
 import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';
 
-global.webViewComponent = function ChecksSidePanelWebView({ projectId }: WebViewProps) {
+const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
+  checkDescription: '',
+  checkId: '',
+  checkName: '',
+  enabledProjectIds: [''],
+};
+
+// TODO - Localized strings
+// TODO - handle deny check
+// TODO - key warning, unique check id
+
+global.webViewComponent = function ChecksSidePanelWebView({
+  projectId,
+  useWebViewScrollGroupScrRef,
+  // useWebViewState,
+}: WebViewProps) {
+  const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
+  // const [editorWebViewId] = useWebViewState('editorWebViewId', '');
+
+  // const editorWebViewController = useWebViewController(
+  //   'platformScriptureEditor.react',
+  //   editorWebViewId,
+  // );
+
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
@@ -39,13 +64,31 @@ global.webViewComponent = function ChecksSidePanelWebView({ projectId }: WebView
     };
   }, [checkAggregator]);
 
+  const [, setAvailableChecks, isLoadingAvailableChecks] = useData(
+    'platformScripture.checkAggregator',
+  ).AvailableChecks(subscriptionId, [defaultCheckRunnerCheckDetails]);
+
+  const defaultScriptureRange: CheckInputRange = useMemo(() => {
+    return {
+      projectId: projectId ?? '',
+      start: new VerseRef(1, 1, 1),
+    };
+  }, [projectId]);
+
+  const [, setActiveRanges, isLoadingActiveRanges] = useData(
+    'platformScripture.checkAggregator',
+  ).ActiveRanges(
+    subscriptionId,
+    useMemo(() => [defaultScriptureRange], [defaultScriptureRange]),
+  );
+
   const checkInputRange: CheckInputRange = useMemo(() => {
     return {
       projectId: projectId ?? '',
-      start: new VerseRef(3, 16, 1),
-      end: new VerseRef(3, 16, 34),
+      start: new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
+      end: new VerseRef(scrRef.bookNum, scrRef.chapterNum, getChaptersForBook(scrRef.bookNum)),
     };
-  }, [projectId]);
+  }, [projectId, scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum]);
 
   const settableCheckDetails: SettableCheckDetails = useMemo(() => {
     return {
@@ -54,58 +97,114 @@ global.webViewComponent = function ChecksSidePanelWebView({ projectId }: WebView
     };
   }, [projectId]);
 
+  // Need to force the web view to show Repeated Words check results for the current scripture range
   useEffect(() => {
-    checkAggregator?.setActiveRanges(subscriptionId, [checkInputRange]);
-    checkAggregator?.setAvailableChecks(subscriptionId, [settableCheckDetails]);
-  }, [checkAggregator, checkInputRange, settableCheckDetails, subscriptionId]);
+    if (setAvailableChecks) setAvailableChecks([settableCheckDetails]);
+    if (setActiveRanges) setActiveRanges([checkInputRange]);
+  }, [checkInputRange, projectId, setActiveRanges, setAvailableChecks, settableCheckDetails]);
 
-  const [checkResults] = useData('platformScripture.checkAggregator').CheckResults(
-    subscriptionId,
-    [],
-  );
+  const [checkResults, , isLoadingCheckResults] = useData(
+    'platformScripture.checkAggregator',
+  ).CheckResults(subscriptionId, []);
 
   const openConfigureChecks = useCallback(() => {
     papi.commands.sendCommand('platformScripture.openConfigureChecks', projectId);
   }, [projectId]);
 
   const writeCheckTitle = useCallback((result: CheckRunResult) => {
-    // TODO why is result.selectedText undefined
+    if (!result || !result.messageFormatString) return '';
     const [, extractedWord] = result.messageFormatString.match(/\|\|(.*?)\|\|/) || [];
 
     return `${result.verseRef.book} ${result.verseRef.chapter}:${result.verseRef.verse} ${extractedWord} ${extractedWord}`;
   }, []);
 
-  const writeCheckId = useCallback(
-    (result: CheckRunResult) => {
-      return `${writeCheckTitle(result)}${result.checkResultUniqueId ? result.checkResultUniqueId : ''}`;
+  const writeCheckId = (result: CheckRunResult, index: number) =>
+    `${index}${result.checkResultType}`;
+
+  const scrollToCheckReferenceInEditor = useCallback(
+    (id: string) => {
+      const selectedResult = checkResults?.find(
+        (result, index) => writeCheckId(result, index) === id,
+      );
+
+      if (!selectedResult) return undefined;
+
+      // TODO - Investigate selectedResult.selectedText and selectRange()
+      // const startScriptureLocation: ScriptureLocation = {
+      //   scrRef: {
+      //     bookNum: selectedResult.verseRef.bookNum,
+      //     chapterNum: selectedResult.verseRef.chapterNum,
+      //     verseNum: selectedResult.verseRef.verseNum,
+      //   },
+      //   offset: selectedResult.start.offset ?? 0,
+      // };
+
+      // console.log(
+      //   `START SCRIPTURE LOCATION ${JSON.stringify(startScriptureLocation.scrRef)} ${JSON.stringify(startScriptureLocation.offset)}`,
+      // );
+
+      // const endScriptureLocation: ScriptureLocation = {
+      //   scrRef: {
+      //     bookNum: selectedResult.verseRef.bookNum,
+      //     chapterNum: selectedResult.verseRef.chapterNum,
+      //     verseNum: selectedResult.verseRef.verseNum,
+      //   },
+      //   offset: selectedResult.end.offset ?? 0,
+      // };
+
+      // console.log(
+      //   `END SCRIPTURE LOCATION ${JSON.stringify(endScriptureLocation.scrRef)} ${JSON.stringify(endScriptureLocation.offset)}`,
+      // );
+
+      // const scriptureRange: ScriptureRange = {
+      //   start: startScriptureLocation,
+      //   end: endScriptureLocation,
+      // };
+      // editorWebViewController?.selectRange(scriptureRange);
+
+      const selectedCheckScrRef: ScriptureReference = {
+        bookNum: selectedResult.verseRef.bookNum,
+        chapterNum: selectedResult.verseRef.chapterNum,
+        verseNum: selectedResult.verseRef.verseNum,
+      };
+
+      setScrRef(selectedCheckScrRef);
     },
-    [writeCheckTitle],
+    [checkResults, setScrRef],
   );
 
-  setSelectedCheckId(writeCheckId(checkResults[0]));
+  const handleSelectCheck = useCallback(
+    (id: string) => {
+      const newId = id === selectedCheckId ? '' : id;
+      setSelectedCheckId(newId);
+
+      scrollToCheckReferenceInEditor(newId);
+    },
+    [scrollToCheckReferenceInEditor, selectedCheckId],
+  );
+
+  if (
+    isLoadingCheckResults ||
+    isLoadingAvailableChecks ||
+    isLoadingActiveRanges ||
+    !checkAggregator
+  )
+    return 'Loading Checks';
 
   return (
     <div className="checks-side-panel-web-view">
-      {/* <p>{projectId}</p> */}
-      {/* <p>{relevantCheck?.map((check) => check)}</p> */}
       <div className="check-card-container">
-        {/* {checkResults.map((result) => (
-          <div>
-            <p>{result.checkResultType}</p>
-            <p>{result.verseRef.toString()}</p>
-          </div>
-        ))} */}
-        {checkResults?.map((result) => (
+        {checkResults?.map((result, index) => (
           <CheckCard
-            checkId={writeCheckId(result)}
-            isSelected={selectedCheckId === writeCheckId(result)}
-            handleSelectCheck={() => setSelectedCheckId(writeCheckId(result))}
+            checkId={writeCheckId(result, index)}
+            isSelected={selectedCheckId === writeCheckId(result, index)}
+            handleSelectCheck={handleSelectCheck}
             checkTitle={writeCheckTitle(result)}
             checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
-            // checkDescription={result.}
-            handleDenyCheck={() => undefined}
+            // handleDenyCheck={() => setSelectedCheckId(writeCheckId(result))}
             handleOpenSettingsAndInventories={() => openConfigureChecks}
             checkType={result.checkResultType}
+            showBadge
           />
         ))}
       </div>

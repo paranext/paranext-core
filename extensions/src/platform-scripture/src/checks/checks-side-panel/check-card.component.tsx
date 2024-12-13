@@ -9,8 +9,6 @@ import {
 } from 'platform-bible-react';
 import { Check, MoreHorizontal, Settings, X } from 'lucide-react';
 import { useMemo } from 'react';
-// import { LocalizeKey } from 'platform-bible-utils';
-import papi from '@papi/frontend';
 
 /** Enum representing the possible states of a check */
 export enum CheckStates {
@@ -27,9 +25,9 @@ export enum CheckStates {
 // TODO Fix width and background color (inheriting from Card)
 /** The FixedBadge component displays a badge indicating the "Fixed" state. */
 export function FixedBadge() {
-  const [localizedString] = papi.react.useLocalizedStrings([
-    '%webView_checksSidePanel_fixedBadge_title%',
-  ]);
+  // const [localizedString] = papi.react.useLocalizedStrings([
+  //   '%webView_checksSidePanel_fixedBadge_title%',
+  // ]);
 
   return (
     <Badge
@@ -38,9 +36,7 @@ export function FixedBadge() {
       className="tw-flex tw-items-center tw-justify-between tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md"
     >
       <Check size={12} />
-      <span className="tw-text-muted-foreground tw-text-xs tw-font-medium">
-        {localizedString['%webView_checksSidePanel_fixedBadge_title%']}
-      </span>
+      <span className="tw-text-muted-foreground tw-text-xs tw-font-medium">Fixed</span>
     </Badge>
   );
 }
@@ -48,9 +44,9 @@ export function FixedBadge() {
 // TODO Fix width and background color (inheriting from Card)
 /** The DeniedBadge component displays a badge indicating the "Denied" state. */
 export function DeniedBadge() {
-  const [localizedString] = papi.react.useLocalizedStrings([
-    '%webView_checksSidePanel_deniedBadge_title%',
-  ]);
+  // const [localizedString] = papi.react.useLocalizedStrings([
+  //   '%webView_checksSidePanel_deniedBadge_title%',
+  // ]);
 
   return (
     <Badge
@@ -59,9 +55,7 @@ export function DeniedBadge() {
       className="tw-flex tw-items-center tw-justify-between tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md"
     >
       <X size={12} />
-      <span className="tw-text-muted-foreground tw-text-xs tw-font-medium">
-        {localizedString['%webView_checksSidePanel_deniedBadge_title%']}
-      </span>
+      <span className="tw-text-muted-foreground tw-text-xs tw-font-medium">Denied</span>
     </Badge>
   );
 }
@@ -69,15 +63,13 @@ export function DeniedBadge() {
 // TODO Check height, weight, shadow strength
 /** The CheckingBadge component displays a badge indicating the "Checking" state. */
 export function CheckingBadge() {
-  const [localizedString] = papi.react.useLocalizedStrings([
-    '%webView_checksSidePanel_checkingBadge_title%',
-  ]);
+  // const [localizedString] = papi.react.useLocalizedStrings([
+  //   '%webView_checksSidePanel_checkingBadge_title%',
+  // ]);
 
   return (
     <Badge className="tw-flex tw-items-center tw-justify-center tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md">
-      <span className="tw-text-xs tw-font-medium">
-        {localizedString['%webView_checksSidePanel_checkingBadge_title%']}
-      </span>
+      <span className="tw-text-xs tw-font-medium">Checking...</span>
     </Badge>
   );
 }
@@ -85,20 +77,20 @@ export function CheckingBadge() {
 /** Props for the FocusedCheckDropdown component. */
 type FocusedCheckDropdownProps = {
   /** Callback for denying a check */
-  handleDenyCheck: (checkTitle: string) => void;
+  // handleDenyCheck: (checkTitle: string) => void;
   /** Callback for opening settings and inventories */
   handleOpenSettingsAndInventories: () => void;
 };
 
 /** Dropdown menu component for actions on a focused check. */
 function FocusedCheckDropdown({
-  handleDenyCheck,
+  // handleDenyCheck,
   handleOpenSettingsAndInventories,
 }: FocusedCheckDropdownProps) {
-  const [localizedStrings] = papi.react.useLocalizedStrings([
-    '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
-    '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
-  ]);
+  // const [localizedStrings] = papi.react.useLocalizedStrings([
+  //   '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
+  //   '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
+  // ]);
 
   return (
     <DropdownMenu>
@@ -108,18 +100,16 @@ function FocusedCheckDropdown({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        <DropdownMenuItem className="tw-flex tw-flex-row" onClick={() => handleDenyCheck}>
+        <DropdownMenuItem className="tw-flex tw-flex-row" onClick={() => undefined}>
           <X className="tw-mr-2 tw-h-4 tw-w-4" />
-          <span>{localizedStrings['%webView_checksSidePanel_focusedCheckDropdown_denyItem%']}</span>
+          <span>Deny</span>
         </DropdownMenuItem>
         <DropdownMenuItem
           className="tw-flex tw-flex-row"
           onClick={() => handleOpenSettingsAndInventories}
         >
           <Settings className="tw-mr-2 tw-h-4 tw-w-4" />
-          <span>
-            {localizedStrings['%webView_checksSidePanel_focusedCheckDropdown_settingsItem%']}
-          </span>
+          <span>Open settings and inventories</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -174,7 +164,7 @@ export type CheckCardProps = {
   /** Callback function triggered when the check is selected */
   handleSelectCheck: (checkTitle: string) => void;
   /** Callback function triggered when the check is denied */
-  handleDenyCheck: (checkTitle: string) => void;
+  // handleDenyCheck: (checkTitle: string) => void;
   /**
    * The title of the check
    *
@@ -191,6 +181,8 @@ export type CheckCardProps = {
   checkDescription?: string;
   /** Callback function triggered to open the configure checks webview */
   handleOpenSettingsAndInventories: () => void;
+  /** Whether or not to show the relevant badge */
+  showBadge?: boolean;
 };
 
 /**
@@ -202,11 +194,12 @@ export default function CheckCard({
   isSelected,
   checkState,
   handleSelectCheck,
-  handleDenyCheck,
+  // handleDenyCheck,
   checkTitle,
   checkType,
   checkDescription,
   handleOpenSettingsAndInventories,
+  showBadge = false,
 }: CheckCardProps) {
   const isFixedOrDenied = useMemo(
     () => checkState === CheckStates.Fixed || checkState === CheckStates.Denied,
@@ -216,8 +209,10 @@ export default function CheckCard({
   return (
     <Card
       key={checkId}
-      onClick={() => handleSelectCheck(checkTitle)}
-      className={`tw-w-full tw-flex tw-flex-col tw-items-flex-start tw-gap-3 tw-p-4 tw-rounded-lg ${isSelected && 'tw-shadow-md'}`}
+      onClick={() => handleSelectCheck(checkId)}
+      className={`pr-twp tw-w-full tw-flex tw-cursor-pointer tw-flex-col tw-items-flex-start tw-gap-3 tw-p-4 tw-rounded-lg hover:tw-shadow-xl ${
+        isSelected ? 'tw-shadow-md' : ''
+      } cursor-pointer`}
       style={
         !isSelected
           ? {
@@ -229,9 +224,9 @@ export default function CheckCard({
     >
       <div className="tw-flex tw-justify-between">
         <div className="tw-gap-1 tw-flex tw-flex-col">
-          {checkState === CheckStates.Fixed && <FixedBadge />}
-          {checkState === CheckStates.Denied && <DeniedBadge />}
-          {checkState === CheckStates.Checking && <CheckingBadge />}
+          {checkState === CheckStates.Fixed && showBadge && <FixedBadge />}
+          {checkState === CheckStates.Denied && showBadge && <DeniedBadge />}
+          {checkState === CheckStates.Checking && showBadge && <CheckingBadge />}
           <span
             className={`tw-text-xs tw-font-medium ${isFixedOrDenied && 'tw-text-muted-foreground'}`}
           >
@@ -242,7 +237,7 @@ export default function CheckCard({
         {isSelected && (
           <FocusedCheckDropdown
             handleOpenSettingsAndInventories={handleOpenSettingsAndInventories}
-            handleDenyCheck={handleDenyCheck}
+            // handleDenyCheck={handleDenyCheck}
           />
         )}
       </div>

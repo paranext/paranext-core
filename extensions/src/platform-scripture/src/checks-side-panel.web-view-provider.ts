@@ -11,11 +11,10 @@ export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
 export interface ChecksSidePanelWebViewOptions extends GetWebViewOptions {
   projectId: string;
+  editorWebViewId: string;
 }
 
 export default class ChecksSidePanelWebViewProvider implements IWebViewProvider {
-  constructor(public webViewType: string = checksSidePanelWebViewType) {}
-
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(
     savedWebView: SavedWebViewDefinition,
