@@ -2,7 +2,7 @@ import UiLanguageSelector, {
   LanguageInfo,
 } from '@/components/advanced/ui-language-selector.component';
 import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
-import { dir } from 'console';
+import { Label } from '@radix-ui/react-dropdown-menu';
 import { useState } from 'react';
 
 const localizedStrings = {
@@ -24,6 +24,7 @@ const languages: Record<string, LanguageInfo> = {
 function UiLanguageSelectorExample({ direction }: HasDirection) {
   const [primary, setPrimary] = useState('fr');
   const [fallback, setFallback] = useState<string[] | undefined>(undefined);
+  const [independent, setIndependent] = useState<string[]>(['es']);
 
   return (
     <div className="tw-space-y-4">
@@ -159,6 +160,20 @@ function UiLanguageSelectorExample({ direction }: HasDirection) {
         }}
         localizedStrings={localizedStrings}
         direction={direction}
+      />
+      <Label>Independent UI Language for some other purpose:</Label>
+
+      <UiLanguageSelector
+        className="tw-w-64"
+        knownUiLanguages={languages}
+        primaryLanguage={independent[0]}
+        fallbackLanguages={independent.slice(1)}
+        onLanguagesChange={(newUiLanguages: string[]) => {
+          console.log(`Total count (independent): ${newUiLanguages.length}`);
+          setIndependent(newUiLanguages);
+        }}
+        localizedStrings={localizedStrings}
+        direction={independent[0] === 'ar' ? 'rtl' : direction}
       />
     </div>
   );
