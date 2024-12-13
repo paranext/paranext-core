@@ -49,6 +49,7 @@ export default function TabNavigationContentSearch({
           isFullWidth={isSearchBarFullWidth}
           onSearch={onSearch}
           placeholder={searchPlaceholder}
+          direction={direction}
         />
       </div>
       <VerticalTabs dir={direction}>

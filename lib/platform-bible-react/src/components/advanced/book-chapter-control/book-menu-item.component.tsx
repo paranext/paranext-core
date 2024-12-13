@@ -1,6 +1,6 @@
 import { Canon } from '@sillsdev/scripture';
 import { PropsWithChildren, KeyboardEvent, forwardRef } from 'react';
-import { DropdownMenuItem as ShadDropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
+import { DropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
 
 export type BookType = 'OT' | 'NT' | 'DC';
@@ -25,6 +25,8 @@ type BookMenuItemProps = PropsWithChildren<{
    * coordinated to genre
    */
   bookType: BookType;
+  /** Text and layout direction */
+  direction?: 'rtl' | 'ltr';
 }>;
 
 const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
@@ -37,11 +39,12 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
       handleKeyDown,
       bookType,
       children,
+      direction,
     }: BookMenuItemProps,
     ref,
   ) => {
     return (
-      <ShadDropdownMenuItem
+      <DropdownMenuItem
         ref={ref}
         key={bookId}
         textValue={bookId}
@@ -59,22 +62,23 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
         }}
         onFocus={handleHighlightBook}
         onMouseMove={handleHighlightBook}
+        dir={direction}
       >
         <span
           className={cn(
-            'tw-border-b-0 tw-border-l-2 tw-border-r-0 tw-border-t-0 tw-border-solid tw-px-2',
+            'tw-border-b-0 tw-border-e-0 tw-border-s-2 tw-border-t-0 tw-border-solid tw-px-2',
             {
               'tw-font-bold': isSelected,
-              'tw-border-l-red-200': bookType.toLowerCase() === 'ot',
-              'tw-border-l-purple-200': bookType.toLowerCase() === 'nt',
-              'tw-border-l-indigo-200': bookType.toLowerCase() === 'dc',
+              'tw-border-s-red-200': bookType.toLowerCase() === 'ot',
+              'tw-border-s-purple-200': bookType.toLowerCase() === 'nt',
+              'tw-border-s-indigo-200': bookType.toLowerCase() === 'dc',
             },
           )}
         >
           {Canon.bookIdToEnglishName(bookId)}
         </span>
         {isSelected && <div>{children}</div>}
-      </ShadDropdownMenuItem>
+      </DropdownMenuItem>
     );
   },
 );

@@ -1,7 +1,8 @@
 import { Slider } from '@/components/shadcn-ui/slider';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { useState } from 'react';
 
-export default function SliderExamples() {
+export default function SliderExamples({ direction }: HasDirection) {
   const [sliderValue, setSlider] = useState<number[]>([33]);
   return (
     <>
@@ -12,6 +13,7 @@ export default function SliderExamples() {
         step={1}
         value={sliderValue}
         onValueChange={setSlider}
+        dir={direction}
       />
       {sliderValue}
 

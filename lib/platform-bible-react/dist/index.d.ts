@@ -207,8 +207,10 @@ export type DblResourceData = {
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
+	/** Text and layout direction */
+	direction?: "rtl" | "ltr";
 };
-export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, direction }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	startChapter: number;
 	endChapter: number;
@@ -216,8 +218,10 @@ export type ChapterRangeSelectorProps = {
 	handleSelectEndChapter: (chapter: number) => void;
 	isDisabled?: boolean;
 	chapterCount: number;
+	/** Text and layout direction */
+	direction?: "rtl" | "ltr";
 };
-export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, direction, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export declare enum BookSelectionMode {
 	CURRENT_BOOK = "current book",
 	CHOOSE_BOOKS = "choose books"
@@ -242,7 +246,7 @@ export type BookSelectorProps = ChapterRangeSelectorProps & {
 	selectedBookIds: string[];
 	localizedStrings: BookSelectorLocalizedStrings;
 };
-export function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, direction, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -393,9 +397,11 @@ export type InventoryProps = {
 	 * other columns you can add these yourself
 	 */
 	columns: ColumnDef<InventoryTableData>[];
+	/** Text and layout direction */
+	direction?: "rtl" | "ltr";
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, direction, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
@@ -423,7 +429,7 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  * @returns Column that shows the status buttons for the related inventory item. The button for the
  *   current status of the item is selected
  */
-export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
+export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void, direction?: "rtl" | "ltr") => ColumnDef<InventoryTableData>;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;
@@ -439,8 +445,10 @@ export interface MultiSelectComboBoxProps {
 	customSelectedText?: string;
 	sortSelected?: boolean;
 	icon?: React$1.ReactNode;
+	/** Text and layout direction */
+	direction?: "rtl" | "ltr";
 }
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, direction, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -631,9 +639,11 @@ export type ScrollGroupSelectorProps = {
 	 * ```
 	 */
 	localizedStrings?: LanguageStrings;
+	/** Text and layout direction */
+	direction?: "rtl" | "ltr";
 };
 /** Selector component for choosing a scroll group */
-export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, direction, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SettingsList component, currently just children */
 export type SettingsListProps = React$1.PropsWithChildren;
 /**
@@ -970,8 +980,10 @@ export type SearchBarProps = {
 	isFullWidth?: boolean;
 	/** Additional css classes to help with unique styling of the search bar */
 	className?: string;
+	/** Text and layout direction */
+	direction?: "rtl" | "ltr";
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder, isFullWidth, className, direction, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {
@@ -1154,7 +1166,9 @@ export declare const Separator: React$1.ForwardRefExoticComponent<Omit<Separator
 export type SonnerProps = React$1.ComponentProps<typeof Toaster>;
 export declare function Sonner({ ...props }: SonnerProps): import("react/jsx-runtime").JSX.Element;
 export declare const Slider: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.SliderProps & React$1.RefAttributes<HTMLSpanElement>, "ref"> & React$1.RefAttributes<HTMLSpanElement>>;
-export declare const Switch: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const Switch: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
+	direction?: "ltr" | "rtl" | undefined;
+} & React$1.RefAttributes<HTMLButtonElement>>;
 export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & {
 	stickyHeader?: boolean | undefined;
 } & React$1.RefAttributes<HTMLTableElement>>;

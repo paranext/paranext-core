@@ -1,8 +1,9 @@
 import ChapterRangeSelector from '@/components/basics/chapter-range-selector.component';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { getChaptersForBook } from 'platform-bible-utils';
 import { useState } from 'react';
 
-export default function ChapterRangeSelectorExample() {
+export default function ChapterRangeSelectorExample({ direction }: HasDirection) {
   const chapterCount = getChaptersForBook(1);
   const [startChapter, setStartChapter] = useState(1);
   const [endChapter, setEndChapter] = useState(chapterCount);
@@ -21,6 +22,7 @@ export default function ChapterRangeSelectorExample() {
       handleSelectStartChapter={handleSelectStart}
       handleSelectEndChapter={handleSelectEnd}
       chapterCount={chapterCount}
+      direction={direction}
     />
   );
 }

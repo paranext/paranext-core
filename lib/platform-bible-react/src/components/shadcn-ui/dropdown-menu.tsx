@@ -107,6 +107,9 @@ export const DropdownMenuSubContent = React.forwardRef<
 ));
 DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayName;
 
+/* TODO: bug in shadcn component: DropdownMenuContent does not support a dir prop.
+For the content we can work around this by adding a div with dir, but that would not cause
+the scrollbar to appear left in an rtl layout (e.g. see book-chapter-control.component) */
 export const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
   DropdownMenuContentProps

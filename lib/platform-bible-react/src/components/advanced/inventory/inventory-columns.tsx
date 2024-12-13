@@ -157,6 +157,7 @@ export const inventoryStatusColumn = (
   onApprovedItemsChange: (items: string[]) => void,
   unapprovedItems: string[],
   onUnapprovedItemsChange: (items: string[]) => void,
+  direction: 'rtl' | 'ltr' = 'ltr',
 ): ColumnDef<InventoryTableData> => {
   return {
     accessorKey: 'status',
@@ -174,7 +175,7 @@ export const inventoryStatusColumn = (
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
       return (
-        <ToggleGroup value={status} variant="outline" type="single">
+        <ToggleGroup value={status} variant="outline" type="single" dir={direction}>
           <ToggleGroupItem
             onClick={() =>
               statusChangeHandler(

@@ -34,13 +34,13 @@ function Layouts({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Toolbar">
-          <ToolbarExamples />
+          <ToolbarExamples direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Settings">TODO</VerticalTabsContent>
 
         <VerticalTabsContent value="Get Resources">
-          <GetResourcesExample />
+          <GetResourcesExample direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Shadcn Dashboard 5">
