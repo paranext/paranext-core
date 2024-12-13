@@ -93,7 +93,7 @@ function UiLanguageSelectorExample({ direction }: HasDirection) {
                                     knownUiLanguages={languages}
                                     primaryLanguage={primary}
                                     fallbackLanguages={fallback}
-                                    onLanguageChanges={(newUiLanguages: string[]) => {
+                                    onLanguagesChange={(newUiLanguages: string[]) => {
                                       console.log(`Total count: ${newUiLanguages.length}`);
                                     }}
                                     onPrimaryLanguageChange={(newPrimaryUiLanguageTag: string) => {

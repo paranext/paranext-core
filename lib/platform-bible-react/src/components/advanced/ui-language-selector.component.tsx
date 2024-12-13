@@ -63,7 +63,7 @@ export type UiLanguageSelectorProps = {
    * handler, the primary UI language is the first one in the array, followed by the fallback
    * languages in order of decreasing preference.
    */
-  onLanguageChanges?: (newUiLanguages: string[]) => void;
+  onLanguagesChange?: (newUiLanguages: string[]) => void;
   /** Handler for the primary language changes. */
   onPrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
   /**
@@ -86,7 +86,7 @@ export default function UiLanguageSelector({
   knownUiLanguages,
   primaryLanguage = 'en',
   fallbackLanguages = [],
-  onLanguageChanges,
+  onLanguagesChange,
   onPrimaryLanguageChange,
   onFallbackLanguagesChange,
   localizedStrings,
@@ -104,8 +104,8 @@ export default function UiLanguageSelector({
     setSelectedLanguage(code);
     if (onPrimaryLanguageChange) onPrimaryLanguageChange(code);
     // REVIEW: Should fallback languages be preserved when primary language changes?
-    if (onLanguageChanges)
-      onLanguageChanges([code, ...fallbackLanguages.filter((lang) => lang !== code)]);
+    if (onLanguagesChange)
+      onLanguagesChange([code, ...fallbackLanguages.filter((lang) => lang !== code)]);
     if (onFallbackLanguagesChange && fallbackLanguages.find((l) => l === code))
       onFallbackLanguagesChange([...fallbackLanguages.filter((lang) => lang !== code)]);
     setIsOpen(false); // Close the dropdown when a selection is made

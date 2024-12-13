@@ -228,7 +228,7 @@ export default function Setting({
             knownUiLanguages={languages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}
-            onLanguageChanges={debouncedHandleChange}
+            onLanguagesChange={debouncedHandleChange}
             localizedStrings={localizedStrings}
           />
         );
