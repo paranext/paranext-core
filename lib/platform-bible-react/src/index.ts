@@ -146,7 +146,11 @@ export {
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 export { default as FilterableResourceList } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
 export { FILTERABLE_RESOURCE_LIST_STRING_KEYS } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
-
+export {
+  default as UiLanguageSelector,
+  type LanguageInfo,
+  type UiLanguageSelectorProps,
+} from './components/advanced/ui-language-selector.component';
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
