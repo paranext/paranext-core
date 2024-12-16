@@ -1485,8 +1485,10 @@ export type UiLanguageSelectorProps = {
 	localizedStrings: UiLanguageSelectorLocalizedStrings;
 	/** Additional css classes to help with unique styling of the control */
 	className?: string;
+	/** Interface direction */
+	direction?: "ltr" | "rtl";
 };
-export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, direction, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

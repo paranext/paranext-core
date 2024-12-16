@@ -104,7 +104,7 @@ public class VerseRefConverter : JsonConverter<VerseRef>
                 bookName,
                 chapterNum.Value.ToString(),
                 verse ?? verseNum!.Value.ToString(),
-                new ScrVers(versification)
+                string.IsNullOrEmpty(versification) ? null : new ScrVers(versification)
             );
     }
 
