@@ -162,8 +162,8 @@ export default function UiLanguageSelector({
       {/* Fallback Language Button */}
       {primaryLanguage !== 'en' && (
         <>
-          <Label className="tw-ml-3">{selectFallbackLanguagesText}</Label>
-          <div className="tw-ml-3">
+          <Label className="tw-ms-3">{selectFallbackLanguagesText}</Label>
+          <div className="tw-ms-3">
             {/* Do not localize or "improve". This label is temporary. */}
             <Label>
               Currently:{'\u00A0'}
