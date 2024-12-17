@@ -1,6 +1,6 @@
 import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
-import { Blocks, BookOpen, Languages, Star, X } from 'lucide-react';
+import { Shapes, BookOpen, Globe, Star, X } from 'lucide-react';
 import React from 'react';
 
 import SearchBar from '@/components/basics/search-bar.component';
@@ -247,30 +247,17 @@ export default function GetResourcesExample() {
             entries={types}
             selected={selectedTypes}
             onChange={setSelectedTypes}
-            placeholder="Select types"
-            customSelectedText={
-              selectedTypes.length === types.length
-                ? 'Any resource type'
-                : `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`
-            }
-            icon={<Blocks />}
+            placeholder="Types"
+            icon={<Shapes />}
           />
 
           <MultiSelectComboBox
             entries={languages}
             selected={selectedLanguages}
             onChange={setSelectedLanguages}
-            placeholder="Select languages"
-            customSelectedText={
-              selectedLanguages.length === 3 &&
-              selectedLanguages.includes('english') &&
-              selectedLanguages.includes('hebrew') &&
-              selectedLanguages.includes('greek')
-                ? 'My languages'
-                : `${selectedLanguages.length} language${selectedLanguages.length > 1 ? 's' : ''}`
-            }
+            placeholder="Languages"
             sortSelected
-            icon={<Languages />}
+            icon={<Globe />}
           />
         </div>
 

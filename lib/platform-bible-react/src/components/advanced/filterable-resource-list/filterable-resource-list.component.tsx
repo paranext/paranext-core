@@ -1,4 +1,3 @@
-import ComboBox from '@/components/basics/combo-box.component';
 import Spinner from '@/components/basics/spinner.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
@@ -10,7 +9,6 @@ import {
 } from '@/components/shadcn-ui/card';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -32,8 +30,9 @@ import {
   ChevronsUpDown,
   ChevronUp,
   Ellipsis,
-  Loader,
+  Globe,
   Search,
+  Shapes,
 } from 'lucide-react';
 
 import {
@@ -41,9 +40,11 @@ import {
   getErrorMessage,
   LanguageStrings,
   LocalizeKey,
-  ResourceType,
 } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
+import MultiSelectComboBox, {
+  MultiSelectComboBoxEntry,
+} from '@/components/advanced/multi-select-combo-box';
 
 export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
@@ -53,8 +54,8 @@ export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
   '%resources_fullName%',
   '%resources_get%',
   '%resources_installed%',
-  '%resources_language%',
-  '%resources_languageFilter%',
+  '%resources_types%',
+  '%resources_languages%',
   '%resources_loadingResources%',
   '%resources_noResults%',
   '%resources_open%',
@@ -79,21 +80,20 @@ type SortConfig = {
   direction: 'ascending' | 'descending';
 };
 
-type TypeOptions = {
-  type: ResourceType;
-  localizedValue: string;
-};
-
 const getLanguageOptions = (
   dblResources: DblResourceData[],
-  languageFilter: string[],
-): string[] => {
-  const sortedLanguages = Array.from(
-    new Set(dblResources.map((resource) => resource.bestLanguageName)),
+  selectedLanguages: string[],
+): MultiSelectComboBoxEntry[] => {
+  const sortedLanguages: MultiSelectComboBoxEntry[] = Array.from(
+    new Set(
+      dblResources.map((resource) => {
+        return { value: resource.bestLanguageName, label: resource.bestLanguageName };
+      }),
+    ),
   );
 
   const prioritizedLanguages = new Set(
-    languageFilter.concat(
+    selectedLanguages.concat(
       dblResources
         .filter((resource) => resource.installed)
         .map((resource) => resource.bestLanguageName),
@@ -101,16 +101,16 @@ const getLanguageOptions = (
   );
 
   return sortedLanguages.sort((a, b) => {
-    const aIsPrioritized = prioritizedLanguages.has(a);
-    const bIsPrioritized = prioritizedLanguages.has(b);
+    const aIsPrioritized = prioritizedLanguages.has(a.label);
+    const bIsPrioritized = prioritizedLanguages.has(b.label);
 
     if (aIsPrioritized && bIsPrioritized) {
-      return a.localeCompare(b);
+      return a.label.localeCompare(b.label);
     }
     if (aIsPrioritized) return -1;
     if (bIsPrioritized) return 1;
 
-    return a.localeCompare(b);
+    return a.label.localeCompare(b.label);
   });
 };
 
@@ -153,12 +153,12 @@ const getActionContent = (
 
 type FilterableResourceListProps = {
   localizedStrings: LanguageStrings;
-  dblResources: DblResourceData[];
-  isLoadingDblResources: boolean;
-  typeFilter: ResourceType[];
-  setTypeFilter: (stateValue: ResourceType[]) => void;
-  languageFilter: string[];
-  setLanguageFilter: (stateValue: string[]) => void;
+  resources: DblResourceData[];
+  isLoadingResources: boolean;
+  selectedTypes: string[];
+  setSelectedTypes: (stateValue: string[]) => void;
+  selectedLanguages: string[];
+  setSelectedLanguages: (stateValue: string[]) => void;
   openResource: (projectId: string) => void;
   installResource: ((uid: string) => Promise<void>) | undefined;
   uninstallResource: ((uid: string) => Promise<void>) | undefined;
@@ -166,12 +166,12 @@ type FilterableResourceListProps = {
 
 function FilterableResourceList({
   localizedStrings,
-  dblResources,
-  isLoadingDblResources,
-  typeFilter,
-  setTypeFilter,
-  languageFilter,
-  setLanguageFilter,
+  resources,
+  isLoadingResources,
+  selectedTypes,
+  setSelectedTypes,
+  selectedLanguages,
+  setSelectedLanguages,
   openResource,
   installResource,
   uninstallResource,
@@ -184,13 +184,14 @@ function FilterableResourceList({
   const getText: string = localizedStrings['%resources_get%'];
   const installedText: string = localizedStrings['%resources_installed%'];
   const languageText: string = localizedStrings['%resources_language%'];
-  const languageFilterText: string = localizedStrings['%resources_languageFilter%'];
+  const languagesText: string = localizedStrings['%resources_languages%'];
   const loadingResourcesText: string = localizedStrings['%resources_loadingResources%'];
   const noResultsText: string = localizedStrings['%resources_noResults%'];
   const openText: string = localizedStrings['%resources_open%'];
   const removeText: string = localizedStrings['%resources_remove%'];
   const sizeText: string = localizedStrings['%resources_size%'];
   const typeText: string = localizedStrings['%resources_type%'];
+  const typesText: string = localizedStrings['%resources_types%'];
   const typeDblText: string = localizedStrings['%resources_type_DBL%'];
   const typeErText: string = localizedStrings['%resources_type_ER%'];
   const typeSlrText: string = localizedStrings['%resources_type_SLR%'];
@@ -220,7 +221,7 @@ function FilterableResourceList({
   useEffect(() => {
     setInstallInfo((currentInstallInfo) =>
       currentInstallInfo.filter((info) => {
-        const resource = dblResources.find((res) => res.dblEntryUid === info.dblEntryUid);
+        const resource = resources.find((res) => res.dblEntryUid === info.dblEntryUid);
 
         if (!resource) return true;
 
@@ -230,12 +231,12 @@ function FilterableResourceList({
         return true;
       }),
     );
-  }, [dblResources]);
+  }, [resources]);
 
   const [textFilter, setTextFilter] = useState<string>('');
 
   const textFilteredResources = useMemo(() => {
-    return dblResources.filter((resource) => {
+    return resources.filter((resource) => {
       const filter = textFilter.toLowerCase();
       return (
         resource.displayName.toLowerCase().includes(filter) ||
@@ -243,66 +244,38 @@ function FilterableResourceList({
         resource.bestLanguageName.toLowerCase().includes(filter)
       );
     });
-  }, [dblResources, textFilter]);
+  }, [resources, textFilter]);
 
-  const typeOptions: TypeOptions[] = useMemo(() => {
+  const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     return [
-      { type: 'DBLResource', localizedValue: typeDblText },
-      { type: 'EnhancedResource', localizedValue: typeErText },
-      { type: 'SourceLanguageResource', localizedValue: typeSlrText },
-      { type: 'XmlResource', localizedValue: typeXrText },
+      { value: 'DBLResource', label: typeDblText },
+      { value: 'EnhancedResource', label: typeErText },
+      { value: 'SourceLanguageResource', label: typeSlrText },
+      { value: 'XmlResource', label: typeXrText },
     ];
   }, [typeDblText, typeErText, typeSlrText, typeXrText]);
 
-  const typeFilterChangeHandler = (newType: ResourceType): void => {
-    const prevTypeFilter: ResourceType[] = [...typeFilter];
-    let newTypeFilter: ResourceType[] = [];
-
-    if (!prevTypeFilter || prevTypeFilter.length === 0) {
-      newTypeFilter = [newType];
-    } else {
-      newTypeFilter = prevTypeFilter.includes(newType)
-        ? prevTypeFilter.filter((value) => value !== newType)
-        : [...prevTypeFilter, newType];
-    }
-    setTypeFilter(newTypeFilter);
-  };
-
   const textAndTypeFilteredResources = useMemo(() => {
     return textFilteredResources.filter((resource) => {
-      return typeFilter.includes(resource.type);
+      return selectedTypes.includes(resource.type);
     });
-  }, [textFilteredResources, typeFilter]);
+  }, [textFilteredResources, selectedTypes]);
 
   useEffect(() => {
-    if (languageFilter.length === 0) {
-      setLanguageFilter(
-        dblResources
+    if (selectedLanguages.length === 0) {
+      setSelectedLanguages(
+        resources
           .filter((resource) => resource.installed === true)
           .map((resource) => resource.bestLanguageName),
       );
     }
-  }, [dblResources, languageFilter.length, setLanguageFilter]);
-
-  const languageFilterChangeHandler = (newLanguage: string): void => {
-    const prevLanguageFilter: string[] = [...languageFilter];
-    let newLanguageFilter: string[] = [];
-
-    if (!prevLanguageFilter || prevLanguageFilter.length === 0) {
-      newLanguageFilter = [newLanguage];
-    } else {
-      newLanguageFilter = prevLanguageFilter.includes(newLanguage)
-        ? prevLanguageFilter.filter((value) => value !== newLanguage)
-        : [...prevLanguageFilter, newLanguage];
-    }
-    setLanguageFilter(newLanguageFilter);
-  };
+  }, [resources, selectedLanguages.length, setSelectedLanguages]);
 
   const textAndTypeAndLanguageFilteredResources = useMemo(() => {
     return textAndTypeFilteredResources.filter((resource) => {
-      return languageFilter.includes(resource.bestLanguageName);
+      return selectedLanguages.includes(resource.bestLanguageName);
     });
-  }, [languageFilter, textAndTypeFilteredResources]);
+  }, [selectedLanguages, textAndTypeFilteredResources]);
 
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'bestLanguageName',
@@ -344,7 +317,7 @@ function FilterableResourceList({
         </div>
       </CardHeader>
       <CardContent>
-        {isLoadingDblResources || !dblResources ? (
+        {isLoadingResources || !resources ? (
           <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
             <Label>{loadingResourcesText}</Label>
             <Spinner />
@@ -362,7 +335,23 @@ function FilterableResourceList({
                 />
                 <Search className="tw-absolute tw-right-3 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-text-muted-foreground" />
               </div>
-              <DropdownMenu>
+              <MultiSelectComboBox
+                entries={typeOptions}
+                selected={selectedTypes}
+                onChange={setSelectedTypes}
+                placeholder={typesText}
+                icon={<Shapes />}
+              />
+
+              <MultiSelectComboBox
+                entries={getLanguageOptions(resources, selectedLanguages)}
+                selected={selectedLanguages}
+                onChange={setSelectedLanguages}
+                placeholder={languagesText}
+                sortSelected
+                icon={<Globe />}
+              />
+              {/* <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline">
                     <Loader className="tw-mr-2 tw-w-4" />
@@ -372,7 +361,7 @@ function FilterableResourceList({
                 <DropdownMenuContent align="start">
                   {typeOptions.map((option) => (
                     <DropdownMenuCheckboxItem
-                      checked={typeFilter.includes(option.type)}
+                      checked={selectedTypes.includes(option.type)}
                       onClick={(e) => {
                         e.preventDefault();
                         typeFilterChangeHandler(option.type);
@@ -387,10 +376,10 @@ function FilterableResourceList({
                 className="tw-w-auto tw-min-w-10 tw-flex-shrink"
                 buttonPlaceholder={languageText}
                 textPlaceholder={languageFilterText}
-                value={languageFilter[0]}
-                options={getLanguageOptions(dblResources, languageFilter)}
+                value={selectedLanguages[0]}
+                options={getLanguageOptions(resources, selectedLanguages)}
                 onChange={languageFilterChangeHandler}
-              />
+              /> */}
             </div>
 
             {sortedResources.length === 0 ? (
@@ -446,7 +435,7 @@ function FilterableResourceList({
                       <TableCell className="tw-font-medium">{resource.fullName}</TableCell>
                       <TableCell>{resource.bestLanguageName}</TableCell>
                       <TableCell>
-                        {typeOptions.find((type) => type.type === resource.type)?.localizedValue ??
+                        {typeOptions.find((type) => type.value === resource.type)?.label ??
                           typeUnknownText}
                       </TableCell>
                       <TableCell>{resource.size}</TableCell>

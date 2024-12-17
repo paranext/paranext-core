@@ -21,6 +21,7 @@ import BookSelectorExample from './advanced/book-selector-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
 import MultiSelectComboBoxExample from './advanced/multi-select-combo-box-example';
 import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
+import FilterableResourceListExample from './advanced/filterable-resource-list-example.component';
 
 function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -74,6 +75,9 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Filterable Resource List">
+            Filterable Resource List
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Multi-select Combo Box">
             Multi-select Combo Box
@@ -149,6 +153,10 @@ function Compositions({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Inventory">
           <InventoryExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Filterable Resource List">
+          <FilterableResourceListExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Navigation Content Search">

@@ -12,7 +12,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 
-type MultiSelectComboBoxEntry = {
+export type MultiSelectComboBoxEntry = {
   value: string;
   label: string;
   starred?: boolean;
@@ -53,8 +53,6 @@ function MultiSelectComboBox({
   );
 
   const getPlaceholderText = () => {
-    if (selected.length === 1)
-      return entries.find((option) => option.value === selected[0])?.label ?? placeholder;
     if (customSelectedText) return customSelectedText;
     return placeholder;
   };

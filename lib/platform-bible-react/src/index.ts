@@ -36,7 +36,10 @@ export {
   inventoryCountColumn,
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
-export { default as MultiSelectComboBox } from './components/advanced/multi-select-combo-box';
+export {
+  default as MultiSelectComboBox,
+  type MultiSelectComboBoxEntry,
+} from './components/advanced/multi-select-combo-box';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,
