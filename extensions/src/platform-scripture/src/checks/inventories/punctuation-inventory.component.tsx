@@ -32,6 +32,8 @@ const PUNCTUATION_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_punctuation_showSinglePunctuationCharacter%',
 ];
 
+const punctuationRegex: RegExp = /[\p{P}]/gu;
+
 // Logic like this is probably not needed anymore after
 // https://github.com/paranext/paranext-core/issues/1384
 // is fixed. I'll leave it in here for now, just in case
@@ -378,7 +380,7 @@ function PunctuationInventory({
         setScriptureReference={setScriptureReference}
         localizedStrings={localizedStrings}
         // extractItems={extractPunctuation(showSequences)}
-        extractItems={/./g}
+        extractItems={punctuationRegex}
         approvedItems={approvedItems}
         unapprovedItems={unapprovedItems}
         text={text}
