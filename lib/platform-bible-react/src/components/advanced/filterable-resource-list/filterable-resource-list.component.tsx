@@ -4,6 +4,7 @@ import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle,
 } from '@/components/shadcn-ui/card';
@@ -61,6 +62,8 @@ export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
   '%resources_noResults%',
   '%resources_open%',
   '%resources_remove%',
+  '%resources_results%',
+  '%resources_showing%',
   '%resources_size%',
   '%resources_type%',
   '%resources_types%',
@@ -78,7 +81,7 @@ type InstallInfo = {
 };
 
 type SortConfig = {
-  key: 'fullName' | 'bestLanguageName';
+  key: 'fullName' | 'bestLanguageName' | 'type' | 'size' | 'action';
   direction: 'ascending' | 'descending';
 };
 
@@ -166,6 +169,7 @@ type FilterableResourceListProps = {
   openResource: (projectId: string) => void;
   installResource: ((uid: string) => Promise<void>) | undefined;
   uninstallResource: ((uid: string) => Promise<void>) | undefined;
+  className?: string;
 };
 
 function FilterableResourceList({
@@ -179,6 +183,7 @@ function FilterableResourceList({
   openResource,
   installResource,
   uninstallResource,
+  className,
 }: FilterableResourceListProps) {
   const actionText: string = localizedStrings['%resources_action%'];
   const anyText: string = localizedStrings['%resources_any%'];
@@ -195,6 +200,8 @@ function FilterableResourceList({
   const noResultsText: string = localizedStrings['%resources_noResults%'];
   const openText: string = localizedStrings['%resources_open%'];
   const removeText: string = localizedStrings['%resources_remove%'];
+  const resultsText: string = localizedStrings['%resources_results%'];
+  const showingText: string = localizedStrings['%resources_showing%'];
   const sizeText: string = localizedStrings['%resources_size%'];
   const typeText: string = localizedStrings['%resources_type%'];
   const typesText: string = localizedStrings['%resources_types%'];
@@ -294,8 +301,15 @@ function FilterableResourceList({
 
   const sortedResources = useMemo(() => {
     return [...textAndTypeAndLanguageFilteredResources].sort((a, b) => {
-      const aValue = a[sortConfig.key];
-      const bValue = b[sortConfig.key];
+      let aValue: string | number;
+      let bValue: string | number;
+      if (sortConfig.key === 'action') {
+        aValue = (a.installed ? 10 : 0) + (a.updateAvailable ? 1 : 0);
+        bValue = (b.installed ? 10 : 0) + (b.updateAvailable ? 1 : 0);
+      } else {
+        aValue = a[sortConfig.key];
+        bValue = b[sortConfig.key];
+      }
 
       if (aValue < bValue) {
         return sortConfig.direction === 'ascending' ? -1 : 1;
@@ -315,161 +329,159 @@ function FilterableResourceList({
     setSortConfig(newSortConfig);
   };
 
+  const buildTableHead = (key: SortConfig['key'], label: string) => (
+    <TableHead onClick={() => handleSort(key)}>
+      <div className="tw-flex tw-items-center">
+        {label}
+        {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
+        {sortConfig.key === key &&
+          (sortConfig.direction === 'ascending' ? (
+            <ChevronUp className="tw-pl-1" size={16} />
+          ) : (
+            <ChevronDown className="tw-pl-1" size={16} />
+          ))}
+      </div>
+    </TableHead>
+  );
+
   return (
-    <Card className="tw-rounded-none tw-border-0">
-      <CardHeader>
-        <div className="tw-flex">
-          <div className="tw-flex tw-items-center tw-pr-4">
-            <BookOpen size={36} className="tw-mr-4" />
-            <div className="tw-flex tw-flex-col tw-gap-2">
-              <CardTitle>{dialogTitleText}</CardTitle>
-              <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
-              <div className="tw-mb-1 tw-flex tw-gap-1">
-                <div className="tw-relative">
-                  <Input
-                    type="text"
-                    className="tw-box-border tw-min-w-72 tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pl-4 tw-pr-3 tw-shadow-none tw-outline-none"
-                    onChange={(event) => setTextFilter(event.target.value)}
-                    value={textFilter}
-                    placeholder={filterInputText}
-                  />
-                  <Search className="tw-absolute tw-right-3 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-text-muted-foreground" />
+    <div className={className}>
+      <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
+        <CardHeader className="tw-flex-shrink-0">
+          <div className="tw-flex">
+            <div className="tw-flex tw-items-center tw-pr-4">
+              <BookOpen size={36} className="tw-mr-4" />
+              <div className="tw-flex tw-flex-col tw-gap-2">
+                <CardTitle>{dialogTitleText}</CardTitle>
+                <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
+                <div className="tw-mb-1 tw-flex tw-gap-1">
+                  <div className="tw-relative">
+                    <Input
+                      type="text"
+                      className="tw-box-border tw-min-w-72 tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pl-4 tw-pr-3 tw-shadow-none tw-outline-none"
+                      onChange={(event) => setTextFilter(event.target.value)}
+                      value={textFilter}
+                      placeholder={filterInputText}
+                    />
+                    <Search className="tw-absolute tw-right-3 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-text-muted-foreground" />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-          <div className="tw-flex tw-flex-col">
-            <Label className="tw-mb-2">{filterByText}</Label>
-            <Filter
-              entries={typeOptions}
-              selected={selectedTypes}
-              onChange={setSelectedTypes}
-              placeholder={typesText}
-              icon={<Shapes />}
-              badgesPlaceholder={anyText}
-            />
+            <div className="tw-flex tw-flex-col tw-gap-2">
+              <Label className="tw-mb-2">{filterByText}</Label>
+              <Filter
+                entries={typeOptions}
+                selected={selectedTypes}
+                onChange={setSelectedTypes}
+                placeholder={typesText}
+                icon={<Shapes />}
+                badgesPlaceholder={anyText}
+              />
 
-            <Filter
-              entries={getLanguageOptions(resources, selectedLanguages)}
-              selected={selectedLanguages}
-              onChange={setSelectedLanguages}
-              placeholder={languagesText}
-              sortSelected
-              icon={<Globe />}
-              badgesPlaceholder={anyText}
-            />
+              <Filter
+                entries={getLanguageOptions(resources, selectedLanguages)}
+                selected={selectedLanguages}
+                onChange={setSelectedLanguages}
+                placeholder={languagesText}
+                sortSelected
+                icon={<Globe />}
+                badgesPlaceholder={anyText}
+              />
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoadingResources || !resources ? (
-          <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-            <Label>{loadingResourcesText}</Label>
-            <Spinner />
-          </div>
-        ) : (
-          <div>
-            {sortedResources.length === 0 ? (
-              <div className="tw-m-4 tw-flex tw-w-full tw-justify-center">
-                <Label>{noResultsText}</Label>
-              </div>
-            ) : (
-              <Table stickyHeader>
-                <TableHeader className="tw-bg-none" stickyHeader>
-                  <TableRow>
-                    <TableHead />
-                    <TableHead />
-                    <TableHead onClick={() => handleSort('fullName')}>
-                      <div className="tw-flex tw-items-center">
-                        {fullNameText}
-                        {sortConfig.key !== 'fullName' && (
-                          <ChevronsUpDown className="tw-pl-1" size={16} />
-                        )}
-                        {sortConfig.key === 'fullName' &&
-                          (sortConfig.direction === 'ascending' ? (
-                            <ChevronUp className="tw-pl-1" size={16} />
-                          ) : (
-                            <ChevronDown className="tw-pl-1" size={16} />
-                          ))}
-                      </div>
-                    </TableHead>
-                    <TableHead onClick={() => handleSort('bestLanguageName')}>
-                      <div className="tw-flex tw-items-center">
-                        {languageText}
-                        {sortConfig.key !== 'bestLanguageName' && (
-                          <ChevronsUpDown className="tw-pl-1" size={16} />
-                        )}
-                        {sortConfig.key === 'bestLanguageName' &&
-                          (sortConfig.direction === 'ascending' ? (
-                            <ChevronUp className="tw-pl-1" size={16} />
-                          ) : (
-                            <ChevronDown className="tw-pl-1" size={16} />
-                          ))}
-                      </div>
-                    </TableHead>
-                    <TableHead>{typeText}</TableHead>
-                    <TableHead>{sizeText}</TableHead>
-                    <TableHead>{actionText}</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sortedResources.map((resource) => (
-                    <TableRow key={resource.displayName + resource.fullName}>
-                      <TableCell>
-                        <BookOpen className="tw-pr-0" size={18} />
-                      </TableCell>
-                      <TableCell>{resource.displayName}</TableCell>
-                      <TableCell className="tw-font-medium">{resource.fullName}</TableCell>
-                      <TableCell>{resource.bestLanguageName}</TableCell>
-                      <TableCell>
-                        {typeOptions.find((type) => type.value === resource.type)?.label ??
-                          typeUnknownText}
-                      </TableCell>
-                      <TableCell>{resource.size}</TableCell>
-                      <TableCell>
-                        <div className="tw-flex tw-justify-between">
-                          {getActionContent(
-                            resource,
-                            installInfo.map((info) => info.dblEntryUid),
-                            getText,
-                            updateText,
-                            installedText,
-                            installOrRemoveResource,
-                          )}
-                          {resource.installed && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost">
-                                  <Ellipsis className="tw-w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start">
-                                <DropdownMenuItem onClick={() => openResource(resource.projectId)}>
-                                  <span>{openText}</span>
-                                </DropdownMenuItem>
-
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    installOrRemoveResource(resource.dblEntryUid, 'remove')
-                                  }
-                                >
-                                  <span>{removeText}</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                      </TableCell>
+        </CardHeader>
+        <CardContent className="tw-flex-grow tw-overflow-auto">
+          {isLoadingResources || !resources ? (
+            <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
+              <Label>{loadingResourcesText}</Label>
+              <Spinner />
+            </div>
+          ) : (
+            <div>
+              {sortedResources.length === 0 ? (
+                <div className="tw-m-4 tw-flex tw-justify-center">
+                  <Label>{noResultsText}</Label>
+                </div>
+              ) : (
+                <Table stickyHeader>
+                  <TableHeader className="tw-bg-none" stickyHeader>
+                    <TableRow>
+                      <TableHead />
+                      <TableHead />
+                      {buildTableHead('fullName', fullNameText)}
+                      {buildTableHead('bestLanguageName', languageText)}
+                      {buildTableHead('type', typeText)}
+                      {buildTableHead('size', sizeText)}
+                      {buildTableHead('action', actionText)}
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedResources.map((resource) => (
+                      <TableRow key={resource.displayName + resource.fullName}>
+                        <TableCell>
+                          <BookOpen className="tw-pr-0" size={18} />
+                        </TableCell>
+                        <TableCell>{resource.displayName}</TableCell>
+                        <TableCell className="tw-font-medium">{resource.fullName}</TableCell>
+                        <TableCell>{resource.bestLanguageName}</TableCell>
+                        <TableCell>
+                          {typeOptions.find((type) => type.value === resource.type)?.label ??
+                            typeUnknownText}
+                        </TableCell>
+                        <TableCell>{resource.size}</TableCell>
+                        <TableCell>
+                          <div className="tw-flex tw-justify-between">
+                            {getActionContent(
+                              resource,
+                              installInfo.map((info) => info.dblEntryUid),
+                              getText,
+                              updateText,
+                              installedText,
+                              installOrRemoveResource,
+                            )}
+                            {resource.installed && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost">
+                                    <Ellipsis className="tw-w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                  <DropdownMenuItem
+                                    onClick={() => openResource(resource.projectId)}
+                                  >
+                                    <span>{openText}</span>
+                                  </DropdownMenuItem>
+
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      installOrRemoveResource(resource.dblEntryUid, 'remove')
+                                    }
+                                  >
+                                    <span>{removeText}</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          )}
+        </CardContent>
+        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-border-t tw-p-2 tw-pt-4">
+          {sortedResources.length > 0 && (
+            <Label>{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
+          )}
+        </CardFooter>
+      </Card>
+    </div>
   );
 }
 

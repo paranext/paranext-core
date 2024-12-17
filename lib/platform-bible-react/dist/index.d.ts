@@ -1422,8 +1422,9 @@ export interface FooterProps {
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 export interface FilterProps extends MultiSelectComboBoxProps {
+	badgesPlaceholder: string;
 }
-export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export declare const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[];
 export type FilterableResourceListProps = {
 	localizedStrings: LanguageStrings;
@@ -1436,8 +1437,9 @@ export type FilterableResourceListProps = {
 	openResource: (projectId: string) => void;
 	installResource: ((uid: string) => Promise<void>) | undefined;
 	uninstallResource: ((uid: string) => Promise<void>) | undefined;
+	className?: string;
 };
-export declare function FilterableResourceList({ localizedStrings, resources, isLoadingResources, selectedTypes, setSelectedTypes, selectedLanguages, setSelectedLanguages, openResource, installResource, uninstallResource, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
+export declare function FilterableResourceList({ localizedStrings, resources, isLoadingResources, selectedTypes, setSelectedTypes, selectedLanguages, setSelectedLanguages, openResource, installResource, uninstallResource, className, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];

@@ -17,6 +17,8 @@
       "%resources_noResults%": "No results found",
       "%resources_open%": "Open",
       "%resources_remove%": "Remove",
+      "%resources_results%": "results",
+      "%resources_showing%": "Showing",
       "%resources_size%": "Size",
       "%resources_type%": "Type",
       "%resources_types%": "Types",
