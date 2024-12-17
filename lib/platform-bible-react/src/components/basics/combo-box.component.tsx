@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
@@ -11,6 +11,7 @@ import {
   CommandList,
 } from '@/components/shadcn-ui/command';
 import { PopoverProps } from '@radix-ui/react-popover';
+import { Direction, getDirRefCallback } from '@/utils/dir-helper';
 
 export type ComboBoxLabelOption = { label: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
@@ -54,8 +55,6 @@ export type ComboBoxProps<T> = {
   isDisabled?: boolean;
 } & PopoverProps;
 
-type Direction = 'ltr' | 'rtl';
-
 function getOptionLabelDefault(option: ComboBoxOption): string {
   if (typeof option === 'string') {
     return option;
@@ -87,11 +86,12 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
   alignDropDown = 'start',
-  dir = 'ltr',
   isDisabled = false,
   ...props
 }: ComboBoxProps<T>) {
   const [open, setOpen] = useState(false);
+  const [dir, setDir] = useState<Direction>('ltr');
+  const ref = getDirRefCallback(setDir);
 
   return (
     <Popover open={open} onOpenChange={setOpen} {...props}>
@@ -106,6 +106,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
             buttonClassName ?? className,
           )}
           disabled={isDisabled}
+          ref={ref}
         >
           <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
             {icon && <div className="tw-pe-2">{icon}</div>}

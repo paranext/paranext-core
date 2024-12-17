@@ -28,7 +28,7 @@ export default function WindowOrTabExample({ direction, isFocused }: HasDirectio
     <div className="tw-rounded-md tw-border">
       <div className="tw-flex tw-flex-row tw-rounded-se-md tw-bg-muted/50">
         <div className="tw-m-2">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} direction={direction} />
+          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
         </div>
         <div className="tw-grow" />
         <div className="tw-m-2 tw-flex">
