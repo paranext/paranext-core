@@ -22,7 +22,7 @@ import {
 } from '@/components/shadcn-ui/table';
 import { cn } from '@/utils/shadcn-ui.util';
 import { DialogTitle } from '@radix-ui/react-dialog';
-import MultiSelectComboBox from '@/components/advanced/multi-select-combo-box';
+import MultiSelectComboBox from '@/components/advanced/multi-select-combo-box.component';
 
 type MultiSelectComboBoxEntry = {
   value: string;

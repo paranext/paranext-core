@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import FilterableResourceList from '@/components/advanced/filterable-resource-list/filterable-resource-list.component';
-import { resourceExamples } from './resource-examples';
+import resourceExamples from './resource-examples';
 
 const localizedStrings = {
   '%resources_action%': 'Action',
@@ -25,7 +25,6 @@ const localizedStrings = {
   '%resources_type_XR%': 'XML Resource',
   '%resources_type_unknown%': 'Unknown resource type',
   '%resources_update%': 'Update',
-  '%mainMenu_openGetResources%': 'Get Resources',
 };
 
 function FilterableResourceListExample() {

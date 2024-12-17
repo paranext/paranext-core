@@ -439,8 +439,9 @@ export interface MultiSelectComboBoxProps {
 	customSelectedText?: string;
 	sortSelected?: boolean;
 	icon?: React$1.ReactNode;
+	className?: string;
 }
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1420,6 +1421,9 @@ export interface FooterProps {
  * @returns The rendered Footer component
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export interface FilterProps extends MultiSelectComboBoxProps {
+}
+export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export declare const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[];
 export type FilterableResourceListProps = {
 	localizedStrings: LanguageStrings;

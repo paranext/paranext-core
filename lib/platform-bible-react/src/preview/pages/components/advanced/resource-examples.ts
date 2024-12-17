@@ -1,6 +1,6 @@
 import { DblResourceData } from 'platform-bible-utils';
 
-export const resourceExamples: DblResourceData[] = [
+const resourceExamples: DblResourceData[] = [
   {
     dblEntryUid: '6855dabfcb711cc2',
     displayName: 'BLA',
@@ -25323,3 +25323,5 @@ export const resourceExamples: DblResourceData[] = [
     projectId: '4545F7F21F92F0C5FB5A2313D1508E87568E5C93ABCDEFFF',
   },
 ];
+
+export default resourceExamples;

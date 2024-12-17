@@ -39,7 +39,7 @@ export {
 export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
-} from './components/advanced/multi-select-combo-box';
+} from './components/advanced/multi-select-combo-box.component';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,
@@ -147,6 +147,7 @@ export {
   type VersionHistoryType,
 } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
+export { default as Filter } from './components/advanced/filterable-resource-list/filter.component';
 export { default as FilterableResourceList } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
 export { FILTERABLE_RESOURCE_LIST_STRING_KEYS } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
 export {

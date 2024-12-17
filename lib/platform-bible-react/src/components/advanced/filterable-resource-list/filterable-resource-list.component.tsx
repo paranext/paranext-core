@@ -44,7 +44,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import MultiSelectComboBox, {
   MultiSelectComboBoxEntry,
-} from '@/components/advanced/multi-select-combo-box';
+} from '@/components/advanced/multi-select-combo-box.component';
 
 export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
@@ -54,7 +54,7 @@ export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
   '%resources_fullName%',
   '%resources_get%',
   '%resources_installed%',
-  '%resources_types%',
+  '%resources_language%',
   '%resources_languages%',
   '%resources_loadingResources%',
   '%resources_noResults%',
@@ -62,6 +62,7 @@ export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
   '%resources_remove%',
   '%resources_size%',
   '%resources_type%',
+  '%resources_types%',
   '%resources_type_DBL%',
   '%resources_type_ER%',
   '%resources_type_SLR%',
@@ -81,36 +82,38 @@ type SortConfig = {
 };
 
 const getLanguageOptions = (
-  dblResources: DblResourceData[],
+  resources: DblResourceData[],
   selectedLanguages: string[],
 ): MultiSelectComboBoxEntry[] => {
-  const sortedLanguages: MultiSelectComboBoxEntry[] = Array.from(
+  const allLanguages: string[] = Array.from(
     new Set(
-      dblResources.map((resource) => {
-        return { value: resource.bestLanguageName, label: resource.bestLanguageName };
+      resources.map((resource) => {
+        return resource.bestLanguageName;
       }),
     ),
   );
 
-  const prioritizedLanguages = new Set(
-    selectedLanguages.concat(
-      dblResources
-        .filter((resource) => resource.installed)
-        .map((resource) => resource.bestLanguageName),
-    ),
+  const starredLanguages = new Set(
+    resources.filter((resource) => resource.installed).map((resource) => resource.bestLanguageName),
   );
 
-  return sortedLanguages.sort((a, b) => {
-    const aIsPrioritized = prioritizedLanguages.has(a.label);
-    const bIsPrioritized = prioritizedLanguages.has(b.label);
+  const prioritizedLanguages = new Set(selectedLanguages.concat(Array.from(starredLanguages)));
+
+  const sortedLanguages = allLanguages.sort((a, b) => {
+    const aIsPrioritized = prioritizedLanguages.has(a);
+    const bIsPrioritized = prioritizedLanguages.has(b);
 
     if (aIsPrioritized && bIsPrioritized) {
-      return a.label.localeCompare(b.label);
+      return a.localeCompare(b);
     }
     if (aIsPrioritized) return -1;
     if (bIsPrioritized) return 1;
 
-    return a.label.localeCompare(b.label);
+    return a.localeCompare(b);
+  });
+
+  return sortedLanguages.map((language) => {
+    return { label: language, value: language, starred: starredLanguages.has(language) };
   });
 };
 
@@ -264,9 +267,13 @@ function FilterableResourceList({
   useEffect(() => {
     if (selectedLanguages.length === 0) {
       setSelectedLanguages(
-        resources
-          .filter((resource) => resource.installed === true)
-          .map((resource) => resource.bestLanguageName),
+        Array.from(
+          new Set(
+            resources
+              .filter((resource) => resource.installed === true)
+              .map((resource) => resource.bestLanguageName),
+          ),
+        ),
       );
     }
   }, [resources, selectedLanguages.length, setSelectedLanguages]);
