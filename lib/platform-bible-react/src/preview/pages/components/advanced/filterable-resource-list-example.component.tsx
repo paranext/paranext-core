@@ -4,8 +4,10 @@ import resourceExamples from './resource-examples';
 
 const localizedStrings = {
   '%resources_action%': 'Action',
+  '%resources_any%': 'Any',
   '%resources_dialog_subtitle%': 'Add resources to Home',
   '%resources_dialog_title%': 'Get Resources',
+  '%resources_filterBy%': 'Filter by',
   '%resources_filterInput%': 'Search by name, language, type',
   '%resources_fullName%': 'Full Name',
   '%resources_get%': 'Get',

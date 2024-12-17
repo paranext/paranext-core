@@ -3,8 +3,10 @@
   "localizedStrings": {
     "en": {
       "%resources_action%": "Action",
+      "%resources_any%": "Any",
       "%resources_dialog_subtitle%": "",
       "%resources_dialog_title%": "Home",
+      "%resources_filterBy%": "Filter by",
       "%resources_filterInput%": "Search by name, language, type",
       "%resources_fullName%": "Full Name",
       "%resources_get%": "Get",

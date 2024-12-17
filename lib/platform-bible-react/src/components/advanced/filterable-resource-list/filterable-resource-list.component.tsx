@@ -35,6 +35,8 @@ import {
   Shapes,
 } from 'lucide-react';
 
+import Filter from '@/components/advanced/filterable-resource-list/filter.component';
+import type { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-combo-box.component';
 import {
   DblResourceData,
   getErrorMessage,
@@ -42,14 +44,13 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
-import MultiSelectComboBox, {
-  MultiSelectComboBoxEntry,
-} from '@/components/advanced/multi-select-combo-box.component';
 
 export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
+  '%resources_any%',
   '%resources_dialog_subtitle%',
   '%resources_dialog_title%',
+  '%resources_filterBy%',
   '%resources_filterInput%',
   '%resources_fullName%',
   '%resources_get%',
@@ -180,9 +181,11 @@ function FilterableResourceList({
   uninstallResource,
 }: FilterableResourceListProps) {
   const actionText: string = localizedStrings['%resources_action%'];
+  const anyText: string = localizedStrings['%resources_any%'];
   const dialogSubtitleText: string = localizedStrings['%resources_dialog_subtitle%'];
   const dialogTitleText: string = localizedStrings['%resources_dialog_title%'];
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
+  const filterByText: string = localizedStrings['%resources_filterBy%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
   const getText: string = localizedStrings['%resources_get%'];
   const installedText: string = localizedStrings['%resources_installed%'];
@@ -315,11 +318,46 @@ function FilterableResourceList({
   return (
     <Card className="tw-rounded-none tw-border-0">
       <CardHeader>
-        <div className="tw-flex tw-items-center">
-          <BookOpen size={36} className="tw-mr-2" />
-          <div>
-            <CardTitle>{dialogTitleText}</CardTitle>
-            <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
+        <div className="tw-flex">
+          <div className="tw-flex tw-items-center tw-pr-4">
+            <BookOpen size={36} className="tw-mr-4" />
+            <div className="tw-flex tw-flex-col tw-gap-2">
+              <CardTitle>{dialogTitleText}</CardTitle>
+              <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
+              <div className="tw-mb-1 tw-flex tw-gap-1">
+                <div className="tw-relative">
+                  <Input
+                    type="text"
+                    className="tw-box-border tw-min-w-72 tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pl-4 tw-pr-3 tw-shadow-none tw-outline-none"
+                    onChange={(event) => setTextFilter(event.target.value)}
+                    value={textFilter}
+                    placeholder={filterInputText}
+                  />
+                  <Search className="tw-absolute tw-right-3 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-text-muted-foreground" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="tw-flex tw-flex-col">
+            <Label className="tw-mb-2">{filterByText}</Label>
+            <Filter
+              entries={typeOptions}
+              selected={selectedTypes}
+              onChange={setSelectedTypes}
+              placeholder={typesText}
+              icon={<Shapes />}
+              badgesPlaceholder={anyText}
+            />
+
+            <Filter
+              entries={getLanguageOptions(resources, selectedLanguages)}
+              selected={selectedLanguages}
+              onChange={setSelectedLanguages}
+              placeholder={languagesText}
+              sortSelected
+              icon={<Globe />}
+              badgesPlaceholder={anyText}
+            />
           </div>
         </div>
       </CardHeader>
@@ -331,64 +369,6 @@ function FilterableResourceList({
           </div>
         ) : (
           <div>
-            <div className="tw-mb-1 tw-flex tw-gap-1">
-              <div className="tw-relative">
-                <Input
-                  type="text"
-                  className="tw-box-border tw-min-w-72 tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pl-4 tw-pr-3 tw-shadow-none tw-outline-none"
-                  onChange={(event) => setTextFilter(event.target.value)}
-                  value={textFilter}
-                  placeholder={filterInputText}
-                />
-                <Search className="tw-absolute tw-right-3 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-text-muted-foreground" />
-              </div>
-              <MultiSelectComboBox
-                entries={typeOptions}
-                selected={selectedTypes}
-                onChange={setSelectedTypes}
-                placeholder={typesText}
-                icon={<Shapes />}
-              />
-
-              <MultiSelectComboBox
-                entries={getLanguageOptions(resources, selectedLanguages)}
-                selected={selectedLanguages}
-                onChange={setSelectedLanguages}
-                placeholder={languagesText}
-                sortSelected
-                icon={<Globe />}
-              />
-              {/* <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline">
-                    <Loader className="tw-mr-2 tw-w-4" />
-                    {typeText}
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  {typeOptions.map((option) => (
-                    <DropdownMenuCheckboxItem
-                      checked={selectedTypes.includes(option.type)}
-                      onClick={(e) => {
-                        e.preventDefault();
-                        typeFilterChangeHandler(option.type);
-                      }}
-                    >
-                      <span>{option.localizedValue}</span>
-                    </DropdownMenuCheckboxItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <ComboBox
-                className="tw-w-auto tw-min-w-10 tw-flex-shrink"
-                buttonPlaceholder={languageText}
-                textPlaceholder={languageFilterText}
-                value={selectedLanguages[0]}
-                options={getLanguageOptions(resources, selectedLanguages)}
-                onChange={languageFilterChangeHandler}
-              /> */}
-            </div>
-
             {sortedResources.length === 0 ? (
               <div className="tw-m-4 tw-flex tw-w-full tw-justify-center">
                 <Label>{noResultsText}</Label>

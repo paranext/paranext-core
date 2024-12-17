@@ -135,6 +135,7 @@ function FilterExample() {
         onChange={setSelectedTypes}
         placeholder="Types"
         icon={<Blocks />}
+        badgesPlaceholder="Any"
       />
     </div>
   );
