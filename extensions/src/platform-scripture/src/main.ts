@@ -189,6 +189,24 @@ export async function activate(context: ExecutionActivationContext) {
       await papi.settings.set('platformScripture.includeMyParatext9Projects', newSettingValue);
       return newSettingValue;
     },
+    {
+      method: {
+        summary: 'Toggle whether to include My Paratext 9 projects within the platform',
+        params: [
+          {
+            name: 'shouldInclude',
+            required: false,
+            summary: 'Whether to include My Paratext 9 projects',
+            schema: { type: 'boolean' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The new value of the setting',
+          schema: { type: 'boolean' },
+        },
+      },
+    },
   );
   const includeProjectsValidatorPromise = papi.settings.registerValidator(
     'platformScripture.includeMyParatext9Projects',
@@ -213,6 +231,24 @@ export async function activate(context: ExecutionActivationContext) {
   const openCharactersInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openCharactersInventory',
     openPlatformCharactersInventory,
+    {
+      method: {
+        summary: 'Open the characters inventory',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the inventory is for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened characters inventory web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
   const characterInventoryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     characterInventoryWebViewType,
@@ -229,6 +265,24 @@ export async function activate(context: ExecutionActivationContext) {
   const openRepeatedWordsInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openRepeatedWordsInventory',
     openPlatformRepeatedWordsInventory,
+    {
+      method: {
+        summary: 'Open the repeated words inventory',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the inventory is for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the opened repeated words inventory web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
   const repeatableWordsInventoryWebViewProviderPromise =
     papi.webViewProviders.registerWebViewProvider(
@@ -246,6 +300,24 @@ export async function activate(context: ExecutionActivationContext) {
   const openMarkersInventoryPromise = papi.commands.registerCommand(
     'platformScripture.openMarkersInventory',
     openPlatformMarkersInventory,
+    {
+      method: {
+        summary: 'Open the markers inventory',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the inventory is for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the new open markers inventory web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
   const markersInventoryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     markersInventoryWebViewType,
@@ -270,6 +342,24 @@ export async function activate(context: ExecutionActivationContext) {
   const configureChecksPromise = papi.commands.registerCommand(
     'platformScripture.openConfigureChecks',
     configureChecks,
+    {
+      method: {
+        summary: 'Open the configure checks web view',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the checks are for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the new configure checks web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
   const configureChecksWebViewProviderPromise = papi.webViewProviders.register(
     configureChecksWebViewType,
@@ -278,6 +368,24 @@ export async function activate(context: ExecutionActivationContext) {
   const showCheckResultsPromise = papi.commands.registerCommand(
     'platformScripture.showCheckResults',
     showCheckResults,
+    {
+      method: {
+        summary: 'Show the check results',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the checks are for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the new check results web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
   const showCheckResultsWebViewProviderPromise = papi.webViewProviders.register(
     checkResultsListWebViewType,

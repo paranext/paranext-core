@@ -75,14 +75,14 @@ export type ProjectLookupServiceType = {
    *
    * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
    * the parameters, their project metadata will all be combined, so all available
-   * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
-   * no id is specified) for the project will be returned. If you need `projectInterface`s supported
+   * `projectInterface`s provided by the PDP Factory with the matching ID (or all PDP Factories if
+   * no ID is specified) for the project will be returned. If you need `projectInterface`s supported
    * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
    *
    * @param options Options for specifying filters for the project metadata retrieved. If a PDP
-   *   Factory Id does not match the filter, it will not be contacted at all for this function call.
+   *   Factory ID does not match the filter, it will not be contacted at all for this function call.
    *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
-   *   its id in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
+   *   its ID in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
    * @returns ProjectMetadata for all projects stored on the local system
    */
   getMetadataForAllProjects(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
