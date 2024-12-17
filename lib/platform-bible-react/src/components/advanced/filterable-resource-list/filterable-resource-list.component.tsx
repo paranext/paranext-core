@@ -269,26 +269,14 @@ function FilterableResourceList({
   }, [typeDblText, typeErText, typeSlrText, typeXrText]);
 
   const textAndTypeFilteredResources = useMemo(() => {
+    if (selectedTypes.length === 0) return textFilteredResources;
     return textFilteredResources.filter((resource) => {
       return selectedTypes.includes(resource.type);
     });
   }, [textFilteredResources, selectedTypes]);
 
-  useEffect(() => {
-    if (selectedLanguages.length === 0) {
-      setSelectedLanguages(
-        Array.from(
-          new Set(
-            resources
-              .filter((resource) => resource.installed === true)
-              .map((resource) => resource.bestLanguageName),
-          ),
-        ),
-      );
-    }
-  }, [resources, selectedLanguages.length, setSelectedLanguages]);
-
   const textAndTypeAndLanguageFilteredResources = useMemo(() => {
+    if (selectedLanguages.length === 0) return textAndTypeFilteredResources;
     return textAndTypeFilteredResources.filter((resource) => {
       return selectedLanguages.includes(resource.bestLanguageName);
     });
@@ -344,6 +332,14 @@ function FilterableResourceList({
     </TableHead>
   );
 
+  const getTypeCount = (option: MultiSelectComboBoxEntry): number => {
+    return resources.filter((resource) => resource.type === option.value).length ?? 0;
+  };
+
+  const getLanguageCount = (option: MultiSelectComboBoxEntry): number => {
+    return resources.filter((resource) => resource.bestLanguageName === option.value).length ?? 0;
+  };
+
   return (
     <div className={className}>
       <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
@@ -372,6 +368,7 @@ function FilterableResourceList({
               <Label className="tw-mb-2">{filterByText}</Label>
               <Filter
                 entries={typeOptions}
+                getEntriesCount={getTypeCount}
                 selected={selectedTypes}
                 onChange={setSelectedTypes}
                 placeholder={typesText}
@@ -381,6 +378,7 @@ function FilterableResourceList({
 
               <Filter
                 entries={getLanguageOptions(resources, selectedLanguages)}
+                getEntriesCount={getLanguageCount}
                 selected={selectedLanguages}
                 onChange={setSelectedLanguages}
                 placeholder={languagesText}
@@ -475,7 +473,7 @@ function FilterableResourceList({
             </div>
           )}
         </CardContent>
-        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-border-t tw-p-2 tw-pt-4">
+        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-border-t tw-p-4">
           {sortedResources.length > 0 && (
             <Label>{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
           )}
