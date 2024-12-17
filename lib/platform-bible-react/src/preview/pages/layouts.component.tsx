@@ -34,7 +34,7 @@ function Layouts({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Toolbar">
-          <ToolbarExamples direction={direction} />
+          <ToolbarExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Settings">TODO</VerticalTabsContent>
