@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { Direction, getDirEffect, getDirRefCallback } from '@/utils/dir-helper';
+import { Direction, useGetDirEffect, useGetDirRefCallback } from '@/utils/dir-helper';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
@@ -124,7 +124,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuItemRef = useRef<HTMLDivElement>(undefined!);
 
-  getDirEffect(setDir, inputRef);
+  useGetDirEffect(setDir, inputRef);
 
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {

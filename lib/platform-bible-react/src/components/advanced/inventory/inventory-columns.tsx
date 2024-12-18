@@ -9,8 +9,9 @@ import {
   CircleHelpIcon,
   CircleXIcon,
 } from 'lucide-react';
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { InventoryTableData, Status } from './inventory-utils';
+import { Direction, useGetDirRefCallback } from '@/utils/dir-helper';
 
 /**
  * Gets an icon that indicates the current sorting direction based on the provided input
@@ -157,8 +158,9 @@ export const inventoryStatusColumn = (
   onApprovedItemsChange: (items: string[]) => void,
   unapprovedItems: string[],
   onUnapprovedItemsChange: (items: string[]) => void,
-  direction: 'rtl' | 'ltr' = 'ltr',
 ): ColumnDef<InventoryTableData> => {
+  const [dir, setDir] = useState<Direction>('ltr');
+  const ref = useGetDirRefCallback(setDir);
   return {
     accessorKey: 'status',
     header: ({ column }) => {
@@ -175,53 +177,55 @@ export const inventoryStatusColumn = (
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
       return (
-        <ToggleGroup value={status} variant="outline" type="single" dir={direction}>
-          <ToggleGroupItem
-            onClick={() =>
-              statusChangeHandler(
-                [item],
-                'approved',
-                approvedItems,
-                onApprovedItemsChange,
-                unapprovedItems,
-                onUnapprovedItemsChange,
-              )
-            }
-            value="approved"
-          >
-            <CircleCheckIcon />
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            onClick={() =>
-              statusChangeHandler(
-                [item],
-                'unapproved',
-                approvedItems,
-                onApprovedItemsChange,
-                unapprovedItems,
-                onUnapprovedItemsChange,
-              )
-            }
-            value="unapproved"
-          >
-            <CircleXIcon />
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            onClick={() =>
-              statusChangeHandler(
-                [item],
-                'unknown',
-                approvedItems,
-                onApprovedItemsChange,
-                unapprovedItems,
-                onUnapprovedItemsChange,
-              )
-            }
-            value="unknown"
-          >
-            <CircleHelpIcon />
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <div ref={ref}>
+          <ToggleGroup value={status} variant="outline" type="single" dir={dir}>
+            <ToggleGroupItem
+              onClick={() =>
+                statusChangeHandler(
+                  [item],
+                  'approved',
+                  approvedItems,
+                  onApprovedItemsChange,
+                  unapprovedItems,
+                  onUnapprovedItemsChange,
+                )
+              }
+              value="approved"
+            >
+              <CircleCheckIcon />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              onClick={() =>
+                statusChangeHandler(
+                  [item],
+                  'unapproved',
+                  approvedItems,
+                  onApprovedItemsChange,
+                  unapprovedItems,
+                  onUnapprovedItemsChange,
+                )
+              }
+              value="unapproved"
+            >
+              <CircleXIcon />
+            </ToggleGroupItem>
+            <ToggleGroupItem
+              onClick={() =>
+                statusChangeHandler(
+                  [item],
+                  'unknown',
+                  approvedItems,
+                  onApprovedItemsChange,
+                  unapprovedItems,
+                  onUnapprovedItemsChange,
+                )
+              }
+              value="unknown"
+            >
+              <CircleHelpIcon />
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
       );
     },
   };

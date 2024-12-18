@@ -140,11 +140,11 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Multi-select Combo Box">
-          <MultiSelectComboBoxExample direction={direction} />
+          <MultiSelectComboBoxExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Inventory">
-          <InventoryExample direction={direction} />
+          <InventoryExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Navigation Content Search">

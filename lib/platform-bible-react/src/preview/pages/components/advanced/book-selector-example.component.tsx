@@ -37,7 +37,7 @@ function BookSelectorExample({ direction }: HasDirection) {
       onSelectBooks={handleSelectBooks}
       selectedBookIds={selectedBooksIds}
       localizedStrings={localizedStrings}
-      direction={direction}
+      dir={direction}
     />
   );
 }
