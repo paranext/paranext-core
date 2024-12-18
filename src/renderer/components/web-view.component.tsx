@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { WebViewContentType, WebViewDefinition } from '@shared/models/web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
@@ -15,17 +15,14 @@ import {
 } from '@renderer/services/web-view.service-host';
 import logger from '@shared/services/logger.service';
 import {
+  PromiseChainingMap,
+  UnsubscriberAsync,
   formatReplacementString,
   isLocalizeKey,
   serialize,
   getLocalizeKeysForScrollGroupIds,
 } from 'platform-bible-utils';
-import {
-  BookChapterControl,
-  ScrollGroupSelector,
-  useEvent,
-  useEventAsync,
-} from 'platform-bible-react';
+import { BookChapterControl, ScrollGroupSelector, useEvent } from 'platform-bible-react';
 import './web-view.component.css';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
@@ -38,6 +35,8 @@ import {
 export const TAB_TYPE_WEBVIEW = 'webView';
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+const registrationPromises = new PromiseChainingMap<string>(logger);
 
 /**
  * Tell the web view service to load the web view with the provided information. Used to retrieve
@@ -69,74 +68,90 @@ export default function WebView({
   // eslint-disable-next-line no-null/no-null
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
 
-  useEventAsync(
-    useCallback(
-      (callback: (args: Parameters<WebViewMessageRequestHandler>) => void) => {
-        return registerRequestHandler(
-          getWebViewMessageRequestType(id),
-          (...args: Parameters<WebViewMessageRequestHandler>) => callback(args),
-          {
-            method: {
-              summary: `Post a message to a WebView with id "${id}". Expected to be used only by the Web View Provider that created the web view or the Web View Controller that represents the web view created by the Web View Provider.`,
-              params: [
-                {
-                  name: 'webViewNonce',
-                  required: true,
-                  summary: 'A nonce to ensure that the message is coming from the correct source',
-                  schema: {
-                    type: 'string',
-                  },
-                },
-                {
-                  name: 'message',
-                  required: true,
-                  summary: 'The message to send to the WebView',
-                  schema: {
-                    type: 'string',
-                  },
-                },
-                {
-                  name: 'targetOrigin',
-                  required: false,
-                  summary:
-                    'Expected origin of the web view. Does not send the message if the web view origin does not match. See https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#targetorigin for more information. Defaults to same origin only (works automatically with React and HTML web views)',
-                  schema: {
-                    type: 'string',
-                  },
-                },
-              ],
-              result: {
-                name: 'return value',
+  const postMessageCallback = useCallback(
+    ([webViewNonce, message, targetOrigin]: Parameters<WebViewMessageRequestHandler>) => {
+      if (!isWebViewNonceCorrect(id, webViewNonce))
+        throw new Error(
+          `Web View Component ${id} (type ${webViewType}) received a message with an invalid nonce!`,
+        );
+      if (!iframeRef.current)
+        throw new Error(
+          `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its ref was not set!`,
+        );
+      if (!iframeRef.current.contentWindow)
+        throw new Error(
+          `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its contentWindow was falsy!`,
+        );
+
+      iframeRef.current.contentWindow.postMessage(message, { targetOrigin });
+    },
+    [id, webViewType],
+  );
+
+  type UnsubscriberContainer = { unsub: UnsubscriberAsync | undefined };
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function registerRequestHandlerAsync(unsubContainer: UnsubscriberContainer) {
+      if (!isMounted) return;
+      const unsub = await registerRequestHandler(
+        getWebViewMessageRequestType(id),
+        (...args: Parameters<WebViewMessageRequestHandler>) => postMessageCallback(args),
+        {
+          method: {
+            summary: `Post a message to a WebView with id "${id}". Expected to be used only by the Web View Provider that created the web view or the Web View Controller that represents the web view created by the Web View Provider.`,
+            params: [
+              {
+                name: 'webViewNonce',
+                required: true,
+                summary: 'A nonce to ensure that the message is coming from the correct source',
                 schema: {
-                  type: 'null',
+                  type: 'string',
                 },
+              },
+              {
+                name: 'message',
+                required: true,
+                summary: 'The message to send to the WebView',
+                schema: {
+                  type: 'string',
+                },
+              },
+              {
+                name: 'targetOrigin',
+                required: false,
+                summary:
+                  'Expected origin of the web view. Does not send the message if the web view origin does not match. See https://developer.mozilla.org/en-US/docs/Web/API/Window/postMessage#targetorigin for more information. Defaults to same origin only (works automatically with React and HTML web views)',
+                schema: {
+                  type: 'string',
+                },
+              },
+            ],
+            result: {
+              name: 'return value',
+              schema: {
+                type: 'null',
               },
             },
           },
-        );
-      },
-      [id],
-    ),
-    useCallback(
-      ([webViewNonce, message, targetOrigin]: Parameters<WebViewMessageRequestHandler>) => {
-        if (!isWebViewNonceCorrect(id, webViewNonce))
-          throw new Error(
-            `Web View Component ${id} (type ${webViewType}) received a message with an invalid nonce!`,
-          );
-        if (!iframeRef.current)
-          throw new Error(
-            `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its ref was not set!`,
-          );
-        if (!iframeRef.current.contentWindow)
-          throw new Error(
-            `Web View Component ${id} (type ${webViewType}) received a message but could not route it to the iframe because its contentWindow was falsy!`,
-          );
+        },
+      );
 
-        iframeRef.current.contentWindow.postMessage(message, { targetOrigin });
-      },
-      [id, webViewType],
-    ),
-  );
+      if (isMounted) unsubContainer.unsub = unsub;
+      else await unsub();
+    }
+
+    const unsubContainer: UnsubscriberContainer = { unsub: undefined };
+    registrationPromises.addPromise(id, () => registerRequestHandlerAsync(unsubContainer));
+
+    return () => {
+      registrationPromises.addPromise(id, async () => {
+        isMounted = false;
+        await unsubContainer.unsub?.();
+      });
+    };
+  }, [id, postMessageCallback]);
 
   useEvent(
     getNetworkEvent('platform.onDidReloadExtensions'),
