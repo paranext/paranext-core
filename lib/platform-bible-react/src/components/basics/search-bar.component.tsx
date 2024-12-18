@@ -1,5 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
+import { Direction, useGetDirRefCallback } from '@/utils/dir-helper';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Search, X } from 'lucide-react';
 import { useState } from 'react';
@@ -21,9 +22,6 @@ export type SearchBarProps = {
 
   /** Additional css classes to help with unique styling of the search bar */
   className?: string;
-
-  /** Text and layout direction */
-  direction?: 'rtl' | 'ltr';
 };
 
 export default function SearchBar({
@@ -31,8 +29,9 @@ export default function SearchBar({
   placeholder,
   isFullWidth,
   className,
-  direction = 'ltr',
 }: SearchBarProps) {
+  const [dir, setDir] = useState<Direction>('ltr');
+  const ref = useGetDirRefCallback(setDir);
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const handleInputChange = (searchString: string) => {
@@ -41,12 +40,12 @@ export default function SearchBar({
   };
 
   return (
-    <div className="tw-relative">
+    <div className="tw-relative" ref={ref}>
       <Search
         className={cn(
           'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50',
-          { 'tw-right-3': direction === 'rtl' },
-          { 'tw-left-3': direction === 'ltr' },
+          { 'tw-right-3': dir === 'rtl' },
+          { 'tw-left-3': dir === 'ltr' },
         )}
       />
       <Input
@@ -61,8 +60,8 @@ export default function SearchBar({
           size="icon"
           className={cn(
             'tw-absolute tw-top-1/2 tw-h-7 tw--translate-y-1/2 tw-transform hover:tw-bg-transparent',
-            { 'tw-left-0': direction === 'rtl' },
-            { 'tw-right-0': direction === 'ltr' },
+            { 'tw-left-0': dir === 'rtl' },
+            { 'tw-right-0': dir === 'ltr' },
           )}
         >
           <X

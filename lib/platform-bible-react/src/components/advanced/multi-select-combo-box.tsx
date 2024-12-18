@@ -8,6 +8,7 @@ import {
   CommandList,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import { Direction, useGetDirRefCallback } from '@/utils/dir-helper';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Check, ChevronsUpDown, Star } from 'lucide-react';
 import { ReactNode, useCallback, useMemo, useState } from 'react';
@@ -28,8 +29,6 @@ interface MultiSelectComboBoxProps {
   customSelectedText?: string;
   sortSelected?: boolean;
   icon?: ReactNode;
-  /** Text and layout direction */
-  direction?: 'rtl' | 'ltr';
 }
 
 function MultiSelectComboBox({
@@ -42,8 +41,9 @@ function MultiSelectComboBox({
   customSelectedText,
   sortSelected = false,
   icon = undefined,
-  direction = 'ltr',
 }: MultiSelectComboBoxProps) {
+  const [dir, setDir] = useState<Direction>('ltr');
+  const ref = useGetDirRefCallback(setDir);
   const [open, setOpen] = useState(false);
 
   const handleSelect = useCallback(
@@ -93,6 +93,7 @@ function MultiSelectComboBox({
             selected.length > 0 && selected.length < entries.length && 'tw-border-primary',
             'tw-group',
           )}
+          ref={ref}
         >
           <div className="tw-flex tw-items-center tw-gap-2">
             <div className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50">
@@ -112,7 +113,7 @@ function MultiSelectComboBox({
           <ChevronsUpDown className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="tw-w-full tw-p-0" dir={direction}>
+      <PopoverContent align="start" className="tw-w-full tw-p-0" dir={dir}>
         <Command>
           <CommandInput placeholder={`Search ${placeholder.toLowerCase()}...`} />
           <CommandList>

@@ -6,10 +6,10 @@ import {
 } from '@/components/advanced/inventory/inventory-columns';
 import { InventoryTableData } from '@/components/advanced/inventory/inventory-utils';
 import Inventory, { Scope } from '@/components/advanced/inventory/inventory.component';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 import scriptureSnippet from './scripture-snippet';
+import { Direction } from '@/utils/dir-helper';
 
 const localizedStrings = {
   '%webView_inventory_all%': 'All items',
@@ -30,7 +30,6 @@ const createColumns = (
   onApprovedItemsChange: (items: string[]) => void,
   unapprovedItems: string[],
   onUnapprovedItemsChange: (items: string[]) => void,
-  direction: 'ltr' | 'rtl',
 ): ColumnDef<InventoryTableData>[] => [
   inventoryItemColumn('Item'),
   inventoryCountColumn('Count'),
@@ -40,11 +39,10 @@ const createColumns = (
     onApprovedItemsChange,
     unapprovedItems,
     onUnapprovedItemsChange,
-    direction,
   ),
 ];
 
-function InventoryExample({ direction }: HasDirection) {
+function InventoryExample() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [approvedItems, setApprovedItems] = useState<string[]>(['well', 'he']);
   const [unapprovedItems, setUnapprovedItems] = useState<string[]>(['for', 'of']);
@@ -66,12 +64,10 @@ function InventoryExample({ direction }: HasDirection) {
           setApprovedItems,
           unapprovedItems,
           setUnapprovedItems,
-          direction,
         )}
         // Matches a sequence of letters surrounded by word boundaries followed by that exact same
         // sequence of letters surrounded by word boundaries
         extractItems={/\b(\p{L}+)\b(?=\s\b\1\b)/gu}
-        direction={direction}
         additionalItemsLabels={{
           checkboxText: 'additional header',
           tableHeaders: ['additional header'],

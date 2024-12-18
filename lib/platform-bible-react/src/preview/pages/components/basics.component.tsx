@@ -77,7 +77,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Chapter Range Selector">
-          <ChapterRangeSelectorExample direction={direction} />
+          <ChapterRangeSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Checkbox">
@@ -89,7 +89,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="ComboBox">
-          <ComboBoxExamples direction={direction} />
+          <ComboBoxExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dialog">
@@ -114,7 +114,7 @@ function Basics({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Sidebar">
           <div className="tw-relative tw-overflow-hidden">
-            <SettingsSidebarExamples direction={direction} />
+            <SettingsSidebarExamples />
           </div>
         </VerticalTabsContent>
 

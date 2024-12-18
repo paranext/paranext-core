@@ -124,7 +124,7 @@ const resources = [
   },
 ];
 
-function MultiSelectComboBoxExample({ direction }: HasDirection) {
+function MultiSelectComboBoxExample() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>(types.map((type) => type.value));
 
   const getOptionsCount = (option: MultiSelectComboBoxEntry): number => {
@@ -146,7 +146,6 @@ function MultiSelectComboBoxExample({ direction }: HasDirection) {
               : `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`
           }
           icon={<Blocks />}
-          direction={direction}
         />
       </div>
 

@@ -14,11 +14,7 @@ import {
 } from '@/components/shadcn-ui/sidebar';
 import { useState } from 'react';
 
-type SidebarExamplesProps = {
-  direction?: string;
-};
-
-export default function SidebarExamples({ direction }: SidebarExamplesProps) {
+export default function SidebarExamples() {
   const [sidebarSelection, setSidebarSelection] = useState('button');
 
   const sidebarItems: { [title: string]: string } = {
@@ -30,7 +26,7 @@ export default function SidebarExamples({ direction }: SidebarExamplesProps) {
   };
 
   return (
-    <SidebarProvider dir={direction} side={direction === 'rtl' ? 'right' : 'left'}>
+    <SidebarProvider>
       <Sidebar>
         <SidebarContent>
           <SidebarGroup>
