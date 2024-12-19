@@ -2,7 +2,6 @@ import { FocusEventHandler, forwardRef, KeyboardEvent, MouseEventHandler } from 
 import { History } from 'lucide-react';
 import { Input } from '@/components/shadcn-ui/input';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Direction } from '@/utils/dir-helper';
 
 export type BookChapterInputProps = {
   handleSearch: (searchString: string) => void;
@@ -13,7 +12,7 @@ export type BookChapterInputProps = {
   value: string;
   placeholder: string;
   /** Text and layout direction */
-  dir?: Direction;
+  direction?: 'rtl' | 'ltr';
 };
 
 // Shadcn Input sets type to "button"- HAVE to prop spread before setting type
@@ -24,7 +23,7 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
       handleKeyDown,
       handleOnClick,
       handleSubmit,
-      dir = 'ltr',
+      direction = 'ltr',
       ...props
     }: BookChapterInputProps,
     ref,
@@ -50,8 +49,8 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
         <History
           className={cn(
             'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-cursor-pointer tw-text-muted-foreground',
-            { 'tw-right-3': dir === 'ltr' },
-            { 'tw-left-3 tw-right-auto': dir === 'rtl' },
+            { 'tw-right-3': direction === 'ltr' },
+            { 'tw-left-3 tw-right-auto': direction === 'rtl' },
           )}
           onClick={() => {
             // eslint-disable-next-line no-console

@@ -11,7 +11,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { Direction, getDirEffect, getDirRefCallback } from '@/utils/dir-helper';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
@@ -30,6 +29,8 @@ type BookTypeLabels = {
 type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+  /** Text and layout direction */
+  direction?: 'rtl' | 'ltr';
 };
 
 const ALL_BOOK_IDS = Canon.allBookIds;
@@ -103,8 +104,7 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
-  const [dir, setDir] = useState<Direction>('ltr');
+function BookChapterControl({ scrRef, handleSubmit, direction }: BookChapterControlProps) {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>(
     Canon.bookNumberToId(scrRef.bookNum),
@@ -123,8 +123,6 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   const contentRef = useRef<HTMLDivElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuItemRef = useRef<HTMLDivElement>(undefined!);
-
-  getDirEffect(setDir, inputRef);
 
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
@@ -265,13 +263,13 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
       }
 
       const upOneChapter =
-        (key === 'ArrowRight' && !dir) ||
-        (key === 'ArrowRight' && dir === 'ltr') ||
-        (key === 'ArrowLeft' && dir === 'rtl');
+        (key === 'ArrowRight' && !direction) ||
+        (key === 'ArrowRight' && direction === 'ltr') ||
+        (key === 'ArrowLeft' && direction === 'rtl');
       const downOneChapter =
-        (key === 'ArrowLeft' && !dir) ||
-        (key === 'ArrowLeft' && dir === 'ltr') ||
-        (key === 'ArrowRight' && dir === 'rtl');
+        (key === 'ArrowLeft' && !direction) ||
+        (key === 'ArrowLeft' && direction === 'ltr') ||
+        (key === 'ArrowRight' && direction === 'rtl');
       let chapterOffSet = 0;
       if (upOneChapter) {
         if (highlightedChapter < fetchEndChapter(highlightedBookId)) {
@@ -357,7 +355,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             }}
             handleSubmit={handleInputSubmit}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
-            dir={dir}
+            direction={direction}
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -365,11 +363,11 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
           // Need to get over the floating window z-index 200
           style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
           onKeyDown={handleKeyDownContent}
-          align={dir === 'ltr' ? 'start' : 'end'}
+          align={direction === 'ltr' ? 'start' : 'end'}
           ref={contentRef}
         >
           {/* work around until DropdownMenuContent supports a dir prop */}
-          <div dir={dir} className={cn({ 'tw-ps-2': dir === 'rtl' })}>
+          <div dir={direction} className={cn({ 'tw-ps-2': direction === 'rtl' })}>
             <GoToMenuItem
               handleSort={() => console.log('sorting')}
               handleLocationHistory={() => console.log('location history')}
@@ -395,7 +393,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                           ref={(element: HTMLDivElement) => {
                             if (selectedBookId === bookId) menuItemRef.current = element;
                           }}
-                          dir={dir}
+                          direction={direction}
                         >
                           <ChapterSelect
                             handleSelectChapter={handleSelectChapter}
