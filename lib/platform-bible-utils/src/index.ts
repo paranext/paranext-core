@@ -8,6 +8,7 @@ export { default as MutexMap } from './mutex-map';
 export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
 export { default as NumberFormat } from './intl-number-format';
 export { default as PlatformEventEmitter } from './platform-event-emitter.model';
+export { default as PromiseChainingMap } from './promise-chaining-map';
 export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
