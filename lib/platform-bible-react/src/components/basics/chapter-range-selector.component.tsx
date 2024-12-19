@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
 import ComboBox from '@/components/basics/combo-box.component';
 import { Label } from '@/components/shadcn-ui/label';
+import { useMemo } from 'react';
 
 export type ChapterRangeSelectorProps = {
   startChapter: number;
@@ -9,8 +9,6 @@ export type ChapterRangeSelectorProps = {
   handleSelectEndChapter: (chapter: number) => void;
   isDisabled?: boolean;
   chapterCount: number;
-  /** Text and layout direction */
-  direction?: 'rtl' | 'ltr';
 };
 
 export default function ChapterRangeSelector({
@@ -20,7 +18,6 @@ export default function ChapterRangeSelector({
   handleSelectEndChapter,
   isDisabled = false,
   chapterCount,
-  direction = 'ltr',
 }: ChapterRangeSelectorProps) {
   const chapterOptions = useMemo(
     () => Array.from({ length: chapterCount }, (_, index) => index + 1),
@@ -52,7 +49,6 @@ export default function ChapterRangeSelector({
         options={chapterOptions}
         getOptionLabel={(option) => option.toString()}
         value={startChapter}
-        dir={direction}
       />
 
       <Label htmlFor="end-chapters-combobox">to</Label>
@@ -64,7 +60,6 @@ export default function ChapterRangeSelector({
         options={chapterOptions}
         getOptionLabel={(option) => option.toString()}
         value={endChapter}
-        dir={direction}
       />
     </>
   );

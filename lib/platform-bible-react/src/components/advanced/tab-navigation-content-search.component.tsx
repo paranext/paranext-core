@@ -28,9 +28,6 @@ export type TabNavigationContentSearchProps = {
 
   /** Optional flag to make the search bar appear full width */
   isSearchBarFullWidth?: boolean;
-
-  /** Text direction ltr or rtl */
-  direction?: 'ltr' | 'rtl';
 };
 
 export default function TabNavigationContentSearch({
@@ -39,7 +36,6 @@ export default function TabNavigationContentSearch({
   searchPlaceholder,
   headerTitle,
   isSearchBarFullWidth = false,
-  direction = 'ltr',
 }: TabNavigationContentSearchProps) {
   return (
     <div className="pr-twp">
@@ -49,10 +45,9 @@ export default function TabNavigationContentSearch({
           isFullWidth={isSearchBarFullWidth}
           onSearch={onSearch}
           placeholder={searchPlaceholder}
-          direction={direction}
         />
       </div>
-      <VerticalTabs dir={direction}>
+      <VerticalTabs>
         <VerticalTabsList>
           {tabList.map((tab) => (
             <VerticalTabsTrigger key={tab.key} value={tab.value}>

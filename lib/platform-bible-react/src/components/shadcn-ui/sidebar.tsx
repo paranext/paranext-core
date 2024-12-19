@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui.util';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 /**
  * CUSTOM: Changes from the original code from Shadcn- Removed uses of useIsMobile, Sheet, and
@@ -25,13 +26,15 @@ const SIDEBAR_WIDTH_ICON = '3rem';
 // CUSTOM: Commented this out pending a discussion with UX about keyboard shortcuts
 // const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
 
+type Side = 'primary' | 'secondary';
+
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed';
   open: boolean;
   setOpen: (open: boolean) => void;
   toggleSidebar: () => void;
   // CUSTOM: this was moved from Sidebar to SidebarProvider to also be able to flip the icon based on the side
-  side: 'left' | 'right';
+  side: Side;
 };
 
 const SidebarContext = React.createContext<SidebarContextProps | undefined>(undefined);
@@ -51,7 +54,7 @@ const SidebarProvider = React.forwardRef<
     defaultOpen?: boolean;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
-    side?: 'left' | 'right';
+    side?: Side;
   }
 >(
   (
@@ -62,7 +65,7 @@ const SidebarProvider = React.forwardRef<
       className,
       style,
       children,
-      side = 'left',
+      side = 'primary',
       ...props
     },
     ref,
@@ -106,15 +109,19 @@ const SidebarProvider = React.forwardRef<
     // This makes it easier to style the sidebar with Tailwind classes.
     const state = isOpen ? 'expanded' : 'collapsed';
 
+    const dir: Direction = readDirection();
+    const oppositeSide: Side = side === 'primary' ? 'secondary' : 'primary';
+    const directionAwareSide = dir === 'ltr' ? side : oppositeSide;
+
     const contextValue = React.useMemo<SidebarContextProps>(
       () => ({
         state,
         open: isOpen,
         setOpen,
         toggleSidebar,
-        side,
+        side: directionAwareSide,
       }),
-      [state, isOpen, setOpen, toggleSidebar, side],
+      [state, isOpen, setOpen, toggleSidebar, directionAwareSide],
     );
 
     return (
@@ -184,7 +191,7 @@ const Sidebar = React.forwardRef<
         className={cn(
           'tw-relative tw-h-svh tw-w-[--sidebar-width] tw-bg-transparent tw-transition-[width] tw-duration-200 tw-ease-linear',
           'group-data-[collapsible=offcanvas]:tw-w-0',
-          'group-data-[side=right]:tw-rotate-180',
+          'group-data-[side=secondary]:tw-rotate-180',
           variant === 'floating' || variant === 'inset'
             ? 'group-data-[collapsible=icon]:tw-w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]'
             : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon]',
@@ -194,13 +201,13 @@ const Sidebar = React.forwardRef<
         className={cn(
           // CUSTOM: Switched tw-fixed to tw-absolute here to scope the sidebar inside of it's container
           'tw-absolute tw-inset-y-0 tw-z-10 tw-hidden tw-h-svh tw-w-[--sidebar-width] tw-transition-[left,right,width] tw-duration-200 tw-ease-linear md:tw-flex',
-          context.side === 'left'
+          context.side === 'primary'
             ? 'tw-left-0 group-data-[collapsible=offcanvas]:tw-left-[calc(var(--sidebar-width)*-1)]'
             : 'tw-right-0 group-data-[collapsible=offcanvas]:tw-right-[calc(var(--sidebar-width)*-1)]',
           // Adjust the padding for floating and inset variants.
           variant === 'floating' || variant === 'inset'
             ? 'tw-p-2 group-data-[collapsible=icon]:tw-w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]'
-            : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon] group-data-[side=left]:tw-border-r group-data-[side=right]:tw-border-l',
+            : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon] group-data-[side=primary]:tw-border-r group-data-[side=secondary]:tw-border-l',
           className,
         )}
         {...props}
@@ -236,7 +243,7 @@ const SidebarTrigger = React.forwardRef<
       }}
       {...props}
     >
-      {context.side === 'left' ? <PanelLeft /> : <PanelRight />}
+      {context.side === 'primary' ? <PanelLeft /> : <PanelRight />}
       <span className="tw-sr-only">Toggle Sidebar</span>
     </Button>
   );
@@ -257,12 +264,12 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'bu
         onClick={toggleSidebar}
         title="Toggle Sidebar"
         className={cn(
-          'tw-absolute tw-inset-y-0 tw-z-20 tw-hidden tw-w-4 tw--translate-x-1/2 tw-transition-all tw-ease-linear after:tw-absolute after:tw-inset-y-0 after:tw-left-1/2 after:tw-w-[2px] hover:after:tw-bg-sidebar-border group-data-[side=left]:tw--right-4 group-data-[side=right]:tw-left-0 sm:tw-flex',
-          '[[data-side=left]_&]:tw-cursor-w-resize [[data-side=right]_&]:tw-cursor-e-resize',
-          '[[data-side=left][data-state=collapsed]_&]:tw-cursor-e-resize [[data-side=right][data-state=collapsed]_&]:tw-cursor-w-resize',
+          'tw-absolute tw-inset-y-0 tw-z-20 tw-hidden tw-w-4 tw--translate-x-1/2 tw-transition-all tw-ease-linear after:tw-absolute after:tw-inset-y-0 after:tw-left-1/2 after:tw-w-[2px] hover:after:tw-bg-sidebar-border group-data-[side=primary]:tw--right-4 group-data-[side=secondary]:tw-left-0 sm:tw-flex',
+          '[[data-side=secondary]_&]:tw-cursor-e-resize [[data-side=secondary]_&]:tw-cursor-w-resize',
+          '[[data-side=primary][data-state=collapsed]_&]:tw-cursor-e-resize [[data-side=secondary][data-state=collapsed]_&]:tw-cursor-w-resize',
           'group-data-[collapsible=offcanvas]:tw-translate-x-0 group-data-[collapsible=offcanvas]:after:tw-left-full group-data-[collapsible=offcanvas]:hover:tw-bg-sidebar',
-          '[[data-side=left][data-collapsible=offcanvas]_&]:tw--right-2',
-          '[[data-side=right][data-collapsible=offcanvas]_&]:tw--left-2',
+          '[[data-side=primary][data-collapsible=offcanvas]_&]:tw--right-2',
+          '[[data-side=secondary][data-collapsible=offcanvas]_&]:tw--left-2',
           className,
         )}
         {...props}

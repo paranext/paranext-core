@@ -1,5 +1,4 @@
 import BookSelector, { BookSelectionMode } from '@/components/advanced/book-selector.component';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { Canon } from '@sillsdev/scripture';
 import { useState } from 'react';
 
@@ -9,7 +8,7 @@ const localizedStrings = {
   '%webView_bookSelector_chooseBooks%': 'Choose Books',
 };
 
-function BookSelectorExample({ direction }: HasDirection) {
+function BookSelectorExample() {
   const [startChapter, setStartChapter] = useState<number>(0);
   const [endChapter, setEndChapter] = useState<number>(0);
   const selectedBooksIds = [
@@ -37,7 +36,6 @@ function BookSelectorExample({ direction }: HasDirection) {
       onSelectBooks={handleSelectBooks}
       selectedBookIds={selectedBooksIds}
       localizedStrings={localizedStrings}
-      direction={direction}
     />
   );
 }

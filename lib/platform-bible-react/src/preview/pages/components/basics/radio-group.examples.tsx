@@ -1,10 +1,9 @@
 import { Label } from '@/components/shadcn-ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 
-export default function RadioGroupExamples({ direction }: HasDirection) {
+export default function RadioGroupExamples() {
   return (
-    <RadioGroup defaultValue="comfortable" dir={direction}>
+    <RadioGroup defaultValue="comfortable">
       <div className="tw-flex tw-items-center tw-gap-x-2">
         <RadioGroupItem value="default" id="r1" />
         <Label htmlFor="r1">Default</Label>

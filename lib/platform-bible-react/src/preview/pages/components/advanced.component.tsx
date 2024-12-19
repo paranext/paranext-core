@@ -1,27 +1,26 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import DataTable from '@/components/advanced/data-table/data-table.component';
+import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
+import TabNavigationContentSearch from '@/components/advanced/tab-navigation-content-search.component';
 import {
   VerticalTabs,
   VerticalTabsContent,
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
-import TabNavigationContentSearch from '@/components/advanced/tab-navigation-content-search.component';
-import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
-import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
-import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
-import { columns, data } from './data-sources/data-table-content';
-import MarketplaceExamples from './advanced/marketplace.example.component';
-import InventoryExample from './advanced/inventory-example.component';
-import SettingsListExamples from './advanced/settings-list.examples.component';
 import BookSelectorExample from './advanced/book-selector-example.component';
+import InventoryExample from './advanced/inventory-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
+import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
+import MarketplaceExamples from './advanced/marketplace.example.component';
 import MultiSelectComboBoxExample from './advanced/multi-select-combo-box-example';
+import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
+import SettingsListExamples from './advanced/settings-list.examples.component';
+import { columns, data } from './data-sources/data-table-content';
 
-function Compositions({ direction }: HasDirection) {
+function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [scrollGroupId, setScrollGroupId] = useState<ScrollGroupId | undefined>(0);
   const [searchValue, setSearchValue] = useState<string>('');
@@ -65,7 +64,7 @@ function Compositions({ direction }: HasDirection) {
       <p className="tw-mb-2 tw-text-muted-foreground">
         A place for components that are composed from basic components
       </p>
-      <VerticalTabs defaultValue="Book Chapter Control" dir={direction}>
+      <VerticalTabs defaultValue="Book Chapter Control">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Book Chapter Control">
             Book Chapter Control
@@ -89,12 +88,12 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} direction={direction} />
+          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
           <div>{JSON.stringify(scrRef)}</div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Book Selector">
-          <BookSelectorExample direction={direction} />
+          <BookSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Data Table">
@@ -102,7 +101,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
-          <VerticalTabs dir={direction}>
+          <VerticalTabs>
             <VerticalTabsList>
               <VerticalTabsTrigger value="Marketplace Buttons">
                 Marketplace Buttons
@@ -123,11 +122,11 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Multi-select Combo Box">
-          <MultiSelectComboBoxExample direction={direction} />
+          <MultiSelectComboBoxExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Inventory">
-          <InventoryExample direction={direction} />
+          <InventoryExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Navigation Content Search">
@@ -137,12 +136,11 @@ function Compositions({ direction }: HasDirection) {
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
             isSearchBarFullWidth
-            direction={direction}
           />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Result List">
-          <ScriptureResultsViewerExample direction={direction} />
+          <ScriptureResultsViewerExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Settings List">
@@ -154,7 +152,6 @@ function Compositions({ direction }: HasDirection) {
             availableScrollGroupIds={[undefined, ...Array(5).keys()]}
             scrollGroupId={scrollGroupId}
             onChangeScrollGroupId={setScrollGroupId}
-            direction={direction}
           />
           <div>Scroll Group Id: {`${scrollGroupId}`}</div>
         </VerticalTabsContent>

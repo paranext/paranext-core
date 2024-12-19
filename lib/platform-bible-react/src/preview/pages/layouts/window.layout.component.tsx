@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 
@@ -19,7 +19,7 @@ export type HasIsFocused = {
   isFocused?: boolean;
 };
 
-export default function WindowOrTabExample({ direction, isFocused }: HasDirection & HasIsFocused) {
+export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const highlightClassName = isFocused
     ? 'tw-bg-primary tw-text-primary-foreground'
@@ -28,17 +28,17 @@ export default function WindowOrTabExample({ direction, isFocused }: HasDirectio
     <div className="tw-rounded-md tw-border">
       <div className="tw-flex tw-flex-row tw-rounded-se-md tw-bg-muted/50">
         <div className="tw-m-2">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} direction={direction} />
+          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
         </div>
         <div className="tw-grow" />
         <div className="tw-m-2 tw-flex">
-          <Tabs defaultValue="a" dir={direction}>
+          <Tabs defaultValue="a">
             <TabsList>
               <TabsTrigger value="a">A</TabsTrigger>
               <TabsTrigger value="b">B</TabsTrigger>
             </TabsList>
           </Tabs>
-          <DropdownMenu dir={direction}>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost">&#x22ee;</Button>
             </DropdownMenuTrigger>
@@ -74,7 +74,7 @@ export default function WindowOrTabExample({ direction, isFocused }: HasDirectio
                   }}
                 >
                   <span>Scroll with</span>
-                  <Tabs defaultValue="a" dir={direction}>
+                  <Tabs defaultValue="a">
                     <TabsList className="tw-h-7">
                       <TabsTrigger className="tw-h-6 tw-w-0" value="a">
                         A

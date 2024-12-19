@@ -11,7 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { cn } from '@/utils/shadcn-ui.util';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { Canon } from '@sillsdev/scripture';
 import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
 import {
@@ -29,8 +29,6 @@ type BookTypeLabels = {
 type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
-  /** Text and layout direction */
-  direction?: 'rtl' | 'ltr';
 };
 
 const ALL_BOOK_IDS = Canon.allBookIds;
@@ -104,7 +102,8 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({ scrRef, handleSubmit, direction }: BookChapterControlProps) {
+function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
+  const dir: Direction = readDirection();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>(
     Canon.bookNumberToId(scrRef.bookNum),
@@ -263,13 +262,13 @@ function BookChapterControl({ scrRef, handleSubmit, direction }: BookChapterCont
       }
 
       const upOneChapter =
-        (key === 'ArrowRight' && !direction) ||
-        (key === 'ArrowRight' && direction === 'ltr') ||
-        (key === 'ArrowLeft' && direction === 'rtl');
+        (key === 'ArrowRight' && !dir) ||
+        (key === 'ArrowRight' && dir === 'ltr') ||
+        (key === 'ArrowLeft' && dir === 'rtl');
       const downOneChapter =
-        (key === 'ArrowLeft' && !direction) ||
-        (key === 'ArrowLeft' && direction === 'ltr') ||
-        (key === 'ArrowRight' && direction === 'rtl');
+        (key === 'ArrowLeft' && !dir) ||
+        (key === 'ArrowLeft' && dir === 'ltr') ||
+        (key === 'ArrowRight' && dir === 'rtl');
       let chapterOffSet = 0;
       if (upOneChapter) {
         if (highlightedChapter < fetchEndChapter(highlightedBookId)) {
@@ -355,7 +354,6 @@ function BookChapterControl({ scrRef, handleSubmit, direction }: BookChapterCont
             }}
             handleSubmit={handleInputSubmit}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
-            direction={direction}
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
@@ -363,11 +361,11 @@ function BookChapterControl({ scrRef, handleSubmit, direction }: BookChapterCont
           // Need to get over the floating window z-index 200
           style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
           onKeyDown={handleKeyDownContent}
-          align={direction === 'ltr' ? 'start' : 'end'}
+          align={dir === 'ltr' ? 'start' : 'end'}
           ref={contentRef}
         >
           {/* work around until DropdownMenuContent supports a dir prop */}
-          <div dir={direction} className={cn({ 'tw-ps-2': direction === 'rtl' })}>
+          <div className="rtl:tw-ps-2">
             <GoToMenuItem
               handleSort={() => console.log('sorting')}
               handleLocationHistory={() => console.log('location history')}
@@ -393,7 +391,6 @@ function BookChapterControl({ scrRef, handleSubmit, direction }: BookChapterCont
                           ref={(element: HTMLDivElement) => {
                             if (selectedBookId === bookId) menuItemRef.current = element;
                           }}
-                          direction={direction}
                         >
                           <ChapterSelect
                             handleSelectChapter={handleSelectChapter}
