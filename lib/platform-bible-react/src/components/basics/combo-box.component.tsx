@@ -1,4 +1,8 @@
+import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { cn } from '@/utils/shadcn-ui.util';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import {
   Command,
   CommandEmpty,
@@ -6,12 +10,8 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/shadcn-ui/command';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
-import { Direction, useGetDirRefCallback } from '@/utils/dir-helper';
-import { cn } from '@/utils/shadcn-ui.util';
 import { PopoverProps } from '@radix-ui/react-popover';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import { ReactNode, useState } from 'react';
+import { Direction, getDirRefCallback } from '@/utils/dir-helper';
 
 export type ComboBoxLabelOption = { label: string };
 export type ComboBoxOption = string | number | ComboBoxLabelOption;
@@ -49,6 +49,8 @@ export type ComboBoxProps<T> = {
   buttonVariant?: ButtonProps['variant'];
   /** Control how the popover menu should be aligned. Defaults to start */
   alignDropDown?: 'start' | 'center' | 'end';
+  /** Text direction ltr or rtl */
+  dir?: Direction;
   /** Optional boolean to set if trigger should be disabled */
   isDisabled?: boolean;
 } & PopoverProps;
@@ -89,7 +91,7 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
 }: ComboBoxProps<T>) {
   const [open, setOpen] = useState(false);
   const [dir, setDir] = useState<Direction>('ltr');
-  const ref = useGetDirRefCallback(setDir);
+  const ref = getDirRefCallback(setDir);
 
   return (
     <Popover open={open} onOpenChange={setOpen} {...props}>

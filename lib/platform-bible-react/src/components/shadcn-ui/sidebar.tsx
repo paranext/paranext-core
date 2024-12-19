@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { VariantProps, cva } from 'class-variance-authority';
 import { PanelLeft, PanelRight } from 'lucide-react';
@@ -14,7 +14,6 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Direction, useGetDirEffect, useGetDirRefCallback } from '@/utils/dir-helper';
 
 /**
  * CUSTOM: Changes from the original code from Shadcn- Removed uses of useIsMobile, Sheet, and
@@ -107,49 +106,41 @@ const SidebarProvider = React.forwardRef<
     // This makes it easier to style the sidebar with Tailwind classes.
     const state = isOpen ? 'expanded' : 'collapsed';
 
-    const [dir, setDir] = useState<Direction>('ltr');
-    const providerRef = useGetDirRefCallback(setDir);
-
-    const oppositeSide = side === 'right' ? 'left' : 'right';
-    const directionAwareSide = dir === 'ltr' ? side : oppositeSide;
-
     const contextValue = React.useMemo<SidebarContextProps>(
       () => ({
         state,
         open: isOpen,
         setOpen,
         toggleSidebar,
-        side: directionAwareSide,
+        side,
       }),
-      [state, isOpen, setOpen, toggleSidebar, directionAwareSide],
+      [state, isOpen, setOpen, toggleSidebar, side],
     );
 
     return (
-      <div ref={providerRef}>
-        <SidebarContext.Provider value={contextValue}>
-          <TooltipProvider delayDuration={0}>
-            <div
-              style={
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                {
-                  '--sidebar-width': SIDEBAR_WIDTH,
-                  '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
-                  ...style,
-                } as React.CSSProperties
-              }
-              className={cn(
-                // Removed tw-min-h-svh
-                'tw-group/sidebar-wrapper pr-twp tw-flex tw-w-full has-[[data-variant=inset]]:tw-bg-sidebar',
-                className,
-              )}
-              ref={ref}
-              {...props}
-            >
-              {children}
-            </div>
-          </TooltipProvider>
-        </SidebarContext.Provider>
-      </div>
+      <SidebarContext.Provider value={contextValue}>
+        <TooltipProvider delayDuration={0}>
+          <div
+            style={
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              {
+                '--sidebar-width': SIDEBAR_WIDTH,
+                '--sidebar-width-icon': SIDEBAR_WIDTH_ICON,
+                ...style,
+              } as React.CSSProperties
+            }
+            className={cn(
+              // Removed tw-min-h-svh
+              'tw-group/sidebar-wrapper pr-twp tw-flex tw-w-full has-[[data-variant=inset]]:tw-bg-sidebar',
+              className,
+            )}
+            ref={ref}
+            {...props}
+          >
+            {children}
+          </div>
+        </TooltipProvider>
+      </SidebarContext.Provider>
     );
   },
 );
