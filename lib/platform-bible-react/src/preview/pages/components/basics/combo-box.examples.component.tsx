@@ -1,8 +1,9 @@
 import ComboBox from '@/components/basics/combo-box.component';
+import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 
-export default function ComboBoxExamples() {
+export default function ComboBoxExamples({ direction }: HasDirection) {
   const [comboBox1Value, setComboBox1Value] = useState<string | undefined>(undefined);
   const [comboBox2Value, setComboBox2Value] = useState<string | undefined>(undefined);
   const [comboBox3Value, setComboBox3Value] = useState<string | undefined>(undefined);
@@ -13,6 +14,7 @@ export default function ComboBoxExamples() {
       <div>
         <p>Default Combobox</p>
         <ComboBox
+          dir={direction}
           options={['Option1', 'Option2', 'Option3']}
           textPlaceholder="Text Placeholder"
           buttonPlaceholder="Button Placeholder"
@@ -24,6 +26,7 @@ export default function ComboBoxExamples() {
       <div>
         <p>Combobox with long text for options will truncate</p>
         <ComboBox
+          dir={direction}
           options={[
             '08/24/24 05:50PM - Revision author',
             '08/24/24 05:30PM - Revision author',
@@ -39,6 +42,7 @@ export default function ComboBoxExamples() {
       <div>
         <p>An icon can be shown on the trigger button</p>
         <ComboBox
+          dir={direction}
           options={[
             '08/24/24 05:50PM - Revision author',
             '08/24/24 05:30PM - Revision author',
@@ -55,6 +59,7 @@ export default function ComboBoxExamples() {
       <div>
         <p>Alignment of dropdown menu can be controlled</p>
         <ComboBox
+          dir={direction}
           options={[
             '08/24/24 05:50PM - Revision author',
             '08/24/24 05:30PM - Revision author',
