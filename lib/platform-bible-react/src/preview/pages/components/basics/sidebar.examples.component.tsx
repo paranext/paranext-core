@@ -14,11 +14,7 @@ import {
 } from '@/components/shadcn-ui/sidebar';
 import { useState } from 'react';
 
-type SidebarExamplesProps = {
-  direction?: string;
-};
-
-export default function SidebarExamples({ direction }: SidebarExamplesProps) {
+export default function SidebarExamples() {
   const [sidebarSelection, setSidebarSelection] = useState('button');
 
   const sidebarItems: { [title: string]: string } = {
@@ -29,31 +25,63 @@ export default function SidebarExamples({ direction }: SidebarExamplesProps) {
     Settings: 'This is the Settings page',
   };
 
+  const rightSidebarItems: { [title: string]: string } = {
+    Lorem: '',
+    Ipsum: '',
+    Dolor: '',
+    Sit: '',
+    Amed: '',
+  };
+
   return (
-    <SidebarProvider dir={direction} side={direction === 'rtl' ? 'right' : 'left'}>
-      <Sidebar>
-        <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Application</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {Object.keys(sidebarItems).map((item) => (
-                  <SidebarMenuItem key={item}>
-                    <SidebarMenuButton onClick={() => setSidebarSelection(item)}>
-                      {item}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        </SidebarContent>
-        <SidebarRail />
-      </Sidebar>
-      <SidebarInset>
-        <SidebarTrigger />
-        {sidebarItems[sidebarSelection]}
-      </SidebarInset>
-    </SidebarProvider>
+    <>
+      <SidebarProvider>
+        <Sidebar>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>Application</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {Object.keys(sidebarItems).map((item) => (
+                    <SidebarMenuItem key={item}>
+                      <SidebarMenuButton onClick={() => setSidebarSelection(item)}>
+                        {item}
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarRail />
+        </Sidebar>
+        <SidebarInset>
+          <SidebarTrigger />
+          {!sidebarItems[sidebarSelection] && (
+            <p>If you can&apos;t see a sidebar, the screen is too narrow</p>
+          )}
+          {sidebarItems[sidebarSelection]}
+        </SidebarInset>
+      </SidebarProvider>
+      <SidebarProvider side="secondary">
+        <Sidebar>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarGroupLabel>Secondary Sidebar</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {Object.keys(rightSidebarItems).map((item) => (
+                    <SidebarMenuItem key={item}>
+                      <SidebarMenuButton>{item}</SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarRail />
+        </Sidebar>
+      </SidebarProvider>
+    </>
   );
 }

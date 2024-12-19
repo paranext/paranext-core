@@ -48,13 +48,9 @@ export type ComboBoxProps<T> = {
   buttonVariant?: ButtonProps['variant'];
   /** Control how the popover menu should be aligned. Defaults to start */
   alignDropDown?: 'start' | 'center' | 'end';
-  /** Text direction ltr or rtl */
-  dir?: Direction;
   /** Optional boolean to set if trigger should be disabled */
   isDisabled?: boolean;
 } & PopoverProps;
-
-type Direction = 'ltr' | 'rtl';
 
 function getOptionLabelDefault(option: ComboBoxOption): string {
   if (typeof option === 'string') {
@@ -87,7 +83,6 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
   alignDropDown = 'start',
-  dir = 'ltr',
   isDisabled = false,
   ...props
 }: ComboBoxProps<T>) {
@@ -120,10 +115,9 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
       <PopoverContent
         align={alignDropDown}
         className={cn('tw-w-[200px] tw-p-0', popoverContentClassName)}
-        dir={dir}
       >
         <Command>
-          <CommandInput dir={dir} placeholder={textPlaceholder} className="tw-text-inherit" />
+          <CommandInput placeholder={textPlaceholder} className="tw-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
             {options.map((option) => (

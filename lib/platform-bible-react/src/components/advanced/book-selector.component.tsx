@@ -62,7 +62,6 @@ export default function BookSelector({
   startChapter,
   handleSelectStartChapter,
   localizedStrings,
-  direction,
 }: BookSelectorProps) {
   const currentBookText = localizeString(localizedStrings, '%webView_bookSelector_currentBook%');
   const chooseText = localizeString(localizedStrings, '%webView_bookSelector_choose%');
@@ -84,7 +83,6 @@ export default function BookSelector({
       // value is always a string but we need it to be BookSelectionMode
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       onValueChange={(value: string) => onSelectionModeChange(value as BookSelectionMode)}
-      dir={direction}
     >
       <div className="tw-flex tw-w-full tw-flex-col tw-gap-4">
         <div className="tw-grid tw-grid-cols-[25%,25%,50%]">
@@ -101,7 +99,6 @@ export default function BookSelector({
               chapterCount={chapterCount}
               startChapter={startChapter}
               endChapter={endChapter}
-              direction={direction}
             />
           </div>
         </div>

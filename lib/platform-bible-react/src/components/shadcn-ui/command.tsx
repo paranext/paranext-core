@@ -5,6 +5,7 @@ import { Search } from 'lucide-react';
 
 import { cn } from '@/utils/shadcn-ui.util';
 import { Dialog, DialogContent } from '@/components/shadcn-ui/dialog';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 const Command = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive>,
@@ -38,19 +39,22 @@ function CommandDialog({ children, ...props }: CommandDialogProps) {
 const CommandInput = React.forwardRef<
   React.ElementRef<typeof CommandPrimitive.Input>,
   React.ComponentPropsWithoutRef<typeof CommandPrimitive.Input>
->(({ className, ...props }, ref) => (
-  <div className="tw-flex tw-items-center tw-border-b tw-px-3">
-    <Search className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
-    <CommandPrimitive.Input
-      ref={ref}
-      className={cn(
-        'tw-flex tw-h-11 tw-w-full tw-rounded-md tw-bg-transparent tw-py-3 tw-text-sm tw-outline-none placeholder:tw-text-muted-foreground disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
-        className,
-      )}
-      {...props}
-    />
-  </div>
-));
+>(({ className, ...props }, ref) => {
+  const dir: Direction = readDirection();
+  return (
+    <div className="tw-flex tw-items-center tw-border-b tw-px-3" dir={dir}>
+      <Search className="tw-me-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
+      <CommandPrimitive.Input
+        ref={ref}
+        className={cn(
+          'tw-flex tw-h-11 tw-w-full tw-rounded-md tw-bg-transparent tw-py-3 tw-text-sm tw-outline-none placeholder:tw-text-muted-foreground disabled:tw-cursor-not-allowed disabled:tw-opacity-50',
+          className,
+        )}
+        {...props}
+      />
+    </div>
+  );
+});
 
 CommandInput.displayName = CommandPrimitive.Input.displayName;
 

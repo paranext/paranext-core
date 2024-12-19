@@ -4,7 +4,6 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import ExampleAlerts from './basics/alert.examples.component';
 import BadgeExamples from './basics/badge.examples.component';
 import ButtonExamples from './basics/button.examples.component';
@@ -13,6 +12,7 @@ import ChapterRangeSelectorExample from './basics/chapter-range-example.componen
 import CheckboxExamples from './basics/checkbox.examples.component';
 import ChecklistExamples from './basics/checklist.examples.component';
 import ComboBoxExamples from './basics/combo-box.examples.component';
+import DialogExamples from './basics/dialog.examples.component';
 import DropdownExamples from './basics/dropdown.examples.component';
 import InputExamples from './basics/input.examples.component';
 import RadioGroupExamples from './basics/radio-group.examples';
@@ -26,13 +26,12 @@ import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
-import DialogExamples from './basics/dialog.examples.component';
 
-function Basics({ direction }: HasDirection) {
+function Basics() {
   return (
     <div>
       <p className="tw-mb-2 tw-text-muted-foreground">A place for the most simple components</p>
-      <VerticalTabs defaultValue="Button" dir={direction}>
+      <VerticalTabs defaultValue="Button">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Badge">Badge</VerticalTabsTrigger>
@@ -73,11 +72,11 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Card">
-          <CardExamples direction={direction} />
+          <CardExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Chapter Range Selector">
-          <ChapterRangeSelectorExample direction={direction} />
+          <ChapterRangeSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Checkbox">
@@ -89,11 +88,11 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="ComboBox">
-          <ComboBoxExamples direction={direction} />
+          <ComboBoxExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dialog">
-          <DialogExamples direction={direction} />
+          <DialogExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Input">
@@ -101,25 +100,25 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Radio Group">
-          <RadioGroupExamples direction={direction} />
+          <RadioGroupExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Search Bar">
-          <SearchBarExamples direction={direction} />
+          <SearchBarExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Select">
-          <SelectExamples direction={direction} />
+          <SelectExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Sidebar">
           <div className="tw-relative tw-overflow-hidden">
-            <SettingsSidebarExamples direction={direction} />
+            <SettingsSidebarExamples />
           </div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Slider">
-          <SliderExamples direction={direction} />
+          <SliderExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Sonner">
@@ -127,19 +126,19 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Spinner">
-          <SpinnerExamples direction={direction} />
+          <SpinnerExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Switch">
-          <SwitchExamples direction={direction} />
+          <SwitchExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Dropdown Menu">
-          <DropdownExamples direction={direction} />
+          <DropdownExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Tabs">
-          <TabExamples direction={direction} />
+          <TabExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Table">
@@ -147,7 +146,7 @@ function Basics({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Toggle Group">
-          <ToggleGroupExamples direction={direction} />
+          <ToggleGroupExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

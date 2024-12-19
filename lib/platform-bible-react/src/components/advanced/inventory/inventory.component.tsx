@@ -32,6 +32,7 @@ import {
   Status,
 } from './inventory-utils';
 import { inventoryAdditionalItemColumn } from './inventory-columns';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -245,8 +246,6 @@ type InventoryProps = {
    * other columns you can add these yourself
    */
   columns: ColumnDef<InventoryTableData>[];
-  /** Text and layout direction */
-  direction?: 'rtl' | 'ltr';
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
@@ -262,7 +261,6 @@ export default function Inventory({
   scope,
   onScopeChange,
   columns,
-  direction,
 }: InventoryProps) {
   const allItemsText = localizeString(localizedStrings, '%webView_inventory_all%');
   const approvedItemsText = localizeString(localizedStrings, '%webView_inventory_approved%');
@@ -392,13 +390,15 @@ export default function Inventory({
     return occurrence[0].occurrences;
   }, [selectedItem, showAdditionalItems, reducedTableData]);
 
+  const dir: Direction = readDirection();
+
   return (
     <div className="pr-twp tw-flex tw-h-full tw-flex-col">
       <div className="tw-flex tw-items-stretch">
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
-          dir={direction}
+          dir={dir}
         >
           <SelectTrigger className="tw-m-1">
             <SelectValue placeholder="Select filter" />
@@ -410,11 +410,7 @@ export default function Inventory({
             <SelectItem value="unknown">{unknownItemsText}</SelectItem>
           </SelectContent>
         </Select>
-        <Select
-          onValueChange={(value) => handleScopeChange(value)}
-          defaultValue={scope}
-          dir={direction}
-        >
+        <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope} dir={dir}>
           <SelectTrigger className="tw-m-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>

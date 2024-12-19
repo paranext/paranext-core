@@ -40,6 +40,7 @@ import {
 } from 'platform-bible-utils';
 import { MouseEvent, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
@@ -137,9 +138,6 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 
   /** Callback function to notify when a row is selected */
   onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
-
-  /** Text direction ltr or rtl */
-  direction?: 'ltr' | 'rtl';
 };
 
 function getColumns(
@@ -236,7 +234,6 @@ export default function ScriptureResultsViewer({
   typeColumnName,
   detailsColumnName,
   onRowSelected,
-  direction = 'ltr',
 }: ScriptureResultsViewerProps) {
   const [grouping, setGrouping] = useState<GroupingState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: scrBookColId, desc: false }]);
@@ -379,7 +376,6 @@ export default function ScriptureResultsViewer({
           onValueChange={(value) => {
             handleSelectChange(value);
           }}
-          dir={direction}
         >
           <SelectTrigger className="tw-mb-1 tw-mt-2">
             <SelectValue />
@@ -428,6 +424,7 @@ export default function ScriptureResultsViewer({
         )}
         <TableBody>
           {table.getRowModel().rows.map((row, rowIndex) => {
+            const dir: Direction = readDirection();
             return (
               <TableRow
                 data-state={row.getIsSelected() ? 'selected' : ''}
@@ -467,7 +464,7 @@ export default function ScriptureResultsViewer({
                             >
                               {row.getIsExpanded() && <ChevronDown />}
                               {!row.getIsExpanded() &&
-                                (direction === 'ltr' ? <ChevronRight /> : <ChevronLeft />)}{' '}
+                                (dir === 'ltr' ? <ChevronRight /> : <ChevronLeft />)}{' '}
                               {flexRender(cell.column.columnDef.cell, cell.getContext())} (
                               {row.subRows.length})
                             </Button>

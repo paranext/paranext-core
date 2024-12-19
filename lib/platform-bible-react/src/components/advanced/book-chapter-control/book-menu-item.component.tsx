@@ -2,6 +2,7 @@ import { Canon } from '@sillsdev/scripture';
 import { PropsWithChildren, KeyboardEvent, forwardRef } from 'react';
 import { DropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 export type BookType = 'OT' | 'NT' | 'DC';
 
@@ -25,8 +26,6 @@ type BookMenuItemProps = PropsWithChildren<{
    * coordinated to genre
    */
   bookType: BookType;
-  /** Text and layout direction */
-  direction?: 'rtl' | 'ltr';
 }>;
 
 const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
@@ -39,19 +38,22 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
       handleKeyDown,
       bookType,
       children,
-      direction,
     }: BookMenuItemProps,
     ref,
   ) => {
+    const dir: Direction = readDirection();
     return (
       <DropdownMenuItem
         ref={ref}
         key={bookId}
         textValue={bookId}
-        className={cn('tw-mx-1 tw-px-1 tw-font-normal tw-text-foreground/80', {
-          // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
-          'tw-bg-amber-50 tw-text-yellow-900 data-[highlighted]:tw-bg-amber-100': isSelected,
-        })}
+        className={cn(
+          'tw-mx-1 tw-flex-col tw-items-start tw-px-1 tw-font-normal tw-text-foreground/80',
+          {
+            // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
+            'tw-bg-amber-50 tw-text-yellow-900 data-[highlighted]:tw-bg-amber-100': isSelected,
+          },
+        )}
         onSelect={(event: Event) => {
           // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
           event.preventDefault();
@@ -62,7 +64,7 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
         }}
         onFocus={handleHighlightBook}
         onMouseMove={handleHighlightBook}
-        dir={direction}
+        dir={dir}
       >
         <span
           className={cn(

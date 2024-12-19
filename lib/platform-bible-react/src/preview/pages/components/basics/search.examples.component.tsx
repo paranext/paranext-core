@@ -1,5 +1,5 @@
 import SearchBar from '@/components/basics/search-bar.component';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 // eslint-disable-next-line no-undef
 let timer: NodeJS.Timeout;
@@ -9,11 +9,12 @@ function onSearchDebounced(search: string) {
   timer = setTimeout(() => alert(`you searched for ${search}`), 1000);
 }
 
-export default function SearchBarExamples({ direction }: HasDirection) {
+export default function SearchBarExamples() {
+  const dir: Direction = readDirection();
   return (
     <div className="tw-flex tw-gap-2">
-      <SearchBar onSearch={onSearchDebounced} direction={direction} />{' '}
-      {direction === 'rtl' ? <>&rarr;</> : <>&larr;</>} type here
+      <SearchBar onSearch={onSearchDebounced} /> {dir === 'rtl' ? <>&rarr;</> : <>&larr;</>} type
+      here
     </div>
   );
 }

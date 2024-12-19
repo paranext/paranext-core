@@ -8,15 +8,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/shadcn-ui/dialog';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 
-export default function DialogExamples({ direction }: HasDirection) {
+export default function DialogExamples() {
   return (
     <Dialog>
       <DialogTrigger asChild>
         <Button>Show Dialog</Button>
       </DialogTrigger>
-      <DialogContent className="tw-max-w-sm" dir={direction}>
+      <DialogContent className="tw-max-w-sm">
         <DialogHeader>
           <DialogTitle>Clear filters</DialogTitle>
           <DialogDescription>Clear filters to show all results?</DialogDescription>
