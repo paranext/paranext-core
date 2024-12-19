@@ -15,7 +15,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
 import {
   Table,
@@ -32,7 +31,6 @@ import {
   ChevronUp,
   Ellipsis,
   Globe,
-  Search,
   Shapes,
 } from 'lucide-react';
 
@@ -45,6 +43,7 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
+import SearchBar from '@/components/basics/search-bar.component';
 
 export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
@@ -127,7 +126,11 @@ const getActionButtonContent = (
   installResource: (dblEntryUid: string, action: 'install' | 'remove') => void,
 ) => {
   return (
-    <Button variant="outline" onClick={() => installResource(resource.dblEntryUid, 'install')}>
+    <Button
+      className="tw-bg-muted"
+      variant="ghost"
+      onClick={() => installResource(resource.dblEntryUid, 'install')}
+    >
       {buttonText}
     </Button>
   );
@@ -144,7 +147,7 @@ const getActionContent = (
   const isBeingHandled = idsBeingHandled.includes(resource.dblEntryUid);
   if (isBeingHandled) {
     return (
-      <Button variant="outline">
+      <Button className="tw-bg-muted" variant="ghost">
         <Spinner className="tw-h-5 tw-py-[1px]" />
       </Button>
     );
@@ -211,6 +214,30 @@ function FilterableResourceList({
   const typeXrText: string = localizedStrings['%resources_type_XR%'];
   const typeUnknownText: string = localizedStrings['%resources_type_unknown%'];
   const updateText: string = localizedStrings['%resources_update%'];
+
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+
+  // When no languages are selected on the first render of this component, set default selection to
+  // languages that have resources installed
+  useEffect(() => {
+    if (isInitialized) return;
+    if (selectedLanguages.length > 0) {
+      setIsInitialized(true);
+      return;
+    }
+    if (resources.length > 0 && selectedLanguages.length === 0) {
+      setSelectedLanguages(
+        Array.from(
+          new Set(
+            resources
+              .filter((resource) => resource.installed === true)
+              .map((resource) => resource.bestLanguageName),
+          ),
+        ),
+      );
+      setIsInitialized(true);
+    }
+  }, [resources, selectedLanguages.length, setSelectedLanguages, isInitialized, setIsInitialized]);
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 
@@ -320,7 +347,7 @@ function FilterableResourceList({
   const buildTableHead = (key: SortConfig['key'], label: string) => (
     <TableHead onClick={() => handleSort(key)}>
       <div className="tw-flex tw-items-center">
-        {label}
+        <div className="tw-font-normal">{label}</div>
         {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
         {sortConfig.key === key &&
           (sortConfig.direction === 'ascending' ? (
@@ -350,22 +377,15 @@ function FilterableResourceList({
               <div className="tw-flex tw-flex-col tw-gap-2">
                 <CardTitle>{dialogTitleText}</CardTitle>
                 <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
-                <div className="tw-mb-1 tw-flex tw-gap-1">
-                  <div className="tw-relative">
-                    <Input
-                      type="text"
-                      className="tw-box-border tw-min-w-72 tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pl-4 tw-pr-3 tw-shadow-none tw-outline-none"
-                      onChange={(event) => setTextFilter(event.target.value)}
-                      value={textFilter}
-                      placeholder={filterInputText}
-                    />
-                    <Search className="tw-absolute tw-right-3 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-text-muted-foreground" />
-                  </div>
-                </div>
+                <SearchBar
+                  className="tw-min-w-72"
+                  onSearch={setTextFilter}
+                  placeholder={filterInputText}
+                />
               </div>
             </div>
-            <div className="tw-flex tw-flex-col tw-gap-2">
-              <Label className="tw-mb-2">{filterByText}</Label>
+            <div className="tw-flex tw-flex-col tw-gap-1">
+              <Label className="tw-mb-2 tw-text-muted-foreground">{filterByText}</Label>
               <Filter
                 entries={typeOptions}
                 getEntriesCount={getTypeCount}
@@ -475,7 +495,7 @@ function FilterableResourceList({
         </CardContent>
         <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-border-t tw-p-4">
           {sortedResources.length > 0 && (
-            <Label>{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
+            <Label className="tw-font-normal">{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
           )}
         </CardFooter>
       </Card>

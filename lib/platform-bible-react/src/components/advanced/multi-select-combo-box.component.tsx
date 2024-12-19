@@ -83,7 +83,7 @@ function MultiSelectComboBox({
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
-            variant="outline"
+            variant="ghost"
             role="combobox"
             aria-expanded={open}
             className={cn(
@@ -104,7 +104,7 @@ function MultiSelectComboBox({
                     selected.length === 0 || selected.length === entries.length,
                 })}
               >
-                {getPlaceholderText()}
+                <div className="tw-font-normal">{getPlaceholderText()}</div>
               </div>
             </div>
             <ChevronsUpDown className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />

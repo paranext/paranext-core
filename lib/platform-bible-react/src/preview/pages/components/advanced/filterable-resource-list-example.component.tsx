@@ -34,10 +34,7 @@ const localizedStrings = {
 function FilterableResourceListExample() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>(['DBLResource']);
 
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([
-    'Dutch (nld)',
-    'French (fra)',
-  ]);
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
 
   return (
     <FilterableResourceList
