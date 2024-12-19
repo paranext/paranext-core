@@ -25,7 +25,7 @@ export const BOOK_SELECTOR_STRING_KEYS = Object.freeze([
 ] as const);
 
 export type BookSelectorLocalizedStrings = {
-  [localizedInventoryKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+  [localizedBookSelectorKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
 /**

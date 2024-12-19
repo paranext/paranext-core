@@ -1,5 +1,7 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import DataTable from '@/components/advanced/data-table/data-table.component';
+import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
+import TabNavigationContentSearch from '@/components/advanced/tab-navigation-content-search.component';
 import {
   VerticalTabs,
   VerticalTabsContent,
@@ -9,17 +11,18 @@ import {
 import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
-import TabNavigationContentSearch from '@/components/advanced/tab-navigation-content-search.component';
-import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
-import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
-import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
-import { columns, data } from './data-sources/data-table-content';
-import MarketplaceExamples from './advanced/marketplace.example.component';
-import InventoryExample from './advanced/inventory-example.component';
-import SettingsListExamples from './advanced/settings-list.examples.component';
 import BookSelectorExample from './advanced/book-selector-example.component';
+import FilterExample from './advanced/filter-example';
+import FilterableResourceListExample from './advanced/filterable-resource-list-example.component';
+import InventoryExample from './advanced/inventory-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
+import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
+import MarketplaceExamples from './advanced/marketplace.example.component';
 import MultiSelectComboBoxExample from './advanced/multi-select-combo-box-example';
+import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
+import SettingsListExamples from './advanced/settings-list.examples.component';
+import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
+import { columns, data } from './data-sources/data-table-content';
 
 function Compositions({ direction }: HasDirection) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -72,7 +75,11 @@ function Compositions({ direction }: HasDirection) {
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Filterable Resource List">
+            Filterable Resource List
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Multi-select Combo Box">
             Multi-select Combo Box
@@ -86,6 +93,9 @@ function Compositions({ direction }: HasDirection) {
             Scroll Group Selector
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="UI Language Selector">
+            UI Language Selector
+          </VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
@@ -95,6 +105,10 @@ function Compositions({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Book Selector">
           <BookSelectorExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="UI Language Selector">
+          <UiLanguageSelectorExample direction={direction} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Scroll Group Selector">
@@ -108,6 +122,10 @@ function Compositions({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Data Table">
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Filter">
+          <FilterExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
@@ -141,6 +159,10 @@ function Compositions({ direction }: HasDirection) {
 
         <VerticalTabsContent value="Inventory">
           <InventoryExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Filterable Resource List">
+          <FilterableResourceListExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Navigation Content Search">

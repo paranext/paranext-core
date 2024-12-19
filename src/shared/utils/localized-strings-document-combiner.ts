@@ -70,7 +70,7 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     locale?: T,
   ): T extends string ? LanguageStrings | undefined : LocalizedStringDataContribution {
     if (!this.latestOutput)
-      // TypeScript seems to dense to understand this is literally exactly the return signature
+      // TypeScript seems too dense to understand this is literally exactly the return signature
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       return (locale ? undefined : {}) as T extends string
         ? LanguageStrings | undefined

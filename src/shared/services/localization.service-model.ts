@@ -3,6 +3,7 @@ import {
   DataProviderDataType,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
+import { LanguageInfo } from 'platform-bible-react';
 import { LanguageStrings, LocalizeKey, OnDidDispose } from 'platform-bible-utils';
 
 export type LocalizationData = LanguageStrings;
@@ -27,6 +28,7 @@ export const localizationServiceObjectToProxy = Object.freeze({
 export type LocalizationDataDataTypes = {
   LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
   LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
+  AvailableInterfaceLanguages: DataProviderDataType<undefined, Record<string, LanguageInfo>, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -58,6 +60,12 @@ export type ILocalizationService = {
    */
   getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
   /**
+   * Get a collection of known user-interface languages
+   *
+   * @returns All user-interface languages
+   */
+  getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
+  /**
    * This data cannot be changed. Trying to use this setter this will always throw
    *
    * @returns Unsubscriber function
@@ -69,6 +77,14 @@ export type ILocalizationService = {
    * @returns Unsubscriber function
    */
   setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+  /**
+   * This data cannot be changed. Trying to use this setter this will always throw
+   *
+   * @returns Unsubscriber function
+   */
+  setAvailableInterfaceLanguages(): Promise<
+    DataProviderUpdateInstructions<LocalizationDataDataTypes>
+  >;
 } & OnDidDispose &
   typeof localizationServiceObjectToProxy & {
     /**

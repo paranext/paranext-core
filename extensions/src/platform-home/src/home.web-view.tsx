@@ -1,7 +1,6 @@
 import { WebViewProps } from '@papi/core';
 import papi from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import type { ResourceType } from 'platform-bible-utils';
 import {
   FilterableResourceList,
   FILTERABLE_RESOURCE_LIST_STRING_KEYS,
@@ -18,11 +17,11 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     'platformGetResources.dblResourcesProvider',
   ).DblResources(undefined, []);
 
-  const [typeFilter, setTypeFilter] = useWebViewState<ResourceType[]>('typeFilter', [
+  const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
     'DBLResource',
   ]);
 
-  const [languageFilter, setLanguageFilter] = useWebViewState<string[]>('languageFilter', []);
+  const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
 
   const openResource = (projectId: string) =>
     papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId);
@@ -69,12 +68,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   return (
     <FilterableResourceList
       localizedStrings={localizedStrings}
-      dblResources={dblResources}
-      isLoadingDblResources={isLoadingDblResources}
-      typeFilter={typeFilter}
-      setTypeFilter={setTypeFilter}
-      languageFilter={languageFilter}
-      setLanguageFilter={setLanguageFilter}
+      resources={dblResources}
+      isLoadingResources={isLoadingDblResources}
+      selectedTypes={selectedTypes}
+      setSelectedTypes={setSelectedTypes}
+      selectedLanguages={selectedLanguages}
+      setSelectedLanguages={setSelectedLanguages}
       openResource={openResource}
       installResource={dblResourcesProvider?.installDblResource}
       uninstallResource={dblResourcesProvider?.uninstallDblResource}

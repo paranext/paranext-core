@@ -233,7 +233,7 @@ export declare const BOOK_SELECTOR_STRING_KEYS: readonly [
 	"%webView_bookSelector_chooseBooks%"
 ];
 export type BookSelectorLocalizedStrings = {
-	[localizedInventoryKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+	[localizedBookSelectorKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 export type BookSelectorProps = ChapterRangeSelectorProps & {
 	handleBookSelectionModeChange: (newMode: BookSelectionMode) => void;
@@ -439,8 +439,9 @@ export interface MultiSelectComboBoxProps {
 	customSelectedText?: string;
 	sortSelected?: boolean;
 	icon?: React$1.ReactNode;
+	className?: string;
 }
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1420,20 +1421,80 @@ export interface FooterProps {
  * @returns The rendered Footer component
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export interface FilterProps extends MultiSelectComboBoxProps {
+	badgesPlaceholder: string;
+}
+export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export declare const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[];
 export type FilterableResourceListProps = {
 	localizedStrings: LanguageStrings;
-	dblResources: DblResourceData[];
-	isLoadingDblResources: boolean;
-	typeFilter: ResourceType[];
-	setTypeFilter: (stateValue: ResourceType[]) => void;
-	languageFilter: string[];
-	setLanguageFilter: (stateValue: string[]) => void;
+	resources: DblResourceData[];
+	isLoadingResources: boolean;
+	selectedTypes: string[];
+	setSelectedTypes: (stateValue: string[]) => void;
+	selectedLanguages: string[];
+	setSelectedLanguages: (stateValue: string[]) => void;
 	openResource: (projectId: string) => void;
 	installResource: ((uid: string) => Promise<void>) | undefined;
 	uninstallResource: ((uid: string) => Promise<void>) | undefined;
+	className?: string;
 };
-export declare function FilterableResourceList({ localizedStrings, dblResources, isLoadingDblResources, typeFilter, setTypeFilter, languageFilter, setLanguageFilter, openResource, installResource, uninstallResource, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
+export declare function FilterableResourceList({ localizedStrings, resources, isLoadingResources, selectedTypes, setSelectedTypes, selectedLanguages, setSelectedLanguages, openResource, installResource, uninstallResource, className, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
+declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
+	"%settings_uiLanguageSelector_selectFallbackLanguages%"
+];
+export type UiLanguageSelectorLocalizedStrings = {
+	[localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+export type LanguageInfo = {
+	/** The name of the language to be displayed (in its native script) */
+	autonym: string;
+	/**
+	 * The name of the language in other languages, so that the language can also be displayed in the
+	 * current UI language, if known.
+	 */
+	uiNames?: Record<string, string>;
+	/**
+	 * Other known names of the language (for searching). This can include pejorative names and should
+	 * never be displayed unless typed by the user.
+	 */
+	otherNames?: string[];
+};
+export type UiLanguageSelectorProps = {
+	/** Full set of known languages to display. The keys are valid BCP-47 tags. */
+	knownUiLanguages: Record<string, LanguageInfo>;
+	/** IETF BCP-47 language tag of the current primary UI language. `undefined` => 'en' */
+	primaryLanguage: string;
+	/**
+	 * Ordered list of fallback language tags to use if the localization key can't be found in the
+	 * current primary UI language. This list never contains English ('en') because it is the ultimate
+	 * fallback.
+	 */
+	fallbackLanguages: string[] | undefined;
+	/**
+	 * Handler for when either the primary or the fallback languages change (or both). For this
+	 * handler, the primary UI language is the first one in the array, followed by the fallback
+	 * languages in order of decreasing preference.
+	 */
+	onLanguagesChange?: (newUiLanguages: string[]) => void;
+	/** Handler for the primary language changes. */
+	onPrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
+	/**
+	 * Handler for when the fallback languages change. The array contains the fallback languages in
+	 * order of decreasing preference.
+	 */
+	onFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
+	/**
+	 * Map whose keys are localized string keys as contained in UI_LANGUAGE_SELECTOR_STRING_KEYS and
+	 * whose values are the localized strings (in the current UI language).
+	 */
+	localizedStrings: UiLanguageSelectorLocalizedStrings;
+	/** Additional css classes to help with unique styling of the control */
+	className?: string;
+	/** Interface direction */
+	direction?: "ltr" | "rtl";
+};
+export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, direction, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
