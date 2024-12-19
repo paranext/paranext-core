@@ -32,7 +32,6 @@ import {
   Status,
 } from './inventory-utils';
 import { inventoryAdditionalItemColumn } from './inventory-columns';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -390,15 +389,12 @@ export default function Inventory({
     return occurrence[0].occurrences;
   }, [selectedItem, showAdditionalItems, reducedTableData]);
 
-  const dir: Direction = readDirection();
-
   return (
     <div className="pr-twp tw-flex tw-h-full tw-flex-col">
       <div className="tw-flex tw-items-stretch">
         <Select
           onValueChange={(value) => handleStatusFilterChange(value)}
           defaultValue={statusFilter}
-          dir={dir}
         >
           <SelectTrigger className="tw-m-1">
             <SelectValue placeholder="Select filter" />
@@ -410,7 +406,7 @@ export default function Inventory({
             <SelectItem value="unknown">{unknownItemsText}</SelectItem>
           </SelectContent>
         </Select>
-        <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope} dir={dir}>
+        <Select onValueChange={(value) => handleScopeChange(value)} defaultValue={scope}>
           <SelectTrigger className="tw-m-1">
             <SelectValue placeholder="Select scope" />
           </SelectTrigger>

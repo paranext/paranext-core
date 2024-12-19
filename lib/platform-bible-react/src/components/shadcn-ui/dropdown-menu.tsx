@@ -138,18 +138,22 @@ DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 export const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   DropdownMenuItemProps
->(({ className, inset, ...props }, ref) => (
-  <DropdownMenuPrimitive.Item
-    ref={ref}
-    className={cn(
-      // removed: tw-relative focus:tw-text-accent-foreground
-      'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-      inset && 'tw-pl-8',
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, inset, ...props }, ref) => {
+  const dir: Direction = readDirection();
+  return (
+    <DropdownMenuPrimitive.Item
+      ref={ref}
+      className={cn(
+        // removed: tw-relative focus:tw-text-accent-foreground
+        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
+        inset && 'tw-pl-8',
+        className,
+      )}
+      {...props}
+      dir={dir}
+    />
+  );
+});
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 
 export const DropdownMenuCheckboxItem = React.forwardRef<

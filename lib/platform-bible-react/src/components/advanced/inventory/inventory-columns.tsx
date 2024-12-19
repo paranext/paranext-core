@@ -1,7 +1,6 @@
 import { ColumnDef, SortDirection } from '@/components/advanced/data-table/data-table.component';
 import { Button } from '@/components/shadcn-ui/button';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
 import {
   ArrowDownIcon,
   ArrowUpDownIcon,
@@ -174,9 +173,8 @@ export const inventoryStatusColumn = (
     cell: ({ row }) => {
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
-      const dir: Direction = readDirection();
       return (
-        <ToggleGroup value={status} variant="outline" type="single" dir={dir}>
+        <ToggleGroup value={status} variant="outline" type="single">
           <ToggleGroupItem
             onClick={() =>
               statusChangeHandler(

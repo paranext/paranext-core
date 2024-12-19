@@ -1,8 +1,7 @@
-import { Canon } from '@sillsdev/scripture';
-import { PropsWithChildren, KeyboardEvent, forwardRef } from 'react';
 import { DropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
+import { Canon } from '@sillsdev/scripture';
+import { KeyboardEvent, PropsWithChildren, forwardRef } from 'react';
 
 export type BookType = 'OT' | 'NT' | 'DC';
 
@@ -41,7 +40,6 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
     }: BookMenuItemProps,
     ref,
   ) => {
-    const dir: Direction = readDirection();
     return (
       <DropdownMenuItem
         ref={ref}
@@ -64,7 +62,6 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
         }}
         onFocus={handleHighlightBook}
         onMouseMove={handleHighlightBook}
-        dir={dir}
       >
         <span
           className={cn(
