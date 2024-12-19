@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
   [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',
@@ -114,6 +115,9 @@ export default function ScrollGroupSelector({
       ),
     ),
   };
+
+  const dir: Direction = readDirection();
+
   return (
     <Select
       value={`${scrollGroupId}`}
@@ -132,6 +136,7 @@ export default function ScrollGroupSelector({
         />
       </SelectTrigger>
       <SelectContent
+        align={dir === 'rtl' ? 'end' : 'start'}
         // Need to get over the floating web view z-index 200
         style={{ zIndex: 250 }}
       >

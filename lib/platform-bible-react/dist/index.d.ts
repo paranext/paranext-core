@@ -457,10 +457,8 @@ export type TabNavigationContentSearchProps = {
 	headerTitle?: string;
 	/** Optional flag to make the search bar appear full width */
 	isSearchBarFullWidth?: boolean;
-	/** Text direction ltr or rtl */
-	direction?: "ltr" | "rtl";
 };
-declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -568,8 +566,6 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 	showSourceColumn?: boolean;
 	/** Callback function to notify when a row is selected */
 	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
-	/** Text direction ltr or rtl */
-	direction?: "ltr" | "rtl";
 };
 /**
  * Component to display a combined list of detailed items from one or more sources, where the items
@@ -580,7 +576,7 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, direction, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a {@link ScrollGroupId} or `undefined` for
@@ -756,19 +752,16 @@ export type ComboBoxProps<T> = {
 	buttonVariant?: ButtonProps["variant"];
 	/** Control how the popover menu should be aligned. Defaults to start */
 	alignDropDown?: "start" | "center" | "end";
-	/** Text direction ltr or rtl */
-	dir?: Direction;
 	/** Optional boolean to set if trigger should be disabled */
 	isDisabled?: boolean;
 } & PopoverProps;
-export type Direction = "ltr" | "rtl";
 /**
  * Autocomplete input and command palette with a list of suggestions.
  *
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -1108,10 +1101,6 @@ export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit
 	className?: string | undefined;
 	sideOffset?: number | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-/**
- * TODO: fix: direction is not automatically handled by this component, so that shortcuts are
- * display always to the right
- */
 export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	inset?: boolean | undefined;
@@ -1485,10 +1474,8 @@ export type UiLanguageSelectorProps = {
 	localizedStrings: UiLanguageSelectorLocalizedStrings;
 	/** Additional css classes to help with unique styling of the control */
 	className?: string;
-	/** Interface direction */
-	direction?: "ltr" | "rtl";
 };
-export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, direction, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

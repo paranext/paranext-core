@@ -139,7 +139,7 @@ function MultiSelectComboBox({
                     </div>
                     <div className="tw-flex-grow">{option.label}</div>
                     {getEntriesCount && (
-                      <div className="tw-w-10 tw-text-right tw-text-muted-foreground">{count}</div>
+                      <div className="tw-w-10 tw-text-end tw-text-muted-foreground">{count}</div>
                     )}
                   </CommandItem>
                 );

@@ -2,6 +2,7 @@ import React from 'react';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 
 import { cn } from '@/utils/shadcn-ui.util';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 export const Tabs = TabsPrimitive.Root;
 
@@ -20,16 +21,20 @@ export type TabsContentProps = React.ComponentPropsWithoutRef<typeof TabsPrimiti
 export const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   TabsListProps
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.List
-    ref={ref}
-    className={cn(
-      'tw-inline-flex tw-h-10 tw-items-center tw-justify-center tw-rounded-md tw-bg-muted tw-p-1 tw-text-muted-foreground',
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const dir: Direction = readDirection();
+  return (
+    <TabsPrimitive.List
+      ref={ref}
+      className={cn(
+        'tw-inline-flex tw-h-10 tw-items-center tw-justify-center tw-rounded-md tw-bg-muted tw-p-1 tw-text-muted-foreground',
+        className,
+      )}
+      {...props}
+      dir={dir}
+    />
+  );
+});
 TabsList.displayName = TabsPrimitive.List.displayName;
 
 export const TabsTrigger = React.forwardRef<

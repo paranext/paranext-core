@@ -17,7 +17,7 @@ function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
       <p className="tw-mb-2 tw-text-muted-foreground">
         A place to look up and learn about some concepts
       </p>
-      <VerticalTabs dir={direction} defaultValue="Howto">
+      <VerticalTabs defaultValue="Howto">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Howto">How to use</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Direction">Direction</VerticalTabsTrigger>

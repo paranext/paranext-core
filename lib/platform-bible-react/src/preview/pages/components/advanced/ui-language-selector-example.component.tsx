@@ -1,7 +1,6 @@
 import UiLanguageSelector, {
   LanguageInfo,
 } from '@/components/advanced/ui-language-selector.component';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { useEffect, useState } from 'react';
 
@@ -26,7 +25,7 @@ const languagesWithInvalidOption: Record<string, LanguageInfo> = {
 
 /* This is intentionally a little overcomplicated in order to easily illustrate the problem
  described in issue #1377 */
-function UiLanguageSelectorExample({ direction }: HasDirection) {
+function UiLanguageSelectorExample() {
   const [primary, setPrimary] = useState('fr');
   const [invalidSelection, setInvalidSelection] = useState(false);
   const [fallback, setFallback] = useState<string[] | undefined>(undefined);
@@ -133,7 +132,6 @@ function UiLanguageSelectorExample({ direction }: HasDirection) {
                                     onPrimaryLanguageChange={validateAndSetPrimary}
                                     onFallbackLanguagesChange={validateAndSetFallbacks}
                                     localizedStrings={localizedStrings}
-                                    direction={direction}
                                   />
                                 </div>
                               </div>
@@ -172,7 +170,6 @@ function UiLanguageSelectorExample({ direction }: HasDirection) {
         onPrimaryLanguageChange={validateAndSetPrimary}
         onFallbackLanguagesChange={validateAndSetFallbacks}
         localizedStrings={localizedStrings}
-        direction={direction}
       />
       <Label>Independent UI Language for some other purpose:</Label>
 
@@ -186,7 +183,6 @@ function UiLanguageSelectorExample({ direction }: HasDirection) {
           setIndependent(newUiLanguages);
         }}
         localizedStrings={localizedStrings}
-        direction={independent[0] === 'ar' ? 'rtl' : direction}
       />
     </div>
   );

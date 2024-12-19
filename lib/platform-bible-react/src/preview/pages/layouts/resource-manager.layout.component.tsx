@@ -240,7 +240,7 @@ export default function GetResourcesExample() {
           <SearchBar
             onSearch={setSearchQuery}
             placeholder="Search by name, language, type..."
-            className={cn('tw-pl-8 tw-pr-8', searchQuery && 'tw-border-primary')}
+            className={cn('tw-px-8', searchQuery && 'tw-border-primary')}
           />
 
           <MultiSelectComboBox
