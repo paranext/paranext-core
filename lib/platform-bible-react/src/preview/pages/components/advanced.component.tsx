@@ -93,7 +93,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} direction={direction} />
           <div>{JSON.stringify(scrRef)}</div>
         </VerticalTabsContent>
 
