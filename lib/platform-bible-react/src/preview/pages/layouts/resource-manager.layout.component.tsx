@@ -20,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
-import { cn } from '@/utils/shadcn-ui.util';
 import { DialogTitle } from '@radix-ui/react-dialog';
 import MultiSelectComboBox from '@/components/advanced/multi-select-combo-box';
 
@@ -237,11 +236,7 @@ export default function GetResourcesExample() {
 
       <div className="tw-space-y-4">
         <div className="tw-grid tw-grid-cols-1 tw-gap-4 md:tw-grid-cols-3">
-          <SearchBar
-            onSearch={setSearchQuery}
-            placeholder="Search by name, language, type..."
-            className={cn('tw-px-8', searchQuery && 'tw-border-primary')}
-          />
+          <SearchBar onSearch={setSearchQuery} placeholder="Search by name, language, type..." />
 
           <MultiSelectComboBox
             entries={types}
