@@ -4,6 +4,7 @@ import { type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/utils/shadcn-ui.util';
 import { toggleVariants } from '@/components/shadcn-ui/toggle';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariants>>({
   size: 'default',
@@ -14,21 +15,25 @@ const ToggleGroup = React.forwardRef<
   React.ElementRef<typeof ToggleGroupPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Root> &
     VariantProps<typeof toggleVariants>
->(({ className, variant, size, children, ...props }, ref) => (
-  <ToggleGroupPrimitive.Root
-    ref={ref}
-    className={cn('pr-twp tw-flex tw-items-center tw-justify-center tw-gap-1', className)}
-    {...props}
-  >
-    <ToggleGroupContext.Provider
-      // Suppress warning produced by imported shadcn code
-      // eslint-disable-next-line react/jsx-no-constructed-context-values
-      value={{ variant, size }}
+>(({ className, variant, size, children, ...props }, ref) => {
+  const dir: Direction = readDirection();
+  return (
+    <ToggleGroupPrimitive.Root
+      ref={ref}
+      className={cn('pr-twp tw-flex tw-items-center tw-justify-center tw-gap-1', className)}
+      {...props}
+      dir={dir}
     >
-      {children}
-    </ToggleGroupContext.Provider>
-  </ToggleGroupPrimitive.Root>
-));
+      <ToggleGroupContext.Provider
+        // Suppress warning produced by imported shadcn code
+        // eslint-disable-next-line react/jsx-no-constructed-context-values
+        value={{ variant, size }}
+      >
+        {children}
+      </ToggleGroupContext.Provider>
+    </ToggleGroupPrimitive.Root>
+  );
+});
 
 ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName;
 

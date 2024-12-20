@@ -1,7 +1,7 @@
 import React from 'react';
 import { Slot } from '@radix-ui/react-slot';
 import { VariantProps, cva } from 'class-variance-authority';
-import { PanelLeft } from 'lucide-react';
+import { PanelLeft, PanelRight } from 'lucide-react';
 
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
@@ -14,22 +14,27 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui.util';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 /**
- * Changes from the original code from Shadcn- Removed uses of useIsMobile, Sheet, and SheetContent.
- * Also removed the parts setting COOKIES.
+ * CUSTOM: Changes from the original code from Shadcn- Removed uses of useIsMobile, Sheet, and
+ * SheetContent. Also removed the parts setting COOKIES.
  */
 
 const SIDEBAR_WIDTH = '16rem';
 const SIDEBAR_WIDTH_ICON = '3rem';
-// Commented this out pending a discussion with UX about keyboard shortcuts
+// CUSTOM: Commented this out pending a discussion with UX about keyboard shortcuts
 // const SIDEBAR_KEYBOARD_SHORTCUT = 'b';
+
+type Side = 'primary' | 'secondary';
 
 type SidebarContextProps = {
   state: 'expanded' | 'collapsed';
   open: boolean;
   setOpen: (open: boolean) => void;
   toggleSidebar: () => void;
+  // CUSTOM: this was moved from Sidebar to SidebarProvider to also be able to flip the icon based on the side
+  side: Side;
 };
 
 const SidebarContext = React.createContext<SidebarContextProps | undefined>(undefined);
@@ -49,6 +54,7 @@ const SidebarProvider = React.forwardRef<
     defaultOpen?: boolean;
     open?: boolean;
     onOpenChange?: (open: boolean) => void;
+    side?: Side;
   }
 >(
   (
@@ -59,6 +65,7 @@ const SidebarProvider = React.forwardRef<
       className,
       style,
       children,
+      side = 'primary',
       ...props
     },
     ref,
@@ -84,7 +91,7 @@ const SidebarProvider = React.forwardRef<
       return setOpen((open) => !open);
     }, [setOpen]);
 
-    // Commented this out pending a discussion with UX about keyboard shortcuts
+    // CUSTOM: Commented this out pending a discussion with UX about keyboard shortcuts
     // Adds a keyboard shortcut to toggle the sidebar.
     // React.useEffect(() => {
     //   const handleKeyDown = (event: KeyboardEvent) => {
@@ -102,14 +109,19 @@ const SidebarProvider = React.forwardRef<
     // This makes it easier to style the sidebar with Tailwind classes.
     const state = isOpen ? 'expanded' : 'collapsed';
 
+    const dir: Direction = readDirection();
+    const oppositeSide: Side = side === 'primary' ? 'secondary' : 'primary';
+    const directionAwareSide = dir === 'ltr' ? side : oppositeSide;
+
     const contextValue = React.useMemo<SidebarContextProps>(
       () => ({
         state,
         open: isOpen,
         setOpen,
         toggleSidebar,
+        side: directionAwareSide,
       }),
-      [state, isOpen, setOpen, toggleSidebar],
+      [state, isOpen, setOpen, toggleSidebar, directionAwareSide],
     );
 
     return (
@@ -144,92 +156,79 @@ SidebarProvider.displayName = 'SidebarProvider';
 const Sidebar = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<'div'> & {
-    side?: 'left' | 'right';
     variant?: 'sidebar' | 'floating' | 'inset';
     collapsible?: 'offcanvas' | 'icon' | 'none';
   }
->(
-  (
-    {
-      side = 'left',
-      variant = 'sidebar',
-      collapsible = 'offcanvas',
-      className,
-      children,
-      ...props
-    },
-    ref,
-  ) => {
-    const { state } = useSidebar();
+>(({ variant = 'sidebar', collapsible = 'offcanvas', className, children, ...props }, ref) => {
+  const context = useSidebar();
 
-    if (collapsible === 'none') {
-      return (
+  if (collapsible === 'none') {
+    return (
+      <div
+        className={cn(
+          'tw-flex tw-h-full tw-w-[--sidebar-width] tw-flex-col tw-bg-sidebar tw-text-sidebar-foreground',
+          className,
+        )}
+        ref={ref}
+        {...props}
+      >
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={ref}
+      className="tw-group tw-peer tw-hidden tw-text-sidebar-foreground md:tw-block"
+      data-state={context.state}
+      data-collapsible={context.state === 'collapsed' ? collapsible : ''}
+      data-variant={variant}
+      data-side={context.side}
+    >
+      {/* This is what handles the sidebar gap on desktop */}
+      <div
+        className={cn(
+          'tw-relative tw-h-svh tw-w-[--sidebar-width] tw-bg-transparent tw-transition-[width] tw-duration-200 tw-ease-linear',
+          'group-data-[collapsible=offcanvas]:tw-w-0',
+          'group-data-[side=secondary]:tw-rotate-180',
+          variant === 'floating' || variant === 'inset'
+            ? 'group-data-[collapsible=icon]:tw-w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]'
+            : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon]',
+        )}
+      />
+      <div
+        className={cn(
+          // CUSTOM: Switched tw-fixed to tw-absolute here to scope the sidebar inside of it's container
+          'tw-absolute tw-inset-y-0 tw-z-10 tw-hidden tw-h-svh tw-w-[--sidebar-width] tw-transition-[left,right,width] tw-duration-200 tw-ease-linear md:tw-flex',
+          context.side === 'primary'
+            ? 'tw-left-0 group-data-[collapsible=offcanvas]:tw-left-[calc(var(--sidebar-width)*-1)]'
+            : 'tw-right-0 group-data-[collapsible=offcanvas]:tw-right-[calc(var(--sidebar-width)*-1)]',
+          // Adjust the padding for floating and inset variants.
+          variant === 'floating' || variant === 'inset'
+            ? 'tw-p-2 group-data-[collapsible=icon]:tw-w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]'
+            : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon] group-data-[side=primary]:tw-border-r group-data-[side=secondary]:tw-border-l',
+          className,
+        )}
+        {...props}
+      >
         <div
-          className={cn(
-            'tw-flex tw-h-full tw-w-[--sidebar-width] tw-flex-col tw-bg-sidebar tw-text-sidebar-foreground',
-            className,
-          )}
-          ref={ref}
-          {...props}
+          data-sidebar="sidebar"
+          className="tw-flex tw-h-full tw-w-full tw-flex-col tw-bg-sidebar group-data-[variant=floating]:tw-rounded-lg group-data-[variant=floating]:tw-border group-data-[variant=floating]:tw-border-sidebar-border group-data-[variant=floating]:tw-shadow"
         >
           {children}
         </div>
-      );
-    }
-
-    return (
-      <div
-        ref={ref}
-        className="tw-group tw-peer tw-hidden tw-text-sidebar-foreground md:tw-block"
-        data-state={state}
-        data-collapsible={state === 'collapsed' ? collapsible : ''}
-        data-variant={variant}
-        data-side={side}
-      >
-        {/* This is what handles the sidebar gap on desktop */}
-        <div
-          className={cn(
-            'tw-relative tw-h-svh tw-w-[--sidebar-width] tw-bg-transparent tw-transition-[width] tw-duration-200 tw-ease-linear',
-            'group-data-[collapsible=offcanvas]:tw-w-0',
-            'group-data-[side=right]:tw-rotate-180',
-            variant === 'floating' || variant === 'inset'
-              ? 'group-data-[collapsible=icon]:tw-w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4))]'
-              : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon]',
-          )}
-        />
-        <div
-          className={cn(
-            // Switched tw-fixed to tw-absolute here to scope the sidebar inside of it's container
-            'tw-absolute tw-inset-y-0 tw-z-10 tw-hidden tw-h-svh tw-w-[--sidebar-width] tw-transition-[left,right,width] tw-duration-200 tw-ease-linear md:tw-flex',
-            side === 'left'
-              ? 'tw-left-0 group-data-[collapsible=offcanvas]:tw-left-[calc(var(--sidebar-width)*-1)]'
-              : 'tw-right-0 group-data-[collapsible=offcanvas]:tw-right-[calc(var(--sidebar-width)*-1)]',
-            // Adjust the padding for floating and inset variants.
-            variant === 'floating' || variant === 'inset'
-              ? 'tw-p-2 group-data-[collapsible=icon]:tw-w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]'
-              : 'group-data-[collapsible=icon]:tw-w-[--sidebar-width-icon] group-data-[side=left]:tw-border-r group-data-[side=right]:tw-border-l',
-            className,
-          )}
-          {...props}
-        >
-          <div
-            data-sidebar="sidebar"
-            className="tw-flex tw-h-full tw-w-full tw-flex-col tw-bg-sidebar group-data-[variant=floating]:tw-rounded-lg group-data-[variant=floating]:tw-border group-data-[variant=floating]:tw-border-sidebar-border group-data-[variant=floating]:tw-shadow"
-          >
-            {children}
-          </div>
-        </div>
       </div>
-    );
-  },
-);
+    </div>
+  );
+});
 Sidebar.displayName = 'Sidebar';
 
 const SidebarTrigger = React.forwardRef<
   React.ElementRef<typeof Button>,
   React.ComponentProps<typeof Button>
 >(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar();
+  const context = useSidebar();
 
   return (
     <Button
@@ -240,11 +239,11 @@ const SidebarTrigger = React.forwardRef<
       className={cn('tw-h-7 tw-w-7', className)}
       onClick={(event) => {
         onClick?.(event);
-        toggleSidebar();
+        context.toggleSidebar();
       }}
       {...props}
     >
-      <PanelLeft />
+      {context.side === 'primary' ? <PanelLeft /> : <PanelRight />}
       <span className="tw-sr-only">Toggle Sidebar</span>
     </Button>
   );
@@ -265,12 +264,12 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'bu
         onClick={toggleSidebar}
         title="Toggle Sidebar"
         className={cn(
-          'tw-absolute tw-inset-y-0 tw-z-20 tw-hidden tw-w-4 tw--translate-x-1/2 tw-transition-all tw-ease-linear after:tw-absolute after:tw-inset-y-0 after:tw-left-1/2 after:tw-w-[2px] hover:after:tw-bg-sidebar-border group-data-[side=left]:tw--right-4 group-data-[side=right]:tw-left-0 sm:tw-flex',
-          '[[data-side=left]_&]:tw-cursor-w-resize [[data-side=right]_&]:tw-cursor-e-resize',
-          '[[data-side=left][data-state=collapsed]_&]:tw-cursor-e-resize [[data-side=right][data-state=collapsed]_&]:tw-cursor-w-resize',
+          'tw-absolute tw-inset-y-0 tw-z-20 tw-hidden tw-w-4 tw--translate-x-1/2 tw-transition-all tw-ease-linear after:tw-absolute after:tw-inset-y-0 after:tw-left-1/2 after:tw-w-[2px] hover:after:tw-bg-sidebar-border group-data-[side=primary]:tw--right-4 group-data-[side=secondary]:tw-left-0 sm:tw-flex',
+          '[[data-side=secondary]_&]:tw-cursor-e-resize [[data-side=secondary]_&]:tw-cursor-w-resize',
+          '[[data-side=primary][data-state=collapsed]_&]:tw-cursor-e-resize [[data-side=secondary][data-state=collapsed]_&]:tw-cursor-w-resize',
           'group-data-[collapsible=offcanvas]:tw-translate-x-0 group-data-[collapsible=offcanvas]:after:tw-left-full group-data-[collapsible=offcanvas]:hover:tw-bg-sidebar',
-          '[[data-side=left][data-collapsible=offcanvas]_&]:tw--right-2',
-          '[[data-side=right][data-collapsible=offcanvas]_&]:tw--left-2',
+          '[[data-side=primary][data-collapsible=offcanvas]_&]:tw--right-2',
+          '[[data-side=secondary][data-collapsible=offcanvas]_&]:tw--left-2',
           className,
         )}
         {...props}
@@ -286,7 +285,7 @@ const SidebarInset = React.forwardRef<HTMLDivElement, React.ComponentProps<'main
       <main
         ref={ref}
         className={cn(
-          // Removed tw-min-h-svh
+          // CUSTOM: Removed tw-min-h-svh
           'tw-relative tw-flex tw-flex-1 tw-flex-col tw-bg-background',
           'peer-data-[variant=inset]:tw-min-h-[calc(100svh-theme(spacing.4))] md:peer-data-[variant=inset]:tw-m-2 md:peer-data-[state=collapsed]:peer-data-[variant=inset]:tw-ml-2 md:peer-data-[variant=inset]:tw-ml-0 md:peer-data-[variant=inset]:tw-rounded-xl md:peer-data-[variant=inset]:tw-shadow',
           className,
@@ -471,7 +470,7 @@ const SidebarMenuItem = React.forwardRef<HTMLLIElement, React.ComponentProps<'li
 SidebarMenuItem.displayName = 'SidebarMenuItem';
 
 const sidebarMenuButtonVariants = cva(
-  // Removed data-[active=true]:tw-bg-sidebar-accent
+  // CUSTOM: Removed data-[active=true]:tw-bg-sidebar-accent
   'tw-peer/menu-button tw-flex tw-w-full tw-items-center tw-gap-2 tw-overflow-hidden tw-rounded-md tw-p-2 tw-text-left tw-text-sm tw-outline-none tw-ring-sidebar-ring tw-transition-[width,height,padding] hover:tw-bg-sidebar-accent hover:tw-text-sidebar-accent-foreground focus-visible:tw-ring-2 active:tw-bg-sidebar-accent active:tw-text-sidebar-accent-foreground disabled:tw-pointer-events-none disabled:tw-opacity-50 tw-group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:tw-pointer-events-none aria-disabled:tw-opacity-50 data-[active=true]:tw-font-medium data-[active=true]:tw-text-sidebar-accent-foreground data-[state=open]:hover:tw-bg-sidebar-accent data-[state=open]:hover:tw-text-sidebar-accent-foreground group-data-[collapsible=icon]:tw-!size-8 group-data-[collapsible=icon]:tw-!p-2 [&>span:last-child]:tw-truncate [&>svg]:tw-size-4 [&>svg]:tw-shrink-0',
   {
     variants: {

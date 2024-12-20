@@ -8,7 +8,6 @@ import {
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
 import BookSelectorExample from './advanced/book-selector-example.component';
@@ -24,7 +23,7 @@ import SettingsListExamples from './advanced/settings-list.examples.component';
 import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
 import { columns, data } from './data-sources/data-table-content';
 
-function Compositions({ direction }: HasDirection) {
+function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [scrollGroupId, setScrollGroupId] = useState<ScrollGroupId | undefined>(0);
   const [searchValue, setSearchValue] = useState<string>('');
@@ -68,7 +67,7 @@ function Compositions({ direction }: HasDirection) {
       <p className="tw-mb-2 tw-text-muted-foreground">
         A place for components that are composed from basic components
       </p>
-      <VerticalTabs defaultValue="Book Chapter Control" dir={direction}>
+      <VerticalTabs defaultValue="Book Chapter Control">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Book Chapter Control">
             Book Chapter Control
@@ -107,19 +106,6 @@ function Compositions({ direction }: HasDirection) {
           <BookSelectorExample />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="UI Language Selector">
-          <UiLanguageSelectorExample direction={direction} />
-        </VerticalTabsContent>
-
-        <VerticalTabsContent value="Scroll Group Selector">
-          <ScrollGroupSelector
-            availableScrollGroupIds={[undefined, ...Array(5).keys()]}
-            scrollGroupId={scrollGroupId}
-            onChangeScrollGroupId={setScrollGroupId}
-          />
-          <div>Scroll Group Id: {`${scrollGroupId}`}</div>
-        </VerticalTabsContent>
-
         <VerticalTabsContent value="Data Table">
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
         </VerticalTabsContent>
@@ -129,7 +115,7 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
-          <VerticalTabs dir={direction}>
+          <VerticalTabs>
             <VerticalTabsList>
               <VerticalTabsTrigger value="Marketplace Buttons">
                 Marketplace Buttons
@@ -153,10 +139,6 @@ function Compositions({ direction }: HasDirection) {
           <MultiSelectComboBoxExample />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Result List">
-          <ScriptureResultsViewerExample direction={direction} />
-        </VerticalTabsContent>
-
         <VerticalTabsContent value="Inventory">
           <InventoryExample />
         </VerticalTabsContent>
@@ -172,16 +154,32 @@ function Compositions({ direction }: HasDirection) {
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
             isSearchBarFullWidth
-            direction={direction}
           />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Result List">
+          <ScriptureResultsViewerExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Settings List">
           <SettingsListExamples />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Scroll Group Selector">
+          <ScrollGroupSelector
+            availableScrollGroupIds={[undefined, ...Array(5).keys()]}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+          />
+          <div>Scroll Group Id: {`${scrollGroupId}`}</div>
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Markdown Renderer">
           <MarkdownRendererExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="UI Language Selector">
+          <UiLanguageSelectorExample />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

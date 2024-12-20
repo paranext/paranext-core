@@ -50,10 +50,11 @@ import {
 } from '@/components/shadcn-ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { useState } from 'react';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-export default function Dashboard5Examples({ direction }: HasDirection) {
+export default function Dashboard5Examples() {
   const [progress, setProgress] = useState<number[]>([25]);
+  const dir: Direction = readDirection();
   return (
     <div className="tw-flex tw-h-[100%] tw-w-full tw-rounded-md tw-bg-muted/40">
       <aside className="tw-s-0 tw-inset-y-0 tw-z-10 tw-hidden tw-w-14 tw-flex-col tw-rounded-s-md tw-border-e tw-bg-background sm:tw-flex">
@@ -170,21 +171,21 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb> */}
-          <div className="tw-relative tw-ml-auto tw-flex-1 md:tw-grow-0">
-            <Search className="tw-absolute tw-left-2.5 tw-top-2.5 tw-h-4 tw-w-4 tw-text-muted-foreground" />
+          <div className="tw-relative tw-ms-auto tw-flex-1 md:tw-grow-0">
+            <Search className="tw-absolute tw-top-2.5 tw-h-4 tw-w-4 tw-text-muted-foreground ltr:tw-left-2.5 rtl:tw-right-2.5" />
             <Input
               type="search"
               placeholder="Search..."
-              className="tw-w-full tw-rounded-lg tw-bg-background tw-pl-8 focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring md:tw-w-[200px] lg:tw-w-[336px]"
+              className="tw-w-full tw-rounded-lg tw-bg-background tw-ps-8 focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring md:tw-w-[200px] lg:tw-w-[336px]"
             />
           </div>
-          <DropdownMenu dir={direction}>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" className="tw-overflow-hidden tw-rounded-full">
                 <User />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align={dir === 'rtl' ? 'start' : 'end'}>
               <DropdownMenuLabel>My Account</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem>Settings</DropdownMenuItem>
@@ -221,7 +222,6 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                 </CardContent>
                 <CardFooter>
                   <Slider
-                    dir={direction}
                     defaultValue={progress}
                     max={100}
                     step={1}
@@ -242,7 +242,7 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                 <CardFooter>Progress value={10}</CardFooter>
               </Card>
             </div>
-            <Tabs defaultValue="week" dir={direction}>
+            <Tabs defaultValue="week">
               <div className="tw-flex tw-items-center">
                 <TabsList>
                   <TabsTrigger value="week">Week</TabsTrigger>
@@ -250,14 +250,14 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                   <TabsTrigger value="year">Year</TabsTrigger>
                 </TabsList>
                 <div className="tw-ms-auto tw-flex tw-items-center tw-gap-2">
-                  <DropdownMenu dir={direction}>
+                  <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="outline" size="sm" className="tw-h-7 tw-gap-1 tw-text-sm">
                         <ListFilter className="tw-h-3.5 tw-w-3.5" />
                         <span className="tw-sr-only sm:tw-not-sr-only">Filter</span>
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align={dir === 'rtl' ? 'start' : 'end'}>
                       <DropdownMenuLabel>Filter by</DropdownMenuLabel>
                       <DropdownMenuSeparator />
                       <DropdownMenuCheckboxItem checked>Fulfilled</DropdownMenuCheckboxItem>
@@ -271,7 +271,7 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                   </Button>
                 </div>
               </div>
-              <TabsContent value="week">
+              <TabsContent value="week" dir={dir}>
                 <Card x-chunk="dashboard-05-chunk-3">
                   <CardHeader className="tw-px-7">
                     <CardTitle>Orders</CardTitle>
@@ -425,21 +425,21 @@ export default function Dashboard5Examples({ direction }: HasDirection) {
                   </CardTitle>
                   <CardDescription>Date: November 23, 2023</CardDescription>
                 </div>
-                <div className="tw-ml-auto tw-flex tw-items-center tw-gap-1">
+                <div className="tw-ms-auto tw-flex tw-items-center tw-gap-1">
                   <Button size="sm" variant="outline" className="tw-h-8 tw-gap-1">
                     <Truck className="tw-h-3.5 tw-w-3.5" />
                     <span className="lg:tw-sr-only xl:tw-not-sr-only xl:tw-whitespace-nowrap">
                       Track Order
                     </span>
                   </Button>
-                  <DropdownMenu dir={direction}>
+                  <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button size="icon" variant="outline" className="tw-h-8 tw-w-8">
                         <MoreVertical className="tw-h-3.5 tw-w-3.5" />
                         <a className="tw-sr-only">More</a>
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align={dir === 'rtl' ? 'start' : 'end'}>
                       <DropdownMenuItem>Edit</DropdownMenuItem>
                       <DropdownMenuItem>Export</DropdownMenuItem>
                       <DropdownMenuSeparator />
