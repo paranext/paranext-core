@@ -123,7 +123,7 @@ function MultiSelectComboBox({
                   return (
                     <CommandItem
                       key={option.value}
-                      value={option.value}
+                      value={option.label}
                       onSelect={handleSelect}
                       className="tw-flex tw-items-center tw-gap-2"
                     >
