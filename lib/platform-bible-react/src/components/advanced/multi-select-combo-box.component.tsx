@@ -46,7 +46,9 @@ function MultiSelectComboBox({
   const [open, setOpen] = useState(false);
 
   const handleSelect = useCallback(
-    (value: string) => {
+    (label: string) => {
+      const value = entries.find((entry) => entry.label === label)?.value;
+      if (!value) return;
       onChange(
         selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value],
       );
@@ -122,7 +124,7 @@ function MultiSelectComboBox({
                     : undefined;
                   return (
                     <CommandItem
-                      key={option.value}
+                      key={option.label}
                       value={option.label}
                       onSelect={handleSelect}
                       className="tw-flex tw-items-center tw-gap-2"
