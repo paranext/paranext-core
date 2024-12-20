@@ -67,6 +67,10 @@ function InventoryExample() {
         // Matches a sequence of letters surrounded by word boundaries followed by that exact same
         // sequence of letters surrounded by word boundaries
         extractItems={/\b(\p{L}+)\b(?=\s\b\1\b)/gu}
+        additionalItemsLabels={{
+          checkboxText: 'additional header',
+          tableHeaders: ['additional header'],
+        }}
       />
       Approved items:
       <ul>

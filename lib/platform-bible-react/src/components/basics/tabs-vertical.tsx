@@ -3,6 +3,7 @@
 'use client';
 
 import { TabsContentProps, TabsListProps, TabsTriggerProps } from '@/components/shadcn-ui/tabs';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import React from 'react';
@@ -19,14 +20,18 @@ export type LeftTabsTriggerProps = TabsTriggerProps & {
 export const VerticalTabs = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Root>,
   VerticalTabsProps
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.Root
-    orientation="vertical"
-    ref={ref}
-    className={cn('tw-flex tw-gap-1 tw-rounded-md tw-text-muted-foreground', className)}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const dir: Direction = readDirection();
+  return (
+    <TabsPrimitive.Root
+      orientation="vertical"
+      ref={ref}
+      className={cn('tw-flex tw-gap-1 tw-rounded-md tw-text-muted-foreground', className)}
+      {...props}
+      dir={dir}
+    />
+  );
+});
 
 VerticalTabs.displayName = TabsPrimitive.List.displayName;
 

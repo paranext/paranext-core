@@ -1,6 +1,6 @@
-import { useMemo } from 'react';
 import ComboBox from '@/components/basics/combo-box.component';
 import { Label } from '@/components/shadcn-ui/label';
+import { useMemo } from 'react';
 
 export type ChapterRangeSelectorProps = {
   startChapter: number;
@@ -44,7 +44,7 @@ export default function ChapterRangeSelector({
       <ComboBox
         isDisabled={isDisabled}
         onChange={onChangeStartChapter}
-        buttonClassName="tw-ml-2 tw-mr-2 tw-w-20"
+        buttonClassName="tw-me-2 tw-ms-2 tw-w-20"
         key="start chapter"
         options={chapterOptions}
         getOptionLabel={(option) => option.toString()}
@@ -55,7 +55,7 @@ export default function ChapterRangeSelector({
       <ComboBox
         isDisabled={isDisabled}
         onChange={onChangeEndChapter}
-        buttonClassName="tw-ml-2 tw-w-20"
+        buttonClassName="tw-ms-2 tw-w-20"
         key="end chapter"
         options={chapterOptions}
         getOptionLabel={(option) => option.toString()}

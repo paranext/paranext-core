@@ -373,7 +373,7 @@ function FilterableResourceList({
         <CardHeader className="tw-flex-shrink-0">
           <div className="tw-flex">
             <div className="tw-flex tw-items-center tw-pr-4">
-              <BookOpen size={36} className="tw-mr-4" />
+              <BookOpen size={36} className="tw-me-4" />
               <div className="tw-flex tw-flex-col tw-gap-2">
                 <CardTitle>{dialogTitleText}</CardTitle>
                 <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>

@@ -123,7 +123,7 @@ function MultiSelectComboBox({
                   return (
                     <CommandItem
                       key={option.value}
-                      value={option.value}
+                      value={option.label}
                       onSelect={handleSelect}
                       className="tw-flex tw-items-center tw-gap-2"
                     >
@@ -140,9 +140,7 @@ function MultiSelectComboBox({
                       </div>
                       <div className="tw-flex-grow">{option.label}</div>
                       {getEntriesCount && (
-                        <div className="tw-w-10 tw-text-right tw-text-muted-foreground">
-                          {count}
-                        </div>
+                        <div className="tw-w-10 tw-text-end tw-text-muted-foreground">{count}</div>
                       )}
                     </CommandItem>
                   );

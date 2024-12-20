@@ -1,20 +1,23 @@
 import { Button } from '@/components/shadcn-ui/button';
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+
 import { ChevronDown } from 'lucide-react';
 
-export default function DropdownExamples({ direction }: HasDirection) {
+export default function DropdownExamples() {
   return (
-    <DropdownMenu dir={direction}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button>
           Open
@@ -29,7 +32,19 @@ export default function DropdownExamples({ direction }: HasDirection) {
             <span>DropdownMenuItem</span>
             <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
           </DropdownMenuItem>
+          <DropdownMenuCheckboxItem checked>
+            <span>DropdownMenuItem</span>
+            <DropdownMenuShortcut>CTRL+L</DropdownMenuShortcut>
+          </DropdownMenuCheckboxItem>
+          <DropdownMenuItem>
+            <span>This is a very very very very large name</span>
+          </DropdownMenuItem>
         </DropdownMenuGroup>
+        <DropdownMenuRadioGroup value="top">
+          <DropdownMenuRadioItem value="top">Top</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="bottom">Bottom</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="right">Right</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
       </DropdownMenuContent>
     </DropdownMenu>
   );
