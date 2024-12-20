@@ -439,8 +439,9 @@ export interface MultiSelectComboBoxProps {
 	customSelectedText?: string;
 	sortSelected?: boolean;
 	icon?: React$1.ReactNode;
+	className?: string;
 }
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1409,20 +1410,25 @@ export interface FooterProps {
  * @returns The rendered Footer component
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export interface FilterProps extends MultiSelectComboBoxProps {
+	badgesPlaceholder: string;
+}
+export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 export declare const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[];
 export type FilterableResourceListProps = {
 	localizedStrings: LanguageStrings;
-	dblResources: DblResourceData[];
-	isLoadingDblResources: boolean;
-	typeFilter: ResourceType[];
-	setTypeFilter: (stateValue: ResourceType[]) => void;
-	languageFilter: string[];
-	setLanguageFilter: (stateValue: string[]) => void;
+	resources: DblResourceData[];
+	isLoadingResources: boolean;
+	selectedTypes: string[];
+	setSelectedTypes: (stateValue: string[]) => void;
+	selectedLanguages: string[];
+	setSelectedLanguages: (stateValue: string[]) => void;
 	openResource: (projectId: string) => void;
 	installResource: ((uid: string) => Promise<void>) | undefined;
 	uninstallResource: ((uid: string) => Promise<void>) | undefined;
+	className?: string;
 };
-export declare function FilterableResourceList({ localizedStrings, dblResources, isLoadingDblResources, typeFilter, setTypeFilter, languageFilter, setLanguageFilter, openResource, installResource, uninstallResource, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
+export declare function FilterableResourceList({ localizedStrings, resources, isLoadingResources, selectedTypes, setSelectedTypes, selectedLanguages, setSelectedLanguages, openResource, installResource, uninstallResource, className, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];
