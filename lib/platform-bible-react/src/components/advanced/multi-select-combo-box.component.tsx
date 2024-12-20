@@ -53,7 +53,7 @@ function MultiSelectComboBox({
         selected.includes(value) ? selected.filter((item) => item !== value) : [...selected, value],
       );
     },
-    [selected, onChange],
+    [entries, selected, onChange],
   );
 
   const getPlaceholderText = () => {

@@ -2,7 +2,7 @@ import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
 import { Label } from '@/components/shadcn-ui/label';
 import { X } from 'lucide-react';
-import MultiSelectComboBox, { MultiSelectComboBoxProps } from '../multi-select-combo-box.component';
+import MultiSelectComboBox, { MultiSelectComboBoxProps } from './multi-select-combo-box.component';
 
 interface FilterProps extends MultiSelectComboBoxProps {
   badgesPlaceholder: string;
@@ -47,7 +47,7 @@ function Filter({
               >
                 <X className="tw-h-3 tw-w-3" />
               </Button>
-              {entries.find((t) => t.value === type)?.label}
+              {entries.find((entry) => entry.value === type)?.label}
             </Badge>
           ))}
         </div>
