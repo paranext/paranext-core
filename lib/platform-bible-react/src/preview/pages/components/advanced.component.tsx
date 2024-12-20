@@ -143,7 +143,7 @@ function Compositions() {
             tabList={tabList}
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
-            searchClassName='tw-w-9/12 tw-py-2'
+            searchClassName="tw-w-9/12 tw-py-2"
           />
         </VerticalTabsContent>
 

@@ -40,7 +40,7 @@ export default function SearchBar({
   const dir: Direction = readDirection();
 
   return (
-    <div className={cn('tw-relative', {'tw-w-full': isFullWidth}, className)}>
+    <div className={cn('tw-relative', { 'tw-w-full': isFullWidth }, className)}>
       <Search
         className={cn(
           'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50',
