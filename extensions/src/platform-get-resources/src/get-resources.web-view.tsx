@@ -38,7 +38,7 @@ import {
 import { DblResourceData, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
 
-const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
+const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
   '%resources_any%',
   '%resources_dialog_subtitle%',
@@ -155,7 +155,7 @@ const getActionContent = (
 };
 
 globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: WebViewProps) {
-  const [localizedStrings] = useLocalizedStrings(FILTERABLE_RESOURCE_LIST_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings(GET_RESOURCES_STRING_KEYS);
 
   const actionText: string = localizedStrings['%resources_action%'];
   const anyText: string = localizedStrings['%resources_any%'];
@@ -223,7 +223,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       );
       setIsInitialized(true);
     }
-  }, [selectedLanguages.length, setSelectedLanguages, isInitialized, setIsInitialized]);
+  }, [selectedLanguages.length, setSelectedLanguages, isInitialized, setIsInitialized, resources]);
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 
@@ -257,7 +257,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         return true;
       }),
     );
-  }, []);
+  }, [resources]);
 
   const [textFilter, setTextFilter] = useState<string>('');
 
@@ -270,7 +270,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         resource.bestLanguageName.toLowerCase().includes(filter)
       );
     });
-  }, [textFilter]);
+  }, [resources, textFilter]);
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     return [
