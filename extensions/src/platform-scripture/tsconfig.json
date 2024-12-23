@@ -43,7 +43,7 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
+  "include": ["src", "../../../lib/platform-bible-react/src/components/advanced/checks-set-up"],
   "exclude": ["node_modules"],
   "ts-node": {
     // This allows us to use path aliases in ts-node

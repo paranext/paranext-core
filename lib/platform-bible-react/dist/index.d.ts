@@ -645,9 +645,18 @@ export type ChecklistProps = {
 	 * @returns A string representing the label text for the checkbox associated with that item
 	 */
 	createLabel?: (item: string) => string;
+	/**
+	 * Optional function creates a label for a provided checkable item
+	 *
+	 * @param item The item for which a label is to be created, including text and any additional
+	 *   elements (e.g. links)
+	 * @returns A react node representing the label text and any additional elements (e.g. links) for
+	 *   the checkbox associated with that item
+	 */
+	createComplexLabel?: (item: string) => React$1.ReactNode;
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
-export function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+export function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;

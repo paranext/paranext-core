@@ -1,0 +1,38 @@
+.checks-set-up-dropdown-menu-group {
+  display: flex;
+  justify-content: space-around;
+}
+
+.checks-set-up-check-type {
+  color: #09090b;
+  font-style: normal;
+  font-weight: 600;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.checks-set-up-dropdown-button {
+  color: rgb(146, 146, 146);
+  background-color: white;
+  border: #e4e4e7 1px solid;
+}
+
+.checks-set-up-checklist-items {
+  font-weight: 400;
+}
+
+.checks-set-up-check-names {
+  color: black;
+  display: inline-flex;
+}
+
+.checks-set-up-links {
+  color: #2563eb;
+  text-align: right;
+  display: inline-flex;
+}
+
+.checks-set-up-deselect-all {
+  border-top: #e4e4e7 1px solid;
+  text-align: center;
+}

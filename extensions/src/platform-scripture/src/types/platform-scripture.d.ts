@@ -763,6 +763,24 @@ declare module 'platform-scripture' {
     };
 
   // #endregion
+
+  // #region ChecksSetup Types
+  export type ChecksSetUpProps = {
+    /** Optional string representing the id attribute of the Checks dropdown */
+    id?: string;
+    /** List of checks that can be selected and, if needed, configured */
+    availableChecks: CheckRunnerCheckDetails[];
+    /**
+     * Function that is called when a checkbox for a check is selected or deselected
+     *
+     * @param checkLabel Name of the check
+     * @param selected True if selected, false if not selected
+     */
+    handleSelectCheck: (checkLabel: string, selected: boolean) => void;
+    /** List of checks that have been selected */
+    selectedChecks: string[];
+  };
+  // #endregion
 }
 
 declare module 'papi-shared-types' {
