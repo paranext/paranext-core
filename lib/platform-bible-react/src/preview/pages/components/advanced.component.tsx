@@ -1,26 +1,27 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import DataTable from '@/components/advanced/data-table/data-table.component';
+import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
+import TabNavigationContentSearch from '@/components/advanced/tab-navigation-content-search.component';
 import {
   VerticalTabs,
   VerticalTabsContent,
   VerticalTabsList,
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
-import NavigationContentSearch from '@/components/advanced/navigation-content-search.component';
-import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
-import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
-import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
-import { columns, data } from './data-sources/data-table-content';
-import MarketplaceExamples from './advanced/marketplace.example.component';
-import InventoryExample from './advanced/inventory-example.component';
-import SettingsListExamples from './advanced/settings-list.examples.component';
 import BookSelectorExample from './advanced/book-selector-example.component';
+import InventoryExample from './advanced/inventory-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
+import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
+import MarketplaceExamples from './advanced/marketplace.example.component';
+import MultiSelectComboBoxExample from './advanced/multi-select-combo-box-example';
+import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
+import SettingsListExamples from './advanced/settings-list.examples.component';
+import { columns, data } from './data-sources/data-table-content';
+import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
 
-function Compositions({ direction }: HasDirection) {
+function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [scrollGroupId, setScrollGroupId] = useState<ScrollGroupId | undefined>(0);
   const [searchValue, setSearchValue] = useState<string>('');
@@ -64,7 +65,7 @@ function Compositions({ direction }: HasDirection) {
       <p className="tw-mb-2 tw-text-muted-foreground">
         A place for components that are composed from basic components
       </p>
-      <VerticalTabs defaultValue="Book Chapter Control" dir={direction}>
+      <VerticalTabs defaultValue="Book Chapter Control">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Book Chapter Control">
             Book Chapter Control
@@ -73,6 +74,9 @@ function Compositions({ direction }: HasDirection) {
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Multi-select Combo Box">
+            Multi-select Combo Box
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Navigation Content Search">
             Navigation Content Search
           </VerticalTabsTrigger>
@@ -82,6 +86,9 @@ function Compositions({ direction }: HasDirection) {
             Scroll Group Selector
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="UI Language Selector">
+            UI Language Selector
+          </VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Book Chapter Control">
@@ -93,21 +100,12 @@ function Compositions({ direction }: HasDirection) {
           <BookSelectorExample />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Scroll Group Selector">
-          <ScrollGroupSelector
-            availableScrollGroupIds={[undefined, ...Array(5).keys()]}
-            scrollGroupId={scrollGroupId}
-            onChangeScrollGroupId={setScrollGroupId}
-          />
-          <div>Scroll Group Id: {`${scrollGroupId}`}</div>
-        </VerticalTabsContent>
-
         <VerticalTabsContent value="Data Table">
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
-          <VerticalTabs dir={direction}>
+          <VerticalTabs>
             <VerticalTabsList>
               <VerticalTabsTrigger value="Marketplace Buttons">
                 Marketplace Buttons
@@ -127,8 +125,8 @@ function Compositions({ direction }: HasDirection) {
           </VerticalTabs>
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Result List">
-          <ScriptureResultsViewerExample direction={direction} />
+        <VerticalTabsContent value="Multi-select Combo Box">
+          <MultiSelectComboBoxExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Inventory">
@@ -136,22 +134,38 @@ function Compositions({ direction }: HasDirection) {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Navigation Content Search">
-          <NavigationContentSearch
+          <TabNavigationContentSearch
             headerTitle={`Testing the NavigationContentSearch, current search value: ${searchValue}`}
             tabList={tabList}
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
             isSearchBarFullWidth
-            direction={direction}
           />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Result List">
+          <ScriptureResultsViewerExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Settings List">
           <SettingsListExamples />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Scroll Group Selector">
+          <ScrollGroupSelector
+            availableScrollGroupIds={[undefined, ...Array(5).keys()]}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+          />
+          <div>Scroll Group Id: {`${scrollGroupId}`}</div>
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Markdown Renderer">
           <MarkdownRendererExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="UI Language Selector">
+          <UiLanguageSelectorExample />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>

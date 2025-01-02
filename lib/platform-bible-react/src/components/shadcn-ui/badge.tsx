@@ -12,6 +12,7 @@ const badgeVariants = cva(
           'tw-border-transparent tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/80',
         secondary:
           'tw-border-transparent tw-bg-secondary tw-text-secondary-foreground hover:tw-bg-secondary/80',
+        muted: 'tw-border-transparent tw-bg-muted tw-text-muted-foreground hover:tw-bg-muted/80',
         destructive:
           'tw-border-transparent tw-bg-destructive tw-text-destructive-foreground hover:tw-bg-destructive/80',
         outline: 'tw-text-foreground',
@@ -28,7 +29,7 @@ export interface BadgeProps
     VariantProps<typeof badgeVariants> {}
 
 function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />;
+  return <div className={cn('pr-twp', badgeVariants({ variant }), className)} {...props} />;
 }
 
 export { Badge, badgeVariants };

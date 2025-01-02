@@ -1,3 +1,4 @@
+import localizationDataService from '@shared/services/localization.service';
 import { ChangeEvent, useCallback, useMemo, useState } from 'react';
 import {
   ProjectSettingNames,
@@ -5,12 +6,12 @@ import {
   SettingNames,
   SettingTypes,
 } from 'papi-shared-types';
-import { Checkbox, Input, SettingsListItem } from 'platform-bible-react';
-import { debounce, getErrorMessage } from 'platform-bible-utils';
+import { Input, Label, LanguageInfo, Switch, UiLanguageSelector } from 'platform-bible-react';
+import { debounce, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import logger from '@shared/services/logger.service';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -28,10 +29,10 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
  * Combines properties and controls with optional validation functions for both project and user
  * settings
  */
-type SettingProps<TProps, TControls, TValidateProject, TValidateUser> = TProps &
+type SettingProps<TProps, TControls, TValidateProject, TValidateOther> = TProps &
   TControls & {
     validateProjectSetting?: TValidateProject;
-    validateUserSetting?: TValidateUser;
+    validateOtherSetting?: TValidateOther;
   };
 
 /** Values of ProjectSettingTypes */
@@ -53,14 +54,14 @@ type ProjectSettingsControls = {
 };
 
 /** Values of SettingTypes */
-export type UserSettingValues = SettingTypes[keyof SettingTypes];
+export type OtherSettingValues = SettingTypes[keyof SettingTypes];
 
 /** Props for the UserSetting component */
-export type UserSettingProps = BaseSettingProps<SettingNames, UserSettingValues>;
+export type OtherSettingProps = BaseSettingProps<SettingNames, OtherSettingValues>;
 
 /** Values from the useSetting hook to manage the setting */
-type UserSettingsControls = {
-  setting: UserSettingValues;
+type OtherSettingsControls = {
+  setting: OtherSettingValues;
   // Necessary for flexibility in handleChangeSetting, ProjectSettingValues and
   // UserSettingValues are not the same so it couldn't assign
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,14 +84,23 @@ type CombinedSettingProps =
       never
     >
   | SettingProps<
-      Omit<UserSettingProps, 'defaultSetting'>,
-      UserSettingsControls,
+      Omit<OtherSettingProps, 'defaultSetting'>,
+      OtherSettingsControls,
       never,
       // Necessary for flexibility in handleChangeSetting, couldn't use unknown
       // and keep types in ProjectSetting component
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (settingKey: any, newValue: any, currentValue: any) => Promise<boolean>
     >;
+
+const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
+  '%settings_defaultMessage_loadingOneSetting%',
+  '%settings_defaultMessage_noSettingComponent%',
+  '%settings_errorMessages_invalidNumber%',
+  '%settings_errorMessages_invalidJSON%',
+  '%settings_errorMessages_invalidValue%',
+  '%settings_uiLanguageSelector_selectFallbackLanguages%',
+];
 
 /**
  * Renders a setting component based on the type of setting (string, number, boolean, or object) and
@@ -101,31 +111,64 @@ export default function Setting({
   setting,
   setSetting,
   isLoading,
-  validateUserSetting,
+  validateOtherSetting,
   validateProjectSetting,
   label,
-  description,
 }: CombinedSettingProps) {
-  const validateSetting = validateUserSetting || validateProjectSetting;
+  const validateSetting = validateOtherSetting || validateProjectSetting;
 
+  // Although the full set of languages is likely to load more-or-less instantaneously, if there is
+  // a delay, we want to be sure to include at least any language(s) currently selected, so the user
+  // can't get into the weird state of dropping down the list and not seeing the current selection
+  // in the list.
+  const defaultLanguages = useMemo(() => {
+    const languages: Record<string, LanguageInfo> = {
+      en: { autonym: 'English', uiNames: { es: 'inglés' } },
+    };
+
+    if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+      // Add hardcoded languages
+      languages.es = { autonym: 'Español', uiNames: { en: 'Spanish', fr: 'espagnol' } };
+      languages.fr = { autonym: 'Français', uiNames: { en: 'French', es: 'francés' } };
+
+      // Add dynamic languages from setting
+      setting.forEach((lang) => {
+        if (!languages[lang]) {
+          languages[lang] = { autonym: lang }; // Autonym is required, but we don't know it.
+        }
+      });
+    }
+
+    return languages;
+  }, [setting, settingKey]);
+
+  const [languages] = useData(localizationDataService.dataProviderName).AvailableInterfaceLanguages(
+    undefined,
+    defaultLanguages,
+  );
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 
   /**
    * Validate and change a setting
    *
    * @param event `ChangeEvent<HTMLInputElement>` is for `Input`; `boolean | 'indeterminate'` is for
-   *   `Checkbox`
+   *   `Switch`
    */
   const handleChangeSetting = async (
-    event: ChangeEvent<HTMLInputElement> | boolean | 'indeterminate',
+    event: ChangeEvent<HTMLInputElement> | string[] | boolean | 'indeterminate',
   ) => {
     let newValue: unknown;
 
     if (typeof event === 'string')
-      // This event came from a `Checkbox` component. It should not be indeterminate
+      // This event came from a `Switch` component. It should not be indeterminate
       logger.warn(`Setting checkbox attempted to set to 'indeterminate' for some reason`);
     else if (typeof event === 'boolean') {
-      // This event came from a `Checkbox` component
+      // This event came from a `Switch` component
+      newValue = event;
+    } else if (Array.isArray(event)) {
+      // This event came from a `UiLanguageSelector` component
       newValue = event;
     } else {
       // This event came from an `Input` component
@@ -133,7 +176,7 @@ export default function Setting({
       if (typeof setting === 'number') {
         const numericValue = parseInt(value, 10);
         if (Number.isNaN(numericValue)) {
-          setErrorMessage('Invalid number');
+          setErrorMessage(localizedStrings['%settings_errorMessages_invalidNumber%']);
           return;
         }
         newValue = numericValue;
@@ -143,7 +186,7 @@ export default function Setting({
         try {
           newValue = JSON.parse(value);
         } catch {
-          setErrorMessage('Invalid JSON');
+          setErrorMessage(localizedStrings['%settings_errorMessages_invalidJSON%']);
           return;
         }
       } else {
@@ -156,7 +199,7 @@ export default function Setting({
         setErrorMessage(undefined);
         if (setSetting) setSetting(newValue);
       } else {
-        setErrorMessage('Invalid value');
+        setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
       }
     } catch (error) {
       setErrorMessage(getErrorMessage(error));
@@ -166,7 +209,7 @@ export default function Setting({
   const debouncedHandleChange = debounce(handleChangeSetting, 500);
 
   const generateComponent = useCallback(() => {
-    let component = <p>No setting component</p>;
+    let component = <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>;
 
     if (typeof setting === 'string' || typeof setting === 'number')
       component = (
@@ -174,41 +217,53 @@ export default function Setting({
       );
     else if (typeof setting === 'boolean')
       component = (
-        <Checkbox
-          key={settingKey}
-          onCheckedChange={debouncedHandleChange}
-          defaultChecked={setting}
-        />
+        <Switch key={settingKey} onCheckedChange={debouncedHandleChange} defaultChecked={setting} />
       );
     else if (typeof setting === 'object')
-      component = (
-        <Input
-          key={settingKey}
-          onChange={debouncedHandleChange}
-          defaultValue={JSON.stringify(setting, undefined, 2)}
-        />
-      );
+      if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
+        component = (
+          <UiLanguageSelector
+            key={settingKey}
+            className="tw-w-64"
+            knownUiLanguages={languages}
+            primaryLanguage={setting[0]}
+            fallbackLanguages={setting.slice(1)}
+            onLanguagesChange={debouncedHandleChange}
+            localizedStrings={localizedStrings}
+          />
+        );
+      } else {
+        component = (
+          <Input
+            key={settingKey}
+            onChange={debouncedHandleChange}
+            defaultValue={JSON.stringify(setting, undefined, 2)}
+          />
+        );
+      }
 
     return (
-      <div>
+      <div className="tw-w-1/3">
         {component}
-        {errorMessage && <div style={{ color: 'red' }}>{errorMessage}</div>}
+        {errorMessage && <Label className="tw-text-red-600 tw-pt-4">{errorMessage}</Label>}
       </div>
     );
-  }, [setting, settingKey, debouncedHandleChange, errorMessage]);
-
-  const loadingSettingKey = '%settings_defaultMessage_loadingSetting%';
-  const [localizedStrings] = useLocalizedStrings(useMemo(() => [loadingSettingKey], []));
-  const localizedLoadingSetting = localizedStrings[loadingSettingKey];
+  }, [setting, settingKey, debouncedHandleChange, errorMessage, languages, localizedStrings]);
 
   return (
-    <SettingsListItem
-      primary={label}
-      secondary={description}
-      isLoading={isLoading}
-      loadingMessage={localizedLoadingSetting}
-    >
-      {generateComponent()}
-    </SettingsListItem>
+    <div>
+      {isLoading ? (
+        <Label className="tw-text-sm tw-text-muted-foreground">
+          {localizedStrings['%settings_defaultMessage_loadingOneSetting%']}
+        </Label>
+      ) : (
+        <div className="tw-flex tw-items-center tw-justify-center">
+          <Label htmlFor={settingKey} className="tw-w-1/3 tw-text-right tw-pr-4">
+            {label}
+          </Label>
+          {generateComponent()}
+        </div>
+      )}
+    </div>
   );
 }

@@ -153,7 +153,6 @@ const configBase: webpack.Configuration = {
       '@emotion/react': path.resolve(__dirname, '..', '../node_modules/@emotion/react'),
       '@emotion/styled': path.resolve(__dirname, '..', '../node_modules/@emotion/styled'),
       '@mui/material': path.resolve(__dirname, '..', '../node_modules/@mui/material'),
-      'react-data-grid': path.resolve(__dirname, '..', '../node_modules/react-data-grid'),
     },
   },
 };

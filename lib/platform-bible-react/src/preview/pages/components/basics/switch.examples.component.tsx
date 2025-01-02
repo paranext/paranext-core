@@ -1,4 +1,5 @@
 import { Switch } from '@/components/shadcn-ui/switch';
+
 import { useState } from 'react';
 
 export default function SwitchExamples() {

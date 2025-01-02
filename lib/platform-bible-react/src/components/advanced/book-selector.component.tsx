@@ -25,7 +25,7 @@ export const BOOK_SELECTOR_STRING_KEYS = Object.freeze([
 ] as const);
 
 export type BookSelectorLocalizedStrings = {
-  [localizedInventoryKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+  [localizedBookSelectorKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 
 /**
@@ -88,7 +88,7 @@ export default function BookSelector({
         <div className="tw-grid tw-grid-cols-[25%,25%,50%]">
           <div className="tw-flex tw-items-center">
             <RadioGroupItem value={BookSelectionMode.CURRENT_BOOK} />
-            <Label className="tw-ml-1">{currentBookText}</Label>
+            <Label className="tw-ms-1">{currentBookText}</Label>
           </div>
           <Label className="tw-flex tw-items-center">{currentBookName}</Label>
           <div className="tw-flex tw-items-center tw-justify-end">
@@ -105,7 +105,7 @@ export default function BookSelector({
         <div className="tw-grid tw-grid-cols-[25%,50%,25%]">
           <div className="tw-flex tw-items-center">
             <RadioGroupItem value={BookSelectionMode.CHOOSE_BOOKS} />
-            <Label className="tw-ml-1">{chooseBooksText}</Label>
+            <Label className="tw-ms-1">{chooseBooksText}</Label>
           </div>
           <Label className="tw-flex tw-items-center">
             {selectedBookIds.map((bookId: string) => Canon.bookIdToEnglishName(bookId)).join(', ')}

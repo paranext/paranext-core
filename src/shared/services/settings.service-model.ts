@@ -39,6 +39,60 @@ export const settingsServiceObjectToProxy = Object.freeze({
     return networkService.registerRequestHandler(
       serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key),
       validator,
+      {
+        method: {
+          summary: `Validate whether a given value is allowed for setting "${key}"`,
+          params: [
+            {
+              name: 'newValue',
+              required: true,
+              summary: 'The new value to validate',
+              schema: {
+                oneOf: [
+                  { type: 'object' },
+                  { type: 'string' },
+                  { type: 'number' },
+                  { type: 'boolean' },
+                  { type: 'array' },
+                ],
+              },
+            },
+            {
+              name: 'currentValue',
+              required: true,
+              summary: 'The current value of the setting',
+              schema: {
+                oneOf: [
+                  { type: 'object' },
+                  { type: 'string' },
+                  { type: 'number' },
+                  { type: 'boolean' },
+                  { type: 'array' },
+                ],
+              },
+            },
+            {
+              name: 'allChanges',
+              required: true,
+              summary: 'All changes to the settings',
+              schema: {
+                oneOf: [
+                  { type: 'object' },
+                  { type: 'string' },
+                  { type: 'number' },
+                  { type: 'boolean' },
+                  { type: 'array' },
+                ],
+              },
+            },
+          ],
+          result: {
+            name: 'return value',
+            summary: 'Whether the new setting value is valid',
+            schema: { type: 'boolean' },
+          },
+        },
+      },
     );
   },
 });

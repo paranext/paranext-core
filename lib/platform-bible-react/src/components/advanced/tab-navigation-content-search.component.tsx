@@ -13,7 +13,7 @@ export type TabKeyValueContent = {
   content: ReactNode;
 };
 
-export type NavigationContentSearchProps = {
+export type TabNavigationContentSearchProps = {
   /** List of values and keys for each tab this component should provide */
   tabList: TabKeyValueContent[];
 
@@ -28,19 +28,15 @@ export type NavigationContentSearchProps = {
 
   /** Optional flag to make the search bar appear full width */
   isSearchBarFullWidth?: boolean;
-
-  /** Text direction ltr or rtl */
-  direction?: 'ltr' | 'rtl';
 };
 
-export default function NavigationContentSearch({
+export default function TabNavigationContentSearch({
   tabList,
   onSearch,
   searchPlaceholder,
   headerTitle,
   isSearchBarFullWidth = false,
-  direction = 'ltr',
-}: NavigationContentSearchProps) {
+}: TabNavigationContentSearchProps) {
   return (
     <div className="pr-twp">
       <div className="tw-sticky tw-top-0 tw-space-y-2 tw-pb-2">
@@ -51,7 +47,7 @@ export default function NavigationContentSearch({
           placeholder={searchPlaceholder}
         />
       </div>
-      <VerticalTabs dir={direction}>
+      <VerticalTabs>
         <VerticalTabsList>
           {tabList.map((tab) => (
             <VerticalTabsTrigger key={tab.key} value={tab.value}>
