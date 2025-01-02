@@ -6,12 +6,13 @@ import {
 } from '@papi/core';
 import checksSidePanelWebView from './checks-side-panel.web-view?inline';
 import checksSidePanelWebViewStyles from './checks-side-panel.web-view.scss?inline';
+import checkAggregatorService from './checks/check-aggregator.service';
 
 export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
 export interface ChecksSidePanelWebViewOptions extends GetWebViewOptions {
   projectId: string;
-  editorWebViewId: string;
+  editorWebViewId: string | undefined;
 }
 
 export default class ChecksSidePanelWebViewProvider implements IWebViewProvider {
@@ -30,6 +31,8 @@ export default class ChecksSidePanelWebViewProvider implements IWebViewProvider 
       styles: checksSidePanelWebViewStyles,
       state: {
         ...savedWebView.state,
+        subscriptionId: checkAggregatorService.getSubscriptionId(),
+        editorWebViewId: getWebViewOptions.editorWebViewId ?? savedWebView.state?.editorWebViewId,
       },
     };
   }

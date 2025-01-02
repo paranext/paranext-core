@@ -142,6 +142,7 @@ async function showCheckResults(webViewId: string | undefined): Promise<string |
 async function openChecksSidePanel(webViewId: string | undefined): Promise<string | undefined> {
   let projectId: string | undefined;
   let tabIdFromWebViewId: string | undefined;
+  let editorWebViewId: string | undefined;
 
   logger.debug('Opening checks side panel');
 
@@ -149,6 +150,8 @@ async function openChecksSidePanel(webViewId: string | undefined): Promise<strin
     const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
     tabIdFromWebViewId = webViewDefinition?.id;
+    if (webViewDefinition?.webViewType === 'platformScriptureEditor.react')
+      editorWebViewId = webViewId;
   } else {
     logger.debug('No editor web view!');
     return undefined;
@@ -159,7 +162,7 @@ async function openChecksSidePanel(webViewId: string | undefined): Promise<strin
     return undefined;
   }
 
-  const options: ChecksSidePanelWebViewOptions = { projectId, editorWebViewId: webViewId };
+  const options: ChecksSidePanelWebViewOptions = { projectId, editorWebViewId };
   return papi.webViews.openWebView(
     checksSidePanelWebViewType,
     { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },

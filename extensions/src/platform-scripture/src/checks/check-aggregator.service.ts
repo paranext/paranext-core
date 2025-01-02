@@ -439,6 +439,7 @@ const checkAggregatorServiceProviderName = 'platformScripture.checkAggregator';
 
 let initializationPromise: Promise<void> | undefined;
 let dataProvider: IDisposableDataProvider<ICheckAggregatorService>;
+let subscriptionId: CheckSubscriptionId = '';
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
@@ -448,6 +449,7 @@ async function initialize(): Promise<void> {
             checkAggregatorServiceProviderName,
             new CheckAggregatorDataProviderEngine(),
           );
+          subscriptionId = await dataProvider.createSubscription();
           resolve();
         } catch (error) {
           reject(error);
@@ -469,6 +471,7 @@ const serviceObject = createSyncProxyForAsyncObject<ICheckAggregatorService>(asy
 }, checkAggregatorServiceObjectToProxy);
 
 function dispose() {
+  if (subscriptionId) serviceObject.deleteSubscription(subscriptionId);
   return dataProvider.dispose();
 }
 
@@ -477,6 +480,7 @@ const checkAggregatorService = {
   initialize,
   dispose,
   serviceObject,
+  getSubscriptionId: () => subscriptionId,
 };
 
 export default checkAggregatorService;
