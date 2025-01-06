@@ -38,5 +38,12 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new Get Resources WebView or `undefined` if not created
      */
     'platformGetResources.openGetResources': () => Promise<string | undefined>;
+
+    /**
+     * Opens a new Home web view and returns the WebView id
+     *
+     * @returns WebView id for new Home WebView or `undefined` if not created
+     */
+    'platformHome.openHome': () => Promise<string | undefined>;
   }
 }

@@ -9,6 +9,13 @@
         "group": "platform.projectResources",
         "order": 1000,
         "command": "platformGetResources.openGetResources"
+      },
+      {
+        "label": "%mainMenu_openHome%",
+        "localizeNotes": "Application main menu > Project > Open Home...",
+        "group": "platform.projectResources",
+        "order": 1001,
+        "command": "platformHome.openHome"
       }
     ]
   },
