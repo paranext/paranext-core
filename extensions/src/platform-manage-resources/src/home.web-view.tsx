@@ -1,6 +1,6 @@
 import papi from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, Home } from 'lucide-react';
+import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, Ellipsis, Home } from 'lucide-react';
 import {
   Button,
   Card,
@@ -8,6 +8,11 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
   // DropdownMenu,
   // DropdownMenuContent,
   // DropdownMenuItem,
@@ -75,14 +80,22 @@ globalThis.webViewComponent = function GetResourcesDialog() {
   const noProjectsText: string = localizedStrings['%resources_noProjects%'];
   const noProjectsInstructionText: string = localizedStrings['%resources_noProjectsInstruction%'];
   const noSearchResultsText: string = localizedStrings['%resources_noSearchResults%'];
-  // const openText: string = localizedStrings['%resources_open%'];
+  const openText: string = localizedStrings['%resources_open%'];
   // const removeText: string = localizedStrings['%resources_remove%'];
   const searchedForText: string = localizedStrings['%resources_searchedFor%'];
   // const updateText: string = localizedStrings['%resources_update%'];
 
-  // const dblResourcesProvider = useDataProvider('platformManageResources.dblResourcesProvider');
+  // const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   // const installResource = dblResourcesProvider?.installDblResource;
   // const uninstallResource = dblResourcesProvider?.uninstallDblResource;
+
+  const openResource = (projectId: string, isEditable: boolean) =>
+    papi.commands.sendCommand(
+      isEditable
+        ? 'platformScriptureEditor.openScriptureEditor'
+        : 'platformScriptureEditor.openResourceViewer',
+      projectId,
+    );
 
   const [projects] = usePromise(
     useCallback(async () => {
@@ -337,6 +350,7 @@ globalThis.webViewComponent = function GetResourcesDialog() {
                       {buildTableHead('language', languageText)}
                       {buildTableHead('activity', activityText)}
                       {buildTableHead('action', actionText)}
+                      <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -380,6 +394,22 @@ globalThis.webViewComponent = function GetResourcesDialog() {
                               </DropdownMenu>
                             )}
                           </div> */}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost">
+                                <Ellipsis className="tw-w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              <DropdownMenuItem
+                                onClick={() => openResource(project.projectId, project.isEditable)}
+                              >
+                                <span>{openText}</span>
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     ))}
