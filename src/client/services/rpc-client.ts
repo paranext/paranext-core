@@ -153,10 +153,16 @@ export default class RpcClient implements IRpcMethodRegistrar {
     method: InternalRequestHandler,
     methodDocs?: SingleMethodDocumentation,
   ): Promise<boolean> {
-    if (this.jsonRpcServer.hasMethod(methodName)) return false;
+    if (this.jsonRpcServer.hasMethod(methodName)) {
+      logger.warn(`RPC method ${methodName} already registered`);
+      return false;
+    }
     const mutex = this.registrationMutexMap.get(methodName);
     return mutex.runExclusive(async () => {
-      if (this.jsonRpcServer.hasMethod(methodName)) return false;
+      if (this.jsonRpcServer.hasMethod(methodName)) {
+        logger.warn(`RPC method ${methodName} already registered`);
+        return false;
+      }
       const success = await this.jsonRpcClient.request(REGISTER_METHOD, [methodName, methodDocs]);
       if (success)
         this.jsonRpcServer.addMethod(methodName, (params: RequestParams) => method(...params));
