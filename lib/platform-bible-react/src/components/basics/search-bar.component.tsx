@@ -40,7 +40,7 @@ export default function SearchBar({
   const dir: Direction = readDirection();
 
   return (
-    <div className="tw-relative">
+    <div className={cn('tw-relative', { 'tw-w-full': isFullWidth }, className)}>
       <Search
         className={cn(
           'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50',
@@ -49,7 +49,7 @@ export default function SearchBar({
         )}
       />
       <Input
-        className={cn('tw-text-ellipsis tw-pe-9 tw-ps-9', { 'tw-w-full': isFullWidth }, className)}
+        className="tw-w-full tw-text-ellipsis tw-pe-9 tw-ps-9"
         placeholder={placeholder}
         value={searchQuery}
         onChange={(e) => handleInputChange(e.target.value)}
@@ -63,13 +63,11 @@ export default function SearchBar({
             { 'tw-left-0': dir === 'rtl' },
             { 'tw-right-0': dir === 'ltr' },
           )}
+          onClick={() => {
+            handleInputChange('');
+          }}
         >
-          <X
-            className="tw-h-4 tw-w-4"
-            onClick={() => {
-              handleInputChange('');
-            }}
-          />
+          <X className="tw-h-4 tw-w-4" />
           <span className="tw-sr-only">Clear</span>
         </Button>
       )}
