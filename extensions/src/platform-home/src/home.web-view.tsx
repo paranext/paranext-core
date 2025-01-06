@@ -96,6 +96,8 @@ globalThis.webViewComponent = function GetResourcesDialog() {
             projectId: data.id,
             isEditable: await pdp.getSetting('platform.isEditable'),
             fullName: await pdp.getSetting('platform.fullName'),
+            name: await pdp.getSetting('platform.name'),
+            language: await pdp.getSetting('platform.language'),
           };
         }),
       );
@@ -169,15 +171,34 @@ globalThis.webViewComponent = function GetResourcesDialog() {
 
   const sortedProjects = useMemo(() => {
     return [...textFilteredProjects].sort((a, b) => {
-      if (a.fullName < b.fullName) {
-        return sortConfig.direction === 'ascending' ? -1 : 1;
+      switch (sortConfig.key) {
+        case 'fullName':
+          if (a.fullName < b.fullName) {
+            return sortConfig.direction === 'ascending' ? -1 : 1;
+          }
+          if (a.fullName > b.fullName) {
+            return sortConfig.direction === 'ascending' ? 1 : -1;
+          }
+          return 0;
+        case 'language':
+          if (a.language < b.language) {
+            return sortConfig.direction === 'ascending' ? -1 : 1;
+          }
+          if (a.language > b.language) {
+            return sortConfig.direction === 'ascending' ? 1 : -1;
+          }
+          return 0;
+        case 'activity':
+          // To be implemented
+          return 0;
+        case 'action':
+          // To be implemented
+          return 0;
+        default:
+          return 0;
       }
-      if (a.fullName > b.fullName) {
-        return sortConfig.direction === 'ascending' ? 1 : -1;
-      }
-      return 0;
     });
-  }, [sortConfig.direction, textFilteredProjects]);
+  }, [sortConfig, textFilteredProjects]);
 
   const buildTableHead = (key: SortConfig['key'], label: string) => (
     <TableHead onClick={() => handleSort(key)}>
@@ -252,7 +273,11 @@ globalThis.webViewComponent = function GetResourcesDialog() {
               />
             </div>
             <div className="tw-self-end">
-              <Button className="tw-bg-muted" variant="ghost">
+              <Button
+                onClick={() => papi.commands.sendCommand('platformGetResources.openGetResources')}
+                className="tw-bg-muted"
+                variant="ghost"
+              >
                 {`+ ${getResourcesText}`}
               </Button>
             </div>
@@ -265,7 +290,10 @@ globalThis.webViewComponent = function GetResourcesDialog() {
               <Label className="tw-text-muted-foreground tw-font-normal">
                 {noProjectsInstructionText}
               </Label>
-              <Button className="tw-mt-4">{`+ ${getResourcesText}`}</Button>
+              <Button
+                onClick={() => papi.commands.sendCommand('platformGetResources.openGetResources')}
+                className="tw-mt-4"
+              >{`+ ${getResourcesText}`}</Button>
             </div>
           ) : (
             <div className="tw-flex-grow tw-h-full">
@@ -284,7 +312,13 @@ globalThis.webViewComponent = function GetResourcesDialog() {
                     >
                       {clearSearchText}
                     </Button>
-                    <Button variant="ghost" className="tw-bg-muted">
+                    <Button
+                      onClick={() =>
+                        papi.commands.sendCommand('platformGetResources.openGetResources')
+                      }
+                      variant="ghost"
+                      className="tw-bg-muted"
+                    >
                       {`+ ${getResourcesText}`}
                     </Button>
                   </div>
@@ -307,9 +341,9 @@ globalThis.webViewComponent = function GetResourcesDialog() {
                         <TableCell>
                           <BookOpen className="tw-pr-0" size={18} />
                         </TableCell>
-                        <TableCell>Shortname (?)</TableCell>
+                        <TableCell>{project.name}</TableCell>
                         <TableCell className="tw-font-medium">{project.fullName}</TableCell>
-                        <TableCell>Language (?)</TableCell>
+                        <TableCell>{project.language}</TableCell>
                         <TableCell>Activity (?)</TableCell>
                         <TableCell>
                           Action (?)
