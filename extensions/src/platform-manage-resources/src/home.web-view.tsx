@@ -80,7 +80,7 @@ globalThis.webViewComponent = function GetResourcesDialog() {
   const searchedForText: string = localizedStrings['%resources_searchedFor%'];
   // const updateText: string = localizedStrings['%resources_update%'];
 
-  // const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
+  // const dblResourcesProvider = useDataProvider('platformManageResources.dblResourcesProvider');
   // const installResource = dblResourcesProvider?.installDblResource;
   // const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
@@ -274,7 +274,9 @@ globalThis.webViewComponent = function GetResourcesDialog() {
             </div>
             <div className="tw-self-end">
               <Button
-                onClick={() => papi.commands.sendCommand('platformGetResources.openGetResources')}
+                onClick={() =>
+                  papi.commands.sendCommand('platformManageResources.openGetResources')
+                }
                 className="tw-bg-muted"
                 variant="ghost"
               >
@@ -291,7 +293,9 @@ globalThis.webViewComponent = function GetResourcesDialog() {
                 {noProjectsInstructionText}
               </Label>
               <Button
-                onClick={() => papi.commands.sendCommand('platformGetResources.openGetResources')}
+                onClick={() =>
+                  papi.commands.sendCommand('platformManageResources.openGetResources')
+                }
                 className="tw-mt-4"
               >{`+ ${getResourcesText}`}</Button>
             </div>
@@ -314,7 +318,7 @@ globalThis.webViewComponent = function GetResourcesDialog() {
                     </Button>
                     <Button
                       onClick={() =>
-                        papi.commands.sendCommand('platformGetResources.openGetResources')
+                        papi.commands.sendCommand('platformManageResources.openGetResources')
                       }
                       variant="ghost"
                       className="tw-bg-muted"

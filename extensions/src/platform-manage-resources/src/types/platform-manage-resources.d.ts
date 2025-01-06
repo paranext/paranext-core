@@ -1,4 +1,4 @@
-declare module 'platform-get-resources' {
+declare module 'platform-manage-resources' {
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import { DataProviderDataType, IDataProvider } from '@papi/core';
   import type { DblResourceData } from 'platform-bible-utils';
@@ -25,7 +25,7 @@ declare module 'platform-get-resources' {
 }
 
 declare module 'papi-shared-types' {
-  import type { IDblResourcesProvider } from 'platform-get-resources';
+  import type { IDblResourcesProvider } from 'platform-manage-resources';
 
   export interface DataProviders {
     'platformGetResources.dblResourcesProvider': IDblResourcesProvider;
@@ -37,13 +37,13 @@ declare module 'papi-shared-types' {
      *
      * @returns WebView id for new Get Resources WebView or `undefined` if not created
      */
-    'platformGetResources.openGetResources': () => Promise<string | undefined>;
+    'platformManageResources.openGetResources': () => Promise<string | undefined>;
 
     /**
      * Opens a new Home web view and returns the WebView id
      *
      * @returns WebView id for new Home WebView or `undefined` if not created
      */
-    'platformHome.openHome': () => Promise<string | undefined>;
+    'platformManageResources.openHome': () => Promise<string | undefined>;
   }
 }

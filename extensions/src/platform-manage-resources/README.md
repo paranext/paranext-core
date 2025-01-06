@@ -1,6 +1,6 @@
-# platform-get-resources
+# platform-manage-resources
 
-Get resources extension for Platform.Bible
+Resource manager extension for Platform.Bible
 
 <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 

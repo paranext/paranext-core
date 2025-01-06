@@ -1,9 +1,9 @@
 {
-  "name": "platform-get-resources",
+  "name": "platform-manage-resources",
   "private": true,
   "version": "0.0.1",
   "main": "src/main.js",
-  "types": "src/types/platform-get-resources.d.ts",
+  "types": "src/types/platform-manage-resources.d.ts",
   "author": "Paranext",
   "license": "MIT",
   "scripts": {
