@@ -2,27 +2,6 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
-      "%resources_action%": "Action",
-      "%resources_dialog_subtitle%": "",
-      "%resources_dialog_title%": "Home",
-      "%resources_filterInput%": "Search by name, language, type",
-      "%resources_fullName%": "Full Name",
-      "%resources_get%": "Get",
-      "%resources_installed%": "Installed",
-      "%resources_language%": "Language",
-      "%resources_languageFilter%": "Filter by language",
-      "%resources_loadingResources%": "Loading Projects and Resource",
-      "%resources_noResults%": "No results found",
-      "%resources_open%": "Open",
-      "%resources_remove%": "Remove",
-      "%resources_size%": "Size",
-      "%resources_type%": "Type",
-      "%resources_type_DBL%": "DBL Resource",
-      "%resources_type_ER%": "Enhanced Resource",
-      "%resources_type_SLR%": "Source Language Text",
-      "%resources_type_XR%": "XML Resource",
-      "%resources_type_unknown%": "Unknown resource type",
-      "%resources_update%": "Update",
       "%mainMenu_openHome%": "Home..."
     }
   }
