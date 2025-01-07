@@ -65,9 +65,9 @@ export default class DocumentCombiner {
   /**
    * Add or update one of the contribution documents for the composition process
    *
-   * Note: the order in which contribution documents are added can be considered to be indeterminate
-   * as it is currently ordered by however `Map.forEach` provides the contributions. The order
-   * matters when merging two arrays into one. Also, when `options.ignoreDuplicateProperties` is
+   * Note: the order in which contribution documents are added can be considered indeterminate as it
+   * depends on the order in which `Map.forEach` iterates over the contributions. However, the order
+   * matters when merging two arrays into one. Also, when `options.ignoreDuplicateProperties` is is
    * `true`, the order also matters when adding the same property to an object that is already
    * provided previously. Please let us know if you have trouble because of indeterminate
    * contribution ordering.
@@ -188,7 +188,7 @@ export default class DocumentCombiner {
    */
   // We just don't need `this` here. This is basically a no-op function that is available to child
   // classes to override
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   protected transformBaseDocumentAfterValidation(baseDocument: JsonDocumentLike): JsonDocumentLike {
     return baseDocument;
   }
@@ -207,7 +207,7 @@ export default class DocumentCombiner {
    */
   // We just don't need `this` here. This is basically a no-op function that is available to child
   // classes to override
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   protected transformContributionAfterValidation(
     // @ts-expect-error this parameter is unused but may be used in child classes
     documentName: string,
@@ -223,7 +223,7 @@ export default class DocumentCombiner {
    */
   // no-op intended to be overridden by child classes. Can't be static
   // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this, @typescript-eslint/no-unused-vars
   protected validateBaseDocument(baseDocument: JsonDocumentLike): void {}
 
   /**
@@ -234,7 +234,7 @@ export default class DocumentCombiner {
    */
   // no-op intended to be overridden by child classes. Can't be static
   // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this, @typescript-eslint/no-unused-vars
   protected validateContribution(documentName: string, document: JsonDocumentLike): void {}
 
   /**
@@ -244,7 +244,7 @@ export default class DocumentCombiner {
    */
   // no-op intended to be overridden by child classes. Can't be static
   // @ts-expect-error ts(6133) parameter doesn't need to be used but still needs the right name
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this, @typescript-eslint/no-unused-vars
   protected validateOutput(output: JsonDocumentLike): void {}
 
   /**
@@ -256,7 +256,7 @@ export default class DocumentCombiner {
    *   means no further contribution documents will be merged.
    */
   // no-op intended to be overridden by child classes. Can't be static
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike {
     return finalOutput;
   }

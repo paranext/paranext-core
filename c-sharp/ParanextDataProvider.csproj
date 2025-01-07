@@ -28,7 +28,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="icu.net" Version="2.10.0" />
+    <PackageReference Include="icu.net" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.1" />
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.1" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
@@ -60,7 +60,7 @@
     by default.
     -->
   <ItemGroup>
-    <Content Include="/opt/local/lib/libicu*.??.dylib" Condition="$([MSBuild]::IsOsPlatform('macOS'))">
+    <Content Include="/opt/local/lib/libicu*.??.dylib" Exclude="/opt/local/lib/libicutest*.dylib;/opt/local/lib/libicutu*.dylib" Condition="$([MSBuild]::IsOsPlatform('macOS'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
@@ -70,6 +70,19 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <Content Include="icon.ico" />
+    <!--
+      Files copied to `AppDomain.CurrentDomain.BaseDirectory` (the location from which DLLs are
+      loaded, usually the same place as the executable...?)
+
+      IP-Country.zip is a file containing information about the country of origin for many ip
+      ranges. As of 18 Nov 2024, this file is copied from a Paratext 9.4 installation. See
+      `Paratext/ResourceCreator/Program.cs` and `Paratext/ParatextData/GeoLocationData.cs` for more
+      information on this file and how to generate it.
+    -->
+    <Content Include="base-directory-assets\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>%(Filename)%(Extension)</TargetPath>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

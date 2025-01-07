@@ -16,7 +16,9 @@ const validate = ajv.compile(localizedStringsDocumentSchema);
 
 function performSchemaValidation(document: JsonDocumentLike, docType: string): void {
   if (!validate(document))
-    throw new Error(`Invalid ${docType} settings document: ${ajv.errorsText(validate.errors)}`);
+    throw new Error(
+      `Invalid ${docType} localized strings document: ${ajv.errorsText(validate.errors)}`,
+    );
 }
 
 /** Modifies the input localized string contribution by canonizing the locales */
@@ -68,7 +70,7 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     locale?: T,
   ): T extends string ? LanguageStrings | undefined : LocalizedStringDataContribution {
     if (!this.latestOutput)
-      // TypeScript seems to dense to understand this is literally exactly the return signature
+      // TypeScript seems too dense to understand this is literally exactly the return signature
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       return (locale ? undefined : {}) as T extends string
         ? LanguageStrings | undefined
@@ -87,14 +89,10 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     ) as T extends string ? LanguageStrings | undefined : LocalizedStringDataContribution;
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
     performSchemaValidation(baseDocument, PLATFORM_NAMESPACE);
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformBaseDocumentAfterValidation(
     baseDocument: JsonDocumentLike,
   ): JsonDocumentLike {
@@ -105,14 +103,10 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateContribution(_documentName: string, document: JsonDocumentLike): void {
     performSchemaValidation(document, PLATFORM_NAMESPACE);
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformContributionAfterValidation(
     _documentName: string,
     document: JsonDocumentLike,
@@ -124,8 +118,6 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateOutput(output: JsonDocumentLike): void {
     performSchemaValidation(output, 'output');
   }

@@ -27,10 +27,36 @@ jobs:
         if: ${{ matrix.os == 'macos-latest' }}
         uses: melusina-org/setup-macports@v1
 
+      - name: Install loader tools on macOS
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          sudo port -v install ld64
+
       - name: Install icu4c on macOS
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          sudo port -v install icu
+          sudo port -v install icu @76.1_0 +universal
+
+      - name: Fixup loader paths for icu4c
+        if: ${{ matrix.os == 'macos-latest' }}
+        # LIB_DEPENDENCIES are of the form "<ICU lib short name> <dependency as ICU lib short name>"
+        # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
+        # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
+        run: |
+          ICU_VERSION=76
+          LIB_DEPENDENCIES="
+          i18n data
+          i18n uc
+          io data
+          io i18n
+          io uc
+          uc data
+          "
+          LIB_DEPENDENCIES=$(echo "$LIB_DEPENDENCIES" | sed '/^$/d')
+          while IFS= read -r line; do
+            set -- $line
+            sudo install_name_tool -change "/opt/local/lib/libicu$2.$ICU_VERSION.dylib" "@loader_path/libicu$2.$ICU_VERSION.dylib" "/opt/local/lib/libicu$1.$ICU_VERSION.dylib"
+          done <<< "$LIB_DEPENDENCIES"
 
       - name: Checkout git repo
         uses: actions/checkout@v4

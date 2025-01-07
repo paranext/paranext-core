@@ -13,10 +13,7 @@ import {
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
-import {
-  coreSettingsValidators,
-  platformSettings,
-} from '@extension-host/data/core-settings-info.data';
+import { coreSettingsValidators } from '@extension-host/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   Unsubscriber,
@@ -31,21 +28,13 @@ import {
 import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
 import { serializeRequestType } from '@shared/utils/util';
-import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
 import { LocalizedSettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
-import { dataProviders } from './papi-backend.service';
+import {
+  settingsDocumentCombiner,
+  waitForResyncContributions,
+} from '@extension-host/services/contribution.service';
 
 const SETTINGS_FILE_URI = joinUriPaths('data://', 'settings.json');
-
-/**
- * Object that keeps track of all settings contributions in the platform. To listen to updates to
- * the settings contributions, subscribe to its `onDidRebuild` event (consider debouncing as each
- * contribution will trigger a rebuild).
- *
- * Keeping this object separate from the data provider and disabling the `set` calls in the data
- * provider prevents random services from changing system settings contributions unexpectedly.
- */
-export const settingsDocumentCombiner = new SettingsDocumentCombiner(platformSettings);
 
 async function getSettingsDataFromFile() {
   const settingsFileExists = await nodeFS.getStats(SETTINGS_FILE_URI);
@@ -66,6 +55,7 @@ async function writeSettingsDataToFile(settingsData: Partial<AllSettingsData>) {
 async function getDefaultValueForKey<SettingName extends SettingNames>(
   key: SettingName,
 ): Promise<SettingTypes[SettingName]> {
+  await waitForResyncContributions();
   const settingInfo = settingsDocumentCombiner.getSettingsContributionInfo()?.settings[key];
   if (!settingInfo) {
     throw new Error(`No setting exists for key ${key}`);
@@ -138,11 +128,13 @@ class SettingDataProviderEngine
     );
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  @dataProviders.decorators.ignore
+  /* eslint-disable @typescript-eslint/class-methods-use-this */
+  @dataProviderService.decorators.ignore
   async getLocalizedSettingsContributionInfo(): Promise<
+    /* eslint-enable */
     LocalizedSettingsContributionInfo | undefined
   > {
+    await waitForResyncContributions();
     return settingsDocumentCombiner.getLocalizedSettingsContributionInfo();
   }
 
@@ -174,7 +166,7 @@ class SettingDataProviderEngine
     return true;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async validateSetting<SettingName extends SettingNames>(
     key: SettingName,
     newValue: SettingTypes[SettingName],

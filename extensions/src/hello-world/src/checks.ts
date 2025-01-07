@@ -35,7 +35,7 @@ class HelloCheck implements Check {
     return true;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   getCheckDetails(): CheckDetails {
     return checkDetails;
   }
@@ -76,15 +76,18 @@ class HelloCheck implements Check {
       const verseIndex = usfm.lastIndexOf('\\v ', cursor) + 3;
       const inVerse = parseInt(usfm.slice(verseIndex, verseIndex + 4), 10);
       const offset = cursor - verseIndex - inVerse.toString().length - 1;
+      const verseRef = new VerseRef(range.start.book, inChapter.toString(), inVerse.toString());
       const newResult: CheckRunResult = {
+        checkId: 'sheep',
+        checkResultType: 'sheep',
+        isDenied: false,
         projectId: this.targetProjectId ?? '',
         messageFormatString: 'Found the word "sheep"',
-        start: {
-          verseRef: new VerseRef(range.start.book, inChapter.toString(), inVerse.toString()),
-          offset,
-        },
+        selectedText: 'sheep',
+        verseRef,
+        start: { verseRef, offset },
         end: {
-          verseRef: new VerseRef(range.start.book, inChapter.toString(), inVerse.toString()),
+          verseRef,
           offset: offset + 5,
         },
       };

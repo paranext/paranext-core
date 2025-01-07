@@ -1,4 +1,5 @@
 import { Slider } from '@/components/shadcn-ui/slider';
+
 import { useState } from 'react';
 
 export default function SliderExamples() {

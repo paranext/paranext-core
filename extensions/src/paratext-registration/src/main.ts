@@ -5,9 +5,9 @@ import ParatextRegistrationWebViewProvider, {
 } from './paratext-registration.web-view-provider';
 
 async function showParatextRegistration(): Promise<string | undefined> {
-  return papi.webViews.getWebView(
+  return papi.webViews.openWebView(
     paratextRegistrationWebViewType,
-    { type: 'float', position: 'center', floatSize: { width: 540, height: 415 } },
+    { type: 'float', position: 'center', floatSize: { width: 540, height: 448 } },
     { existingId: '?' },
   );
 }
@@ -57,10 +57,11 @@ export async function activate(context: ExecutionActivationContext) {
     'paratextRegistration.showParatextRegistration',
     showParatextRegistration,
   );
-  const showParatextRegistrationWebViewProviderPromise = papi.webViewProviders.register(
-    paratextRegistrationWebViewType,
-    paratextRegistrationWebViewProvider,
-  );
+  const showParatextRegistrationWebViewProviderPromise =
+    papi.webViewProviders.registerWebViewProvider(
+      paratextRegistrationWebViewType,
+      paratextRegistrationWebViewProvider,
+    );
 
   // No need to wait for this; it will do its thing and handle its own errors
   showParatextRegistrationIfNoRegistrationData();

@@ -1,8 +1,5 @@
 import * as networkService from '@shared/services/network.service';
-import {
-  coreProjectSettingsValidators,
-  platformProjectSettings,
-} from '@extension-host/data/core-project-settings-info.data';
+import { coreProjectSettingsValidators } from '@extension-host/data/core-project-settings-info.data';
 import networkObjectService from '@shared/services/network-object.service';
 import {
   CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR,
@@ -14,21 +11,11 @@ import {
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
 import { includes, isLocalizeKey, isString } from 'platform-bible-utils';
-import ProjectSettingsDocumentCombiner, {
-  LocalizedProjectSettingsContributionInfo,
-} from '@shared/utils/project-settings-document-combiner';
-
-/**
- * Object that keeps track of all project settings contributions in the platform. To listen to
- * updates to the project settings contributions, subscribe to its `onDidRebuild` event (consider
- * debouncing as each contribution will trigger a rebuild).
- *
- * Keeping this object separate from the network object prevents random services from changing
- * system project settings contributions unexpectedly.
- */
-export const projectSettingsDocumentCombiner = new ProjectSettingsDocumentCombiner(
-  platformProjectSettings,
-);
+import { LocalizedProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
+import {
+  projectSettingsDocumentCombiner,
+  waitForResyncContributions,
+} from '@extension-host/services/contribution.service';
 
 let initializationPromise: Promise<void>;
 /** Do the setup this service needs to function */
@@ -76,6 +63,7 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   key: ProjectSettingName,
 ): Promise<ProjectSettingTypes[ProjectSettingName]> {
   await initialize();
+  await waitForResyncContributions();
   const projectSettingInfo =
     projectSettingsDocumentCombiner.getProjectSettingsContributionInfo()?.settings[key];
 
@@ -118,6 +106,7 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
 async function getLocalizedContributionInfo(): Promise<
   LocalizedProjectSettingsContributionInfo | undefined
 > {
+  await waitForResyncContributions();
   return projectSettingsDocumentCombiner.getLocalizedProjectSettingsContributionInfo();
 }
 

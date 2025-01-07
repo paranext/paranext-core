@@ -21,6 +21,7 @@ import {
   testingStringUtils,
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
+  formatReplacementStringToArray,
 } from './string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
@@ -176,6 +177,152 @@ describe('indexOfClosestClosingCurlyBrace', () => {
     expect(result).toBe(-1);
     result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 23, true);
     expect(result).toBe(-1);
+  });
+});
+
+describe('formatReplacementStringToArray', () => {
+  test('combines all strings into one', () => {
+    const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one-horned': 'Unicorn',
+    });
+    expect(result).toEqual(['Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesome']);
+  });
+
+  test('with curly braces', () => {
+    const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one-horned': ['Unicorn'],
+    });
+    expect(result).toEqual(['Look𐐷At🦄This𐐷', ['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+
+  test('with surrogate pairs in the escape sequence', () => {
+    const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{one👮🏽‍♀️horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one👮🏽‍♀️horned': ['Unicorn'],
+    });
+    expect(result).toEqual(['Look𐐷At🦄This𐐷', ['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+
+  test('with curly braces at the start', () => {
+    const result = formatReplacementStringToArray('{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one-horned': ['Unicorn'],
+    });
+    expect(result).toEqual([['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+
+  test('with curly braces as the whole string', () => {
+    const result = formatReplacementStringToArray('{one-horned}', {
+      'one-horned': ['Unicorn'],
+    });
+    expect(result).toEqual([['Unicorn']]);
+  });
+
+  test('with curly braces and an empty string replacer', () => {
+    const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
+      'one-horned': '',
+    });
+    expect(result).toEqual(['Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+
+  test('with multiple pairs of curly braces', () => {
+    const result = formatReplacementStringToArray(
+      'Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome{sauce}',
+      {
+        'one-horned': ['Unicorn'],
+        sauce: { suffix: 'ness' },
+      },
+    );
+    expect(result).toEqual([
+      'Look𐐷At🦄This𐐷',
+      ['Unicorn'],
+      'Thing👮🏽‍♀️Its𐐷Awesome',
+      { suffix: 'ness' },
+    ]);
+  });
+
+  test('with empty curly braces', () => {
+    const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{}', {
+      'one-horned': ['Unicorn'],
+    });
+    expect(result).toEqual(['Look𐐷At🦄This𐐷']);
+  });
+
+  test('with unknown word in curly braces', () => {
+    const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{UFO}', {
+      'one-horned': ['Unicorn'],
+    });
+    expect(result).toEqual(['Look𐐷At🦄This𐐷UFO']);
+  });
+
+  test('with escaped curly braces', () => {
+    const result = formatReplacementStringToArray(
+      'Look𐐷At🦄This𐐷\\{one-horned\\}Thing👮🏽‍♀️Its𐐷Awesome',
+      {
+        'one-horned': ['Unicorn'],
+      },
+    );
+    expect(result).toEqual(['Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome']);
+  });
+
+  test('with multiple pairs of escaped curly braces', () => {
+    const result = formatReplacementStringToArray(
+      'Look𐐷At🦄This𐐷\\{one-horned\\}Thing👮🏽‍♀️Its𐐷Awesome\\{:)\\}',
+      {
+        'one-horned': 'Unicorn',
+        ':)': 'smiley face',
+      },
+    );
+    expect(result).toEqual(['Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome{:)}']);
+  });
+
+  test('with curly braces and escaped curly braces', () => {
+    const result = formatReplacementStringToArray(
+      'Hi, this is {name}! I like \\{curly braces\\}!',
+      {
+        name: ['Jim'],
+      },
+    );
+    expect(result).toEqual(['Hi, this is ', ['Jim'], '! I like {curly braces}!']);
+  });
+
+  test('with multiple pairs of curly braces and escaped curly braces', () => {
+    const result = formatReplacementStringToArray(
+      'Hi, this is {name}! I like \\{curly braces\\}!Hi, this is {name}! I like \\{curly braces\\}!',
+      {
+        name: { replacedName: 'Jim' },
+      },
+    );
+    expect(result).toEqual([
+      'Hi, this is ',
+      { replacedName: 'Jim' },
+      '! I like {curly braces}!Hi, this is ',
+      { replacedName: 'Jim' },
+      '! I like {curly braces}!',
+    ]);
+  });
+
+  test('with interesting types as keys and values', () => {
+    const result = formatReplacementStringToArray(
+      'Hi, this is {name}! I use {0} weights when I curl {weightLbs}lb weights. I do {1} reps {interval}. I have a weakness level of {weakness}.',
+      {
+        name: 'Chad',
+        0: { type: 'lead' },
+        weightLbs: 9000,
+        1: 1000,
+        interval: 'every second of every day',
+        weakness: undefined,
+      },
+    );
+    expect(result).toEqual([
+      'Hi, this is Chad! I use ',
+      { type: 'lead' },
+      ' weights when I curl ',
+      9000,
+      'lb weights. I do ',
+      1000,
+      ' reps every second of every day. I have a weakness level of ',
+      undefined,
+      '.',
+    ]);
   });
 });
 

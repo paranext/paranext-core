@@ -49,6 +49,18 @@
         "description": "%project_settings_platformScripture_invalidMarkers_description%",
         "default": "",
         "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.validPunctuation": {
+        "label": "%project_settings_platformScripture_validPunctuation_label%",
+        "description": "%project_settings_platformScripture_validPunctuation_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
+      },
+      "platformScripture.invalidPunctuation": {
+        "label": "%project_settings_platformScripture_invalidPunctuation_label%",
+        "description": "%project_settings_platformScripture_invalidPunctuation_description%",
+        "default": "",
+        "includeProjectInterfaces": ["Paratext", "Scripture"]
       }
     }
   }

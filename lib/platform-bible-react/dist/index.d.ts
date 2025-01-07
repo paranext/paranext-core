@@ -193,6 +193,18 @@ export type LocalizedStringValue = string;
 export interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
+export type ResourceType = "DBLResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
+export type DblResourceData = {
+	dblEntryUid: string;
+	displayName: string;
+	fullName: string;
+	bestLanguageName: string;
+	type: ResourceType;
+	size: number;
+	installed: boolean;
+	updateAvailable: boolean;
+	projectId: string;
+};
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -222,7 +234,7 @@ export declare const BOOK_SELECTOR_STRING_KEYS: readonly [
 	"%webView_bookSelector_chooseBooks%"
 ];
 export type BookSelectorLocalizedStrings = {
-	[localizedInventoryKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+	[localizedBookSelectorKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 export type BookSelectorProps = ChapterRangeSelectorProps & {
 	handleBookSelectionModeChange: (newMode: BookSelectionMode) => void;
@@ -413,12 +425,29 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  *   current status of the item is selected
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
+export type MultiSelectComboBoxEntry = {
+	value: string;
+	label: string;
+	starred?: boolean;
+};
+export interface MultiSelectComboBoxProps {
+	entries: MultiSelectComboBoxEntry[];
+	getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
+	selected: string[];
+	onChange: (values: string[]) => void;
+	placeholder: string;
+	commandEmptyMessage?: string;
+	customSelectedText?: string;
+	sortSelected?: boolean;
+	icon?: React$1.ReactNode;
+}
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
 	content: React$1.ReactNode;
 };
-export type NavigationContentSearchProps = {
+export type TabNavigationContentSearchProps = {
 	/** List of values and keys for each tab this component should provide */
 	tabList: TabKeyValueContent[];
 	/** Handler to run when the value of the search bar changes */
@@ -427,12 +456,44 @@ export type NavigationContentSearchProps = {
 	searchPlaceholder?: string;
 	/** Optional title to include in the header */
 	headerTitle?: string;
-	/** Optional flag to make the search bar appear full width */
-	isSearchBarFullWidth?: boolean;
-	/** Text direction ltr or rtl */
-	direction?: "ltr" | "rtl";
+	/** Optional className to modify the search input */
+	searchClassName?: string;
 };
-export function NavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, direction, }: NavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export type SelectedSettingsSidebarItem = {
+	label: string;
+	projectId?: string;
+};
+export type ProjectInfo = {
+	projectId: string;
+	projectName: string;
+};
+export type SettingsSidebarProps = {
+	/** Optional id for testing */
+	id?: string;
+	/** Extension labels from contribution */
+	extensionLabels: string[];
+	/** Project names and ids */
+	projectInfo: ProjectInfo[];
+	/** Handler for selecting a sidebar item */
+	handleSelectSidebarItem: (key: string, projectId?: string) => void;
+	/** The current selected value in the sidebar */
+	selectedSidebarItem: SelectedSettingsSidebarItem;
+	/** Label for the group of extensions setting groups */
+	extensionsSidebarGroupLabel: string;
+	/** Label for the group of projects settings */
+	projectsSidebarGroupLabel: string;
+	/** Placeholder text for the button */
+	buttonPlaceholderText: string;
+};
+export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
+	/** Optional id for testing */
+	id?: string;
+	/** Handler to run when the value of the search bar changes */
+	onSearch: (searchQuery: string) => void;
+};
+export function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -506,8 +567,6 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 	showSourceColumn?: boolean;
 	/** Callback function to notify when a row is selected */
 	onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
-	/** Text direction ltr or rtl */
-	direction?: "ltr" | "rtl";
 };
 /**
  * Component to display a combined list of detailed items from one or more sources, where the items
@@ -518,7 +577,7 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, direction, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a {@link ScrollGroupId} or `undefined` for
@@ -667,8 +726,12 @@ export type ComboBoxProps<T> = {
 	/** Text label title for combobox */
 	/** List of available options for the dropdown menu */
 	options?: readonly T[];
-	/** Additional css classes to help with unique styling of the combo box */
+	/** @deprecated 3 December 2024. Renamed to {@link buttonClassName} */
 	className?: string;
+	/** Additional css classes to help with unique styling of the combo box button */
+	buttonClassName?: string;
+	/** Additional css classes to help with unique styling of the combo box popover */
+	popoverContentClassName?: string;
 	/**
 	 * The selected value that the combo box currently holds. Must be shallow equal to one of the
 	 * options entries.
@@ -678,6 +741,8 @@ export type ComboBoxProps<T> = {
 	onChange?: (newValue: T) => void;
 	/** Used to determine the string value for a given option. */
 	getOptionLabel?: (option: ComboBoxOption) => string;
+	/** Icon to be displayed on the trigger */
+	icon?: React$1.ReactNode;
 	/** Text displayed on button if `value` is undefined */
 	buttonPlaceholder?: string;
 	/** Placeholder text for text field */
@@ -686,19 +751,18 @@ export type ComboBoxProps<T> = {
 	commandEmptyMessage?: string;
 	/** Variant of button */
 	buttonVariant?: ButtonProps["variant"];
-	/** Text direction ltr or rtl */
-	dir?: Direction;
+	/** Control how the popover menu should be aligned. Defaults to start */
+	alignDropDown?: "start" | "center" | "end";
 	/** Optional boolean to set if trigger should be disabled */
 	isDisabled?: boolean;
 } & PopoverProps;
-export type Direction = "ltr" | "rtl";
 /**
  * Autocomplete input and command palette with a list of suggestions.
  *
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, value, onChange, getOptionLabel, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, dir, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
+export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 export type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
@@ -886,6 +950,7 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
+/** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/**
 	 * Callback fired to handle the search query when button pressed
@@ -897,8 +962,10 @@ export type SearchBarProps = {
 	placeholder?: string;
 	/** Optional boolean to set the input base to full width */
 	isFullWidth?: boolean;
+	/** Additional css classes to help with unique styling of the search bar */
+	className?: string;
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {
@@ -973,6 +1040,12 @@ export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttrib
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
 export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+export declare const badgeVariants: (props?: ({
+	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | null | undefined;
+} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
+}
+export declare function Badge({ className, variant, ...props }: BadgeProps): import("react/jsx-runtime").JSX.Element;
 export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
@@ -1029,10 +1102,6 @@ export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit
 	className?: string | undefined;
 	sideOffset?: number | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-/**
- * TODO: fix: direction is not automatically handled by this component, so that shortcuts are
- * display always to the right
- */
 export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	inset?: boolean | undefined;
@@ -1196,6 +1265,12 @@ export interface MarkdownRendererProps {
 	/** The markdown string to render */
 	markdown: string;
 	className?: string;
+	/**
+	 * The [`target` attribute for `a` html
+	 * tags](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#target). Defaults to not
+	 * adding a `target` to `a` tags
+	 */
+	anchorTarget?: string;
 }
 /**
  * This component renders markdown content given a markdown string. It uses typography styles from
@@ -1205,7 +1280,7 @@ export interface MarkdownRendererProps {
  * @param id Optional unique identifier
  * @returns A div containing the rendered markdown content.
  */
-export function MarkdownRenderer({ id, markdown, className }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export function MarkdownRenderer({ id, markdown, className, anchorTarget, }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
 export declare enum DropdownMenuItemType {
 	Check = 0,
 	Radio = 1
@@ -1339,6 +1414,73 @@ export interface FooterProps {
  * @returns The rendered Footer component
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export declare const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[];
+export type FilterableResourceListProps = {
+	localizedStrings: LanguageStrings;
+	dblResources: DblResourceData[];
+	isLoadingDblResources: boolean;
+	typeFilter: ResourceType[];
+	setTypeFilter: (stateValue: ResourceType[]) => void;
+	languageFilter: string[];
+	setLanguageFilter: (stateValue: string[]) => void;
+	openResource: (projectId: string) => void;
+	installResource: ((uid: string) => Promise<void>) | undefined;
+	uninstallResource: ((uid: string) => Promise<void>) | undefined;
+};
+export declare function FilterableResourceList({ localizedStrings, dblResources, isLoadingDblResources, typeFilter, setTypeFilter, languageFilter, setLanguageFilter, openResource, installResource, uninstallResource, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
+declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
+	"%settings_uiLanguageSelector_selectFallbackLanguages%"
+];
+export type UiLanguageSelectorLocalizedStrings = {
+	[localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+export type LanguageInfo = {
+	/** The name of the language to be displayed (in its native script) */
+	autonym: string;
+	/**
+	 * The name of the language in other languages, so that the language can also be displayed in the
+	 * current UI language, if known.
+	 */
+	uiNames?: Record<string, string>;
+	/**
+	 * Other known names of the language (for searching). This can include pejorative names and should
+	 * never be displayed unless typed by the user.
+	 */
+	otherNames?: string[];
+};
+export type UiLanguageSelectorProps = {
+	/** Full set of known languages to display. The keys are valid BCP-47 tags. */
+	knownUiLanguages: Record<string, LanguageInfo>;
+	/** IETF BCP-47 language tag of the current primary UI language. `undefined` => 'en' */
+	primaryLanguage: string;
+	/**
+	 * Ordered list of fallback language tags to use if the localization key can't be found in the
+	 * current primary UI language. This list never contains English ('en') because it is the ultimate
+	 * fallback.
+	 */
+	fallbackLanguages: string[] | undefined;
+	/**
+	 * Handler for when either the primary or the fallback languages change (or both). For this
+	 * handler, the primary UI language is the first one in the array, followed by the fallback
+	 * languages in order of decreasing preference.
+	 */
+	onLanguagesChange?: (newUiLanguages: string[]) => void;
+	/** Handler for the primary language changes. */
+	onPrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
+	/**
+	 * Handler for when the fallback languages change. The array contains the fallback languages in
+	 * order of decreasing preference.
+	 */
+	onFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
+	/**
+	 * Map whose keys are localized string keys as contained in UI_LANGUAGE_SELECTOR_STRING_KEYS and
+	 * whose values are the localized strings (in the current UI language).
+	 */
+	localizedStrings: UiLanguageSelectorLocalizedStrings;
+	/** Additional css classes to help with unique styling of the control */
+	className?: string;
+};
+export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
@@ -1467,6 +1609,7 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 export declare function cn(...inputs: ClassValue[]): string;
 
 export {
+	TabNavigationContentSearch as NavigationContentSearch,
 	sonner,
 };
 

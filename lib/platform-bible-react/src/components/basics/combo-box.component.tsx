@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
@@ -21,8 +21,12 @@ export type ComboBoxProps<T> = {
   /** Text label title for combobox */
   /** List of available options for the dropdown menu */
   options?: readonly T[];
-  /** Additional css classes to help with unique styling of the combo box */
+  /** @deprecated 3 December 2024. Renamed to {@link buttonClassName} */
   className?: string;
+  /** Additional css classes to help with unique styling of the combo box button */
+  buttonClassName?: string;
+  /** Additional css classes to help with unique styling of the combo box popover */
+  popoverContentClassName?: string;
   /**
    * The selected value that the combo box currently holds. Must be shallow equal to one of the
    * options entries.
@@ -32,6 +36,8 @@ export type ComboBoxProps<T> = {
   onChange?: (newValue: T) => void;
   /** Used to determine the string value for a given option. */
   getOptionLabel?: (option: ComboBoxOption) => string;
+  /** Icon to be displayed on the trigger */
+  icon?: ReactNode;
   /** Text displayed on button if `value` is undefined */
   buttonPlaceholder?: string;
   /** Placeholder text for text field */
@@ -40,13 +46,11 @@ export type ComboBoxProps<T> = {
   commandEmptyMessage?: string;
   /** Variant of button */
   buttonVariant?: ButtonProps['variant'];
-  /** Text direction ltr or rtl */
-  dir?: Direction;
+  /** Control how the popover menu should be aligned. Defaults to start */
+  alignDropDown?: 'start' | 'center' | 'end';
   /** Optional boolean to set if trigger should be disabled */
   isDisabled?: boolean;
 } & PopoverProps;
-
-type Direction = 'ltr' | 'rtl';
 
 function getOptionLabelDefault(option: ComboBoxOption): string {
   if (typeof option === 'string') {
@@ -68,14 +72,17 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   id,
   options = [],
   className,
+  buttonClassName,
+  popoverContentClassName,
   value,
   onChange = () => {},
   getOptionLabel = getOptionLabelDefault,
+  icon = undefined,
   buttonPlaceholder = '',
   textPlaceholder = '',
   commandEmptyMessage = 'No option found',
   buttonVariant = 'outline',
-  dir = 'ltr',
+  alignDropDown = 'start',
   isDisabled = false,
   ...props
 }: ComboBoxProps<T>) {
@@ -89,18 +96,28 @@ function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           role="combobox"
           aria-expanded={open}
           id={id}
-          className={cn('tw-w-[200px] tw-justify-between', className)}
+          className={cn(
+            'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
+            buttonClassName ?? className,
+          )}
           disabled={isDisabled}
         >
-          <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
-            {value ? getOptionLabel(value) : buttonPlaceholder}
-          </span>
+          <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
+            {icon && <div className="tw-pe-2">{icon}</div>}
+            <span className="tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap">
+              {value ? getOptionLabel(value) : buttonPlaceholder}
+            </span>
+          </div>
+
           <ChevronsUpDown className="tw-ms-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[200px] tw-p-0" dir={dir}>
+      <PopoverContent
+        align={alignDropDown}
+        className={cn('tw-w-[200px] tw-p-0', popoverContentClassName)}
+      >
         <Command>
-          <CommandInput dir={dir} placeholder={textPlaceholder} className="tw-text-inherit" />
+          <CommandInput placeholder={textPlaceholder} className="tw-text-inherit" />
           <CommandEmpty>{commandEmptyMessage}</CommandEmpty>
           <CommandList>
             {options.map((option) => (

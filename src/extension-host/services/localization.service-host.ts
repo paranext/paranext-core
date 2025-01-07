@@ -23,24 +23,32 @@ import logger from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
 import path from 'path';
 import settingsService from '@shared/services/settings.service';
-import LocalizedStringsDocumentCombiner from '@shared/utils/localized-strings-document-combiner';
+import {
+  localizedStringsDocumentCombiner,
+  waitForResyncContributions,
+} from '@extension-host/services/contribution.service';
+import { LanguageInfo } from 'platform-bible-react';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
 // BCP 47 validation regex from https://stackoverflow.com/questions/7035825/regular-expression-for-a-language-tag-as-defined-by-bcp47
 const LANGUAGE_CODE_REGEX =
   /^(?<grandfathered>(?:en-GB-oed|i-(?:ami|bnn|default|enochian|hak|klingon|lux|mingo|navajo|pwn|t(?:a[oy]|su))|sgn-(?:BE-(?:FR|NL)|CH-DE))|(?:art-lojban|cel-gaulish|no-(?:bok|nyn)|zh-(?:guoyu|hakka|min(?:-nan)?|xiang)))|(?:(?<language>(?:[A-Za-z]{2,3}(?:-(?<extlang>[A-Za-z]{3}(?:-[A-Za-z]{3}){0,2}))?)|[A-Za-z]{4}|[A-Za-z]{5,8})(?:-(?<script>[A-Za-z]{4}))?(?:-(?<region>[A-Za-z]{2}|[0-9]{3}))?(?:-(?<variant>[A-Za-z0-9]{5,8}|[0-9][A-Za-z0-9]{3}))*(?:-(?<extension>[0-9A-WY-Za-wy-z](?:-[A-Za-z0-9]{2,8})+))*)(?:-(?<privateUse>x(?:-[A-Za-z0-9]{1,8})+))?$/;
 
-/**
- * Object that keeps track of all localized string contributions in the platform. To listen to
- * updates to the localized string contributions, subscribe to its `onDidRebuild` event (consider
- * debouncing as each contribution will trigger a rebuild).
- *
- * Keeping this object separate from the data provider and disabling the `set` calls in the data
- * provider prevents random services from changing system localized string contributions
- * unexpectedly.
- */
-export const localizedStringsDocumentCombiner = new LocalizedStringsDocumentCombiner({});
+const loadedLocales: Record<string, LanguageInfo> = {};
 
+const languageDetails: Record<string, LanguageInfo> = {
+  en: {
+    autonym: 'English',
+    uiNames: { es: 'inglés', de: 'Englisch', fr: 'Anglais', km: 'ភាសាអង់គ្លេស' },
+  },
+  es: { autonym: 'Español', uiNames: { en: 'Spanish', de: 'Spanisch' } },
+  fr: { autonym: 'Français', uiNames: { en: 'French', de: 'Französisch', es: 'francés' } },
+  de: { autonym: 'Deutsch', uiNames: { en: 'German', es: 'alemán', fr: 'Allemand' } },
+  km: { autonym: 'ខ្មែរ', uiNames: { en: 'Khmer', es: 'jemer', de: 'Khmer', fr: 'Khmer' } },
+  zh: { autonym: '中文', uiNames: { en: 'Chinese', es: 'chino' } },
+  hi: { autonym: 'हिन्दी', uiNames: { en: 'Hindi', es: 'hindi' } },
+  ar: { autonym: 'العربية', uiNames: { en: 'Arabic', es: 'árabe' } },
+};
 function getFileNameFromUri(uriToMatch: string): string {
   const file = path.parse(uriToMatch);
   return file.name;
@@ -85,9 +93,9 @@ function convertToLocalizedStringMetadata(jsonString: string): StringsMetadata {
 }
 
 async function getLocalizedFileUris(): Promise<string[]> {
-  const entries = await nodeFS.readDir(LOCALIZATION_ROOT_URI);
-  if (!entries) throw new Error('No entries found in localization folder');
-  return entries.file;
+  const entries = (await nodeFS.readDir(LOCALIZATION_ROOT_URI))?.file;
+  if (!entries?.length) throw new Error('No files found in localization folder');
+  return entries;
 }
 
 /** Load the contents of all localization files from disk */
@@ -111,6 +119,14 @@ async function loadAllLocalizationData() {
           localizeFileString,
           fileName,
         );
+
+        // ENHANCE: instead of creating a hardcoded languageDetails and using that, see if we can
+        // get all the needed info from SLDR.
+        if (!loadedLocales[fileName]) {
+          loadedLocales[fileName] = languageDetails[fileName] || {
+            autonym: fileName,
+          };
+        }
       } catch (error) {
         logger.warn(error);
       }
@@ -148,12 +164,14 @@ async function moveToFirstLanguageWithData(languages: string[]) {
   if (languages.length === 0) return undefined;
 
   const standardizedLanguageCode = await getCanonicalLocale(languages[0]);
+  await waitForResyncContributions();
   if (localizedStringsDocumentCombiner.getLocalizedStringData(standardizedLanguageCode))
     return standardizedLanguageCode;
 
   // Try to get data for base language by stripping the region from the language code
   // (e.g. en-US becomes en)
   const baseLanguage = await getBaseLanguageCode(languages[0]);
+  await waitForResyncContributions();
   if (localizedStringsDocumentCombiner.getLocalizedStringData(baseLanguage)) return baseLanguage;
 
   // If no language data can be found for a language or its base, then we should remove it from
@@ -170,6 +188,7 @@ async function getNextDefinedLanguageData(languages: string[]) {
     return undefined;
   }
 
+  await waitForResyncContributions();
   const languageData =
     localizedStringsDocumentCombiner.getLocalizedStringData(standardizedLanguage);
   // Note: This should never happen thanks to the english fallback, but is here just in case
@@ -181,6 +200,7 @@ async function getNextDefinedLanguageData(languages: string[]) {
 }
 
 async function getMetadata(localizeKey: LocalizeKey) {
+  await waitForResyncContributions();
   if (!localizedStringsDocumentCombiner.getLocalizedStringData().metadata) {
     logger.warn(`Metadata missing`);
     return undefined;
@@ -243,7 +263,7 @@ class LocalizationDataProviderEngine
   implements IDataProviderEngine<LocalizationDataDataTypes>
 {
   // This method legitimately does not need to call anything else in this class as of now
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getLocalizedString({ localizeKey, locales = [] }: LocalizationSelector) {
     const languages = locales.length > 0 ? [...locales] : await getDefaultLanguages();
 
@@ -299,16 +319,30 @@ class LocalizationDataProviderEngine
     return Object.fromEntries(localizations);
   }
 
+  // This method legitimately does not need to call anything else in this class as of now
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async getAvailableInterfaceLanguages() {
+    return loadedLocales;
+  }
+
   // Because this is a data provider, we have to provide this method even though it always throws
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
     throw new Error('setLocalizedString disabled');
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {
     throw new Error('setLocalizedStrings disabled');
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setAvailableInterfaceLanguages(): Promise<
+    DataProviderUpdateInstructions<LocalizationDataDataTypes>
+  > {
+    throw new Error('setAvailableInterfaceLanguages disabled');
   }
 }
 

@@ -6,15 +6,27 @@ import {
   Marginal,
   MarginalRef,
 } from '@biblionexus-foundation/platform-editor';
-import { MarkerContent, Usj } from '@biblionexus-foundation/scripture-utilities';
+import {
+  MarkerContent,
+  USJ_TYPE,
+  USJ_VERSION,
+  Usj,
+} from '@biblionexus-foundation/scripture-utilities';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectSetting, useSetting } from '@papi/frontend/react';
-import { deepClone, ScriptureReference, UsjReaderWriter } from 'platform-bible-utils';
+import {
+  compareScrRefs,
+  deepClone,
+  ScriptureReference,
+  serialize,
+  UsjReaderWriter,
+} from 'platform-bible-utils';
 import { Button } from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
+import { EditorWebViewMessage, SelectionRange } from 'platform-scripture-editor';
 import {
   convertEditorCommentsToLegacyComments,
   convertLegacyCommentsToEditorThreads,
@@ -32,7 +44,7 @@ const VERSE_NUMBER_SCROLL_OFFSET = 80;
  */
 const EDITOR_LOAD_DELAY_TIME = 100;
 
-const usjDocumentDefault: Usj = { type: 'USJ', version: '0.2.1', content: [] };
+const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -78,7 +90,43 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
-  const [scrRef, setScrRefInternal] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+
+  const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
+
+  // listen to messages from the web view controller
+  useEffect(() => {
+    const webViewMessageListener = ({
+      data: { method, scrRef: targetScrRef, range },
+    }: MessageEvent<EditorWebViewMessage>) => {
+      switch (method) {
+        case 'selectRange':
+          logger.debug(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
+
+          if (compareScrRefs(scrRef, targetScrRef) !== 0) {
+            // Need to update scr ref, let the editor load the Scripture text at the new scrRef,
+            // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
+            // which will set the range after a short wait time in a `useEffect` below
+            setScrRefWithScroll(targetScrRef);
+            nextSelectionRange.current = range;
+          }
+          // We're on the right scr ref. Go ahead and set the selection
+          else editorRef.current?.setSelection(range);
+
+          break;
+        default:
+          // Unknown method name
+          logger.debug(`Received event with unknown method ${method}`);
+          break;
+      }
+    };
+
+    window.addEventListener('message', webViewMessageListener);
+
+    return () => {
+      window.removeEventListener('message', webViewMessageListener);
+    };
+  }, [scrRef, setScrRefWithScroll]);
 
   const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
 
@@ -88,12 +136,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const internallySetScrRefRef = useRef<ScriptureReference | undefined>(undefined);
 
-  const setScrRef = useCallback(
+  const setScrRefNoScroll = useCallback(
     (newScrRef: ScriptureReference) => {
       internallySetScrRefRef.current = newScrRef;
-      return setScrRefInternal(newScrRef);
+      return setScrRefWithScroll(newScrRef);
     },
-    [setScrRefInternal],
+    [setScrRefWithScroll],
   );
 
   /**
@@ -107,7 +155,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     projectId,
   ).ChapterUSJ(
     useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
-    usjDocumentDefault,
+    defaultUsj,
   );
 
   const usjSentToPdp = useRef(usjFromPdp);
@@ -268,7 +316,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     }
   }, [usjFromPdp, scrRef]);
 
-  // Scroll the selected verse into view
+  // Scroll the selected verse and selection range into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
@@ -283,6 +331,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
     let highlightedVerseElement: HTMLElement | undefined;
 
+    // Queue up the next selection range to be set and clear it so we don't accidentally set the
+    // range to the wrong thing
+    const nextRange = nextSelectionRange.current;
+    nextSelectionRange.current = undefined;
+
     // Wait before scrolling to make sure there is time for the editor to load
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
@@ -291,6 +344,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       highlightedVerseElement?.classList.add('highlighted');
 
       internallySetScrRefRef.current = undefined;
+
+      // Set the selection if the selection was set to something as part of this scr ref change
+      if (nextRange) editorRef.current?.setSelection(nextRange);
     }, EDITOR_LOAD_DELAY_TIME);
 
     return () => {
@@ -322,7 +378,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Editorial
           ref={editorRef}
           scrRef={scrRef}
-          onScrRefChange={setScrRef}
+          onScrRefChange={setScrRefNoScroll}
           options={options}
           logger={logger}
         />
@@ -337,7 +393,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Marginal
           ref={editorRef}
           scrRef={scrRef}
-          onScrRefChange={setScrRef}
+          onScrRefChange={setScrRefNoScroll}
           onUsjChange={onUsjAndCommentsChange}
           onCommentChange={saveCommentsToPdp}
           options={options}
@@ -353,7 +409,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <Editorial
         ref={editorRef}
         scrRef={scrRef}
-        onScrRefChange={setScrRef}
+        onScrRefChange={setScrRefNoScroll}
         onUsjChange={saveUsjToPdp}
         options={options}
         logger={logger}

@@ -1,18 +1,28 @@
-import { useState } from 'react';
+import { persistDirection } from '@/utils/dir-helper.util';
+import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
 import Compositions from './pages/components/advanced.component';
 import Basics from './pages/components/basics.component';
 import Guide from './pages/guide.component';
 import Layouts from './pages/layouts.component';
 import Playground from './pages/playground.component';
+import ContactButtons from './preview-components/contact-buttons.component';
 import { DirToggle, Direction } from './preview-components/direction-toggle.component';
 import { ThemeProvider } from './preview-components/theme-provider.component';
 import { ThemeButton } from './preview-components/theme-toggle.component';
-import ContactButtons from './preview-components/contact-buttons.component';
+
+const initialDirection: Direction = 'ltr';
 
 function App() {
-  const [direction, setDirection] = useState<Direction>('ltr');
-  const changeDirectionHandler = (dir: Direction) => setDirection(dir);
+  const [direction, setDirection] = useState<Direction>(initialDirection);
+  const changeDirectionHandler = (dir: Direction) => {
+    setDirection(dir);
+    persistDirection(dir);
+  };
+
+  useEffect(() => {
+    changeDirectionHandler(initialDirection);
+  }, []);
 
   return (
     <ThemeProvider defaultTheme="dark" storageKey="vite-ui-theme">
@@ -35,13 +45,13 @@ function App() {
           </TabsList>
 
           <TabsContent value="Basics">
-            <Basics direction={direction} />
+            <Basics />
           </TabsContent>
           <TabsContent value="Advanced">
-            <Compositions direction={direction} />
+            <Compositions />
           </TabsContent>
           <TabsContent value="Layouts">
-            <Layouts direction={direction} />
+            <Layouts />
           </TabsContent>
           <TabsContent value="Playground">
             <Playground />

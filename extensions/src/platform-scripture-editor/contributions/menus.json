@@ -91,6 +91,12 @@
             "command": "platformScripture.openMarkersInventory"
           },
           {
+            "label": "%webView_platformScriptureEditor_punctuationInventory%",
+            "group": "platformScriptureEditor.inventory",
+            "order": 4,
+            "command": "platformScripture.openPunctuationInventory"
+          },
+          {
             "label": "%webView_platformScriptureEditor_configureChecks%",
             "group": "platformScriptureEditor.checks",
             "order": 1,

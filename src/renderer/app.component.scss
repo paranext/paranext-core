@@ -1,4 +1,4 @@
-@import 'styles/vars';
+@use 'styles/vars';
 
 /*
  * @NOTE: Prepend a `~` to css file paths that are in your node_modules
@@ -8,8 +8,8 @@ body {
   position: relative;
   color: white;
   height: 100vh;
-  background: $color--background;
-  font-family: $font-family;
+  background: vars.$color--background;
+  font-family: vars.$font-family;
   overflow-y: hidden;
   display: flex;
   justify-content: center;
@@ -36,14 +36,11 @@ li {
 
 a {
   text-decoration: none;
-  height: fit-content;
-  width: fit-content;
-  margin: 10px;
 }
 
 a:hover {
   opacity: 1;
-  text-decoration: none;
+  text-decoration: underline;
 }
 
 .about {
