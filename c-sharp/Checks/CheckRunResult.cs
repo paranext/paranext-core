@@ -12,7 +12,7 @@ public sealed record CheckRunResult(
     string CheckResultType,
     string ProjectId,
     string MessageFormatString,
-    [property: JsonIgnore] string Text,
+    string SelectedText,
     bool IsDenied,
     VerseRef VerseRef,
     CheckLocation Start,
@@ -28,7 +28,7 @@ public sealed record CheckRunResult(
             && CheckResultType == other.CheckResultType
             && ProjectId == other.ProjectId
             && MessageFormatString == other.MessageFormatString
-            && Text == other.Text
+            && SelectedText == other.SelectedText
             && IsDenied == other.IsDenied
             && VerseRef.ToStringWithVersification() == other.VerseRef.ToStringWithVersification()
             && Start == other.Start
@@ -42,7 +42,7 @@ public sealed record CheckRunResult(
             CheckResultType,
             ProjectId,
             MessageFormatString,
-            Text,
+            SelectedText,
             IsDenied,
             VerseRef,
             Start
