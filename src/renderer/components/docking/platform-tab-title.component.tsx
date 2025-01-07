@@ -89,7 +89,7 @@ export default function PlatformTabTitle({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button>
+          <Button variant="ghost">
             <div ref={containerRef} className="title">
               {isLoading || !webViewMenu?.topMenu ? (
                 icon
