@@ -63,25 +63,25 @@ interface HomeProjectOptions extends GetWebViewOptions {
 export async function activate(context: ExecutionActivationContext) {
   logger.info('Platform Manage Resources Extension is activating!');
 
-  let isSendReceiveAvailable: boolean = false;
-  if (context.elevatedPrivileges.manageExtensions) {
-    manageExtensions = context.elevatedPrivileges.manageExtensions;
-    const installedExtensions = await manageExtensions.getInstalledExtensions();
-    console.log('installed extensions:', installedExtensions);
-    isSendReceiveAvailable =
-      installedExtensions.packaged.includes({
-        extensionName: 'paratextBibleSendReceive',
-        extensionVersion: '0.1.0',
-      }) ||
-      installedExtensions.enabled.includes({
-        extensionName: 'paratextBibleSendReceive',
-        extensionVersion: '0.1.0',
-      });
-    console.log(
-      'rolf:',
-      await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects'),
-    );
-  }
+  // let isSendReceiveAvailable: boolean = false;
+  // if (context.elevatedPrivileges.manageExtensions) {
+  //   manageExtensions = context.elevatedPrivileges.manageExtensions;
+  //   const installedExtensions = await manageExtensions.getInstalledExtensions();
+  //   console.log('installed extensions:', installedExtensions);
+  //   isSendReceiveAvailable =
+  //     installedExtensions.packaged.includes({
+  //       extensionName: 'paratextBibleSendReceive',
+  //       extensionVersion: '0.1.0',
+  //     }) ||
+  //     installedExtensions.enabled.includes({
+  //       extensionName: 'paratextBibleSendReceive',
+  //       extensionVersion: '0.1.0',
+  //     });
+  //   console.log(
+  //     'rolf:',
+  //     await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects'),
+  //   );
+  // }
 
   const getResourcesWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     GET_RESOURCES_WEB_VIEW_TYPE,
@@ -103,14 +103,14 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
-  if (isSendReceiveAvailable) {
-    console.log(
-      'rolf:',
-      await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects'),
-    );
-  }
+  // if (isSendReceiveAvailable) {
+  //   console.log(
+  //     'rolf:',
+  //     await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects'),
+  //   );
+  // }
 
-  const options: HomeProjectOptions = { isSendReceiveAvailable: isSendReceiveAvailable };
+  // const options: HomeProjectOptions = { isSendReceiveAvailable: isSendReceiveAvailable };
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformManageResources.openHome',
     async () => {
@@ -120,7 +120,7 @@ export async function activate(context: ExecutionActivationContext) {
           type: 'float',
           floatSize: HOME_WEB_VIEW_SIZE,
         },
-        options,
+        // options,
       );
     },
   );
