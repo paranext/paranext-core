@@ -444,10 +444,10 @@ export type TabNavigationContentSearchProps = {
 	searchPlaceholder?: string;
 	/** Optional title to include in the header */
 	headerTitle?: string;
-	/** Optional flag to make the search bar appear full width */
-	isSearchBarFullWidth?: boolean;
+	/** Optional className to modify the search input */
+	searchClassName?: string;
 };
-declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, isSearchBarFullWidth, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;

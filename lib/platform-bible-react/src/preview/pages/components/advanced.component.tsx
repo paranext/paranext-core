@@ -21,6 +21,7 @@ import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.e
 import SettingsListExamples from './advanced/settings-list.examples.component';
 import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
 import { columns, data } from './data-sources/data-table-content';
+import SettingSidebarContentSearchExamples from './advanced/settings-sidebar-content-search.example.component';
 
 function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -87,6 +88,9 @@ function Compositions() {
           <VerticalTabsTrigger value="Scroll Group Selector">
             Scroll Group Selector
           </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Settings Sidebar Content Search">
+            Settings Sidebar Content Search
+          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
           <VerticalTabsTrigger value="UI Language Selector">
             UI Language Selector
@@ -145,7 +149,7 @@ function Compositions() {
             tabList={tabList}
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
-            isSearchBarFullWidth
+            searchClassName="tw-w-9/12 tw-py-2"
           />
         </VerticalTabsContent>
 
@@ -164,6 +168,10 @@ function Compositions() {
             onChangeScrollGroupId={setScrollGroupId}
           />
           <div>Scroll Group Id: {`${scrollGroupId}`}</div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Settings Sidebar Content Search">
+          <SettingSidebarContentSearchExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Markdown Renderer">

@@ -26,8 +26,8 @@ export type TabNavigationContentSearchProps = {
   /** Optional title to include in the header */
   headerTitle?: string;
 
-  /** Optional flag to make the search bar appear full width */
-  isSearchBarFullWidth?: boolean;
+  /** Optional className to modify the search input */
+  searchClassName?: string;
 };
 
 export default function TabNavigationContentSearch({
@@ -35,14 +35,14 @@ export default function TabNavigationContentSearch({
   onSearch,
   searchPlaceholder,
   headerTitle,
-  isSearchBarFullWidth = false,
+  searchClassName,
 }: TabNavigationContentSearchProps) {
   return (
     <div className="pr-twp">
       <div className="tw-sticky tw-top-0 tw-space-y-2 tw-pb-2">
         {headerTitle ? <h1>{headerTitle}</h1> : ''}
         <SearchBar
-          isFullWidth={isSearchBarFullWidth}
+          className={searchClassName}
           onSearch={onSearch}
           placeholder={searchPlaceholder}
         />
