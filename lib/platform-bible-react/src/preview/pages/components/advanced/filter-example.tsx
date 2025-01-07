@@ -1,6 +1,5 @@
-import MultiSelectComboBox, {
-  MultiSelectComboBoxEntry,
-} from '@/components/advanced/multi-select-combo-box.component';
+import Filter from '@/components/advanced/filterable-resource-list/filter.component';
+import { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-combo-box.component';
 import { Blocks } from 'lucide-react';
 import { useState } from 'react';
 
@@ -123,44 +122,23 @@ const getOptionsCount = (option: MultiSelectComboBoxEntry): number => {
   return resources.filter((resource) => resource.type === option.value).length ?? 0;
 };
 
-function MultiSelectComboBoxExample() {
+function FilterExample() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>(types.map((type) => type.value));
-
-  const getCustomSelectedText = () => {
-    if (selectedTypes.length === types.length || selectedTypes.length === 0) return 'Any type';
-    if (selectedTypes.length === 1) {
-      const matchingType = types.find((type) => type.value === selectedTypes[0]);
-      if (matchingType) return matchingType.label;
-    }
-    return `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`;
-  };
 
   return (
     <div className="tw-flex tw-flex-col tw-gap-4">
-      <div className="tw-w-[300px]">
-        <MultiSelectComboBox
-          entries={types}
-          getEntriesCount={getOptionsCount}
-          selected={selectedTypes}
-          onChange={setSelectedTypes}
-          placeholder="Types"
-          customSelectedText={getCustomSelectedText()}
-          icon={<Blocks />}
-        />
-      </div>
-
-      <p>Resources:</p>
-      <ul>
-        {resources
-          .filter((resource) => selectedTypes.length === 0 || selectedTypes.includes(resource.type))
-          .map((resource) => (
-            <li key={resource.id}>
-              <b>{resource.type}</b> {resource.name} ({resource.language}) - {resource.size}
-            </li>
-          ))}
-      </ul>
+      <p>This component is a combination of the Multi-Select Combo Box and Badge components</p>
+      <Filter
+        entries={types}
+        getEntriesCount={getOptionsCount}
+        selected={selectedTypes}
+        onChange={setSelectedTypes}
+        placeholder="Types"
+        icon={<Blocks />}
+        badgesPlaceholder="Any"
+      />
     </div>
   );
 }
 
-export default MultiSelectComboBoxExample;
+export default FilterExample;
