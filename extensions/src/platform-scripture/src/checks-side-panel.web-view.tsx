@@ -8,16 +8,10 @@ import {
   CheckSubscriptionId,
   SettableCheckDetails,
 } from 'platform-scripture';
-import {
-  useData,
-  useDataProvider,
-  useLocalizedStrings,
-  useWebViewController,
-} from '@papi/frontend/react';
+import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { VerseRef } from '@sillsdev/scripture';
-import { getChaptersForBook, LocalizeKey } from 'platform-bible-utils';
+import { getChaptersForBook, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
-import { ScriptureLocation } from 'platform-scripture-editor';
 import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
@@ -42,16 +36,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
-  const [scrRef, , ,] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
-  const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
   const [subscriptionId] = useWebViewState<CheckSubscriptionId>('subscriptionId', '');
   const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRINGS);
-
-  const editorWebViewController = useWebViewController(
-    'platformScriptureEditor.react',
-    editorWebViewId,
-  );
 
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
@@ -73,6 +61,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
     useMemo(() => [defaultScriptureRange], [defaultScriptureRange]),
   );
 
+  const [, setIncludeDeniedResults, isLoadingIncludeDeniedResults] = useData(
+    'platformScripture.checkAggregator',
+  ).IncludeDeniedResults(subscriptionId, true);
+
   const checkInputRange: CheckInputRange = useMemo(() => {
     return {
       projectId: projectId ?? '',
@@ -90,22 +82,30 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   // Force the web view to show Repeated Words check results for the current scripture range since filters are not currently applied
   useEffect(() => {
-    if (setAvailableChecks) setAvailableChecks([settableCheckDetails]);
-    if (setActiveRanges) setActiveRanges([checkInputRange]);
-  }, [checkInputRange, projectId, setActiveRanges, setAvailableChecks, settableCheckDetails]);
+    async function updateChecksAndRanges() {
+      if (setAvailableChecks) await setAvailableChecks([settableCheckDetails]);
+      if (setActiveRanges) await setActiveRanges([checkInputRange]);
+      if (setIncludeDeniedResults) await setIncludeDeniedResults(true);
+    }
+    updateChecksAndRanges();
+  }, [
+    checkInputRange,
+    projectId,
+    setActiveRanges,
+    setAvailableChecks,
+    setIncludeDeniedResults,
+    settableCheckDetails,
+  ]);
 
   const [checkResults, , isLoadingCheckResults] = useData(
     'platformScripture.checkAggregator',
-  ).CheckResults(subscriptionId, [], {
-    retrieveDataImmediately: true,
-    whichUpdates: '*',
-  });
+  ).CheckResults(subscriptionId, []);
 
-  const openConfigureChecks = useCallback(() => {
-    papi.commands.sendCommand('platformScripture.openConfigureChecks', projectId);
+  const openConfigureChecks = useCallback(async () => {
+    await papi.commands.sendCommand('platformScripture.openConfigureChecks', projectId);
   }, [projectId]);
 
-  // TODO: Used messageFormatString because result.selectedText is not defined.
+  // Used messageFormatString because result.selectedText is the entire verse.
   const writeCheckTitle = useCallback((result: CheckRunResult) => {
     if (!result || !result.messageFormatString) return '';
     const [, extractedWord] = result.messageFormatString.match(/\|\|(.*?)\|\|/) || [];
@@ -113,110 +113,48 @@ global.webViewComponent = function ChecksSidePanelWebView({
     return `${result.verseRef.book} ${result.verseRef.chapter}:${result.verseRef.verse} ${extractedWord} ${extractedWord}`;
   }, []);
 
-  const writeCheckId = (result: CheckRunResult, index: number) =>
-    `${index}${result.checkResultType}`;
-
-  // const scrollToCheckReferenceInEditor = useCallback(
-  //   (id: string) => {
-  //     const selectedResult = checkResults?.find(
-  //       (result, index) => writeCheckId(result, index) === id,
-  //     );
-
-  //     if (!selectedResult) return;
-
-  //     const selectedCheckScrRef: ScriptureReference = {
-  //       bookNum: selectedResult.verseRef.bookNum,
-  //       chapterNum: selectedResult.verseRef.chapterNum,
-  //       verseNum: selectedResult.verseRef.verseNum,
-  //     };
-
-  //     setScrRef(selectedCheckScrRef);
-  //   },
-  //   [checkResults, setScrRef],
-  // );
-
-  // TODO: Function for getting selectedResult
-  // TODO: Is this highlighting text in the editor? Do we still need to update the scrRef?
   /**
-   * Selects a range in the editor based on the provided check result ID. This function is used to
-   * highlight the text in the editor that corresponds to a specific check result. Adapted from
-   * onRowSelected in CheckingResultsListWebView.
-   *
-   * @param id - The ID of the check result to select.
-   * @returns Promise<void> - A promise that resolves when the range has been selected.
+   * Creates a unique identifier for a CheckRunResult, used to provide a unique key to the UI and to
+   * track which check result is selected.
    */
-  const selectRange = useCallback(
-    async (id: string) => {
+  const writeCheckId = (result: CheckRunResult, index: number) =>
+    `${result.checkResultUniqueId || ''}__${result.verseRef.book}_${result.verseRef.chapter}_${result.verseRef.verse}__${result.checkResultType}__${index}`;
+
+  // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
+  /**
+   * Scrolls the editor to the reference of the selected check result by setting the scripture
+   * reference of the scroll group shared by the side panel and the editor.
+   *
+   * @param id - The unique identifier of the selected check result.
+   */
+  const scrollToCheckReferenceInEditor = useCallback(
+    (id: string) => {
       const selectedResult = checkResults?.find(
         (result, index) => writeCheckId(result, index) === id,
       );
 
-      if (!selectedResult || !editorWebViewController || !editorWebViewId) return;
+      if (!selectedResult) return;
 
-      // eslint-disable-next-line no-console
-      // console.log('selectedResult', {
-      //   start: selectedResult.start,
-      //   end: selectedResult.end,
-      // });
+      const selectedCheckScrRef: ScriptureReference = {
+        bookNum: selectedResult.verseRef.bookNum,
+        chapterNum: selectedResult.verseRef.chapterNum,
+        verseNum: selectedResult.verseRef.verseNum,
+      };
 
-      const startOffset = selectedResult.start.offset ?? 0;
-      const start: ScriptureLocation =
-        'jsonPath' in selectedResult.start
-          ? {
-              bookNum: selectedResult.verseRef.bookNum,
-              chapterNum: selectedResult.verseRef.chapterNum,
-              jsonPath: selectedResult.start.jsonPath,
-              offset: startOffset,
-            }
-          : {
-              scrRef: {
-                bookNum: selectedResult.verseRef.bookNum,
-                chapterNum: selectedResult.verseRef.chapterNum,
-                verseNum: selectedResult.verseRef.verseNum,
-              },
-              offset: startOffset,
-            };
-
-      let end: ScriptureLocation = { ...start, offset: start.offset ?? 0 };
-      if (selectedResult.end) {
-        const endOffset = selectedResult.start.offset ?? end.offset;
-        end =
-          'jsonPath' in selectedResult.end
-            ? {
-                bookNum: selectedResult.verseRef.bookNum,
-                chapterNum: selectedResult.verseRef.chapterNum,
-                jsonPath: selectedResult.end.jsonPath,
-                offset: endOffset,
-              }
-            : {
-                scrRef: {
-                  bookNum: selectedResult.verseRef.bookNum,
-                  chapterNum: selectedResult.verseRef.chapterNum,
-                  verseNum: selectedResult.verseRef.verseNum,
-                },
-                offset: endOffset,
-              };
-      }
-
-      await editorWebViewController.selectRange({
-        start,
-        end,
-      });
+      setScrRef(selectedCheckScrRef);
     },
-    [checkResults, editorWebViewController, editorWebViewId],
+    [checkResults, setScrRef],
   );
 
-  // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any
   const handleSelectCheck = useCallback(
     async (id: string) => {
       const newId = id === selectedCheckId ? '' : id;
       setSelectedCheckId(newId);
-      await selectRange(newId);
+      scrollToCheckReferenceInEditor(newId);
     },
-    [selectRange, selectedCheckId],
+    [scrollToCheckReferenceInEditor, selectedCheckId],
   );
 
-  // TODO: This is not working, but you can see the checks are reloaded through console messages
   const handleDenyCheck = useCallback(
     async (result: CheckRunResult) => {
       if (!result || !result.checkId || !projectId || !checkAggregator) return false;
@@ -230,17 +168,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
         result.checkResultUniqueId,
       );
 
-      return denyResultSuccess || false;
+      return denyResultSuccess;
     },
     [checkAggregator, projectId],
   );
 
-  // TODO: This is not working, check is never "denied" so I can't test this
   const handleAllowCheck = useCallback(
     async (result: CheckRunResult) => {
-      if (!result || !result.checkId || !projectId) return false;
+      if (!result || !result.checkId || !projectId || !checkAggregator) return false;
 
-      const allowResultStatus = await checkAggregator?.allowCheckResult(
+      const allowResultStatus = await checkAggregator.allowCheckResult(
         result.checkId,
         result.checkResultType,
         projectId,
@@ -249,7 +186,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
         result.checkResultUniqueId,
       );
 
-      return allowResultStatus || false;
+      return allowResultStatus;
     },
     [checkAggregator, projectId],
   );
@@ -258,6 +195,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     isLoadingCheckResults ||
     isLoadingAvailableChecks ||
     isLoadingActiveRanges ||
+    isLoadingIncludeDeniedResults ||
     !checkAggregator
   )
     return (
@@ -288,8 +226,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
               handleSelectCheck={handleSelectCheck}
               checkTitle={writeCheckTitle(result)}
               checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
-              handleDenyCheck={() => handleDenyCheck(result)}
-              handleAllowCheck={() => handleAllowCheck(result)}
+              handleDenyCheck={handleDenyCheck}
+              handleAllowCheck={handleAllowCheck}
               handleOpenSettingsAndInventories={() => openConfigureChecks}
               showBadge
             />

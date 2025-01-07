@@ -2,6 +2,7 @@ import {
   Badge,
   Button,
   Card,
+  cn,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -24,7 +25,6 @@ export enum CheckStates {
   Denied = 'Denied',
 }
 
-// TODO Fix width and background color (inheriting from Card)
 /** The FixedBadge component displays a badge indicating the "Fixed" state. */
 export function FixedBadge() {
   const [localizedStrings] = useLocalizedStrings(
@@ -33,9 +33,8 @@ export function FixedBadge() {
 
   return (
     <Badge
-      style={{ backgroundColor: '#FFFFFF' }}
       variant="outline"
-      className="tw-flex tw-items-center tw-justify-between tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md"
+      className="tw-flex tw-items-center tw-justify-between tw-bg-white tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md"
     >
       <Check size={12} />
       <span className="tw-text-muted-foreground tw-text-xs tw-font-medium">
@@ -45,7 +44,6 @@ export function FixedBadge() {
   );
 }
 
-// TODO Fix width and background color (inheriting from Card)
 /** The DeniedBadge component displays a badge indicating the "Denied" state. */
 export function DeniedBadge() {
   const [localizedStrings] = useLocalizedStrings(
@@ -54,9 +52,8 @@ export function DeniedBadge() {
 
   return (
     <Badge
-      style={{ backgroundColor: '#FFFFFF' }}
       variant="outline"
-      className="tw-flex tw-items-center tw-justify-between tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md"
+      className="tw-flex tw-items-center tw-justify-between tw-bg-white tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md"
     >
       <X size={12} />
       <span className="tw-text-muted-foreground tw-text-xs tw-font-medium">
@@ -66,7 +63,6 @@ export function DeniedBadge() {
   );
 }
 
-// TODO Check height, weight, shadow strength
 /** The CheckingBadge component displays a badge indicating the "Checking" state. */
 export function CheckingBadge() {
   const [localizedStrings] = useLocalizedStrings(
@@ -74,7 +70,7 @@ export function CheckingBadge() {
   );
 
   return (
-    <Badge className="tw-flex tw-items-center tw-justify-center tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md">
+    <Badge className="tw-flex tw-items-center tw-justify-center tw-bg-white tw-w-20 tw-h-5 tw-shadow-sm tw-rounded-md">
       <span className="tw-text-xs tw-font-medium">
         {localizedStrings['%webView_checksSidePanel_checkingBadge_title%']}
       </span>
@@ -162,38 +158,21 @@ function FocusedCheckDropdown({
 }
 
 /** Props for the CheckNotification component. */
-type CheckNotificationProps = {
+type CheckTypeIndicatorProps = {
   /** Indicates whether the check notification should be appear muted */
   isMuted?: boolean;
-  /** The type of the check */
+  /** The type of the check to display */
   checkType: string;
 };
 
-// TODO : Move to PBR? Add TW style
 /**
  * CheckNotification component displays a notification for a check, with different styles based on
  * whether it is muted or not
  */
-function CheckNotification({ isMuted, checkType }: CheckNotificationProps) {
+function CheckTypeIndicator({ isMuted, checkType }: CheckTypeIndicatorProps) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'row' }}>
-      <div
-        style={{
-          width: '15px',
-          height: '15px',
-          padding: '5px',
-          alignItems: 'center',
-        }}
-      >
-        <div
-          style={{
-            background: isMuted ? '#A1A1AA' : '#60A5FA',
-            borderRadius: '50%',
-            width: '5px',
-            height: '5px',
-          }}
-        />
-      </div>
+    <div className="pr-twp tw-flex tw-flex-row tw-items-center tw-gap-2">
+      <Badge variant={isMuted ? 'mutedIndicator' : 'blueIndicator'} />
       <span className="tw-text-xs tw-text-gray-500">{checkType}</span>
     </div>
   );
@@ -254,17 +233,11 @@ export default function CheckCard({
   return (
     <Card
       onClick={() => handleSelectCheck(checkId)}
-      className={`pr-twp tw-w-full tw-flex tw-cursor-pointer tw-flex-col tw-items-flex-start tw-gap-3 tw-p-4 tw-rounded-lg hover:tw-shadow-xl ${
-        isSelected ? 'tw-shadow-md' : ''
-      } cursor-pointer`}
-      style={
-        !isSelected
-          ? {
-              backgroundColor: '#F1F5F9',
-              borderColor: '#F1F5F9',
-            }
-          : {}
-      }
+      className={cn(
+        'pr-twp tw-w-full tw-flex tw-cursor-pointer tw-flex-col tw-items-flex-start tw-gap-3 tw-p-4 tw-rounded-lg hover:tw-shadow-xl tw-border-0',
+        { 'tw-shadow-md': isSelected },
+        { 'tw-bg-slate-100 tw-border-slate-100': !isSelected },
+      )}
     >
       <div className="tw-flex tw-justify-between">
         <div className="tw-gap-1 tw-flex tw-flex-col">
@@ -276,7 +249,7 @@ export default function CheckCard({
           >
             {checkTitle}
           </span>
-          <CheckNotification checkType={checkResult.checkResultType} isMuted={isFixedOrDenied} />
+          <CheckTypeIndicator checkType={checkResult.checkResultType} isMuted={isFixedOrDenied} />
         </div>
         {isSelected && (
           <FocusedCheckDropdown

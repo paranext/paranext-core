@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import papi, { DataProviderEngine, dataProviders, logger } from '@papi/backend';
 import { Mutex, MutexMap, UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
 import {
@@ -239,17 +238,13 @@ class CheckRunnerEngine
     checkResultUniqueId?: string,
   ): Promise<boolean> {
     const deniedResults = await this.loadDeniedResults(projectId);
-    console.log('Before adding denied result:', deniedResults);
     const retVal = deniedResults.addResult({
       checkResultType,
       verseRef,
       selectedText,
       checkResultUniqueId,
     });
-    if (retVal) {
-      await this.saveDeniedResults(projectId);
-      console.log('After saving denied result:', await this.loadDeniedResults(projectId));
-    }
+    if (retVal) await this.saveDeniedResults(projectId);
     return retVal;
   }
 
