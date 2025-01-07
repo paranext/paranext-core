@@ -28,6 +28,7 @@ import {
   TableRow,
   usePromise,
 } from 'platform-bible-react';
+import { getErrorMessage } from 'platform-bible-utils';
 // import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -62,7 +63,7 @@ type SortConfig = {
 //   action: 'installing' | 'removing';
 // };
 
-globalThis.webViewComponent = function GetResourcesDialog() {
+globalThis.webViewComponent = function HomeDialog() {
   const [localizedStrings] = useLocalizedStrings(HOME_STRING_KEYS);
 
   const actionText: string = localizedStrings['%resources_action%'];
@@ -95,6 +96,26 @@ globalThis.webViewComponent = function GetResourcesDialog() {
         : 'platformScriptureEditor.openResourceViewer',
       projectId,
     );
+
+  const [getSharedProjectsError, setGetSharedProjectsError] = useState('');
+
+  const [sharedProjectsInfo] = usePromise(
+    useCallback(async () => {
+      // Gather S/R-able projects
+      try {
+        const projectsInfo = await papi.commands.sendCommand(
+          'paratextBibleSendReceive.getSharedProjects',
+        );
+        return projectsInfo;
+      } catch (e) {
+        setGetSharedProjectsError(getErrorMessage(e));
+        return undefined;
+      }
+    }, []),
+    undefined,
+  );
+
+  console.log('SR projs:', sharedProjectsInfo);
 
   const [projects] = usePromise(
     useCallback(async () => {

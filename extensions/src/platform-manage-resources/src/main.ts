@@ -1,6 +1,7 @@
 import papi, { logger } from '@papi/backend';
 import {
   ExecutionActivationContext,
+  GetWebViewOptions,
   IWebViewProvider,
   ManageExtensions,
   SavedWebViewDefinition,
@@ -55,13 +56,31 @@ const homeWebViewProvider: IWebViewProvider = {
   },
 };
 
+interface HomeProjectOptions extends GetWebViewOptions {
+  isSendReceiveAvailable?: boolean;
+}
+
 export async function activate(context: ExecutionActivationContext) {
   logger.info('Platform Manage Resources Extension is activating!');
 
+  let isSendReceiveAvailable: boolean = false;
   if (context.elevatedPrivileges.manageExtensions) {
     manageExtensions = context.elevatedPrivileges.manageExtensions;
     const installedExtensions = await manageExtensions.getInstalledExtensions();
     console.log('installed extensions:', installedExtensions);
+    isSendReceiveAvailable =
+      installedExtensions.packaged.includes({
+        extensionName: 'paratextBibleSendReceive',
+        extensionVersion: '0.1.0',
+      }) ||
+      installedExtensions.enabled.includes({
+        extensionName: 'paratextBibleSendReceive',
+        extensionVersion: '0.1.0',
+      });
+    console.log(
+      'rolf:',
+      await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects'),
+    );
   }
 
   const getResourcesWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
@@ -84,13 +103,25 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
+  if (isSendReceiveAvailable) {
+    console.log(
+      'rolf:',
+      await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects'),
+    );
+  }
+
+  const options: HomeProjectOptions = { isSendReceiveAvailable: isSendReceiveAvailable };
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformManageResources.openHome',
     async () => {
-      return papi.webViews.openWebView(HOME_WEB_VIEW_TYPE, {
-        type: 'float',
-        floatSize: HOME_WEB_VIEW_SIZE,
-      });
+      return papi.webViews.openWebView(
+        HOME_WEB_VIEW_TYPE,
+        {
+          type: 'float',
+          floatSize: HOME_WEB_VIEW_SIZE,
+        },
+        options,
+      );
     },
   );
 
