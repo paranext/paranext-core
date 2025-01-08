@@ -39,10 +39,6 @@ export default function ChecksScopeFilter({ handleSelectScope }: ChecksScopeFilt
           <Label htmlFor={CheckScopes.Chapter}>{CheckScopes.Chapter}</Label>
         </div>
         <div>
-          <RadioGroupItem value={CheckScopes.VisibleText} id={CheckScopes.VisibleText} />
-          <Label htmlFor={CheckScopes.VisibleText}>{CheckScopes.VisibleText}</Label>
-        </div>
-        <div>
           <RadioGroupItem value={CheckScopes.All} id={CheckScopes.All} />
           <Label htmlFor={CheckScopes.All}>{CheckScopes.All}</Label>
         </div>

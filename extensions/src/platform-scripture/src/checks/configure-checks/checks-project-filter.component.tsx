@@ -30,6 +30,8 @@ async function getProjectNames(projectIdToGetName: string) {
   return { projectShortName, projectFullName };
 }
 
+// TODO when testing- make this look like we have already selected the project in the editor and disable the dropdown
+
 /** Dropdown component to select a project to run checks for */
 export default function ChecksProjectFilter({ handleSelectProject }: ChecksProjectFilterProps) {
   const [selectedProject, setSelectedProject] = useState<string>();
