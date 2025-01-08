@@ -43,7 +43,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
-  const [, setAvailableChecks, isLoadingAvailableChecks] = useData(
+  const [availableChecks, setAvailableChecks, isLoadingAvailableChecks] = useData(
     'platformScripture.checkAggregator',
   ).AvailableChecks(subscriptionId, [defaultCheckRunnerCheckDetails]);
 
@@ -117,8 +117,18 @@ global.webViewComponent = function ChecksSidePanelWebView({
    * Creates a unique identifier for a CheckRunResult, used to provide a unique key to the UI and to
    * track which check result is selected.
    */
-  const writeCheckId = (result: CheckRunResult, index: number) =>
-    `${result.checkResultUniqueId || ''}__${result.verseRef.book}_${result.verseRef.chapter}_${result.verseRef.verse}__${result.checkResultType}__${index}`;
+  const writeCheckId = useMemo(
+    () => (result: CheckRunResult, index: number) =>
+      `${result.checkResultUniqueId || ''}__${result.verseRef.book}_${result.verseRef.chapter}_${result.verseRef.verse}__${result.checkResultType}__${index}`,
+    [],
+  );
+
+  const getLocalizedCheckDescription = useCallback(
+    (checkId: string) => {
+      return availableChecks.find((check) => check.checkId === checkId)?.checkDescription ?? '';
+    },
+    [availableChecks],
+  );
 
   // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
@@ -143,7 +153,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
       setScrRef(selectedCheckScrRef);
     },
-    [checkResults, setScrRef],
+    [checkResults, setScrRef, writeCheckId],
   );
 
   const handleSelectCheck = useCallback(
@@ -224,12 +234,13 @@ global.webViewComponent = function ChecksSidePanelWebView({
               checkId={writeCheckId(result, index)}
               isSelected={selectedCheckId === writeCheckId(result, index)}
               handleSelectCheck={handleSelectCheck}
-              checkTitle={writeCheckTitle(result)}
+              checkCardTitle={writeCheckTitle(result)}
               checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
               handleDenyCheck={handleDenyCheck}
               handleAllowCheck={handleAllowCheck}
               handleOpenSettingsAndInventories={openSettingsAndInventories}
               showBadge
+              checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
             />
           ))
         )}

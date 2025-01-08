@@ -202,13 +202,15 @@ export type CheckCardProps = {
    *
    * @example 'MIC 4:1 Charge Charge'
    */
-  checkTitle: string;
+  checkCardTitle: string;
   /** A brief description of the check result. Optional. */
-  checkDescription?: string;
+  checkCardDescription?: string;
   /** Callback function triggered to open the configure checks webview */
   handleOpenSettingsAndInventories: () => void;
   /** Whether or not to show the relevant badge */
   showBadge?: boolean;
+  /** Description or LocalizeKey of the description of the check to display in UI */
+  checkName: string;
 };
 
 /**
@@ -223,10 +225,11 @@ export default function CheckCard({
   handleSelectCheck,
   handleAllowCheck,
   handleDenyCheck,
-  checkTitle,
-  checkDescription,
+  checkCardTitle,
+  checkCardDescription,
   handleOpenSettingsAndInventories,
   showBadge = false,
+  checkName,
 }: CheckCardProps) {
   const isFixedOrDenied = useMemo(
     () => checkState === CheckStates.Fixed || checkState === CheckStates.Denied,
@@ -250,9 +253,9 @@ export default function CheckCard({
           <span
             className={`tw-text-xs tw-font-medium ${isFixedOrDenied && 'tw-text-muted-foreground'}`}
           >
-            {checkTitle}
+            {checkCardTitle}
           </span>
-          <CheckTypeIndicator checkType={checkResult.checkResultType} isMuted={isFixedOrDenied} />
+          <CheckTypeIndicator checkType={checkName} isMuted={isFixedOrDenied} />
         </div>
         {isSelected && (
           <FocusedCheckDropdown
@@ -263,9 +266,9 @@ export default function CheckCard({
           />
         )}
       </div>
-      {isSelected && checkDescription && (
+      {isSelected && checkCardDescription && (
         <span className="tw-text-xs tw-font-regular tw-text-muted-foreground">
-          {checkDescription}
+          {checkCardDescription}
         </span>
       )}
     </Card>
