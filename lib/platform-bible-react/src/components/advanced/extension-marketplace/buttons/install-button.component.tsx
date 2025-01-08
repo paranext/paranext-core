@@ -16,9 +16,7 @@ type InstallButtonProps = {
  * The InstallButton component is a button designed for initiating installs. It includes visuals for
  * active installing and idle states.
  *
- * @param isInstalling The installing boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
- * @param buttonText Optional text for the button.
+ * @param InstallButtonProps
  * @returns A install button.
  */
 export default function InstallButton({

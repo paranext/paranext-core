@@ -4,20 +4,48 @@ import * as TabsPrimitive from '@radix-ui/react-tabs';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
+/**
+ * Tabs components provide a set of layered sections of content—known as tab panels–that are
+ * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
+ * UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export const Tabs = TabsPrimitive.Root;
 
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export type TabsListProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.List> & {
   className?: string;
 };
 
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export type TabsTriggerProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
   className?: string;
 };
 
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export type TabsContentProps = React.ComponentPropsWithoutRef<typeof TabsPrimitive.Content> & {
   className?: string;
 };
 
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export const TabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   TabsListProps
@@ -37,6 +65,11 @@ export const TabsList = React.forwardRef<
 });
 TabsList.displayName = TabsPrimitive.List.displayName;
 
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export const TabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   TabsTriggerProps
@@ -52,6 +85,11 @@ export const TabsTrigger = React.forwardRef<
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
 
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export const TabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
   TabsContentProps

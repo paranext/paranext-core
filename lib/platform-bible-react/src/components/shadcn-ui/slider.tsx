@@ -4,6 +4,13 @@ import * as SliderPrimitive from '@radix-ui/react-slider';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
+/**
+ * The Slider component is an input where the user selects a value from within a given range. This
+ * component is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/slider}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/slider}
+ */
 const Slider = React.forwardRef<
   React.ElementRef<typeof SliderPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SliderPrimitive.Root>

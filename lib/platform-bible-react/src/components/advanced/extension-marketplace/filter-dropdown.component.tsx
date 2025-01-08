@@ -45,8 +45,7 @@ export type FilterDropdownProps = {
  * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
  * items that can be checkboxes or radio items.
  *
- * @param id Optional unique identifier
- * @param groups The groups array contains the groups that will be displayed in the dropdown
+ * @param FilterDropdownProps
  * @returns A filter dropdown.
  */
 export default function FilterDropdown({ id, groups }: FilterDropdownProps) {

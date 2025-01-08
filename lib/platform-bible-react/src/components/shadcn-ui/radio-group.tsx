@@ -5,6 +5,14 @@ import { Circle } from 'lucide-react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
+/**
+ * Radio Group components providing a set of checkable buttons—known as radio buttons—where no more
+ * than one of the buttons can be checked at a time. These components are built on Radix UI
+ * primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radio-group}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/radio-group}
+ */
 const RadioGroup = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Root>
@@ -21,6 +29,11 @@ const RadioGroup = React.forwardRef<
 });
 RadioGroup.displayName = RadioGroupPrimitive.Root.displayName;
 
+/**
+ * @inheritdoc RadioGroup
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radio-group}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/radio-group}
+ */
 const RadioGroupItem = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item>
