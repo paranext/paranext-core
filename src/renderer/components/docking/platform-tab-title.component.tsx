@@ -1,7 +1,6 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import menuDataService from '@shared/services/menu-data.service';
 import {
-  Button,
   CommandHandler,
   HamburgerMenuButton,
   Tooltip,
@@ -89,28 +88,28 @@ export default function PlatformTabTitle({
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <Button variant="ghost">
-            <div ref={containerRef} className="title">
-              {isLoading || !webViewMenu?.topMenu ? (
-                icon
-              ) : (
-                <HamburgerMenuButton
-                  commandHandler={commandHandler}
-                  normalMenu={webViewMenu?.topMenu}
-                  className="tab-menu-button"
-                  aria-label={tabLabel}
-                  containerRef={containerRef}
-                >
-                  {icon}
-                </HamburgerMenuButton>
-              )}
-              <span>{title}</span>
-            </div>
-          </Button>
+          <div ref={containerRef} className="title">
+            {isLoading || !webViewMenu?.topMenu ? (
+              icon
+            ) : (
+              <HamburgerMenuButton
+                commandHandler={commandHandler}
+                normalMenu={webViewMenu?.topMenu}
+                className="tab-menu-button"
+                aria-label={tabLabel}
+                containerRef={containerRef}
+              >
+                {icon}
+              </HamburgerMenuButton>
+            )}
+            <span>{title}</span>
+          </div>
         </TooltipTrigger>
-        <TooltipContent>
-          <p>{tooltip}</p>
-        </TooltipContent>
+        {tooltip && (
+          <TooltipContent className="tooltip" side="right">
+            <p>{tooltip}</p>
+          </TooltipContent>
+        )}
       </Tooltip>
     </TooltipProvider>
   );
