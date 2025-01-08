@@ -97,7 +97,8 @@ globalThis.webViewComponent = function HomeDialog() {
       projectId,
     );
 
-  const [getSharedProjectsError, setGetSharedProjectsError] = useState('');
+  const [, setGetSharedProjectsError] = useState('');
+  // const [getSharedProjectsError, setGetSharedProjectsError] = useState('');
 
   const [sharedProjectsInfo] = usePromise(
     useCallback(async () => {

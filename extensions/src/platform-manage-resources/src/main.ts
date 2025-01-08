@@ -1,9 +1,9 @@
 import papi, { logger } from '@papi/backend';
 import {
   ExecutionActivationContext,
-  GetWebViewOptions,
+  // GetWebViewOptions,
   IWebViewProvider,
-  ManageExtensions,
+  // ManageExtensions,
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
@@ -18,7 +18,7 @@ const HOME_WEB_VIEW_TYPE = 'platformManageResources.home';
 const GET_RESOURCES_WEB_VIEW_SIZE = { width: 900, height: 650 };
 const HOME_WEB_VIEW_SIZE = { width: 900, height: 650 };
 
-let manageExtensions: ManageExtensions;
+// let manageExtensions: ManageExtensions;
 
 const getResourcesWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -56,9 +56,9 @@ const homeWebViewProvider: IWebViewProvider = {
   },
 };
 
-interface HomeProjectOptions extends GetWebViewOptions {
-  isSendReceiveAvailable?: boolean;
-}
+// interface HomeProjectOptions extends GetWebViewOptions {
+//   isSendReceiveAvailable?: boolean;
+// }
 
 export async function activate(context: ExecutionActivationContext) {
   logger.info('Platform Manage Resources Extension is activating!');
