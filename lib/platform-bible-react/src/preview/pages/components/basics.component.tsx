@@ -5,6 +5,7 @@ import {
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
 import ExampleAlerts from './basics/alert.examples.component';
+import AvatarExample from './basics/avatar.examples.component';
 import BadgeExamples from './basics/badge.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
@@ -35,6 +36,7 @@ function Basics() {
       <VerticalTabs defaultValue="Button">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Avatar">Avatar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Badge">Badge</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
@@ -63,6 +65,10 @@ function Basics() {
 
         <VerticalTabsContent value="Alert">
           <ExampleAlerts />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Avatar">
+          <AvatarExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Badge">
