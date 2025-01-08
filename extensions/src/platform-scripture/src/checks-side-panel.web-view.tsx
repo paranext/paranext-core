@@ -1,5 +1,5 @@
 import { WebViewProps } from '@papi/core';
-import papi from '@papi/frontend';
+import { logger } from '@papi/frontend';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckInputRange,
@@ -101,9 +101,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'platformScripture.checkAggregator',
   ).CheckResults(subscriptionId, []);
 
-  const openConfigureChecks = useCallback(async () => {
-    await papi.commands.sendCommand('platformScripture.openConfigureChecks', projectId);
-  }, [projectId]);
+  const openSettingsAndInventories = useCallback(() => {
+    logger.info('Open check settings and inventories');
+  }, []);
 
   // Used messageFormatString because result.selectedText is the entire verse.
   const writeCheckTitle = useCallback((result: CheckRunResult) => {
@@ -228,7 +228,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
               checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
               handleDenyCheck={handleDenyCheck}
               handleAllowCheck={handleAllowCheck}
-              handleOpenSettingsAndInventories={() => openConfigureChecks}
+              handleOpenSettingsAndInventories={openSettingsAndInventories}
               showBadge
             />
           ))

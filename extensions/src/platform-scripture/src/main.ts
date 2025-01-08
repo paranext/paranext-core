@@ -424,6 +424,24 @@ export async function activate(context: ExecutionActivationContext) {
   const showChecksSidePanelPromise = papi.commands.registerCommand(
     'platformScripture.openChecksSidePanel',
     openChecksSidePanel,
+    {
+      method: {
+        summary: 'Open the checks side panel',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the checks are for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the new checks side panel web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
   );
   const showChecksSidePanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     checksSidePanelWebViewType,

@@ -145,7 +145,10 @@ function FocusedCheckDropdown({
         )}
         <DropdownMenuItem
           className="tw-flex tw-flex-row"
-          onClick={handleOpenSettingsAndInventories}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleOpenSettingsAndInventories();
+          }}
         >
           <Settings className="tw-mr-2 tw-h-4 tw-w-4" />
           <span>
