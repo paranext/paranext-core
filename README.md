@@ -302,7 +302,7 @@ Some important decisions in this project were inspired by the work done in [Visu
 ## License
 
 This project is licensed under the [MIT License](./LICENSE).
-Copyright © 2022-2025 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
+Copyright © 2017-2025 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
 
 <!-- define variables used above -->
 
