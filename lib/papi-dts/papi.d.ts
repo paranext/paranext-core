@@ -5464,13 +5464,64 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     getInstalledExtensions: GetInstalledExtensionsFunction;
   };
 }
+declare module 'shared/models/handle-uri-privilege.model' {
+  import { Unsubscriber } from 'platform-bible-utils';
+  /** Function that is called when the system navigates to a URI that this handler is set up to handle. */
+  export type UriHandler = (uri: string) => Promise<void> | void;
+  /**
+   * Function that registers a {@link UriHandler} to be called when the system navigates to a URI that
+   * matches the handler's scope
+   */
+  export type RegisterUriHandler = (uriHandler: UriHandler) => Unsubscriber;
+  /**
+   * Functions and properties related to listening for when the system navigates to a URI built for an
+   * extension
+   */
+  export type HandleUri = {
+    /**
+     * Register a handler function to listen for when the system navigates to a URI built for this
+     * extension. Each extension can only register one uri handler at a time.
+     *
+     * Each extension has its own exclusive URI that it can handle. Extensions cannot handle each
+     * others' URIs. The URIs this extension's handler will receive will have the following
+     * structure:
+     *
+     *     `<redirect-uri><additional-data>`;
+     *
+     * - `<redirect-uri>` is {@link HandleUri.redirectUri}.
+     * - `<additional-data>` is anything else that is on the URI as the application receives it. This
+     *   could include path, query (aka parameters), and fragment (aka anchor).
+     *
+     * Handling URIs is useful for authentication workflows and other interactions with this extension
+     * from outside the application.
+     */
+    registerUriHandler: RegisterUriHandler;
+    /**
+     * The most basic URI this extension can handle with {@link HandleUri.registerUriHandler}. This
+     * `redirectUri` has the following structure:
+     *
+     *     `<app-uri-scheme>://<extension-publisher>.<extension-name>`;
+     *
+     * - `<app-uri-scheme>` is the URI scheme this application supports. TODO: link name here
+     * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
+     *   manifest
+     * - `<extension-name>` is the name of this extension as specified in the extension manifest
+     *
+     * Additional data can be added to the end of the URI; this is just the scheme and authority. See
+     * {@link HandleUri.registerUriHandler} for more information.
+     */
+    redirectUri: string;
+  };
+}
 declare module 'shared/models/elevated-privileges.model' {
   import { CreateProcess } from 'shared/models/create-process-privilege.model';
   import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  import { HandleUri } from 'shared/models/handle-uri-privilege.model';
   /** String constants that are listed in an extension's manifest.json to state needed privileges */
   export enum ElevatedPrivilegeNames {
     createProcess = 'createProcess',
     manageExtensions = 'manageExtensions',
+    handleUri = 'handleUri',
   }
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
@@ -5478,6 +5529,11 @@ declare module 'shared/models/elevated-privileges.model' {
     createProcess: CreateProcess | undefined;
     /** Functions that can be run to manage what extensions are running */
     manageExtensions: ManageExtensions | undefined;
+    /**
+     * Functions and properties related to listening for when the system navigates to a URI built for
+     * this extension
+     */
+    handleUri: HandleUri | undefined;
   };
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
@@ -5785,6 +5841,23 @@ declare module 'shared/data/platform.data' {
    * Platform.Bible core
    */
   export const PLATFORM_NAMESPACE = 'platform';
+  /**
+   * Name of this application like `platform.bible`.
+   *
+   * Note: this is an identifier for the application, not this application's executable file name
+   */
+  export const APP_NAME: string;
+  /** Version of this application in [semver](https://semver.org/) format. */
+  export const APP_VERSION: string;
+  /**
+   * URI scheme that this application handles. Navigating to a URI with this scheme will open this
+   * application. This application will handle the URI as it sees fit. For example, the URI may be
+   * handled by an extension - see {@link ElevatedPrivileges.registerUriHandler } for more
+   * information.
+   *
+   * This is the same as {@link APP_NAME}.
+   */
+  export const APP_URI_SCHEME: string;
   /** Query string passed to the renderer when starting if it should enable noisy dev mode */
   export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
 }
@@ -6214,6 +6287,11 @@ declare module '@papi/core' {
     InstalledExtensions,
     ManageExtensions,
   } from 'shared/models/manage-extensions-privilege.model';
+  export type {
+    HandleUri,
+    RegisterUriHandler,
+    UriHandler,
+  } from 'shared/models/handle-uri-privilege.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
@@ -6947,6 +7025,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      * implemented.
      */
     activationEvents: string[];
+    /** Id of publisher who published this extension on the extension marketplace */
+    publisher?: string;
   };
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {

@@ -259,6 +259,23 @@ function helloException(message: string) {
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello world is activating!');
 
+  if (!context.elevatedPrivileges.handleUri) {
+    logger.warn(
+      'Hello World could not get handleUri. Maybe need to add handleUri in elevatedPrivileges',
+    );
+  } else {
+    context.registrations.add(
+      context.elevatedPrivileges.handleUri.registerUriHandler((uri) => {
+        const url = new URL(uri);
+        if (url?.pathname === '/greet') logger.info(`Hello, ${url.searchParams.get('name')}!`);
+        else logger.info(`Hello World extension received a uri at an unknown path! ${uri}`);
+      }),
+    );
+    logger.info(
+      `Hello world is listening to URIs. You can navigate to ${context.elevatedPrivileges.handleUri.redirectUri}/greet?name=your_name to say hello`,
+    );
+  }
+
   async function readRawDataForAllProjects(): Promise<string> {
     try {
       return await papi.storage.readUserData(context.executionToken, allProjectDataStorageKey);

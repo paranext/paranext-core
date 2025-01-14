@@ -25,10 +25,28 @@ import { SerializedRequestType } from '@shared/utils/util';
 import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
-import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
+import { APP_URI_SCHEME, DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { GET_METHODS } from '@shared/data/rpc.model';
+import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+
+// #region Prevent multiple instances of the app. This needs to stay at the top of the app!
+
+// Prevent multiple instances because an instance launched after the first is likely a URL redirect
+// to our protocol client. We handle URI redirects below in `second-instance`
+
+/** Whether this is the first instance of this application. */
+const isFirstInstance = app.requestSingleInstanceLock();
+
+if (!isFirstInstance) {
+  logger.debug(
+    `Application launched but not first instance. Exiting. This probably means the application just handled a URL. process.argv: ${process.argv}`,
+  );
+  app.exit();
+}
+
+// #endregion
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 /**
@@ -62,6 +80,66 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
+  // Keep a global reference of the window object. If you don't, the window will
+  // be closed automatically when the JavaScript object is garbage collected.
+  let mainWindow: BrowserWindow | undefined;
+
+  // #region Set up the protocol client to receive navigation to this app's URI scheme
+
+  // Launch the portable app if we're in it; otherwise use the normal path
+  const launchPath = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+  const args = process.argv.slice(1);
+
+  function handleUri(uri: string) {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    logger.debug(`Main is handling uri ${uri}`);
+    // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
+    // when we get there
+    let url: URL;
+    try {
+      url = new URL(uri);
+    } catch (e) {
+      logger.debug(
+        `Main received uri ${uri} but could not parse it. If this does not look like a uri, that probably means the user tried to open the application again. This is likely not a problem. ${e}`,
+      );
+      return;
+    }
+    if (url.protocol !== `${APP_URI_SCHEME}:`) {
+      logger.warn(`Main received uri ${uri} but protocol does not match ${APP_URI_SCHEME}`);
+      return;
+    }
+
+    (async () => {
+      try {
+        await networkService.request(HANDLE_URI_REQUEST_TYPE, uri);
+      } catch (e) {
+        logger.warn(
+          `Main sent request for extension service to handle uri ${uri}, but it threw. ${e}`,
+        );
+      }
+    })();
+  }
+  // Resolve the path to this file if we're running electron, not the packaged app (probably means running in dev)
+  if (process.defaultApp && args.length > 2) args[2] = path.resolve(args[2]);
+  app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args);
+  if (process.platform === 'darwin') {
+    // Use OSX's event to handle navigation
+    app.on('open-url', (_event, url) => handleUri(url));
+  } else {
+    // Non-OSX attempts to launch a second instance to handle navigation; detect and handle
+    // accordingly
+    app.on('second-instance', (_event, commandLine) => {
+      // Handle the URL
+      const uri = commandLine[commandLine.length - 1];
+      handleUri(uri);
+    });
+  }
+
+  // #endregion
+
   // #region Start the renderer
 
   // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -71,10 +149,6 @@ async function main() {
     autoUpdater.checkForUpdatesAndNotify();
   }
 } */
-
-  // Keep a global reference of the window object. If you don't, the window will
-  // be closed automatically when the JavaScript object is garbage collected.
-  let mainWindow: BrowserWindow | undefined;
 
   if (process.env.NODE_ENV === 'production') {
     const sourceMapSupport = await import('source-map-support');

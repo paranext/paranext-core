@@ -11,6 +11,11 @@ export type {
   InstalledExtensions,
   ManageExtensions,
 } from '@shared/models/manage-extensions-privilege.model';
+export type {
+  HandleUri,
+  RegisterUriHandler,
+  UriHandler,
+} from '@shared/models/handle-uri-privilege.model';
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export type {
