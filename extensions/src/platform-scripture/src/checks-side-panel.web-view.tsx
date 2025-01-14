@@ -102,7 +102,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const [checkResults, , isLoadingCheckResults] = useData(
     'platformScripture.checkAggregator',
-  ).CheckResults(subscriptionId, []);
+  ).CheckResults(
+    subscriptionId,
+    useMemo(() => [], []),
+  );
 
   const openSettingsAndInventories = useCallback(() => {
     logger.info('Open check settings and inventories');
