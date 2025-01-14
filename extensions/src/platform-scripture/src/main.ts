@@ -151,16 +151,20 @@ async function showCheckResults(webViewId: string | undefined): Promise<string |
   return papi.webViews.openWebView(checkResultsListWebViewType, { type: 'tab' }, options);
 }
 
-async function openChecksSidePanel(webViewId: string | undefined): Promise<string | undefined> {
-  let projectId: string | undefined;
+async function openChecksSidePanel(
+  editorWebViewId: string | undefined,
+): Promise<string | undefined> {
+  let projectId: ChecksSidePanelWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
+  let editorScrollGroupId: ChecksSidePanelWebViewOptions['editorScrollGroupId'];
 
   logger.debug('Opening checks side panel');
 
-  if (webViewId) {
-    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
+  if (editorWebViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
     projectId = webViewDefinition?.projectId;
     tabIdFromWebViewId = webViewDefinition?.id;
+    editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
   }
 
   if (!projectId) {
@@ -168,12 +172,22 @@ async function openChecksSidePanel(webViewId: string | undefined): Promise<strin
     return undefined;
   }
 
-  const options: ChecksSidePanelWebViewOptions = { projectId };
-  return papi.webViews.openWebView(
+  const subscriptionId = await checkAggregatorService.serviceObject.createSubscription();
+
+  const options: ChecksSidePanelWebViewOptions = { projectId, subscriptionId, editorScrollGroupId };
+  const sidePanelWebViewId = await papi.webViews.openWebView(
     checksSidePanelWebViewType,
     { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
     options,
   );
+
+  papi.webViews.onDidCloseWebView(async ({ webView }) => {
+    if (webView.webViewType === checksSidePanelWebViewType && webView.id === sidePanelWebViewId) {
+      await checkAggregatorService.serviceObject.deleteSubscription(subscriptionId);
+    }
+  });
+
+  return sidePanelWebViewId;
 }
 
 export async function activate(context: ExecutionActivationContext) {

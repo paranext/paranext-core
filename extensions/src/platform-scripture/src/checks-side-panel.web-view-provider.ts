@@ -2,17 +2,19 @@ import {
   GetWebViewOptions,
   IWebViewProvider,
   SavedWebViewDefinition,
+  ScrollGroupScrRef,
   WebViewDefinition,
 } from '@papi/core';
 import papi from '@papi/backend';
 import checksSidePanelWebView from './checks-side-panel.web-view?inline';
 import checksSidePanelWebViewStyles from './checks-side-panel.web-view.scss?inline';
-import checkAggregatorService from './checks/check-aggregator.service';
 
 export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
 export interface ChecksSidePanelWebViewOptions extends GetWebViewOptions {
   projectId: string | undefined;
+  subscriptionId: string | undefined;
+  editorScrollGroupId: ScrollGroupScrRef | undefined;
 }
 
 export default class ChecksSidePanelWebViewProvider implements IWebViewProvider {
@@ -33,9 +35,10 @@ export default class ChecksSidePanelWebViewProvider implements IWebViewProvider 
       projectId,
       content: checksSidePanelWebView,
       styles: checksSidePanelWebViewStyles,
+      scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,
-        subscriptionId: checkAggregatorService.getSubscriptionId(),
+        subscriptionId: getWebViewOptions.subscriptionId ?? savedWebView.state?.subscriptionId,
       },
     };
   }

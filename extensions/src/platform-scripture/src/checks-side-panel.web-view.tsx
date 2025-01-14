@@ -10,7 +10,7 @@ import {
 } from 'platform-scripture';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { VerseRef } from '@sillsdev/scripture';
-import { getChaptersForBook, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
 import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';
 
@@ -45,7 +45,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const [availableChecks, setAvailableChecks, isLoadingAvailableChecks] = useData(
     'platformScripture.checkAggregator',
-  ).AvailableChecks(subscriptionId, [defaultCheckRunnerCheckDetails]);
+  ).AvailableChecks(
+    subscriptionId,
+    useMemo(() => [defaultCheckRunnerCheckDetails], []),
+  );
 
   const defaultScriptureRange: CheckInputRange = useMemo(() => {
     return {
@@ -68,10 +71,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const checkInputRange: CheckInputRange = useMemo(() => {
     return {
       projectId: projectId ?? '',
-      start: new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
-      end: new VerseRef(scrRef.bookNum, scrRef.chapterNum, getChaptersForBook(scrRef.bookNum)),
+      start: new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1),
+      end: new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1),
     };
-  }, [projectId, scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum]);
+  }, [projectId, scrRef.bookNum, scrRef.chapterNum]);
 
   const settableCheckDetails: SettableCheckDetails = useMemo(() => {
     return {
@@ -209,7 +212,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     !checkAggregator
   )
     return (
-      <div className="pr-twp checks-side-panel-web-view tw-h-full tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+      <div className="pr-twp tw-h-screen tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
         <Spinner />
         <span className="tw-text-sm">
           {localizedStrings['%webView_checksSidePanel_loadingCheckResults%']}
@@ -218,10 +221,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
     );
 
   return (
-    <div className="pr-twp checks-side-panel-web-view">
+    <div className="pr-twp">
+      <p>{subscriptionId}</p>
       <div className="check-card-container">
         {checkResults?.length === 0 ? (
-          <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-h-full tw-w-full">
+          <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-h-screen tw-w-full">
             <span className="tw-text-sm">
               {localizedStrings['%webView_checksSidePanel_noCheckResults%']}
             </span>
