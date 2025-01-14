@@ -41,7 +41,7 @@ export default function AboutPanel() {
       <div className="about">
         <InlineLogoAndName width="80%" />
         <h1>{productName}</h1>
-        <p>Copyright © 2022-2024 SIL International</p>
+        <p>Copyright ©2022-2025 SIL Global and United Bible Societies.</p>
         <p>{formatReplacementString(versionLabelFormat, PackageInfo)}</p>
         <p>{formatReplacementString(licenseLabelFormat, PackageInfo)}</p>
         <p>{PackageInfo.description}</p>
