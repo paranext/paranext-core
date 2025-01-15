@@ -12,14 +12,14 @@ const packageInfo = require('../../../release/app/package.json');
 export const PLATFORM_NAMESPACE = 'platform';
 
 /**
- * Name of this application like `platform.bible`.
+ * Name of this application like `platform-bible`.
  *
  * Note: this is an identifier for the application, not this application's executable file name
  */
-export const APP_NAME = packageInfo.name;
+export const APP_NAME: string = packageInfo.name;
 
 /** Version of this application in [semver](https://semver.org/) format. */
-export const APP_VERSION = packageInfo.version;
+export const APP_VERSION: string = packageInfo.version;
 
 /**
  * URI scheme that this application handles. Navigating to a URI with this scheme will open this

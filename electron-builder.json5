@@ -5,6 +5,10 @@
   productName: 'Platform.Bible',
   appId: 'org.paranext.PlatformBible',
   copyright: 'Copyright © 2022-2024 SIL Global',
+  protocols: {
+    name: 'platform-bible',
+    schemes: ['platform-bible'],
+  },
   asar: true,
   asarUnpack: '**\\*.{node,dll}',
   files: ['dist', 'node_modules', 'package.json'],

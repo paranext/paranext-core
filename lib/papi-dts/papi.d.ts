@@ -5842,7 +5842,7 @@ declare module 'shared/data/platform.data' {
    */
   export const PLATFORM_NAMESPACE = 'platform';
   /**
-   * Name of this application like `platform.bible`.
+   * Name of this application like `platform-bible`.
    *
    * Note: this is an identifier for the application, not this application's executable file name
    */
