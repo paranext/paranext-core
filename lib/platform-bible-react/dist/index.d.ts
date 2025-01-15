@@ -1042,7 +1042,7 @@ export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttrib
 export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
 export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | null | undefined;
+	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
 export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
 }

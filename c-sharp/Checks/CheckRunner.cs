@@ -233,6 +233,7 @@ internal class CheckRunner(PapiClient papiClient)
         {
             var denials = GetOrCreateDenials(projectId);
             denials.AddDenial(MessageId.UnknownUseMsgText, vRef, checkResultType, selectedText);
+            denials.Save();
             check.ResultsRecorder.PostProcessResults(null, denials, null);
             SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "Denied check result");
             return true;
@@ -254,6 +255,7 @@ internal class CheckRunner(PapiClient papiClient)
         {
             var denials = GetOrCreateDenials(projectId);
             denials.RemoveDenial(MessageId.UnknownUseMsgText, vRef, checkResultType, selectedText);
+            denials.Save();
             check.ResultsRecorder.PostProcessResults(null, denials, null);
             SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "Allowed check result");
             return true;

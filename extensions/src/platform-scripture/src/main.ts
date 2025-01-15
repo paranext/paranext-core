@@ -15,6 +15,10 @@ import CheckResultsWebViewProvider, {
   checkResultsListWebViewType,
   CheckResultsWebViewOptions,
 } from './checking-results-list.web-view-provider';
+import ChecksSidePanelWebViewProvider, {
+  ChecksSidePanelWebViewOptions,
+  checksSidePanelWebViewType,
+} from './checks-side-panel.web-view-provider';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -86,7 +90,7 @@ async function openInventory(
   let projectId: string | undefined;
 
   if (webViewId) {
-    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
   }
 
@@ -95,7 +99,7 @@ async function openInventory(
   }
 
   const options: InventoryWebViewOptions = { projectId };
-  return papi.webViews.getWebView(
+  return papi.webViews.openWebView(
     webViewType,
     { type: 'float', floatSize: { width: 700, height: 800 } },
     options,
@@ -108,7 +112,7 @@ async function configureChecks(webViewId: string | undefined): Promise<string | 
   logger.debug('Configuring checks');
 
   if (webViewId) {
-    const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
     projectId = webViewDefinition?.projectId;
   }
 
@@ -118,7 +122,7 @@ async function configureChecks(webViewId: string | undefined): Promise<string | 
   }
 
   const options: ConfigureChecksWebViewOptions = { projectId };
-  return papi.webViews.getWebView(
+  return papi.webViews.openWebView(
     configureChecksWebViewType,
     { type: 'float', floatSize: { width: 700, height: 800 } },
     options,
@@ -145,6 +149,45 @@ async function showCheckResults(webViewId: string | undefined): Promise<string |
 
   const options: CheckResultsWebViewOptions = { editorWebViewId, projectId };
   return papi.webViews.openWebView(checkResultsListWebViewType, { type: 'tab' }, options);
+}
+
+async function openChecksSidePanel(
+  editorWebViewId: string | undefined,
+): Promise<string | undefined> {
+  let projectId: ChecksSidePanelWebViewOptions['projectId'];
+  let tabIdFromWebViewId: string | undefined;
+  let editorScrollGroupId: ChecksSidePanelWebViewOptions['editorScrollGroupId'];
+
+  logger.debug('Opening checks side panel');
+
+  if (editorWebViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
+    projectId = webViewDefinition?.projectId;
+    tabIdFromWebViewId = webViewDefinition?.id;
+    editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
+  }
+
+  if (!projectId) {
+    logger.debug('No project!');
+    return undefined;
+  }
+
+  const subscriptionId = await checkAggregatorService.serviceObject.createSubscription();
+
+  const options: ChecksSidePanelWebViewOptions = { projectId, subscriptionId, editorScrollGroupId };
+  const sidePanelWebViewId = await papi.webViews.openWebView(
+    checksSidePanelWebViewType,
+    { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
+    options,
+  );
+
+  papi.webViews.onDidCloseWebView(async ({ webView }) => {
+    if (webView.webViewType === checksSidePanelWebViewType && webView.id === sidePanelWebViewId) {
+      await checkAggregatorService.serviceObject.deleteSubscription(subscriptionId);
+    }
+  });
+
+  return sidePanelWebViewId;
 }
 
 export async function activate(context: ExecutionActivationContext) {
@@ -177,6 +220,7 @@ export async function activate(context: ExecutionActivationContext) {
   const configureChecksWebViewProvider = new ConfigureChecksWebViewProvider(
     '%webView_configureChecks_title%',
   );
+  const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
     'platformScripture.toggleIncludeMyParatext9Projects',
@@ -361,7 +405,7 @@ export async function activate(context: ExecutionActivationContext) {
       },
     },
   );
-  const configureChecksWebViewProviderPromise = papi.webViewProviders.register(
+  const configureChecksWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     configureChecksWebViewType,
     configureChecksWebViewProvider,
   );
@@ -387,9 +431,35 @@ export async function activate(context: ExecutionActivationContext) {
       },
     },
   );
-  const showCheckResultsWebViewProviderPromise = papi.webViewProviders.register(
+  const showCheckResultsWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     checkResultsListWebViewType,
     checkResultsWebViewProvider,
+  );
+  const showChecksSidePanelPromise = papi.commands.registerCommand(
+    'platformScripture.openChecksSidePanel',
+    openChecksSidePanel,
+    {
+      method: {
+        summary: 'Open the checks side panel',
+        params: [
+          {
+            name: 'webViewId',
+            required: false,
+            summary: 'The ID of the web view tied to the project that the checks are for',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          summary: 'The ID of the new checks side panel web view',
+          schema: { type: 'string' },
+        },
+      },
+    },
+  );
+  const showChecksSidePanelWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    checksSidePanelWebViewType,
+    checksSidePanelWebViewProvider,
   );
 
   await checkHostingService.initialize();
@@ -421,6 +491,8 @@ export async function activate(context: ExecutionActivationContext) {
     await configureChecksWebViewProviderPromise,
     await showCheckResultsPromise,
     await showCheckResultsWebViewProviderPromise,
+    await showChecksSidePanelPromise,
+    await showChecksSidePanelWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );

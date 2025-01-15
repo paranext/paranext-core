@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@biblionexus-foundation/platform-editor": "~0.6.7",
-    "@biblionexus-foundation/scripture-utilities": "~0.0.6",
+    "@biblionexus-foundation/scripture-utilities": "~0.0.7",
     "@swc/core": "^1.10.1",
     "@tailwindcss/typography": "^0.5.15",
     "@types/node": "^20.17.10",
