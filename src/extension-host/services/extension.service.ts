@@ -848,9 +848,13 @@ function createRegisterUriHandlerFunction(manifest: ExtensionManifest): Register
 }
 
 function handleExtensionUri(uri: string) {
-  const url = URL.parse(uri);
-  if (!url) {
-    logger.warn(`Extension service received uri ${uri} but could not parse it`);
+  // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
+  // when we get there
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch (e) {
+    logger.warn(`Extension service received uri ${uri} but could not parse it. ${e}`);
     return;
   }
   if (url.protocol !== `${APP_URI_SCHEME}:`) {
@@ -867,7 +871,7 @@ function handleExtensionUri(uri: string) {
   const uriHandler = uriHandlersByExtensionKey.get(extensionKey);
 
   if (!uriHandler) {
-    logger.debug(
+    logger.warn(
       `Extension service received uri ${uri}, but there was not a registered URI handler for ${extensionKey}`,
     );
     return;
