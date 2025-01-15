@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.DataProvider</RootNamespace>
     <SelfContained>true</SelfContained>
-    <Company>SIL International</Company>
-    <Copyright>SIL International</Copyright>
+    <Company>SIL Global and United Bible Societies</Company>
+    <Copyright>Copyright © 2017-2025 SIL Global and United Bible Societies</Copyright>
     <Authors>sillsdev</Authors>
     <Product>Paratext Data Provider for Platform.Bible</Product>
     <Title>Paratext Data Provider for Platform.Bible</Title>
