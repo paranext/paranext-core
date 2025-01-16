@@ -1068,7 +1068,7 @@ export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | null | undefined;
+	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
