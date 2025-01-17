@@ -22,8 +22,7 @@ interface VersionHistoryProps {
  * Component to render the version history information shown in the footer component. Lists the 5
  * most recent versions, with the options to show all versions by pressing a button.
  *
- * @param versionHistory Object containing the versions mapped with their information
- * @param id Optional unique identifier
+ * @param VersionHistoryProps
  * @returns Rendered version history for the Footer component
  */
 export default function VersionHistory({ id, versionHistory }: VersionHistoryProps) {

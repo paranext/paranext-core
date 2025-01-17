@@ -32,12 +32,7 @@ type SettingsListItemProps = PropsWithChildren & {
 /**
  * SettingsListItem component is a common list item. Rendered with a formatted div
  *
- * @param primary Primary text of the list item
- * @param secondary Optional secondary text of the list item
- * @param isLoading Optional, to display a message if the action component isn't generated yet,
- *   defaults to false
- * @param children The action component(s) to provide for this item
- * @param loadingMessage Optional, message to display if isLoading
+ * @param SettingsListItemProps
  * @returns Formatted div encompassing the list item content
  */
 export function SettingsListItem({
@@ -80,10 +75,7 @@ type SettingsListHeaderProps = {
 /**
  * SettingsListHeader component displays text above the list
  *
- * @param primary The primary text of the list header
- * @param secondary Optional secondary text of the list header
- * @param includeSeparator Optional boolean to include a separator underneath the secondary text.
- *   Defaults to false
+ * @param SettingsListHeaderProps
  * @returns Formatted div with list header content
  */
 export function SettingsListHeader({

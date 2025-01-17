@@ -407,7 +407,7 @@ export declare const inventoryItemColumn: (itemLabel: string) => ColumnDef<Inven
  * Function that creates the count column for inventories. Should be used with the DataTable
  * component.
  *
- * @param itemLabel Localized label for the count column
+ * @param countLabel Localized label for the count column
  * @returns Column that shows the number of occurrences of the related inventory items
  */
 export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<InventoryTableData>;
@@ -654,12 +654,7 @@ export type SettingsListItemProps = React$1.PropsWithChildren & {
 /**
  * SettingsListItem component is a common list item. Rendered with a formatted div
  *
- * @param primary Primary text of the list item
- * @param secondary Optional secondary text of the list item
- * @param isLoading Optional, to display a message if the action component isn't generated yet,
- *   defaults to false
- * @param children The action component(s) to provide for this item
- * @param loadingMessage Optional, message to display if isLoading
+ * @param SettingsListItemProps
  * @returns Formatted div encompassing the list item content
  */
 export declare function SettingsListItem({ primary, secondary, children, isLoading, loadingMessage, }: SettingsListItemProps): import("react/jsx-runtime").JSX.Element;
@@ -675,10 +670,7 @@ export type SettingsListHeaderProps = {
 /**
  * SettingsListHeader component displays text above the list
  *
- * @param primary The primary text of the list header
- * @param secondary Optional secondary text of the list header
- * @param includeSeparator Optional boolean to include a separator underneath the secondary text.
- *   Defaults to false
+ * @param SettingsListHeaderProps
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
@@ -708,13 +700,30 @@ export type ChecklistProps = {
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
 export function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Style variants for the Button component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+/**
+ * Props for Button component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
 export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
 	asChild?: boolean;
 }
+/**
+ * The Button component displays a button or a component that looks like a button. The component is
+ * built and styled by Shadcn UI.
+ *
+ * @param ButtonProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
 export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type ComboBoxLabelOption = {
 	label: string;
@@ -1035,138 +1044,499 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	className?: string;
 }>;
 export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
+ */
 export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & VariantProps<(props?: ({
 	variant?: "default" | "destructive" | null | undefined;
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Alert
+ * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
+ */
 export declare const AlertTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+/**
+ * @inheritdoc Alert
+ * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
+ */
 export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+/**
+ * Style variants for the Badge component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
+ */
 export declare const badgeVariants: (props?: ({
 	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+/**
+ * Props for the Badge component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
+ */
 export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {
 }
+/**
+ * The Badge component displays a badge or a component that looks like a badge. The component is
+ * built and styled by Shadcn UI.
+ *
+ * @param BadgeProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
+ */
 export declare function Badge({ className, variant, ...props }: BadgeProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Card component displays a card with header, content, and footer. This component is built and
+ * styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 export declare const Card: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 export declare const CardHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 export declare const CardTitle: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLHeadingElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 export declare const CardDescription: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLParagraphElement> & React$1.RefAttributes<HTMLParagraphElement>>;
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 export declare const CardContent: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 export declare const CardFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Checkbox component provides a control that allows the user to toggle between checked and not
+ * checked. This components is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/checkbox}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
+ */
 export declare const Checkbox: React$1.ForwardRefExoticComponent<Omit<CheckboxPrimitive.CheckboxProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * Dropdown Menu components providing accessible dropdown menus and submenus. These components are
+ * built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenu: React$1.FC<DropdownMenuPrimitive.DropdownMenuProps>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuTrigger: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuPortal: React$1.FC<DropdownMenuPrimitive.DropdownMenuPortalProps>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuSub: React$1.FC<DropdownMenuPrimitive.DropdownMenuSubProps>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuRadioGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export type DropdownMenuSubTriggerProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubTrigger> & {
 	className?: string;
 	inset?: boolean;
 };
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export type DropdownMenuSubContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.SubContent> & {
 	className?: string;
 };
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export type DropdownMenuContentProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content> & {
 	className?: string;
 	sideOffset?: number;
 };
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export type DropdownMenuItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
 	className?: string;
 	inset?: boolean;
 };
+/** @inheritDoc DropdownMenu @group DropdownMenu */
 export type DropdownMenuCheckboxItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
 	className?: string;
 	checked?: boolean;
 };
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export type DropdownMenuRadioItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem> & {
 	className?: string;
 };
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export type DropdownMenuLabelProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
 	className?: string;
 	inset?: boolean;
 };
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export type DropdownMenuSeparatorProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator> & {
 	className?: string;
 };
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export type DropdownMenuShortcutProps = React$1.HTMLAttributes<HTMLSpanElement> & {
 	className?: string;
 };
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuSubTrigger: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubTriggerProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuSubContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	sideOffset?: number | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	checked?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuLabel: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritDoc DropdownMenu
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare const DropdownMenuSeparator: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
 export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
 export declare namespace DropdownMenuShortcut {
 	var displayName: string;
 }
+/**
+ * Props for Input component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 export interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement> {
 }
+/**
+ * Input component displays a form input field or a component that looks like an input field. This
+ * components is built and styled with Shadcn UI.
+ *
+ * @param InputProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React$1.RefAttributes<HTMLInputElement>>;
+/**
+ * The Label component renders an accessible label associated with controls. This components is
+ * built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/label}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
+ */
 export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: import("class-variance-authority/dist/types").ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
+/**
+ * Radio Group components providing a set of checkable buttons—known as radio buttons—where no more
+ * than one of the buttons can be checked at a time. These components are built on Radix UI
+ * primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radio-group}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/radio-group}
+ */
 export declare const RadioGroup: React$1.ForwardRefExoticComponent<Omit<RadioGroupPrimitive.RadioGroupProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc RadioGroup
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radio-group}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/radio-group}
+ */
 export declare const RadioGroupItem: React$1.ForwardRefExoticComponent<Omit<RadioGroupPrimitive.RadioGroupItemProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * Select components display a list of options for the user to pick from—triggered by a button.
+ * These components are built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const Select: React$1.FC<SelectPrimitive.SelectProps>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectGroup: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectGroupProps & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectValueProps & React$1.RefAttributes<HTMLSpanElement>>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectTrigger: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectScrollUpButton: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectScrollUpButtonProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectScrollDownButton: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectScrollDownButtonProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectContent: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectLabel: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectItem: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Select
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ */
 export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * The Separator component visually or semantically sepearates content. This component is built on
+ * Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/separator}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/separator}
+ */
 export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Props for SOnner component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
+ * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
+ */
 export type SonnerProps = React$1.ComponentProps<typeof Toaster>;
+/**
+ * The Sonner component is an opinionated toast component for React. It is built on Sonner and
+ * styled with Shadcn UI.
+ *
+ * @param SonnerProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
+ * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
+ */
 export declare function Sonner({ ...props }: SonnerProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The Slider component is an input where the user selects a value from within a given range. This
+ * component is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/slider}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/slider}
+ */
 export declare const Slider: React$1.ForwardRefExoticComponent<Omit<SliderPrimitive.SliderProps & React$1.RefAttributes<HTMLSpanElement>, "ref"> & React$1.RefAttributes<HTMLSpanElement>>;
+/**
+ * The Switch component is a control that allows the user to toggle between checked and not checked.
+ * This component is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/switch}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/switch}
+ */
 export declare const Switch: React$1.ForwardRefExoticComponent<Omit<SwitchPrimitives.SwitchProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * Table components provide a responsive table. These components are built and styled with Shadcn
+ * UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ */
 export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & {
 	stickyHeader?: boolean | undefined;
 } & React$1.RefAttributes<HTMLTableElement>>;
+/**
+ * @inheritdoc Table
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ */
 export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & {
 	stickyHeader?: boolean | undefined;
 } & React$1.RefAttributes<HTMLTableSectionElement>>;
+/**
+ * @inheritdoc Table
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ */
 export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+/**
+ * @inheritdoc Table
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ */
 export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
+/**
+ * @inheritdoc Table
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ */
 export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
+/**
+ * @inheritdoc Table
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ */
 export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
+/**
+ * @inheritdoc Table
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ */
 export declare const TableCell: React$1.ForwardRefExoticComponent<React$1.TdHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
+/**
+ * @inheritdoc Table
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ */
 export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableCaptionElement> & React$1.RefAttributes<HTMLTableCaptionElement>>;
+/**
+ * Tabs components provide a set of layered sections of content—known as tab panels–that are
+ * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
+ * UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
 	className?: string;
 };
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * @inheritdoc Tabs
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
+ */
 export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
@@ -1184,10 +1554,22 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These
+ * components are built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/toggle-group}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/toggle-group}
+ */
 export declare const ToggleGroup: React$1.ForwardRefExoticComponent<((Omit<ToggleGroupPrimitive.ToggleGroupSingleProps & React$1.RefAttributes<HTMLDivElement>, "ref"> | Omit<ToggleGroupPrimitive.ToggleGroupMultipleProps & React$1.RefAttributes<HTMLDivElement>, "ref">) & VariantProps<(props?: ({
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
 } & import("class-variance-authority/dist/types").ClassProp) | undefined) => string>) & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * @inheritdoc ToggleGroup
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/toggle-group}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/toggle-group}
+ */
 export declare const ToggleGroupItem: React$1.ForwardRefExoticComponent<Omit<ToggleGroupPrimitive.ToggleGroupItemProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & VariantProps<(props?: ({
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
@@ -1204,9 +1586,7 @@ export type InstallButtonProps = {
  * The InstallButton component is a button designed for initiating installs. It includes visuals for
  * active installing and idle states.
  *
- * @param isInstalling The installing boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
- * @param buttonText Optional text for the button.
+ * @param InstallButtonProps
  * @returns A install button.
  */
 export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
@@ -1220,8 +1600,7 @@ export type EnableButtonProps = {
  * The EnableButton component is a button designed for initiating enabling of downloads. It includes
  * visuals for active enabling and idle states.
  *
- * @param isEnabling The enabling boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
+ * @param EnableButtonProps
  * @returns A button that can be used to enable.
  */
 export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
@@ -1235,8 +1614,7 @@ export type DisableButtonProps = {
  * The DisableButton component is a button designed for initiating disabling of downloads. It
  * includes visuals for active disabling and idle states.
  *
- * @param isDisabling The disabling boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
+ * @param DisableButtonProps
  * @returns A button that can be used to disable.
  */
 export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
@@ -1250,8 +1628,7 @@ export type UpdateButtonProps = {
  * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
  * It includes visuals for active updating and idle states.
  *
- * @param isUpdating The updating boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
+ * @param UpdateButtonProps
  * @returns A button that can be used to update.
  */
 export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
@@ -1272,8 +1649,7 @@ export interface MarkdownRendererProps {
  * This component renders markdown content given a markdown string. It uses typography styles from
  * the platform.
  *
- * @param markdown The markdown string to render.
- * @param id Optional unique identifier
+ * @param MarkdownRendererProps
  * @returns A div containing the rendered markdown content.
  */
 export function MarkdownRenderer({ id, markdown, className, anchorTarget, }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
@@ -1308,8 +1684,7 @@ export type FilterDropdownProps = {
  * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
  * items that can be checkboxes or radio items.
  *
- * @param id Optional unique identifier
- * @param groups The groups array contains the groups that will be displayed in the dropdown
+ * @param FilterDropdownProps
  * @returns A filter dropdown.
  */
 export function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
@@ -1330,8 +1705,7 @@ export interface NoExtensionsFoundProps {
 /**
  * This component displays a message to the user when no extensions are found in the marketplace.
  *
- * @param id Optional unique identifier
- * @param message The message to display.
+ * @param NoExtensionsFoundProps
  * @returns {JSX.Element} - Returns the message component that displays the message to the user.
  */
 export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
@@ -1352,11 +1726,7 @@ export interface MoreInfoProps {
  * This component displays the more info section of the extension which includes the category,
  * number of downloads, languages, and links to the website and support
  *
- * @param id Optional unique identifier
- * @param category The category of the extension
- * @param downloads The number of downloads for the extension
- * @param languages The languages supported by the extension
- * @param moreInfoUrl The URL to the more info page of the extension
+ * @param MoreInfoProps
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */
@@ -1380,8 +1750,7 @@ export interface VersionHistoryProps {
  * Component to render the version history information shown in the footer component. Lists the 5
  * most recent versions, with the options to show all versions by pressing a button.
  *
- * @param versionHistory Object containing the versions mapped with their information
- * @param id Optional unique identifier
+ * @param VersionHistoryProps
  * @returns Rendered version history for the Footer component
  */
 export function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
@@ -1402,11 +1771,7 @@ export interface FooterProps {
  * Component to render the footer for the extension details which contains information on the
  * publisher, version history, languages, and file size.
  *
- * @param id Optional unique identifier
- * @param publisherDisplayName Name of the publisher
- * @param fileSize Size of the extension file in bytes
- * @param locales List of language codes supported by the extension
- * @param versionHistory Object containing the version history mapped with their information
+ * @param FooterProps
  * @returns The rendered Footer component
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;

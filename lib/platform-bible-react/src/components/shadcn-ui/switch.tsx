@@ -4,6 +4,13 @@ import React from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
+/**
+ * The Switch component is a control that allows the user to toggle between checked and not checked.
+ * This component is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/switch}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/switch}
+ */
 const Switch = React.forwardRef<
   React.ElementRef<typeof SwitchPrimitives.Root>,
   React.ComponentPropsWithoutRef<typeof SwitchPrimitives.Root>

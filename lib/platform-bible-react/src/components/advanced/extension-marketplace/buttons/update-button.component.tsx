@@ -13,8 +13,7 @@ type UpdateButtonProps = {
  * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
  * It includes visuals for active updating and idle states.
  *
- * @param isUpdating The updating boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
+ * @param UpdateButtonProps
  * @returns A button that can be used to update.
  */
 export default function UpdateButton({

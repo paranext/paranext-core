@@ -13,8 +13,7 @@ type EnableButtonProps = {
  * The EnableButton component is a button designed for initiating enabling of downloads. It includes
  * visuals for active enabling and idle states.
  *
- * @param isEnabling The enabling boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
+ * @param EnableButtonProps
  * @returns A button that can be used to enable.
  */
 export default function EnableButton({
