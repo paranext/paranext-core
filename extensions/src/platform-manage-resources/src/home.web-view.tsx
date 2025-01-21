@@ -97,26 +97,26 @@ globalThis.webViewComponent = function HomeDialog() {
       projectId,
     );
 
-  const [, setGetSharedProjectsError] = useState('');
-  // const [getSharedProjectsError, setGetSharedProjectsError] = useState('');
+  // const [, setGetSharedProjectsError] = useState('');
+  // // const [getSharedProjectsError, setGetSharedProjectsError] = useState('');
 
-  const [sharedProjectsInfo] = usePromise(
-    useCallback(async () => {
-      // Gather S/R-able projects
-      try {
-        const projectsInfo = await papi.commands.sendCommand(
-          'paratextBibleSendReceive.getSharedProjects',
-        );
-        return projectsInfo;
-      } catch (e) {
-        setGetSharedProjectsError(getErrorMessage(e));
-        return undefined;
-      }
-    }, []),
-    undefined,
-  );
+  // const [sharedProjectsInfo] = usePromise(
+  //   useCallback(async () => {
+  //     // Gather S/R-able projects
+  //     try {
+  //       const projectsInfo = await papi.commands.sendCommand(
+  //         'paratextBibleSendReceive.getSharedProjects',
+  //       );
+  //       return projectsInfo;
+  //     } catch (e) {
+  //       setGetSharedProjectsError(getErrorMessage(e));
+  //       return undefined;
+  //     }
+  //   }, []),
+  //   undefined,
+  // );
 
-  console.log('SR projs:', sharedProjectsInfo);
+  // console.log('SR projs:', sharedProjectsInfo);
 
   const [projects] = usePromise(
     useCallback(async () => {
