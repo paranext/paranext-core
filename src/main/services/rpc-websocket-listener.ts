@@ -13,7 +13,7 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
-import { Mutex } from 'platform-bible-utils';
+import { getErrorMessage, Mutex } from 'platform-bible-utils';
 import { WebSocketServer } from 'ws';
 import logger from '@shared/services/logger.service';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
@@ -122,7 +122,7 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
           const awaitedResult = result instanceof Promise ? await result : result;
           return createSuccessResponse(awaitedResult);
         } catch (error) {
-          return createErrorResponse(JSON.stringify(error), JSONRPCErrorCode.InternalError);
+          return createErrorResponse(getErrorMessage(error), JSONRPCErrorCode.InternalError);
         }
       },
       'rpc-websocket-listener',

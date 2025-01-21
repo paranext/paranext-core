@@ -290,6 +290,20 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     );
   }
 
+  // test data protection
+  try {
+    const data = 'Hello, world!';
+    const isEncryptionAvailable = await papi.dataProtection.isEncryptionAvailable();
+    const dataEncrypted = await papi.dataProtection.encryptString(data);
+    const dataDecrypted = await papi.dataProtection.decryptString(dataEncrypted);
+    if (!isEncryptionAvailable || data === dataEncrypted || data !== dataDecrypted)
+      logger.warn(
+        `Hello World Data Protection test failed! data = '${data}'. dataEncrypted = '${dataEncrypted}'. dataDecrypted = '${dataDecrypted}'. isEncryptionAvailable = ${isEncryptionAvailable}`,
+      );
+  } catch (e) {
+    logger.warn(`Hello World Data Protection test failed! ${e}`);
+  }
+
   async function readRawDataForAllProjects(): Promise<string> {
     try {
       return await papi.storage.readUserData(context.executionToken, allProjectDataStorageKey);

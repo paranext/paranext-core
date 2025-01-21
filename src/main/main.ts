@@ -30,6 +30,7 @@ import { startProjectLookupService } from '@main/services/project-lookup.service
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+import { startDataProtectionService } from '@main/services/data-protection.service-host';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -82,6 +83,8 @@ async function main() {
 
   // The project lookup service relies on the network object status service
   await startProjectLookupService();
+
+  await startDataProtectionService();
 
   // The .NET data provider relies on the network service and nothing else
   dotnetDataProvider.start();

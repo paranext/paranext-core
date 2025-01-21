@@ -6524,6 +6524,93 @@ declare module 'shared/services/project-settings.service' {
   const projectSettingsService: IProjectSettingsService;
   export default projectSettingsService;
 }
+declare module 'shared/models/data-protection.service-model' {
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: These functions pass strings across processes over WebSocket, so please note they are
+   * not secure to the same extent that Electron's `safeStorage` API is.
+   */
+  export interface IDataProtectionService {
+    /**
+     * Encrypts a string using Electron's
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API. Transforms the
+     * returned buffer to a base64-encoded string using
+     * [`buffer.toString('base64')`](https://nodejs.org/api/buffer.html#buftostringencoding-start-end).
+     *
+     * This method throws if the encryption mechanism is not available such as on Linux without a
+     * supported package installed. See
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) for more information.
+     *
+     * Note that this encryption mechanism is not transferrable between computers. We recommend using
+     * it with `papi.storage` methods to store data safely.
+     *
+     * WARNING: This command passes the string across processes over WebSocket, so please note it is
+     * not secure to the same extent that Electron's `safeStorage` API is.
+     *
+     * @param text String to encrypt
+     * @returns Encrypted string. Use `papi.dataProtection.decryptString` to decrypt
+     */
+    encryptString(text: string): Promise<string>;
+    /**
+     * Decrypts a string using Electron's
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API. Transforms the
+     * input base64-encoded string to a buffer using [`Buffer.from(text,
+     * 'base64')`](https://nodejs.org/api/buffer.html#static-method-bufferfromstring-encoding).
+     *
+     * This method throws if the decryption mechanism is not available such as on Linux without a
+     * supported package installed. See
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) for more information.
+     *
+     * Note that this encryption mechanism is not transferrable between computers. We recommend using
+     * it with `papi.storage` methods to store data safely.
+     *
+     * WARNING: This command passes the string across processes over WebSocket, so please note it is
+     * not secure to the same extent that Electron's `safeStorage` API is.
+     *
+     * @param encryptedText String to decrypt. This string should have been encrypted by
+     *   `papi.dataProtection.encryptString`
+     * @returns Decrypted string
+     */
+    decryptString(encryptedText: string): Promise<string>;
+    /**
+     * Returns `true` if encryption is currently available. Returns `false` if the decryption
+     * mechanism is not available such as on Linux without a supported package installed. See
+     * Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API for
+     * more information.
+     *
+     * WARNING: This command passes the string across processes over WebSocket, so please note it is
+     * not secure to the same extent that Electron's `safeStorage` API is.
+     *
+     * @returns `true` if encryption is currently available; `false` otherwise
+     */
+    isEncryptionAvailable(): Promise<boolean>;
+  }
+  export const dataProtectionServiceNetworkObjectName = 'DataProtectionService';
+}
+declare module 'shared/services/data-protection.service' {
+  import { IDataProtectionService } from 'shared/models/data-protection.service-model';
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: These functions pass strings across processes over WebSocket, so please note they are
+   * not secure to the same extent that Electron's `safeStorage` API is.
+   */
+  const dataProtectionService: IDataProtectionService;
+  export default dataProtectionService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -6637,6 +6724,19 @@ declare module '@papi/backend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
+    /**
+     *
+     * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+     *
+     * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+     *
+     * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+     * them with `papi.storage` methods to store data safely.
+     *
+     * WARNING: These functions pass strings across processes over WebSocket, so please note they are
+     * not secure to the same extent that Electron's `safeStorage` API is.
+     */
+    dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -6841,6 +6941,19 @@ declare module '@papi/backend' {
    * other services and extensions that have registered commands.
    */
   export const commands: typeof commandService;
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: These functions pass strings across processes over WebSocket, so please note they are
+   * not secure to the same extent that Electron's `safeStorage` API is.
+   */
+  export const dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
   /**
    *
    * Service exposing various functions related to using webViews
