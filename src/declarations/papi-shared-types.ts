@@ -60,6 +60,11 @@ declare module 'papi-shared-types' {
     'platform.restart': () => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
+    /**
+     * Open a link in a new browser window. Like `window.open` in the frontend with
+     * `target='_blank'`
+     */
+    'platform.openWindow': (url: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */

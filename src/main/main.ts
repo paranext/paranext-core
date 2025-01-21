@@ -55,6 +55,24 @@ const PROCESS_CLOSE_TIME_OUT = 2000;
  */
 let willRestart = false;
 
+/**
+ * Open a link in the browser following the restrictions we put in place in Platform.Bible
+ *
+ * Make sure not to allow just any link. See
+ * https://benjamin-altpeter.de/shell-openexternal-dangers/
+ */
+async function openExternal(url: string) {
+  if (!url.startsWith('https://')) throw new Error(`URL must start with 'https://': ${url}`);
+  try {
+    await shell.openExternal(url);
+  } catch (e) {
+    logger.warn(e);
+    throw e;
+  }
+
+  return true;
+}
+
 async function main() {
   // The network service relies on nothing else, and other things rely on it, so start it first
   await networkService.initialize();
@@ -236,7 +254,15 @@ async function main() {
     // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
     mainWindow.webContents.setWindowOpenHandler((handlerDetails) => {
       // Only allow https urls
-      if (handlerDetails.url?.startsWith('https://')) shell.openExternal(handlerDetails.url);
+      (async () => {
+        try {
+          openExternal(handlerDetails.url);
+        } catch (e) {
+          logger.warn(
+            `Main could not open external url ${handlerDetails.url} from windowOpenHandler. ${e}`,
+          );
+        }
+      })();
 
       return { action: 'deny' };
     });
@@ -367,11 +393,38 @@ async function main() {
     'https://playground.open-rpc.org/?transport=websocket&schemaUrl=ws%3A%2F%2Flocalhost%3A8876%0A&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI';
   commandService.registerCommand(
     'platform.openDeveloperDocumentationUrl',
-    async () => shell.openExternal(liveDocsUrl),
+    async () => {
+      await openExternal(liveDocsUrl);
+    },
     {
       method: {
         summary: 'Open the OpenRPC documentation in a browser',
         params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.openWindow',
+    async (url) => {
+      logger.debug(`Main opening window with url from command: ${url}`);
+      await openExternal(url);
+    },
+    {
+      method: {
+        summary: "Open a link in the user's default browser",
+        params: [
+          {
+            name: 'url',
+            required: true,
+            summary: 'The url to open',
+            schema: { type: 'string' },
+          },
+        ],
         result: {
           name: 'return value',
           schema: { type: 'null' },

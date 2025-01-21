@@ -265,10 +265,24 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     );
   } else {
     context.registrations.add(
-      context.elevatedPrivileges.handleUri.registerUriHandler((uri) => {
+      context.elevatedPrivileges.handleUri.registerUriHandler(async (uri) => {
         const url = new URL(uri);
-        if (url?.pathname === '/greet') logger.info(`Hello, ${url.searchParams.get('name')}!`);
-        else logger.info(`Hello World extension received a uri at an unknown path! ${uri}`);
+        switch (url?.pathname) {
+          case '/greet':
+            logger.info(`Hello, ${url.searchParams.get('name')}!`);
+            break;
+          case '/greetAndOpen': {
+            const avatarUrl = `https://ui-avatars.com/api/?background=random&${url.searchParams}`;
+            logger.info(
+              `Hello, ${url.searchParams.get('name')}! Pulling up a generated avatar for you at ${avatarUrl}`,
+            );
+            await papi.commands.sendCommand('platform.openWindow', avatarUrl);
+            break;
+          }
+          default:
+            logger.info(`Hello World extension received a uri at an unknown path! ${uri}`);
+            break;
+        }
       }),
     );
     logger.info(

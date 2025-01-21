@@ -118,7 +118,7 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
             JSONRPCErrorCode.InternalError,
           );
         try {
-          const result = method(requestParams);
+          const result = method(...requestParams);
           const awaitedResult = result instanceof Promise ? await result : result;
           return createSuccessResponse(awaitedResult);
         } catch (error) {
