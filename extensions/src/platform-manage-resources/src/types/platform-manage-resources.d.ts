@@ -52,5 +52,8 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new Home WebView or `undefined` if not created
      */
     'platformManageResources.openHome': () => Promise<string | undefined>;
+
+    /** @returns True if Send/Receive is available to the user, false if not */
+    'platformManageResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
   }
 }

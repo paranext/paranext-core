@@ -26,6 +26,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  useEvent,
   usePromise,
 } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
@@ -113,26 +114,51 @@ globalThis.webViewComponent = function HomeDialog() {
       projectId,
     );
 
-  // const [, setGetSharedProjectsError] = useState('');
-  // // const [getSharedProjectsError, setGetSharedProjectsError] = useState('');
+  const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
+    undefined,
+  );
 
-  // const [sharedProjectsInfo] = usePromise(
-  //   useCallback(async () => {
-  //     // Gather S/R-able projects
-  //     try {
-  //       const projectsInfo = await papi.commands.sendCommand(
-  //         'paratextBibleSendReceive.getSharedProjects',
-  //       );
-  //       return projectsInfo;
-  //     } catch (e) {
-  //       setGetSharedProjectsError(getErrorMessage(e));
-  //       return undefined;
-  //     }
-  //   }, []),
-  //   undefined,
-  // );
+  const checkIfSendReceiveAvailable = useCallback(async () => {
+    console.log('on did reload extensions');
+    const isAvailable = await papi.commands.sendCommand(
+      'platformManageResources.isSendReceiveAvailable',
+    );
+    setIsSendReceiveAvailable(isAvailable);
+  }, []);
 
-  // console.log('SR projs:', sharedProjectsInfo);
+  useEffect(() => {
+    checkIfSendReceiveAvailable();
+  }, [checkIfSendReceiveAvailable]);
+
+  useEvent(
+    papi.network.getNetworkEvent('platform.onDidReloadExtensions'),
+    checkIfSendReceiveAvailable,
+  );
+
+  const [, setGetSharedProjectsError] = useState('');
+
+  const [sharedProjectsInfo] = usePromise(
+    useCallback(async () => {
+      if (!isSendReceiveAvailable) {
+        console.log('send receive not available');
+        return undefined;
+      }
+      try {
+        console.log('get shared projects');
+        const projectsInfo = await papi.commands.sendCommand(
+          'paratextBibleSendReceive.getSharedProjects',
+        );
+        return projectsInfo;
+      } catch (e) {
+        console.log('get shared projects failed');
+        setGetSharedProjectsError(getErrorMessage(e));
+        return undefined;
+      }
+    }, [isSendReceiveAvailable]),
+    undefined,
+  );
+
+  console.log('SR projs:', sharedProjectsInfo);
 
   const [projects] = usePromise(
     useCallback(async () => {
@@ -157,26 +183,6 @@ globalThis.webViewComponent = function HomeDialog() {
   );
 
   console.log('editable projs:', projects);
-
-  // const [sharedProjectsInfo] = usePromise(
-  //   useCallback(async () => {
-  //     try {
-  //       const projectsInfo = await papi.commands.sendCommand(
-  //         'paratextBibleSendReceive.getSharedProjects',
-  //       );
-  //       return projectsInfo;
-  //     } catch (e) {
-  //       // setGetSharedProjectsError(getErrorMessage(e));
-  //       return undefined;
-  //     }
-  //   }, []),
-  //   undefined,
-  // );
-
-  // console.log('S/R projs:', sharedProjectsInfo);
-
-  // const openResource = (projectId: string) =>
-  //   papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId);
 
   // const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 

@@ -3,7 +3,7 @@ import {
   ExecutionActivationContext,
   // GetWebViewOptions,
   IWebViewProvider,
-  // ManageExtensions,
+  ManageExtensions,
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
@@ -18,7 +18,7 @@ const HOME_WEB_VIEW_TYPE = 'platformManageResources.home';
 const GET_RESOURCES_WEB_VIEW_SIZE = { width: 900, height: 650 };
 const HOME_WEB_VIEW_SIZE = { width: 900, height: 650 };
 
-// let manageExtensions: ManageExtensions;
+let manageExtensions: ManageExtensions;
 
 const getResourcesWebViewProvider: IWebViewProvider = {
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -56,32 +56,8 @@ const homeWebViewProvider: IWebViewProvider = {
   },
 };
 
-// interface HomeProjectOptions extends GetWebViewOptions {
-//   isSendReceiveAvailable?: boolean;
-// }
-
 export async function activate(context: ExecutionActivationContext) {
   logger.info('Platform Manage Resources Extension is activating!');
-
-  // let isSendReceiveAvailable: boolean = false;
-  // if (context.elevatedPrivileges.manageExtensions) {
-  //   manageExtensions = context.elevatedPrivileges.manageExtensions;
-  //   const installedExtensions = await manageExtensions.getInstalledExtensions();
-  //   console.log('installed extensions:', installedExtensions);
-  //   isSendReceiveAvailable =
-  //     installedExtensions.packaged.includes({
-  //       extensionName: 'paratextBibleSendReceive',
-  //       extensionVersion: '0.1.0',
-  //     }) ||
-  //     installedExtensions.enabled.includes({
-  //       extensionName: 'paratextBibleSendReceive',
-  //       extensionVersion: '0.1.0',
-  //     });
-  //   console.log(
-  //     'rolf:',
-  //     await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects'),
-  //   );
-  // }
 
   const getResourcesWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     GET_RESOURCES_WEB_VIEW_TYPE,
@@ -103,33 +79,41 @@ export async function activate(context: ExecutionActivationContext) {
     },
   );
 
-  // if (isSendReceiveAvailable) {
-  //   console.log(
-  //     'rolf:',
-  //     await papi.commands.sendCommand('paratextBibleSendReceive.getSharedProjects'),
-  //   );
-  // }
-
-  // const options: HomeProjectOptions = { isSendReceiveAvailable: isSendReceiveAvailable };
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformManageResources.openHome',
     async () => {
-      return papi.webViews.openWebView(
-        HOME_WEB_VIEW_TYPE,
-        {
-          type: 'float',
-          floatSize: HOME_WEB_VIEW_SIZE,
-        },
-        // options,
-      );
+      return papi.webViews.openWebView(HOME_WEB_VIEW_TYPE, {
+        type: 'float',
+        floatSize: HOME_WEB_VIEW_SIZE,
+      });
+    },
+  );
+
+  const isSendReceiveAvailableCommandPromise = papi.commands.registerCommand(
+    'platformManageResources.isSendReceiveAvailable',
+    async () => {
+      let isSendReceiveAvailable: boolean = false;
+      if (context.elevatedPrivileges.manageExtensions) {
+        manageExtensions = context.elevatedPrivileges.manageExtensions;
+        const installedExtensions = await manageExtensions.getInstalledExtensions();
+        console.log('installed extensions:', installedExtensions);
+        isSendReceiveAvailable = installedExtensions.packaged
+          .concat(installedExtensions.enabled)
+          .some((extension) => {
+            return extension.extensionName === 'paratextBibleSendReceive';
+          });
+        console.log('is send receive available:', isSendReceiveAvailable);
+      }
+      return isSendReceiveAvailable;
     },
   );
 
   context.registrations.add(
     await getResourcesWebViewProviderPromise,
-    await openGetResourcesWebViewCommandPromise,
     await homeWebViewProviderPromise,
+    await openGetResourcesWebViewCommandPromise,
     await openHomeWebViewCommandPromise,
+    await isSendReceiveAvailableCommandPromise,
   );
 
   logger.info('Platform Manage Resources Extension finished activating!');
