@@ -21,6 +21,13 @@ declare module 'platform-manage-resources' {
      * @param uid DBL Entry UID that is used to identify the resource
      */
     uninstallDblResource: (uid: string) => Promise<void>;
+    /**
+     * Detects if credentials for the DBL have been configured or not. Does not check if they are
+     * valid or not.
+     *
+     * @returns True if any credentials are configured, false if not.
+     */
+    isGetDblResourcesAvailable: (uid: string) => Promise<boolean>;
   };
 }
 

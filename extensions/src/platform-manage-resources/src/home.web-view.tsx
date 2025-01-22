@@ -1,5 +1,5 @@
 import papi from '@papi/frontend';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, Ellipsis, Home } from 'lucide-react';
 import {
   Button,
@@ -30,7 +30,7 @@ import {
 } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
 // import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const HOME_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
@@ -85,9 +85,25 @@ globalThis.webViewComponent = function HomeDialog() {
   const searchedForText: string = localizedStrings['%resources_searchedFor%'];
   // const updateText: string = localizedStrings['%resources_update%'];
 
-  // const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
+  const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
   // const installResource = dblResourcesProvider?.installDblResource;
   // const uninstallResource = dblResourcesProvider?.uninstallDblResource;
+
+  const [showGetResourcesButton, setShowGetResourceButton] = useState<boolean | undefined>(
+    undefined,
+  );
+
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      if (dblResourcesProvider) {
+        setShowGetResourceButton(await dblResourcesProvider.isGetDblResourcesAvailable('why?'));
+      } else {
+        setShowGetResourceButton(undefined);
+      }
+    };
+
+    fetchAvailability();
+  }, [dblResourcesProvider]);
 
   const openResource = (projectId: string, isEditable: boolean) =>
     papi.commands.sendCommand(
@@ -307,15 +323,17 @@ globalThis.webViewComponent = function HomeDialog() {
               />
             </div>
             <div className="tw-self-end">
-              <Button
-                onClick={() =>
-                  papi.commands.sendCommand('platformManageResources.openGetResources')
-                }
-                className="tw-bg-muted"
-                variant="ghost"
-              >
-                {`+ ${getResourcesText}`}
-              </Button>
+              {showGetResourcesButton && (
+                <Button
+                  onClick={() =>
+                    papi.commands.sendCommand('platformManageResources.openGetResources')
+                  }
+                  className="tw-bg-muted"
+                  variant="ghost"
+                >
+                  {`+ ${getResourcesText}`}
+                </Button>
+              )}
             </div>
           </div>
         </CardHeader>
@@ -326,12 +344,15 @@ globalThis.webViewComponent = function HomeDialog() {
               <Label className="tw-text-muted-foreground tw-font-normal">
                 {noProjectsInstructionText}
               </Label>
-              <Button
-                onClick={() =>
-                  papi.commands.sendCommand('platformManageResources.openGetResources')
-                }
-                className="tw-mt-4"
-              >{`+ ${getResourcesText}`}</Button>
+
+              {showGetResourcesButton && (
+                <Button
+                  onClick={() =>
+                    papi.commands.sendCommand('platformManageResources.openGetResources')
+                  }
+                  className="tw-mt-4"
+                >{`+ ${getResourcesText}`}</Button>
+              )}
             </div>
           ) : (
             <div className="tw-flex-grow tw-h-full">
@@ -350,15 +371,17 @@ globalThis.webViewComponent = function HomeDialog() {
                     >
                       {clearSearchText}
                     </Button>
-                    <Button
-                      onClick={() =>
-                        papi.commands.sendCommand('platformManageResources.openGetResources')
-                      }
-                      variant="ghost"
-                      className="tw-bg-muted"
-                    >
-                      {`+ ${getResourcesText}`}
-                    </Button>
+                    {showGetResourcesButton && (
+                      <Button
+                        onClick={() =>
+                          papi.commands.sendCommand('platformManageResources.openGetResources')
+                        }
+                        variant="ghost"
+                        className="tw-bg-muted"
+                      >
+                        {`+ ${getResourcesText}`}
+                      </Button>
+                    )}
                   </div>
                 </div>
               ) : (

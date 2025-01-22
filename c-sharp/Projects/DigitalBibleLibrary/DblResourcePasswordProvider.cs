@@ -13,6 +13,19 @@ internal class DblResourcePasswordProvider : IZippedResourcePasswordProvider
 {
     private string? _cachedValue;
 
+    public static bool IsPassWordAvailable()
+    {
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            return false;
+
+        IConfigurationRoot config = new ConfigurationBuilder()
+            .AddUserSecrets<DblResourcePasswordProvider>()
+            .Build();
+
+        return !string.IsNullOrEmpty(config["DblResourceBase64-DO-NOT-SHARE"])
+            && !string.IsNullOrEmpty(config["DblResourceHash-DO-NOT-SHARE"]);
+    }
+
     public string GetPassword()
     {
         if (!RegistrationInfo.DefaultUser.IsValid)
