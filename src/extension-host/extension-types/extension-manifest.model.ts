@@ -47,4 +47,6 @@ export type ExtensionManifest = {
    * implemented.
    */
   activationEvents: string[];
+  /** Id of publisher who published this extension on the extension marketplace */
+  publisher?: string;
 };
