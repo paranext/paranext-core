@@ -1,6 +1,15 @@
 import papi from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { BookOpen, ChevronDown, ChevronsUpDown, ChevronUp, Ellipsis, Home } from 'lucide-react';
+import {
+  BookOpen,
+  ChevronDown,
+  ChevronsUpDown,
+  ChevronUp,
+  Ellipsis,
+  Home,
+  ScrollText,
+} from 'lucide-react';
+import { EditedStatus } from 'paratext-bible-send-receive';
 import {
   Button,
   Card,
@@ -57,6 +66,17 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
 type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
+};
+
+type MergedProjectInfo = {
+  projectId: string;
+  name: string;
+  fullName: string;
+  language: string;
+  isEditable: boolean;
+  isSendReceivable: boolean;
+  editedStatus?: EditedStatus;
+  lastSendReceiveDate?: string;
 };
 
 // type InstallInfo = {
@@ -160,7 +180,7 @@ globalThis.webViewComponent = function HomeDialog() {
 
   console.log('SR projs:', sharedProjectsInfo);
 
-  const [projects] = usePromise(
+  const [allProjectsInfo] = usePromise(
     useCallback(async () => {
       const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
@@ -182,7 +202,45 @@ globalThis.webViewComponent = function HomeDialog() {
     undefined,
   );
 
-  console.log('editable projs:', projects);
+  console.log('editable projs:', allProjectsInfo);
+
+  const [mergedProjectInfo, setMergedProjectInfo] = useState<MergedProjectInfo[]>([]);
+
+  useEffect(() => {
+    let newMergedProjectInfo: MergedProjectInfo[] = [];
+    if (sharedProjectsInfo) {
+      for (const [projectId, sharedProject] of Object.entries(sharedProjectsInfo)) {
+        newMergedProjectInfo.push({
+          projectId,
+          name: sharedProject.name,
+          fullName: sharedProject.fullName,
+          language: sharedProject.language,
+          isEditable: true,
+          isSendReceivable: true,
+          editedStatus: sharedProject.editedStatus,
+          lastSendReceiveDate: sharedProject.lastSendReceiveDate,
+        });
+      }
+    }
+    allProjectsInfo?.forEach((project) => {
+      if (
+        !newMergedProjectInfo.some((mergedProject) => mergedProject.projectId === project.projectId)
+      ) {
+        newMergedProjectInfo.push({
+          projectId: project.projectId,
+          name: project.name,
+          fullName: project.fullName,
+          language: project.language,
+          isEditable: project.isEditable,
+          isSendReceivable: false,
+        });
+      }
+    });
+
+    console.log('merged projs:', newMergedProjectInfo);
+
+    setMergedProjectInfo(newMergedProjectInfo);
+  }, [allProjectsInfo, sharedProjectsInfo]);
 
   // const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 
@@ -205,12 +263,12 @@ globalThis.webViewComponent = function HomeDialog() {
   const [textFilter, setTextFilter] = useState<string>('');
 
   const textFilteredProjects = useMemo(() => {
-    if (!projects) return [];
-    return projects.filter((project) => {
+    if (!mergedProjectInfo) return [];
+    return mergedProjectInfo.filter((project) => {
       const filter = textFilter.toLowerCase();
       return project.fullName.toLowerCase().includes(filter);
     });
-  }, [projects, textFilter]);
+  }, [mergedProjectInfo, textFilter]);
 
   const [sortConfig, setSortConfig] = useState<SortConfig>({
     key: 'language',
@@ -344,7 +402,7 @@ globalThis.webViewComponent = function HomeDialog() {
           </div>
         </CardHeader>
         <CardContent className="tw-flex-grow tw-overflow-auto">
-          {!projects ? (
+          {!allProjectsInfo ? (
             <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
               <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
               <Label className="tw-text-muted-foreground tw-font-normal">
@@ -407,12 +465,20 @@ globalThis.webViewComponent = function HomeDialog() {
                     {sortedProjects.map((project) => (
                       <TableRow key={project.projectId}>
                         <TableCell>
-                          <BookOpen className="tw-pr-0" size={18} />
+                          {project.isSendReceivable ? (
+                            <ScrollText className="tw-pr-0" size={18} />
+                          ) : (
+                            <BookOpen className="tw-pr-0" size={18} />
+                          )}
                         </TableCell>
                         <TableCell>{project.name}</TableCell>
                         <TableCell className="tw-font-medium">{project.fullName}</TableCell>
                         <TableCell>{project.language}</TableCell>
-                        <TableCell>Activity (?)</TableCell>
+                        <TableCell>
+                          {project.isSendReceivable && project.lastSendReceiveDate
+                            ? project.lastSendReceiveDate
+                            : '-'}
+                        </TableCell>
                         <TableCell>
                           Action (?)
                           {/* <div className="tw-flex tw-justify-between">
