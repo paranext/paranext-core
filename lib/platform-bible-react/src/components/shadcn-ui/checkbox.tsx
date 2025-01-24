@@ -4,6 +4,13 @@ import { Check } from 'lucide-react';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * Checkbox component provides a control that allows the user to toggle between checked and not
+ * checked. This components is built on Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/checkbox}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
+ */
 const Checkbox = React.forwardRef<
   React.ElementRef<typeof CheckboxPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>

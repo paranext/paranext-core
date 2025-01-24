@@ -20,11 +20,7 @@ interface FooterProps {
  * Component to render the footer for the extension details which contains information on the
  * publisher, version history, languages, and file size.
  *
- * @param id Optional unique identifier
- * @param publisherDisplayName Name of the publisher
- * @param fileSize Size of the extension file in bytes
- * @param locales List of language codes supported by the extension
- * @param versionHistory Object containing the version history mapped with their information
+ * @param FooterProps
  * @returns The rendered Footer component
  */
 export default function Footer({

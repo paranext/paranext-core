@@ -20,8 +20,7 @@ interface MarkdownRendererProps {
  * This component renders markdown content given a markdown string. It uses typography styles from
  * the platform.
  *
- * @param markdown The markdown string to render.
- * @param id Optional unique identifier
+ * @param MarkdownRendererProps
  * @returns A div containing the rendered markdown content.
  */
 export default function MarkdownRenderer({
