@@ -259,6 +259,51 @@ function helloException(message: string) {
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello world is activating!');
 
+  if (!context.elevatedPrivileges.handleUri) {
+    logger.warn(
+      'Hello World could not get handleUri. Maybe need to add handleUri in elevatedPrivileges',
+    );
+  } else {
+    context.registrations.add(
+      context.elevatedPrivileges.handleUri.registerUriHandler(async (uri) => {
+        const url = new URL(uri);
+        switch (url?.pathname) {
+          case '/greet':
+            logger.info(`Hello, ${url.searchParams.get('name')}!`);
+            break;
+          case '/greetAndOpen': {
+            const avatarUrl = `https://ui-avatars.com/api/?background=random&${url.searchParams}`;
+            logger.info(
+              `Hello, ${url.searchParams.get('name')}! Pulling up a generated avatar for you at ${avatarUrl}`,
+            );
+            await papi.commands.sendCommand('platform.openWindow', avatarUrl);
+            break;
+          }
+          default:
+            logger.info(`Hello World extension received a uri at an unknown path! ${uri}`);
+            break;
+        }
+      }),
+    );
+    logger.info(
+      `Hello world is listening to URIs. You can navigate to ${context.elevatedPrivileges.handleUri.redirectUri}/greet?name=your_name to say hello`,
+    );
+  }
+
+  // test data protection
+  try {
+    const data = 'Hello, world!';
+    const isEncryptionAvailable = await papi.dataProtection.isEncryptionAvailable();
+    const dataEncrypted = await papi.dataProtection.encryptString(data);
+    const dataDecrypted = await papi.dataProtection.decryptString(dataEncrypted);
+    if (!isEncryptionAvailable || data === dataEncrypted || data !== dataDecrypted)
+      logger.warn(
+        `Hello World Data Protection test failed! data = '${data}'. dataEncrypted = '${dataEncrypted}'. dataDecrypted = '${dataDecrypted}'. isEncryptionAvailable = ${isEncryptionAvailable}`,
+      );
+  } catch (e) {
+    logger.warn(`Hello World Data Protection test failed! ${e}`);
+  }
+
   async function readRawDataForAllProjects(): Promise<string> {
     try {
       return await papi.storage.readUserData(context.executionToken, allProjectDataStorageKey);
