@@ -9,10 +9,14 @@ import {
   SettableCheckDetails,
 } from 'platform-scripture';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { VerseRef } from '@sillsdev/scripture';
-import { LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { Canon, VerseRef } from '@sillsdev/scripture';
+import { getChaptersForBook, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
 import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';
+import ChecksScopeFilter, {
+  CheckScopes,
+} from './checks/configure-checks/checks-scope-filter.component';
+import ChecksProjectFilter from './checks/configure-checks/checks-project-filter.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -32,14 +36,16 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
 ];
 
 global.webViewComponent = function ChecksSidePanelWebView({
-  projectId,
+  projectId: editorProjectId,
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
   const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
+  const [scope, setScope] = useState<CheckScopes>(CheckScopes.Chapter);
+  const [projectId, setProjectId] = useState(editorProjectId);
   const [subscriptionId] = useWebViewState<CheckSubscriptionId>('subscriptionId', '');
-  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRINGS);
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
 
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
@@ -69,12 +75,27 @@ global.webViewComponent = function ChecksSidePanelWebView({
   ).IncludeDeniedResults(subscriptionId, true);
 
   const checkInputRange: CheckInputRange = useMemo(() => {
+    // Default is chapter
+    let start = new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1);
+    let end = new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1);
+
+    if (scope === CheckScopes.Book) {
+      start = new VerseRef(scrRef.bookNum, 1, 1);
+      end = new VerseRef(scrRef.bookNum, getChaptersForBook(scrRef.bookNum), 1);
+    }
+
+    // TODO does all mean all books all chapters
+    if (scope === CheckScopes.All) {
+      start = new VerseRef(1, 1, 1);
+      end = new VerseRef(Canon.lastBook, getChaptersForBook(Canon.lastBook), 1);
+    }
+
     return {
       projectId: projectId ?? '',
-      start: new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1),
-      end: new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1),
+      start,
+      end,
     };
-  }, [projectId, scrRef.bookNum, scrRef.chapterNum]);
+  }, [projectId, scope, scrRef]);
 
   const settableCheckDetails: SettableCheckDetails = useMemo(() => {
     return {
@@ -207,28 +228,53 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [checkAggregator, projectId],
   );
 
+  const handleSelectProject = useCallback(
+    (newProjectId: string) => {
+      setProjectId(newProjectId);
+    },
+    [setProjectId],
+  );
+
+  const handleSelectScope = useCallback(
+    (newScope: CheckScopes) => {
+      setScope(newScope);
+    },
+    [setScope],
+  );
+
   if (
     isLoadingCheckResults ||
     isLoadingAvailableChecks ||
     isLoadingActiveRanges ||
     isLoadingIncludeDeniedResults ||
     !checkAggregator
-  )
+  ) {
     return (
-      <div className="pr-twp tw-h-screen tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+      <div className="pr-twp tw-box-border tw-h-screen tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
         <Spinner />
         <span className="tw-text-sm">
           {localizedStrings['%webView_checksSidePanel_loadingCheckResults%']}
         </span>
       </div>
     );
+  }
 
   return (
-    <div className="pr-twp">
-      <p>{subscriptionId}</p>
-      <div className="check-card-container">
+    <div className="pr-twp tw-p-3">
+      <div className="tw-flex tw-gap-1 tw-items-center tw-mb-2 tw-w-full tw-min-w-0">
+        <div className="tw-w-1/3 tw-min-w-0">
+          <ChecksProjectFilter
+            handleSelectProject={handleSelectProject}
+            selectedProjectId={projectId ?? ''}
+          />
+        </div>
+        <div className="tw-w-2/3 tw-min-w-0">
+          <ChecksScopeFilter handleSelectScope={handleSelectScope} />
+        </div>
+      </div>
+      <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3">
         {checkResults?.length === 0 ? (
-          <div className="tw-flex tw-flex-col tw-items-center tw-justify-center tw-h-screen tw-w-full">
+          <div className="tw-flex tw-flex-col tw-box-border tw-items-center tw-justify-center tw-h-screen tw-w-full">
             <span className="tw-text-sm">
               {localizedStrings['%webView_checksSidePanel_noCheckResults%']}
             </span>

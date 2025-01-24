@@ -7,7 +7,7 @@ import {
 } from '@papi/core';
 import papi from '@papi/backend';
 import checksSidePanelWebView from './checks-side-panel.web-view?inline';
-import checksSidePanelWebViewStyles from './checks-side-panel.web-view.scss?inline';
+import tailwindStyles from './tailwind.css?inline';
 
 export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
@@ -34,7 +34,7 @@ export default class ChecksSidePanelWebViewProvider implements IWebViewProvider 
       title,
       projectId,
       content: checksSidePanelWebView,
-      styles: checksSidePanelWebViewStyles,
+      styles: tailwindStyles,
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,

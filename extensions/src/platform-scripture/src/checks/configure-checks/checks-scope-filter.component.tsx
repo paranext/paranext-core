@@ -1,12 +1,25 @@
-import { Label, Popover, RadioGroup, RadioGroupItem, Separator } from 'platform-bible-react';
-import { useCallback, useState } from 'react';
+import { useLocalizedStrings } from '@papi/frontend/react';
+import { LocalizeKey } from 'platform-bible-utils';
+import { useCallback, useMemo, useState } from 'react';
+import { Label, RadioGroup, RadioGroupItem } from 'platform-bible-react';
+import FilterPopover from './filter-popover.component';
 
-enum CheckScopes {
-  /** Section of project text that I can currently see */
-  VisibleText = 'VisibleText',
+/**
+ * Enum representing the different scopes that can be selected for checks.
+ *
+ * - `Chapter`: Scope of a single chapter.
+ * - `Book`: Scope of an entire book.
+ * - `All`: Scope of the entire project.
+ */
+export enum CheckScopes {
   Chapter = 'Chapter',
   Book = 'Book',
   All = 'All',
+  /**
+   * Section of project text that the user can currently see. Not yet implemented, commented out so
+   * that it can still enumerate through these values
+   */
+  // VisibleText = 'VisibleText',
 }
 
 type ChecksScopeFilterProps = {
@@ -14,35 +27,61 @@ type ChecksScopeFilterProps = {
   handleSelectScope: (scope: CheckScopes) => void;
 };
 
+const CHECK_SCOPE_FILTER_STRINGS: { [key in CheckScopes]: LocalizeKey } = {
+  Chapter: '%webView_checksSidePanel_scopeFilter_chapter%',
+  Book: '%webView_checksSidePanel_scopeFilter_book%',
+  All: '%webView_checksSidePanel_scopeFilter_all%',
+};
+
+const LOCALIZED_STRINGS: LocalizeKey[] = ['%webView_checksSidePanel_scopeFilter_label%'];
+
+/**
+ * ChecksScopeFilter component provides a dropdown to select the scope for running checks. Users can
+ * choose between Chapter, Book, or All scopes. The component leverages popover and radio group
+ * elements for the UI and triggers a callback function when the scope changes.
+ */
 export default function ChecksScopeFilter({ handleSelectScope }: ChecksScopeFilterProps) {
   const [selectedScope, setSelectedScope] = useState<CheckScopes>(CheckScopes.Chapter);
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => Object.values(CHECK_SCOPE_FILTER_STRINGS).concat(LOCALIZED_STRINGS), []),
+  );
 
   const onScopeChange = useCallback(
-    (newScope: CheckScopes) => {
-      setSelectedScope(newScope);
-      handleSelectScope(newScope);
+    (newScope: string) => {
+      // The scope is a string but we are using tighter types in this component
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const scope = newScope as CheckScopes;
+      setSelectedScope(scope);
+      handleSelectScope(scope);
     },
     [handleSelectScope],
   );
 
+  const getScopeLabel = useCallback(
+    (scope: string) => {
+      // The scope is a string but we are using tighter types in this component
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      return localizedStrings[CHECK_SCOPE_FILTER_STRINGS[scope as CheckScopes]];
+    },
+    [localizedStrings],
+  );
+
   return (
-    <Popover>
-      <Label>Scope</Label>
-      <Separator />
-      <RadioGroup value={selectedScope} onValueChange={onScopeChange}>
-        <div>
-          <RadioGroupItem value={CheckScopes.Book} id={CheckScopes.Book} />
-          <Label htmlFor={CheckScopes.Book}>{CheckScopes.Book}</Label>
-        </div>
-        <div>
-          <RadioGroupItem value={CheckScopes.Chapter} id={CheckScopes.Chapter} />
-          <Label htmlFor={CheckScopes.Chapter}>{CheckScopes.Chapter}</Label>
-        </div>
-        <div>
-          <RadioGroupItem value={CheckScopes.All} id={CheckScopes.All} />
-          <Label htmlFor={CheckScopes.All}>{CheckScopes.All}</Label>
-        </div>
+    <FilterPopover
+      selectedValue={selectedScope}
+      radioGroupLabel={localizedStrings['%webView_checksSidePanel_scopeFilter_label%']}
+      getSelectedValueLabel={getScopeLabel}
+    >
+      <RadioGroup value={selectedScope} onValueChange={onScopeChange} className="tw-p-3">
+        {Object.values(CheckScopes).map((scope) => (
+          <div key={scope} className="tw-flex tw-gap-2 tw-items-center">
+            <RadioGroupItem value={scope} id={scope} />
+            <Label htmlFor={scope} className="tw-flex-1 tw-text-sm tw-font-normal">
+              {getScopeLabel(scope)}
+            </Label>
+          </div>
+        ))}
       </RadioGroup>
-    </Popover>
+    </FilterPopover>
   );
 }

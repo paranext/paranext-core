@@ -240,8 +240,8 @@ export default function CheckCard({
     <Card
       onClick={() => handleSelectCheck(checkId)}
       className={cn(
-        'pr-twp tw-w-full tw-flex tw-cursor-pointer tw-flex-col tw-items-flex-start tw-gap-3 tw-p-4 tw-rounded-lg hover:tw-shadow-xl tw-border-0',
-        { 'tw-shadow-md': isSelected },
+        'pr-twp tw-w-full tw-flex tw-cursor-pointer tw-flex-col tw-items-flex-start tw-gap-3 tw-p-4 tw-rounded-lg hover:tw-shadow-md tw-border-0',
+        { 'tw-shadow-sm': isSelected },
         { 'tw-bg-slate-100 tw-border-slate-100': !isSelected },
       )}
     >
