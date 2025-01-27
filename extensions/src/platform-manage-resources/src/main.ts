@@ -1,7 +1,6 @@
 import papi, { logger } from '@papi/backend';
 import {
   ExecutionActivationContext,
-  // GetWebViewOptions,
   IWebViewProvider,
   ManageExtensions,
   SavedWebViewDefinition,

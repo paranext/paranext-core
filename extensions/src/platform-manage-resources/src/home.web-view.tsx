@@ -9,7 +9,6 @@ import {
   Home,
   ScrollText,
 } from 'lucide-react';
-import { EditedStatus } from 'paratext-bible-send-receive';
 import {
   Button,
   Card,
@@ -67,6 +66,8 @@ type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
 };
+
+type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
 
 type MergedProjectInfo = {
   projectId: string;
@@ -207,9 +208,9 @@ globalThis.webViewComponent = function HomeDialog() {
   const [mergedProjectInfo, setMergedProjectInfo] = useState<MergedProjectInfo[]>([]);
 
   useEffect(() => {
-    let newMergedProjectInfo: MergedProjectInfo[] = [];
+    const newMergedProjectInfo: MergedProjectInfo[] = [];
     if (sharedProjectsInfo) {
-      for (const [projectId, sharedProject] of Object.entries(sharedProjectsInfo)) {
+      Object.entries(sharedProjectsInfo).forEach(([projectId, sharedProject]) => {
         newMergedProjectInfo.push({
           projectId,
           name: sharedProject.name,
@@ -220,7 +221,7 @@ globalThis.webViewComponent = function HomeDialog() {
           editedStatus: sharedProject.editedStatus,
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
         });
-      }
+      });
     }
     allProjectsInfo?.forEach((project) => {
       if (
