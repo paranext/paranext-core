@@ -3096,6 +3096,11 @@ declare module 'papi-shared-types' {
     'platform.restart': () => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
+    /**
+     * Open a link in a new browser window. Like `window.open` in the frontend with
+     * `target='_blank'`
+     */
+    'platform.openWindow': (url: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -5464,13 +5469,68 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     getInstalledExtensions: GetInstalledExtensionsFunction;
   };
 }
+declare module 'shared/models/handle-uri-privilege.model' {
+  import { Unsubscriber } from 'platform-bible-utils';
+  /** Function that is called when the system navigates to a URI that this handler is set up to handle. */
+  export type UriHandler = (uri: string) => Promise<void> | void;
+  /**
+   * Function that registers a {@link UriHandler} to be called when the system navigates to a URI that
+   * matches the handler's scope
+   */
+  export type RegisterUriHandler = (uriHandler: UriHandler) => Unsubscriber;
+  /**
+   * Functions and properties related to listening for when the system navigates to a URI built for an
+   * extension
+   */
+  export type HandleUri = {
+    /**
+     * Register a handler function to listen for when the system navigates to a URI built for this
+     * extension. Each extension can only register one uri handler at a time.
+     *
+     * Each extension has its own exclusive URI that it can handle. Extensions cannot handle each
+     * others' URIs. The URIs this extension's handler will receive will have the following
+     * structure:
+     *
+     *     `<redirect-uri><additional-data>`;
+     *
+     * - `<redirect-uri>` is {@link HandleUri.redirectUri}.
+     * - `<additional-data>` is anything else that is on the URI as the application receives it. This
+     *   could include path, query (aka parameters), and fragment (aka anchor).
+     *
+     * Handling URIs is useful for authentication workflows and other interactions with this extension
+     * from outside the application.
+     *
+     * Note: There is currently no check in place to guarantee that a call to this handler will only
+     * come from navigating to the uri; a process connecting over the PAPI WebSocket could fake a call
+     * to this handler. However, there is no expectation for this to happen.
+     */
+    registerUriHandler: RegisterUriHandler;
+    /**
+     * The most basic URI this extension can handle with {@link HandleUri.registerUriHandler}. This
+     * `redirectUri` has the following structure:
+     *
+     *     `<app-uri-scheme>://<extension-publisher>.<extension-name>`;
+     *
+     * - `<app-uri-scheme>` is the URI scheme this application supports. TODO: link name here
+     * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
+     *   manifest
+     * - `<extension-name>` is the name of this extension as specified in the extension manifest
+     *
+     * Additional data can be added to the end of the URI; this is just the scheme and authority. See
+     * {@link HandleUri.registerUriHandler} for more information.
+     */
+    redirectUri: string;
+  };
+}
 declare module 'shared/models/elevated-privileges.model' {
   import { CreateProcess } from 'shared/models/create-process-privilege.model';
   import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  import { HandleUri } from 'shared/models/handle-uri-privilege.model';
   /** String constants that are listed in an extension's manifest.json to state needed privileges */
   export enum ElevatedPrivilegeNames {
     createProcess = 'createProcess',
     manageExtensions = 'manageExtensions',
+    handleUri = 'handleUri',
   }
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
@@ -5478,6 +5538,11 @@ declare module 'shared/models/elevated-privileges.model' {
     createProcess: CreateProcess | undefined;
     /** Functions that can be run to manage what extensions are running */
     manageExtensions: ManageExtensions | undefined;
+    /**
+     * Functions and properties related to listening for when the system navigates to a URI built for
+     * this extension
+     */
+    handleUri: HandleUri | undefined;
   };
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
@@ -5785,6 +5850,23 @@ declare module 'shared/data/platform.data' {
    * Platform.Bible core
    */
   export const PLATFORM_NAMESPACE = 'platform';
+  /**
+   * Name of this application like `platform-bible`.
+   *
+   * Note: this is an identifier for the application, not this application's executable file name
+   */
+  export const APP_NAME: string;
+  /** Version of this application in [semver](https://semver.org/) format. */
+  export const APP_VERSION: string;
+  /**
+   * URI scheme that this application handles. Navigating to a URI with this scheme will open this
+   * application. This application will handle the URI as it sees fit. For example, the URI may be
+   * handled by an extension - see {@link ElevatedPrivileges.registerUriHandler } for more
+   * information.
+   *
+   * This is the same as {@link APP_NAME}.
+   */
+  export const APP_URI_SCHEME: string;
   /** Query string passed to the renderer when starting if it should enable noisy dev mode */
   export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
 }
@@ -6214,6 +6296,11 @@ declare module '@papi/core' {
     InstalledExtensions,
     ManageExtensions,
   } from 'shared/models/manage-extensions-privilege.model';
+  export type {
+    HandleUri,
+    RegisterUriHandler,
+    UriHandler,
+  } from 'shared/models/handle-uri-privilege.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
@@ -6441,6 +6528,103 @@ declare module 'shared/services/project-settings.service' {
   const projectSettingsService: IProjectSettingsService;
   export default projectSettingsService;
 }
+declare module 'shared/models/data-protection.service-model' {
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  export interface IDataProtectionService {
+    /**
+     * Encrypts a string using Electron's
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API. Transforms the
+     * returned buffer to a base64-encoded string using
+     * [`buffer.toString('base64')`](https://nodejs.org/api/buffer.html#buftostringencoding-start-end).
+     *
+     * This method throws if the encryption mechanism is not available such as on Linux without a
+     * supported package installed. See
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) for more information.
+     *
+     * Note that this encryption mechanism is not transferrable between computers. We recommend using
+     * it with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @param text String to encrypt
+     * @returns Encrypted string. Use `papi.dataProtection.decryptString` to decrypt
+     */
+    encryptString(text: string): Promise<string>;
+    /**
+     * Decrypts a string using Electron's
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API. Transforms the
+     * input base64-encoded string to a buffer using [`Buffer.from(text,
+     * 'base64')`](https://nodejs.org/api/buffer.html#static-method-bufferfromstring-encoding).
+     *
+     * This method throws if the decryption mechanism is not available such as on Linux without a
+     * supported package installed. See
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) for more information.
+     *
+     * Note that this encryption mechanism is not transferrable between computers. We recommend using
+     * it with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @param encryptedText String to decrypt. This string should have been encrypted by
+     *   `papi.dataProtection.encryptString`
+     * @returns Decrypted string
+     */
+    decryptString(encryptedText: string): Promise<string>;
+    /**
+     * Returns `true` if encryption is currently available. Returns `false` if the decryption
+     * mechanism is not available such as on Linux without a supported package installed. See
+     * Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API for
+     * more information.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @returns `true` if encryption is currently available; `false` otherwise
+     */
+    isEncryptionAvailable(): Promise<boolean>;
+  }
+  export const dataProtectionServiceNetworkObjectName = 'DataProtectionService';
+}
+declare module 'shared/services/data-protection.service' {
+  import { IDataProtectionService } from 'shared/models/data-protection.service-model';
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  const dataProtectionService: IDataProtectionService;
+  export default dataProtectionService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -6554,6 +6738,21 @@ declare module '@papi/backend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
+    /**
+     *
+     * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+     *
+     * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+     *
+     * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+     * them with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+     * to be stored securely in local files. It is not intended to protect data passed over a network
+     * connection. Please note that using this service passes the unencrypted string between local
+     * processes using the PAPI WebSocket.
+     */
+    dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -6760,6 +6959,21 @@ declare module '@papi/backend' {
   export const commands: typeof commandService;
   /**
    *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  export const dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
+  /**
+   *
    * Service exposing various functions related to using webViews
    *
    * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
@@ -6947,6 +7161,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      * implemented.
      */
     activationEvents: string[];
+    /** Id of publisher who published this extension on the extension marketplace */
+    publisher?: string;
   };
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {

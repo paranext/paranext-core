@@ -14,7 +14,7 @@ import * as platformBibleUtils from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
 import { getCommandLineArgumentsGroup, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
-import papi, { network, fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
@@ -30,7 +30,7 @@ import {
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
-import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
+import { APP_URI_SCHEME, PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import {
   ElevatedPrivilegeNames,
   ElevatedPrivileges,
@@ -46,6 +46,16 @@ import { CreateProcess } from '@shared/models/create-process-privilege.model';
 import { wrappedFork, wrappedSpawn } from '@extension-host/services/create-process.service';
 import os from 'os';
 import { resyncContributions } from '@extension-host/services/contribution.service';
+import {
+  HandleUri,
+  RegisterUriHandler,
+  UriHandler,
+} from '@shared/models/handle-uri-privilege.model';
+import {
+  createNetworkEventEmitter,
+  registerRequestHandler,
+} from '@shared/services/network.service';
+import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -100,6 +110,14 @@ type DtsInfo = {
   /** File name including `.d.ts` */
   base: string;
 };
+
+/**
+ * Key to uniquely identify an extension with some extra certainty that the extension is who it says
+ * it is.
+ *
+ * Format: `<extension-publisher>.<extension-name>`
+ */
+type ExtensionKey = `${string}.${string}`;
 
 /**
  * Name of the file describing the extension and its capabilities. Provided by the extension
@@ -167,6 +185,12 @@ let reloadFinishedEventEmitter: platformBibleUtils.PlatformEventEmitter<boolean>
 let isReloading = false;
 /** Whether we should reload extensions again once finished currently reloading */
 let shouldReload = false;
+
+/** Map of registered URI handlers for each extension keyed by the extension publisher name and name */
+const uriHandlersByExtensionKey = new Map<ExtensionKey, UriHandler>();
+
+/** Regex matching to spaces */
+const spaceRegex = /\s/;
 
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
@@ -794,10 +818,82 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
 
 // #endregion
 
+// #region Extension URI handling privileges
+
+function getExtensionKey(manifest: ExtensionManifest): ExtensionKey {
+  if (!manifest.publisher || spaceRegex.test(manifest.publisher))
+    throw new Error('Extension publisher must not be empty string, undefined, or contain spaces');
+  if (!manifest.name || spaceRegex.test(manifest.name))
+    throw new Error('Extension name must not be empty string, undefined, or contain spaces');
+  const extensionKey: ExtensionKey = `${manifest.publisher}.${manifest.name}`;
+  return extensionKey;
+}
+
+function getRedirectUri(manifest: ExtensionManifest) {
+  return `${APP_URI_SCHEME}://${getExtensionKey(manifest)}`;
+}
+
+function createRegisterUriHandlerFunction(manifest: ExtensionManifest): RegisterUriHandler {
+  return (uriHandler) => {
+    const extensionKey = getExtensionKey(manifest);
+    if (uriHandlersByExtensionKey.has(extensionKey))
+      throw new Error(
+        `Extension ${extensionKey} already has a registered Uri handler. Cannot have multiple.`,
+      );
+
+    uriHandlersByExtensionKey.set(extensionKey, uriHandler);
+
+    return () => uriHandlersByExtensionKey.delete(extensionKey);
+  };
+}
+
+function handleExtensionUri(uri: string) {
+  // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
+  // when we get there
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch (e) {
+    logger.warn(`Extension service received uri ${uri} but could not parse it. ${e}`);
+    return;
+  }
+  if (url.protocol !== `${APP_URI_SCHEME}:`) {
+    logger.warn(
+      `Extension service received uri ${uri} but protocol does not match ${APP_URI_SCHEME}`,
+    );
+    return;
+  }
+
+  // Validating the map keys when setting in createRegisterUriHandlerFunction, so this won't match
+  // to anything if it is not properly formatted. Implicitly validating as ExtensionKey
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const extensionKey = url?.hostname as ExtensionKey;
+  const uriHandler = uriHandlersByExtensionKey.get(extensionKey);
+
+  if (!uriHandler) {
+    logger.warn(
+      `Extension service received uri ${uri}, but there was not a registered URI handler for ${extensionKey}`,
+    );
+    return;
+  }
+
+  (async () => {
+    try {
+      logger.debug(`Extension service sending uri ${uri} to extension ${extensionKey} to handle`);
+      await uriHandler(uri);
+    } catch (e) {
+      logger.warn(`Extension service ran uri handler for ${uri}, but it threw. ${e}`);
+    }
+  })();
+}
+
+// #endregion
+
 function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<ElevatedPrivileges> {
   const retVal: ElevatedPrivileges = {
     createProcess: undefined,
     manageExtensions: undefined,
+    handleUri: undefined,
   };
   if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.createProcess)) {
     const createProcess: CreateProcess = {
@@ -821,6 +917,14 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
     };
     Object.freeze(manageExtensions);
     retVal.manageExtensions = manageExtensions;
+  }
+  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.handleUri)) {
+    const handleUri: HandleUri = {
+      redirectUri: getRedirectUri(manifest),
+      registerUriHandler: createRegisterUriHandlerFunction(manifest),
+    };
+    Object.freeze(handleUri);
+    retVal.handleUri = handleUri;
   }
   Object.freeze(retVal);
   return retVal;
@@ -1002,6 +1106,16 @@ async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | 
   if (!isUnsubscribed)
     logger.error(`Extension '${extension.name}' was not successfully unsubscribed!`);
 
+  let extensionKey: ExtensionKey | undefined;
+  try {
+    extensionKey = getExtensionKey(extension);
+  } catch (e) {
+    logger.debug(
+      `Could not get extension key for extension '${extension.name}'. Skipping attempting to delete uri handler.`,
+    );
+  }
+  if (extensionKey) uriHandlersByExtensionKey.delete(extensionKey);
+
   // Delete the extension module from Node's module cache if we previously loaded it.
   const moduleKey = systemRequire.resolve(getPathFromUri(extension.dirUri));
   if (moduleKey in systemRequire.cache) delete systemRequire.cache[moduleKey];
@@ -1112,9 +1226,11 @@ export const initialize = () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
 
-    reloadFinishedEventEmitter = network.createNetworkEventEmitter<boolean>(
+    reloadFinishedEventEmitter = createNetworkEventEmitter<boolean>(
       'platform.onDidReloadExtensions',
     );
+
+    await registerRequestHandler(HANDLE_URI_REQUEST_TYPE, handleExtensionUri);
 
     await normalizeExtensionFileNames();
 
