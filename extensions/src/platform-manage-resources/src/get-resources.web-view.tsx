@@ -422,7 +422,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                   </TableHeader>
                   <TableBody>
                     {sortedResources.map((resource) => (
-                      <TableRow key={resource.displayName + resource.fullName}>
+                      <TableRow
+                        onDoubleClick={() => {
+                          if (resource.installed) openResource(resource.projectId);
+                        }}
+                        key={resource.displayName + resource.fullName}
+                      >
                         <TableCell>
                           <BookOpen className="tw-pr-0" size={18} />
                         </TableCell>

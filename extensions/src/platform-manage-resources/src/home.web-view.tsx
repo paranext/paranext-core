@@ -20,11 +20,6 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  // DropdownMenu,
-  // DropdownMenuContent,
-  // DropdownMenuItem,
-  // DropdownMenuSeparator,
-  // DropdownMenuTrigger,
   Label,
   LocalizeKey,
   SearchBar,
@@ -38,7 +33,7 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import { getErrorMessage } from 'platform-bible-utils';
-// import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
+// import { DblResourceData } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const HOME_STRING_KEYS: LocalizeKey[] = [
@@ -94,7 +89,6 @@ globalThis.webViewComponent = function HomeDialog() {
   const dialogTitleText: string = localizedStrings['%home_dialog_title%'];
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
-  // const getText: string = localizedStrings['%resources_get%'];
   const getResourcesText: string = localizedStrings['%resources_getResources%'];
   // const installedText: string = localizedStrings['%resources_installed%'];
   const itemsText: string = localizedStrings['%resources_items%'];
@@ -105,6 +99,7 @@ globalThis.webViewComponent = function HomeDialog() {
   const openText: string = localizedStrings['%resources_open%'];
   // const removeText: string = localizedStrings['%resources_remove%'];
   const searchedForText: string = localizedStrings['%resources_searchedFor%'];
+  const syncText: string = localizedStrings['%resources_sync%'];
   // const updateText: string = localizedStrings['%resources_update%'];
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
@@ -135,6 +130,9 @@ globalThis.webViewComponent = function HomeDialog() {
       projectId,
     );
 
+  const sendReceiveProject = (projectId: string) =>
+    papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId);
+
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
   );
@@ -161,7 +159,7 @@ globalThis.webViewComponent = function HomeDialog() {
   const [sharedProjectsInfo] = usePromise(
     useCallback(async () => {
       if (!isSendReceiveAvailable) {
-        console.log('send receive not available');
+        console.log('Send/Receive not available');
         return undefined;
       }
       try {
@@ -464,7 +462,10 @@ globalThis.webViewComponent = function HomeDialog() {
                   </TableHeader>
                   <TableBody>
                     {sortedProjects.map((project) => (
-                      <TableRow key={project.projectId}>
+                      <TableRow
+                        onDoubleClick={() => openResource(project.projectId, project.isEditable)}
+                        key={project.projectId}
+                      >
                         <TableCell>
                           {project.isSendReceivable ? (
                             <ScrollText className="tw-pr-0" size={18} />
@@ -481,36 +482,13 @@ globalThis.webViewComponent = function HomeDialog() {
                             : '-'}
                         </TableCell>
                         <TableCell>
-                          Action (?)
-                          {/* <div className="tw-flex tw-justify-between">
-                            {getActionContent(
-                              project,
-                              installInfo.map((info) => info.dblEntryUid),
-                              getText,
-                              updateText,
-                              installedText,
-                              installOrRemoveResource,
-                            )}
-                            {project.isEditable && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost">
-                                    <Ellipsis className="tw-w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                  <DropdownMenuItem onClick={() => openResource(project.projectId)}>
-                                    <span>{openText}</span>
-                                  </DropdownMenuItem>
-
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => {}}>
-                                    <span>{removeText}</span>
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
-                          </div> */}
+                          {project.isSendReceivable && (
+                            <div>
+                              <Button onClick={() => sendReceiveProject(project.projectId)}>
+                                {syncText}
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell>
                           <DropdownMenu>
@@ -519,13 +497,17 @@ globalThis.webViewComponent = function HomeDialog() {
                                 <Ellipsis className="tw-w-4" />
                               </Button>
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              <DropdownMenuItem
-                                onClick={() => openResource(project.projectId, project.isEditable)}
-                              >
-                                <span>{openText}</span>
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
+                            {project.isSendReceivable && (
+                              <DropdownMenuContent align="start">
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    openResource(project.projectId, project.isEditable)
+                                  }
+                                >
+                                  <span>{openText}</span>
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            )}
                           </DropdownMenu>
                         </TableCell>
                       </TableRow>
