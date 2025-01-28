@@ -61,6 +61,8 @@ type SortConfig = {
   direction: 'ascending' | 'descending';
 };
 
+// This type is copied from paratext-bible-send-receive.d.ts
+// Is there a better way to access this type?
 type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
 
 type MergedProjectInfo = {
@@ -102,7 +104,9 @@ globalThis.webViewComponent = function HomeDialog() {
   useEffect(() => {
     const fetchAvailability = async () => {
       if (dblResourcesProvider) {
-        setShowGetResourceButton(await dblResourcesProvider.isGetDblResourcesAvailable('why?'));
+        setShowGetResourceButton(
+          await dblResourcesProvider.isGetDblResourcesAvailable('Why do we need a parameter here?'),
+        );
       } else {
         setShowGetResourceButton(undefined);
       }
@@ -119,15 +123,11 @@ globalThis.webViewComponent = function HomeDialog() {
       projectId,
     );
 
-  const sendReceiveProject = (projectId: string) =>
-    papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
-
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
   );
 
   const checkIfSendReceiveAvailable = useCallback(async () => {
-    console.log('on did reload extensions');
     const isAvailable = await papi.commands.sendCommand(
       'platformManageResources.isSendReceiveAvailable',
     );
@@ -143,30 +143,28 @@ globalThis.webViewComponent = function HomeDialog() {
     checkIfSendReceiveAvailable,
   );
 
+  const sendReceiveProject = (projectId: string) =>
+    papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+
   const [, setGetSharedProjectsError] = useState('');
 
   const [sharedProjectsInfo] = usePromise(
     useCallback(async () => {
       if (!isSendReceiveAvailable) {
-        console.log('Send/Receive not available');
         return undefined;
       }
       try {
-        console.log('get shared projects');
         const projectsInfo = await papi.commands.sendCommand(
           'paratextBibleSendReceive.getSharedProjects',
         );
         return projectsInfo;
       } catch (e) {
-        console.log('get shared projects failed');
         setGetSharedProjectsError(getErrorMessage(e));
         return undefined;
       }
     }, [isSendReceiveAvailable]),
     undefined,
   );
-
-  console.log('SR projs:', sharedProjectsInfo);
 
   const [allProjectsInfo] = usePromise(
     useCallback(async () => {
@@ -189,8 +187,6 @@ globalThis.webViewComponent = function HomeDialog() {
     }, []),
     undefined,
   );
-
-  console.log('editable projs:', allProjectsInfo);
 
   const [mergedProjectInfo, setMergedProjectInfo] = useState<MergedProjectInfo[]>([]);
 
@@ -224,8 +220,6 @@ globalThis.webViewComponent = function HomeDialog() {
         });
       }
     });
-
-    console.log('merged projs:', newMergedProjectInfo);
 
     setMergedProjectInfo(newMergedProjectInfo);
   }, [allProjectsInfo, sharedProjectsInfo]);
@@ -273,10 +267,10 @@ globalThis.webViewComponent = function HomeDialog() {
           }
           return 0;
         case 'activity':
-          // To be implemented
+          // To be implemented later
           return 0;
         case 'action':
-          // To be implemented
+          // To be implemented later
           return 0;
         default:
           return 0;
@@ -413,7 +407,7 @@ globalThis.webViewComponent = function HomeDialog() {
                         <TableCell>{project.name}</TableCell>
                         <TableCell className="tw-font-medium">{project.fullName}</TableCell>
                         <TableCell>{project.language}</TableCell>
-                        {sortedProjects.some((project) => project.isSendReceivable) && (
+                        {sortedProjects.some((proj) => proj.isSendReceivable) && (
                           <TableCell>
                             {project.lastSendReceiveDate
                               ? dateFormatter.format(new Date(project.lastSendReceiveDate))
