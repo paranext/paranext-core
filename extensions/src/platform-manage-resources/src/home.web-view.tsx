@@ -1,4 +1,4 @@
-import papi from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import { useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import {
   BookOpen,
@@ -23,6 +23,7 @@ import {
   Label,
   LocalizeKey,
   SearchBar,
+  Spinner,
   Table,
   TableBody,
   TableCell,
@@ -32,8 +33,8 @@ import {
   useEvent,
   usePromise,
 } from 'platform-bible-react';
-import { DateTimeFormat, getErrorMessage } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const HOME_STRING_KEYS: LocalizeKey[] = [
   '%resources_action%',
@@ -54,6 +55,7 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
   '%resources_remove%',
   '%resources_searchedFor%',
   '%resources_update%',
+  '%resources_sync%',
 ];
 
 type SortConfig = {
@@ -77,6 +79,14 @@ type MergedProjectInfo = {
 };
 
 globalThis.webViewComponent = function HomeDialog() {
+  const isMounted = useRef(false);
+  useEffect(() => {
+    isMounted.current = true;
+    return () => {
+      isMounted.current = false;
+    };
+  }, []);
+
   const [localizedStrings] = useLocalizedStrings(HOME_STRING_KEYS);
 
   const actionText: string = localizedStrings['%resources_action%'];
@@ -143,10 +153,21 @@ globalThis.webViewComponent = function HomeDialog() {
     checkIfSendReceiveAvailable,
   );
 
-  const sendReceiveProject = (projectId: string) =>
-    papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+  const [sendReceiveInProgress, setSendReceiveInProgress] = useState<boolean>(false);
 
-  const [, setGetSharedProjectsError] = useState('');
+  const sendReceiveProject = async (projectId: string) => {
+    try {
+      setSendReceiveInProgress(true);
+
+      await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
+
+      if (isMounted.current) setSendReceiveInProgress(false);
+    } catch (e) {
+      logger.warn(
+        `Home web view failed to reload after running S/R for project ${projectId}: ${e}`,
+      );
+    }
+  };
 
   const [sharedProjectsInfo] = usePromise(
     useCallback(async () => {
@@ -159,7 +180,7 @@ globalThis.webViewComponent = function HomeDialog() {
         );
         return projectsInfo;
       } catch (e) {
-        setGetSharedProjectsError(getErrorMessage(e));
+        logger.warn(`Home web view failed to get shared projects: ${getErrorMessage(e)}`);
         return undefined;
       }
     }, [isSendReceiveAvailable]),
@@ -299,8 +320,8 @@ globalThis.webViewComponent = function HomeDialog() {
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', ['en']);
 
-  const dateFormatter = useMemo(() => {
-    return new DateTimeFormat(interfaceLanguages, { dateStyle: 'long', timeStyle: 'long' });
+  const relativeTimeFormatter = useMemo(() => {
+    return new Intl.RelativeTimeFormat(interfaceLanguages, { style: 'long', numeric: 'auto' });
   }, [interfaceLanguages]);
 
   return (
@@ -414,7 +435,10 @@ globalThis.webViewComponent = function HomeDialog() {
                         {sortedProjects.some((proj) => proj.isSendReceivable) && (
                           <TableCell>
                             {project.lastSendReceiveDate
-                              ? dateFormatter.format(new Date(project.lastSendReceiveDate))
+                              ? formatTimeSpan(
+                                  relativeTimeFormatter,
+                                  new Date(project.lastSendReceiveDate),
+                                )
                               : '-'}
                           </TableCell>
                         )}
@@ -422,7 +446,7 @@ globalThis.webViewComponent = function HomeDialog() {
                           {project.isSendReceivable ? (
                             <div>
                               <Button onClick={() => sendReceiveProject(project.projectId)}>
-                                {syncText}
+                                {sendReceiveInProgress ? <Spinner /> : syncText}
                               </Button>
                             </div>
                           ) : (
