@@ -154,18 +154,25 @@ globalThis.webViewComponent = function HomeDialog() {
   );
 
   const [sendReceiveInProgress, setSendReceiveInProgress] = useState<boolean>(false);
+  const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
 
   const sendReceiveProject = async (projectId: string) => {
     try {
       setSendReceiveInProgress(true);
+      setActiveSendReceiveProjects((prev) => [...prev, projectId]);
 
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
 
-      if (isMounted.current) setSendReceiveInProgress(false);
+      if (isMounted.current) {
+        setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
+        setSendReceiveInProgress(false);
+      }
     } catch (e) {
       logger.warn(
         `Home web view failed to reload after running S/R for project ${projectId}: ${e}`,
       );
+      setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
+      setSendReceiveInProgress(false);
     }
   };
 
@@ -183,7 +190,7 @@ globalThis.webViewComponent = function HomeDialog() {
         logger.warn(`Home web view failed to get shared projects: ${getErrorMessage(e)}`);
         return undefined;
       }
-    }, [isSendReceiveAvailable]),
+    }, [isSendReceiveAvailable, sendReceiveInProgress]),
     undefined,
   );
 
@@ -434,19 +441,29 @@ globalThis.webViewComponent = function HomeDialog() {
                         <TableCell>{project.language}</TableCell>
                         {sortedProjects.some((proj) => proj.isSendReceivable) && (
                           <TableCell>
-                            {project.lastSendReceiveDate
-                              ? formatTimeSpan(
-                                  relativeTimeFormatter,
-                                  new Date(project.lastSendReceiveDate),
-                                )
-                              : '-'}
+                            {project.lastSendReceiveDate &&
+                              formatTimeSpan(
+                                relativeTimeFormatter,
+                                new Date(project.lastSendReceiveDate),
+                              )}
                           </TableCell>
                         )}
                         <TableCell>
                           {project.isSendReceivable ? (
                             <div>
-                              <Button onClick={() => sendReceiveProject(project.projectId)}>
-                                {sendReceiveInProgress ? <Spinner /> : syncText}
+                              <Button
+                                disabled={
+                                  sendReceiveInProgress &&
+                                  activeSendReceiveProjects.includes(project.projectId)
+                                }
+                                onClick={() => sendReceiveProject(project.projectId)}
+                              >
+                                {sendReceiveInProgress &&
+                                activeSendReceiveProjects.includes(project.projectId) ? (
+                                  <Spinner className="tw-h-5 tw-py-[1px]" />
+                                ) : (
+                                  syncText
+                                )}
                               </Button>
                             </div>
                           ) : (
