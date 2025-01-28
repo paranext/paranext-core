@@ -230,7 +230,11 @@ globalThis.webViewComponent = function HomeDialog() {
     if (!mergedProjectInfo) return [];
     return mergedProjectInfo.filter((project) => {
       const filter = textFilter.toLowerCase();
-      return project.fullName.toLowerCase().includes(filter);
+      return (
+        project.fullName.toLowerCase().includes(filter) ||
+        project.name.toLowerCase().includes(filter) ||
+        project.language.toLowerCase().includes(filter)
+      );
     });
   }, [mergedProjectInfo, textFilter]);
 
