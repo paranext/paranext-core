@@ -190,7 +190,7 @@ globalThis.webViewComponent = function HomeDialog() {
         logger.warn(`Home web view failed to get shared projects: ${getErrorMessage(e)}`);
         return undefined;
       }
-    }, [isSendReceiveAvailable, sendReceiveInProgress]),
+    }, [isSendReceiveAvailable]),
     undefined,
   );
 

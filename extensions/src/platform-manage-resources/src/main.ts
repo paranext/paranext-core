@@ -95,13 +95,11 @@ export async function activate(context: ExecutionActivationContext) {
       if (context.elevatedPrivileges.manageExtensions) {
         manageExtensions = context.elevatedPrivileges.manageExtensions;
         const installedExtensions = await manageExtensions.getInstalledExtensions();
-        console.log('installed extensions:', installedExtensions);
         isSendReceiveAvailable = installedExtensions.packaged
           .concat(installedExtensions.enabled)
           .some((extension) => {
             return extension.extensionName === 'paratextBibleSendReceive';
           });
-        console.log('is send receive available:', isSendReceiveAvailable);
       }
       return isSendReceiveAvailable;
     },
