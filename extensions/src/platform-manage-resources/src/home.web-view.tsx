@@ -1,5 +1,5 @@
 import papi from '@papi/frontend';
-import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import { useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import {
   BookOpen,
   ChevronDown,
@@ -32,8 +32,7 @@ import {
   useEvent,
   usePromise,
 } from 'platform-bible-react';
-import { getErrorMessage } from 'platform-bible-utils';
-// import { DblResourceData } from 'platform-bible-utils';
+import { DateTimeFormat, getErrorMessage } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const HOME_STRING_KEYS: LocalizeKey[] = [
@@ -75,11 +74,6 @@ type MergedProjectInfo = {
   lastSendReceiveDate?: string;
 };
 
-// type InstallInfo = {
-//   dblEntryUid: string;
-//   action: 'installing' | 'removing';
-// };
-
 globalThis.webViewComponent = function HomeDialog() {
   const [localizedStrings] = useLocalizedStrings(HOME_STRING_KEYS);
 
@@ -90,21 +84,16 @@ globalThis.webViewComponent = function HomeDialog() {
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
   const getResourcesText: string = localizedStrings['%resources_getResources%'];
-  // const installedText: string = localizedStrings['%resources_installed%'];
   const itemsText: string = localizedStrings['%resources_items%'];
   const languageText: string = localizedStrings['%resources_language%'];
   const noProjectsText: string = localizedStrings['%resources_noProjects%'];
   const noProjectsInstructionText: string = localizedStrings['%resources_noProjectsInstruction%'];
   const noSearchResultsText: string = localizedStrings['%resources_noSearchResults%'];
   const openText: string = localizedStrings['%resources_open%'];
-  // const removeText: string = localizedStrings['%resources_remove%'];
   const searchedForText: string = localizedStrings['%resources_searchedFor%'];
   const syncText: string = localizedStrings['%resources_sync%'];
-  // const updateText: string = localizedStrings['%resources_update%'];
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
-  // const installResource = dblResourcesProvider?.installDblResource;
-  // const uninstallResource = dblResourcesProvider?.uninstallDblResource;
 
   const [showGetResourcesButton, setShowGetResourceButton] = useState<boolean | undefined>(
     undefined,
@@ -131,7 +120,7 @@ globalThis.webViewComponent = function HomeDialog() {
     );
 
   const sendReceiveProject = (projectId: string) =>
-    papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId);
+    papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
 
   const [isSendReceiveAvailable, setIsSendReceiveAvailable] = useState<boolean | undefined>(
     undefined,
@@ -241,24 +230,6 @@ globalThis.webViewComponent = function HomeDialog() {
     setMergedProjectInfo(newMergedProjectInfo);
   }, [allProjectsInfo, sharedProjectsInfo]);
 
-  // const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
-
-  // const installOrRemoveResource = (dblEntryUid: string, action: 'install' | 'remove'): void => {
-  //   if (!installResource || !uninstallResource) return;
-  //   const newInstallInfo: InstallInfo = {
-  //     dblEntryUid,
-  //     action: action === 'install' ? 'installing' : 'removing',
-  //   };
-
-  //   setInstallInfo((prevInfo) => [...prevInfo, newInstallInfo]);
-
-  //   const actionFunction = action === 'install' ? installResource : uninstallResource;
-
-  //   actionFunction(dblEntryUid).catch((error) => {
-  //     console.debug(getErrorMessage(error));
-  //   });
-  // };
-
   const [textFilter, setTextFilter] = useState<string>('');
 
   const textFilteredProjects = useMemo(() => {
@@ -328,46 +299,11 @@ globalThis.webViewComponent = function HomeDialog() {
     </TableHead>
   );
 
-  // const getActionButtonContent = (
-  //   resource: DblResourceData,
-  //   buttonText: string,
-  //   installResource: (dblEntryUid: string, action: 'install' | 'remove') => void,
-  // ) => {
-  //   return (
-  //     <Button
-  //       className="tw-bg-muted"
-  //       variant="ghost"
-  //       onClick={() => installResource(resource.dblEntryUid, 'install')}
-  //     >
-  //       {buttonText}
-  //     </Button>
-  //   );
-  // };
+  const [interfaceLanguages] = useSetting('platform.interfaceLanguage', ['en']);
 
-  // const getActionContent = (
-  //   resource: { projectId: string; isEditable: boolean; fullName: string },
-  //   idsBeingHandled: string[],
-  //   getText: string,
-  //   updateText: string,
-  //   installedText: string,
-  //   installResource: (dblEntryUid: string, action: 'install' | 'remove') => void,
-  // ) => {
-  //   const isBeingHandled = idsBeingHandled.includes(resource.dblEntryUid);
-  //   if (isBeingHandled) {
-  //     return (
-  //       <Button className="tw-bg-muted" variant="ghost">
-  //         <Spinner className="tw-h-5 tw-py-[1px]" />
-  //       </Button>
-  //     );
-  //   }
-  //   if (!resource.installed) {
-  //     return getActionButtonContent(resource, getText, installResource);
-  //   }
-  //   if (resource.updateAvailable) {
-  //     return getActionButtonContent(resource, updateText, installResource);
-  //   }
-  //   return <Label className="tw-my-2 tw-flex tw-h-6 tw-items-center">{installedText}</Label>;
-  // };
+  const dateFormatter = useMemo(() => {
+    return new DateTimeFormat(interfaceLanguages, { dateStyle: 'long', timeStyle: 'long' });
+  }, [interfaceLanguages]);
 
   return (
     <div>
@@ -455,7 +391,8 @@ globalThis.webViewComponent = function HomeDialog() {
                       <TableHead />
                       {buildTableHead('fullName', fullNameText)}
                       {buildTableHead('language', languageText)}
-                      {buildTableHead('activity', activityText)}
+                      {sortedProjects.some((project) => project.isSendReceivable) &&
+                        buildTableHead('activity', activityText)}
                       {buildTableHead('action', actionText)}
                       <TableHead />
                     </TableRow>
@@ -476,28 +413,36 @@ globalThis.webViewComponent = function HomeDialog() {
                         <TableCell>{project.name}</TableCell>
                         <TableCell className="tw-font-medium">{project.fullName}</TableCell>
                         <TableCell>{project.language}</TableCell>
+                        {sortedProjects.some((project) => project.isSendReceivable) && (
+                          <TableCell>
+                            {project.lastSendReceiveDate
+                              ? dateFormatter.format(new Date(project.lastSendReceiveDate))
+                              : '-'}
+                          </TableCell>
+                        )}
                         <TableCell>
-                          {project.isSendReceivable && project.lastSendReceiveDate
-                            ? project.lastSendReceiveDate
-                            : '-'}
-                        </TableCell>
-                        <TableCell>
-                          {project.isSendReceivable && (
+                          {project.isSendReceivable ? (
                             <div>
                               <Button onClick={() => sendReceiveProject(project.projectId)}>
                                 {syncText}
                               </Button>
                             </div>
+                          ) : (
+                            <Button
+                              onClick={() => openResource(project.projectId, project.isEditable)}
+                            >
+                              {openText}
+                            </Button>
                           )}
                         </TableCell>
                         <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost">
-                                <Ellipsis className="tw-w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            {project.isSendReceivable && (
+                          {project.isSendReceivable && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost">
+                                  <Ellipsis className="tw-w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
                               <DropdownMenuContent align="start">
                                 <DropdownMenuItem
                                   onClick={() =>
@@ -507,8 +452,8 @@ globalThis.webViewComponent = function HomeDialog() {
                                   <span>{openText}</span>
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
-                            )}
-                          </DropdownMenu>
+                            </DropdownMenu>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
