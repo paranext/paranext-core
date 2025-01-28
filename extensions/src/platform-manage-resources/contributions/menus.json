@@ -4,13 +4,6 @@
     "groups": {},
     "items": [
       {
-        "label": "%mainMenu_openGetResources%",
-        "localizeNotes": "Application main menu > Project > Get Resources...",
-        "group": "platform.projectResources",
-        "order": 1000,
-        "command": "platformManageResources.openGetResources"
-      },
-      {
         "label": "%mainMenu_openHome%",
         "localizeNotes": "Application main menu > Project > Open Home...",
         "group": "platform.projectResources",

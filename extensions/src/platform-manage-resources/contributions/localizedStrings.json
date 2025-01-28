@@ -38,7 +38,6 @@
       "%resources_type_XR%": "XML Resource",
       "%resources_type_unknown%": "Unknown resource type",
       "%resources_update%": "Update",
-      "%mainMenu_openGetResources%": "Get Resources",
       "%mainMenu_openHome%": "Home..."
     }
   }
