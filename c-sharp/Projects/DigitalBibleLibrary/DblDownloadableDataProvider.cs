@@ -77,12 +77,18 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// </returns>
     private void FetchAvailableDBLResources()
     {
-        _resources = InstallableDBLResource.GetInstallableDBLResources(
+        var allResources = InstallableDBLResource.GetInstallableDBLResources(
             RegistrationInfo.DefaultUser,
             new DBLRESTClientFactory(),
             new DblProjectDeleter(),
             new DblMigrationOperations(),
             new DblResourcePasswordProvider()
+        );
+        _resources = allResources.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
+        var excludedResources = allResources.Except(_resources).Select(r => r.Name).ToList();
+        excludedResources.Sort();
+        Console.WriteLine(
+            $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
         );
     }
 
