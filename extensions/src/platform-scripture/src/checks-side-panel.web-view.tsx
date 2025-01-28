@@ -269,7 +269,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
           />
         </div>
         <div className="tw-w-2/3 tw-min-w-0">
-          <ChecksScopeFilter handleSelectScope={handleSelectScope} />
+          <ChecksScopeFilter selectedScope={scope} handleSelectScope={handleSelectScope} />
         </div>
       </div>
       <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3">
