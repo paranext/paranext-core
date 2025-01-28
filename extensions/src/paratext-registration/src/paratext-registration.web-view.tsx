@@ -22,7 +22,7 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import { deepEqual, getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
-import { DetailedHTMLProps, HTMLAttributes, useEffect, useMemo, useState } from 'react';
+import { DetailedHTMLProps, HTMLAttributes, useEffect, useMemo, useRef, useState } from 'react';
 
 type GenericComponentProps = DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>;
 
@@ -170,11 +170,11 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 // #endregion
 
 globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }: WebViewProps) {
-  const [isMounted, setIsMounted] = useState(false);
+  const isMounted = useRef(false);
   useEffect(() => {
-    setIsMounted(true);
+    isMounted.current = true;
     return () => {
-      setIsMounted(false);
+      isMounted.current = false;
     };
   }, []);
 
@@ -246,48 +246,52 @@ globalThis.webViewComponent = function ParatextRegistration({ useWebViewState }:
   const hasUnsavedChanges = hasUnsavedRegistrationDataChanges || hasUnsavedInternetSettingsChanges;
 
   const saveAndRestart = async () => {
-    setSaveState(SaveState.IsSaving);
-    setSaveError('');
+    try {
+      setSaveState(SaveState.IsSaving);
+      setSaveError('');
 
-    if (!hasUnsavedChanges) return;
+      if (!hasUnsavedChanges) return;
 
-    const savePromises = [];
-    let internetSettingsIndex = -1;
-    if (hasUnsavedInternetSettingsChanges) {
-      savePromises.push(saveInternetSettings(internetSettings));
-      internetSettingsIndex = 0;
-    }
-    if (hasUnsavedRegistrationDataChanges)
-      savePromises.push(saveRegistrationInformation(name, registrationCode, email, supporter));
+      const savePromises = [];
+      let internetSettingsIndex = -1;
+      if (hasUnsavedInternetSettingsChanges) {
+        savePromises.push(saveInternetSettings(internetSettings));
+        internetSettingsIndex = 0;
+      }
+      if (hasUnsavedRegistrationDataChanges)
+        savePromises.push(saveRegistrationInformation(name, registrationCode, email, supporter));
 
-    const results = await Promise.allSettled(savePromises);
-    // Filtering out the successful results, so all that's left is rejected
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const failedResults = results.filter((result, i) => {
-      if (result.status !== 'rejected') return false;
-      logger.warn(
-        `Failed to save ${i === internetSettingsIndex ? 'Paratext Internet Settings' : 'Paratext Registration information'}! ${result.reason}`,
-      );
-      return true;
-    }) as PromiseRejectedResult[];
+      const results = await Promise.allSettled(savePromises);
+      // Filtering out the successful results, so all that's left is rejected
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const failedResults = results.filter((result, i) => {
+        if (result.status !== 'rejected') return false;
+        logger.warn(
+          `Failed to save ${i === internetSettingsIndex ? 'Paratext Internet Settings' : 'Paratext Registration information'}! ${result.reason}`,
+        );
+        return true;
+      }) as PromiseRejectedResult[];
 
-    if (failedResults.length === 0) {
-      // Queue up the restart
-      (async () => {
-        try {
-          await wait(REGISTRATION_CHANGE_RESTART_DELAY_MS);
-          await papi.commands.sendCommand('platform.restart');
-        } catch (e) {
-          logger.warn(
-            `Failed to restart after saving Paratext registration information and internet settings! The user will need to restart manually`,
-          );
-        }
-      })();
+      if (failedResults.length === 0) {
+        // Queue up the restart
+        (async () => {
+          try {
+            await wait(REGISTRATION_CHANGE_RESTART_DELAY_MS);
+            await papi.commands.sendCommand('platform.restart');
+          } catch (e) {
+            logger.warn(
+              `Failed to restart after saving Paratext registration information and internet settings! The user will need to restart manually`,
+            );
+          }
+        })();
 
-      if (isMounted) setSaveState(SaveState.HasSaved);
-    } else if (isMounted) {
-      setSaveError(failedResults.map((result) => getErrorMessage(result.reason)).join('\n\n'));
-      setSaveState(SaveState.HasNotSaved);
+        if (isMounted.current) setSaveState(SaveState.HasSaved);
+      } else if (isMounted.current) {
+        setSaveError(failedResults.map((result) => getErrorMessage(result.reason)).join('\n\n'));
+        setSaveState(SaveState.HasNotSaved);
+      }
+    } catch (e) {
+      logger.warn(`Paratext registration web view failed to run saveAndRestart: ${e}`);
     }
   };
 
