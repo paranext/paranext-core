@@ -36,14 +36,14 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
 ];
 
 global.webViewComponent = function ChecksSidePanelWebView({
-  projectId: editorProjectId,
+  projectId,
+  updateWebViewDefinition,
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
   const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
-  const [scope, setScope] = useState<CheckScopes>(CheckScopes.Chapter);
-  const [projectId, setProjectId] = useState(editorProjectId);
+  const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
   const [subscriptionId] = useWebViewState<CheckSubscriptionId>('subscriptionId', '');
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
 
@@ -230,9 +230,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const handleSelectProject = useCallback(
     (newProjectId: string) => {
-      setProjectId(newProjectId);
+      updateWebViewDefinition({ projectId: newProjectId });
     },
-    [setProjectId],
+    [updateWebViewDefinition],
   );
 
   const handleSelectScope = useCallback(

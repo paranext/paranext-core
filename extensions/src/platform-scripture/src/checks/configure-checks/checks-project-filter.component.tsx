@@ -1,7 +1,7 @@
 import papi, { projectDataProviders } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { usePromise, RadioGroupItem, Label, RadioGroup } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import FilterPopover from './filter-popover.component';
 
@@ -41,6 +41,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_projectFilter_noProjectSelected%',
   '%webView_checksSidePanel_projectFilter_noProjectsFound%',
   '%webView_checksSidePanel_projectFilter_label%',
+  '%webView_checksSidePanel_projectFilter_projectName_format%',
 ];
 
 /** Dropdown component to select a project to run checks for */
@@ -80,9 +81,16 @@ export default function ChecksProjectFilter({
     [handleSelectProject],
   );
 
-  const writeProjectName = useCallback((fullName: string, shortName: string) => {
-    return `${fullName} (${shortName})`;
-  }, []);
+  const writeProjectName = useCallback(
+    (fullName: string, shortName: string) => {
+      // return `${fullName} (${shortName})`;
+      return formatReplacementStringToArray(
+        localizedStrings['%webView_checksSidePanel_projectFilter_projectName_format%'],
+        { fullName, shortName },
+      );
+    },
+    [localizedStrings],
+  );
 
   const getProjectShortNameLabel = useCallback(() => {
     return (
@@ -96,7 +104,6 @@ export default function ChecksProjectFilter({
       selectedValue={selectedProjectId}
       radioGroupLabel={localizedStrings['%webView_checksSidePanel_projectFilter_label%']}
       getSelectedValueLabel={getProjectShortNameLabel}
-      shouldDisableButton
     >
       <RadioGroup value={selectedProjectId} onValueChange={onProjectChange} className="tw-p-3">
         {Object.entries(projectIdsAndNames).length === 0

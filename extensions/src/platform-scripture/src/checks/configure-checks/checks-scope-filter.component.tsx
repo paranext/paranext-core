@@ -25,6 +25,8 @@ export enum CheckScopes {
 type ChecksScopeFilterProps = {
   /** Callback function to handle the selection of a scope. */
   handleSelectScope: (scope: CheckScopes) => void;
+  /** The currently selected scope */
+  selectedScope: CheckScopes;
 };
 
 const CHECK_SCOPE_FILTER_STRINGS: { [key in CheckScopes]: LocalizeKey } = {
@@ -40,8 +42,11 @@ const LOCALIZED_STRINGS: LocalizeKey[] = ['%webView_checksSidePanel_scopeFilter_
  * choose between Chapter, Book, or All scopes. The component leverages popover and radio group
  * elements for the UI and triggers a callback function when the scope changes.
  */
-export default function ChecksScopeFilter({ handleSelectScope }: ChecksScopeFilterProps) {
-  const [selectedScope, setSelectedScope] = useState<CheckScopes>(CheckScopes.Chapter);
+export default function ChecksScopeFilter({
+  handleSelectScope,
+  selectedScope: selectedScopeFromWebView,
+}: ChecksScopeFilterProps) {
+  const [selectedScope, setSelectedScope] = useState<CheckScopes>(selectedScopeFromWebView);
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => Object.values(CHECK_SCOPE_FILTER_STRINGS).concat(LOCALIZED_STRINGS), []),
   );
