@@ -168,7 +168,7 @@ function GetResourcesExamples() {
 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
 
-  const [selectedTypes, setSelectedTypes] = useState<string[]>(['DBLResource']);
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(['ScriptureResource']);
 
   // When no languages are selected on the first render of this component, set default selection to
   // languages that have resources installed
@@ -241,7 +241,7 @@ function GetResourcesExamples() {
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     return [
-      { value: 'DBLResource', label: typeDblText },
+      { value: 'ScriptureResource', label: typeDblText },
       { value: 'EnhancedResource', label: typeErText },
       { value: 'SourceLanguageResource', label: typeSlrText },
       { value: 'XmlResource', label: typeXrText },
