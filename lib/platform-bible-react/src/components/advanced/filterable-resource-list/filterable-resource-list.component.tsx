@@ -378,6 +378,7 @@ function FilterableResourceList({
                 <CardTitle>{dialogTitleText}</CardTitle>
                 <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
                 <SearchBar
+                  value={textFilter}
                   className="tw-min-w-72"
                   onSearch={setTextFilter}
                   placeholder={filterInputText}

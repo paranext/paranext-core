@@ -17,6 +17,9 @@ export type TabNavigationContentSearchProps = {
   /** List of values and keys for each tab this component should provide */
   tabList: TabKeyValueContent[];
 
+  /** The search query in the search bar */
+  searchValue: string;
+
   /** Handler to run when the value of the search bar changes */
   onSearch: (searchQuery: string) => void;
 
@@ -32,6 +35,7 @@ export type TabNavigationContentSearchProps = {
 
 export default function TabNavigationContentSearch({
   tabList,
+  searchValue,
   onSearch,
   searchPlaceholder,
   headerTitle,
@@ -43,6 +47,7 @@ export default function TabNavigationContentSearch({
         {headerTitle ? <h1>{headerTitle}</h1> : ''}
         <SearchBar
           className={searchClassName}
+          value={searchValue}
           onSearch={onSearch}
           placeholder={searchPlaceholder}
         />
