@@ -15,8 +15,8 @@ internal class DblResourcePasswordProvider : IZippedResourcePasswordProvider
 
     public static bool IsPassWordAvailable()
     {
-        if (!RegistrationInfo.DefaultUser.IsValid)
-            return false;
+        if (RegistrationInfo.DefaultUser.IsValid)
+            return true;
 
         IConfigurationRoot config = new ConfigurationBuilder()
             .AddUserSecrets<DblResourcePasswordProvider>()
