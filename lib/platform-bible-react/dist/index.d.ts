@@ -438,6 +438,8 @@ export type TabKeyValueContent = {
 export type TabNavigationContentSearchProps = {
 	/** List of values and keys for each tab this component should provide */
 	tabList: TabKeyValueContent[];
+	/** The search query in the search bar */
+	searchValue: string;
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
 	/** Optional placeholder for the search bar */
@@ -447,7 +449,7 @@ export type TabNavigationContentSearchProps = {
 	/** Optional className to modify the search input */
 	searchClassName?: string;
 };
-declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -478,10 +480,12 @@ export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelect
 export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;
+	/** The search query in the search bar */
+	searchValue: string;
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
 };
-export function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -949,8 +953,10 @@ export type IconButtonProps = React$1.PropsWithChildren<{
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
+	/** Seach query for the search bar */
+	value: string;
 	/**
-	 * Callback fired to handle the search query when button pressed
+	 * Callback fired to handle the search query is updated
 	 *
 	 * @param searchQuery
 	 */
@@ -962,7 +968,7 @@ export type SearchBarProps = {
 	/** Additional css classes to help with unique styling of the search bar */
 	className?: string;
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ value, onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {

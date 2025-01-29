@@ -342,6 +342,7 @@ globalThis.webViewComponent = function HomeDialog() {
                 <CardTitle>{dialogTitleText}</CardTitle>
               </div>
               <SearchBar
+                value={textFilter}
                 className="tw-min-w-72"
                 onSearch={setTextFilter}
                 placeholder={filterInputText}

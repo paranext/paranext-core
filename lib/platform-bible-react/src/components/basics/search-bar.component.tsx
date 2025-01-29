@@ -3,12 +3,13 @@ import { Input } from '@/components/shadcn-ui/input';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Search, X } from 'lucide-react';
-import { useState } from 'react';
 
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
+  /** Seach query for the search bar */
+  value: string;
   /**
-   * Callback fired to handle the search query when button pressed
+   * Callback fired to handle the search query is updated
    *
    * @param searchQuery
    */
@@ -25,18 +26,12 @@ export type SearchBarProps = {
 };
 
 export default function SearchBar({
+  value,
   onSearch,
   placeholder,
   isFullWidth,
   className,
 }: SearchBarProps) {
-  const [searchQuery, setSearchQuery] = useState<string>('');
-
-  const handleInputChange = (searchString: string) => {
-    setSearchQuery(searchString);
-    onSearch(searchString);
-  };
-
   const dir: Direction = readDirection();
 
   return (
@@ -51,10 +46,10 @@ export default function SearchBar({
       <Input
         className="tw-w-full tw-text-ellipsis tw-pe-9 tw-ps-9"
         placeholder={placeholder}
-        value={searchQuery}
-        onChange={(e) => handleInputChange(e.target.value)}
+        value={value}
+        onChange={(e) => onSearch(e.target.value)}
       />
-      {searchQuery && (
+      {value && (
         <Button
           variant="ghost"
           size="icon"
@@ -64,7 +59,7 @@ export default function SearchBar({
             { 'tw-right-0': dir === 'ltr' },
           )}
           onClick={() => {
-            handleInputChange('');
+            onSearch('');
           }}
         >
           <X className="tw-h-4 tw-w-4" />
