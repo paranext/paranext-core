@@ -8,6 +8,9 @@ export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
     /** Optional id for testing */
     id?: string;
 
+    /** The search query in the search bar */
+    searchValue: string;
+
     /** Handler to run when the value of the search bar changes */
     onSearch: (searchQuery: string) => void;
   };
@@ -19,6 +22,7 @@ export default function SettingsSidebarContentSearch({
   children,
   handleSelectSidebarItem,
   selectedSidebarItem,
+  searchValue,
   onSearch,
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
@@ -29,6 +33,7 @@ export default function SettingsSidebarContentSearch({
       <div className="tw-box-border tw-flex tw-items-center tw-justify-center tw-py-4">
         <SearchBar
           className="tw-w-9/12"
+          value={searchValue}
           onSearch={onSearch}
           placeholder="Search app settings, extension settings, and project settings"
         />
