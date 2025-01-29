@@ -45,16 +45,13 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
   '%resources_fullName%',
   '%resources_get%',
   '%resources_getResources%',
-  '%resources_installed%',
   '%resources_items%',
   '%resources_language%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
   '%resources_open%',
-  '%resources_remove%',
   '%resources_searchedFor%',
-  '%resources_update%',
   '%resources_sync%',
 ];
 
@@ -74,6 +71,7 @@ type MergedProjectInfo = {
   language: string;
   isEditable: boolean;
   isSendReceivable: boolean;
+  isLocallyAvailable?: boolean;
   editedStatus?: EditedStatus;
   lastSendReceiveDate?: string;
 };
@@ -95,6 +93,7 @@ globalThis.webViewComponent = function HomeDialog() {
   const dialogTitleText: string = localizedStrings['%home_dialog_title%'];
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
+  const getText: string = localizedStrings['%resources_get%'];
   const getResourcesText: string = localizedStrings['%resources_getResources%'];
   const itemsText: string = localizedStrings['%resources_items%'];
   const languageText: string = localizedStrings['%resources_language%'];
@@ -229,6 +228,7 @@ globalThis.webViewComponent = function HomeDialog() {
           language: sharedProject.language,
           isEditable: true,
           isSendReceivable: true,
+          isLocallyAvailable: allProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
         });
@@ -462,8 +462,10 @@ globalThis.webViewComponent = function HomeDialog() {
                                 {sendReceiveInProgress &&
                                 activeSendReceiveProjects.includes(project.projectId) ? (
                                   <Spinner className="tw-h-5 tw-py-[1px]" />
-                                ) : (
+                                ) : project.isLocallyAvailable ? (
                                   syncText
+                                ) : (
+                                  getText
                                 )}
                               </Button>
                             </div>
