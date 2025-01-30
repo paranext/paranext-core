@@ -27,7 +27,7 @@ declare module 'platform-manage-resources' {
      *
      * @returns True if any credentials are configured, false if not.
      */
-    isGetDblResourcesAvailable: (uid: string) => Promise<boolean>;
+    isGetDblResourcesAvailable: () => Promise<boolean>;
   };
 }
 

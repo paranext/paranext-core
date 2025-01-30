@@ -113,9 +113,7 @@ globalThis.webViewComponent = function HomeDialog() {
   useEffect(() => {
     const fetchAvailability = async () => {
       if (dblResourcesProvider) {
-        setShowGetResourceButton(
-          await dblResourcesProvider.isGetDblResourcesAvailable('Why do we need a parameter here?'),
-        );
+        setShowGetResourceButton(await dblResourcesProvider.isGetDblResourcesAvailable());
       } else {
         setShowGetResourceButton(undefined);
       }

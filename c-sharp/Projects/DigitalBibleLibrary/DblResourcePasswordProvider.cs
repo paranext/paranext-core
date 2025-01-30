@@ -13,7 +13,7 @@ internal class DblResourcePasswordProvider : IZippedResourcePasswordProvider
 {
     private string? _cachedValue;
 
-    public static bool IsPassWordAvailable()
+    public static bool IsPasswordAvailable()
     {
         if (RegistrationInfo.DefaultUser.IsValid)
             return true;
