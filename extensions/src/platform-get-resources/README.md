@@ -1,4 +1,4 @@
-# platform-manage-resources
+# platform-get-resources
 
 Resource manager extension for Platform.Bible
 

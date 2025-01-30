@@ -1,4 +1,4 @@
-declare module 'platform-manage-resources' {
+declare module 'platform-get-resources' {
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import { DataProviderDataType, IDataProvider } from '@papi/core';
   import type { DblResourceData } from 'platform-bible-utils';
@@ -7,6 +7,8 @@ declare module 'platform-manage-resources' {
     /** List of information about resources that are available from the DBL */
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
   };
+
+  export type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
 
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
@@ -32,7 +34,7 @@ declare module 'platform-manage-resources' {
 }
 
 declare module 'papi-shared-types' {
-  import type { IDblResourcesProvider } from 'platform-manage-resources';
+  import type { IDblResourcesProvider } from 'platform-get-resources';
 
   export interface DataProviders {
     'platformGetResources.dblResourcesProvider': IDblResourcesProvider;
@@ -44,16 +46,16 @@ declare module 'papi-shared-types' {
      *
      * @returns WebView id for new Get Resources WebView or `undefined` if not created
      */
-    'platformManageResources.openGetResources': () => Promise<string | undefined>;
+    'platformGetResources.openGetResources': () => Promise<string | undefined>;
 
     /**
      * Opens a new Home web view and returns the WebView id
      *
      * @returns WebView id for new Home WebView or `undefined` if not created
      */
-    'platformManageResources.openHome': () => Promise<string | undefined>;
+    'platformGetResources.openHome': () => Promise<string | undefined>;
 
     /** @returns True if Send/Receive is available to the user, false if not */
-    'platformManageResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
+    'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
   }
 }

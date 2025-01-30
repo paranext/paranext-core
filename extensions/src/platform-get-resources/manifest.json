@@ -1,5 +1,5 @@
 {
-  "name": "platform-manage-resources",
+  "name": "platform-get-resources",
   "version": "0.0.1",
   "displayData": "assets/displayData.json",
   "author": "Paranext",
@@ -7,7 +7,7 @@
   "main": "src/main.ts",
   "extensionDependencies": {},
   "elevatedPrivileges": ["manageExtensions"],
-  "types": "src/types/platform-manage-resources.d.ts",
+  "types": "src/types/platform-get-resources.d.ts",
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",

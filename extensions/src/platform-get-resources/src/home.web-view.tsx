@@ -34,6 +34,7 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
+import { EditedStatus } from 'platform-get-resources';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const HOME_STRING_KEYS: LocalizeKey[] = [
@@ -59,10 +60,6 @@ type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
 };
-
-// This type is copied from paratext-bible-send-receive.d.ts
-// Is there a better way to access this type?
-type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
 
 type MergedProjectInfo = {
   projectId: string;
@@ -136,7 +133,7 @@ globalThis.webViewComponent = function HomeDialog() {
 
   const checkIfSendReceiveAvailable = useCallback(async () => {
     const isAvailable = await papi.commands.sendCommand(
-      'platformManageResources.isSendReceiveAvailable',
+      'platformGetResources.isSendReceiveAvailable',
     );
     setIsSendReceiveAvailable(isAvailable);
   }, []);
@@ -213,9 +210,7 @@ globalThis.webViewComponent = function HomeDialog() {
     undefined,
   );
 
-  const [mergedProjectInfo, setMergedProjectInfo] = useState<MergedProjectInfo[]>([]);
-
-  useEffect(() => {
+  const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
     if (sharedProjectsInfo) {
       Object.entries(sharedProjectsInfo).forEach(([projectId, sharedProject]) => {
@@ -247,14 +242,19 @@ globalThis.webViewComponent = function HomeDialog() {
       }
     });
 
-    setMergedProjectInfo(newMergedProjectInfo);
+    return newMergedProjectInfo;
   }, [allProjectsInfo, sharedProjectsInfo]);
 
   const [textFilter, setTextFilter] = useState<string>('');
 
-  const textFilteredProjects = useMemo(() => {
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: 'language',
+    direction: 'ascending',
+  });
+
+  const filteredAndSortedProjects = useMemo(() => {
     if (!mergedProjectInfo) return [];
-    return mergedProjectInfo.filter((project) => {
+    const textFilteredProjects = mergedProjectInfo.filter((project) => {
       const filter = textFilter.toLowerCase();
       return (
         project.fullName.toLowerCase().includes(filter) ||
@@ -262,23 +262,8 @@ globalThis.webViewComponent = function HomeDialog() {
         project.language.toLowerCase().includes(filter)
       );
     });
-  }, [mergedProjectInfo, textFilter]);
 
-  const [sortConfig, setSortConfig] = useState<SortConfig>({
-    key: 'language',
-    direction: 'ascending',
-  });
-
-  const handleSort = (key: SortConfig['key']) => {
-    const newSortConfig: SortConfig = { key, direction: 'ascending' };
-    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
-      newSortConfig.direction = 'descending';
-    }
-    setSortConfig(newSortConfig);
-  };
-
-  const sortedProjects = useMemo(() => {
-    return [...textFilteredProjects].sort((a, b) => {
+    return textFilteredProjects.sort((a, b) => {
       switch (sortConfig.key) {
         case 'fullName':
           if (a.fullName < b.fullName) {
@@ -306,7 +291,15 @@ globalThis.webViewComponent = function HomeDialog() {
           return 0;
       }
     });
-  }, [sortConfig, textFilteredProjects]);
+  }, [mergedProjectInfo, textFilter, sortConfig]);
+
+  const handleSort = (key: SortConfig['key']) => {
+    const newSortConfig: SortConfig = { key, direction: 'ascending' };
+    if (sortConfig.key === key && sortConfig.direction === 'ascending') {
+      newSortConfig.direction = 'descending';
+    }
+    setSortConfig(newSortConfig);
+  };
 
   const buildTableHead = (key: SortConfig['key'], label: string) => (
     <TableHead onClick={() => handleSort(key)}>
@@ -349,9 +342,7 @@ globalThis.webViewComponent = function HomeDialog() {
             <div className="tw-self-end">
               {showGetResourcesButton && (
                 <Button
-                  onClick={() =>
-                    papi.commands.sendCommand('platformManageResources.openGetResources')
-                  }
+                  onClick={() => papi.commands.sendCommand('platformGetResources.openGetResources')}
                   className="tw-bg-muted"
                   variant="ghost"
                 >
@@ -371,16 +362,14 @@ globalThis.webViewComponent = function HomeDialog() {
 
               {showGetResourcesButton && (
                 <Button
-                  onClick={() =>
-                    papi.commands.sendCommand('platformManageResources.openGetResources')
-                  }
+                  onClick={() => papi.commands.sendCommand('platformGetResources.openGetResources')}
                   className="tw-mt-4"
                 >{`+ ${getResourcesText}`}</Button>
               )}
             </div>
           ) : (
             <div className="tw-flex-grow tw-h-full">
-              {sortedProjects.length === 0 ? (
+              {filteredAndSortedProjects.length === 0 ? (
                 <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
                   <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
                   <Label className="tw-text-muted-foreground tw-font-normal">
@@ -398,7 +387,7 @@ globalThis.webViewComponent = function HomeDialog() {
                     {showGetResourcesButton && (
                       <Button
                         onClick={() =>
-                          papi.commands.sendCommand('platformManageResources.openGetResources')
+                          papi.commands.sendCommand('platformGetResources.openGetResources')
                         }
                         variant="ghost"
                         className="tw-bg-muted"
@@ -416,14 +405,14 @@ globalThis.webViewComponent = function HomeDialog() {
                       <TableHead />
                       {buildTableHead('fullName', fullNameText)}
                       {buildTableHead('language', languageText)}
-                      {sortedProjects.some((project) => project.isSendReceivable) &&
+                      {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
                         buildTableHead('activity', activityText)}
                       {buildTableHead('action', actionText)}
                       <TableHead />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {sortedProjects.map((project) => (
+                    {filteredAndSortedProjects.map((project) => (
                       <TableRow
                         onDoubleClick={() => openResource(project.projectId, project.isEditable)}
                         key={project.projectId}
@@ -438,7 +427,7 @@ globalThis.webViewComponent = function HomeDialog() {
                         <TableCell>{project.name}</TableCell>
                         <TableCell className="tw-font-medium">{project.fullName}</TableCell>
                         <TableCell>{project.language}</TableCell>
-                        {sortedProjects.some((proj) => proj.isSendReceivable) && (
+                        {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
                           <TableCell>
                             {project.lastSendReceiveDate &&
                               formatTimeSpan(
@@ -503,8 +492,8 @@ globalThis.webViewComponent = function HomeDialog() {
           )}
         </CardContent>
         <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-p-4 tw-border-t">
-          {sortedProjects.length > 0 && (
-            <Label className="tw-font-normal">{`${sortedProjects.length} ${itemsText}`}</Label>
+          {filteredAndSortedProjects.length > 0 && (
+            <Label className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
           )}
         </CardFooter>
       </Card>

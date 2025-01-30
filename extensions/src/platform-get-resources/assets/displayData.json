@@ -4,7 +4,7 @@
   "supportUrl": "",
   "localizedDisplayInfo": {
     "en": {
-      "displayName": "Platform Manage Resources",
+      "displayName": "Platform Get Resources",
       "shortSummary": "Resource manager extension for Platform.Bible",
       "description": "assets/descriptions/description-en.md"
     }
