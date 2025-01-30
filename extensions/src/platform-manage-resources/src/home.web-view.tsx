@@ -460,13 +460,12 @@ globalThis.webViewComponent = function HomeDialog() {
                                 onClick={() => sendReceiveProject(project.projectId)}
                               >
                                 {sendReceiveInProgress &&
-                                activeSendReceiveProjects.includes(project.projectId) ? (
-                                  <Spinner className="tw-h-5 tw-py-[1px]" />
-                                ) : project.isLocallyAvailable ? (
-                                  syncText
-                                ) : (
-                                  getText
-                                )}
+                                  activeSendReceiveProjects.includes(project.projectId) && (
+                                    <Spinner className="tw-h-5 tw-py-[1px]" />
+                                  )}
+                                {!sendReceiveInProgress && project.isLocallyAvailable
+                                  ? syncText
+                                  : getText}
                               </Button>
                             </div>
                           ) : (
