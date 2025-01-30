@@ -39,6 +39,7 @@ export default class ChecksSidePanelWebViewProvider implements IWebViewProvider 
       state: {
         ...savedWebView.state,
         subscriptionId: getWebViewOptions.subscriptionId ?? savedWebView.state?.subscriptionId,
+        scope: savedWebView.state?.scope,
       },
     };
   }

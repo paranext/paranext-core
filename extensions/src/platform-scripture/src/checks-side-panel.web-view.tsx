@@ -9,7 +9,7 @@ import {
   SettableCheckDetails,
 } from 'platform-scripture';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { Canon, VerseRef } from '@sillsdev/scripture';
+import { VerseRef } from '@sillsdev/scripture';
 import { getChaptersForBook, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
 import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';
@@ -84,11 +84,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
       end = new VerseRef(scrRef.bookNum, getChaptersForBook(scrRef.bookNum), 1);
     }
 
-    // TODO does all mean all books all chapters
-    if (scope === CheckScopes.All) {
-      start = new VerseRef(1, 1, 1);
-      end = new VerseRef(Canon.lastBook, getChaptersForBook(Canon.lastBook), 1);
-    }
+    // TODO: Cannot use "All" scope because c# returns "Ranges cannot span between books"
+    // if (scope === CheckScopes.All) {
+    //   start = new VerseRef(1, 1, 1);
+    //   end = new VerseRef(LAST_SCR_BOOK_NUM, getChaptersForBook(LAST_SCR_BOOK_NUM), 1);
+    // }
 
     return {
       projectId: projectId ?? '',
