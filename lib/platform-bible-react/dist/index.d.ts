@@ -192,18 +192,6 @@ export type LocalizedStringValue = string;
 export interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
-export type ResourceType = "DBLResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
-export type DblResourceData = {
-	dblEntryUid: string;
-	displayName: string;
-	fullName: string;
-	bestLanguageName: string;
-	type: ResourceType;
-	size: number;
-	installed: boolean;
-	updateAvailable: boolean;
-	projectId: string;
-};
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -1785,21 +1773,6 @@ export interface FilterProps extends MultiSelectComboBoxProps {
 	badgesPlaceholder: string;
 }
 export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
-export declare const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[];
-export type FilterableResourceListProps = {
-	localizedStrings: LanguageStrings;
-	resources: DblResourceData[];
-	isLoadingResources: boolean;
-	selectedTypes: string[];
-	setSelectedTypes: (stateValue: string[]) => void;
-	selectedLanguages: string[];
-	setSelectedLanguages: (stateValue: string[]) => void;
-	openResource: (projectId: string) => void;
-	installResource: ((uid: string) => Promise<void>) | undefined;
-	uninstallResource: ((uid: string) => Promise<void>) | undefined;
-	className?: string;
-};
-export declare function FilterableResourceList({ localizedStrings, resources, isLoadingResources, selectedTypes, setSelectedTypes, selectedLanguages, setSelectedLanguages, openResource, installResource, uninstallResource, className, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];
