@@ -1770,8 +1770,18 @@ export interface FooterProps {
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 export interface FilterProps extends MultiSelectComboBoxProps {
+	/**
+	 * Placeholder text that will be displayed when no items are selected. It will appear at the
+	 * location where the badges would be if any items were selected.
+	 */
 	badgesPlaceholder: string;
 }
+/**
+ * This is a variant of the {@link MultiSelectComboBox}, that shows a {@link Badge} component for each
+ * selected item in the combo box. Clicking the 'X' icon on the badge will clear the item from the
+ * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
+ * displayed if no items are selected,
+ */
 export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"

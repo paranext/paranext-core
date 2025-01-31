@@ -5,9 +5,19 @@ import { X } from 'lucide-react';
 import MultiSelectComboBox, { MultiSelectComboBoxProps } from './multi-select-combo-box.component';
 
 interface FilterProps extends MultiSelectComboBoxProps {
+  /**
+   * Placeholder text that will be displayed when no items are selected. It will appear at the
+   * location where the badges would be if any items were selected.
+   */
   badgesPlaceholder: string;
 }
 
+/**
+ * This is a variant of the {@link MultiSelectComboBox}, that shows a {@link Badge} component for each
+ * selected item in the combo box. Clicking the 'X' icon on the badge will clear the item from the
+ * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
+ * displayed if no items are selected,
+ */
 function Filter({
   entries,
   getEntriesCount,
