@@ -285,8 +285,10 @@ internal class LocalParatextProjects
         // Add usfm.sty and Attribution.md
         foreach (string requiredFile in _requiredProjectRootFiles)
         {
-            var dest = Path.Join(ProjectRootFolder, requiredFile);
-            File.Copy(Path.Join("assets", requiredFile), dest, true);
+            string basePath = AppContext.BaseDirectory;
+            string sourcePath = Path.Combine(basePath, "assets", requiredFile);
+            string dest = Path.Join(ProjectRootFolder, requiredFile);
+            File.Copy(sourcePath, dest, true);
         }
     }
 

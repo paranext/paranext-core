@@ -107,10 +107,10 @@ cd paranext-core
 npm install
 ```
 
-To build the declaration type file `papi.d.ts` for extensions to use, run the following:
+To build, run the following:
 
 ```bash
-npm run build:types
+npm run build
 ```
 
 ## Starting Development
