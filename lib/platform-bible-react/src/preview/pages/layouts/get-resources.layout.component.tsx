@@ -157,7 +157,7 @@ function GetResourcesExamples() {
   const sizeText: string = 'Size';
   const typeText: string = 'Type';
   const typesText: string = 'Types';
-  const typeDblText: string = 'DBL Resource';
+  const typeDblText: string = 'Scripture Resource';
   const typeErText: string = 'Enhanced Resource';
   const typeSlrText: string = 'Source Language Text';
   const typeXrText: string = 'XML Resource';
@@ -331,6 +331,7 @@ function GetResourcesExamples() {
                 <CardTitle>{dialogTitleText}</CardTitle>
                 <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
                 <SearchBar
+                  value={textFilter}
                   className="tw-min-w-72"
                   onSearch={setTextFilter}
                   placeholder={filterInputText}

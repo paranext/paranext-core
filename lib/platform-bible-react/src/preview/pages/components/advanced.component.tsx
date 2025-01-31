@@ -147,6 +147,7 @@ function Compositions() {
           <TabNavigationContentSearch
             headerTitle={`Testing the NavigationContentSearch, current search value: ${searchValue}`}
             tabList={tabList}
+            searchValue={searchValue}
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
             searchClassName="tw-w-9/12 tw-py-2"

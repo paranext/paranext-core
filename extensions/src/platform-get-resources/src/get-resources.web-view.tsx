@@ -59,7 +59,7 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_size%',
   '%resources_type%',
   '%resources_types%',
-  '%resources_type_Scripture%',
+  '%resources_type_DBL%',
   '%resources_type_ER%',
   '%resources_type_SLR%',
   '%resources_type_XR%',
@@ -177,7 +177,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const sizeText: string = localizedStrings['%resources_size%'];
   const typeText: string = localizedStrings['%resources_type%'];
   const typesText: string = localizedStrings['%resources_types%'];
-  const typeScriptureText: string = localizedStrings['%resources_type_Scripture%'];
+  const typeDblText: string = localizedStrings['%resources_type_DBL%'];
   const typeErText: string = localizedStrings['%resources_type_ER%'];
   const typeSlrText: string = localizedStrings['%resources_type_SLR%'];
   const typeXrText: string = localizedStrings['%resources_type_XR%'];
@@ -195,7 +195,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
-    'ScriptureResource',
+    'DBLResource',
   ]);
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
@@ -274,12 +274,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     return [
-      { value: 'ScriptureResource', label: typeScriptureText },
+      { value: 'DBLResource', label: typeDblText },
       { value: 'EnhancedResource', label: typeErText },
       { value: 'SourceLanguageResource', label: typeSlrText },
       { value: 'XmlResource', label: typeXrText },
     ];
-  }, [typeScriptureText, typeErText, typeSlrText, typeXrText]);
+  }, [typeDblText, typeErText, typeSlrText, typeXrText]);
 
   const textAndTypeFilteredResources = useMemo(() => {
     if (selectedTypes.length === 0) return textFilteredResources;
@@ -364,6 +364,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                 <CardTitle>{dialogTitleText}</CardTitle>
                 <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
                 <SearchBar
+                  value={textFilter}
                   className="tw-min-w-72"
                   onSearch={setTextFilter}
                   placeholder={filterInputText}

@@ -198,6 +198,7 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
             setSelectedSidebarItem({ label: key, projectId: projId })
           }
           selectedSidebarItem={selectedSidebarItem}
+          searchValue={searchQuery}
           onSearch={handleSearchInput}
           extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_extensionsLabel%']}
           projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectsLabel%']}

@@ -76,9 +76,9 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// <returns>
     /// True if any credentials are configured, false if not.
     /// </returns>
-    private bool IsGetDblResourcesAvailable(string _unused)
+    private bool IsGetDblResourcesAvailable()
     {
-        return DblResourcePasswordProvider.IsPassWordAvailable();
+        return DblResourcePasswordProvider.IsPasswordAvailable();
     }
 
     /// <summary>
