@@ -1,6 +1,9 @@
 import SettingsSidebarContentSearch from '@/components/advanced/settings-components/settings-sidebar-content-search.component';
+import { useState } from 'react';
 
 export default function SettingSidebarContentSearchExamples() {
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
   return (
     <div>
       <SettingsSidebarContentSearch
@@ -17,7 +20,11 @@ export default function SettingSidebarContentSearchExamples() {
         handleSelectSidebarItem={(key: string, projId?: string) =>
           console.log('Selected:', key, projId)
         }
-        onSearch={(query) => console.log('Searching for:', query)}
+        searchValue={searchQuery}
+        onSearch={(query) => {
+          setSearchQuery(query);
+          console.log('Searching for:', query);
+        }}
       />
     </div>
   );

@@ -56,6 +56,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             ("getDblResources", GetDblResources),
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
+            ("isGetDblResourcesAvailable", IsGetDblResourcesAvailable),
         ];
     }
 
@@ -67,6 +68,18 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     #endregion
 
     #region Private properties and methods
+
+    /// <summary>
+    /// Detect if DBL credentials have been configured. Does not check these credentials for
+    /// validity.
+    /// </summary>
+    /// <returns>
+    /// True if any credentials are configured, false if not.
+    /// </returns>
+    private bool IsGetDblResourcesAvailable()
+    {
+        return DblResourcePasswordProvider.IsPasswordAvailable();
+    }
 
     /// <summary>
     /// Fetch list DBL resources

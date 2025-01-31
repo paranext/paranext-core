@@ -1,4 +1,4 @@
-import Filter from '@/components/advanced/filterable-resource-list/filter.component';
+import Filter from '@/components/advanced/filter.component';
 import { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-combo-box.component';
 import { Blocks } from 'lucide-react';
 import { useState } from 'react';
