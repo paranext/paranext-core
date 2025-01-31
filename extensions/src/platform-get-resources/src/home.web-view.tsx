@@ -135,7 +135,9 @@ globalThis.webViewComponent = function HomeDialog() {
     const isAvailable = await papi.commands.sendCommand(
       'platformGetResources.isSendReceiveAvailable',
     );
-    setIsSendReceiveAvailable(isAvailable);
+    if (isMounted.current) {
+      setIsSendReceiveAvailable(isAvailable);
+    }
   }, []);
 
   useEffect(() => {
@@ -165,8 +167,10 @@ globalThis.webViewComponent = function HomeDialog() {
       logger.warn(
         `Home web view failed to reload after running S/R for project ${projectId}: ${e}`,
       );
-      setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
-      setSendReceiveInProgress(false);
+      if (isMounted.current) {
+        setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
+        setSendReceiveInProgress(false);
+      }
     }
   };
 
