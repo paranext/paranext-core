@@ -1742,6 +1742,22 @@ export function formatBytes(fileSize: number, decimals?: number): string;
  *   returned.
  */
 export function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
+/**
+ * Get a localized string representation of the time between two dates
+ *
+ * @example
+ *
+ * `since` = 3 Aug 2024 8:00 AM
+ *
+ * `to` = 5 Aug 2024 8:000 AM
+ *
+ * Returns: "two days ago"
+ *
+ * @param since "Destination" time. time against which to get the time span.
+ * @param to "Starting" time. Time span will be formatted relative to `to`. Defaults to `new Date()`
+ * @returns Time span in words from `to` to `since`
+ */
+export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeFormat, since: Date, to?: Date): string;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /** The data an extension provides to inform Platform.Bible of the localized strings it provides. */

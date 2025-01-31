@@ -78,6 +78,7 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
+export { default as formatTimeSpan } from './date-time-format-util';
 
 // Types
 export type { DeepPartial, ReplaceType, UnionToIntersection } from './util';
