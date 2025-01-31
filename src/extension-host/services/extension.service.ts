@@ -12,7 +12,11 @@ import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import * as platformBibleUtils from 'platform-bible-utils';
 import logger from '@shared/services/logger.service';
-import { getCommandLineArgumentsGroup, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
+import {
+  getCommandLineArgumentsGroup,
+  COMMAND_LINE_ARGS,
+  getCommandLineSwitch,
+} from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import executionTokenService from '@node/services/execution-token.service';
@@ -209,6 +213,13 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
 }
 
 /**
+ * The directory for extensions bundled into the application
+ *
+ * - In development: `paranext-core/extensions/dist`
+ * - In production: `resources/extensions`
+ */
+const bundledExtensionDir = `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`;
+/**
  * The directories we will search for extension directories and zips.
  *
  * Command-line-provided directories are given priority, so they are provided in this order:
@@ -224,12 +235,30 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
  *    - In production: `resources/extensions`
  */
 const extensionRootDirectories: Uri[] = [
+  // 1. `--extensionDirs`-provided directories
   ...getCommandLineArgumentsGroup(COMMAND_LINE_ARGS.ExtensionsDir).map(
     (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
   ),
+  // 2. Installed extensions directory
   installedExtensionsUri,
-  `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
+  // 3. Core extensions directory
+  bundledExtensionDir,
 ];
+/**
+ * The root extension directories we should watch for changes to extensions.
+ *
+ * We do not want to watch the bundled extension directory if we are in the portable application
+ * because it deletes and unzips all app files every time it is launched including when the user
+ * navigates to a url containing our {@link APP_URI_SCHEME}. See {@link handleExtensionUri} for more
+ * information about navigating to our uri scheme.
+ */
+const extensionRootDirectoriesToWatch: Uri[] = [...extensionRootDirectories];
+if (getCommandLineSwitch(COMMAND_LINE_ARGS.Portable)) {
+  extensionRootDirectoriesToWatch.splice(
+    extensionRootDirectoriesToWatch.indexOf(bundledExtensionDir),
+    1,
+  );
+}
 
 /** Individual extension folders and/or zips to load as provided by command-line `--extensions` */
 const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
@@ -619,7 +648,7 @@ function watchForExtensionChanges(): UnsubscriberAsync {
 
   const watcher = chokidar
     .watch(
-      extensionRootDirectories
+      extensionRootDirectoriesToWatch
         .concat(commandLineExtensionDirectories)
         .map((uri) => getPathFromUri(uri)),
       { ignoreInitial: true, awaitWriteFinish: true },

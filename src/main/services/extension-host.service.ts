@@ -150,7 +150,13 @@ async function startExtensionHost() {
   if (app.isPackaged) {
     extensionHost = fork(
       path.join(__dirname, '../extension-host/extension-host.js'),
-      [commandLineArgumentsAliases[COMMAND_LINE_ARGS.Packaged][0], ...sharedArgs],
+      [
+        commandLineArgumentsAliases[COMMAND_LINE_ARGS.Packaged][0],
+        ...(process.env.PORTABLE_EXECUTABLE_FILE
+          ? [commandLineArgumentsAliases[COMMAND_LINE_ARGS.Portable][0]]
+          : []),
+        ...sharedArgs,
+      ],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       },
