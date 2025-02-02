@@ -12,15 +12,16 @@ import {
   USJ_VERSION,
   Usj,
 } from '@biblionexus-foundation/scripture-utilities';
-import { Canon, VerseRef } from '@sillsdev/scripture';
-import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
+import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
+import { JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectSetting, useSetting } from '@papi/frontend/react';
 import {
   compareScrRefs,
   deepClone,
-  ScriptureReference,
+  // rename the old reference type used in the BookChapter control
+  ScriptureReference as BCReference,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -34,6 +35,9 @@ import {
   MILESTONE_END,
   MILESTONE_START,
 } from './comments';
+
+/** We are in the process of making all existing uses of `ScriptureReference` into his type. */
+type ScriptureReference = SerializedVerseRef;
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -90,7 +94,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
-  const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+  const [bcScrRef, setBCScrRef] = useWebViewScrollGroupScrRef();
+  const [scrRef, setScrRef] = useState<ScriptureReference>({
+    book: Canon.bookNumberToId(bcScrRef.bookNum),
+    chapterNum: bcScrRef.chapterNum,
+    verseNum: bcScrRef.verseNum,
+  });
+
+  const setScrRefWithScroll = useCallback(
+    (newBCScrRef: BCReference) => {
+      setBCScrRef(newBCScrRef);
+      setScrRef({
+        book: Canon.bookNumberToId(newBCScrRef.bookNum),
+        chapterNum: newBCScrRef.chapterNum,
+        verseNum: newBCScrRef.verseNum,
+      });
+    },
+    [setBCScrRef],
+  );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
 
@@ -103,7 +124,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         case 'selectRange':
           logger.debug(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
 
-          if (compareScrRefs(scrRef, targetScrRef) !== 0) {
+          if (compareScrRefs(bcScrRef, targetScrRef) !== 0) {
             // Need to update scr ref, let the editor load the Scripture text at the new scrRef,
             // and scroll to the new scrRef before setting the range. Set the nextSelectionRange
             // which will set the range after a short wait time in a `useEffect` below
@@ -126,7 +147,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [scrRef, setScrRefWithScroll]);
+  }, [bcScrRef, setScrRefWithScroll]);
 
   const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
 
@@ -138,8 +159,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newScrRef: ScriptureReference) => {
+      const newBCScrRef: BCReference = {
+        bookNum: Canon.bookIdToNumber(newScrRef.book),
+        chapterNum: newScrRef.chapterNum,
+        verseNum: newScrRef.verseNum,
+      };
       internallySetScrRefRef.current = newScrRef;
-      return setScrRefWithScroll(newScrRef);
+      setScrRef(newScrRef);
+      setScrRefWithScroll(newBCScrRef);
     },
     [setScrRefWithScroll],
   );
@@ -154,7 +181,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
-    useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
+    useMemo(() => VerseRef.fromJSON(scrRef), [scrRef]),
     defaultUsj,
   );
 
@@ -189,7 +216,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     projectId,
   ).Comments(
     useMemo(() => {
-      return { bookId: Canon.bookNumberToId(scrRef.bookNum), chapterNum: scrRef.chapterNum };
+      return { bookId: scrRef.book, chapterNum: scrRef.chapterNum };
     }, [scrRef]),
     [],
   );
@@ -321,7 +348,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // If we made this latest scrRef change, don't scroll
     if (
       internallySetScrRefRef.current &&
-      internallySetScrRefRef.current.bookNum === scrRef.bookNum &&
+      internallySetScrRefRef.current.book === scrRef.book &&
       internallySetScrRefRef.current.chapterNum === scrRef.chapterNum &&
       internallySetScrRefRef.current.verseNum === scrRef.verseNum
     ) {
@@ -365,7 +392,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.bookNum) ? 'rtl' : 'ltr',
+      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.book) ? 'rtl' : 'ltr',
     }),
     [isReadOnly, projectName, scrRef],
   );
