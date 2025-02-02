@@ -12,7 +12,7 @@ import {
   USJ_VERSION,
   Usj,
 } from '@biblionexus-foundation/scripture-utilities';
-import { Canon, VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
@@ -58,17 +58,17 @@ function deepEqualAcrossIframes(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function scrollToScrRef(scrRef: ScriptureReference): HTMLElement | undefined {
+function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefined {
   const verseElement =
     document.querySelector<HTMLElement>(
-      `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
+      `.editor-container span[data-marker="v"][data-number="${verseLocation.verseNum}"]`,
     ) ?? undefined;
 
   // Scroll if we find the verse or we're at the start of the chapter
-  if (verseElement || scrRef.verseNum === 1) {
+  if (verseElement || verseLocation.verseNum === 1) {
     // If we're at the first verse, scroll to the top so we can see intro material
     let scrollTop = 0;
-    if (verseElement && scrRef.verseNum > 1)
+    if (verseElement && verseLocation.verseNum > 1)
       scrollTop =
         verseElement.getBoundingClientRect().top + window.scrollY - VERSE_NUMBER_SCROLL_OFFSET;
 
@@ -91,6 +91,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+  const verseLocation = useMemo<SerializedVerseRef>(
+    () => ({
+      book: Canon.bookNumberToId(scrRef.bookNum),
+      chapterNum: scrRef.chapterNum,
+      verseNum: scrRef.verseNum,
+    }),
+    [scrRef],
+  );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
 
@@ -134,12 +142,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
    * come from us
    */
-  const internallySetScrRefRef = useRef<ScriptureReference | undefined>(undefined);
+  const internalVerseLocationRef = useRef<SerializedVerseRef | undefined>(undefined);
 
   const setScrRefNoScroll = useCallback(
-    (newScrRef: ScriptureReference) => {
-      internallySetScrRefRef.current = newScrRef;
-      return setScrRefWithScroll(newScrRef);
+    (newVerseLocation: SerializedVerseRef) => {
+      const newScrRef: ScriptureReference = {
+        bookNum: Canon.bookIdToNumber(newVerseLocation.book),
+        chapterNum: newVerseLocation.chapterNum,
+        verseNum: newVerseLocation.verseNum,
+      };
+      internalVerseLocationRef.current = newVerseLocation;
+      setScrRefWithScroll(newScrRef);
     },
     [setScrRefWithScroll],
   );
@@ -154,7 +167,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
-    useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
+    useMemo(() => VerseRef.fromJSON(verseLocation), [verseLocation]),
     defaultUsj,
   );
 
@@ -189,8 +202,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     projectId,
   ).Comments(
     useMemo(() => {
-      return { bookId: Canon.bookNumberToId(scrRef.bookNum), chapterNum: scrRef.chapterNum };
-    }, [scrRef]),
+      return { bookId: verseLocation.book, chapterNum: verseLocation.chapterNum };
+    }, [verseLocation]),
     [],
   );
 
@@ -225,7 +238,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // Determine which "new" comments are actually new
       const usjRW = new UsjReaderWriter(usjWithAnchors);
-      const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);
+      const newLegacyComments = convertEditorCommentsToLegacyComments(
+        newComments,
+        usjRW,
+        verseLocation,
+      );
       const legacyCommentsToAdd: LegacyComment[] = [];
       newLegacyComments.forEach((newComment) => {
         if (!legacyCommentIds.has(newComment.id)) legacyCommentsToAdd.push(newComment);
@@ -238,7 +255,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const newCommentArray = [...legacyCommentsFromPdp, ...legacyCommentsToAdd];
       saveLegacyCommentsToPdp(newCommentArray);
     },
-    [legacyCommentsFromPdp, scrRef, saveLegacyCommentsToPdp],
+    [legacyCommentsFromPdp, verseLocation, saveLegacyCommentsToPdp],
   );
 
   /**
@@ -312,20 +329,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       hasFirstRetrievedScripture.current = true;
       // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
-      setTimeout(() => scrollToScrRef(scrRef), EDITOR_LOAD_DELAY_TIME);
+      setTimeout(() => scrollToVerse(verseLocation), EDITOR_LOAD_DELAY_TIME);
     }
-  }, [usjFromPdp, scrRef]);
+  }, [usjFromPdp, verseLocation]);
 
   // Scroll the selected verse and selection range into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
-      internallySetScrRefRef.current &&
-      internallySetScrRefRef.current.bookNum === scrRef.bookNum &&
-      internallySetScrRefRef.current.chapterNum === scrRef.chapterNum &&
-      internallySetScrRefRef.current.verseNum === scrRef.verseNum
+      internalVerseLocationRef.current &&
+      internalVerseLocationRef.current.book === verseLocation.book &&
+      internalVerseLocationRef.current.chapterNum === verseLocation.chapterNum &&
+      internalVerseLocationRef.current.verseNum === verseLocation.verseNum
     ) {
-      internallySetScrRefRef.current = undefined;
+      internalVerseLocationRef.current = undefined;
       return () => {};
     }
 
@@ -340,10 +357,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
       // Scroll to and add a highlight to the current verse element
-      highlightedVerseElement = scrollToScrRef(scrRef);
+      highlightedVerseElement = scrollToVerse(verseLocation);
       highlightedVerseElement?.classList.add('highlighted');
 
-      internallySetScrRefRef.current = undefined;
+      internalVerseLocationRef.current = undefined;
 
       // Set the selection if the selection was set to something as part of this scr ref change
       if (nextRange) editorRef.current?.setSelection(nextRange);
@@ -357,7 +374,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Remove highlight from the current verse element
       highlightedVerseElement?.classList.remove('highlighted');
     };
-  }, [scrRef]);
+  }, [verseLocation]);
 
   const [projectName] = useProjectSetting(projectId, 'platform.name', '');
 
@@ -365,9 +382,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.bookNum) ? 'rtl' : 'ltr',
+      textDirection:
+        projectName === 'OHEBGRK' && Canon.isBookOT(verseLocation.book) ? 'rtl' : 'ltr',
     }),
-    [isReadOnly, projectName, scrRef],
+    [isReadOnly, projectName, verseLocation],
   );
 
   if (isReadOnly) {
@@ -377,7 +395,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Button className="tw-hidden" />
         <Editorial
           ref={editorRef}
-          scrRef={scrRef}
+          scrRef={verseLocation}
           onScrRefChange={setScrRefNoScroll}
           options={options}
           logger={logger}
@@ -392,7 +410,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Button className="tw-hidden" />
         <Marginal
           ref={editorRef}
-          scrRef={scrRef}
+          scrRef={verseLocation}
           onScrRefChange={setScrRefNoScroll}
           onUsjChange={onUsjAndCommentsChange}
           onCommentChange={saveCommentsToPdp}
@@ -408,7 +426,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <Button className="tw-hidden" />
       <Editorial
         ref={editorRef}
-        scrRef={scrRef}
+        scrRef={verseLocation}
         onScrRefChange={setScrRefNoScroll}
         onUsjChange={saveUsjToPdp}
         options={options}
