@@ -1,3 +1,4 @@
+import { Usj } from '@biblionexus-foundation/scripture-utilities';
 import {
   getLocalizedIdFromBookNumber,
   compareScrRefs,
@@ -5,6 +6,8 @@ import {
   scrRefToBBBCCCVVV,
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
+  normalizeScriptureSpaces,
+  areUsjContentsEqualExceptWhitespace,
 } from './scripture-util';
 
 async function mockGetLocalizedString(item: {
@@ -171,5 +174,292 @@ describe('getLocalizeKeysForScrollGroupIds', () => {
       '%scrollGroup_undefined%',
       '%scrollGroup_1%',
     ]);
+  });
+});
+
+describe('normalizeScriptureSpaces', () => {
+  test('should replace sets of control characters, carriage returns, and tabs with single spaces', () => {
+    expect(normalizeScriptureSpaces('Hello\t\v\fWorld\r\n')).toBe('Hello World ');
+  });
+
+  test('should strip duplicate spaces', () => {
+    expect(normalizeScriptureSpaces('Hello   World')).toBe('Hello World');
+  });
+
+  test('should remove ZWSP followed by a space', () => {
+    expect(normalizeScriptureSpaces('Hello\u200B World')).toBe('Hello World');
+  });
+
+  test('should de-duplicate consecutive Paratext-selectable invisible characters', () => {
+    expect(normalizeScriptureSpaces('Hello\u200d\u200dWorld')).toBe('Hello\u200dWorld');
+    expect(normalizeScriptureSpaces('Hello\u200B\u200B\u200BWorld')).toBe('Hello\u200BWorld');
+  });
+
+  test('should shrink mixed control characters and spaces into one space', () => {
+    expect(normalizeScriptureSpaces('Hello \t \n \r \v World')).toBe('Hello World');
+  });
+
+  test('should shrink mixed ZWSPs and spaces into one space', () => {
+    expect(normalizeScriptureSpaces('Hello\u200B \u200B \u200B World')).toBe('Hello World');
+  });
+
+  test('should consider ideographic spaces not to be spaces while de-duplicating both', () => {
+    expect(normalizeScriptureSpaces('Hello  \u2000 \u3000\u200A\u2009World\u3000\u200A ')).toBe(
+      'Hello \u3000\u200AWorld\u3000\u200A',
+    );
+  });
+
+  test('should leave Paratext-selectable invisible characters that are not white spaces and spaces between while de-duplicating both', () => {
+    expect(normalizeScriptureSpaces('Hello\u200d\u200d    \u200d \u200d World')).toBe(
+      'Hello\u200d \u200d \u200d World',
+    );
+  });
+
+  test('should handle leading and trailing spaces', () => {
+    expect(normalizeScriptureSpaces('  Hello World  ')).toBe(' Hello World ');
+  });
+
+  test('should handle leading and trailing control characters', () => {
+    expect(normalizeScriptureSpaces('\tHello World\n')).toBe(' Hello World ');
+  });
+
+  test('should handle leading and trailing ZWSPs', () => {
+    expect(normalizeScriptureSpaces('\u200B\u200BHello World\u200B\u200B\u200B\u200B')).toBe(
+      '\u200BHello World\u200B',
+    );
+  });
+
+  test('should handle leading and trailing Paratext-selectable invisible characters', () => {
+    expect(normalizeScriptureSpaces('\u200d\u200d\u200d\u200dHello World\u200d\u200d')).toBe(
+      '\u200dHello World\u200d',
+    );
+  });
+});
+
+describe('areUsjContentsEqualExceptWhitespace', () => {
+  test('should return true for crazy whitespace around and inside in-line markers', () => {
+    const usj1: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            '   blah \u3000      ',
+            { type: 'char', marker: 'wj', content: ['            Hello   '] },
+            { type: 'char', marker: 'nd', content: [' World!'] },
+            'asdf            \n\n\n ',
+          ],
+        },
+      ],
+    };
+    const usj2: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            ' \u200a\u200a\u200a\u200a\u200ablah \u200a\u3000 \u200a\u200a',
+            { type: 'char', marker: 'wj', content: [' \u200a\u200aHello \u200a'] },
+            {
+              type: 'char',
+              marker: 'nd',
+              content: [' \u200a\u200a\u200a\u200a\u200a\u200a\u200aWorld!'],
+            },
+            'asdf \u200a\u200a\u200a\u200a\u200a\u200a',
+          ],
+        },
+      ],
+    };
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
+  });
+
+  test('should return true for one not having space at the end of block marker', () => {
+    const usj1: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            'blah ',
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            ' ',
+            { type: 'char', marker: 'nd', content: ['World!'] },
+            '    \t \n   ',
+          ],
+        },
+      ],
+    };
+    const usj2: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            'blah ',
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            ' ',
+            { type: 'char', marker: 'nd', content: ['World!'] },
+            // Doesn't have the space string at the end
+          ],
+        },
+      ],
+    };
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
+  });
+
+  test('should return true for space difference at the end of block marker final string', () => {
+    const usj1: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            'blah ',
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            ' ',
+            { type: 'char', marker: 'nd', content: ['World!'] },
+            'stuff         ',
+          ],
+        },
+      ],
+    };
+    const usj2: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            'blah ',
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            ' ',
+            { type: 'char', marker: 'nd', content: ['World!'] },
+            // Doesn't have space at the end of the string
+            'stuff',
+          ],
+        },
+      ],
+    };
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(true);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(true);
+  });
+
+  test('should return false for space difference at the end of last in-line marker in the block', () => {
+    const usj1: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            'blah ',
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            ' ',
+            { type: 'char', marker: 'nd', content: ['World!'] },
+          ],
+        },
+      ],
+    };
+    const usj2: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            'blah ',
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            ' ',
+            // Space after World! here
+            { type: 'char', marker: 'nd', content: ['World! '] },
+          ],
+        },
+      ],
+    };
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(false);
+  });
+
+  test('should return false for different in-line markers', () => {
+    const usj1: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            { type: 'char', marker: 'b', content: ['World!'] },
+          ],
+        },
+      ],
+    };
+    const usj2: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            // This is a nd, not a b
+            { type: 'char', marker: 'nd', content: ['World!'] },
+          ],
+        },
+      ],
+    };
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(false);
+  });
+
+  test('should return false for in-line marker different contents', () => {
+    const usj1: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            { type: 'char', marker: 'nd', content: [' World!'] },
+          ],
+        },
+      ],
+    };
+    const usj2: Usj = {
+      type: 'USJ',
+      version: '3.1',
+      content: [
+        {
+          type: 'para',
+          marker: 'p',
+          content: [
+            { type: 'char', marker: 'wj', content: ['Hello'] },
+            // Doesn't have a space before World!
+            { type: 'char', marker: 'nd', content: ['World!'] },
+          ],
+        },
+      ],
+    };
+    expect(areUsjContentsEqualExceptWhitespace(usj1, usj2)).toBe(false);
+    expect(areUsjContentsEqualExceptWhitespace(usj2, usj1)).toBe(false);
   });
 });

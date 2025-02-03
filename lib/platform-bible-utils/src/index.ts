@@ -42,9 +42,11 @@ export {
   createSyncProxyForAsyncObject,
 } from './util';
 export {
+  areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
   getLocalizedIdFromBookNumber,
+  normalizeScriptureSpaces,
   scrRefToBBBCCCVVV,
 } from './scripture-util';
 export {
@@ -71,6 +73,7 @@ export {
   ordinalCompare,
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
+  isWhiteSpace,
 } from './string-util';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';

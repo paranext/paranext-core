@@ -1133,6 +1133,28 @@ export declare function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (Scroll
  * @returns The formatted reference.
  */
 export declare function formatScrRef(scrRef: ScriptureReference, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
+/**
+ * Converts all control characters, carriage returns, and tabs into spaces and then strips duplicate
+ * spaces.
+ *
+ * This is mainly intended for use with individual Scripture strings in USFM, USX, USJ, etc. format.
+ * It is not intended to implement the [USFM white space definition or reduction
+ * rules](https://docs.usfm.bible/usfm/3.1/whitespace.html) but strictly follows Paratext 9's white
+ * space rules. It is generally best suited to normalizing spaces within a Scripture marker as it
+ * removes all newlines.
+ *
+ * This function is a direct translation of `UsfmToken.RegularizeSpaces` from `ParatextData.dll`
+ */
+export declare function normalizeScriptureSpaces(str: string): string;
+/**
+ * Determines if the USJ documents or markers (and all contents) are equivalent after regularizing
+ * spaces according to the way `ParatextData.dll` does.
+ *
+ * Note that this will not work properly if there ever exist any properties of USJ document or USJ
+ * markers other than `content` that are complex objects like arrays or objects as the properties
+ * are shallow equaled.
+ */
+export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
 /** USJ content node type for a chapter */
 export declare const CHAPTER_TYPE = "chapter";
 /** USJ content node type for a verse */
@@ -1592,6 +1614,28 @@ export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArr
  * @returns An array of `RegExp` objects. If the input is `undefined`, an empty array is returned.
  */
 export declare function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[];
+/**
+ * Determines whether a string contains one or more white space characters and no other characters.
+ *
+ * This implementation uses [dotnet's `Char.IsWhiteSpace` definition of white
+ * space](https://learn.microsoft.com/en-us/dotnet/api/system.char.iswhitespace?view=net-9.0):
+ *
+ * ```ts
+ * /^[\u000C\u000A\u000D\u0009\u000B\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/.test(
+ *   ch,
+ * );
+ * ```
+ *
+ * Note: This differs from
+ * [`/\s/.test(ch)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions/Character_classes#:~:text=Matches%20a%20single%20white%20space%20character%2C%20including%20space)
+ * (usually considered the determiner of what is white space in JavaScript) in that it does not
+ * include ZWNBSP (U+FEFF) but rather includes NEXT LINE (U+0085)
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more white space characters and no other
+ *   characters, `false` otherwise
+ */
+export declare function isWhiteSpace(ch: string): boolean;
 /**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
