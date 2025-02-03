@@ -738,6 +738,36 @@ export function transformAndEnsureRegExpArray(
   return regExpArray;
 }
 
+const whiteSpaceRegex =
+  // Using unicode control characters to be very explicit about which characters we are using.
+  // The first 6 characters are the control characters \f\n\r\t\v.
+  // eslint-disable-next-line no-control-regex
+  /^[\u000C\u000A\u000D\u0009\u000B\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/;
+/**
+ * Determines whether a string contains one or more white space characters and no other characters.
+ *
+ * This implementation uses [dotnet's `Char.IsWhiteSpace` definition of white
+ * space](https://learn.microsoft.com/en-us/dotnet/api/system.char.iswhitespace?view=net-9.0):
+ *
+ * ```ts
+ * /^[\u000C\u000A\u000D\u0009\u000B\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/.test(
+ *   ch,
+ * );
+ * ```
+ *
+ * Note: This differs from
+ * [`/\s/.test(ch)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions/Character_classes#:~:text=Matches%20a%20single%20white%20space%20character%2C%20including%20space)
+ * (usually considered the determiner of what is white space in JavaScript) in that it does not
+ * include ZWNBSP (U+FEFF) but rather includes NEXT LINE (U+0085)
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more white space characters and no other
+ *   characters, `false` otherwise
+ */
+export function isWhiteSpace(ch: string) {
+  return whiteSpaceRegex.test(ch);
+}
+
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingStringUtils = {
   indexOfClosestClosingCurlyBrace,
