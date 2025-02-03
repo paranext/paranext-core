@@ -10,6 +10,8 @@ import {
 import ensureArray from './array-util';
 import { isString } from './util';
 
+const ZWSP = '\u200B';
+
 /**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
  * Unicode code points instead of UTF-16 character codes.
@@ -736,6 +738,129 @@ export function transformAndEnsureRegExpArray(
   const regExpArray = stringArray.map((str: string) => new RegExp(str));
 
   return regExpArray;
+}
+
+const whiteSpaceRegex =
+  /^[\f\n\r\t\v\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/;
+/**
+ * Determines whether a string contains one or more white space characters and no other characters.
+ *
+ * This implementation uses [dotnet's `Char.IsWhiteSpace` definition of white
+ * space](https://learn.microsoft.com/en-us/dotnet/api/system.char.iswhitespace?view=net-9.0):
+ *
+ * ```ts
+ * /^[\f\n\r\t\v\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/.test(
+ *   ch,
+ * );
+ * ```
+ *
+ * Note: This differs from `/\s/.test(ch)` (usually considered the determiner of what is white space
+ * in JavaScript) in that it does not include ZWNBSP (U+FEFF) but rather includes NEXT LINE
+ * (U+0085)
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more white space characters and no other
+ *   characters, `false` otherwise
+ */
+export function isWhiteSpace(ch: string) {
+  return whiteSpaceRegex.test(ch);
+}
+
+const nonSemanticWhiteSpaceRegex =
+  /^[\f\n\r\t\v\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u200B\u0085]+$/;
+/**
+ * Determines whether a string contains one or more "non-meaningful" white space characters
+ * according to `ParatextData.dll` and no other characters.
+ *
+ * "Non-meaningful" white space according to `ParatextData.dll` is white space (according to
+ * {@link isWhiteSpace}) other than IDEOGRAPHIC SPACE (U+3000) and also includes ZWSP (U+200B)
+ *
+ * This function is a direct translation of `UsfmToken.IsNonSemanticWhiteSpace` from
+ * `ParatextData.dll`
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more "non-meaningful" white space characters and
+ *   no other characters, `false` otherwise
+ */
+function isNonSemanticWhiteSpace(ch: string) {
+  return nonSemanticWhiteSpaceRegex.test(ch);
+}
+
+// Note Zero-width joiner is at the start because eslint thinks we're trying to test for joined
+// characters if it's in the middle. https://eslint.org/docs/latest/rules/no-misleading-character-class
+const invisibleCharOrWhiteSpaceRegex =
+  /^[\u200d\u2003\u2002\u0020\u00a0\u202f\u2009\u200a\u3000\u200b\u200c\u2060\u200e\u200f]+$/;
+/**
+ * Determines whether a string contains one or more Paratext-9-selectable invisible characters or
+ * white space characters and no other characters.
+ *
+ * Paratext-9-selectable invisible characters or white space characters are characters listed in
+ * [Paratext 9's "Whitespace and invisible characters
+ * drop-down"](https://paratext.myjetbrains.com/youtrack/issue/PTX-23623) that the user can insert
+ * into the text:
+ *
+ * ```ts
+ * // Zero-width joiner, em space, en space, space, no-break space, narrow no-break space,
+ * // thin space, hair space, ideographic space, zero-width space, zero-width non-joiner,
+ * // word joiner, left-to-right mark, right-to-left mark
+ * /^[\u200d\u2003\u2002\u0020\u00a0\u202f\u2009\u200a\u3000\u200b\u200c\u2060\u200e\u200f]+$/.test(
+ *   ch,
+ * );
+ * ```
+ *
+ * Note: more white space characters are supported in Paratext 9 but are not listed in this
+ * dropdown. See {@link isWhiteSpace} for more information.
+ *
+ * This function is a direct translation of `CharExtensions.IsInvisibleCharOrWhitespace` from
+ * `ParatextData.dll`
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more Paratext-9-selectable invisible characters
+ *   or white space characters and no other characters, `false` otherwise
+ */
+function isParatextSelectableInvisibleCharOrWhiteSpace(ch: string) {
+  return invisibleCharOrWhiteSpaceRegex.test(ch);
+}
+
+/**
+ * Converts all control characters, carriage returns, and tabs into spaces and then strips duplicate
+ * spaces.
+ *
+ * This function is a direct translation of `UsfmToken.RegularizeSpaces` from `ParatextData.dll`
+ */
+export function regularizeSpaces(str: string): string {
+  let result = '';
+  let lastCharWasSpace = false;
+  // Initialized to placeholder previous character
+  let prevCh = '\0';
+  for (let i = 0; i < str.length; i += 1) {
+    const ch = str[i];
+    // Control characters, CR/LF, and TAB become spaces
+    if (ch.charCodeAt(0) < 32) {
+      if (!lastCharWasSpace) result += ' ';
+      lastCharWasSpace = true;
+    } else if (
+      !lastCharWasSpace &&
+      ch === ZWSP &&
+      i + 1 < str.length &&
+      isNonSemanticWhiteSpace(str[i + 1])
+    ) {
+      // ZWSP is redundant if followed by a space
+    } else if (isNonSemanticWhiteSpace(ch)) {
+      // Keep other kinds of spaces
+      if (!lastCharWasSpace) result += ch;
+      lastCharWasSpace = true;
+    } else if (isParatextSelectableInvisibleCharOrWhiteSpace(ch) && prevCh === ch) {
+      // If the char is a whitespace or invisible char that has not already been handled and is a duplicate, remove the duplicate
+    } else {
+      result += ch;
+      lastCharWasSpace = false;
+    }
+
+    prevCh = ch;
+  }
+
+  return result;
 }
 
 /** This is an internal-only export for testing purposes and should not be used in development */

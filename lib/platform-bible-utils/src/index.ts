@@ -71,6 +71,8 @@ export {
   ordinalCompare,
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
+  isWhiteSpace,
+  regularizeSpaces,
 } from './string-util';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';

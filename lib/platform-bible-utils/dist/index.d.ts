@@ -1593,6 +1593,34 @@ export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArr
  */
 export declare function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[];
 /**
+ * Determines whether a string contains one or more white space characters and no other characters.
+ *
+ * This implementation uses [dotnet's `Char.IsWhiteSpace` definition of white
+ * space](https://learn.microsoft.com/en-us/dotnet/api/system.char.iswhitespace?view=net-9.0):
+ *
+ * ```ts
+ * /^[\f\n\r\t\v\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/.test(
+ *   ch,
+ * );
+ * ```
+ *
+ * Note: This differs from `/\s/.test(ch)` (usually considered the determiner of what is white space
+ * in JavaScript) in that it does not include ZWNBSP (U+FEFF) but rather includes NEXT LINE
+ * (U+0085)
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more white space characters and no other
+ *   characters, `false` otherwise
+ */
+export declare function isWhiteSpace(ch: string): boolean;
+/**
+ * Converts all control characters, carriage returns, and tabs into spaces and then strips duplicate
+ * spaces.
+ *
+ * This function is a direct translation of `UsfmToken.RegularizeSpaces` from `ParatextData.dll`
+ */
+export declare function regularizeSpaces(str: string): string;
+/**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
  * @param a The first object to compare
