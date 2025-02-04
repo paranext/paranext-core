@@ -620,9 +620,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     private static string ConvertUsfmToUsx(ScrText scrText, VerseRef verseRef, bool chapterOnly)
     {
-        var scrStylesheet = scrText.ScrStylesheet(verseRef.BookNum);
         string usfmData = scrText.GetText(verseRef, chapterOnly, true) ?? string.Empty;
-        XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(scrStylesheet, usfmData, false);
+        XmlDocument xmlDoc = UsfmToUsx.ConvertToXmlDocument(scrText, verseRef.BookNum, usfmData);
         return xmlDoc.OuterXml;
     }
 
@@ -639,7 +638,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             scrText.ScrStylesheet(verseRef.BookNum),
             doc.CreateNavigator(),
             XPathExpression.Compile("*[false()]"),
-            out string usfm
+            out string usfm,
+            scrText.Settings.AllowInvisibleChars
         );
 
         return UsfmToken.NormalizeUsfm(scrText, verseRef.BookNum, usfm);
@@ -654,9 +654,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // $"//chapter[@number=\"{verseRef.ChapterNum}\"]/following::verse[@number=\"{verseRef.VerseNum}\"][1]/following::node()[preceding::chapter[1]/@number=\"{verseRef.ChapterNum}\"][preceding-sibling::verse[1]/@number=\"{verseRef.VerseNum}\"][not(self::verse)]";
         // It's more likely that a successful approach would require walking the XmlDocument DOM
 
-        var scrStylesheet = scrText.ScrStylesheet(vRef.BookNum);
         string usfmData = scrText.GetText(vRef, true, true) ?? string.Empty;
-        XmlDocument usxData = UsfmToUsx.ConvertToXmlDocument(scrStylesheet, usfmData, false);
+        XmlDocument usxData = UsfmToUsx.ConvertToXmlDocument(scrText, vRef.BookNum, usfmData);
         var chapterNode = usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum, 1));
         if (chapterNode == null)
             return string.Empty;
