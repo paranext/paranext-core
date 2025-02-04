@@ -10,7 +10,12 @@ import {
 } from 'platform-scripture';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { VerseRef } from '@sillsdev/scripture';
-import { getChaptersForBook, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import {
+  getChaptersForBook,
+  LAST_SCR_BOOK_NUM,
+  LocalizeKey,
+  ScriptureReference,
+} from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
 import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';
 import ChecksScopeFilter, {
@@ -84,18 +89,24 @@ global.webViewComponent = function ChecksSidePanelWebView({
       end = new VerseRef(scrRef.bookNum, getChaptersForBook(scrRef.bookNum), 1);
     }
 
-    // TODO: Cannot use "All" scope because c# returns "Ranges cannot span between books"
-    // if (scope === CheckScopes.All) {
-    //   start = new VerseRef(1, 1, 1);
-    //   end = new VerseRef(LAST_SCR_BOOK_NUM, getChaptersForBook(LAST_SCR_BOOK_NUM), 1);
-    // }
-
     return {
       projectId: projectId ?? '',
       start,
       end,
     };
   }, [projectId, scope, scrRef]);
+
+  const getActiveRangesForScopeAll = useCallback((): CheckInputRange[] => {
+    return Array.from({ length: LAST_SCR_BOOK_NUM }, (_, bookIndex) => {
+      const start = new VerseRef(bookIndex + 1, 1, 1);
+      const end = new VerseRef(bookIndex + 1, getChaptersForBook(bookIndex + 1), 1);
+      return {
+        projectId: projectId ?? '',
+        start,
+        end,
+      };
+    });
+  }, [projectId]);
 
   const settableCheckDetails: SettableCheckDetails = useMemo(() => {
     return {
@@ -108,7 +119,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
   useEffect(() => {
     async function updateChecksAndRanges() {
       if (setAvailableChecks) await setAvailableChecks([settableCheckDetails]);
-      if (setActiveRanges) await setActiveRanges([checkInputRange]);
+      if (setActiveRanges && (scope === CheckScopes.Book || scope === CheckScopes.Chapter))
+        await setActiveRanges([checkInputRange]);
+      if (setActiveRanges && scope === CheckScopes.All)
+        await setActiveRanges(getActiveRangesForScopeAll());
       if (setIncludeDeniedResults) await setIncludeDeniedResults(true);
     }
     updateChecksAndRanges();
@@ -119,6 +133,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
     setAvailableChecks,
     setIncludeDeniedResults,
     settableCheckDetails,
+    scope,
+    getActiveRangesForScopeAll,
   ]);
 
   const [checkResults, , isLoadingCheckResults] = useData(
@@ -185,11 +201,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const handleSelectCheck = useCallback(
     async (id: string) => {
-      const newId = id === selectedCheckId ? '' : id;
-      setSelectedCheckId(newId);
-      scrollToCheckReferenceInEditor(newId);
+      setSelectedCheckId(id);
+      scrollToCheckReferenceInEditor(id);
     },
-    [scrollToCheckReferenceInEditor, selectedCheckId],
+    [scrollToCheckReferenceInEditor],
   );
 
   const handleDenyCheck = useCallback(
@@ -250,7 +265,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     !checkAggregator
   ) {
     return (
-      <div className="pr-twp tw-box-border tw-h-screen tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+      <div className="pr-twp tw-bg-muted/50 tw-h-screen tw-box-border tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
         <Spinner />
         <span className="tw-text-sm">
           {localizedStrings['%webView_checksSidePanel_loadingCheckResults%']}
@@ -260,15 +275,15 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }
 
   return (
-    <div className="pr-twp tw-p-3">
-      <div className="tw-flex tw-gap-1 tw-items-center tw-mb-2 tw-w-full tw-min-w-0">
-        <div className="tw-w-1/3 tw-min-w-0">
+    <div className="pr-twp tw-box-border tw-p-3 tw-h-full tw-bg-muted/50">
+      <div className="tw-flex tw-gap-1 tw-items-center tw-pb-2 tw-w-full tw-min-w-0">
+        <div className="tw-w-1/2 tw-min-w-0">
           <ChecksProjectFilter
             handleSelectProject={handleSelectProject}
             selectedProjectId={projectId ?? ''}
           />
         </div>
-        <div className="tw-w-2/3 tw-min-w-0">
+        <div className="tw-w-1/2 tw-min-w-0">
           <ChecksScopeFilter selectedScope={scope} handleSelectScope={handleSelectScope} />
         </div>
       </div>

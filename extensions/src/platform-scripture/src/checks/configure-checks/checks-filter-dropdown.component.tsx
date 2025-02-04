@@ -1,9 +1,16 @@
 import { ChevronDown } from 'lucide-react';
-import { Popover, PopoverTrigger, Button, PopoverContent, Separator } from 'platform-bible-react';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+  Separator,
+} from 'platform-bible-react';
 import { PropsWithChildren } from 'react';
 
-/** Props for the FilterPopover component */
-type FilterPopoverProps = PropsWithChildren & {
+/** Props for the ChecksFilterDropdown component */
+type ChecksFilterDropdownProps = PropsWithChildren & {
   /** The selected value of the radio group */
   selectedValue: string;
   /** The label for the radio group */
@@ -15,19 +22,22 @@ type FilterPopoverProps = PropsWithChildren & {
 };
 
 /**
- * A Popover component that displays a group of items. The `children` prop should be a `RadioGroup`
- * or set of Checkbox`es and `Label` components.
+ * Component for the filter and configure dropdowns in the checks side panel
+ *
+ * The component renders a dropdown with a button showing the currently selected value and a chevron
+ * down icon. When the button is clicked, a menu is displayed with a label and the children passed
+ * to the component.
  */
-export default function FilterPopover({
+export default function ChecksFilterDropdown({
   selectedValue,
   radioGroupLabel,
   getSelectedValueLabel,
-  shouldDisableButton = false,
+  shouldDisableButton,
   children,
-}: FilterPopoverProps) {
+}: ChecksFilterDropdownProps) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
           className="tw-w-full tw-shadow-sm tw-inline-flex tw-items-center tw-justify-between"
@@ -38,14 +48,12 @@ export default function FilterPopover({
           </div>
           <ChevronDown size={16} className="tw-shrink-0" />
         </Button>
-      </PopoverTrigger>
-      <PopoverContent className="tw-p-0" align="start">
-        <div className="tw-p-3">
-          <h4 className="tw-font-medium tw-text-sm">{radioGroupLabel}</h4>
-        </div>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="tw-max-w-sm">
+        <DropdownMenuLabel>{radioGroupLabel}</DropdownMenuLabel>
         <Separator />
         {children}
-      </PopoverContent>
-    </Popover>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

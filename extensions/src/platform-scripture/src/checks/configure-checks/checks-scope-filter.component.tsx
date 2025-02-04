@@ -1,8 +1,8 @@
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
-import { Label, RadioGroup, RadioGroupItem } from 'platform-bible-react';
-import FilterPopover from './filter-popover.component';
+import { DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'platform-bible-react';
+import ChecksFilterDropdown from './checks-filter-dropdown.component';
 
 /**
  * Enum representing the different scopes that can be selected for checks.
@@ -14,11 +14,7 @@ import FilterPopover from './filter-popover.component';
 export enum CheckScopes {
   Chapter = 'Chapter',
   Book = 'Book',
-  /**
-   * All check results for the project. Not yet implemented because c# check service returns "Ranges
-   * can not span between books"
-   */
-  // All = 'All',
+  All = 'All',
   /**
    * Section of project text that the user can currently see. Not yet implemented, commented out so
    * that it can still enumerate through these values
@@ -36,8 +32,7 @@ type ChecksScopeFilterProps = {
 const CHECK_SCOPE_FILTER_STRINGS: { [key in CheckScopes]: LocalizeKey } = {
   Chapter: '%webView_checksSidePanel_scopeFilter_chapter%',
   Book: '%webView_checksSidePanel_scopeFilter_book%',
-  // Commented out because we want this but c# check service does not support it yet
-  // All: '%webView_checksSidePanel_scopeFilter_all%',
+  All: '%webView_checksSidePanel_scopeFilter_all%',
 };
 
 const LOCALIZED_STRINGS: LocalizeKey[] = ['%webView_checksSidePanel_scopeFilter_label%'];
@@ -77,21 +72,18 @@ export default function ChecksScopeFilter({
   );
 
   return (
-    <FilterPopover
+    <ChecksFilterDropdown
       selectedValue={selectedScope}
       radioGroupLabel={localizedStrings['%webView_checksSidePanel_scopeFilter_label%']}
       getSelectedValueLabel={getScopeLabel}
     >
-      <RadioGroup value={selectedScope} onValueChange={onScopeChange} className="tw-p-3">
+      <DropdownMenuRadioGroup value={selectedScope} onValueChange={onScopeChange}>
         {Object.values(CheckScopes).map((scope) => (
-          <div key={scope} className="tw-flex tw-gap-2 tw-items-center">
-            <RadioGroupItem value={scope} id={scope} />
-            <Label htmlFor={scope} className="tw-flex-1 tw-text-sm tw-font-normal">
-              {getScopeLabel(scope)}
-            </Label>
-          </div>
+          <DropdownMenuRadioItem key={scope} value={scope} id={scope}>
+            {getScopeLabel(scope)}
+          </DropdownMenuRadioItem>
         ))}
-      </RadioGroup>
-    </FilterPopover>
+      </DropdownMenuRadioGroup>
+    </ChecksFilterDropdown>
   );
 }

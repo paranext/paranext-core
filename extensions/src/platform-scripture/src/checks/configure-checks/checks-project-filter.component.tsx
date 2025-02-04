@@ -1,9 +1,9 @@
 import papi, { projectDataProviders } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { usePromise, RadioGroupItem, Label, RadioGroup } from 'platform-bible-react';
+import { usePromise, DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'platform-bible-react';
 import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
-import FilterPopover from './filter-popover.component';
+import ChecksFilterDropdown from './checks-filter-dropdown.component';
 
 /** Props for ChecksProjectFilter component */
 type ChecksProjectFilterProps = {
@@ -83,7 +83,6 @@ export default function ChecksProjectFilter({
 
   const writeProjectName = useCallback(
     (fullName: string, shortName: string) => {
-      // return `${fullName} (${shortName})`;
       return formatReplacementStringToArray(
         localizedStrings['%webView_checksSidePanel_projectFilter_projectName_format%'],
         { fullName, shortName },
@@ -100,26 +99,22 @@ export default function ChecksProjectFilter({
   }, [localizedStrings, projectIdsAndNames, selectedProjectId]);
 
   return (
-    <FilterPopover
+    <ChecksFilterDropdown
       selectedValue={selectedProjectId}
       radioGroupLabel={localizedStrings['%webView_checksSidePanel_projectFilter_label%']}
       getSelectedValueLabel={getProjectShortNameLabel}
     >
-      <RadioGroup value={selectedProjectId} onValueChange={onProjectChange} className="tw-p-3">
+      <DropdownMenuRadioGroup value={selectedProjectId} onValueChange={onProjectChange}>
         {Object.entries(projectIdsAndNames).length === 0
           ? localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
           : Object.entries(projectIdsAndNames).map(([projectId, project]) => (
-              <div key={projectId} className="tw-flex tw-items-start tw-gap-2">
-                <RadioGroupItem value={projectId} id={projectId} className="tw-mt-0.5" />
-                <Label
-                  htmlFor={projectId}
-                  className="tw-flex-1 tw-text-sm tw-font-normal tw-leading-5"
-                >
+              <DropdownMenuRadioItem key={projectId} value={projectId} id={projectId}>
+                <div className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
                   {writeProjectName(project.fullName, project.shortName)}
-                </Label>
-              </div>
+                </div>
+              </DropdownMenuRadioItem>
             ))}
-      </RadioGroup>
-    </FilterPopover>
+      </DropdownMenuRadioGroup>
+    </ChecksFilterDropdown>
   );
 }
