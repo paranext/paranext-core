@@ -49,7 +49,7 @@ export default function ChecksFilterDropdown({
           <ChevronDown size={16} className="tw-shrink-0" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="tw-max-w-sm">
+      <DropdownMenuContent className="tw-max-w-sm" align="start">
         <DropdownMenuLabel>{radioGroupLabel}</DropdownMenuLabel>
         <Separator />
         {children}
