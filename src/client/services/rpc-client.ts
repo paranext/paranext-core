@@ -23,7 +23,7 @@ import {
   WEBSOCKET_PORT,
 } from '@shared/data/rpc.model';
 import { createWebSocket } from '@client/services/web-socket.factory';
-import { AsyncVariable, Mutex, MutexMap } from 'platform-bible-utils';
+import { AsyncVariable, getErrorMessage, Mutex, MutexMap } from 'platform-bible-utils';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
@@ -98,7 +98,7 @@ export default class RpcClient implements IRpcMethodRegistrar {
         this.connectionStatus = ConnectionStatus.Connected;
         logger.info(`Websocket connected to ${this.ws.url}`);
       } catch (error) {
-        RpcClient.handleError(`RPC client connection error: ${JSON.stringify(error)}`, this.ws);
+        RpcClient.handleError(`RPC client connection error: ${getErrorMessage(error)}`, this.ws);
         this.removeEventListenersFromWebSocket();
         this.connectionStatus = ConnectionStatus.Disconnected;
         this.ws = undefined;
