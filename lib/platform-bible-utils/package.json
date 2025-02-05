@@ -47,6 +47,7 @@
     "jsonpath-plus": "^10.2.0"
   },
   "devDependencies": {
+    "@biblionexus-foundation/scripture-utilities": "^0.0.7",
     "@types/jest": "^29.5.14",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",

@@ -18,6 +18,7 @@ import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectSetting, useSetting } from '@papi/frontend/react';
 import {
+  areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   deepClone,
   ScriptureReference,
@@ -167,14 +168,48 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
-    useMemo(() => VerseRef.fromJSON(verseLocation), [verseLocation]),
+    useMemo(
+      () =>
+        VerseRef.fromJSON({
+          book: verseLocation.book,
+          chapterNum: verseLocation.chapterNum,
+          verseNum: 1,
+          versificationStr: verseLocation.versificationStr,
+        }),
+      [verseLocation.book, verseLocation.chapterNum, verseLocation.versificationStr],
+    ),
     defaultUsj,
+    // `whichUpdates` set to `*` because we need to receive all updates instead of just ones that
+    // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
+    useMemo(() => ({ whichUpdates: '*' }), []),
   );
+  const usjFromPdpPrev = useRef<Usj | undefined>(undefined);
+  useEffect(() => {
+    return () => {
+      usjFromPdpPrev.current = usjFromPdp;
+    };
+  }, [usjFromPdp]);
+
+  /** Latest USJ from the PDP with comment anchors inserted */
+  const usjFromPdpWithAnchors = useRef(defaultUsj);
 
   const usjSentToPdp = useRef(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
-  const saveUsjToPdp = useCallback(
-    (newUsj: Usj) => {
+
+  /** If the editor has updates that the PDP hasn't recorded, save them to the PDP */
+  const saveUsjToPdpIfUpdated = useMemo(() => {
+    function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
+      if (
+        editorUsj &&
+        !areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, editorUsj)
+      )
+        saveUsjToPdpInternal(editorUsj);
+    }
+
+    // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
+    // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
+    // `saveUsjToPdpIfUpdated` everywhere.
+    async function saveUsjToPdpInternal(newUsj: Usj) {
       if (!saveUsjToPdpRaw) return;
 
       // Don't start writing to the PDP again if we're in the middle of writing now
@@ -192,10 +227,24 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
       currentlyWritingUsjToPdp.current = true;
       usjSentToPdp.current = clonedUsj;
-      saveUsjToPdpRaw(clonedUsj);
-    },
-    [saveUsjToPdpRaw],
-  );
+      try {
+        if (!(await saveUsjToPdpRaw(clonedUsj)) && currentlyWritingUsjToPdp.current) {
+          currentlyWritingUsjToPdp.current = false;
+
+          // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
+          // chance the editor has more updates since the last attempted save. Let's check and save
+          // again if there have been updates
+          const editorUsj = editorRef.current?.getUsj();
+          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
+        }
+      } catch (e) {
+        logger.error(`Error saving USJ to PDP: ${e}`);
+        currentlyWritingUsjToPdp.current = false;
+      }
+    }
+
+    return saveUsjToPdpIfUpdatedInternal;
+  }, [saveUsjToPdpRaw]);
 
   const [legacyCommentsFromPdp, saveLegacyCommentsToPdp] = useProjectData(
     'legacyCommentManager.comments',
@@ -203,7 +252,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   ).Comments(
     useMemo(() => {
       return { bookId: verseLocation.book, chapterNum: verseLocation.chapterNum };
-    }, [verseLocation]),
+    }, [verseLocation.book, verseLocation.chapterNum]),
     [],
   );
 
@@ -278,38 +327,41 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const onUsjAndCommentsChange = useCallback(
     (newUsjFromEditor: Usj, newCommentsFromEditor: Comments | undefined) => {
       saveCommentsToPdp(newCommentsFromEditor, newUsjFromEditor);
-      saveUsjToPdp(newUsjFromEditor);
+      saveUsjToPdpIfUpdated(newUsjFromEditor);
     },
-    [saveUsjToPdp, saveCommentsToPdp],
+    [saveUsjToPdpIfUpdated, saveCommentsToPdp],
   );
 
   // This should only be used in the following `useEffect`
   const mostRecentlySetLegacyComments = useRef(legacyCommentsFromPdp);
 
   // Update the editor if a change comes in from the PDP
+  // Note: this will run every time we get data from the PDP whether or not it is different than it
+  // was previously. We need to know when data comes in so we can set
+  // `currentlyWritingUsjToPdp.current` to `false` appropriately
   useEffect(() => {
     if (!usjFromPdp || !legacyCommentsFromPdp || !editorRef.current) return;
 
     // The PDP informed us of updates, so writing to it must be complete (if we were writing)
     currentlyWritingUsjToPdp.current = false;
 
-    // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
-    const usjFromPdpWithAnchors = deepClone(usjFromPdp);
-    insertCommentAnchors(usjFromPdpWithAnchors);
+    // Recalculate usj from PDP with anchors if the new USJ we received from the PDP is different
+    // than the previous we received
+    if (!deepEqualAcrossIframes(usjFromPdp, usjFromPdpPrev.current)) {
+      // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
+      usjFromPdpWithAnchors.current = deepClone(usjFromPdp);
+      insertCommentAnchors(usjFromPdpWithAnchors.current);
+    }
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
-    if (!deepEqualAcrossIframes(usjFromPdpWithAnchors, usjSentToPdp.current)) {
-      usjSentToPdp.current = usjFromPdpWithAnchors;
-      editorRef.current.setUsj(usjFromPdpWithAnchors);
+    if (!areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, usjSentToPdp.current)) {
+      usjSentToPdp.current = usjFromPdpWithAnchors.current;
+      editorRef.current.setUsj(usjFromPdpWithAnchors.current);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
-    else {
-      const editorUsj = editorRef.current.getUsj();
-      if (editorUsj && !deepEqualAcrossIframes(usjFromPdpWithAnchors, editorUsj))
-        saveUsjToPdp(editorUsj);
-    }
+    else saveUsjToPdpIfUpdated();
 
     // Make sure the editor has the latest comment data from the PDP
     if (
@@ -321,7 +373,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // The editor's USJ needs to have anchors for these comments or the editor will error
       editorRef.current.setComments?.(threads);
     }
-  }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdp, usjFromPdp]);
+  }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdpIfUpdated, usjFromPdp]);
 
   // On loading the first time, scroll the selected verse into view
   useEffect(() => {
@@ -428,7 +480,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         ref={editorRef}
         scrRef={verseLocation}
         onScrRefChange={setScrRefNoScroll}
-        onUsjChange={saveUsjToPdp}
+        onUsjChange={saveUsjToPdpIfUpdated}
         options={options}
         logger={logger}
       />

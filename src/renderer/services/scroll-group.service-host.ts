@@ -71,7 +71,12 @@ export function setScrRefSync(
   scrRef: ScriptureReference,
   shouldSetVerseRefSetting = true,
 ): boolean {
-  if (!scrRef || !scrRef.bookNum || !scrRef.chapterNum || !scrRef.verseNum)
+  if (
+    !scrRef ||
+    !(typeof scrRef.bookNum === 'number') ||
+    !(typeof scrRef.chapterNum === 'number') ||
+    !(typeof scrRef.verseNum === 'number')
+  )
     throw new Error('Must provide scrRef in proper format!');
 
   const scrollGroupIdDefaulted = scrollGroupId ?? 0;

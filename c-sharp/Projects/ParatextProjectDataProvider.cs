@@ -558,6 +558,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     public bool SetChapterUsx(VerseRef verseRef, string data)
     {
         string? failedMessage = null;
+        bool didChange = true;
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
@@ -566,6 +567,17 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 writeLock =>
                 {
                     var usfm = ConvertUsxToUsfm(scrText, verseRef, data);
+
+                    // Compare the current USFM to the normalized input USFM to see if anything changed
+                    // This may happen if someone makes a whitespace change that gets normalized
+                    // back to the same USFM
+                    var currentUsfm = GetChapterUsfm(verseRef);
+                    if (currentUsfm == usfm)
+                    {
+                        didChange = false;
+                        return;
+                    }
+
                     scrText.PutText(verseRef.BookNum, verseRef.ChapterNum, true, usfm, writeLock);
                 }
             );
@@ -577,6 +589,9 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
         if (failedMessage != null)
             throw new Exception(failedMessage);
+
+        if (!didChange)
+            return false;
 
         SendDataUpdateEvent(AllScriptureDataTypes, "USX chapter data update event");
         return true;
