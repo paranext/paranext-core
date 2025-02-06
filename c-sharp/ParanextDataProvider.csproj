@@ -65,6 +65,24 @@
     </Content>
   </ItemGroup>
 
+  <!-- This assumes that icu4c libs are installed under "/usr/lib/x86_64-linux-gnu" on Linux. -->
+  <ItemGroup>
+    <Content Include="/usr/lib/x86_64-linux-gnu/libicu*.so.??" Exclude="/usr/lib/x86_64-linux-gnu/libicutest*;/usr/lib/x86_64-linux-gnu/libicutu*" Condition="$([MSBuild]::IsOsPlatform('Linux'))">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    Workaround for .NET bug: https://github.com/dotnet/runtime/issues/57784
+    We also set the environment variable DOTNET_LTTNG to 0 to disable LTTng tracing in the snap.
+    We're copying the approach from https://github.com/jellyfin/jellyfin/pull/11008/files.
+    -->
+  <Target Name="DeleteClrTracePointProvider" Condition="$([MSBuild]::IsOsPlatform('Linux'))" AfterTargets="Publish">
+    <Message Text="Deleting libcoreclrtraceptprovider.so"/>
+    <Delete Files="$(OutDir)libcoreclrtraceptprovider.so" />
+    <Delete Files="$(PublishDir)libcoreclrtraceptprovider.so" />
+  </Target>
+
   <ItemGroup>
     <Content Include="assets\**\*.*">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
