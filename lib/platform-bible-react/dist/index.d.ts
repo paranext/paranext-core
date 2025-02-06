@@ -3,6 +3,7 @@
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
+import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { PopoverProps } from '@radix-ui/react-popover';
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
 import * as SelectPrimitive from '@radix-ui/react-select';
@@ -1330,6 +1331,26 @@ export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
 export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: import("class-variance-authority/dist/types").ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
+/**
+ * The Popover component displays rich content in a portal, triggered by a button. This popover is
+ * built on Radix UI's Popover component and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
+export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
+/**
+ * @inheritdoc Popover
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
+export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * @inheritdoc Popover
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
+export declare const PopoverContent: React$1.ForwardRefExoticComponent<Omit<PopoverPrimitive.PopoverContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Radio Group components providing a set of checkable buttons—known as radio buttons—where no more
  * than one of the buttons can be checked at a time. These components are built on Radix UI
