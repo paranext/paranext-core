@@ -58,17 +58,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
   useEffect(() => {
-    // const validateSubscriptionId = async () => {
-    //   logger.info('Validating subscription ID');
-    //   const isIDValid = await checkAggregator?.validateSubscription(subscriptionId);
-    //   if (!isIDValid) {
-    //     await checkAggregator?.deleteSubscription(subscriptionId);
-    //     logger.info('Deleted subscription ID', subscriptionId);
-    //     const newSubscriptionId = await checkAggregator?.createSubscription();
-    //     setSubscriptionId(newSubscriptionId || '');
-    //     logger.info('Created subscription ID', newSubscriptionId);
-    //   }
-    // };
     const validateSubscriptionId = async () => {
       logger.info('Validating subscription ID');
       const isIDValid = await checkAggregator?.validateSubscription(subscriptionId);
