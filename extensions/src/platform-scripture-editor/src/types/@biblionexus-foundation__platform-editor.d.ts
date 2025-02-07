@@ -24,12 +24,18 @@ declare module 'shared-react/nodes/scripture/usj/ImmutableNoteCallerNode' {
   export const immutableNoteCallerNodeName = 'ImmutableNoteCallerNode';
 }
 
-declare module 'shared-react/plugins/logger-basic.model' {
+declare module 'shared/adaptors/logger-basic.model' {
   export type LoggerBasic = {
     error(message: string): void;
     warn(message: string): void;
     info(message: string): void;
   };
+}
+
+declare module 'shared/utils/get-marker-action.model' {
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+
+  export type ScriptureReference = SerializedVerseRef;
 }
 
 declare module 'shared-react/plugins/text-direction.model' {

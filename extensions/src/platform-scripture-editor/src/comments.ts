@@ -2,14 +2,13 @@ import { Comments } from '@biblionexus-foundation/platform-editor';
 import { MarkerContent, MarkerObject, Usj } from '@biblionexus-foundation/scripture-utilities';
 import {
   CHAPTER_TYPE,
-  ScriptureReference,
   UsjContentLocation,
   UsjReaderWriter,
   VERSE_TYPE,
   VerseRefOffset,
 } from 'platform-bible-utils';
 import { LegacyComment } from 'legacy-comment-manager';
-import { Canon, VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { logger } from '@papi/frontend';
 
 export const MILESTONE_START = 'zmsc-s';
@@ -113,15 +112,11 @@ function getCommentDetails(
 export function convertEditorCommentsToLegacyComments(
   comments: Comments,
   usjRW: UsjReaderWriter,
-  scrRef: ScriptureReference,
+  verseLocation: SerializedVerseRef,
 ): LegacyComment[] {
   const legacyComments: LegacyComment[] = [];
   comments.forEach((editorComment) => {
-    const commentDetails = getCommentDetails(
-      usjRW,
-      editorComment.id,
-      Canon.bookNumberToId(scrRef.bookNum),
-    );
+    const commentDetails = getCommentDetails(usjRW, editorComment.id, verseLocation.book);
     if (!commentDetails) return;
     if (editorComment.type === 'comment') {
       legacyComments.push({

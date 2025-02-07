@@ -3,6 +3,7 @@
 import * as CheckboxPrimitive from '@radix-ui/react-checkbox';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
+import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { PopoverProps } from '@radix-ui/react-popover';
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
 import * as SelectPrimitive from '@radix-ui/react-select';
@@ -192,18 +193,6 @@ export type LocalizedStringValue = string;
 export interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
-export type ResourceType = "DBLResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
-export type DblResourceData = {
-	dblEntryUid: string;
-	displayName: string;
-	fullName: string;
-	bestLanguageName: string;
-	type: ResourceType;
-	size: number;
-	installed: boolean;
-	updateAvailable: boolean;
-	projectId: string;
-};
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
@@ -450,6 +439,8 @@ export type TabKeyValueContent = {
 export type TabNavigationContentSearchProps = {
 	/** List of values and keys for each tab this component should provide */
 	tabList: TabKeyValueContent[];
+	/** The search query in the search bar */
+	searchValue: string;
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
 	/** Optional placeholder for the search bar */
@@ -459,7 +450,7 @@ export type TabNavigationContentSearchProps = {
 	/** Optional className to modify the search input */
 	searchClassName?: string;
 };
-declare function TabNavigationContentSearch({ tabList, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -490,10 +481,12 @@ export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelect
 export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;
+	/** The search query in the search bar */
+	searchValue: string;
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
 };
-export function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -961,8 +954,10 @@ export type IconButtonProps = React$1.PropsWithChildren<{
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
+	/** Seach query for the search bar */
+	value: string;
 	/**
-	 * Callback fired to handle the search query when button pressed
+	 * Callback fired to handle the search query is updated
 	 *
 	 * @param searchQuery
 	 */
@@ -974,7 +969,7 @@ export type SearchBarProps = {
 	/** Additional css classes to help with unique styling of the search bar */
 	className?: string;
 };
-export function SearchBar({ onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export function SearchBar({ value, onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {
@@ -1336,6 +1331,26 @@ export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
 export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: import("class-variance-authority/dist/types").ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
+/**
+ * The Popover component displays rich content in a portal, triggered by a button. This popover is
+ * built on Radix UI's Popover component and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
+export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
+/**
+ * @inheritdoc Popover
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
+export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * @inheritdoc Popover
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
+export declare const PopoverContent: React$1.ForwardRefExoticComponent<Omit<PopoverPrimitive.PopoverContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Radio Group components providing a set of checkable buttons—known as radio buttons—where no more
  * than one of the buttons can be checked at a time. These components are built on Radix UI
@@ -1776,24 +1791,19 @@ export interface FooterProps {
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 export interface FilterProps extends MultiSelectComboBoxProps {
+	/**
+	 * Placeholder text that will be displayed when no items are selected. It will appear at the
+	 * location where the badges would be if any items were selected.
+	 */
 	badgesPlaceholder: string;
 }
+/**
+ * This is a variant of the {@link MultiSelectComboBox}, that shows a {@link Badge} component for each
+ * selected item in the combo box. Clicking the 'X' icon on the badge will clear the item from the
+ * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
+ * displayed if no items are selected,
+ */
 export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
-export declare const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[];
-export type FilterableResourceListProps = {
-	localizedStrings: LanguageStrings;
-	resources: DblResourceData[];
-	isLoadingResources: boolean;
-	selectedTypes: string[];
-	setSelectedTypes: (stateValue: string[]) => void;
-	selectedLanguages: string[];
-	setSelectedLanguages: (stateValue: string[]) => void;
-	openResource: (projectId: string) => void;
-	installResource: ((uid: string) => Promise<void>) | undefined;
-	uninstallResource: ((uid: string) => Promise<void>) | undefined;
-	className?: string;
-};
-export declare function FilterableResourceList({ localizedStrings, resources, isLoadingResources, selectedTypes, setSelectedTypes, selectedLanguages, setSelectedLanguages, openResource, installResource, uninstallResource, className, }: FilterableResourceListProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];

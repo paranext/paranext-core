@@ -34,45 +34,12 @@ import {
   Shapes,
 } from 'lucide-react';
 
-import Filter from '@/components/advanced/filterable-resource-list/filter.component';
+import Filter from '@/components/advanced/filter.component';
 import type { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-combo-box.component';
-import {
-  DblResourceData,
-  getErrorMessage,
-  LanguageStrings,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
 import SearchBar from '@/components/basics/search-bar.component';
-
-export const FILTERABLE_RESOURCE_LIST_STRING_KEYS: LocalizeKey[] = [
-  '%resources_action%',
-  '%resources_any%',
-  '%resources_dialog_subtitle%',
-  '%resources_dialog_title%',
-  '%resources_filterBy%',
-  '%resources_filterInput%',
-  '%resources_fullName%',
-  '%resources_get%',
-  '%resources_installed%',
-  '%resources_language%',
-  '%resources_languages%',
-  '%resources_loadingResources%',
-  '%resources_noResults%',
-  '%resources_open%',
-  '%resources_remove%',
-  '%resources_results%',
-  '%resources_showing%',
-  '%resources_size%',
-  '%resources_type%',
-  '%resources_types%',
-  '%resources_type_DBL%',
-  '%resources_type_ER%',
-  '%resources_type_SLR%',
-  '%resources_type_XR%',
-  '%resources_type_unknown%',
-  '%resources_update%',
-];
+import resourceExamples from './resource-examples';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -161,61 +128,47 @@ const getActionContent = (
   return <Label className="tw-my-2 tw-flex tw-h-6 tw-items-center">{installedText}</Label>;
 };
 
-type FilterableResourceListProps = {
-  localizedStrings: LanguageStrings;
-  resources: DblResourceData[];
-  isLoadingResources: boolean;
-  selectedTypes: string[];
-  setSelectedTypes: (stateValue: string[]) => void;
-  selectedLanguages: string[];
-  setSelectedLanguages: (stateValue: string[]) => void;
-  openResource: (projectId: string) => void;
-  installResource: ((uid: string) => Promise<void>) | undefined;
-  uninstallResource: ((uid: string) => Promise<void>) | undefined;
-  className?: string;
-};
+const resources = resourceExamples;
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const installResource = async (_uid: string) => {};
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const uninstallResource = async (_uid: string) => {};
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const openResource = (_id: string) => {};
 
-function FilterableResourceList({
-  localizedStrings,
-  resources,
-  isLoadingResources,
-  selectedTypes,
-  setSelectedTypes,
-  selectedLanguages,
-  setSelectedLanguages,
-  openResource,
-  installResource,
-  uninstallResource,
-  className,
-}: FilterableResourceListProps) {
-  const actionText: string = localizedStrings['%resources_action%'];
-  const anyText: string = localizedStrings['%resources_any%'];
-  const dialogSubtitleText: string = localizedStrings['%resources_dialog_subtitle%'];
-  const dialogTitleText: string = localizedStrings['%resources_dialog_title%'];
-  const filterInputText: string = localizedStrings['%resources_filterInput%'];
-  const filterByText: string = localizedStrings['%resources_filterBy%'];
-  const fullNameText: string = localizedStrings['%resources_fullName%'];
-  const getText: string = localizedStrings['%resources_get%'];
-  const installedText: string = localizedStrings['%resources_installed%'];
-  const languageText: string = localizedStrings['%resources_language%'];
-  const languagesText: string = localizedStrings['%resources_languages%'];
-  const loadingResourcesText: string = localizedStrings['%resources_loadingResources%'];
-  const noResultsText: string = localizedStrings['%resources_noResults%'];
-  const openText: string = localizedStrings['%resources_open%'];
-  const removeText: string = localizedStrings['%resources_remove%'];
-  const resultsText: string = localizedStrings['%resources_results%'];
-  const showingText: string = localizedStrings['%resources_showing%'];
-  const sizeText: string = localizedStrings['%resources_size%'];
-  const typeText: string = localizedStrings['%resources_type%'];
-  const typesText: string = localizedStrings['%resources_types%'];
-  const typeDblText: string = localizedStrings['%resources_type_DBL%'];
-  const typeErText: string = localizedStrings['%resources_type_ER%'];
-  const typeSlrText: string = localizedStrings['%resources_type_SLR%'];
-  const typeXrText: string = localizedStrings['%resources_type_XR%'];
-  const typeUnknownText: string = localizedStrings['%resources_type_unknown%'];
-  const updateText: string = localizedStrings['%resources_update%'];
+function GetResourcesExamples() {
+  const actionText: string = 'Action';
+  const anyText: string = 'Any';
+  const dialogSubtitleText: string = 'Add resources to Home';
+  const dialogTitleText: string = 'Get Resources';
+  const filterInputText: string = 'Filter by';
+  const filterByText: string = 'Search by name; language; type';
+  const fullNameText: string = 'Full Name';
+  const getText: string = 'Get';
+  const installedText: string = 'Installed';
+  const languageText: string = 'Language';
+  const languagesText: string = 'Languages';
+  const loadingResourcesText: string = 'Loading resources...';
+  const noResultsText: string = 'No results found';
+  const openText: string = 'Open';
+  const removeText: string = 'Remove';
+  const resultsText: string = 'results';
+  const showingText: string = 'Showing';
+  const sizeText: string = 'Size';
+  const typeText: string = 'Type';
+  const typesText: string = 'Types';
+  const typeDblText: string = 'DBL Resource';
+  const typeErText: string = 'Enhanced Resource';
+  const typeSlrText: string = 'Source Language Text';
+  const typeXrText: string = 'XML Resource';
+  const typeUnknownText: string = 'Unknown resource type';
+  const updateText: string = 'Update';
 
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
+
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>([]);
+
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(['DBLResource']);
 
   // When no languages are selected on the first render of this component, set default selection to
   // languages that have resources installed
@@ -237,7 +190,7 @@ function FilterableResourceList({
       );
       setIsInitialized(true);
     }
-  }, [resources, selectedLanguages.length, setSelectedLanguages, isInitialized, setIsInitialized]);
+  }, [selectedLanguages.length, setSelectedLanguages, isInitialized, setIsInitialized]);
 
   const [installInfo, setInstallInfo] = useState<InstallInfo[]>([]);
 
@@ -271,7 +224,7 @@ function FilterableResourceList({
         return true;
       }),
     );
-  }, [resources]);
+  }, []);
 
   const [textFilter, setTextFilter] = useState<string>('');
 
@@ -284,7 +237,7 @@ function FilterableResourceList({
         resource.bestLanguageName.toLowerCase().includes(filter)
       );
     });
-  }, [resources, textFilter]);
+  }, [textFilter]);
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     return [
@@ -368,7 +321,7 @@ function FilterableResourceList({
   };
 
   return (
-    <div className={className}>
+    <div>
       <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
         <CardHeader className="tw-flex-shrink-0">
           <div className="tw-flex">
@@ -378,6 +331,7 @@ function FilterableResourceList({
                 <CardTitle>{dialogTitleText}</CardTitle>
                 <CardDescription className="tw-mt-1">{dialogSubtitleText}</CardDescription>
                 <SearchBar
+                  value={textFilter}
                   className="tw-min-w-72"
                   onSearch={setTextFilter}
                   placeholder={filterInputText}
@@ -410,7 +364,7 @@ function FilterableResourceList({
           </div>
         </CardHeader>
         <CardContent className="tw-flex-grow tw-overflow-auto">
-          {isLoadingResources || !resources ? (
+          {!resources ? (
             <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
               <Label>{loadingResourcesText}</Label>
               <Spinner />
@@ -503,4 +457,4 @@ function FilterableResourceList({
   );
 }
 
-export default FilterableResourceList;
+export default GetResourcesExamples;

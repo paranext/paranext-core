@@ -56,6 +56,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             ("getDblResources", GetDblResources),
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
+            ("isGetDblResourcesAvailable", IsGetDblResourcesAvailable),
         ];
     }
 
@@ -69,6 +70,18 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     #region Private properties and methods
 
     /// <summary>
+    /// Detect if DBL credentials have been configured. Does not check these credentials for
+    /// validity.
+    /// </summary>
+    /// <returns>
+    /// True if any credentials are configured, false if not.
+    /// </returns>
+    private bool IsGetDblResourcesAvailable()
+    {
+        return DblResourcePasswordProvider.IsPasswordAvailable();
+    }
+
+    /// <summary>
     /// Fetch list DBL resources
     /// </summary>
     /// <returns>
@@ -77,12 +90,18 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// </returns>
     private void FetchAvailableDBLResources()
     {
-        _resources = InstallableDBLResource.GetInstallableDBLResources(
+        var allResources = InstallableDBLResource.GetInstallableDBLResources(
             RegistrationInfo.DefaultUser,
             new DBLRESTClientFactory(),
             new DblProjectDeleter(),
             new DblMigrationOperations(),
             new DblResourcePasswordProvider()
+        );
+        _resources = allResources.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
+        var excludedResources = allResources.Except(_resources).Select(r => r.Name).ToList();
+        excludedResources.Sort();
+        Console.WriteLine(
+            $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
         );
     }
 

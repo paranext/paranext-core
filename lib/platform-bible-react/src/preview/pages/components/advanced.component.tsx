@@ -12,7 +12,6 @@ import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
 import BookSelectorExample from './advanced/book-selector-example.component';
 import FilterExample from './advanced/filter-example';
-import FilterableResourceListExample from './advanced/filterable-resource-list-example.component';
 import InventoryExample from './advanced/inventory-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
 import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
@@ -77,9 +76,6 @@ function Compositions() {
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Filterable Resource List">
-            Filterable Resource List
-          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Multi-select Combo Box">
             Multi-select Combo Box
@@ -147,14 +143,11 @@ function Compositions() {
           <InventoryExample />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Filterable Resource List">
-          <FilterableResourceListExample />
-        </VerticalTabsContent>
-
         <VerticalTabsContent value="Navigation Content Search">
           <TabNavigationContentSearch
             headerTitle={`Testing the NavigationContentSearch, current search value: ${searchValue}`}
             tabList={tabList}
+            searchValue={searchValue}
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
             searchClassName="tw-w-9/12 tw-py-2"

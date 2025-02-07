@@ -111,6 +111,7 @@ export { default as Checkbox } from './components/shadcn-ui/checkbox';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
+export * from './components/shadcn-ui/popover';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
 export { Separator } from './components/shadcn-ui/separator';
@@ -147,9 +148,7 @@ export {
   type VersionHistoryType,
 } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
-export { default as Filter } from './components/advanced/filterable-resource-list/filter.component';
-export { default as FilterableResourceList } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
-export { FILTERABLE_RESOURCE_LIST_STRING_KEYS } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
+export { default as Filter } from './components/advanced/filter.component';
 export {
   default as UiLanguageSelector,
   type LanguageInfo,

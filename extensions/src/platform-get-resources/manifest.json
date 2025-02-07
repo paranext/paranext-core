@@ -6,7 +6,7 @@
   "license": "MIT",
   "main": "src/main.ts",
   "extensionDependencies": {},
-  "elevatedPrivileges": [],
+  "elevatedPrivileges": ["manageExtensions"],
   "types": "src/types/platform-get-resources.d.ts",
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",

@@ -27,6 +27,12 @@ jobs:
         if: ${{ matrix.os == 'macos-latest' }}
         uses: melusina-org/setup-macports@v1
 
+      - name: Update MacPorts ports tree
+        if: ${{ matrix.os == 'macos-latest' }}
+        # Not using `-v` for verbose because it is very slow and does not add much value
+        run: |
+          sudo port sync
+
       - name: Install loader tools on macOS
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
