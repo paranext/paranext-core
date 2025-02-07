@@ -32,12 +32,6 @@ declare module 'shared/adaptors/logger-basic.model' {
   };
 }
 
-declare module 'shared/utils/get-marker-action.model' {
-  import { SerializedVerseRef } from '@sillsdev/scripture';
-
-  export type ScriptureReference = SerializedVerseRef;
-}
-
 declare module 'shared-react/plugins/text-direction.model' {
   /** Left-to-right or Right-to-left or Automatically determined from the content. */
   export type TextDirection = 'ltr' | 'rtl' | 'auto';
