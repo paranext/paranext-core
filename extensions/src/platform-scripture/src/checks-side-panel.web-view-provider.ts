@@ -8,12 +8,12 @@ import {
 import papi from '@papi/backend';
 import checksSidePanelWebView from './checks-side-panel.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
+// import checkAggregatorService from './checks/check-aggregator.service';
 
 export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
 export interface ChecksSidePanelWebViewOptions extends GetWebViewOptions {
   projectId: string | undefined;
-  subscriptionId: string | undefined;
   editorScrollGroupId: ScrollGroupScrRef | undefined;
 }
 
@@ -38,8 +38,6 @@ export default class ChecksSidePanelWebViewProvider implements IWebViewProvider 
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,
-        subscriptionId: getWebViewOptions.subscriptionId ?? savedWebView.state?.subscriptionId,
-        scope: savedWebView.state?.scope,
       },
     };
   }

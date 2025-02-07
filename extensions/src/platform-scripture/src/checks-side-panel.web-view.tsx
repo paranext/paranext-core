@@ -49,10 +49,50 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
-  const [subscriptionId] = useWebViewState<CheckSubscriptionId>('subscriptionId', '');
+  const [subscriptionId, setSubscriptionId] = useWebViewState<CheckSubscriptionId>(
+    'subscriptionId',
+    '',
+  );
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
 
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+
+  useEffect(() => {
+    // const validateSubscriptionId = async () => {
+    //   logger.info('Validating subscription ID');
+    //   const isIDValid = await checkAggregator?.validateSubscription(subscriptionId);
+    //   if (!isIDValid) {
+    //     await checkAggregator?.deleteSubscription(subscriptionId);
+    //     logger.info('Deleted subscription ID', subscriptionId);
+    //     const newSubscriptionId = await checkAggregator?.createSubscription();
+    //     setSubscriptionId(newSubscriptionId || '');
+    //     logger.info('Created subscription ID', newSubscriptionId);
+    //   }
+    // };
+    const validateSubscriptionId = async () => {
+      logger.info('Validating subscription ID');
+      const isIDValid = await checkAggregator?.validateSubscription(subscriptionId);
+      if (!isIDValid) {
+        logger.info('Subscription ID invalid; creating a new one');
+        const newSubscriptionId = await checkAggregator?.createSubscription();
+        setSubscriptionId(newSubscriptionId || '');
+        logger.info('Created subscription ID', newSubscriptionId);
+      }
+    };
+
+    validateSubscriptionId();
+
+    return () => {
+      const deleteSubscription = async () => {
+        if (subscriptionId) {
+          await checkAggregator?.deleteSubscription(subscriptionId);
+          logger.info('Deleted subscription ID while unmounting', subscriptionId);
+        }
+      };
+
+      deleteSubscription();
+    };
+  }, [checkAggregator, subscriptionId, setSubscriptionId]);
 
   const [availableChecks, setAvailableChecks, isLoadingAvailableChecks] = useData(
     'platformScripture.checkAggregator',
