@@ -8,7 +8,6 @@ import {
 import papi from '@papi/backend';
 import checksSidePanelWebView from './checks-side-panel.web-view?inline';
 import tailwindStyles from './tailwind.css?inline';
-// import checkAggregatorService from './checks/check-aggregator.service';
 
 export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
