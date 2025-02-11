@@ -13,7 +13,6 @@ export const checksSidePanelWebViewType = 'platformScripture.checksSidePanel';
 
 export interface ChecksSidePanelWebViewOptions extends GetWebViewOptions {
   projectId: string | undefined;
-  subscriptionId: string | undefined;
   editorScrollGroupId: ScrollGroupScrRef | undefined;
 }
 
@@ -38,7 +37,6 @@ export default class ChecksSidePanelWebViewProvider implements IWebViewProvider 
       scrollGroupScrRef: getWebViewOptions.editorScrollGroupId,
       state: {
         ...savedWebView.state,
-        subscriptionId: getWebViewOptions.subscriptionId ?? savedWebView.state?.subscriptionId,
       },
     };
   }

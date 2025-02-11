@@ -42,9 +42,11 @@ export {
   createSyncProxyForAsyncObject,
 } from './util';
 export {
+  areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
   getLocalizedIdFromBookNumber,
+  normalizeScriptureSpaces,
   scrRefToBBBCCCVVV,
 } from './scripture-util';
 export {
@@ -71,6 +73,7 @@ export {
   ordinalCompare,
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
+  isWhiteSpace,
 } from './string-util';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
@@ -78,6 +81,7 @@ export { serialize, deserialize, isSerializable, htmlEncode } from './serializat
 export { default as getCurrentLocale } from './intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
+export { default as formatTimeSpan } from './date-time-format-util';
 
 // Types
 export type { DeepPartial, ReplaceType, UnionToIntersection } from './util';

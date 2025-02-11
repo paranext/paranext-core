@@ -24,7 +24,7 @@ declare module 'shared-react/nodes/scripture/usj/ImmutableNoteCallerNode' {
   export const immutableNoteCallerNodeName = 'ImmutableNoteCallerNode';
 }
 
-declare module 'shared-react/plugins/logger-basic.model' {
+declare module 'shared/adaptors/logger-basic.model' {
   export type LoggerBasic = {
     error(message: string): void;
     warn(message: string): void;

@@ -732,6 +732,13 @@ declare module 'platform-scripture' {
      * @returns `true` if the subscription could be deleted, `false` otherwise
      */
     deleteSubscription: (subscriptionId: CheckSubscriptionId) => Promise<boolean>;
+    /**
+     * Validates the subscription with the given ID.
+     *
+     * @param subscriptionId - The ID of the subscription to validate.
+     * @returns `true` if the subscription is valid, `false` otherwise.
+     */
+    validateSubscription: (subscriptionId: CheckSubscriptionId) => Promise<boolean>;
   };
 
   /**

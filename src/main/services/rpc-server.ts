@@ -26,6 +26,7 @@ import {
 } from '@shared/data/rpc.model';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import { getErrorMessage } from 'platform-bible-utils';
 
 type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
 
@@ -209,7 +210,7 @@ export default class RpcServer implements IRpcHandler {
       this.processMessage(deserializeMessage(ev.data));
     } catch (error) {
       this.handleError(
-        `Error processing JSONRPC message (${ev.data}): ${JSON.stringify(error)}`,
+        `Error processing JSONRPC message (${ev.data}): ${getErrorMessage(error)}`,
         error,
       );
     }
@@ -239,7 +240,7 @@ export default class RpcServer implements IRpcHandler {
               : createErrorResponse(response.error.message, response.error.code, request.id);
           sendPayloadToWebSocket(this.ws, payload);
         } catch (error) {
-          this.handleError(`Error handling request: ${JSON.stringify(error)}`, request);
+          this.handleError(`Error handling request: ${getErrorMessage(error)}`, request);
         }
       });
       await Promise.all(promises);

@@ -238,6 +238,7 @@ export default function CheckCard({
 
   return (
     <Card
+      key={checkId}
       onClick={() => handleSelectCheck(checkId)}
       className={cn(
         'pr-twp tw-w-full tw-flex tw-cursor-pointer tw-flex-col tw-items-flex-start tw-gap-3 tw-p-4 tw-rounded-lg hover:tw-shadow-md tw-border-0',

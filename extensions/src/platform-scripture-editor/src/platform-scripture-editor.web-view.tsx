@@ -12,12 +12,13 @@ import {
   USJ_VERSION,
   Usj,
 } from '@biblionexus-foundation/scripture-utilities';
-import { Canon, VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectSetting, useSetting } from '@papi/frontend/react';
 import {
+  areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   deepClone,
   ScriptureReference,
@@ -58,17 +59,17 @@ function deepEqualAcrossIframes(a: unknown, b: unknown) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-function scrollToScrRef(scrRef: ScriptureReference): HTMLElement | undefined {
+function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefined {
   const verseElement =
     document.querySelector<HTMLElement>(
-      `.editor-container span[data-marker="v"][data-number="${scrRef.verseNum}"]`,
+      `.editor-container span[data-marker="v"][data-number="${verseLocation.verseNum}"]`,
     ) ?? undefined;
 
   // Scroll if we find the verse or we're at the start of the chapter
-  if (verseElement || scrRef.verseNum === 1) {
+  if (verseElement || verseLocation.verseNum === 1) {
     // If we're at the first verse, scroll to the top so we can see intro material
     let scrollTop = 0;
-    if (verseElement && scrRef.verseNum > 1)
+    if (verseElement && verseLocation.verseNum > 1)
       scrollTop =
         verseElement.getBoundingClientRect().top + window.scrollY - VERSE_NUMBER_SCROLL_OFFSET;
 
@@ -91,6 +92,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
+  const verseLocation = useMemo<SerializedVerseRef>(
+    () => ({
+      book: Canon.bookNumberToId(scrRef.bookNum),
+      chapterNum: scrRef.chapterNum,
+      verseNum: scrRef.verseNum,
+    }),
+    [scrRef],
+  );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
 
@@ -134,12 +143,17 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
    * come from us
    */
-  const internallySetScrRefRef = useRef<ScriptureReference | undefined>(undefined);
+  const internalVerseLocationRef = useRef<SerializedVerseRef | undefined>(undefined);
 
   const setScrRefNoScroll = useCallback(
-    (newScrRef: ScriptureReference) => {
-      internallySetScrRefRef.current = newScrRef;
-      return setScrRefWithScroll(newScrRef);
+    (newVerseLocation: SerializedVerseRef) => {
+      const newScrRef: ScriptureReference = {
+        bookNum: Canon.bookIdToNumber(newVerseLocation.book),
+        chapterNum: newVerseLocation.chapterNum,
+        verseNum: newVerseLocation.verseNum,
+      };
+      internalVerseLocationRef.current = newVerseLocation;
+      setScrRefWithScroll(newScrRef);
     },
     [setScrRefWithScroll],
   );
@@ -154,14 +168,48 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
-    useMemo(() => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum), [scrRef]),
+    useMemo(
+      () =>
+        VerseRef.fromJSON({
+          book: verseLocation.book,
+          chapterNum: verseLocation.chapterNum,
+          verseNum: 1,
+          versificationStr: verseLocation.versificationStr,
+        }),
+      [verseLocation.book, verseLocation.chapterNum, verseLocation.versificationStr],
+    ),
     defaultUsj,
+    // `whichUpdates` set to `*` because we need to receive all updates instead of just ones that
+    // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
+    useMemo(() => ({ whichUpdates: '*' }), []),
   );
+  const usjFromPdpPrev = useRef<Usj | undefined>(undefined);
+  useEffect(() => {
+    return () => {
+      usjFromPdpPrev.current = usjFromPdp;
+    };
+  }, [usjFromPdp]);
+
+  /** Latest USJ from the PDP with comment anchors inserted */
+  const usjFromPdpWithAnchors = useRef(defaultUsj);
 
   const usjSentToPdp = useRef(usjFromPdp);
   const currentlyWritingUsjToPdp = useRef(false);
-  const saveUsjToPdp = useCallback(
-    (newUsj: Usj) => {
+
+  /** If the editor has updates that the PDP hasn't recorded, save them to the PDP */
+  const saveUsjToPdpIfUpdated = useMemo(() => {
+    function saveUsjToPdpIfUpdatedInternal(editorUsj = editorRef.current?.getUsj()) {
+      if (
+        editorUsj &&
+        !areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, editorUsj)
+      )
+        saveUsjToPdpInternal(editorUsj);
+    }
+
+    // We used to have this running on the editor's `onUsjChanged`, but it seems the editor still
+    // fires an `onUsjChanged` when its USJ is set. Until this is fixed, we will just use
+    // `saveUsjToPdpIfUpdated` everywhere.
+    async function saveUsjToPdpInternal(newUsj: Usj) {
       if (!saveUsjToPdpRaw) return;
 
       // Don't start writing to the PDP again if we're in the middle of writing now
@@ -179,18 +227,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Indicate we're in the process of writing to the PDP so we don't trigger multiple writes
       currentlyWritingUsjToPdp.current = true;
       usjSentToPdp.current = clonedUsj;
-      saveUsjToPdpRaw(clonedUsj);
-    },
-    [saveUsjToPdpRaw],
-  );
+      try {
+        if (!(await saveUsjToPdpRaw(clonedUsj)) && currentlyWritingUsjToPdp.current) {
+          currentlyWritingUsjToPdp.current = false;
+
+          // The set was unsuccessful AND we haven't received new USJ from the PDP, so there is a
+          // chance the editor has more updates since the last attempted save. Let's check and save
+          // again if there have been updates
+          const editorUsj = editorRef.current?.getUsj();
+          if (!deepEqualAcrossIframes(editorUsj, newUsj)) saveUsjToPdpIfUpdatedInternal(editorUsj);
+        }
+      } catch (e) {
+        logger.error(`Error saving USJ to PDP: ${e}`);
+        currentlyWritingUsjToPdp.current = false;
+      }
+    }
+
+    return saveUsjToPdpIfUpdatedInternal;
+  }, [saveUsjToPdpRaw]);
 
   const [legacyCommentsFromPdp, saveLegacyCommentsToPdp] = useProjectData(
     'legacyCommentManager.comments',
     projectId,
   ).Comments(
     useMemo(() => {
-      return { bookId: Canon.bookNumberToId(scrRef.bookNum), chapterNum: scrRef.chapterNum };
-    }, [scrRef]),
+      return { bookId: verseLocation.book, chapterNum: verseLocation.chapterNum };
+    }, [verseLocation.book, verseLocation.chapterNum]),
     [],
   );
 
@@ -225,7 +287,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // Determine which "new" comments are actually new
       const usjRW = new UsjReaderWriter(usjWithAnchors);
-      const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);
+      const newLegacyComments = convertEditorCommentsToLegacyComments(
+        newComments,
+        usjRW,
+        verseLocation,
+      );
       const legacyCommentsToAdd: LegacyComment[] = [];
       newLegacyComments.forEach((newComment) => {
         if (!legacyCommentIds.has(newComment.id)) legacyCommentsToAdd.push(newComment);
@@ -238,7 +304,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const newCommentArray = [...legacyCommentsFromPdp, ...legacyCommentsToAdd];
       saveLegacyCommentsToPdp(newCommentArray);
     },
-    [legacyCommentsFromPdp, scrRef, saveLegacyCommentsToPdp],
+    [legacyCommentsFromPdp, verseLocation, saveLegacyCommentsToPdp],
   );
 
   /**
@@ -261,38 +327,41 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const onUsjAndCommentsChange = useCallback(
     (newUsjFromEditor: Usj, newCommentsFromEditor: Comments | undefined) => {
       saveCommentsToPdp(newCommentsFromEditor, newUsjFromEditor);
-      saveUsjToPdp(newUsjFromEditor);
+      saveUsjToPdpIfUpdated(newUsjFromEditor);
     },
-    [saveUsjToPdp, saveCommentsToPdp],
+    [saveUsjToPdpIfUpdated, saveCommentsToPdp],
   );
 
   // This should only be used in the following `useEffect`
   const mostRecentlySetLegacyComments = useRef(legacyCommentsFromPdp);
 
   // Update the editor if a change comes in from the PDP
+  // Note: this will run every time we get data from the PDP whether or not it is different than it
+  // was previously. We need to know when data comes in so we can set
+  // `currentlyWritingUsjToPdp.current` to `false` appropriately
   useEffect(() => {
     if (!usjFromPdp || !legacyCommentsFromPdp || !editorRef.current) return;
 
     // The PDP informed us of updates, so writing to it must be complete (if we were writing)
     currentlyWritingUsjToPdp.current = false;
 
-    // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
-    const usjFromPdpWithAnchors = deepClone(usjFromPdp);
-    insertCommentAnchors(usjFromPdpWithAnchors);
+    // Recalculate usj from PDP with anchors if the new USJ we received from the PDP is different
+    // than the previous we received
+    if (!deepEqualAcrossIframes(usjFromPdp, usjFromPdpPrev.current)) {
+      // The editor's USJ already has anchors, so insert them into the PDP's USJ before comparing
+      usjFromPdpWithAnchors.current = deepClone(usjFromPdp);
+      insertCommentAnchors(usjFromPdpWithAnchors.current);
+    }
 
     // If what the PDP provided is different than the last thing we sent to the PDP, assume the PDP
     // has the best data. This could happen if the selected chapter changed or something other than
     // the editor wrote to the PDP.
-    if (!deepEqualAcrossIframes(usjFromPdpWithAnchors, usjSentToPdp.current)) {
-      usjSentToPdp.current = usjFromPdpWithAnchors;
-      editorRef.current.setUsj(usjFromPdpWithAnchors);
+    if (!areUsjContentsEqualExceptWhitespace(usjFromPdpWithAnchors.current, usjSentToPdp.current)) {
+      usjSentToPdp.current = usjFromPdpWithAnchors.current;
+      editorRef.current.setUsj(usjFromPdpWithAnchors.current);
     }
     // If the editor has updates that the PDP hasn't recorded, save them to the PDP
-    else {
-      const editorUsj = editorRef.current.getUsj();
-      if (editorUsj && !deepEqualAcrossIframes(usjFromPdpWithAnchors, editorUsj))
-        saveUsjToPdp(editorUsj);
-    }
+    else saveUsjToPdpIfUpdated();
 
     // Make sure the editor has the latest comment data from the PDP
     if (
@@ -304,7 +373,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // The editor's USJ needs to have anchors for these comments or the editor will error
       editorRef.current.setComments?.(threads);
     }
-  }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdp, usjFromPdp]);
+  }, [insertCommentAnchors, legacyCommentsFromPdp, saveUsjToPdpIfUpdated, usjFromPdp]);
 
   // On loading the first time, scroll the selected verse into view
   useEffect(() => {
@@ -312,20 +381,20 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       hasFirstRetrievedScripture.current = true;
       // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
-      setTimeout(() => scrollToScrRef(scrRef), EDITOR_LOAD_DELAY_TIME);
+      setTimeout(() => scrollToVerse(verseLocation), EDITOR_LOAD_DELAY_TIME);
     }
-  }, [usjFromPdp, scrRef]);
+  }, [usjFromPdp, verseLocation]);
 
   // Scroll the selected verse and selection range into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
-      internallySetScrRefRef.current &&
-      internallySetScrRefRef.current.bookNum === scrRef.bookNum &&
-      internallySetScrRefRef.current.chapterNum === scrRef.chapterNum &&
-      internallySetScrRefRef.current.verseNum === scrRef.verseNum
+      internalVerseLocationRef.current &&
+      internalVerseLocationRef.current.book === verseLocation.book &&
+      internalVerseLocationRef.current.chapterNum === verseLocation.chapterNum &&
+      internalVerseLocationRef.current.verseNum === verseLocation.verseNum
     ) {
-      internallySetScrRefRef.current = undefined;
+      internalVerseLocationRef.current = undefined;
       return () => {};
     }
 
@@ -340,10 +409,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
       // Scroll to and add a highlight to the current verse element
-      highlightedVerseElement = scrollToScrRef(scrRef);
+      highlightedVerseElement = scrollToVerse(verseLocation);
       highlightedVerseElement?.classList.add('highlighted');
 
-      internallySetScrRefRef.current = undefined;
+      internalVerseLocationRef.current = undefined;
 
       // Set the selection if the selection was set to something as part of this scr ref change
       if (nextRange) editorRef.current?.setSelection(nextRange);
@@ -357,7 +426,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Remove highlight from the current verse element
       highlightedVerseElement?.classList.remove('highlighted');
     };
-  }, [scrRef]);
+  }, [verseLocation]);
 
   const [projectName] = useProjectSetting(projectId, 'platform.name', '');
 
@@ -365,9 +434,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.bookNum) ? 'rtl' : 'ltr',
+      textDirection:
+        projectName === 'OHEBGRK' && Canon.isBookOT(verseLocation.book) ? 'rtl' : 'ltr',
     }),
-    [isReadOnly, projectName, scrRef],
+    [isReadOnly, projectName, verseLocation],
   );
 
   if (isReadOnly) {
@@ -377,7 +447,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Button className="tw-hidden" />
         <Editorial
           ref={editorRef}
-          scrRef={scrRef}
+          scrRef={verseLocation}
           onScrRefChange={setScrRefNoScroll}
           options={options}
           logger={logger}
@@ -392,7 +462,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Button className="tw-hidden" />
         <Marginal
           ref={editorRef}
-          scrRef={scrRef}
+          scrRef={verseLocation}
           onScrRefChange={setScrRefNoScroll}
           onUsjChange={onUsjAndCommentsChange}
           onCommentChange={saveCommentsToPdp}
@@ -408,9 +478,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       <Button className="tw-hidden" />
       <Editorial
         ref={editorRef}
-        scrRef={scrRef}
+        scrRef={verseLocation}
         onScrRefChange={setScrRefNoScroll}
-        onUsjChange={saveUsjToPdp}
+        onUsjChange={saveUsjToPdpIfUpdated}
         options={options}
         logger={logger}
       />
