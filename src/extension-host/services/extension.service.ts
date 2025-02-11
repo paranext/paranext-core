@@ -11,6 +11,7 @@ import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import * as platformBibleUtils from 'platform-bible-utils';
+import * as crypto from 'crypto';
 import logger from '@shared/services/logger.service';
 import {
   getCommandLineArgumentsGroup,
@@ -1048,6 +1049,11 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
     if (moduleName === '@papi/backend') return papi;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
     if (moduleName === 'platform-bible-utils') return platformBibleUtils;
+
+    // Node-provided modules
+    if (moduleName === 'crypto') return crypto;
+    /* if (moduleName === 'buffer') return buffer;
+    if (moduleName === 'util') return util; */
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithCheck.find(

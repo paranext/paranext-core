@@ -14,7 +14,8 @@ export default class UnsubscriberAsyncList {
    */
   add(...unsubscribers: (UnsubscriberAsync | Unsubscriber | Dispose)[]) {
     unsubscribers.forEach((unsubscriber) => {
-      if ('dispose' in unsubscriber) this.unsubscribers.add(unsubscriber.dispose);
+      if ('dispose' in unsubscriber)
+        this.unsubscribers.add(unsubscriber.dispose.bind(unsubscriber));
       else this.unsubscribers.add(unsubscriber);
     });
   }
