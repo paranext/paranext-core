@@ -3,6 +3,13 @@ import * as SeparatorPrimitive from '@radix-ui/react-separator';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * The Separator component visually or semantically sepearates content. This component is built on
+ * Radix UI primitives and styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/separator}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/separator}
+ */
 const Separator = React.forwardRef<
   React.ElementRef<typeof SeparatorPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof SeparatorPrimitive.Root>

@@ -23,6 +23,7 @@ import {
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
 import logger from '@shared/services/logger.service';
+import { getEmptyMethodDocs, NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 // #endregion
 
@@ -419,6 +420,7 @@ const set = async <T extends NetworkableObject>(
   objectToShare: T,
   objectType: string = 'object',
   objectAttributes: { [property: string]: unknown } | undefined = undefined,
+  objectDocumentation: NetworkObjectDocumentation = {},
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
@@ -430,8 +432,25 @@ const set = async <T extends NetworkableObject>(
 
     // Check if there is a network object with this ID remotely by trying to register it
     const unsubPromises = [
-      networkService.registerRequestHandler(getNetworkObjectRequestType(id), () =>
-        Promise.resolve(true),
+      networkService.registerRequestHandler(
+        getNetworkObjectRequestType(id),
+        () => Promise.resolve(true),
+        {
+          method: {
+            summary: objectDocumentation.summary ?? '',
+            description: objectDocumentation.description ?? '',
+            params: [],
+            result: {
+              name: 'return value',
+              summary: 'Does the network object exist?',
+              required: true,
+              schema: {
+                type: 'boolean',
+              },
+            },
+          },
+          components: objectDocumentation.components,
+        },
       ),
     ];
 
@@ -447,10 +466,15 @@ const set = async <T extends NetworkableObject>(
 
     netObjDetails.functionNames.forEach((functionName) => {
       const requestType = getNetworkObjectRequestType(id, functionName);
-      const unsub = networkService.registerRequestHandler(requestType, (...args: unknown[]) =>
+      const methodDocs =
+        objectDocumentation.methods?.find((method) => method.name === functionName) ??
+        getEmptyMethodDocs();
+      const unsub = networkService.registerRequestHandler(
+        requestType,
         // Assert as any to allow indexing on the function name
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-        Promise.resolve((objectToShare as any)[functionName](...args)),
+        (...args: unknown[]) => Promise.resolve((objectToShare as any)[functionName](...args)),
+        { method: methodDocs },
       );
       unsubPromises.push(unsub);
     });

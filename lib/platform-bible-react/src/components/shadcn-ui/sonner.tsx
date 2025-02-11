@@ -1,8 +1,22 @@
 import { ComponentProps } from 'react';
 import { toast as sonner, Toaster } from 'sonner';
 
+/**
+ * Props for SOnner component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
+ * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
+ */
 type SonnerProps = ComponentProps<typeof Toaster>;
 
+/**
+ * The Sonner component is an opinionated toast component for React. It is built on Sonner and
+ * styled with Shadcn UI.
+ *
+ * @param SonnerProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
+ * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
+ */
 function Sonner({ ...props }: SonnerProps) {
   return (
     <Toaster

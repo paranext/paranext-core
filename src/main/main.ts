@@ -6,7 +6,7 @@
  * using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, shell, ipcMain } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -22,13 +22,32 @@ import extensionAssetProtocolService from '@main/services/extension-asset-protoc
 import { wait, serialize } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
 import { get } from '@shared/services/project-data-provider.service';
 import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
-import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
+import { APP_URI_SCHEME, DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { GET_METHODS } from '@shared/data/rpc.model';
+import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+import { startDataProtectionService } from '@main/services/data-protection.service-host';
+
+// #region Prevent multiple instances of the app. This needs to stay at the top of the app!
+
+// Prevent multiple instances because an instance launched after the first is likely a URL redirect
+// to our protocol client. We handle URI redirects below in `second-instance`
+
+/** Whether this is the first instance of this application. */
+const isFirstInstance = app.requestSingleInstanceLock();
+
+if (!isFirstInstance) {
+  logger.info(
+    `Application launched but not first instance. Exiting. This probably means the application just handled a URL. process.argv: ${process.argv}`,
+  );
+  app.exit();
+}
+
+// #endregion
 
 const PROCESS_CLOSE_TIME_OUT = 2000;
 /**
@@ -36,6 +55,24 @@ const PROCESS_CLOSE_TIME_OUT = 2000;
  * we only run `relaunch` once which has a slightly different use case than `isClosing`
  */
 let willRestart = false;
+
+/**
+ * Open a link in the browser following the restrictions we put in place in Platform.Bible
+ *
+ * Make sure not to allow just any link. See
+ * https://benjamin-altpeter.de/shell-openexternal-dangers/
+ */
+async function openExternal(url: string) {
+  if (!url.startsWith('https://')) throw new Error(`URL must start with 'https://': ${url}`);
+  try {
+    await shell.openExternal(url);
+  } catch (e) {
+    logger.warn(e);
+    throw e;
+  }
+
+  return true;
+}
 
 async function main() {
   // The network service relies on nothing else, and other things rely on it, so start it first
@@ -52,6 +89,10 @@ async function main() {
 
   // TODO (maybe): Wait for signal from the .NET data provider process that it is ready
 
+  // Need to start the data protection service before starting the extension host because the extension
+  // host uses it
+  await startDataProtectionService();
+
   // The extension host service relies on the network service.
   // Extensions inside the extension host might rely on the .NET data provider and each other
   // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
@@ -62,6 +103,68 @@ async function main() {
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
 
+  // Keep a global reference of the window object. If you don't, the window will
+  // be closed automatically when the JavaScript object is garbage collected.
+  let mainWindow: BrowserWindow | undefined;
+
+  // #region Set up the protocol client to receive navigation to this app's URI scheme
+
+  // Launch the portable app if we're in it; otherwise use the normal path
+  const launchPath = process.env.PORTABLE_EXECUTABLE_FILE || process.execPath;
+  const args = process.argv.slice(1);
+
+  function handleUri(uri: string) {
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+    logger.debug(`Main is handling uri ${uri}`);
+    // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
+    // when we get there
+    let url: URL;
+    try {
+      url = new URL(uri);
+    } catch (e) {
+      logger.debug(
+        `Main received uri ${uri} but could not parse it. If this does not look like a uri, that probably means the user tried to open the application again. This is likely not a problem. ${e}`,
+      );
+      return;
+    }
+    if (url.protocol !== `${APP_URI_SCHEME}:`) {
+      logger.warn(`Main received uri ${uri} but protocol does not match ${APP_URI_SCHEME}`);
+      return;
+    }
+
+    (async () => {
+      try {
+        await networkService.request(HANDLE_URI_REQUEST_TYPE, uri);
+      } catch (e) {
+        logger.warn(
+          `Main sent request for extension service to handle uri ${uri}, but it threw. ${e}`,
+        );
+      }
+    })();
+  }
+  // Resolve the path to this file if we're running the electron app itself and passing in this file
+  // Note that this condition (`process.defaultApp`) is not quite the same as whether we're
+  // packaged, so we're not using `globalThis.isPackaged` here.
+  if (process.defaultApp && args.length > 2) args[2] = path.resolve(args[2]);
+  app.setAsDefaultProtocolClient(APP_URI_SCHEME, launchPath, args);
+  if (process.platform === 'darwin') {
+    // Use OSX's event to handle navigation
+    app.on('open-url', (_event, url) => handleUri(url));
+  } else {
+    // Non-OSX attempts to launch a second instance to handle navigation; detect and handle
+    // accordingly
+    app.on('second-instance', (_event, commandLine) => {
+      // Handle the URL
+      const uri = commandLine[commandLine.length - 1];
+      handleUri(uri);
+    });
+  }
+
+  // #endregion
+
   // #region Start the renderer
 
   // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -71,10 +174,6 @@ async function main() {
     autoUpdater.checkForUpdatesAndNotify();
   }
 } */
-
-  // Keep a global reference of the window object. If you don't, the window will
-  // be closed automatically when the JavaScript object is garbage collected.
-  let mainWindow: BrowserWindow | undefined;
 
   if (process.env.NODE_ENV === 'production') {
     const sourceMapSupport = await import('source-map-support');
@@ -162,7 +261,15 @@ async function main() {
     // target="_blank". Please revise web-view.service-host.ts as necessary if you make changes here
     mainWindow.webContents.setWindowOpenHandler((handlerDetails) => {
       // Only allow https urls
-      if (handlerDetails.url?.startsWith('https://')) shell.openExternal(handlerDetails.url);
+      (async () => {
+        try {
+          openExternal(handlerDetails.url);
+        } catch (e) {
+          logger.warn(
+            `Main could not open external url ${handlerDetails.url} from windowOpenHandler. ${e}`,
+          );
+        }
+      })();
 
       return { action: 'deny' };
     });
@@ -205,25 +312,14 @@ async function main() {
     }
   });
 
-  /** Map from ipc channel to handler function. Use with ipcRenderer.invoke */
-  const ipcHandlers: {
-    [ipcChannel: SerializedRequestType]: (
-      event: IpcMainInvokeEvent,
-      // We don't know the exact parameter types since ipc handlers can be anything
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...args: any[]
-    ) => Promise<unknown> | unknown;
-  } = {
-    'electronAPI:env.test': (_event, message: string) => `From main.ts: test ${message}`,
-  };
-
   app
     .whenReady()
     // eslint-disable-next-line promise/always-return
     .then(() => {
       // Set up ipc handlers
-      Object.entries(ipcHandlers).forEach(([ipcChannel, ipcHandler]) =>
-        ipcMain.handle(ipcChannel, ipcHandler),
+      ipcMain.handle(
+        'electronAPI:env.test',
+        (_event, message: string) => `From main.ts: test ${message}`,
       );
 
       createWindow();
@@ -237,33 +333,43 @@ async function main() {
     })
     .catch(logger.info);
 
-  Object.entries(ipcHandlers).forEach(([ipcHandle, handler]) => {
-    networkService.registerRequestHandler(
-      // Re-assert type after passing through `forEach`.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      ipcHandle as SerializedRequestType,
-      // Handle with an empty event.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      async (...args: unknown[]) => handler({} as IpcMainInvokeEvent, ...args),
-    );
-  });
-
   // #endregion
 
   // #region Register commands
 
-  // `main.ts`'s command handler declarations are in `papi-shared-types.ts` so they can be picked up
-  // by papi-dts
-  // This map should allow any functions because commands can be any function type
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
-    'platform.restartExtensionHost': async () => {
-      restartExtensionHost();
+  // `main.ts`'s command handler declarations are in `papi-shared-types.ts` so papi-dts sees them
+
+  commandService.registerCommand('platform.restartExtensionHost', restartExtensionHost, {
+    method: {
+      summary: 'Restart the extension host which reloads and reinitializes TS/JS extensions',
+      params: [],
+      result: {
+        name: 'return value',
+        schema: { type: 'null' },
+      },
     },
-    'platform.quit': async () => {
+  });
+
+  commandService.registerCommand(
+    'platform.quit',
+    async () => {
       app.quit();
     },
-    'platform.restart': async () => {
+    {
+      method: {
+        summary: 'Close the platform, including all processes started by it',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.restart',
+    async () => {
       // Only set up to restart once. This could accidentally be called twice if `app.quit` is
       // canceled or if someone requested to restart multiple times in the few seconds it takes
       // `app.quit` to run because of the `will-quit` event
@@ -278,13 +384,61 @@ async function main() {
       }
       app.quit();
     },
-  };
+    {
+      method: {
+        summary: 'Restart the platform, including all processes started by it',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
 
-  Object.entries(commandHandlers).forEach(([commandName, handler]) => {
-    // Re-assert type after passing through `forEach`.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    commandService.registerCommand(commandName as CommandNames, handler);
-  });
+  const liveDocsUrl =
+    'https://playground.open-rpc.org/?transport=websocket&schemaUrl=ws%3A%2F%2Flocalhost%3A8876%0A&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI';
+  commandService.registerCommand(
+    'platform.openDeveloperDocumentationUrl',
+    async () => {
+      await openExternal(liveDocsUrl);
+    },
+    {
+      method: {
+        summary: 'Open the OpenRPC documentation in a browser',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.openWindow',
+    async (url) => {
+      logger.debug(`Main opening window with url from command: ${url}`);
+      await openExternal(url);
+    },
+    {
+      method: {
+        summary: "Open a link in the user's default browser",
+        params: [
+          {
+            name: 'url',
+            required: true,
+            summary: 'The url to open',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
 
   // #endregion
 
@@ -360,8 +514,9 @@ async function main() {
     // Dump all the network objects after things have settled a bit
     setTimeout(async () => {
       logger.info(
-        `Available network objects after 30 seconds: ${serialize(
-          await networkObjectStatusService.getAllNetworkObjectDetails(),
+        `Available network request types after 30 seconds: ${serialize(
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          await networkService.request(GET_METHODS as SerializedRequestType, {}),
         )}`,
       );
     }, 30000);

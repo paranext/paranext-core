@@ -868,11 +868,19 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
+    'platformScripture.openPunctuationInventory': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
     'platformScripture.openConfigureChecks': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
     'platformScripture.showCheckResults': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
   }
@@ -918,5 +926,9 @@ declare module 'papi-shared-types' {
     'platformScripture.validMarkers': string;
 
     'platformScripture.invalidMarkers': string;
+
+    'platformScripture.validPunctuation': string;
+
+    'platformScripture.invalidPunctuation': string;
   }
 }

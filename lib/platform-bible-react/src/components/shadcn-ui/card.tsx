@@ -2,6 +2,12 @@ import React from 'react';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * The Card component displays a card with header, content, and footer. This component is built and
+ * styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
@@ -16,6 +22,10 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
 );
 Card.displayName = 'Card';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
@@ -27,6 +37,10 @@ const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDiv
 );
 CardHeader.displayName = 'CardHeader';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
     <h3
@@ -44,6 +58,10 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
 );
 CardTitle.displayName = 'CardTitle';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
@@ -52,6 +70,10 @@ const CardDescription = React.forwardRef<
 ));
 CardDescription.displayName = 'CardDescription';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div ref={ref} className={cn('pr-twp tw-p-6 tw-pt-0', className)} {...props} />
@@ -59,6 +81,10 @@ const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
 );
 CardContent.displayName = 'CardContent';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div

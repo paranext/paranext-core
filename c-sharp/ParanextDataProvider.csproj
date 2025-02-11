@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.DataProvider</RootNamespace>
     <SelfContained>true</SelfContained>
-    <Company>SIL International</Company>
-    <Copyright>SIL International</Copyright>
+    <Company>SIL Global and United Bible Societies</Company>
+    <Copyright>Copyright © 2017-2025 SIL Global and United Bible Societies</Copyright>
     <Authors>sillsdev</Authors>
     <Product>Paratext Data Provider for Platform.Bible</Product>
     <Title>Paratext Data Provider for Platform.Bible</Title>
@@ -28,7 +28,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="icu.net" Version="2.10.0" />
+    <PackageReference Include="icu.net" Version="3.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.1" />
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.1" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
@@ -60,7 +60,7 @@
     by default.
     -->
   <ItemGroup>
-    <Content Include="/opt/local/lib/libicu*.??.dylib" Condition="$([MSBuild]::IsOsPlatform('macOS'))">
+    <Content Include="/opt/local/lib/libicu*.??.dylib" Exclude="/opt/local/lib/libicutest*.dylib;/opt/local/lib/libicutu*.dylib" Condition="$([MSBuild]::IsOsPlatform('macOS'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

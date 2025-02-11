@@ -3,10 +3,27 @@ import * as PopoverPrimitive from '@radix-ui/react-popover';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * The Popover component displays rich content in a portal, triggered by a button. This popover is
+ * built on Radix UI's Popover component and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
 const Popover = PopoverPrimitive.Root;
 
+/**
+ * @inheritdoc Popover
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
 const PopoverTrigger = PopoverPrimitive.Trigger;
 
+/**
+ * @inheritdoc Popover
+ * @see Shadcn UI Documentation {@link https://ui.shadcn.com/docs/components/popover}
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/docs/primitives/components/popover}
+ */
 const PopoverContent = React.forwardRef<
   React.ElementRef<typeof PopoverPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Paranext.DataProvider.Checks;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
@@ -15,6 +16,13 @@ public static class Program
     {
         Console.WriteLine("Paranext data provider starting up");
         Thread.CurrentThread.Name = "Main";
+
+        var listener = new ConsoleTraceListener { TraceOutputOptions = TraceOptions.DateTime };
+        // Clear the default listeners to stop Debug.Assert from crashing the app
+        Trace.Listeners.Clear();
+        // Log all trace messages to the console
+        Trace.Listeners.Add(listener);
+        Trace.AutoFlush = true;
 
         using PapiClient papi = new();
         try

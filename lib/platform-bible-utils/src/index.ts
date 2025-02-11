@@ -8,6 +8,7 @@ export { default as MutexMap } from './mutex-map';
 export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
 export { default as NumberFormat } from './intl-number-format';
 export { default as PlatformEventEmitter } from './platform-event-emitter.model';
+export { default as PromiseChainingMap } from './promise-chaining-map';
 export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
@@ -127,6 +128,7 @@ export type {
   Localized,
 } from './menus.model';
 export { menuDocumentSchema } from './menus.model';
+export type { DblResourceData, ResourceType } from './resources.model';
 export type {
   ExtensionControlledProjectSetting,
   ExtensionControlledSetting,

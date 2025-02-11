@@ -136,7 +136,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                     new Enum<MessageId>(result.CheckResultType),
                     result.VerseRef,
                     result.MessageFormatString,
-                    result.Text
+                    result.SelectedText
                 );
                 if (isDenied != result.IsDenied)
                     CheckRunResults[i] = new CheckRunResult(
@@ -144,7 +144,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                         result.CheckResultType,
                         result.ProjectId,
                         result.MessageFormatString,
-                        result.Text,
+                        result.SelectedText,
                         isDenied,
                         result.VerseRef,
                         result.Start,
@@ -162,7 +162,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                     continue;
                 }
 
-                var textIndex = indexer.Usfm.IndexOf(result.Text, verseIndex.Value);
+                var textIndex = indexer.Usfm.IndexOf(result.SelectedText, verseIndex.Value);
                 if (textIndex < 0)
                 {
                     result.Start.Offset = 0;
@@ -170,7 +170,7 @@ public sealed class CheckResultsRecorder(string checkId, string projectId) : IRe
                 }
 
                 result.Start.Offset += textIndex - verseIndex.Value;
-                result.End.Offset = result.Start.Offset + result.Text.Length;
+                result.End.Offset = result.Start.Offset + result.SelectedText.Length;
             }
         }
     }

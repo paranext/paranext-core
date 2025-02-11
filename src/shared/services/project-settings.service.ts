@@ -45,7 +45,7 @@ export function filterProjectSettingsContributionsByProjectInterfaces(
         Object.entries(contribution.properties).forEach(([key, property]) => {
           const { includeProjectInterfaces, excludeProjectInterfaces } = property;
 
-          if (includeProjectInterfaces && excludeProjectInterfaces) {
+          if (includeProjectInterfaces || excludeProjectInterfaces) {
             if (
               areProjectInterfacesIncluded(
                 projectInterfaces,

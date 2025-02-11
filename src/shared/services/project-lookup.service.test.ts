@@ -36,6 +36,35 @@ jest.mock('@shared/services/network-object-status.service', () => ({
   },
 }));
 
+beforeAll(() => {
+  jest.useFakeTimers({
+    advanceTimers: true,
+    // Only fake performance.now()
+    doNotFake: [
+      'Date',
+      'hrtime',
+      'nextTick',
+      // 'performance',
+      'queueMicrotask',
+      'requestAnimationFrame',
+      'cancelAnimationFrame',
+      'requestIdleCallback',
+      'cancelIdleCallback',
+      'setImmediate',
+      'clearImmediate',
+      'setInterval',
+      'clearInterval',
+      'setTimeout',
+      'clearTimeout',
+    ],
+  });
+  jest.advanceTimersByTime(testingProjectLookupService.LOAD_TIME_GRACE_PERIOD_MS);
+});
+
+afterAll(() => {
+  jest.useRealTimers();
+});
+
 beforeEach(() => {
   // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
   networkObjectService.get.mockImplementation(() => {

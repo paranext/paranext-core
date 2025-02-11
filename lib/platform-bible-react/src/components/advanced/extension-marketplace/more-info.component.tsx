@@ -18,11 +18,7 @@ interface MoreInfoProps {
  * This component displays the more info section of the extension which includes the category,
  * number of downloads, languages, and links to the website and support
  *
- * @param id Optional unique identifier
- * @param category The category of the extension
- * @param downloads The number of downloads for the extension
- * @param languages The languages supported by the extension
- * @param moreInfoUrl The URL to the more info page of the extension
+ * @param MoreInfoProps
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */

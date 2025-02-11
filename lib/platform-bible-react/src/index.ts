@@ -37,9 +37,20 @@ export {
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
 export {
+  default as MultiSelectComboBox,
+  type MultiSelectComboBoxEntry,
+} from './components/advanced/multi-select-combo-box.component';
+export {
   default as NavigationContentSearch,
   type TabKeyValueContent,
-} from './components/advanced/navigation-content-search.component';
+} from './components/advanced/tab-navigation-content-search.component';
+export {
+  default as SettingsSidebar,
+  type SettingsSidebarProps,
+  type ProjectInfo,
+  type SelectedSettingsSidebarItem,
+} from './components/advanced/settings-components/settings-sidebar.component';
+export { default as SettingsSidebarContentSearch } from './components/advanced/settings-components/settings-sidebar-content-search.component';
 export { default as ScriptureResultsViewer } from './components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 export type {
   ResultsSet,
@@ -58,7 +69,6 @@ export {
   SettingsListHeader,
   SettingsListItem,
 } from './components/advanced/settings-components/settings-list.component';
-
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
 export { default as Checklist } from './components/basics/checklist.component';
@@ -87,6 +97,7 @@ export { default as Toolbar } from './components/mui/toolbar.component';
 export type { ToolbarProps } from './components/mui/toolbar.component';
 
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
+export { Badge, type BadgeProps, badgeVariants } from './components/shadcn-ui/badge';
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export {
   Card,
@@ -100,6 +111,7 @@ export { default as Checkbox } from './components/shadcn-ui/checkbox';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
+export * from './components/shadcn-ui/popover';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
 export { Separator } from './components/shadcn-ui/separator';
@@ -136,7 +148,14 @@ export {
   type VersionHistoryType,
 } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
-
+export { default as Filter } from './components/advanced/filterable-resource-list/filter.component';
+export { default as FilterableResourceList } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
+export { FILTERABLE_RESOURCE_LIST_STRING_KEYS } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
+export {
+  default as UiLanguageSelector,
+  type LanguageInfo,
+  type UiLanguageSelectorProps,
+} from './components/advanced/ui-language-selector.component';
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';

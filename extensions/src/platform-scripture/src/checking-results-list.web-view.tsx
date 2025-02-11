@@ -6,8 +6,8 @@ import {
   sonner,
   usePromise,
 } from 'platform-bible-react';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
+import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useData, useDataProvider, useLocalizedStrings, useWebViewController } from '@papi/frontend/react';
 import {
   CheckRunnerCheckDetails,
   CheckRunResult,
@@ -17,6 +17,7 @@ import {
 import { Canon } from '@sillsdev/scripture';
 import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
 import papi, { logger } from '@papi/frontend';
+import { ScriptureLocation } from 'platform-scripture-editor';
 import ChecksSetUp from './checks/checks-set-up/checks-set-up.component';
 
 // TODO: Remove all code for the checks-set-up component once it can be moved to the checks side
@@ -105,11 +106,31 @@ const parseResults = (
               offset: checkResult.start.offset,
             }
           : {
-              bookNum: 0,
-              chapterNum: 0,
-              verseNum: 0,
+              // Use `checkResult.verseRef` for the location. This may not necessarily be 100%
+              // accurate. Need to reconsider if we do a larger check location rework
+              bookNum: Canon.bookIdToNumber(checkResult.verseRef.book),
+              chapterNum: checkResult.verseRef.chapterNum,
+              verseNum: checkResult.verseRef.verseNum,
               jsonPath: checkResult.start.jsonPath,
               offset: checkResult.start.offset,
+            },
+      end:
+        'verseRef' in checkResult.end
+          ? {
+              bookNum: Canon.bookIdToNumber(checkResult.end.verseRef.book),
+              chapterNum: checkResult.end.verseRef.chapterNum,
+              verseNum: checkResult.end.verseRef.verseNum,
+              jsonPath: '',
+              offset: checkResult.end.offset,
+            }
+          : {
+              // Use `checkResult.verseRef` for the location. This may not necessarily be 100%
+              // accurate. Need to reconsider if we do a larger check location rework
+              bookNum: Canon.bookIdToNumber(checkResult.verseRef.book),
+              chapterNum: checkResult.verseRef.chapterNum,
+              verseNum: checkResult.verseRef.verseNum,
+              jsonPath: checkResult.end.jsonPath,
+              offset: checkResult.end.offset,
             },
     };
     // The checking service seems to produce duplicated check results so this is a temporary fix to
@@ -126,7 +147,9 @@ const parseResults = (
 global.webViewComponent = function CheckingResultsListWebView({
   projectId,
   updateWebViewDefinition,
+  useWebViewState,
 }: WebViewProps) {
+  const [editorWebViewId] = useWebViewState<string | undefined>('editorWebViewId', undefined);
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
   // const [subscriptionId, setSubscriptionId] = useState('');
@@ -144,6 +167,10 @@ global.webViewComponent = function CheckingResultsListWebView({
       }
     };
 
+  const editorWebViewController = useWebViewController(
+    'platformScriptureEditor.react',
+    editorWebViewId,
+  );
     fetchSubscriptionId();
 
     return () => {
@@ -154,7 +181,7 @@ global.webViewComponent = function CheckingResultsListWebView({
     };
   }, [checkAggregator]);
 
-  const handleSubscriptionIdChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleSubscriptionIdChange = (event: ChangeEvent<HTMLInputElement>) => {
     setSubscriptionId(event.target.value);
   };
 
@@ -293,6 +320,58 @@ global.webViewComponent = function CheckingResultsListWebView({
           placeholder="Enter subscription ID"
         />
       </div>
+      <ScriptureResultsViewer sources={viewableResults} />
+      <ScriptureResultsViewer
+        sources={viewableResults}
+        onRowSelected={async (selectedRow) => {
+          if (!selectedRow || !editorWebViewController) return;
+
+          try {
+            const startOffset = 'offset' in selectedRow.start ? selectedRow.start.offset : 0;
+            const start: ScriptureLocation = selectedRow.start.jsonPath
+              ? {
+                  bookNum: selectedRow.start.bookNum,
+                  chapterNum: selectedRow.start.chapterNum,
+                  jsonPath: selectedRow.start.jsonPath,
+                  offset: startOffset,
+                }
+              : {
+                  scrRef: {
+                    bookNum: selectedRow.start.bookNum,
+                    chapterNum: selectedRow.start.chapterNum,
+                    verseNum: selectedRow.start.verseNum,
+                  },
+                  offset: startOffset,
+                };
+            let end: ScriptureLocation = { ...start, offset: start.offset ?? 0 };
+            if (selectedRow.end) {
+              const endOffset = 'offset' in selectedRow.end ? selectedRow.end.offset : end.offset;
+              end = selectedRow.end.jsonPath
+                ? {
+                    bookNum: selectedRow.end.bookNum,
+                    chapterNum: selectedRow.end.chapterNum,
+                    jsonPath: selectedRow.end.jsonPath,
+                    offset: endOffset,
+                  }
+                : {
+                    scrRef: {
+                      bookNum: selectedRow.end.bookNum,
+                      chapterNum: selectedRow.end.chapterNum,
+                      verseNum: selectedRow.end.verseNum,
+                    },
+                    offset: endOffset,
+                  };
+            }
+            editorWebViewController.selectRange({
+              start,
+              end,
+            });
+          } catch (e) {
+            logger.warn(
+              `Check results list failed to select range in editor for row ${JSON.stringify(selectedRow)}: ${e}`,
+            );
+          }
+        }}
       <ScriptureResultsViewer sources={viewableResults} />
       {/* <div>{availableChecksIsLoading ? <p> Checks loading...</p> : <p>Checks are loaded</p>}</div>
       <div>

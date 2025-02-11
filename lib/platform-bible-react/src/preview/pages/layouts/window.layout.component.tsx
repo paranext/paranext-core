@@ -11,12 +11,19 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 
-export default function WindowOrTabExample({ direction }: HasDirection) {
+export type HasIsFocused = {
+  isFocused?: boolean;
+};
+
+export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
+  const highlightClassName = isFocused
+    ? 'tw-bg-primary tw-text-primary-foreground'
+    : 'tw-bg-secondary tw-text-secondary-foreground';
   return (
     <div className="tw-rounded-md tw-border">
       <div className="tw-flex tw-flex-row tw-rounded-se-md tw-bg-muted/50">
@@ -25,13 +32,13 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
         </div>
         <div className="tw-grow" />
         <div className="tw-m-2 tw-flex">
-          <Tabs defaultValue="a" dir={direction}>
+          <Tabs defaultValue="a">
             <TabsList>
               <TabsTrigger value="a">A</TabsTrigger>
               <TabsTrigger value="b">B</TabsTrigger>
             </TabsList>
           </Tabs>
-          <DropdownMenu dir={direction}>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost">&#x22ee;</Button>
             </DropdownMenuTrigger>
@@ -67,7 +74,7 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
                   }}
                 >
                   <span>Scroll with</span>
-                  <Tabs defaultValue="a" dir={direction}>
+                  <Tabs defaultValue="a">
                     <TabsList className="tw-h-7">
                       <TabsTrigger className="tw-h-6 tw-w-0" value="a">
                         A
@@ -117,12 +124,13 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
         </p>
         <br />
         <p>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
-          ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
-          ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in
-          reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur
-          sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id
-          est laborum.
+          Lorem{' '}
+          <span className={highlightClassName}>ipsum dolor sit amet, consectetur adipiscing</span>{' '}
+          elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+          veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+          Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat
+          nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia
+          deserunt mollit anim id est laborum.
         </p>
         <br />
         <p>

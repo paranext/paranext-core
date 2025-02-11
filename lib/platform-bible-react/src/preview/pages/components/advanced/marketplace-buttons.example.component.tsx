@@ -32,37 +32,37 @@ export default function MarketplaceButtonExamples() {
     ],
   };
   return (
-    <>
+    <div>
       <p>
         Note: These buttons are currently styled with fixed colors and are therefore not theme-able
       </p>
       <br />
       FilterButton Button:
-      <div className="tw-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <FilterDropdown groups={[filterGroup, sortGroup]} />
       </div>
       InstallButton Button:
-      <div className="tw-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <InstallButton isInstalling={false} handleClick={() => {}} buttonText="Get" />
         <InstallButton isInstalling handleClick={() => {}} buttonText="Get" />
         <InstallButton isInstalling={false} handleClick={() => {}} />
         <InstallButton isInstalling handleClick={() => {}} />
       </div>
       DisableButton Button:
-      <div className="tw-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <DisableButton isDisabling={false} handleClick={() => {}} />
         <DisableButton isDisabling handleClick={() => {}} />
       </div>
       EnableButton Button:
-      <div className="tw-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <EnableButton isEnabling={false} handleClick={() => {}} />
         <EnableButton isEnabling handleClick={() => {}} />
       </div>
       UpdateButton Button:
-      <div className="tw-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <UpdateButton isUpdating={false} handleClick={() => {}} />
         <UpdateButton isUpdating handleClick={() => {}} />
       </div>
-    </>
+    </div>
   );
 }

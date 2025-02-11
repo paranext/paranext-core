@@ -4,7 +4,11 @@
 {
   productName: 'Platform.Bible',
   appId: 'org.paranext.PlatformBible',
-  copyright: 'Copyright © 2022-2024 SIL Global',
+  copyright: 'Copyright © 2017-2025 SIL Global and United Bible Societies',
+  protocols: {
+    name: 'platform-bible',
+    schemes: ['platform-bible'],
+  },
   asar: true,
   asarUnpack: '**\\*.{node,dll}',
   files: ['dist', 'node_modules', 'package.json'],

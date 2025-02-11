@@ -204,9 +204,9 @@ export declare class DocumentCombiner {
 	/**
 	 * Add or update one of the contribution documents for the composition process
 	 *
-	 * Note: the order in which contribution documents are added can be considered to be indeterminate
-	 * as it is currently ordered by however `Map.forEach` provides the contributions. The order
-	 * matters when merging two arrays into one. Also, when `options.ignoreDuplicateProperties` is
+	 * Note: the order in which contribution documents are added can be considered indeterminate as it
+	 * depends on the order in which `Map.forEach` iterates over the contributions. However, the order
+	 * matters when merging two arrays into one. Also, when `options.ignoreDuplicateProperties` is is
 	 * `true`, the order also matters when adding the same property to an object that is already
 	 * provided previously. Please let us know if you have trouble because of indeterminate
 	 * contribution ordering.
@@ -445,6 +445,59 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 * override emit and still call the base functionality.
 	 */
 	protected disposeFn(): Promise<boolean>;
+}
+/**
+ * Class that allows you to chain promises for a given key. This is useful when:
+ *
+ * 1. You need to run promises from synchronous code and don't need to look at the results.
+ * 2. The promises to run, or at least precisely when to run them, are not known in advance.
+ * 3. The promises need to be run sequentially, waiting for the previous one to finish.
+ *
+ * An example of when this can be helpful is inside of React components. Component code is mostly
+ * synchronous, but you may need to run some asynchronous code. You can't use `await` inside of
+ * React component code in many situations, so you can use this class to chain promises together.
+ *
+ * When promises are added to the map with a key, they will run in the order they were added to the
+ * map for that key. If a promise rejects, a warning will be logged and the chain will continue. If
+ * a promise is added while another promise in the map for that key is running, the new promise will
+ * be chained to the existing one.
+ */
+export declare class PromiseChainingMap<TKey = string> {
+	private readonly map;
+	private readonly logger;
+	/**
+	 * Creates a new PromiseChainingMap
+	 *
+	 * @param logger Object with a `warn` method that will be called when a promise rejects. This
+	 *   defaults to `console`.
+	 */
+	constructor(logger?: {
+		warn: (message: string) => void;
+	});
+	/**
+	 * Adds a promise function to the map for a given key. If a promise is already running for the
+	 * key, the new promise will be chained to the existing one. Once all promises for a key have
+	 * settled, the map will be cleared for that key.
+	 *
+	 * @param key Unique key to identify a distinct promise chain
+	 * @param promiseFunction Function that returns a promise to add to the chain
+	 */
+	addPromiseFunction(key: TKey, promiseFunction: () => Promise<unknown>): void;
+	/**
+	 * Gets the current promise chain for the given key. This is mostly useful for testing. Normally
+	 * you should just call {@link addPromiseFunction} and let the map handle the rest.
+	 *
+	 * @param key Unique key to identify a distinct promise chain
+	 * @returns The current promise chain for the key
+	 */
+	get(key: TKey): Promise<unknown> | undefined;
+	/**
+	 * Configures a promise chain to be removed from the map for the given key after all the promises
+	 * have settled
+	 *
+	 * @param key Unique key to identify a distinct promise chain
+	 */
+	private cleanupPromiseChain;
 }
 /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
 export declare class UnsubscriberAsyncList {
@@ -1796,6 +1849,18 @@ export declare const localizedStringsDocumentSchema: {
 			tsType: string;
 		};
 	};
+};
+export type ResourceType = "DBLResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
+export type DblResourceData = {
+	dblEntryUid: string;
+	displayName: string;
+	fullName: string;
+	bestLanguageName: string;
+	type: ResourceType;
+	size: number;
+	installed: boolean;
+	updateAvailable: boolean;
+	projectId: string;
 };
 /** The data an extension provides to inform Platform.Bible of the settings it provides */
 export type SettingsContribution = SettingsGroup | SettingsGroup[];

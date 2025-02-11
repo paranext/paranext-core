@@ -1,4 +1,4 @@
-@import '../../styles/vars';
+@use '../../styles/vars';
 
 .dock {
   background-color: hsl(var(--background));
@@ -72,7 +72,7 @@
 
 /* overriding default style for the shadow indicating that not all tabs are shown */
 .dock-nav-more::after {
-  box-shadow: inset -10px 0 8px -8px $color--shadow;
+  box-shadow: inset -10px 0 8px -8px vars.$color--shadow;
 }
 
 /* expand the invisible dock-tab-hit-area a bit to cover the border area above it */
@@ -82,7 +82,7 @@
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
-  background: $color--inactive-tab;
+  background: vars.$color--inactive-tab;
   padding: 0;
   border: 0;
 }
@@ -105,14 +105,14 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: 0;
   border: 0;
-  background: $color--inactive-tab;
-  color: $color--text;
+  background: vars.$color--inactive-tab;
+  color: vars.$color--text;
   flex: 1 0 auto;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  background: $color--active-tab;
-  color: $color--text;
+  background: vars.$color--active-tab;
+  color: vars.$color--text;
   border-bottom: 0;
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
 }
@@ -123,7 +123,7 @@
   content: '';
   width: 0.5px; // fix that renderer would sometimes used 2px instead of 1 for whatever reason
   height: 20px;
-  background: $color--border;
+  background: vars.$color--border;
   position: absolute;
   bottom: 6px;
   left: -2px;
@@ -189,25 +189,25 @@ $tab-bottom-rounding: $space--s;
 // #region CONTROLS //////////////////////////////////////////////
 /* Close buttons */
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
-  padding-left: $space--s;
-  padding-right: $space--m + $space--xs + $space--xxs;
+  padding-left: vars.$space--s;
+  padding-right: vars.$space--m + vars.$space--xs + vars.$space--xxs;
 }
 
 .dock-panel.dock-style-card .dock-tab-close-btn {
-  right: $space--xs;
+  right: vars.$space--xs;
 }
 
 .dock-dropdown-menu-item .dock-tab-close-btn {
-  right: $space--xs;
-  top: $space--xs + $space--xxs;
+  right: vars.$space--xs;
+  top: vars.$space--xs + vars.$space--xxs;
 }
 
 .dock-dropdown-menu-item .title {
-  padding-right: $space--s + $space--xs;
+  padding-right: vars.$space--s + vars.$space--xs;
 }
 
 .dock-tab-close-btn {
-  font-family: $font-family;
+  font-family: vars.$font-family;
   color: transparent;
 }
 
@@ -223,11 +223,11 @@ $tab-bottom-rounding: $space--s;
 }
 
 .dock-panel-max-btn::before {
-  border: 2px solid $color--border;
+  border: 2px solid vars.$color--border;
 }
 
 .dock-panel-min-btn::before {
-  color: $color--border;
+  color: vars.$color--border;
 }
 
 .dock-panel.dock-style-card .dock-panel-max-btn,

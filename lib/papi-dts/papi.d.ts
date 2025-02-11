@@ -933,8 +933,11 @@ declare module 'shared/data/rpc.model' {
    * your request handler.
    */
   export const UNREGISTER_METHOD = 'network:unregisterMethod';
-  /** Get all methods that are currently registered on the network. */
-  export const GET_METHODS = 'network:getMethods';
+  /**
+   * Get all methods that are currently registered on the network. Required to be 'rpc.discover' by
+   * the OpenRPC specification.
+   */
+  export const GET_METHODS = 'rpc.discover';
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
 }
@@ -980,6 +983,173 @@ declare module 'shared/models/papi-network-event-emitter.model' {
     dispose: () => Promise<boolean>;
   }
 }
+declare module 'shared/models/openrpc.model' {
+  import type { JSONSchema7 } from 'json-schema';
+  /**
+   * Describes APIs available to call using JSON-RPC 2.0
+   *
+   * See https://github.com/open-rpc/meta-schema/releases - Release 1.14.2 aligns with OpenRPC 1.2.6.
+   * https://github.com/open-rpc/meta-schema/releases/download/1.14.2/open-rpc-meta-schema.json
+   *
+   * We don't want to go past 1.2.6 because https://playground.open-rpc.org/ doesn't support anything
+   * past 1.2.6 for now. See https://github.com/open-rpc/playground/issues/606.
+   *
+   * Note that the types from https://www.npmjs.com/package/@open-rpc/meta-schema/v/1.14.2 are not
+   * very good. For example, all the properties of `Components` are of type `any` instead of the
+   * specific types they should be, and they redefine types for JSON Schema. So we're using our own
+   * types here instead.
+   */
+  export type OpenRpc = {
+    openrpc: string;
+    info: Info;
+    servers?: Server[];
+    methods: Method[];
+    components?: Components;
+    externalDocs?: ExternalDocumentation;
+  };
+  export type Components = {
+    schemas?: {
+      [key: string]: Schema;
+    };
+    contentDescriptors?: {
+      [key: string]: ContentDescriptor;
+    };
+    examples?: {
+      [key: string]: Example;
+    };
+    links?: {
+      [key: string]: Link;
+    };
+    errors?: {
+      [key: string]: Error;
+    };
+    tags?: {
+      [key: string]: Tag;
+    };
+  };
+  export type ComponentsReference = `#/components/${string}`;
+  export type Contact = {
+    name?: string;
+    email?: string;
+    url?: string;
+  };
+  export type ContentDescriptor = {
+    name: string;
+    schema: Schema;
+    required?: boolean;
+    summary?: string;
+    description?: string;
+    deprecated?: boolean;
+  };
+  export type Error = {
+    code: number;
+    message: string;
+    data?: any;
+  };
+  export type Example = {
+    name: string;
+    value: any;
+    summary?: string;
+    description?: string;
+  };
+  export type ExamplePairingObject = {
+    name: string;
+    params: (Example | Reference)[];
+    result: Example | Reference;
+    description?: string;
+  };
+  export type ExternalDocumentation = {
+    url: string;
+    description?: string;
+  };
+  export type Info = {
+    title: string;
+    version: string;
+    description?: string;
+    termsOfService?: string;
+    contact?: Contact;
+    license?: License;
+  };
+  export type License = {
+    name: string;
+    url?: string;
+  };
+  export type Link = {
+    name?: string;
+    summary?: string;
+    description?: string;
+    method?: string;
+    params?: {
+      [key: string]: any;
+    };
+    server?: Server;
+  };
+  export type Method = {
+    /** The canonical name for the method. The name MUST be unique within the methods array. */
+    name: string;
+    params: (ContentDescriptor | Reference)[];
+    result: ContentDescriptor | Reference;
+    /** A short summary of what the method does. */
+    summary?: string;
+    /**
+     * A verbose explanation of the method behavior. GitHub Flavored Markdown syntax MAY be used for
+     * rich text representation.
+     */
+    description?: string;
+    deprecated?: boolean;
+    servers?: Server[];
+    tags?: (Tag | Reference)[];
+    /** Format the server expects the params. Defaults to 'either'. */
+    paramStructure?: 'by-name' | 'by-position' | 'either';
+    errors?: (Error | Reference)[];
+    links?: (Link | Reference)[];
+    examples?: (ExamplePairingObject | Reference)[];
+    externalDocs?: ExternalDocumentation;
+  };
+  export type Reference = {
+    $ref: ComponentsReference;
+  };
+  export type Server = {
+    url: string;
+    name?: string;
+    description?: string;
+    summary?: string;
+    variables?: {
+      [key: string]: ServerVariable;
+    };
+  };
+  export type ServerVariable = {
+    default: string;
+    description?: string;
+    enum?: string[];
+  };
+  export type Schema = JSONSchema7;
+  export type Tag = {
+    name: string;
+    description?: string;
+    externalDocs?: ExternalDocumentation;
+  };
+  export type MethodDocumentationWithoutName = Omit<Method, 'name'>;
+  /** Documentation about a single method */
+  export type SingleMethodDocumentation = {
+    method: MethodDocumentationWithoutName;
+    components?: Components;
+  };
+  /** Documentation about all methods on a network object */
+  export type NetworkObjectDocumentation = {
+    summary?: string;
+    description?: string;
+    methods?: Method[];
+    components?: Components;
+  };
+  /** Create an object of type {@link OpenRpc} to hold documentation for PAPI websocket methods */
+  export function createEmptyOpenRpc(papiVersion: string): OpenRpc;
+  /**
+   * Get an empty {@link OpenRpc} method document object. Useful for populating documentation for
+   * methods that didn't have their own documentation provided.
+   */
+  export function getEmptyMethodDocs(): MethodDocumentationWithoutName;
+}
 declare module 'shared/models/rpc.interface' {
   import {
     ConnectionStatus,
@@ -987,6 +1157,7 @@ declare module 'shared/models/rpc.interface' {
     InternalRequestHandler,
     RequestParams,
   } from 'shared/data/rpc.model';
+  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   /**
@@ -1055,10 +1226,18 @@ declare module 'shared/models/rpc.interface' {
    */
   export interface IRpcMethodRegistrar extends IRpcHandler {
     /** Register a method that will be called if an RPC request is made */
-    registerMethod: (methodName: string, method: InternalRequestHandler) => Promise<boolean>;
+    registerMethod: (
+      methodName: string,
+      method: InternalRequestHandler,
+      methodDocs?: SingleMethodDocumentation,
+    ) => Promise<boolean>;
     /** Unregister a method so it is no longer available to RPC requests */
     unregisterMethod: (methodName: string) => Promise<boolean>;
   }
+  export type RegisteredRpcMethodDetails = {
+    handler: IRpcHandler;
+    methodDocs?: SingleMethodDocumentation;
+  };
 }
 declare module 'client/services/web-socket.interface' {
   /**
@@ -1137,6 +1316,7 @@ declare module 'client/services/rpc-client' {
     RequestParams,
   } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   /**
    * Manages the JSON-RPC protocol on the client end of a websocket that connects to main
    *
@@ -1164,7 +1344,11 @@ declare module 'client/services/rpc-client' {
       requestParams: RequestParams,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
-    registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean>;
+    registerMethod(
+      methodName: string,
+      method: InternalRequestHandler,
+      methodDocs?: SingleMethodDocumentation,
+    ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
     private createNextRequestId;
     private addEventListenersToWebSocket;
@@ -1176,9 +1360,10 @@ declare module 'client/services/rpc-client' {
 }
 declare module 'main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcHandler } from 'shared/models/rpc.interface';
+  import { IRpcHandler, RegisteredRpcMethodDetails } from 'shared/models/rpc.interface';
   import { ConnectionStatus, RequestParams } from 'shared/data/rpc.model';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
   /**
    * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
@@ -1197,14 +1382,14 @@ declare module 'main/services/rpc-server' {
     private readonly jsonRpcServer;
     /** Refers to any process that connected to main over the websocket */
     private readonly jsonRpcClient;
-    private readonly rpcHandlerByMethodName;
+    private readonly rpcMethodDetailsByMethodName;
     /** Called by an RpcServer when all other RpcServers should emit an event over the network */
     private readonly propagateEventMethod;
     constructor(
       name: string,
       webSocket: WebSocket,
       propagateEventMethod: PropagateEventMethod,
-      rpcHandlerByMethodName: Map<string, IRpcHandler>,
+      rpcMethodDetailsByMethodName: Map<string, RegisteredRpcMethodDetails>,
     );
     connect(): Promise<boolean>;
     disconnect(): Promise<void>;
@@ -1213,7 +1398,7 @@ declare module 'main/services/rpc-server' {
       requestParams: RequestParams,
     ): Promise<JSONRPCResponse>;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
-    registerRemoteMethod(methodName: string): boolean;
+    registerRemoteMethod(methodName: string, methodDocs?: SingleMethodDocumentation): boolean;
     unregisterRemoteMethod(methodName: string): boolean;
     private createNextRequestId;
     private addMethodToRpcServer;
@@ -1236,6 +1421,7 @@ declare module 'main/services/rpc-websocket-listener' {
   import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { OpenRpc, SingleMethodDocumentation } from 'shared/models/openrpc.model';
   /**
    * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
    * connects, an RpcServer is created in this same process to service that connection.
@@ -1254,7 +1440,7 @@ declare module 'main/services/rpc-websocket-listener' {
     private nextSocketNumber;
     private readonly connectionMutex;
     private readonly rpcServerBySocket;
-    private readonly rpcHandlerByMethodName;
+    private readonly rpcMethodDetailsByMethodName;
     private readonly localMethodsByMethodName;
     constructor();
     get nextSocketId(): string;
@@ -1264,8 +1450,13 @@ declare module 'main/services/rpc-websocket-listener' {
       requestType: SerializedRequestType,
       requestParams: RequestParams,
     ): Promise<JSONRPCResponse>;
-    registerMethod(methodName: string, method: InternalRequestHandler): Promise<boolean>;
+    registerMethod(
+      methodName: string,
+      method: InternalRequestHandler,
+      methodDocs?: SingleMethodDocumentation,
+    ): Promise<boolean>;
     unregisterMethod(methodName: string): Promise<boolean>;
+    generateOpenRpcSchema(): OpenRpc;
     emitEventOnNetwork<T>(eventType: string, event: T): void;
     private propagateEvent;
     private onClientConnect;
@@ -1286,6 +1477,7 @@ declare module 'shared/services/network.service' {
   import { InternalRequestHandler } from 'shared/data/rpc.model';
   import { UnsubscriberAsync, PlatformEventEmitter, PlatformEvent } from 'platform-bible-utils';
   import { SerializedRequestType } from 'shared/utils/util';
+  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1311,6 +1503,7 @@ declare module 'shared/services/network.service' {
   export function registerRequestHandler(
     requestType: SerializedRequestType,
     requestHandler: InternalRequestHandler,
+    requestDocs?: SingleMethodDocumentation,
   ): Promise<UnsubscriberAsync>;
   /**
    * Creates a function that is a request function with a baked requestType. This is also nice because
@@ -1360,6 +1553,7 @@ declare module 'shared/services/network-object.service' {
     LocalObjectToProxyCreator,
     NetworkObjectDetails,
   } from 'shared/models/network-object.model';
+  import { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
   /**
@@ -1424,6 +1618,7 @@ declare module 'shared/services/network-object.service' {
           [property: string]: unknown;
         }
       | undefined,
+    objectDocumentation?: NetworkObjectDocumentation,
   ) => Promise<DisposableNetworkObject<T>>;
   export interface MinimalNetworkObjectService {
     get: typeof get;
@@ -2868,6 +3063,7 @@ declare module 'papi-shared-types' {
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from 'shared/models/network-object.model';
+  import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -2898,8 +3094,18 @@ declare module 'papi-shared-types' {
     'platform.quit': () => Promise<void>;
     /** Restart the application */
     'platform.restart': () => Promise<void>;
+    /** Open a browser to the platform's OpenRPC documentation */
+    'platform.openDeveloperDocumentationUrl': () => Promise<void>;
+    /**
+     * Open a link in a new browser window. Like `window.open` in the frontend with
+     * `target='_blank'`
+     */
+    'platform.openWindow': (url: string) => Promise<void>;
+    /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
+    /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
+    'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -3409,6 +3615,7 @@ declare module 'papi-shared-types' {
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
   import { CommandHandlers } from 'papi-shared-types';
+  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   /**
    * Register a command on the papi to be handled here
    *
@@ -3424,6 +3631,7 @@ declare module 'shared/services/command.service' {
   export const registerCommand: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
     handler: CommandHandlers[CommandName],
+    commandDocs?: SingleMethodDocumentation,
   ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
   export const sendCommand: <CommandName extends keyof CommandHandlers>(
@@ -3975,14 +4183,14 @@ declare module 'shared/models/project-lookup.service-model' {
      *
      * Note: If there are multiple PDPs available whose metadata matches the conditions provided by
      * the parameters, their project metadata will all be combined, so all available
-     * `projectInterface`s provided by the PDP Factory with the matching id (or all PDP Factories if
-     * no id is specified) for the project will be returned. If you need `projectInterface`s supported
+     * `projectInterface`s provided by the PDP Factory with the matching ID (or all PDP Factories if
+     * no ID is specified) for the project will be returned. If you need `projectInterface`s supported
      * by specific PDP Factories, you can access it at {@link ProjectMetadata.pdpFactoryInfo}.
      *
      * @param options Options for specifying filters for the project metadata retrieved. If a PDP
-     *   Factory Id does not match the filter, it will not be contacted at all for this function call.
+     *   Factory ID does not match the filter, it will not be contacted at all for this function call.
      *   As a result, a PDP factory that intends to layer over other PDP factories **must** specify
-     *   its id in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
+     *   its ID in `options.excludePdpFactoryIds` to avoid an infinite loop of calling this function.
      * @returns ProjectMetadata for all projects stored on the local system
      */
     getMetadataForAllProjects(options?: ProjectMetadataFilterOptions): Promise<ProjectMetadata[]>;
@@ -4050,6 +4258,8 @@ declare module 'shared/models/project-lookup.service-model' {
   /** Local object of functions to run locally on each process as part of the project lookup service */
   export const projectLookupServiceBase: ProjectLookupServiceType;
   /**
+   * Gets project metadata from PDPFs filtered down by various filtering options
+   *
    * Note: If there are multiple PDPs available whose metadata matches the conditions provided by the
    * parameters, their project metadata will all be combined, so all available `projectInterface`s
    * provided by the PDP Factory with the matching id (or all PDP Factories if no id is specified) for
@@ -4111,6 +4321,7 @@ declare module 'shared/models/project-lookup.service-model' {
     internalGetMetadata: typeof internalGetMetadata;
     compareProjectDataProviderFactoryMetadataInfoMinimalMatch: typeof compareProjectDataProviderFactoryMetadataInfoMinimalMatch;
     transformGetMetadataForProjectParametersToFilter: typeof transformGetMetadataForProjectParametersToFilter;
+    LOAD_TIME_GRACE_PERIOD_MS: number;
   };
 }
 declare module 'shared/services/project-lookup.service' {
@@ -5057,7 +5268,7 @@ declare module 'shared/services/dialog.service-model' {
       options?: DialogTypes[DialogTabType]['options'],
     ): Promise<DialogTypes[DialogTabType]['responseType'] | undefined>;
     /**
-     * Shows a select project dialog to the user and prompts the user to select a dialog
+     * Shows a select project dialog to the user and prompts the user to select a project
      *
      * @param options Various options for configuring the dialog that shows
      * @returns Returns the user's selected project id or `undefined` if the user cancels
@@ -5258,13 +5469,68 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     getInstalledExtensions: GetInstalledExtensionsFunction;
   };
 }
+declare module 'shared/models/handle-uri-privilege.model' {
+  import { Unsubscriber } from 'platform-bible-utils';
+  /** Function that is called when the system navigates to a URI that this handler is set up to handle. */
+  export type UriHandler = (uri: string) => Promise<void> | void;
+  /**
+   * Function that registers a {@link UriHandler} to be called when the system navigates to a URI that
+   * matches the handler's scope
+   */
+  export type RegisterUriHandler = (uriHandler: UriHandler) => Unsubscriber;
+  /**
+   * Functions and properties related to listening for when the system navigates to a URI built for an
+   * extension
+   */
+  export type HandleUri = {
+    /**
+     * Register a handler function to listen for when the system navigates to a URI built for this
+     * extension. Each extension can only register one uri handler at a time.
+     *
+     * Each extension has its own exclusive URI that it can handle. Extensions cannot handle each
+     * others' URIs. The URIs this extension's handler will receive will have the following
+     * structure:
+     *
+     *     `<redirect-uri><additional-data>`;
+     *
+     * - `<redirect-uri>` is {@link HandleUri.redirectUri}.
+     * - `<additional-data>` is anything else that is on the URI as the application receives it. This
+     *   could include path, query (aka parameters), and fragment (aka anchor).
+     *
+     * Handling URIs is useful for authentication workflows and other interactions with this extension
+     * from outside the application.
+     *
+     * Note: There is currently no check in place to guarantee that a call to this handler will only
+     * come from navigating to the uri; a process connecting over the PAPI WebSocket could fake a call
+     * to this handler. However, there is no expectation for this to happen.
+     */
+    registerUriHandler: RegisterUriHandler;
+    /**
+     * The most basic URI this extension can handle with {@link HandleUri.registerUriHandler}. This
+     * `redirectUri` has the following structure:
+     *
+     *     `<app-uri-scheme>://<extension-publisher>.<extension-name>`;
+     *
+     * - `<app-uri-scheme>` is the URI scheme this application supports. TODO: link name here
+     * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
+     *   manifest
+     * - `<extension-name>` is the name of this extension as specified in the extension manifest
+     *
+     * Additional data can be added to the end of the URI; this is just the scheme and authority. See
+     * {@link HandleUri.registerUriHandler} for more information.
+     */
+    redirectUri: string;
+  };
+}
 declare module 'shared/models/elevated-privileges.model' {
   import { CreateProcess } from 'shared/models/create-process-privilege.model';
   import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  import { HandleUri } from 'shared/models/handle-uri-privilege.model';
   /** String constants that are listed in an extension's manifest.json to state needed privileges */
   export enum ElevatedPrivilegeNames {
     createProcess = 'createProcess',
     manageExtensions = 'manageExtensions',
+    handleUri = 'handleUri',
   }
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
@@ -5272,6 +5538,11 @@ declare module 'shared/models/elevated-privileges.model' {
     createProcess: CreateProcess | undefined;
     /** Functions that can be run to manage what extensions are running */
     manageExtensions: ManageExtensions | undefined;
+    /**
+     * Functions and properties related to listening for when the system navigates to a URI built for
+     * this extension
+     */
+    handleUri: HandleUri | undefined;
   };
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
@@ -5478,6 +5749,7 @@ declare module 'shared/services/localization.service-model' {
     DataProviderDataType,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
+  import { LanguageInfo } from 'platform-bible-react';
   import { LanguageStrings, LocalizeKey, OnDidDispose } from 'platform-bible-utils';
   export type LocalizationData = LanguageStrings;
   export type LocalizationSelector = {
@@ -5505,6 +5777,11 @@ declare module 'shared/services/localization.service-model' {
   export type LocalizationDataDataTypes = {
     LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
     LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
+    AvailableInterfaceLanguages: DataProviderDataType<
+      undefined,
+      Record<string, LanguageInfo>,
+      never
+    >;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -5533,6 +5810,12 @@ declare module 'shared/services/localization.service-model' {
      */
     getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
     /**
+     * Get a collection of known user-interface languages
+     *
+     * @returns All user-interface languages
+     */
+    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
      * @returns Unsubscriber function
@@ -5544,6 +5827,14 @@ declare module 'shared/services/localization.service-model' {
      * @returns Unsubscriber function
      */
     setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @returns Unsubscriber function
+     */
+    setAvailableInterfaceLanguages(): Promise<
+      DataProviderUpdateInstructions<LocalizationDataDataTypes>
+    >;
   } & OnDidDispose &
     typeof localizationServiceObjectToProxy & {
       /**
@@ -5559,6 +5850,23 @@ declare module 'shared/data/platform.data' {
    * Platform.Bible core
    */
   export const PLATFORM_NAMESPACE = 'platform';
+  /**
+   * Name of this application like `platform-bible`.
+   *
+   * Note: this is an identifier for the application, not this application's executable file name
+   */
+  export const APP_NAME: string;
+  /** Version of this application in [semver](https://semver.org/) format. */
+  export const APP_VERSION: string;
+  /**
+   * URI scheme that this application handles. Navigating to a URI with this scheme will open this
+   * application. This application will handle the URI as it sees fit. For example, the URI may be
+   * handled by an extension - see {@link ElevatedPrivileges.registerUriHandler } for more
+   * information.
+   *
+   * This is the same as {@link APP_NAME}.
+   */
+  export const APP_URI_SCHEME: string;
   /** Query string passed to the renderer when starting if it should enable noisy dev mode */
   export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
 }
@@ -5988,6 +6296,11 @@ declare module '@papi/core' {
     InstalledExtensions,
     ManageExtensions,
   } from 'shared/models/manage-extensions-privilege.model';
+  export type {
+    HandleUri,
+    RegisterUriHandler,
+    UriHandler,
+  } from 'shared/models/handle-uri-privilege.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
@@ -6003,6 +6316,12 @@ declare module '@papi/core' {
   export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
+  export type {
+    Components as ComponentsDocumentation,
+    MethodDocumentationWithoutName,
+    NetworkObjectDocumentation,
+    SingleMethodDocumentation,
+  } from 'shared/models/openrpc.model';
   export type {
     ExtensionDataScope,
     MandatoryProjectDataTypes,
@@ -6209,6 +6528,103 @@ declare module 'shared/services/project-settings.service' {
   const projectSettingsService: IProjectSettingsService;
   export default projectSettingsService;
 }
+declare module 'shared/models/data-protection.service-model' {
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  export interface IDataProtectionService {
+    /**
+     * Encrypts a string using Electron's
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API. Transforms the
+     * returned buffer to a base64-encoded string using
+     * [`buffer.toString('base64')`](https://nodejs.org/api/buffer.html#buftostringencoding-start-end).
+     *
+     * This method throws if the encryption mechanism is not available such as on Linux without a
+     * supported package installed. See
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) for more information.
+     *
+     * Note that this encryption mechanism is not transferrable between computers. We recommend using
+     * it with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @param text String to encrypt
+     * @returns Encrypted string. Use `papi.dataProtection.decryptString` to decrypt
+     */
+    encryptString(text: string): Promise<string>;
+    /**
+     * Decrypts a string using Electron's
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API. Transforms the
+     * input base64-encoded string to a buffer using [`Buffer.from(text,
+     * 'base64')`](https://nodejs.org/api/buffer.html#static-method-bufferfromstring-encoding).
+     *
+     * This method throws if the decryption mechanism is not available such as on Linux without a
+     * supported package installed. See
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) for more information.
+     *
+     * Note that this encryption mechanism is not transferrable between computers. We recommend using
+     * it with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @param encryptedText String to decrypt. This string should have been encrypted by
+     *   `papi.dataProtection.encryptString`
+     * @returns Decrypted string
+     */
+    decryptString(encryptedText: string): Promise<string>;
+    /**
+     * Returns `true` if encryption is currently available. Returns `false` if the decryption
+     * mechanism is not available such as on Linux without a supported package installed. See
+     * Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API for
+     * more information.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @returns `true` if encryption is currently available; `false` otherwise
+     */
+    isEncryptionAvailable(): Promise<boolean>;
+  }
+  export const dataProtectionServiceNetworkObjectName = 'DataProtectionService';
+}
+declare module 'shared/services/data-protection.service' {
+  import { IDataProtectionService } from 'shared/models/data-protection.service-model';
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  const dataProtectionService: IDataProtectionService;
+  export default dataProtectionService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -6322,6 +6738,21 @@ declare module '@papi/backend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
+    /**
+     *
+     * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+     *
+     * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+     *
+     * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+     * them with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+     * to be stored securely in local files. It is not intended to protect data passed over a network
+     * connection. Please note that using this service passes the unencrypted string between local
+     * processes using the PAPI WebSocket.
+     */
+    dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -6528,6 +6959,21 @@ declare module '@papi/backend' {
   export const commands: typeof commandService;
   /**
    *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  export const dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
+  /**
+   *
    * Service exposing various functions related to using webViews
    *
    * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
@@ -6715,6 +7161,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      * implemented.
      */
     activationEvents: string[];
+    /** Id of publisher who published this extension on the extension marketplace */
+    publisher?: string;
   };
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {

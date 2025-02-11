@@ -606,6 +606,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         try
         {
             var scrText = LocalParatextProjects.GetParatextProject(ProjectDetails.Metadata.Id);
+            if (verseRef.Versification == null)
+                verseRef.Versification = scrText.Settings.Versification;
             return getTextFromScrText(scrText, verseRef);
         }
         catch (Exception e) when (e is ArgumentException or ProjectNotFoundException)

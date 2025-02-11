@@ -286,8 +286,7 @@ internal class LocalParatextProjects
         foreach (string requiredFile in _requiredProjectRootFiles)
         {
             var dest = Path.Join(ProjectRootFolder, requiredFile);
-            if (!File.Exists(dest))
-                File.Copy(Path.Join("assets", requiredFile), dest);
+            File.Copy(Path.Join("assets", requiredFile), dest, true);
         }
     }
 
