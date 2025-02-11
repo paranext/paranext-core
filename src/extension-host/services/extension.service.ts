@@ -120,7 +120,7 @@ type DtsInfo = {
  * Key to uniquely identify an extension with some extra certainty that the extension is who it says
  * it is.
  *
- * Format: `<extension-publisher>.<extension-name>`
+ * Format: `<extension-publisher>.<extension-name>`.toLowerCase()
  */
 type ExtensionKey = `${string}.${string}`;
 
@@ -855,7 +855,9 @@ function getExtensionKey(manifest: ExtensionManifest): ExtensionKey {
     throw new Error('Extension publisher must not be empty string, undefined, or contain spaces');
   if (!manifest.name || spaceRegex.test(manifest.name))
     throw new Error('Extension name must not be empty string, undefined, or contain spaces');
-  const extensionKey: ExtensionKey = `${manifest.publisher}.${manifest.name}`;
+  // It doesn't like that we `toLowerCase`'d it, but it's still in the right format
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const extensionKey = `${manifest.publisher}.${manifest.name}`.toLowerCase() as ExtensionKey;
   return extensionKey;
 }
 
@@ -897,7 +899,7 @@ function handleExtensionUri(uri: string) {
   // Validating the map keys when setting in createRegisterUriHandlerFunction, so this won't match
   // to anything if it is not properly formatted. Implicitly validating as ExtensionKey
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const extensionKey = url?.hostname as ExtensionKey;
+  const extensionKey = url?.hostname.toLowerCase() as ExtensionKey;
   const uriHandler = uriHandlersByExtensionKey.get(extensionKey);
 
   if (!uriHandler) {
