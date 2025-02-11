@@ -172,20 +172,12 @@ async function openChecksSidePanel(
     return undefined;
   }
 
-  const subscriptionId = await checkAggregatorService.serviceObject.createSubscription();
-
-  const options: ChecksSidePanelWebViewOptions = { projectId, subscriptionId, editorScrollGroupId };
+  const options: ChecksSidePanelWebViewOptions = { projectId, editorScrollGroupId };
   const sidePanelWebViewId = await papi.webViews.openWebView(
     checksSidePanelWebViewType,
     { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
     options,
   );
-
-  papi.webViews.onDidCloseWebView(async ({ webView }) => {
-    if (webView.webViewType === checksSidePanelWebViewType && webView.id === sidePanelWebViewId) {
-      await checkAggregatorService.serviceObject.deleteSubscription(subscriptionId);
-    }
-  });
 
   return sidePanelWebViewId;
 }
