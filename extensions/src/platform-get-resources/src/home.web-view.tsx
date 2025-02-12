@@ -210,7 +210,7 @@ globalThis.webViewComponent = function HomeDialog() {
     undefined,
   );
 
-  const [allProjectsInfo] = usePromise(
+  const [localProjectsInfo] = usePromise(
     useCallback(async () => {
       const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
@@ -247,13 +247,13 @@ globalThis.webViewComponent = function HomeDialog() {
           language: sharedProject.language,
           isEditable: true,
           isSendReceivable: true,
-          isLocallyAvailable: allProjectsInfo?.some((project) => project.projectId === projectId),
+          isLocallyAvailable: localProjectsInfo?.some((project) => project.projectId === projectId),
           editedStatus: sharedProject.editedStatus,
           lastSendReceiveDate: sharedProject.lastSendReceiveDate,
         });
       });
     }
-    allProjectsInfo?.forEach((project) => {
+    localProjectsInfo?.forEach((project) => {
       if (
         !newMergedProjectInfo.some((mergedProject) => mergedProject.projectId === project.projectId)
       ) {
@@ -269,7 +269,7 @@ globalThis.webViewComponent = function HomeDialog() {
     });
 
     return newMergedProjectInfo;
-  }, [allProjectsInfo, sharedProjectsInfo]);
+  }, [localProjectsInfo, sharedProjectsInfo]);
 
   const [textFilter, setTextFilter] = useState<string>('');
 
@@ -308,7 +308,15 @@ globalThis.webViewComponent = function HomeDialog() {
           }
           return 0;
         case 'activity':
-          // To be implemented later
+          if (!a.lastSendReceiveDate || !b.lastSendReceiveDate) {
+            return 0;
+          }
+          if (a.lastSendReceiveDate < b.lastSendReceiveDate) {
+            return sortConfig.direction === 'ascending' ? -1 : 1;
+          }
+          if (a.lastSendReceiveDate > b.lastSendReceiveDate) {
+            return sortConfig.direction === 'ascending' ? 1 : -1;
+          }
           return 0;
         case 'action':
           // To be implemented later
@@ -393,7 +401,7 @@ globalThis.webViewComponent = function HomeDialog() {
           </CardContent>
         ) : (
           <CardContent className="tw-flex-grow tw-overflow-auto">
-            {!allProjectsInfo ? (
+            {!localProjectsInfo ? (
               <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
                 <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
                 <Label className="tw-text-muted-foreground tw-font-normal">
