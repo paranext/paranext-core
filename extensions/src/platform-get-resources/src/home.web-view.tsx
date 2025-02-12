@@ -154,19 +154,19 @@ globalThis.webViewComponent = function HomeDialog() {
     checkIfSendReceiveAvailable,
   );
 
-  const [sendReceiveInProgress, setSendReceiveInProgress] = useState<boolean>(false);
+  const [isSendReceiveInProgress, setIsSendReceiveInProgress] = useState<boolean>(false);
   const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
 
   const sendReceiveProject = async (projectId: string) => {
     try {
-      setSendReceiveInProgress(true);
+      setIsSendReceiveInProgress(true);
       setActiveSendReceiveProjects((prev) => [...prev, projectId]);
 
       await papi.commands.sendCommand('paratextBibleSendReceive.sendReceiveProjects', [projectId]);
 
       if (isMounted.current) {
         setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
-        setSendReceiveInProgress(false);
+        setIsSendReceiveInProgress(false);
       }
     } catch (e) {
       logger.warn(
@@ -174,13 +174,16 @@ globalThis.webViewComponent = function HomeDialog() {
       );
       if (isMounted.current) {
         setActiveSendReceiveProjects((prev) => prev.filter((id) => id !== projectId));
-        setSendReceiveInProgress(false);
+        setIsSendReceiveInProgress(false);
       }
     }
   };
 
   const [sharedProjectsInfo] = usePromise(
     useCallback(async () => {
+      // This line lets us get updated info on the S/R projects when S/R is triggered
+      isSendReceiveInProgress;
+
       if (!isSendReceiveAvailable) {
         setIsLoadingRemoteProjects(false);
         return undefined;
@@ -202,7 +205,7 @@ globalThis.webViewComponent = function HomeDialog() {
         }
         return undefined;
       }
-    }, [isSendReceiveAvailable]),
+    }, [isSendReceiveAvailable, isSendReceiveInProgress]),
     undefined,
   );
 
@@ -344,6 +347,14 @@ globalThis.webViewComponent = function HomeDialog() {
     return new Intl.RelativeTimeFormat(interfaceLanguages, { style: 'long', numeric: 'auto' });
   }, [interfaceLanguages]);
 
+  const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
+    if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
+      return <Spinner className="tw-h-5 tw-py-[1px]" />;
+    }
+
+    return project.isLocallyAvailable ? syncText : getText;
+  };
+
   return (
     <div>
       <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
@@ -471,18 +482,12 @@ globalThis.webViewComponent = function HomeDialog() {
                               <div>
                                 <Button
                                   disabled={
-                                    sendReceiveInProgress &&
+                                    isSendReceiveInProgress &&
                                     activeSendReceiveProjects.includes(project.projectId)
                                   }
                                   onClick={() => sendReceiveProject(project.projectId)}
                                 >
-                                  {sendReceiveInProgress &&
-                                    activeSendReceiveProjects.includes(project.projectId) && (
-                                      <Spinner className="tw-h-5 tw-py-[1px]" />
-                                    )}
-                                  {!sendReceiveInProgress && project.isLocallyAvailable
-                                    ? syncText
-                                    : getText}
+                                  {getSendReceiveButtonContent(project)}
                                 </Button>
                               </div>
                             ) : (
