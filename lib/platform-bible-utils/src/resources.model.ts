@@ -1,5 +1,5 @@
 export type ResourceType =
-  | 'DBLResource'
+  | 'ScriptureResource'
   | 'EnhancedResource'
   | 'XmlResource'
   | 'SourceLanguageResource';

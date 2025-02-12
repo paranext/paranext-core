@@ -1910,7 +1910,7 @@ export declare const localizedStringsDocumentSchema: {
 		};
 	};
 };
-export type ResourceType = "DBLResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
+export type ResourceType = "ScriptureResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;
 	displayName: string;
