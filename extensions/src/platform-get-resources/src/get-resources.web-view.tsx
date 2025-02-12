@@ -50,7 +50,7 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_installed%',
   '%resources_language%',
   '%resources_languages%',
-  '%resources_loadingResources%',
+  '%resources_loading%',
   '%resources_noResults%',
   '%resources_open%',
   '%resources_remove%',
@@ -168,7 +168,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installedText: string = localizedStrings['%resources_installed%'];
   const languageText: string = localizedStrings['%resources_language%'];
   const languagesText: string = localizedStrings['%resources_languages%'];
-  const loadingResourcesText: string = localizedStrings['%resources_loadingResources%'];
+  const loadingText: string = localizedStrings['%resources_loading%'];
   const noResultsText: string = localizedStrings['%resources_noResults%'];
   const openText: string = localizedStrings['%resources_open%'];
   const removeText: string = localizedStrings['%resources_remove%'];
@@ -399,7 +399,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         <CardContent className="tw-flex-grow tw-overflow-auto">
           {isLoadingResources || !resources ? (
             <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-              <Label>{loadingResourcesText}</Label>
+              <Label>{loadingText}</Label>
               <Spinner />
             </div>
           ) : (

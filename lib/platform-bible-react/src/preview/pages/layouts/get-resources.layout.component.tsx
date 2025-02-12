@@ -148,7 +148,7 @@ function GetResourcesExamples() {
   const installedText: string = 'Installed';
   const languageText: string = 'Language';
   const languagesText: string = 'Languages';
-  const loadingResourcesText: string = 'Loading resources...';
+  const loadingText: string = 'Loading resources...';
   const noResultsText: string = 'No results found';
   const openText: string = 'Open';
   const removeText: string = 'Remove';
@@ -366,7 +366,7 @@ function GetResourcesExamples() {
         <CardContent className="tw-flex-grow tw-overflow-auto">
           {!resources ? (
             <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-              <Label>{loadingResourcesText}</Label>
+              <Label>{loadingText}</Label>
               <Spinner />
             </div>
           ) : (

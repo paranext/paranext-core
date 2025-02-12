@@ -18,7 +18,7 @@
       "%resources_items%": "items",
       "%resources_language%": "Language",
       "%resources_languages%": "Languages",
-      "%resources_loadingResources%": "Loading...",
+      "%resources_loading%": "Loading...",
       "%resources_noProjects%": "Nothing here.",
       "%resources_noProjectsInstruction%": "To get started, ask a teammate to add you to a project, or get resources.",
       "%resources_noSearchResults%": "Nothing found.",
