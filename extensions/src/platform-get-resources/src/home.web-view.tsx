@@ -182,6 +182,7 @@ globalThis.webViewComponent = function HomeDialog() {
   const [sharedProjectsInfo] = usePromise(
     useCallback(async () => {
       // This line lets us get updated info on the S/R projects when S/R is triggered
+      // eslint-disable-next-line no-unused-expressions
       isSendReceiveInProgress;
 
       if (!isSendReceiveAvailable) {
