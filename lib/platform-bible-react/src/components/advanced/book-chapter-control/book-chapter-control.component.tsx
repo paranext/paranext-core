@@ -3,7 +3,6 @@ import BookMenuItem, {
   BookType,
 } from '@/components/advanced/book-chapter-control/book-menu-item.component';
 import ChapterSelect from '@/components/advanced/book-chapter-control/chapter-select.component';
-import GoToMenuItem from '@/components/advanced/book-chapter-control/go-to-menu-item.component';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -366,11 +365,13 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         >
           {/* work around until DropdownMenuContent supports a dir prop */}
           <div className="rtl:tw-ps-2">
+            {/* Commented out for now as it is not implemented, may be used in the future
             <GoToMenuItem
               handleSort={() => console.log('sorting')}
               handleLocationHistory={() => console.log('location history')}
               handleBookmarks={() => console.log('bookmarks')}
             />
+            */}
             {BOOK_TYPE_ARRAY.map(
               (bookType, bookTypeIndex) =>
                 fetchFilteredBooks(bookType).length > 0 && (
