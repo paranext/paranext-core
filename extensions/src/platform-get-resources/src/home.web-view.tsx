@@ -48,6 +48,7 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
+  '%resources_loading%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
@@ -82,6 +83,9 @@ globalThis.webViewComponent = function HomeDialog() {
     };
   }, []);
 
+  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
+  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+
   const [localizedStrings] = useLocalizedStrings(HOME_STRING_KEYS);
 
   const actionText: string = localizedStrings['%resources_action%'];
@@ -94,6 +98,7 @@ globalThis.webViewComponent = function HomeDialog() {
   const getResourcesText: string = localizedStrings['%resources_getResources%'];
   const itemsText: string = localizedStrings['%resources_items%'];
   const languageText: string = localizedStrings['%resources_language%'];
+  const loadingText: string = localizedStrings['%resources_loading%'];
   const noProjectsText: string = localizedStrings['%resources_noProjects%'];
   const noProjectsInstructionText: string = localizedStrings['%resources_noProjectsInstruction%'];
   const noSearchResultsText: string = localizedStrings['%resources_noSearchResults%'];
@@ -177,15 +182,24 @@ globalThis.webViewComponent = function HomeDialog() {
   const [sharedProjectsInfo] = usePromise(
     useCallback(async () => {
       if (!isSendReceiveAvailable) {
+        setIsLoadingRemoteProjects(false);
         return undefined;
       }
       try {
         const projectsInfo = await papi.commands.sendCommand(
           'paratextBibleSendReceive.getSharedProjects',
         );
+
+        if (isMounted.current) {
+          setIsLoadingRemoteProjects(false);
+        }
         return projectsInfo;
       } catch (e) {
         logger.warn(`Home web view failed to get shared projects: ${getErrorMessage(e)}`);
+
+        if (isMounted.current) {
+          setIsLoadingRemoteProjects(false);
+        }
         return undefined;
       }
     }, [isSendReceiveAvailable]),
@@ -209,6 +223,10 @@ globalThis.webViewComponent = function HomeDialog() {
           };
         }),
       );
+
+      if (isMounted.current) {
+        setIsLoadingLocalProjects(false);
+      }
       return projectInfo;
     }, []),
     undefined,
@@ -356,145 +374,154 @@ globalThis.webViewComponent = function HomeDialog() {
             </div>
           </div>
         </CardHeader>
-        <CardContent className="tw-flex-grow tw-overflow-auto">
-          {!allProjectsInfo ? (
-            <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-              <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
-              <Label className="tw-text-muted-foreground tw-font-normal">
-                {noProjectsInstructionText}
-              </Label>
+        {isLoadingLocalProjects || isLoadingRemoteProjects ? (
+          <CardContent className="tw-flex tw-flex-grow tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+            <Label>{loadingText}</Label>
+            <Spinner />
+          </CardContent>
+        ) : (
+          <CardContent className="tw-flex-grow tw-overflow-auto">
+            {!allProjectsInfo ? (
+              <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+                <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
+                <Label className="tw-text-muted-foreground tw-font-normal">
+                  {noProjectsInstructionText}
+                </Label>
 
-              {showGetResourcesButton && (
-                <Button
-                  onClick={() => papi.commands.sendCommand('platformGetResources.openGetResources')}
-                  className="tw-mt-4"
-                >{`+ ${getResourcesText}`}</Button>
-              )}
-            </div>
-          ) : (
-            <div className="tw-flex-grow tw-h-full">
-              {filteredAndSortedProjects.length === 0 ? (
-                <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                  <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
-                  <Label className="tw-text-muted-foreground tw-font-normal">
-                    {`${searchedForText} "${textFilter}".`}
-                  </Label>
-                  <div className="tw-flex tw-gap-1  tw-mt-4">
-                    <Button
-                      variant="ghost"
-                      onClick={() => {
-                        setTextFilter('');
-                      }}
-                    >
-                      {clearSearchText}
-                    </Button>
-                    {showGetResourcesButton && (
+                {showGetResourcesButton && (
+                  <Button
+                    onClick={() =>
+                      papi.commands.sendCommand('platformGetResources.openGetResources')
+                    }
+                    className="tw-mt-4"
+                  >{`+ ${getResourcesText}`}</Button>
+                )}
+              </div>
+            ) : (
+              <div className="tw-flex-grow tw-h-full">
+                {filteredAndSortedProjects.length === 0 ? (
+                  <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+                    <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
+                    <Label className="tw-text-muted-foreground tw-font-normal">
+                      {`${searchedForText} "${textFilter}".`}
+                    </Label>
+                    <div className="tw-flex tw-gap-1  tw-mt-4">
                       <Button
-                        onClick={() =>
-                          papi.commands.sendCommand('platformGetResources.openGetResources')
-                        }
                         variant="ghost"
-                        className="tw-bg-muted"
+                        onClick={() => {
+                          setTextFilter('');
+                        }}
                       >
-                        {`+ ${getResourcesText}`}
+                        {clearSearchText}
                       </Button>
-                    )}
+                      {showGetResourcesButton && (
+                        <Button
+                          onClick={() =>
+                            papi.commands.sendCommand('platformGetResources.openGetResources')
+                          }
+                          variant="ghost"
+                          className="tw-bg-muted"
+                        >
+                          {`+ ${getResourcesText}`}
+                        </Button>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ) : (
-                <Table stickyHeader>
-                  <TableHeader className="tw-bg-none" stickyHeader>
-                    <TableRow>
-                      <TableHead />
-                      <TableHead />
-                      {buildTableHead('fullName', fullNameText)}
-                      {buildTableHead('language', languageText)}
-                      {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
-                        buildTableHead('activity', activityText)}
-                      {buildTableHead('action', actionText)}
-                      <TableHead />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredAndSortedProjects.map((project) => (
-                      <TableRow
-                        onDoubleClick={() => openResource(project.projectId, project.isEditable)}
-                        key={project.projectId}
-                      >
-                        <TableCell>
-                          {project.isSendReceivable ? (
-                            <ScrollText className="tw-pr-0" size={18} />
-                          ) : (
-                            <BookOpen className="tw-pr-0" size={18} />
-                          )}
-                        </TableCell>
-                        <TableCell>{project.name}</TableCell>
-                        <TableCell className="tw-font-medium">{project.fullName}</TableCell>
-                        <TableCell>{project.language}</TableCell>
-                        {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                          <TableCell>
-                            {project.lastSendReceiveDate &&
-                              formatTimeSpan(
-                                relativeTimeFormatter,
-                                new Date(project.lastSendReceiveDate),
-                              )}
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          {project.isSendReceivable ? (
-                            <div>
-                              <Button
-                                disabled={
-                                  sendReceiveInProgress &&
-                                  activeSendReceiveProjects.includes(project.projectId)
-                                }
-                                onClick={() => sendReceiveProject(project.projectId)}
-                              >
-                                {sendReceiveInProgress &&
-                                  activeSendReceiveProjects.includes(project.projectId) && (
-                                    <Spinner className="tw-h-5 tw-py-[1px]" />
-                                  )}
-                                {!sendReceiveInProgress && project.isLocallyAvailable
-                                  ? syncText
-                                  : getText}
-                              </Button>
-                            </div>
-                          ) : (
-                            <Button
-                              onClick={() => openResource(project.projectId, project.isEditable)}
-                            >
-                              {openText}
-                            </Button>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {project.isSendReceivable && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost">
-                                  <Ellipsis className="tw-w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="start">
-                                <DropdownMenuItem
-                                  onClick={() =>
-                                    openResource(project.projectId, project.isEditable)
-                                  }
-                                >
-                                  <span>{openText}</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </TableCell>
+                ) : (
+                  <Table stickyHeader>
+                    <TableHeader className="tw-bg-none" stickyHeader>
+                      <TableRow>
+                        <TableHead />
+                        <TableHead />
+                        {buildTableHead('fullName', fullNameText)}
+                        {buildTableHead('language', languageText)}
+                        {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
+                          buildTableHead('activity', activityText)}
+                        {buildTableHead('action', actionText)}
+                        <TableHead />
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </div>
-          )}
-        </CardContent>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredAndSortedProjects.map((project) => (
+                        <TableRow
+                          onDoubleClick={() => openResource(project.projectId, project.isEditable)}
+                          key={project.projectId}
+                        >
+                          <TableCell>
+                            {project.isSendReceivable ? (
+                              <ScrollText className="tw-pr-0" size={18} />
+                            ) : (
+                              <BookOpen className="tw-pr-0" size={18} />
+                            )}
+                          </TableCell>
+                          <TableCell>{project.name}</TableCell>
+                          <TableCell className="tw-font-medium">{project.fullName}</TableCell>
+                          <TableCell>{project.language}</TableCell>
+                          {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
+                            <TableCell>
+                              {project.lastSendReceiveDate &&
+                                formatTimeSpan(
+                                  relativeTimeFormatter,
+                                  new Date(project.lastSendReceiveDate),
+                                )}
+                            </TableCell>
+                          )}
+                          <TableCell>
+                            {project.isSendReceivable ? (
+                              <div>
+                                <Button
+                                  disabled={
+                                    sendReceiveInProgress &&
+                                    activeSendReceiveProjects.includes(project.projectId)
+                                  }
+                                  onClick={() => sendReceiveProject(project.projectId)}
+                                >
+                                  {sendReceiveInProgress &&
+                                    activeSendReceiveProjects.includes(project.projectId) && (
+                                      <Spinner className="tw-h-5 tw-py-[1px]" />
+                                    )}
+                                  {!sendReceiveInProgress && project.isLocallyAvailable
+                                    ? syncText
+                                    : getText}
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button
+                                onClick={() => openResource(project.projectId, project.isEditable)}
+                              >
+                                {openText}
+                              </Button>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {project.isSendReceivable && (
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost">
+                                    <Ellipsis className="tw-w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start">
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      openResource(project.projectId, project.isEditable)
+                                    }
+                                  >
+                                    <span>{openText}</span>
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            )}
+          </CardContent>
+        )}
         <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-p-4 tw-border-t">
           {filteredAndSortedProjects.length > 0 && (
             <Label className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>

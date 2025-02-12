@@ -59,7 +59,7 @@
   "%resources_installed%": "Installed",
   "%resources_language%": "Language",
   "%resources_languages%": "Languages",
-  "%resources_loadingResources%": "Loading...",
+  "%resources_loading%": "Loading...",
   "%resources_noResults%": "No results found",
   "%resources_open%": "Open",
   "%resources_remove%": "Remove",
