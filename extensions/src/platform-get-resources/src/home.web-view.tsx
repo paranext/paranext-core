@@ -33,7 +33,7 @@ import {
   useEvent,
 } from 'platform-bible-react';
 import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
-import { EditedStatus } from 'platform-get-resources';
+import { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const HOME_STRING_KEYS: LocalizeKey[] = [
@@ -59,22 +59,6 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
 type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
-};
-
-// This type was copied over from platform-bible-send-receive
-// I think we might need a common place for types like these (EditedStatus needs to go there too)
-type SharedProjectsInfo = { [projectId: string]: SharedProjectInfo };
-/** Information about a S/R-able project needed to display it in the S/R dialog */
-type SharedProjectInfo = {
-  id: string;
-  name: string;
-  fullName: string;
-  language: string;
-  editedStatus: EditedStatus;
-  lastSendReceiveDate: string;
-  /** Names of admins on this project. Only filled if project is new */
-  adminNames?: string[];
-  warnings?: string[];
 };
 
 type LocalProjectInfo = {
