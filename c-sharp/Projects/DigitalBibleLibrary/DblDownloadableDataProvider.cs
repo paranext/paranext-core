@@ -30,7 +30,8 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         public string DisplayName { get; set; } = DisplayName;
         public string FullName { get; set; } = FullName;
         public string BestLanguageName { get; set; } = BestLanguageName;
-        public string Type { get; set; } = Type.ToString() + "Resource";
+        public string Type { get; set; } =
+            Type.ToString() == "DBL" ? "ScriptureResource" : Type.ToString();
         public long Size { get; set; } = Size;
         public bool Installed { get; set; } = Installed;
         public bool UpdateAvailable { get; set; } = UpdateAvailable;
