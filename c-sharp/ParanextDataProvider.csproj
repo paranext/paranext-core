@@ -34,9 +34,9 @@
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
     <PackageReference Include="ParatextChecks" Version="9.5.0.9" />
     <PackageReference Include="ParatextData" Version="9.5.0.9" />
-    <PackageReference Include="SIL.Core" Version="15.0.0" />
-    <PackageReference Include="SIL.Scripture" Version="15.0.0" />
-    <PackageReference Include="SIL.WritingSystems" Version="15.0.0" />
+    <PackageReference Include="SIL.Core" Version="16.0.0-beta0031" />
+    <PackageReference Include="SIL.Scripture" Version="16.0.0-beta0031" />
+    <PackageReference Include="SIL.WritingSystems" Version="16.0.0-beta0031" />
     <PackageReference Include="StreamJsonRpc" Version="2.20.20" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
     <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.1" />
@@ -64,6 +64,24 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <!-- This assumes that icu4c libs are installed under "/usr/lib/x86_64-linux-gnu" on Linux. -->
+  <ItemGroup>
+    <Content Include="/usr/lib/x86_64-linux-gnu/libicu*.so.??" Exclude="/usr/lib/x86_64-linux-gnu/libicutest*;/usr/lib/x86_64-linux-gnu/libicutu*" Condition="$([MSBuild]::IsOsPlatform('Linux'))">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <!--
+    Workaround for .NET bug: https://github.com/dotnet/runtime/issues/57784
+    We also set the environment variable DOTNET_LTTNG to 0 to disable LTTng tracing in the snap.
+    We're copying the approach from https://github.com/jellyfin/jellyfin/pull/11008/files.
+    -->
+  <Target Name="DeleteClrTracePointProvider" Condition="$([MSBuild]::IsOsPlatform('Linux'))" AfterTargets="Publish">
+    <Message Text="Deleting libcoreclrtraceptprovider.so"/>
+    <Delete Files="$(OutDir)libcoreclrtraceptprovider.so" />
+    <Delete Files="$(PublishDir)libcoreclrtraceptprovider.so" />
+  </Target>
 
   <ItemGroup>
     <Content Include="assets\**\*.*">
