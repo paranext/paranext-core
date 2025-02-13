@@ -31,7 +31,6 @@ import {
   TableHeader,
   TableRow,
   useEvent,
-  usePromise,
 } from 'platform-bible-react';
 import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
 import { EditedStatus } from 'platform-get-resources';
@@ -60,6 +59,30 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
 type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
+};
+
+// This type was copied over from platform-bible-send-receive
+// I think we might need a common place for types like these (EditedStatus needs to go there too)
+type SharedProjectsInfo = { [projectId: string]: SharedProjectInfo };
+/** Information about a S/R-able project needed to display it in the S/R dialog */
+type SharedProjectInfo = {
+  id: string;
+  name: string;
+  fullName: string;
+  language: string;
+  editedStatus: EditedStatus;
+  lastSendReceiveDate: string;
+  /** Names of admins on this project. Only filled if project is new */
+  adminNames?: string[];
+  warnings?: string[];
+};
+
+type LocalProjectInfo = {
+  projectId: string;
+  isEditable: boolean;
+  fullName: string;
+  name: string;
+  language: string;
 };
 
 type MergedProjectInfo = {
@@ -179,16 +202,10 @@ globalThis.webViewComponent = function HomeDialog() {
     }
   };
 
-  const [sharedProjectsInfo] = usePromise(
-    useCallback(async () => {
-      // This line lets us get updated info on the S/R projects when S/R is triggered
-      // eslint-disable-next-line no-unused-expressions
-      isSendReceiveInProgress;
+  const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
 
-      if (!isSendReceiveAvailable) {
-        setIsLoadingRemoteProjects(false);
-        return undefined;
-      }
+  useEffect(() => {
+    const getSharedProjects = async () => {
       try {
         const projectsInfo = await papi.commands.sendCommand(
           'paratextBibleSendReceive.getSharedProjects',
@@ -196,22 +213,31 @@ globalThis.webViewComponent = function HomeDialog() {
 
         if (isMounted.current) {
           setIsLoadingRemoteProjects(false);
+          setSharedProjectsInfo(projectsInfo);
         }
-        return projectsInfo;
       } catch (e) {
         logger.warn(`Home web view failed to get shared projects: ${getErrorMessage(e)}`);
 
         if (isMounted.current) {
           setIsLoadingRemoteProjects(false);
         }
-        return undefined;
       }
-    }, [isSendReceiveAvailable, isSendReceiveInProgress]),
-    undefined,
-  );
+    };
 
-  const [localProjectsInfo] = usePromise(
-    useCallback(async () => {
+    if (isSendReceiveInProgress) {
+      return;
+    }
+    if (!isSendReceiveAvailable) {
+      setIsLoadingRemoteProjects(false);
+      return;
+    }
+    getSharedProjects();
+  }, [isSendReceiveAvailable, isSendReceiveInProgress]);
+
+  const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
+
+  useEffect(() => {
+    const getLocalProjects = async () => {
       const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
       });
@@ -231,10 +257,14 @@ globalThis.webViewComponent = function HomeDialog() {
       if (isMounted.current) {
         setIsLoadingLocalProjects(false);
       }
-      return projectInfo;
-    }, []),
-    undefined,
-  );
+      setLocalProjectsInfo(projectInfo);
+    };
+
+    if (isSendReceiveInProgress) {
+      return;
+    }
+    getLocalProjects();
+  }, [isSendReceiveInProgress]);
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
@@ -508,7 +538,7 @@ globalThis.webViewComponent = function HomeDialog() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {project.isSendReceivable && (
+                            {project.isSendReceivable && project.isLocallyAvailable && (
                               <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                   <Button variant="ghost">
