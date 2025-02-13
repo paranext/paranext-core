@@ -248,7 +248,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const [legacyCommentsFromPdp, saveLegacyCommentsToPdp] = useProjectData(
     'legacyCommentManager.comments',
-    projectId,
+    // Only load comments if we have them turned on
+    commentsEnabled ? projectId : undefined,
   ).Comments(
     useMemo(() => {
       return { bookId: verseLocation.book, chapterNum: verseLocation.chapterNum };
