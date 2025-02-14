@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import DockLayout from 'rc-dock';
+import DockLayout, { PanelBase } from 'rc-dock';
 
 import {
   WebViewDefinition,
@@ -14,7 +14,7 @@ import {
 import { DialogData } from '@shared/models/dialog-options.model';
 
 import testLayout from '@renderer/testing/test-layout.data';
-import { registerDockLayout } from '@renderer/services/web-view.service-host';
+import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-host';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
 import logger from '@shared/services/logger.service';
 import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
@@ -83,7 +83,7 @@ export default function PlatformDockLayout() {
       loadTab={loadTab}
       saveTab={saveTab}
       onLayoutChange={(...args) => {
-        const [, currentTabId, direction] = args;
+        const [layout, currentTabId, direction] = args;
 
         let webViewDefinition: WebViewDefinition | undefined;
 
@@ -97,8 +97,24 @@ export default function PlatformDockLayout() {
             // If a dialog was closed, tell the dialog service
             if (direction === 'remove') {
               if ((currentTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
-                /* eslint-enable */
                 resolveDialogRequest(currentTabId, undefined, false);
+
+              if (layout.floatbox?.children.length === 0 && layout.dockbox.children.length === 1) {
+                const panel: PanelBase = layout.dockbox.children[0] as PanelBase;
+                /* eslint-enable */
+                const hasNoTabs = panel.tabs.length === 0;
+                if (hasNoTabs) {
+                  (async () => {
+                    try {
+                      await openWebView('platformGetResources.home');
+                    } catch (e) {
+                      throw new Error(
+                        `platform-dock-layout.component error: Opening Home web view failed!`,
+                      );
+                    }
+                  })();
+                }
+              }
             }
 
             if (currentTab.tabType === TAB_TYPE_WEBVIEW)
