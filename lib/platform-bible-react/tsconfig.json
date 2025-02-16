@@ -4,6 +4,7 @@
     "baseUrl": "./src",
     "target": "ESNext",
     "module": "ESNext",
+    "moduleResolution": "bundler",
     // Running npm i removes packages that are in common between the current directory's
     // node_modules and any below. Without typeRoots specified like this, TypeScript climbs
     // directories looking for node_modules/@types folders by default.

@@ -25,6 +25,10 @@
   "main": "dist/index.cjs",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    "import": "./dist/index.js",
+    "require": "./dist/index.cjs"
+  },
   "files": ["dist"],
   "scripts": {
     "start": "vite --host --open",
@@ -39,7 +43,7 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
-    "test": "jest --silent",
+    "test": "vitest",
     "typecheck": "tsc -p ./tsconfig.json"
   },
   "peerDependencies": {
@@ -117,7 +121,8 @@
     "typedoc": "^0.27.7",
     "typescript": "^5.4.5",
     "vite": "^5.4.14",
-    "vite-tsconfig-paths": "^5.1.4"
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.0.5"
   },
   "volta": {
     "extends": "../../package.json"

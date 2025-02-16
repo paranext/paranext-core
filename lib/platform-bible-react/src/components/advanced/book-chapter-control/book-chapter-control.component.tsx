@@ -13,7 +13,7 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { Canon } from '@sillsdev/scripture';
-import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
+import { type ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
 import {
   KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -26,7 +26,8 @@ import {
 type BookTypeLabels = {
   [bookType in BookType]: string;
 };
-type BookChapterControlProps = {
+
+export type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
 };

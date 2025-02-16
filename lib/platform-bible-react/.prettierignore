@@ -8,3 +8,6 @@ dist
 
 # Doc files
 docs
+
+# HTML (excluded only in this file since formatting went haywire)
+index.html
