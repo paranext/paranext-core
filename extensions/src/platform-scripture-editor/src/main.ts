@@ -13,12 +13,15 @@ import {
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
+  EditorDecorations,
   EditorWebViewMessage,
+  OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
 } from 'platform-scripture-editor';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
+import { mergeDecorations } from './decorations.util';
 
 logger.info('Scripture Editor is importing!');
 
@@ -31,6 +34,7 @@ const scriptureEditor = '%webView_platformScriptureEditor_title_editable_no_proj
 interface PlatformScriptureEditorOptions extends GetWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
+  options?: OpenEditorOptions;
 }
 
 async function getLocalizations(): Promise<LanguageStrings> {
@@ -44,22 +48,25 @@ async function getLocalizations(): Promise<LanguageStrings> {
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformScriptureEditor(
   projectId: string | undefined,
+  options?: OpenEditorOptions,
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(projectId, false);
+  return open(projectId, options, false);
 }
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformResourceViewer(
   projectId: string | undefined,
+  options?: OpenEditorOptions,
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(projectId, true);
+  return open(projectId, options, true);
 }
 
 /** Function to prompt for a project and open it in the editor */
 async function open(
   projectId: string | undefined,
+  options: OpenEditorOptions | undefined,
   isReadOnly: boolean,
 ): Promise<string | undefined> {
   const projectForWebView = { projectId, isEditable: !isReadOnly };
@@ -67,6 +74,9 @@ async function open(
     // Get a list of projects that are editable or not editable to show in the select project dialog
     const projectMetadatas = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+      // TODO: Change this! Make it a setting or something? How do we want to exclude slingshot drafts
+      // from this call?
+      excludePdpFactoryIds: ['scriptureForge.slingshotPdpf'],
     });
     const projectsWithEditable = await Promise.all(
       projectMetadatas.map(async (projectMetadata) => {
@@ -104,13 +114,14 @@ async function open(
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
-    const options: PlatformScriptureEditorOptions = {
+    const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
+      options,
     };
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
-    return papi.webViews.openWebView(scriptureEditorWebViewType, undefined, options);
+    return papi.webViews.openWebView(scriptureEditorWebViewType, undefined, openWebViewOptions);
   }
   return undefined;
 }
@@ -156,8 +167,15 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       state: {
         ...savedWebView.state,
         isReadOnly,
+        decorations: mergeDecorations(
+          // We know this will be EditorDecorations though webView state doesn't have types
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          savedWebView.state?.decorations as EditorDecorations,
+          getWebViewOptions.options?.decorations,
+        ),
       },
       projectId,
+      allowPopups: true,
     };
   }
 
@@ -308,6 +326,30 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           );
         } catch (e) {
           const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running selectRange! ${e}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async updateDecorations(decorationsToAdd, decorationsToRemove) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to updateDecorations(${serialize(decorationsToAdd)},${serialize(decorationsToRemove)})`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'updateDecorations',
+            decorationsToAdd,
+            decorationsToRemove,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${e}`;
           logger.warn(message);
           throw new Error(message);
         }
