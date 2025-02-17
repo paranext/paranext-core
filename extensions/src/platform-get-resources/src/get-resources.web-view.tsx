@@ -50,7 +50,7 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_installed%',
   '%resources_language%',
   '%resources_languages%',
-  '%resources_loadingResources%',
+  '%resources_loading%',
   '%resources_noResults%',
   '%resources_open%',
   '%resources_remove%',
@@ -59,7 +59,7 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_size%',
   '%resources_type%',
   '%resources_types%',
-  '%resources_type_DBL%',
+  '%resources_type_Scripture%',
   '%resources_type_ER%',
   '%resources_type_SLR%',
   '%resources_type_XR%',
@@ -168,7 +168,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installedText: string = localizedStrings['%resources_installed%'];
   const languageText: string = localizedStrings['%resources_language%'];
   const languagesText: string = localizedStrings['%resources_languages%'];
-  const loadingResourcesText: string = localizedStrings['%resources_loadingResources%'];
+  const loadingText: string = localizedStrings['%resources_loading%'];
   const noResultsText: string = localizedStrings['%resources_noResults%'];
   const openText: string = localizedStrings['%resources_open%'];
   const removeText: string = localizedStrings['%resources_remove%'];
@@ -177,7 +177,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const sizeText: string = localizedStrings['%resources_size%'];
   const typeText: string = localizedStrings['%resources_type%'];
   const typesText: string = localizedStrings['%resources_types%'];
-  const typeDblText: string = localizedStrings['%resources_type_DBL%'];
+  const typeScriptureText: string = localizedStrings['%resources_type_Scripture%'];
   const typeErText: string = localizedStrings['%resources_type_ER%'];
   const typeSlrText: string = localizedStrings['%resources_type_SLR%'];
   const typeXrText: string = localizedStrings['%resources_type_XR%'];
@@ -195,7 +195,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
-    'DBLResource',
+    'ScriptureResource',
   ]);
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
@@ -274,12 +274,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     return [
-      { value: 'DBLResource', label: typeDblText },
+      { value: 'ScriptureResource', label: typeScriptureText },
       { value: 'EnhancedResource', label: typeErText },
       { value: 'SourceLanguageResource', label: typeSlrText },
       { value: 'XmlResource', label: typeXrText },
     ];
-  }, [typeDblText, typeErText, typeSlrText, typeXrText]);
+  }, [typeScriptureText, typeErText, typeSlrText, typeXrText]);
 
   const textAndTypeFilteredResources = useMemo(() => {
     if (selectedTypes.length === 0) return textFilteredResources;
@@ -399,7 +399,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
         <CardContent className="tw-flex-grow tw-overflow-auto">
           {isLoadingResources || !resources ? (
             <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-              <Label>{loadingResourcesText}</Label>
+              <Label>{loadingText}</Label>
               <Spinner />
             </div>
           ) : (
