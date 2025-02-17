@@ -28,6 +28,7 @@ type BookTypeLabels = {
 type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+  activeBookIds?: string[];
 };
 
 const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
@@ -45,11 +46,12 @@ const SEARCH_QUERY_FORMATS = [
   /^(\w+)(?:\s(\d+))$/i, // Matches a word followed by a chapter number
   /^(\w+)(?:\s(\d+):(\d+))$/i, // Matches a word followed by a chapter and verse number
 ];
-const fetchGroupedBooks = (bookType: BookType) => {
+const fetchGroupedBooks = (bookType: BookType, activeBookIds?: string[]) => {
+  const bookIds = activeBookIds ?? ALL_BOOK_IDS;
   const groupedBooks = {
-    OT: ALL_BOOK_IDS.filter((bookId) => Canon.isBookOT(bookId)),
-    NT: ALL_BOOK_IDS.filter((bookId) => Canon.isBookNT(bookId)),
-    DC: ALL_BOOK_IDS.filter((bookId) => Canon.isBookDC(bookId)),
+    OT: bookIds.filter((bookId) => Canon.isBookOT(bookId)),
+    NT: bookIds.filter((bookId) => Canon.isBookNT(bookId)),
+    DC: bookIds.filter((bookId) => Canon.isBookDC(bookId)),
   };
   return groupedBooks[bookType];
 };
@@ -101,7 +103,7 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
+function BookChapterControl({ scrRef, handleSubmit, activeBookIds }: BookChapterControlProps) {
   const dir: Direction = readDirection();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>(
@@ -124,7 +126,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
-      return fetchGroupedBooks(bookType).filter((bookId: string) => {
+      return fetchGroupedBooks(bookType, activeBookIds).filter((bookId: string) => {
         const englishNameLowerCase = Canon.bookIdToEnglishName(bookId).toLowerCase();
         const normalizedQuery = searchQuery.replace(/[^a-zA-Z]/g, '').toLowerCase();
         return (
@@ -133,7 +135,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         );
       });
     },
-    [searchQuery],
+    [searchQuery, activeBookIds],
   );
 
   const handleSearchInput = (searchString: string) => {

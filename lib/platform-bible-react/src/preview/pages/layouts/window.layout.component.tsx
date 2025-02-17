@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
+import { Canon } from '@sillsdev/scripture';
 
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
@@ -21,6 +22,17 @@ export type HasIsFocused = {
 
 export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
+  // Example hardcoded active book IDs
+  const initialActiveBookIds = [
+    1,
+    Canon.bookIdToNumber('ISA'),
+    Canon.bookIdToNumber('ACT'),
+    66,
+    Canon.bookIdToNumber('ES3'), // Demonstrates that an obsolete book in use will display
+  ];
+  const activeBookNums = Array.from(new Set([...initialActiveBookIds, scrRef.bookNum]));
+  activeBookNums.sort();
+  const activeBookIds = activeBookNums.map((bookNum) => Canon.bookNumberToId(bookNum));
   const highlightClassName = isFocused
     ? 'tw-bg-primary tw-text-primary-foreground'
     : 'tw-bg-secondary tw-text-secondary-foreground';
@@ -28,7 +40,11 @@ export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
     <div className="tw-rounded-md tw-border">
       <div className="tw-flex tw-flex-row tw-rounded-se-md tw-bg-muted/50">
         <div className="tw-m-2">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+          <BookChapterControl
+            scrRef={scrRef}
+            handleSubmit={setScrRef}
+            activeBookIds={activeBookIds}
+          />
         </div>
         <div className="tw-grow" />
         <div className="tw-m-2 tw-flex">
