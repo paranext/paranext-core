@@ -25,7 +25,7 @@ import {
   DropdownMenuTrigger,
   Filter,
   Label,
-  MultiSelectComboBoxEntry,
+  type MultiSelectComboBoxEntry,
   SearchBar,
   Spinner,
   Table,
@@ -35,7 +35,7 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-import { DblResourceData, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import { type DblResourceData, getErrorMessage, type LocalizeKey } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
 
 const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [

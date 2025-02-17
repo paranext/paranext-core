@@ -1,7 +1,7 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
-import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
-import { ScriptureReference } from 'platform-bible-utils';
+import { type Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
+import type { ScriptureReference } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { VerseRef } from '@sillsdev/scripture';

@@ -1,12 +1,11 @@
-// import { LanguageStrings, LocalizeKey, ScriptureReference, substring } from 'platform-bible-utils';
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import type { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import {
   Button,
-  ColumnDef,
+  type ColumnDef,
   Inventory,
-  // InventoryItemOccurrence,
-  InventoryTableData,
-  Scope,
+  // type InventoryItemOccurrence,
+  type InventoryTableData,
+  type Scope,
   // getBookNumFromId,
   // getLinesFromUSFM,
   // getNumberFromUSFM,

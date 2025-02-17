@@ -1,7 +1,7 @@
 import papi, { projectDataProviders } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { usePromise, DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'platform-bible-react';
-import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementStringToArray, type LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import ChecksFilterDropdown from './checks-filter-dropdown.component';
 

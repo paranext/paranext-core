@@ -5,7 +5,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, type LocalizeKey } from 'platform-bible-utils';
 import inventoryWebView from './inventory.web-view?inline';
 import inventoryWebViewStyles from './inventory.web-view.scss?inline';
 

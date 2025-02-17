@@ -21,7 +21,7 @@ import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   deepClone,
-  ScriptureReference,
+  type ScriptureReference,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';

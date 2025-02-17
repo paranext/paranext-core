@@ -8,7 +8,7 @@ import type {
 } from '@papi/core';
 import {
   formatReplacementString,
-  LanguageStrings,
+  type LanguageStrings,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';

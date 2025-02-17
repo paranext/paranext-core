@@ -5,7 +5,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
-import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
+import { formatReplacementString, type LocalizeKey } from 'platform-bible-utils';
 import configureChecksWebView from './configure-checks.web-view?inline';
 import configureChecksWebViewStyles from './configure-checks.web-view.scss?inline';
 

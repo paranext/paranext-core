@@ -1,5 +1,6 @@
 import papi, { DataProviderEngine, dataProviders, logger } from '@papi/backend';
-import { Mutex, MutexMap, UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
+import { Mutex, MutexMap, UnsubscriberAsyncList } from 'platform-bible-utils';
+import type { UnsubscriberAsync } from 'platform-bible-utils';
 import {
   DataProviderUpdateInstructions,
   ExtensionDataScope,

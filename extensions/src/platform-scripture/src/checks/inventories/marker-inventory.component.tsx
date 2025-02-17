@@ -1,7 +1,7 @@
 import { useLocalizedStrings, useProjectData, useSetting } from '@papi/frontend/react';
 import {
   Button,
-  ColumnDef,
+  type ColumnDef,
   getBookNumFromId,
   getLinesFromUSFM,
   getNumberFromUSFM,
@@ -9,17 +9,17 @@ import {
   Inventory,
   inventoryCountColumn,
   inventoryItemColumn,
-  InventoryItemOccurrence,
+  type InventoryItemOccurrence,
   inventoryStatusColumn,
-  InventoryTableData,
-  Scope,
+  type InventoryTableData,
+  type Scope,
 } from 'platform-bible-react';
 import {
   deepEqual,
   defaultScrRef,
-  LanguageStrings,
-  LocalizeKey,
-  ScriptureReference,
+  type LanguageStrings,
+  type LocalizeKey,
+  type ScriptureReference,
   substring,
 } from 'platform-bible-utils';
 import { useMemo } from 'react';

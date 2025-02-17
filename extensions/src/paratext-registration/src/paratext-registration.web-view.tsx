@@ -21,7 +21,7 @@ import {
   Spinner,
   usePromise,
 } from 'platform-bible-react';
-import { deepEqual, getErrorMessage, LocalizeKey, wait } from 'platform-bible-utils';
+import { deepEqual, getErrorMessage, type LocalizeKey, wait } from 'platform-bible-utils';
 import { DetailedHTMLProps, HTMLAttributes, useEffect, useMemo, useRef, useState } from 'react';
 
 type GenericComponentProps = DetailedHTMLProps<HTMLAttributes<HTMLDivElement>, HTMLDivElement>;

@@ -1,10 +1,10 @@
 import { WebViewProps } from '@papi/core';
-import { Label, ResultsSet, ScriptureResultsViewer, usePromise } from 'platform-bible-react';
+import { Label, type ResultsSet, ScriptureResultsViewer, usePromise } from 'platform-bible-react';
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useData, useLocalizedStrings, useWebViewController } from '@papi/frontend/react';
 import { CheckRunnerCheckDetails, CheckRunResult } from 'platform-scripture';
 import { Canon } from '@sillsdev/scripture';
-import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
+import { formatReplacementString, type LanguageStrings } from 'platform-bible-utils';
 import papi, { logger } from '@papi/frontend';
 import { ScriptureLocation } from 'platform-scripture-editor';
 

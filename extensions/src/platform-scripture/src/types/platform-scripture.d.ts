@@ -9,7 +9,7 @@ declare module 'platform-scripture' {
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
-  import { Dispose, LocalizeKey, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { Dispose, LocalizeKey, UnsubscriberAsync } from 'platform-bible-utils';
   import type { Usj } from '@biblionexus-foundation/scripture-utilities';
 
   // #region Project Interface Data Types
@@ -773,7 +773,7 @@ declare module 'platform-scripture' {
 }
 
 declare module 'papi-shared-types' {
-  import { UnsubscriberAsync } from 'platform-bible-utils';
+  import type { UnsubscriberAsync } from 'platform-bible-utils';
 
   import type {
     IUSFMBookProjectDataProvider,

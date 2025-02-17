@@ -6,7 +6,7 @@ declare module 'legacy-comment-manager' {
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
-  import { UnsubscriberAsync } from 'platform-bible-utils';
+  import type { UnsubscriberAsync } from 'platform-bible-utils';
 
   export type LegacyCommentSelector = {
     bookId: string;

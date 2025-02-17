@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { testingLocalizationService } from '@extension-host/services/localization.service-host';
 import logger from '@shared/services/logger.service';
 import { SettingNames } from 'papi-shared-types';
@@ -23,7 +24,7 @@ const MOCK_FILES: { [uri: string]: string } = {
   }`,
 };
 
-jest.mock('@shared/services/settings.service', () => ({
+vi.mock('@shared/services/settings.service', () => ({
   __esModule: true,
   default: {
     get<SettingName extends SettingNames>(key: SettingName) {
@@ -33,7 +34,7 @@ jest.mock('@shared/services/settings.service', () => ({
   },
 }));
 
-jest.mock('@node/services/node-file-system.service', () => ({
+vi.mock('@node/services/node-file-system.service', () => ({
   readDir: () => {
     const entries: Readonly<{
       file: string[];
@@ -52,14 +53,15 @@ jest.mock('@node/services/node-file-system.service', () => ({
   },
 }));
 
-jest.mock('@shared/services/logger.service', () => ({
+vi.mock('@shared/services/logger.service', () => ({
   __esModule: true,
   default: {
-    warn: jest.fn(() => {}),
+    warn: vi.fn(() => {}),
   },
 }));
-jest.mock('@extension-host/services/contribution.service', () => ({
-  ...jest.requireActual('@extension-host/services/contribution.service'),
+
+vi.mock('@extension-host/services/contribution.service', async () => ({
+  ...(await vi.importActual('@extension-host/services/contribution.service')),
   // Don't actually wait because we're not syncing any contributions in these tests
   waitForResyncContributions: async () => {},
 }));
@@ -72,7 +74,7 @@ beforeAll(async () => {
     await testingLocalizationService.implementLocalizationDataProviderEngine();
 });
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 test('Correct localized value returned to match single localizeKey', async () => {
@@ -175,7 +177,7 @@ test('Default language is english when no language provided with localizeKey', a
   const response = await localizationDataProviderEngine.getLocalizedString({
     localizeKey: LOCALIZE_KEY,
   });
-  await expect(response).toEqual('Submit');
+  expect(response).toEqual('Submit');
 });
 
 test('Default language is english when no language provided with localizeKeys', async () => {

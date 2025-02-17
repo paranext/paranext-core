@@ -88,8 +88,8 @@
     "stop": "tsx stop-processes.mjs",
     "storybook": "storybook dev -p 6006",
     "storybook:build": "storybook build",
-    "test": "npm run test:core && npm run test --workspaces --if-present",
-    "test:core": "jest --silent",
+    "test": "npm run test:core -- --run && npm run test --workspaces --if-present -- --run",
+    "test:core": "vitest",
     "typecheck": "npm run typecheck:core && npm run typecheck --workspaces --if-present",
     "typecheck:core": "tsc -p ./tsconfig.json",
     "typecheck:papi-dts": "cd lib/papi-dts && npm run typecheck",
@@ -231,6 +231,8 @@
     "webpack-cli": "^5.1.4",
     "webpack-dev-server": "^5.2.0",
     "webpack-merge": "^6.0.1",
+    "vite-tsconfig-paths": "^5.1.4",
+    "vitest": "^3.0.5",
     "yalc": "^1.0.0-pre.53"
   },
   "engines": {

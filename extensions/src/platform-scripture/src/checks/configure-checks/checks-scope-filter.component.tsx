@@ -1,5 +1,5 @@
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { type LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import { DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'platform-bible-react';
 import ChecksFilterDropdown from './checks-filter-dropdown.component';

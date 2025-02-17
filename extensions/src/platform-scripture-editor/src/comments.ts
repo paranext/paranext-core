@@ -2,10 +2,10 @@ import { Comments } from '@biblionexus-foundation/platform-editor';
 import { MarkerContent, MarkerObject, Usj } from '@biblionexus-foundation/scripture-utilities';
 import {
   CHAPTER_TYPE,
-  UsjContentLocation,
+  type UsjContentLocation,
   UsjReaderWriter,
   VERSE_TYPE,
-  VerseRefOffset,
+  type VerseRefOffset,
 } from 'platform-bible-utils';
 import { LegacyComment } from 'legacy-comment-manager';
 import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';

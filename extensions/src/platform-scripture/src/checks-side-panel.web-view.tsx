@@ -13,8 +13,8 @@ import { VerseRef } from '@sillsdev/scripture';
 import {
   getChaptersForBook,
   LAST_SCR_BOOK_NUM,
-  LocalizeKey,
-  ScriptureReference,
+  type LocalizeKey,
+  type ScriptureReference,
 } from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
 import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';

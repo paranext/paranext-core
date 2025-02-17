@@ -5,7 +5,7 @@ import papi, { ProjectDataProviderEngine, logger } from '@papi/backend';
 import { DataProviderUpdateInstructions, IProjectDataProviderEngine } from '@papi/core';
 import { VerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
-import { UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
+import { type UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
 import {
   USJBookProjectInterfaceDataTypes,
   USJChapterProjectInterfaceDataTypes,

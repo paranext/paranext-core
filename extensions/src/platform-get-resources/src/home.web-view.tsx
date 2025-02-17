@@ -21,7 +21,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Label,
-  LocalizeKey,
   SearchBar,
   Spinner,
   Table,
@@ -33,7 +32,7 @@ import {
   useEvent,
   usePromise,
 } from 'platform-bible-react';
-import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
+import { formatTimeSpan, getErrorMessage, type LocalizeKey } from 'platform-bible-utils';
 import { EditedStatus } from 'platform-get-resources';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 

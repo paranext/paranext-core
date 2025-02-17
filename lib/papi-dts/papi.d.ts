@@ -4975,7 +4975,7 @@ declare module 'node/services/execution-token.service' {
 }
 declare module 'extension-host/services/extension-storage.service' {
   import { ExecutionToken } from 'node/models/execution-token.model';
-  import { Buffer } from 'buffer';
+  import { Buffer } from 'node:buffer';
   /**
    * This is only intended to be called by the extension service. This service cannot call into the
    * extension service or it causes a circular dependency.

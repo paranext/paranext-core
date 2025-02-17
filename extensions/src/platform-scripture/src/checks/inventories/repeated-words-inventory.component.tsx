@@ -1,9 +1,9 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import type { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import {
-  ColumnDef,
+  type ColumnDef,
   Inventory,
-  InventoryTableData,
-  Scope,
+  type InventoryTableData,
+  type Scope,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
