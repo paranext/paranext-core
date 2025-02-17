@@ -18,9 +18,6 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
     { handleSearch, handleKeyDown, handleOnClick, handleSubmit, ...props }: BookChapterInputProps,
     ref,
   ) => {
-    /* Commented out for now as it is not implemented, may be used in the future
-    const dir: Direction = readDirection();
-    */
     return (
       <div className="tw-relative">
         <Input
@@ -39,19 +36,6 @@ const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
           onClick={handleOnClick}
           ref={ref}
         />
-        {/* Commented out for now as it is not implemented, may be used in the future
-        <History
-          className={cn(
-            'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-cursor-pointer tw-text-muted-foreground',
-            { 'tw-right-3': dir === 'ltr' },
-            { 'tw-left-3 tw-right-auto': dir === 'rtl' },
-          )}
-          onClick={() => {
-            // eslint-disable-next-line no-console
-            console.log('back in history');
-          }}
-        />
-        */}
       </div>
     );
   },

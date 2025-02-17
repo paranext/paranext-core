@@ -30,7 +30,7 @@ type BookChapterControlProps = {
   handleSubmit: (scrRef: ScriptureReference) => void;
 };
 
-const ALL_BOOK_IDS = Canon.allBookIds;
+const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
 const BOOK_TYPE_LABELS: BookTypeLabels = {
   OT: 'Old Testament',
   NT: 'New Testament',
