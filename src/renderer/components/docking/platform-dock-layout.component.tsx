@@ -99,14 +99,16 @@ export default function PlatformDockLayout() {
               if ((currentTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
                 resolveDialogRequest(currentTabId, undefined, false);
 
-              if (layout.floatbox?.children.length === 0 && layout.dockbox.children.length === 1) {
+              if (layout.dockbox.children.length === 1) {
                 const panel: PanelBase = layout.dockbox.children[0] as PanelBase;
                 /* eslint-enable */
                 const hasNoTabs = panel.tabs.length === 0;
                 if (hasNoTabs) {
                   (async () => {
                     try {
-                      await openWebView('platformGetResources.home');
+                      await openWebView('platformGetResources.home', {
+                        type: 'tab',
+                      });
                     } catch (e) {
                       throw new Error(
                         `platform-dock-layout.component error: Opening Home web view failed!`,
