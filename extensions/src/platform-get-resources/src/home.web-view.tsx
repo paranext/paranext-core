@@ -90,9 +90,6 @@ globalThis.webViewComponent = function HomeDialog() {
     };
   }, []);
 
-  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
-  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
-
   const [localizedStrings] = useLocalizedStrings(HOME_STRING_KEYS);
 
   const actionText: string = localizedStrings['%resources_action%'];
@@ -165,6 +162,8 @@ globalThis.webViewComponent = function HomeDialog() {
   const [activeSendReceiveProjects, setActiveSendReceiveProjects] = useState<string[]>([]);
 
   const sendReceiveProject = async (projectId: string) => {
+    if (!isSendReceiveAvailable) return;
+
     try {
       setIsSendReceiveInProgress(true);
       setActiveSendReceiveProjects((prev) => [...prev, projectId]);
@@ -187,22 +186,29 @@ globalThis.webViewComponent = function HomeDialog() {
   };
 
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
+  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
 
   useEffect(() => {
+    if (!isSendReceiveAvailable) {
+      setIsLoadingRemoteProjects(false);
+      return;
+    }
+
+    let promiseIsCurrent = true;
     const getSharedProjects = async () => {
       try {
         const projectsInfo = await papi.commands.sendCommand(
           'paratextBibleSendReceive.getSharedProjects',
         );
 
-        if (isMounted.current) {
+        if (promiseIsCurrent && isMounted.current) {
           setIsLoadingRemoteProjects(false);
           setSharedProjectsInfo(projectsInfo);
         }
       } catch (e) {
         logger.warn(`Home web view failed to get shared projects: ${getErrorMessage(e)}`);
 
-        if (isMounted.current) {
+        if (promiseIsCurrent && isMounted.current) {
           setIsLoadingRemoteProjects(false);
         }
       }
@@ -216,11 +222,18 @@ globalThis.webViewComponent = function HomeDialog() {
       return;
     }
     getSharedProjects();
+
+    return () => {
+      // Mark this promise as old and not to be used
+      promiseIsCurrent = false;
+    };
   }, [isSendReceiveAvailable, isSendReceiveInProgress]);
 
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
+  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
 
   useEffect(() => {
+    let promiseIsCurrent = true;
     const getLocalProjects = async () => {
       const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
@@ -238,16 +251,21 @@ globalThis.webViewComponent = function HomeDialog() {
         }),
       );
 
-      if (isMounted.current) {
+      if (promiseIsCurrent && isMounted.current) {
         setIsLoadingLocalProjects(false);
+        setLocalProjectsInfo(projectInfo);
       }
-      setLocalProjectsInfo(projectInfo);
     };
 
     if (isSendReceiveInProgress) {
       return;
     }
     getLocalProjects();
+
+    return () => {
+      // Mark this promise as old and not to be used
+      promiseIsCurrent = false;
+    };
   }, [isSendReceiveInProgress]);
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
