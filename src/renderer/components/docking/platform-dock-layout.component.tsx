@@ -84,7 +84,6 @@ export default function PlatformDockLayout() {
       saveTab={saveTab}
       onLayoutChange={(...args) => {
         const [layout, currentTabId, direction] = args;
-
         let webViewDefinition: WebViewDefinition | undefined;
 
         if (currentTabId) {
@@ -98,7 +97,9 @@ export default function PlatformDockLayout() {
             if (direction === 'remove') {
               if ((currentTab.data as DialogData)?.isDialog && hasDialogRequest(currentTabId))
                 resolveDialogRequest(currentTabId, undefined, false);
+            }
 
+            if (direction === 'float' || direction === 'remove') {
               if (layout.dockbox.children.length === 1) {
                 const panel: PanelBase = layout.dockbox.children[0] as PanelBase;
                 /* eslint-enable */
