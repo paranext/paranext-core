@@ -24,13 +24,18 @@ import {
 } from 'platform-bible-utils';
 import { BookChapterControl, ScrollGroupSelector, useEvent } from 'platform-bible-react';
 import './web-view.component.css';
-import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
+import {
+  useLocalizedStrings,
+  useProjectSetting,
+  useScrollGroupScrRef,
+} from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { getNetworkEvent, registerRequestHandler } from '@shared/services/network.service';
 import {
   getWebViewMessageRequestType,
   WebViewMessageRequestHandler,
 } from '@shared/services/web-view.service-model';
+import { Canon } from '@node_modules/@sillsdev/scripture/dist';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -63,6 +68,7 @@ export default function WebView({
   allowSameOrigin,
   allowPopups,
   scrollGroupScrRef,
+  projectId,
 }: WebViewTabProps) {
   // React starts refs as null
   // eslint-disable-next-line no-null/no-null
@@ -208,10 +214,25 @@ export default function WebView({
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const [booksPresent] = useProjectSetting(projectId, 'platformScripture.booksPresent', '');
+
+  const activeBookIds = booksPresent
+    ? Array.from(booksPresent).reduce((ids: string[], char, index) => {
+        if (char === '1') {
+          ids.push(Canon.bookNumberToId(index + 1));
+        }
+        return ids;
+      }, [])
+    : undefined;
+
   return (
     <div className="web-view-parent">
       <div className="web-view-tab-nav">
-        <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+        <BookChapterControl
+          scrRef={scrRef}
+          handleSubmit={setScrRef}
+          activeBookIds={activeBookIds}
+        />
         <ScrollGroupSelector
           availableScrollGroupIds={availableScrollGroupIds}
           scrollGroupId={scrollGroupId}
