@@ -28,7 +28,7 @@ type BookTypeLabels = {
 type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
-  activeBookIds?: string[];
+  getActiveBookIds?: () => string[];
 };
 
 const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
@@ -46,15 +46,7 @@ const SEARCH_QUERY_FORMATS = [
   /^(\w+)(?:\s(\d+))$/i, // Matches a word followed by a chapter number
   /^(\w+)(?:\s(\d+):(\d+))$/i, // Matches a word followed by a chapter and verse number
 ];
-const fetchGroupedBooks = (bookType: BookType, activeBookIds?: string[]) => {
-  const bookIds = activeBookIds ?? ALL_BOOK_IDS;
-  const groupedBooks = {
-    OT: bookIds.filter((bookId) => Canon.isBookOT(bookId)),
-    NT: bookIds.filter((bookId) => Canon.isBookNT(bookId)),
-    DC: bookIds.filter((bookId) => Canon.isBookDC(bookId)),
-  };
-  return groupedBooks[bookType];
-};
+
 const fetchEndChapter = (bookId: string) => {
   // getChaptersForBook returns -1 if not found in scrBookData
   // scrBookData only includes OT and NT, so all DC will return -1
@@ -103,7 +95,7 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({ scrRef, handleSubmit, activeBookIds }: BookChapterControlProps) {
+function BookChapterControl({ scrRef, handleSubmit, getActiveBookIds }: BookChapterControlProps) {
   const dir: Direction = readDirection();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>(
@@ -124,9 +116,25 @@ function BookChapterControl({ scrRef, handleSubmit, activeBookIds }: BookChapter
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuItemRef = useRef<HTMLDivElement>(undefined!);
 
+  const arraysAreEqual = (a: string[], b: string[]) =>
+    a.length === b.length && a.every((val, index) => val === b[index]);
+
+  const [bookIds, setBookIds] = useState<string[]>(ALL_BOOK_IDS);
+
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
-      return fetchGroupedBooks(bookType, activeBookIds).filter((bookId: string) => {
+      const newBookIds = getActiveBookIds ? getActiveBookIds() : ALL_BOOK_IDS;
+
+      // Only update state if contents actually changed
+      if (!arraysAreEqual(newBookIds, bookIds)) {
+        setBookIds(newBookIds);
+      }
+
+      return {
+        OT: newBookIds.filter((bookId) => Canon.isBookOT(bookId)),
+        NT: newBookIds.filter((bookId) => Canon.isBookNT(bookId)),
+        DC: newBookIds.filter((bookId) => Canon.isBookDC(bookId)),
+      }[bookType].filter((bookId: string) => {
         const englishNameLowerCase = Canon.bookIdToEnglishName(bookId).toLowerCase();
         const normalizedQuery = searchQuery.replace(/[^a-zA-Z]/g, '').toLowerCase();
         return (
@@ -135,7 +143,7 @@ function BookChapterControl({ scrRef, handleSubmit, activeBookIds }: BookChapter
         );
       });
     },
-    [searchQuery, activeBookIds],
+    [searchQuery, getActiveBookIds, bookIds], // Only recompute when relevant values change
   );
 
   const handleSearchInput = (searchString: string) => {
@@ -374,15 +382,16 @@ function BookChapterControl({ scrRef, handleSubmit, activeBookIds }: BookChapter
               handleBookmarks={() => console.log('bookmarks')}
             />
             */}
-            {BOOK_TYPE_ARRAY.map(
-              (bookType, bookTypeIndex) =>
-                fetchFilteredBooks(bookType).length > 0 && (
+            {BOOK_TYPE_ARRAY.map((bookType, bookTypeIndex) => {
+              const filteredBooks = fetchFilteredBooks(bookType);
+              return (
+                filteredBooks.length > 0 && (
                   <div key={bookType}>
                     <DropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
                       {BOOK_TYPE_LABELS[bookType]}
                     </DropdownMenuLabel>
 
-                    {fetchFilteredBooks(bookType).map((bookId) => (
+                    {filteredBooks.map((bookId) => (
                       <div key={bookId}>
                         <BookMenuItem
                           bookId={bookId}
@@ -416,8 +425,9 @@ function BookChapterControl({ scrRef, handleSubmit, activeBookIds }: BookChapter
                       <DropdownMenuSeparator />
                     ) : undefined}
                   </div>
-                ),
-            )}
+                )
+              );
+            })}
           </div>
         </DropdownMenuContent>
       </DropdownMenu>

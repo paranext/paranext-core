@@ -216,14 +216,18 @@ export default function WebView({
 
   const [booksPresent] = useProjectSetting(projectId, 'platformScripture.booksPresent', '');
 
-  const activeBookIds = booksPresent
-    ? Array.from(booksPresent).reduce((ids: string[], char, index) => {
-        if (char === '1') {
-          ids.push(Canon.bookNumberToId(index + 1));
-        }
-        return ids;
-      }, [])
-    : undefined;
+  const activeBookNums = useMemo(
+    () =>
+      booksPresent
+        ? Array.from(booksPresent).reduce((ids: number[], char, index) => {
+            if (char === '1') {
+              ids.push(index + 1);
+            }
+            return ids;
+          }, [])
+        : undefined,
+    [booksPresent], // Dependency array: recompute only if booksPresent changes
+  );
 
   return (
     <div className="web-view-parent">
@@ -231,7 +235,7 @@ export default function WebView({
         <BookChapterControl
           scrRef={scrRef}
           handleSubmit={setScrRef}
-          activeBookIds={activeBookIds}
+          activeBookIds={activeBookNums?.map((n) => Canon.bookNumberToId(n))}
         />
         <ScrollGroupSelector
           availableScrollGroupIds={availableScrollGroupIds}
