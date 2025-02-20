@@ -15,8 +15,8 @@ export default function SettingSidebarContentSearchExamples() {
           { projectName: 'c', projectId: '3' },
         ]}
         selectedSidebarItem={{ label: '', projectId: '' }}
-        projectsSidebarGroupLabel=""
-        extensionsSidebarGroupLabel=""
+        projectsSidebarGroupLabel="Projects Settings"
+        extensionsSidebarGroupLabel="General Settings"
         handleSelectSidebarItem={(key: string, projId?: string) =>
           console.log('Selected:', key, projId)
         }
@@ -25,7 +25,9 @@ export default function SettingSidebarContentSearchExamples() {
           setSearchQuery(query);
           console.log('Searching for:', query);
         }}
-      />
+      >
+        <div>This is where related settings entries should be rendered</div>
+      </SettingsSidebarContentSearch>
     </div>
   );
 }

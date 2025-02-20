@@ -10,6 +10,7 @@ import {
   SidebarMenuButton,
 } from '@/components/shadcn-ui/sidebar';
 import { cn } from '@/utils/shadcn-ui.util';
+import { ScrollText } from 'lucide-react';
 import { useCallback } from 'react';
 
 export type SelectedSettingsSidebarItem = {
@@ -43,6 +44,9 @@ export type SettingsSidebarProps = {
 
   /** Placeholder text for the button */
   buttonPlaceholderText: string;
+
+  /** Additional css classes to help with unique styling of the search bar */
+  className?: string;
 };
 
 export default function SettingsSidebar({
@@ -54,6 +58,7 @@ export default function SettingsSidebar({
   extensionsSidebarGroupLabel,
   projectsSidebarGroupLabel,
   buttonPlaceholderText,
+  className,
 }: SettingsSidebarProps) {
   const handleSelectItem = useCallback(
     (item: string, projectId?: string) => {
@@ -80,7 +85,7 @@ export default function SettingsSidebar({
       id={id}
       collapsible="none"
       variant="inset"
-      className="tw-w-96 tw-gap-2 tw-overflow-y-auto tw-rounded tw-bg-slate-100"
+      className={cn('tw-w-96 tw-gap-2 tw-overflow-y-auto tw-bg-slate-100', className)}
     >
       <SidebarContent>
         <SidebarGroup>
@@ -112,6 +117,7 @@ export default function SettingsSidebar({
           </SidebarGroupLabel>
           <SidebarGroupContent className="tw-pl-3">
             <ComboBox
+              buttonClassName="tw-w-full"
               popoverContentClassName="tw-z-[1000]"
               options={projectInfo.flatMap((info) => info.projectId)}
               getOptionLabel={(projectId: ComboBoxOption) => {
@@ -125,6 +131,7 @@ export default function SettingsSidebar({
                 handleSelectItem(selectedProjectName, projectId);
               }}
               value={selectedSidebarItem?.projectId ?? undefined}
+              icon={<ScrollText />}
             />
           </SidebarGroupContent>
         </SidebarGroup>
