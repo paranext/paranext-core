@@ -235,7 +235,9 @@ export default function WebView({
         <BookChapterControl
           scrRef={scrRef}
           handleSubmit={setScrRef}
-          activeBookIds={activeBookNums?.map((n) => Canon.bookNumberToId(n))}
+          getActiveBookIds={
+            activeBookNums ? () => activeBookNums.map((n) => Canon.bookNumberToId(n)) : undefined
+          }
         />
         <ScrollGroupSelector
           availableScrollGroupIds={availableScrollGroupIds}
