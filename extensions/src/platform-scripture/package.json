@@ -26,7 +26,7 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
-    "test": "jest --silent",
+    "test": "vitest",
     "typecheck": "tsc -p ./tsconfig.json"
   },
   "browserslist": [],

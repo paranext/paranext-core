@@ -16,7 +16,8 @@
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
-      "@node_modules/*": ["../node_modules/*"]
+      "@node_modules/*": ["../node_modules/*"],
+      "vite": ["./@types/shims-vite.d.ts"]
     },
     "experimentalDecorators": true,
     "typeRoots": [
