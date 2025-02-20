@@ -88,7 +88,7 @@
   "%settings_errorMessages_invalidJSON%": "Invalid JSON",
   "%settings_errorMessages_invalidValue%": "Invalid value",
   "%settings_sidebar_extensionsLabel%": "General Settings",
-  "%settings_sidebar_projectsComboBoxPlaceholder%": "Type or select project",
+  "%settings_sidebar_projectsComboBoxPlaceholder%": "Select project",
   "%settings_sidebar_projectsLabel%": "Project Settings",
   "%settings_title_projectSettings%": "Project Settings",
   "%settings_title%": "Settings",
