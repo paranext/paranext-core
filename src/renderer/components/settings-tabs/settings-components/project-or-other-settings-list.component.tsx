@@ -1,10 +1,11 @@
-import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'platform-bible-react';
-import { useMemo } from 'react';
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'platform-bible-react';
+import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
+import { useMemo } from 'react';
 import OtherSetting from './other-setting.component';
+import './project-or-other-settings-list.component.scss';
 import ProjectSetting from './project-setting.component';
-import { ProjectSettingValues, OtherSettingValues } from './setting.component';
+import { OtherSettingValues, ProjectSettingValues } from './setting.component';
 
 /** Properties for a settings list component that displays either project or user settings */
 type ProjectOrOtherSettingsListProps = {
@@ -52,15 +53,15 @@ export default function ProjectOrOtherSettingsList({
   if (!hasFilteredProperties) return undefined;
 
   return (
-    <Card>
+    <Card className="card">
       <CardHeader>
         <CardTitle>{groupLabel}</CardTitle>
         {groupDescription && <CardDescription>{groupDescription}</CardDescription>}
       </CardHeader>
       <CardContent>
-        <div className="tw-space-y-4">
-          {Object.entries(filteredSettingsProperties).map(([key, property]) =>
-            projectId ? (
+        {Object.entries(filteredSettingsProperties).map(([key, property]) =>
+          projectId ? (
+            <div className="card-content">
               <ProjectSetting
                 key={key}
                 // Key is a string technically, but it has to be a settingKey to access the setting
@@ -73,7 +74,9 @@ export default function ProjectOrOtherSettingsList({
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
                 defaultSetting={property.default as ProjectSettingValues}
               />
-            ) : (
+            </div>
+          ) : (
+            <div className="card-content">
               <OtherSetting
                 key={key}
                 // Key is a string technically, but it has to be a settingKey to access the setting
@@ -85,9 +88,9 @@ export default function ProjectOrOtherSettingsList({
                 // eslint-disable-next-line no-type-assertion/no-type-assertion
                 defaultSetting={property.default as OtherSettingValues}
               />
-            ),
-          )}
-        </div>
+            </div>
+          ),
+        )}
       </CardContent>
     </Card>
   );

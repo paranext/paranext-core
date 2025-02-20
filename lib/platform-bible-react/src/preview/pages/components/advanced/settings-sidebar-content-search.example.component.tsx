@@ -8,7 +8,7 @@ export default function SettingSidebarContentSearchExamples() {
     <div>
       <SettingsSidebarContentSearch
         buttonPlaceholderText="?? Select a project"
-        extensionLabels={['A', 'B', 'C']}
+        extensionLabels={{ A: 'A', B: 'B', C: 'C' }}
         projectInfo={[
           { projectName: 'a', projectId: '1' },
           { projectName: 'b', projectId: '2' },

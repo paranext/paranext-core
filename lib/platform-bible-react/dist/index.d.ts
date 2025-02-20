@@ -463,7 +463,7 @@ export type SettingsSidebarProps = {
 	/** Optional id for testing */
 	id?: string;
 	/** Extension labels from contribution */
-	extensionLabels: string[];
+	extensionLabels: Record<string, string>;
 	/** Project names and ids */
 	projectInfo: ProjectInfo[];
 	/** Handler for selecting a sidebar item */

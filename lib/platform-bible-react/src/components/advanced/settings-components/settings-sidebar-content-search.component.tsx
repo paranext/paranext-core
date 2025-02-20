@@ -38,9 +38,12 @@ export default function SettingsSidebarContentSearch({
           placeholder="Search app settings, extension settings, and project settings"
         />
       </div>
-      <SidebarProvider id={id} className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto">
+      <SidebarProvider
+        id={id}
+        className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto tw-border-t-2 tw-border-muted"
+      >
         <SettingsSidebar
-          className="tw-w-[230px]"
+          className="tw-w-[230px] tw-border-e-2 tw-border-muted"
           extensionLabels={extensionLabels}
           projectInfo={projectInfo}
           handleSelectSidebarItem={handleSelectSidebarItem}

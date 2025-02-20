@@ -25,7 +25,7 @@ export type SettingsSidebarProps = {
   id?: string;
 
   /** Extension labels from contribution */
-  extensionLabels: string[];
+  extensionLabels: Record<string, string>;
 
   /** Project names and ids */
   projectInfo: ProjectInfo[];
@@ -85,7 +85,7 @@ export default function SettingsSidebar({
       id={id}
       collapsible="none"
       variant="inset"
-      className={cn('tw-w-96 tw-gap-2 tw-overflow-y-auto tw-bg-slate-100', className)}
+      className={cn('tw-w-96 tw-gap-2 tw-overflow-y-auto tw-bg-muted/50', className)}
     >
       <SidebarContent>
         <SidebarGroup>
@@ -94,15 +94,15 @@ export default function SettingsSidebar({
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {extensionLabels.map((label) => (
-                <SidebarMenuItem key={label}>
+              {Object.entries(extensionLabels).map(([key, label]) => (
+                <SidebarMenuItem key={key}>
                   <SidebarMenuButton
                     className={cn(
                       'tw-rounded tw-py-2 tw-text-sm tw-text-gray-500 hover:tw-bg-white hover:tw-text-gray-900 hover:tw-shadow-sm active:tw-bg-white',
-                      { 'tw-bg-white tw-text-gray-900 tw-shadow-sm': getIsActive(label) },
+                      { 'tw-bg-white tw-text-gray-900 tw-shadow-sm': getIsActive(key) },
                     )}
-                    onClick={() => handleSelectItem(label)}
-                    isActive={getIsActive(label)}
+                    onClick={() => handleSelectItem(key)}
+                    isActive={getIsActive(key)}
                   >
                     <span className="tw-pl-3">{label}</span>
                   </SidebarMenuButton>
@@ -117,6 +117,7 @@ export default function SettingsSidebar({
           </SidebarGroupLabel>
           <SidebarGroupContent className="tw-pl-3">
             <ComboBox
+              buttonVariant="ghost"
               buttonClassName="tw-w-full"
               popoverContentClassName="tw-z-[1000]"
               options={projectInfo.flatMap((info) => info.projectId)}
