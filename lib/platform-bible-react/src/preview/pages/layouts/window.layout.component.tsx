@@ -28,7 +28,7 @@ export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
     Canon.bookIdToNumber('ISA'),
     Canon.bookIdToNumber('ACT'),
     66,
-    Canon.bookIdToNumber('ES3'), // Demonstrates that an obsolete book in use will display
+    Canon.bookIdToNumber('3ES'), // Demonstrates that an obsolete book in use will display
   ];
   const activeBookNums = Array.from(new Set([...initialActiveBookIds, scrRef.bookNum]));
   activeBookNums.sort();
