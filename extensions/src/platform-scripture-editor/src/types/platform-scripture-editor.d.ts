@@ -133,6 +133,19 @@ declare module 'platform-scripture-editor' {
   export type OpenEditorOptions = {
     /** Decorations to add to the editor */
     decorations: EditorDecorations;
+    /**
+     * Url of image to show on the title bar of the tab
+     *
+     * Defaults to the software's standard logo.
+     */
+    iconUrl?: string;
+    /**
+     * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
+     * WebView
+     */
+    title?: string | LocalizeKey;
+    /** Tooltip that is shown when hovering over the webview title */
+    tooltip?: string;
   };
 
   export type PlatformScriptureEditorWebViewController = NetworkableObject<{

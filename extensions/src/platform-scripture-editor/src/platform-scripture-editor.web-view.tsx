@@ -83,19 +83,34 @@ function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefin
       `.editor-container span[data-marker="v"][data-number="${verseLocation.verseNum}"]`,
     ) ?? undefined;
 
-  // Scroll if we find the verse or we're at the start of the chapter
-  if (verseElement || verseLocation.verseNum === 1) {
-    // If we're at the first verse, scroll to the top so we can see intro material
-    let scrollTop = 0;
-    if (verseElement && verseLocation.verseNum > 1)
-      scrollTop =
-        verseElement.getBoundingClientRect().top + window.scrollY - VERSE_NUMBER_SCROLL_OFFSET;
+  const scrollContainerElement =
+    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
 
-    window.scrollTo({
-      top: scrollTop,
+  // Scroll if we find the verse or we're at the start of the chapter
+  if (scrollContainerElement && (verseElement || verseLocation.verseNum === 1)) {
+    // Get the scroll position all the way up to the scroll container
+    let offsetElement = verseElement;
+    // If we're at the first verse, scroll to the top so we can see intro material
+    let verseOffsetTop = 0;
+    if (verseLocation.verseNum > 1) {
+      // Find the y offset from the scrolling container
+      while (offsetElement && offsetElement !== scrollContainerElement) {
+        verseOffsetTop += offsetElement.offsetTop;
+        offsetElement =
+          offsetElement.offsetParent instanceof HTMLElement
+            ? offsetElement.offsetParent
+            : undefined;
+      }
+      // Scroll a bit above the verse so you can see a bit of context
+      verseOffsetTop -= VERSE_NUMBER_SCROLL_OFFSET;
+    }
+
+    scrollContainerElement?.scrollTo({
       behavior: 'smooth',
+      top: verseOffsetTop,
     });
   }
+
   return verseElement;
 }
 
@@ -603,7 +618,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
             ))}
           </div>
           {/** Editor */}
-          <div className="tw-overflow-y-auto tw-flex-grow">{renderEditor()}</div>
+          {renderEditor()}
         </div>,
       )}
     </div>

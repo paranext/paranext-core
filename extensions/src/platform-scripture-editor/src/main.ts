@@ -8,7 +8,9 @@ import type {
 } from '@papi/core';
 import {
   formatReplacementString,
+  isLocalizeKey,
   LanguageStrings,
+  LocalizeKey,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -26,10 +28,11 @@ import { mergeDecorations } from './decorations.util';
 logger.info('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
-const projectIdTitleFormatStr = '%webView_platformScriptureEditor_title_format%';
-const editable = '%webView_platformScriptureEditor_title_editable_indicator%';
-const resourceViewer = '%webView_platformScriptureEditor_title_readonly_no_project%';
-const scriptureEditor = '%webView_platformScriptureEditor_title_editable_no_project%';
+
+const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
+const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
+const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
+const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
 interface PlatformScriptureEditorOptions extends GetWebViewOptions {
   projectId: string | undefined;
@@ -37,9 +40,17 @@ interface PlatformScriptureEditorOptions extends GetWebViewOptions {
   options?: OpenEditorOptions;
 }
 
-async function getLocalizations(): Promise<LanguageStrings> {
+/**
+ * Get localized strings for creating the editor WebView tab
+ *
+ * @param tabTitleFormatString Localize key or plain string for title of the tab
+ * @returns Localized strings
+ */
+async function getEditorTabLocalizations(
+  tabTitleFormatString: LocalizeKey,
+): Promise<LanguageStrings> {
   const localizationData = await papi.localization.getLocalizedStrings({
-    localizeKeys: [editable, projectIdTitleFormatStr, resourceViewer, scriptureEditor],
+    localizeKeys: [EDITABLE_KEY, tabTitleFormatString],
     locales: ['en'],
   });
   return localizationData;
@@ -141,27 +152,36 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
         `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
-    const localizedStrings = await getLocalizations();
-    const localizedProjectIdTitleFormatStr = localizedStrings[projectIdTitleFormatStr];
-    const localizedEditable = localizedStrings[editable];
-    const localizedResourceViewer = localizedStrings[resourceViewer];
-    const localizedScriptureEditor = localizedStrings[scriptureEditor];
-
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
-    let title = '';
-    if (projectId) {
-      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-      title = formatReplacementString(localizedProjectIdTitleFormatStr, {
-        projectId: (await pdp.getSetting('platform.name')) ?? projectId,
+    let title = getWebViewOptions.options?.title || savedWebView.title;
+    if (!title) {
+      if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
+      else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
+    }
+    if (isLocalizeKey(title)) {
+      const localizedStrings = await getEditorTabLocalizations(title);
+      const localizedTitleFormatStr = localizedStrings[title];
+      const localizedEditable = localizedStrings[EDITABLE_KEY];
+
+      let projectName = projectId;
+      if (projectId) {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+        projectName = (await pdp.getSetting('platform.name')) ?? projectName;
+      }
+
+      title = formatReplacementString(localizedTitleFormatStr, {
+        projectId: projectName,
         editable: isReadOnly ? '' : localizedEditable,
       });
-    } else title = isReadOnly ? localizedResourceViewer : localizedScriptureEditor;
+    }
 
     return {
-      title,
       ...savedWebView,
+      title,
+      iconUrl: getWebViewOptions.options?.iconUrl ?? savedWebView.iconUrl,
+      tooltip: getWebViewOptions.options?.tooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
       state: {
