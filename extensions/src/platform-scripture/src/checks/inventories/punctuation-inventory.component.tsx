@@ -1,4 +1,3 @@
-// import { LanguageStrings, LocalizeKey, ScriptureReference, substring } from 'platform-bible-utils';
 import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
 import {
   Button,
