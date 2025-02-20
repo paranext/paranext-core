@@ -45,7 +45,7 @@ export type SettingsSidebarProps = {
   /** Placeholder text for the button */
   buttonPlaceholderText: string;
 
-  /** Additional css classes to help with unique styling of the search bar */
+  /** Additional css classes to help with unique styling of the sidebar */
   className?: string;
 };
 
