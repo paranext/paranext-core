@@ -1,6 +1,7 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
 import Toolbar from '@/components/mui/toolbar.component';
+import { UserRound } from 'lucide-react';
 
 import { defaultScrRef, Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { useState } from 'react';
@@ -14,12 +15,38 @@ export default function ToolbarExamples() {
     });
   return (
     <div className="tw-flex tw-flex-col tw-gap-4">
-      <Toolbar className="toolbar" menuProvider={undefined} commandHandler={() => {}}>
+      <Toolbar menuProvider={undefined} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
 
-      <Toolbar className="toolbar" menuProvider={menuProvider} commandHandler={() => {}}>
+      <Toolbar menuProvider={menuProvider} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+
+      <Toolbar menuProvider={menuProvider} commandHandler={() => {}} className="tw-bg-muted">
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+      </Toolbar>
+
+      <Toolbar
+        menuProvider={menuProvider}
+        commandHandler={() => {}}
+        className="tw-h-8 tw-bg-background"
+      >
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+      </Toolbar>
+
+      <Toolbar
+        menuProvider={menuProvider}
+        commandHandler={() => {}}
+        className="tw-h-8 tw-bg-background"
+        configAreaChildren={
+          <>
+            <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+            <UserRound />
+          </>
+        }
+      >
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
       </Toolbar>
     </div>
   );

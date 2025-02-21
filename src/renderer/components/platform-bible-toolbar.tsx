@@ -62,13 +62,19 @@ export default function PlatformBibleToolbar() {
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   return (
-    <Toolbar className="toolbar" menuProvider={getMenuData} commandHandler={handleMenuCommand}>
-      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+    <Toolbar
+      menuProvider={getMenuData}
+      commandHandler={handleMenuCommand}
+      className="tw-h-12 tw-bg-transparent"
+      useAsAppDragArea
+    >
+      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}
         scrollGroupId={scrollGroupId}
         onChangeScrollGroupId={setScrollGroupId}
         localizedStrings={scrollGroupLocalizedStrings}
+        className="tw-h-8"
       />
     </Toolbar>
   );

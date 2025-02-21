@@ -29,6 +29,7 @@ type BookTypeLabels = {
 type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+  className?: string;
 };
 
 const ALL_BOOK_IDS = Canon.allBookIds;
@@ -102,7 +103,7 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
+function BookChapterControl({ scrRef, handleSubmit, className }: BookChapterControlProps) {
   const dir: Direction = readDirection();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>(
@@ -354,6 +355,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
             }}
             handleSubmit={handleInputSubmit}
             placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
+            className={className}
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent

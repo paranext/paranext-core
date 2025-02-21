@@ -16,7 +16,7 @@ import {
 
 export default function MenubarExamples() {
   return (
-    <Menubar>
+    <Menubar className="pr-twp tw-border-0 tw-bg-transparent">
       <MenubarMenu>
         <MenubarTrigger>File</MenubarTrigger>
         <MenubarContent>

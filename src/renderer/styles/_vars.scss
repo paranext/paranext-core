@@ -9,9 +9,9 @@ $color--pt9-darkgray: #4c4c4c;
 $color--text: hsl(var(--foreground));
 $color--shadow: var(--divider, rgba(0, 0, 0, 0.5));
 
-$color--background: hsl(var(--muted));
+$color--background: hsl(var(--muted) / 0.5);
 $color--active-tab: hsl(var(--background));
-$color--inactive-tab: $color--background;
+$color--inactive-tab: hsl(var(--muted));
 
 $color--border: var(--divider, rgba(0, 0, 0, 0.12));
 
