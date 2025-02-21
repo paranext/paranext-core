@@ -35,11 +35,150 @@ import {
   getWebViewMessageRequestType,
   WebViewMessageRequestHandler,
 } from '@shared/services/web-view.service-model';
-import { Canon } from '@node_modules/@sillsdev/scripture/dist';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
+
+/* HACK: Accessing anything in Canon (see commented out call to Canon.bookNumberToId below) causes
+a timeout. So for now, I'm hard-coding a copy of the array that Canon.allBookIds returns. */
+const allBookIdsCached: string[] = [
+  'GEN',
+  'EXO',
+  'LEV',
+  'NUM',
+  'DEU',
+  'JOS',
+  'JDG',
+  'RUT',
+  '1SA',
+  '2SA', // 10
+
+  '1KI',
+  '2KI',
+  '1CH',
+  '2CH',
+  'EZR',
+  'NEH',
+  'EST',
+  'JOB',
+  'PSA',
+  'PRO', // 20
+
+  'ECC',
+  'SNG',
+  'ISA',
+  'JER',
+  'LAM',
+  'EZK',
+  'DAN',
+  'HOS',
+  'JOL',
+  'AMO', // 30
+
+  'OBA',
+  'JON',
+  'MIC',
+  'NAM',
+  'HAB',
+  'ZEP',
+  'HAG',
+  'ZEC',
+  'MAL',
+  'MAT', // 40
+
+  'MRK',
+  'LUK',
+  'JHN',
+  'ACT',
+  'ROM',
+  '1CO',
+  '2CO',
+  'GAL',
+  'EPH',
+  'PHP', // 50
+
+  'COL',
+  '1TH',
+  '2TH',
+  '1TI',
+  '2TI',
+  'TIT',
+  'PHM',
+  'HEB',
+  'JAS',
+  '1PE', // 60
+
+  '2PE',
+  '1JN',
+  '2JN',
+  '3JN',
+  'JUD',
+  'REV',
+  'TOB',
+  'JDT',
+  'ESG',
+  'WIS', // 70
+
+  'SIR',
+  'BAR',
+  'LJE',
+  'S3Y',
+  'SUS',
+  'BEL',
+  '1MA',
+  '2MA',
+  '3MA',
+  '4MA', // 80
+
+  '1ES',
+  '2ES',
+  'MAN',
+  'PS2',
+  'ODA',
+  'PSS',
+  'JSA', // actual variant text for JOS, now in LXA text
+  'JDB', // actual variant text for JDG, now in LXA text
+  'TBS', // actual variant text for TOB, now in LXA text
+  'SST', // actual variant text for SUS, now in LXA text // 90
+
+  'DNT', // actual variant text for DAN, now in LXA text
+  'BLT', // actual variant text for BEL, now in LXA text
+  'XXA',
+  'XXB',
+  'XXC',
+  'XXD',
+  'XXE',
+  'XXF',
+  'XXG',
+  'FRT', // 100
+
+  'BAK',
+  'OTH',
+  '3ES', // Used previously but really should be 2ES
+  'EZA', // Used to be called 4ES, but not actually in any known project
+  '5EZ', // Used to be called 5ES, but not actually in any known project
+  '6EZ', // Used to be called 6ES, but not actually in any known project
+  'INT',
+  'CNC',
+  'GLO',
+  'TDX', // 110
+
+  'NDX',
+  'DAG',
+  'PS3',
+  '2BA',
+  'LBA',
+  'JUB',
+  'ENO',
+  '1MQ',
+  '2MQ',
+  '3MQ', // 120
+
+  'REP',
+  '4BA',
+  'LAO',
+];
 
 const registrationPromises = new PromiseChainingMap<string>(logger);
 
@@ -216,18 +355,21 @@ export default function WebView({
 
   const [booksPresent] = useProjectSetting(projectId, 'platformScripture.booksPresent', '');
 
-  const activeBookNums = useMemo(
-    () =>
-      booksPresent
-        ? Array.from(booksPresent).reduce((ids: number[], char, index) => {
-            if (char === '1') {
-              ids.push(index + 1);
-            }
-            return ids;
-          }, [])
-        : undefined,
-    [booksPresent], // Dependency array: recompute only if booksPresent changes
-  );
+  const bookNumberToId = (num: number) => {
+    if (num < allBookIdsCached.length) return allBookIdsCached[num];
+    return `***`;
+  };
+
+  const fetchActiveBooks = () => {
+    return Array.from(booksPresent).reduce((ids: string[], char, index) => {
+      if (char === '1') {
+        //          ids.push(Canon.bookNumberToId(index + 1));
+        ids.push(bookNumberToId(index));
+      }
+
+      return ids;
+    }, []);
+  };
 
   return (
     <div className="web-view-parent">
@@ -235,9 +377,7 @@ export default function WebView({
         <BookChapterControl
           scrRef={scrRef}
           handleSubmit={setScrRef}
-          getActiveBookIds={
-            activeBookNums ? () => activeBookNums.map((n) => Canon.bookNumberToId(n)) : undefined
-          }
+          getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
         />
         <ScrollGroupSelector
           availableScrollGroupIds={availableScrollGroupIds}
