@@ -34,7 +34,7 @@
     "start": "vite --host --open",
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
     "build:docs": "npm install && typedoc",
-    "build": "npm run build:basic && npm run lint-fix && npm run test",
+    "build": "npm run build:basic && npm run lint-fix && npm run test -- --run",
     "watch": "tsc && vite build --watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
