@@ -39,7 +39,7 @@ vi.mock('@shared/services/network-object-status.service', () => ({
 }));
 
 beforeAll(() => {
-  vi.useFakeTimers();
+  vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['performance'] });
   vi.advanceTimersByTime(testingProjectLookupService.LOAD_TIME_GRACE_PERIOD_MS);
 });
 
