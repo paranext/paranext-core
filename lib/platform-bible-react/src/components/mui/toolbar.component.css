@@ -2,9 +2,3 @@
   height: fit-content !important;
   position: absolute !important;
 }
-
-.papi-toolbar-children {
-  padding: 10px;
-  display: flex;
-  gap: 8px;
-}
