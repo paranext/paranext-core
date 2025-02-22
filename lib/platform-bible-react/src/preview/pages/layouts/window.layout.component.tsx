@@ -31,7 +31,7 @@ export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
   const initialActiveBookNums = Array.from(randomBinaryString).reduce(
     (ids: number[], char, index) => {
       if (char === '1') {
-        ids.push(index);
+        ids.push(index + 1);
       }
       return ids;
     },

@@ -116,19 +116,9 @@ function BookChapterControl({ scrRef, handleSubmit, getActiveBookIds }: BookChap
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuItemRef = useRef<HTMLDivElement>(undefined!);
 
-  const arraysAreEqual = (a: string[], b: string[]) =>
-    a.length === b.length && a.every((val, index) => val === b[index]);
-
-  const [bookIds, setBookIds] = useState<string[]>(ALL_BOOK_IDS);
-
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
       const newBookIds = getActiveBookIds ? getActiveBookIds() : ALL_BOOK_IDS;
-
-      // Only update state if contents actually changed
-      if (!arraysAreEqual(newBookIds, bookIds)) {
-        setBookIds(newBookIds);
-      }
 
       return {
         OT: newBookIds.filter((bookId) => Canon.isBookOT(bookId)),
@@ -143,7 +133,7 @@ function BookChapterControl({ scrRef, handleSubmit, getActiveBookIds }: BookChap
         );
       });
     },
-    [searchQuery, getActiveBookIds, bookIds], // Only recompute when relevant values change
+    [searchQuery, getActiveBookIds], // Only recompute when relevant values change
   );
 
   const handleSearchInput = (searchString: string) => {
