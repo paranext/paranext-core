@@ -48,7 +48,7 @@
   "peerDependencies": {},
   "dependencies": {
     "async-mutex": "^0.5.0",
-    "jsonpath-plus": "^10.2.0"
+    "jsonpath-plus": "^10.3.0"
   },
   "devDependencies": {
     "@biblionexus-foundation/scripture-utilities": "^0.0.7",

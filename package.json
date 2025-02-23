@@ -193,7 +193,7 @@
     "html-webpack-plugin": "^5.6.3",
     "husky": "^8.0.3",
     "identity-obj-proxy": "^3.0.0",
-    "jsonpath-plus": "^10.2.0",
+    "jsonpath-plus": "^10.3.0",
     "lint-staged": "^15.2.11",
     "mini-css-extract-plugin": "^2.9.2",
     "node-loader": "^2.1.0",
