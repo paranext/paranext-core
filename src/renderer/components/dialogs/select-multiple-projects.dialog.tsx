@@ -12,7 +12,8 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { Check, FolderOpenIcon } from 'lucide-react';
-import { Button, LocalizeKey, usePromise } from 'platform-bible-react';
+import { Button, usePromise } from 'platform-bible-react';
+import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 
 function SelectMultipleProjectsDialog({

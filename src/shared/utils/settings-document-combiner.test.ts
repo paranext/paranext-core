@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { Localized, SettingsContribution, slice } from 'platform-bible-utils';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
@@ -7,7 +8,7 @@ import {
 } from '@shared/utils/settings-document-combiner-base';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 
-jest.mock('@shared/services/localization.service', () => ({
+vi.mock('@shared/services/localization.service', () => ({
   __esModule: true,
   default: {
     async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
