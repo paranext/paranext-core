@@ -3,7 +3,6 @@ import BookMenuItem, {
   BookType,
 } from '@/components/advanced/book-chapter-control/book-menu-item.component';
 import ChapterSelect from '@/components/advanced/book-chapter-control/chapter-select.component';
-import GoToMenuItem from '@/components/advanced/book-chapter-control/go-to-menu-item.component';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,9 +29,10 @@ type BookTypeLabels = {
 export type BookChapterControlProps = {
   scrRef: ScriptureReference;
   handleSubmit: (scrRef: ScriptureReference) => void;
+  getActiveBookIds?: () => string[];
 };
 
-const ALL_BOOK_IDS = Canon.allBookIds;
+const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
 const BOOK_TYPE_LABELS: BookTypeLabels = {
   OT: 'Old Testament',
   NT: 'New Testament',
@@ -47,14 +47,7 @@ const SEARCH_QUERY_FORMATS = [
   /^(\w+)(?:\s(\d+))$/i, // Matches a word followed by a chapter number
   /^(\w+)(?:\s(\d+):(\d+))$/i, // Matches a word followed by a chapter and verse number
 ];
-const fetchGroupedBooks = (bookType: BookType) => {
-  const groupedBooks = {
-    OT: ALL_BOOK_IDS.filter((bookId) => Canon.isBookOT(bookId)),
-    NT: ALL_BOOK_IDS.filter((bookId) => Canon.isBookNT(bookId)),
-    DC: ALL_BOOK_IDS.filter((bookId) => Canon.isBookDC(bookId)),
-  };
-  return groupedBooks[bookType];
-};
+
 const fetchEndChapter = (bookId: string) => {
   // getChaptersForBook returns -1 if not found in scrBookData
   // scrBookData only includes OT and NT, so all DC will return -1
@@ -103,7 +96,7 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
+function BookChapterControl({ scrRef, handleSubmit, getActiveBookIds }: BookChapterControlProps) {
   const dir: Direction = readDirection();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>(
@@ -126,7 +119,13 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
-      return fetchGroupedBooks(bookType).filter((bookId: string) => {
+      const newBookIds = getActiveBookIds ? getActiveBookIds() : ALL_BOOK_IDS;
+
+      return {
+        OT: newBookIds.filter((bookId) => Canon.isBookOT(bookId)),
+        NT: newBookIds.filter((bookId) => Canon.isBookNT(bookId)),
+        DC: newBookIds.filter((bookId) => Canon.isBookDC(bookId)),
+      }[bookType].filter((bookId: string) => {
         const englishNameLowerCase = Canon.bookIdToEnglishName(bookId).toLowerCase();
         const normalizedQuery = searchQuery.replace(/[^a-zA-Z]/g, '').toLowerCase();
         return (
@@ -135,7 +134,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         );
       });
     },
-    [searchQuery],
+    [searchQuery, getActiveBookIds], // Only recompute when relevant values change
   );
 
   const handleSearchInput = (searchString: string) => {
@@ -367,20 +366,16 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         >
           {/* work around until DropdownMenuContent supports a dir prop */}
           <div className="rtl:tw-ps-2">
-            <GoToMenuItem
-              handleSort={() => console.log('sorting')}
-              handleLocationHistory={() => console.log('location history')}
-              handleBookmarks={() => console.log('bookmarks')}
-            />
-            {BOOK_TYPE_ARRAY.map(
-              (bookType, bookTypeIndex) =>
-                fetchFilteredBooks(bookType).length > 0 && (
+            {BOOK_TYPE_ARRAY.map((bookType, bookTypeIndex) => {
+              const filteredBooks = fetchFilteredBooks(bookType);
+              return (
+                filteredBooks.length > 0 && (
                   <div key={bookType}>
                     <DropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
                       {BOOK_TYPE_LABELS[bookType]}
                     </DropdownMenuLabel>
 
-                    {fetchFilteredBooks(bookType).map((bookId) => (
+                    {filteredBooks.map((bookId) => (
                       <div key={bookId}>
                         <BookMenuItem
                           bookId={bookId}
@@ -414,8 +409,9 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
                       <DropdownMenuSeparator />
                     ) : undefined}
                   </div>
-                ),
-            )}
+                )
+              );
+            })}
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
