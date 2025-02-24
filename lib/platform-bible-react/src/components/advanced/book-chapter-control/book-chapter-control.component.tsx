@@ -366,13 +366,6 @@ function BookChapterControl({ scrRef, handleSubmit, getActiveBookIds }: BookChap
         >
           {/* work around until DropdownMenuContent supports a dir prop */}
           <div className="rtl:tw-ps-2">
-            {/* Commented out for now as it is not implemented, may be used in the future
-            <GoToMenuItem
-              handleSort={() => console.log('sorting')}
-              handleLocationHistory={() => console.log('location history')}
-              handleBookmarks={() => console.log('bookmarks')}
-            />
-            */}
             {BOOK_TYPE_ARRAY.map((bookType, bookTypeIndex) => {
               const filteredBooks = fetchFilteredBooks(bookType);
               return (
