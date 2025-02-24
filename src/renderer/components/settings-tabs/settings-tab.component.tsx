@@ -144,14 +144,16 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
       return Object.entries(filteredProjectSettingsContributions).flatMap(([, settingsGroups]) =>
         settingsGroups
           ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
-              <ProjectOrOtherSettingsList
-                key={settingsGroup.label}
-                settingProperties={settingsGroup.properties}
-                projectId={projectId}
-                groupLabel={settingsGroup.label}
-                groupDescription={settingsGroup.description}
-                searchQuery={searchQuery}
-              />
+              <div className="project-or-settings-list">
+                <ProjectOrOtherSettingsList
+                  key={settingsGroup.label}
+                  settingProperties={settingsGroup.properties}
+                  projectId={projectId}
+                  groupLabel={settingsGroup.label}
+                  groupDescription={settingsGroup.description}
+                  searchQuery={searchQuery}
+                />
+              </div>
             ))
           : [],
       );
@@ -213,13 +215,15 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
             {selectedSidebarItem.projectId
               ? renderProjectSettingsList(selectedSidebarItem.projectId)
               : settingsContributions[selectedSidebarItem.label]?.map((group) => (
-                  <ProjectOrOtherSettingsList
-                    key={group.label}
-                    groupLabel={group.label}
-                    groupDescription={group.description}
-                    settingProperties={group.properties}
-                    searchQuery={searchQuery}
-                  />
+                  <div className="project-or-settings-list">
+                    <ProjectOrOtherSettingsList
+                      key={group.label}
+                      groupLabel={group.label}
+                      groupDescription={group.description}
+                      settingProperties={group.properties}
+                      searchQuery={searchQuery}
+                    />
+                  </div>
                 ))}
           </div>
         </SettingsSidebarContentSearch>

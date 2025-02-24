@@ -50,9 +50,9 @@ export default function ProjectOrOtherSettingsList({
     [filteredSettingsProperties],
   );
 
-  if (!hasFilteredProperties) return undefined;
+  // if (!hasFilteredProperties) return undefined;
 
-  return (
+  return hasFilteredProperties ? (
     <Card className="card">
       <CardHeader>
         <CardTitle>{groupLabel}</CardTitle>
@@ -93,5 +93,7 @@ export default function ProjectOrOtherSettingsList({
         )}
       </CardContent>
     </Card>
+  ) : (
+    <div>Empty</div>
   );
 }
