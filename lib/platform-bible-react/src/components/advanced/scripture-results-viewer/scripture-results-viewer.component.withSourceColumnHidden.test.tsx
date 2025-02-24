@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ScriptureResultsViewer from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 
@@ -48,16 +48,18 @@ describe('ScriptureResultsViewer with only Scripture ref and details columns', (
     },
   ];
 
-  beforeEach(() => {
-    render(
-      // By default, it should omit Check Type/source column
-      <ScriptureResultsViewer
-        sources={sources}
-        typeColumnName={checkTypeHeader}
-        detailsColumnName={errorDetailsTypeHeader}
-        showColumnHeaders
-      />,
-    );
+  beforeEach(async () => {
+    await act(async () => {
+      render(
+        // By default, it should omit Check Type/source column
+        <ScriptureResultsViewer
+          sources={sources}
+          typeColumnName={checkTypeHeader}
+          detailsColumnName={errorDetailsTypeHeader}
+          showColumnHeaders
+        />,
+      );
+    });
   });
 
   it('should render the other headers', () => {

@@ -1,10 +1,11 @@
+import { Mock, vi } from 'vitest';
 import PromiseChainingMap from './promise-chaining-map';
 
 describe('PromiseChainingMap', () => {
-  let logger: { warn: jest.Mock };
+  let logger: { warn: Mock };
 
   beforeEach(() => {
-    logger = { warn: jest.fn() };
+    logger = { warn: vi.fn() };
   });
 
   it('should handle multiple keys independently', async () => {
