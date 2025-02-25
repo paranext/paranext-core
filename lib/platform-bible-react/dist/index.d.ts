@@ -393,7 +393,7 @@ export type SettingsSidebarProps = {
 	/** Optional id for testing */
 	id?: string;
 	/** Extension labels from contribution */
-	extensionLabels: string[];
+	extensionLabels: Record<string, string>;
 	/** Project names and ids */
 	projectInfo: ProjectInfo[];
 	/** Handler for selecting a sidebar item */
@@ -406,8 +406,10 @@ export type SettingsSidebarProps = {
 	projectsSidebarGroupLabel: string;
 	/** Placeholder text for the button */
 	buttonPlaceholderText: string;
+	/** Additional css classes to help with unique styling of the sidebar */
+	className?: string;
 };
-export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;

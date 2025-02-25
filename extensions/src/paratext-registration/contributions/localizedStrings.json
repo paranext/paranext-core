@@ -82,7 +82,7 @@
       "%paratextRegistration_webView_title%": "Paratext Registration Information",
       "%paratextRegistration_webView_tooltip%": "Enter your Paratext Registration Information into this form.",
       "%paratextRegistration_exception_register_before_accessing_dbl_resources%": "You must provide a valid Paratext registration before opening resources from the Digital Bible Library.",
-      "%settings_paratextRegistration_registration_internet_group_label%": "Paratext Registration and Internet Settings",
+      "%settings_paratextRegistration_registration_internet_group_label%": "Registration and Internet",
       "%settings_paratextRegistration_registration_internet_group_description%": "Settings related to the user's Paratext Registry connection and some internet access controls",
       "%settings_paratextRegistration_shouldShowOnStartup_label%": "Show Paratext Registration Web View on Startup",
       "%settings_paratextRegistration_shouldShowOnStartup_description%": "Whether to show the form to enter Paratext Registration information when the application starts if it has not been entered previously."

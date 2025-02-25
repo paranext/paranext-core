@@ -1,5 +1,4 @@
 .settings-tab {
-  padding: 2%;
   height: 100%;
   box-sizing: border-box;
 }
@@ -15,4 +14,31 @@
 .sidebar-container {
   height: 100%;
   box-sizing: border-box;
+}
+
+.project-or-settings-list-container {
+  margin-top: 1rem;
+  padding-inline-end: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+}
+
+.project-or-settings-list {
+  max-width: 100%;
+}
+
+.zero-search-results {
+  display: flex;
+  flex-grow: 1;
+  height: 100%;
+  flex-direction: column;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.zero-search-results-title {
+  font-weight: 700;
 }

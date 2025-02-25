@@ -13,6 +13,7 @@ export default function ProjectSetting({
   description,
   defaultSetting,
   projectId,
+  className,
 }: ProjectSettingProps) {
   const [setting, setSetting, , isLoading] = useProjectSetting<keyof ProjectSettingTypes>(
     projectId,
@@ -37,6 +38,7 @@ export default function ProjectSetting({
       validateProjectSetting={validateProjectSetting}
       label={label}
       description={description}
+      className={className}
     />
   );
 }
