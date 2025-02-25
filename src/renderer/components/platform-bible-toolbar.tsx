@@ -67,6 +67,7 @@ export default function PlatformBibleToolbar() {
       commandHandler={handleMenuCommand}
       className="tw-h-12 tw-bg-transparent"
       useAsAppDragArea
+      menubarVariant="muted"
     >
       <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
       <ScrollGroupSelector
