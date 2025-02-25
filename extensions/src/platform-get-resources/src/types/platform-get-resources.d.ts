@@ -8,15 +8,6 @@ declare module 'platform-get-resources' {
     DblResources: DataProviderDataType<undefined, DblResourceData[], never>;
   };
 
-  /**
-   * In what state the project to S/R is
-   *
-   * - `undefined` or `''` = project has not been edited
-   * - `edited` = project has been edited
-   * - `new` = project not present on the system and available for download
-   */
-  export type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
-
   export type IDblResourcesProvider = IDataProvider<GetResourcesDataTypes> & {
     /**
      * Installs or updates a DBL resource to the local filesystem
