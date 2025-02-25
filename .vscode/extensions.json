@@ -5,11 +5,11 @@
     "dbaeumer.vscode-eslint",
     "editorconfig.editorconfig",
     "esbenp.prettier-vscode",
-    "firsttris.vscode-jest-runner",
     "formulahendry.dotnet-test-explorer",
     "mrmlnc.vscode-json5",
     "ms-dotnettools.csdevkit",
     "streetsidesoftware.code-spell-checker",
-    "stylelint.vscode-stylelint"
+    "stylelint.vscode-stylelint",
+    "vitest.explorer"
   ]
 }

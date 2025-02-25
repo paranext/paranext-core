@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { testingSettingService } from '@extension-host/services/settings.service-host';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { SettingNames } from 'papi-shared-types';
@@ -20,7 +21,7 @@ beforeEach(() => {
     testingSettingService.implementSettingDataProviderEngine(MOCK_SETTINGS_DATA);
 });
 
-jest.mock('@node/services/node-file-system.service', () => ({
+vi.mock('@node/services/node-file-system.service', () => ({
   readFileText: () => {
     return JSON.stringify(VERSE_REF_DEFAULT);
   },
@@ -28,8 +29,8 @@ jest.mock('@node/services/node-file-system.service', () => ({
     return Promise.resolve();
   },
 }));
-jest.mock('@extension-host/data/core-settings-info.data', () => ({
-  ...jest.requireActual('@extension-host/data/core-settings-info.data'),
+vi.mock('@extension-host/data/core-settings-info.data', async () => ({
+  ...(await vi.importActual('@extension-host/data/core-settings-info.data')),
   __esModule: true,
   platformSettings: {
     label: '%platform_group1%',
@@ -60,7 +61,7 @@ jest.mock('@extension-host/data/core-settings-info.data', () => ({
     },
   },
 }));
-jest.mock('@shared/services/localization.service', () => ({
+vi.mock('@shared/services/localization.service', () => ({
   __esModule: true,
   default: {
     async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
@@ -70,8 +71,8 @@ jest.mock('@shared/services/localization.service', () => ({
     },
   },
 }));
-jest.mock('@extension-host/services/contribution.service', () => ({
-  ...jest.requireActual('@extension-host/services/contribution.service'),
+vi.mock('@extension-host/services/contribution.service', async () => ({
+  ...(await vi.importActual('@extension-host/services/contribution.service')),
   // Don't actually wait because we're not syncing any contributions in these tests
   waitForResyncContributions: async () => {},
 }));

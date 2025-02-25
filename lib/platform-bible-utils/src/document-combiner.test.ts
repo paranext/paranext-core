@@ -1,4 +1,6 @@
 /* eslint-disable max-classes-per-file */
+
+import { vi } from 'vitest';
 import DocumentCombiner, { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 
 // #region Combiner implementations
@@ -114,9 +116,9 @@ describe('Simple object combining', () => {
   const arrayD1 = { d: ['red', 'yellow'] };
   const arrayD2 = { d: ['blue', 'green'] };
 
-  test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
+  it('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(hasA);
-    const rebuildCallbackMock = jest.fn(() => {});
+    const rebuildCallbackMock = vi.fn(() => {});
     const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
 
     expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
@@ -141,9 +143,9 @@ describe('Simple object combining', () => {
     unsubscriber();
   });
 
-  test('deleteAllContributions, onDidRebuild works', () => {
+  it('deleteAllContributions, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(hasA);
-    const rebuildCallbackMock = jest.fn(() => {});
+    const rebuildCallbackMock = vi.fn(() => {});
     const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
 
     combiner.addOrUpdateContribution('B', hasB);
@@ -162,9 +164,9 @@ describe('Simple array combining', () => {
   const has5 = [5];
   const has6 = [6];
 
-  test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
+  it('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(base);
-    const rebuildCallbackMock = jest.fn(() => {});
+    const rebuildCallbackMock = vi.fn(() => {});
     const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
 
     expect(JSON.stringify(combiner.output)).toBe('[1,2,3]');
@@ -183,9 +185,9 @@ describe('Simple array combining', () => {
     unsubscriber();
   });
 
-  test('deleteAllContributions, onDidRebuild works', () => {
+  it('deleteAllContributions, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(base);
-    const rebuildCallbackMock = jest.fn(() => {});
+    const rebuildCallbackMock = vi.fn(() => {});
     const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
 
     combiner.addOrUpdateContribution('4', has4);

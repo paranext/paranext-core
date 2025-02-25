@@ -21,7 +21,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Label,
-  LocalizeKey,
   SearchBar,
   Spinner,
   Table,

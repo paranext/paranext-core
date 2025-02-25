@@ -1,10 +1,9 @@
-/* eslint-disable import/first */
-jest.mock('../../../shared/services/logger.service');
-
 import { FloatPosition } from 'rc-dock';
+import { vi } from 'vitest';
 import { FloatLayout } from '@shared/models/docking-framework.model';
 import { getFloatPosition } from './platform-dock-layout-positioning.util';
-/* eslint-enable */
+
+vi.mock('../../../shared/services/logger.service');
 
 describe('Dock Layout Component', () => {
   describe('getFloatPosition()', () => {
