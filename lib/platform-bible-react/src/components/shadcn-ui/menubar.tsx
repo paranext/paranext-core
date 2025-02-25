@@ -4,6 +4,30 @@ import { Check, ChevronRight, Circle } from 'lucide-react';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/* #region CUSTOM */
+type MenubarContextProps = {
+  variant?: 'default' | 'muted';
+};
+
+const MenubarContext = React.createContext<MenubarContextProps | undefined>(undefined);
+
+function useContext() {
+  const context = React.useContext(MenubarContext);
+  if (!context) {
+    throw new Error('useContext must be used within a MenubarProvider.');
+  }
+
+  return context;
+}
+
+function mutedMenuElementClasses(context: MenubarContextProps) {
+  return {
+    'hover:tw-bg-muted hover:tw-text-foreground focus:tw-bg-muted focus:tw-text-foreground data-[state=open]:tw-bg-muted data-[state=open]:tw-text-foreground':
+      context.variant === 'muted',
+  };
+}
+/* #endregion CUSTOM */
+
 function MenubarMenu({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Menu>) {
   return <MenubarPrimitive.Menu {...props} />;
 }
@@ -26,33 +50,52 @@ function MenubarSub({ ...props }: React.ComponentProps<typeof MenubarPrimitive.S
 
 const Menubar = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Root>
->(({ className, ...props }, ref) => (
-  <MenubarPrimitive.Root
-    ref={ref}
-    className={cn(
-      'tw-flex tw-h-10 tw-items-center tw-space-x-1 tw-rounded-md tw-border tw-bg-background tw-p-1',
-      className,
-    )}
-    {...props}
-  />
-));
+  React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Root> & {
+    variant?: MenubarContextProps['variant'];
+  }
+>(({ className, variant = 'default', ...props }, ref) => {
+  /* #region CUSTOM */
+  const contextValue = React.useMemo<MenubarContextProps>(
+    () => ({
+      variant,
+    }),
+    [variant],
+  );
+  /* #endregion CUSTOM */
+  return (
+    <MenubarContext.Provider value={contextValue}>
+      <MenubarPrimitive.Root
+        ref={ref}
+        className={cn(
+          'tw-flex tw-h-10 tw-items-center tw-space-x-1 tw-rounded-md tw-border tw-bg-background tw-p-1',
+          className,
+        )}
+        {...props}
+      />
+    </MenubarContext.Provider>
+  );
+});
 Menubar.displayName = MenubarPrimitive.Root.displayName;
 
 const MenubarTrigger = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Trigger>
->(({ className, ...props }, ref) => (
-  <MenubarPrimitive.Trigger
-    ref={ref}
-    className={cn(
-      'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
-      'hover:tw-bg-accent hover:tw-text-accent-foreground',
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const context = useContext();
+  return (
+    <MenubarPrimitive.Trigger
+      ref={ref}
+      className={cn(
+        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
+        // CUSTOM
+        'tw-text-foreground', // to match the default shadcn style
+        mutedMenuElementClasses(context),
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 MenubarTrigger.displayName = MenubarPrimitive.Trigger.displayName;
 
 const MenubarSubTrigger = React.forwardRef<
@@ -60,55 +103,75 @@ const MenubarSubTrigger = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.SubTrigger> & {
     inset?: boolean;
   }
->(({ className, inset, children, ...props }, ref) => (
-  <MenubarPrimitive.SubTrigger
-    ref={ref}
-    className={cn(
-      'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
-      inset && 'tw-pl-8',
-      className,
-    )}
-    {...props}
-  >
-    {children}
-    <ChevronRight className="tw-ml-auto tw-h-4 tw-w-4" />
-  </MenubarPrimitive.SubTrigger>
-));
+>(({ className, inset, children, ...props }, ref) => {
+  const context = useContext();
+  return (
+    <MenubarPrimitive.SubTrigger
+      ref={ref}
+      className={cn(
+        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
+        inset && 'tw-pl-8',
+        // CUSTOM
+        mutedMenuElementClasses(context),
+        className,
+      )}
+      {...props}
+    >
+      {children}
+      <ChevronRight className="tw-ml-auto tw-h-4 tw-w-4" />
+    </MenubarPrimitive.SubTrigger>
+  );
+});
 MenubarSubTrigger.displayName = MenubarPrimitive.SubTrigger.displayName;
 
 const MenubarSubContent = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.SubContent>
->(({ className, ...props }, ref) => (
-  <MenubarPrimitive.SubContent
-    ref={ref}
-    className={cn(
-      'tw-z-50 tw-min-w-[8rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const context = useContext();
+  return (
+    <MenubarPrimitive.SubContent
+      ref={ref}
+      className={cn(
+        'tw-z-50 tw-min-w-[8rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground data-[state=open]:tw-animate-in data-[state=closed]:tw-animate-out data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+        // CUSTOM
+        {
+          'tw-bg-primary-foreground': context.variant === 'muted',
+        },
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 MenubarSubContent.displayName = MenubarPrimitive.SubContent.displayName;
 
 const MenubarContent = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Content>
->(({ className, align = 'start', alignOffset = -4, sideOffset = 8, ...props }, ref) => (
-  <MenubarPrimitive.Portal>
-    <MenubarPrimitive.Content
-      ref={ref}
-      align={align}
-      alignOffset={alignOffset}
-      sideOffset={sideOffset}
-      className={cn(
-        'tw-z-50 tw-min-w-[12rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground tw-shadow-md data-[state=open]:tw-animate-in data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
-        className,
-      )}
-      {...props}
-    />
-  </MenubarPrimitive.Portal>
-));
+>(({ className, align = 'start', alignOffset = -4, sideOffset = 8, ...props }, ref) => {
+  const context = useContext();
+  return (
+    <MenubarPrimitive.Portal>
+      <MenubarPrimitive.Content
+        ref={ref}
+        align={align}
+        alignOffset={alignOffset}
+        sideOffset={sideOffset}
+        className={cn(
+          'tw-z-50 tw-min-w-[12rem] tw-overflow-hidden tw-rounded-md tw-border tw-bg-popover tw-p-1 tw-text-popover-foreground tw-shadow-md data-[state=open]:tw-animate-in data-[state=closed]:tw-fade-out-0 data-[state=open]:tw-fade-in-0 data-[state=closed]:tw-zoom-out-95 data-[state=open]:tw-zoom-in-95 data-[side=bottom]:tw-slide-in-from-top-2 data-[side=left]:tw-slide-in-from-right-2 data-[side=right]:tw-slide-in-from-left-2 data-[side=top]:tw-slide-in-from-bottom-2',
+          // CUSTOM
+          'pr-twp',
+          {
+            'tw-bg-primary-foreground': context.variant === 'muted',
+          },
+          className,
+        )}
+        {...props}
+      />
+    </MenubarPrimitive.Portal>
+  );
+});
 MenubarContent.displayName = MenubarPrimitive.Content.displayName;
 
 const MenubarItem = React.forwardRef<
@@ -116,17 +179,22 @@ const MenubarItem = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Item> & {
     inset?: boolean;
   }
->(({ className, inset, ...props }, ref) => (
-  <MenubarPrimitive.Item
-    ref={ref}
-    className={cn(
-      'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-      inset && 'tw-pl-8',
-      className,
-    )}
-    {...props}
-  />
-));
+>(({ className, inset, ...props }, ref) => {
+  const context = useContext();
+  return (
+    <MenubarPrimitive.Item
+      ref={ref}
+      className={cn(
+        'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
+        inset && 'tw-pl-8',
+        // CUSTOM
+        mutedMenuElementClasses(context),
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 MenubarItem.displayName = MenubarPrimitive.Item.displayName;
 
 const MenubarCheckboxItem = React.forwardRef<

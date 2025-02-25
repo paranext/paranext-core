@@ -48,6 +48,24 @@ export default function ToolbarExamples() {
       >
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
       </Toolbar>
+
+      <div className="tw-items-center tw-rounded-md tw-bg-muted/50 tw-py-2">
+        <Toolbar
+          menuProvider={menuProvider}
+          commandHandler={() => {}}
+          className="tw-h-8 tw-border-0 tw-bg-transparent"
+          menubarVariant="muted"
+          configAreaChildren={
+            <>
+              <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+              <UserRound />
+            </>
+          }
+        >
+          <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+        </Toolbar>
+        <div className="tw-m-2 tw-h-8 tw-rounded-sm tw-bg-background" />
+      </div>
     </div>
   );
 }
