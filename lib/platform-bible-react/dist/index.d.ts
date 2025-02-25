@@ -977,8 +977,19 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	id?: string;
 	/** Additional css classes to help with unique styling of the toolbar */
 	className?: string;
+<<<<<<< HEAD
 }>;
 export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+=======
+	/** If to use the toolbar as an area to drag around the application */
+	useAsAppDragArea?: boolean;
+	/** Children put up at the right side in a ltr layout */
+	configAreaChildren?: React$1.ReactNode;
+	/** Variant of the menubar */
+	menubarVariant?: "default" | "muted";
+}>;
+export function Toolbar({ menuProvider, commandHandler, className, id, children, configAreaChildren, useAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+>>>>>>> 94f7504ec2 (add a muted menubar variant)
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *

@@ -22,7 +22,7 @@ export default function ComboBoxExamples() {
         />
       </div>
       <div>
-        <p>Combobox with long text for options will truncate</p>
+        <p>Combobox with long text for options will truncate - using ghost variant here</p>
         <ComboBox
           options={[
             '08/24/24 05:50PM - Revision author',
@@ -34,6 +34,7 @@ export default function ComboBoxExamples() {
           commandEmptyMessage="Empty Message"
           value={comboBox2Value}
           onChange={setComboBox2Value}
+          buttonVariant="ghost"
         />
       </div>
       <div>
