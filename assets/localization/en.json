@@ -82,6 +82,8 @@
   "%settings_defaultMessage_noSettings%": "No settings",
   "%settings_defaultMessage_noSettingComponent%": "No setting component",
   "%settings_defaultMessage_noSettingsForThisProject%": "No settings available for this project.",
+  "%settings_defaultMessage_noSettingsFound%": "Nothing found.",
+  "%settings_defaultMessage_noSettingsFoundDetails%": "Searched for \"{query}\" in Settings",
   "%settings_defaultSearchText_searchProject%": "Search Project Settings...",
   "%settings_defaultSearchText_searchUserSettings%": "Search User Settings...",
   "%settings_errorMessages_invalidNumber%": "Invalid number",

@@ -15,6 +15,10 @@ type ProjectOrOtherSettingsListProps = {
   projectId?: string;
   /** Current search query to filter the list by */
   searchQuery: string;
+  /** Callback function that returns matches based on the search query */
+  onSearchMatchesFound?: (
+    properties: Localized<ProjectSettingProperties> | Localized<SettingProperties>,
+  ) => void;
   /** Settings group label */
   groupLabel: string;
   /** Optional settings group description */
@@ -29,6 +33,7 @@ export default function ProjectOrOtherSettingsList({
   settingProperties,
   projectId,
   searchQuery,
+  onSearchMatchesFound,
   groupLabel,
   groupDescription,
 }: ProjectOrOtherSettingsListProps) {
@@ -42,8 +47,10 @@ export default function ProjectOrOtherSettingsList({
         ),
       );
 
+    if (onSearchMatchesFound) onSearchMatchesFound(filteredProperties);
+
     return filteredProperties;
-  }, [searchQuery, settingProperties]);
+  }, [onSearchMatchesFound, searchQuery, settingProperties]);
 
   const hasFilteredProperties = useMemo(
     () => Object.keys(filteredSettingsProperties).length > 0,

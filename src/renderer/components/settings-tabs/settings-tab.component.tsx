@@ -13,7 +13,13 @@ import './settings-tab.component.scss';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { LocalizeKey } from 'platform-bible-utils';
+import {
+  formatReplacementString,
+  Localized,
+  LocalizeKey,
+  ProjectSettingProperties,
+  SettingProperties,
+} from 'platform-bible-utils';
 import ProjectOrOtherSettingsList from './settings-components/project-or-other-settings-list.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
@@ -42,6 +48,8 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_sidebar_projectsLabel%',
   '%settings_sidebar_projectsComboBoxPlaceholder%',
   '%settings_defaultMessage_noSettings%',
+  '%settings_defaultMessage_noSettingsFound%',
+  '%settings_defaultMessage_noSettingsFoundDetails%',
 ];
 
 export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
@@ -136,6 +144,24 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
     [],
   );
 
+  const [searchMatches, setSearchMatches] = useState<Record<string, number>>({});
+
+  const handleSearchMatchesFound = useCallback(
+    (
+      groupKey: string,
+      properties: Localized<ProjectSettingProperties> | Localized<SettingProperties>,
+    ) => {
+      setSearchMatches((prevMatches) => {
+        const numberOfMatchedItems = Object.keys(properties).length;
+        if (prevMatches[groupKey] === numberOfMatchedItems) return prevMatches;
+        return { ...prevMatches, [groupKey]: numberOfMatchedItems };
+      });
+    },
+    [],
+  );
+
+  const hasSearchResults = Object.values(searchMatches).some((count) => count > 0);
+
   const renderProjectSettingsList = useCallback(
     (projectId: string) => {
       if (!filteredProjectSettingsContributions)
@@ -146,19 +172,22 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
           ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
               <div className="project-or-settings-list">
                 <ProjectOrOtherSettingsList
-                  key={settingsGroup.label}
+                  key={settingsGroup.label + projectId}
                   settingProperties={settingsGroup.properties}
                   projectId={projectId}
                   groupLabel={settingsGroup.label}
                   groupDescription={settingsGroup.description}
                   searchQuery={searchQuery}
+                  onSearchMatchesFound={(matches) =>
+                    handleSearchMatchesFound(settingsGroup.label, matches)
+                  }
                 />
               </div>
             ))
           : [],
       );
     },
-    [filteredProjectSettingsContributions, localizedStrings, searchQuery],
+    [filteredProjectSettingsContributions, handleSearchMatchesFound, localizedStrings, searchQuery],
   );
 
   if (projectIdToLimitSettings) {
@@ -222,9 +251,29 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
                       groupDescription={group.description}
                       settingProperties={group.properties}
                       searchQuery={searchQuery}
+                      onSearchMatchesFound={(matches) =>
+                        handleSearchMatchesFound(group.label, matches)
+                      }
                     />
                   </div>
                 ))}
+
+            {!hasSearchResults && (
+              <div className="zero-search-results">
+                <span className="zero-search-results-title">
+                  {localizedStrings['%settings_defaultMessage_noSettingsFound%']}
+                </span>
+                <span>
+                  {formatReplacementString(
+                    localizedStrings['%settings_defaultMessage_noSettingsFoundDetails%'],
+
+                    {
+                      query: searchQuery,
+                    },
+                  )}
+                </span>
+              </div>
+            )}
           </div>
         </SettingsSidebarContentSearch>
       </div>
