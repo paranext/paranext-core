@@ -31,7 +31,7 @@ import {
   TableRow,
   useEvent,
 } from 'platform-bible-react';
-import { formatTimeSpan, getErrorMessage } from 'platform-bible-utils';
+import { formatTimeSpan, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
