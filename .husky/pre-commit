@@ -1,9 +1,6 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
 echo "Format and stylelint fixes..."
 npm run lint:staged
 echo "Format and stylelint fixes finished"
 
-echo "If the following fails run npm run editor:unlink"
+echo "If the following fails run: npm run editor:unlink"
 npx yalc check

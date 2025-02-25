@@ -1,5 +1,5 @@
 import { WebViewProps } from '@papi/core';
-import papi from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import {
   BookOpen,
@@ -239,7 +239,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     const actionFunction = action === 'install' ? installResource : uninstallResource;
 
     actionFunction(dblEntryUid).catch((error) => {
-      console.debug(getErrorMessage(error));
+      logger.debug(getErrorMessage(error));
     });
   };
 
