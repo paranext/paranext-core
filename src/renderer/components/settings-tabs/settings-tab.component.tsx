@@ -160,7 +160,9 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
     [],
   );
 
-  const hasSearchResults = Object.values(searchMatches).some((count) => count > 0);
+  const hasSearchResults = useMemo(() => {
+    return Object.values(searchMatches).some((count) => count > 0);
+  }, [searchMatches]);
 
   const renderProjectSettingsList = useCallback(
     (projectId: string) => {
@@ -170,19 +172,18 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
       return Object.entries(filteredProjectSettingsContributions).flatMap(([, settingsGroups]) =>
         settingsGroups
           ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
-              <div className="project-or-settings-list">
-                <ProjectOrOtherSettingsList
-                  key={settingsGroup.label + projectId}
-                  settingProperties={settingsGroup.properties}
-                  projectId={projectId}
-                  groupLabel={settingsGroup.label}
-                  groupDescription={settingsGroup.description}
-                  searchQuery={searchQuery}
-                  onSearchMatchesFound={(matches) =>
-                    handleSearchMatchesFound(settingsGroup.label, matches)
-                  }
-                />
-              </div>
+              <ProjectOrOtherSettingsList
+                key={settingsGroup.label + projectId}
+                settingProperties={settingsGroup.properties}
+                projectId={projectId}
+                groupLabel={settingsGroup.label}
+                groupDescription={settingsGroup.description}
+                searchQuery={searchQuery}
+                onSearchMatchesFound={(matches) =>
+                  handleSearchMatchesFound(settingsGroup.label, matches)
+                }
+                className="project-or-settings-list"
+              />
             ))
           : [],
       );
@@ -244,18 +245,17 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
             {selectedSidebarItem.projectId
               ? renderProjectSettingsList(selectedSidebarItem.projectId)
               : settingsContributions[selectedSidebarItem.label]?.map((group) => (
-                  <div className="project-or-settings-list">
-                    <ProjectOrOtherSettingsList
-                      key={group.label}
-                      groupLabel={group.label}
-                      groupDescription={group.description}
-                      settingProperties={group.properties}
-                      searchQuery={searchQuery}
-                      onSearchMatchesFound={(matches) =>
-                        handleSearchMatchesFound(group.label, matches)
-                      }
-                    />
-                  </div>
+                  <ProjectOrOtherSettingsList
+                    key={group.label}
+                    groupLabel={group.label}
+                    groupDescription={group.description}
+                    settingProperties={group.properties}
+                    searchQuery={searchQuery}
+                    onSearchMatchesFound={(matches) =>
+                      handleSearchMatchesFound(group.label, matches)
+                    }
+                    className="project-or-settings-list"
+                  />
                 ))}
 
             {!hasSearchResults && (

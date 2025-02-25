@@ -9,6 +9,7 @@ export default function OtherSetting({
   label,
   description,
   defaultSetting,
+  className,
 }: OtherSettingProps) {
   const [setting, setSetting, , isLoading] = useSetting<keyof SettingTypes>(
     settingKey,
@@ -32,6 +33,7 @@ export default function OtherSetting({
       validateOtherSetting={validateOtherSetting}
       label={label}
       description={description}
+      className={className}
     />
   );
 }

@@ -24,6 +24,8 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   description?: string;
   /** Default value of the setting */
   defaultSetting: TSettingValue;
+  /** Additional css classes to help with unique styling of the Settings component */
+  className?: string;
 };
 
 /**
@@ -115,6 +117,7 @@ export default function Setting({
   validateOtherSetting,
   validateProjectSetting,
   label,
+  className,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -252,7 +255,7 @@ export default function Setting({
   }, [setting, settingKey, debouncedHandleChange, errorMessage, languages, localizedStrings]);
 
   return (
-    <div>
+    <div className={className}>
       {isLoading ? (
         <Label className="loading-label">
           {localizedStrings['%settings_defaultMessage_loadingOneSetting%']}
