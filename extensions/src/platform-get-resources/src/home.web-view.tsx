@@ -111,7 +111,7 @@ globalThis.webViewComponent = function HomeDialog() {
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 
-  const [showGetResourcesButton, setShowGetResourceButton] = useState<boolean | undefined>(
+  const [showGetResourcesButton, setShowGetResourcesButton] = useState<boolean | undefined>(
     undefined,
   );
 
@@ -120,10 +120,10 @@ globalThis.webViewComponent = function HomeDialog() {
       if (dblResourcesProvider) {
         const isGetDblResourcesAvailable = await dblResourcesProvider.isGetDblResourcesAvailable();
         if (isMounted.current) {
-          setShowGetResourceButton(isGetDblResourcesAvailable);
+          setShowGetResourcesButton(isGetDblResourcesAvailable);
         }
       } else {
-        setShowGetResourceButton(undefined);
+        setShowGetResourcesButton(undefined);
       }
     };
 
