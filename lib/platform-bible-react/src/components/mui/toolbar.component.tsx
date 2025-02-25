@@ -28,6 +28,9 @@ export type ToolbarProps = PropsWithChildren<{
 
   /** Children put up at the right side in a ltr layout */
   configAreaChildren?: ReactNode;
+
+  /** Variant of the menubar */
+  menubarVariant?: 'default' | 'muted';
 }>;
 
 export default function Toolbar({
@@ -38,6 +41,7 @@ export default function Toolbar({
   children,
   configAreaChildren,
   useAsAppDragArea,
+  menubarVariant = 'default',
 }: ToolbarProps) {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -69,7 +73,8 @@ export default function Toolbar({
                   containerRef={containerRef}
                   menuProvider={menuProvider}
                 />
-                <MenubarExamples /> {/* TODO: This is a placeholder for the actual menu */}
+                {/* TODO: This is a placeholder for the actual menu */}
+                <MenubarExamples variant={menubarVariant} />
               </>
             ) : undefined}
           </div>
