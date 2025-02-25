@@ -39,7 +39,7 @@
 .dock-layout {
   flex-grow: 1;
   margin: 8px;
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible {
@@ -155,6 +155,7 @@ $tab-top-rounding: vars.$space--xs;
   border-radius: $tab-top-rounding;
 }
 
+.dock-nav-wrap,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
