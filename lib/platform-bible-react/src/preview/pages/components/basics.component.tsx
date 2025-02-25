@@ -26,6 +26,7 @@ import SwitchExamples from './basics/switch.examples.component';
 import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
+import MenubarExamples from './basics/menubar.examples.component';
 
 function Basics() {
   return (
@@ -46,6 +47,7 @@ function Basics() {
           <VerticalTabsTrigger value="Dialog">Dialog</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Menubar">Menubar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
@@ -97,6 +99,10 @@ function Basics() {
 
         <VerticalTabsContent value="Input">
           <InputExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Menubar">
+          <MenubarExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Radio Group">

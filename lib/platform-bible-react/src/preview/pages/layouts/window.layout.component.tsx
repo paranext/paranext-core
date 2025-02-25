@@ -11,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
+import { Canon } from '@sillsdev/scripture';
 
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
@@ -21,6 +22,32 @@ export type HasIsFocused = {
 
 export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
+  // Example hardcoded active book IDs
+
+  const randomBinaryString = Array.from({ length: 71 }, () =>
+    Math.random() < 0.8 ? '0' : '1',
+  ).join('');
+
+  const initialActiveBookNums = Array.from(randomBinaryString).reduce(
+    (ids: number[], char, index) => {
+      if (char === '1') {
+        ids.push(index + 1);
+      }
+      return ids;
+    },
+    [],
+  );
+
+  const getActiveBookIds = () => {
+    // Add ES3 to demonstrate that an obsolete book in use will display (easier than trying to
+    // figure out which 0 to make a 1 in the above string.)
+    const activeBookNums = Array.from(
+      new Set([...initialActiveBookNums, scrRef.bookNum, Canon.bookIdToNumber('3ES')]),
+    );
+    activeBookNums.sort((a, b) => a - b);
+    return activeBookNums.map((bookNum) => Canon.bookNumberToId(bookNum));
+  };
+
   const highlightClassName = isFocused
     ? 'tw-bg-primary tw-text-primary-foreground'
     : 'tw-bg-secondary tw-text-secondary-foreground';
@@ -28,7 +55,11 @@ export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
     <div className="tw-rounded-md tw-border">
       <div className="tw-flex tw-flex-row tw-rounded-se-md tw-bg-muted/50">
         <div className="tw-m-2">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+          <BookChapterControl
+            scrRef={scrRef}
+            handleSubmit={setScrRef}
+            getActiveBookIds={getActiveBookIds}
+          />
         </div>
         <div className="tw-grow" />
         <div className="tw-m-2 tw-flex">

@@ -36,7 +36,7 @@ jobs:
         uses: melusina-org/setup-macports@v1
 
       - name: Update MacPorts ports tree
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         # Not using `-v` for verbose because it is very slow and does not add much value
         run: |
           sudo port sync
@@ -103,6 +103,12 @@ jobs:
         with:
           file_path: 'package.json'
 
+      - name: Read release/app/package.json
+        id: release_package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'release/app/package.json'
+
       - name: Install Node and NPM
         uses: actions/setup-node@v4
         with:
@@ -114,13 +120,40 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publish releases - Windows
+      - name: Prepare release - Windows
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
         if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:
-          # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm exec electron-builder -- --publish always --win
+        run: |
+          npm exec electron-builder -- --win
+          mkdir release\\staged
+          move release\\build\\*Setup*.exe release\\staged
+
+      - name: Code signing - Windows
+        if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        # See https://github.com/cognitedata/code-sign-action/blob/main/README.md for descriptions
+        env:
+          CERTIFICATE_HOST: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST }}
+          CERTIFICATE_HOST_API_KEY: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST_API_KEY }}
+          CERTIFICATE_SHA1_HASH: ${{ secrets.WIN_CERTIFICATE_SHA1_HASH }}
+          CLIENT_CERTIFICATE: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT }}
+          CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT_PASSWORD }}
+          KEYPAIR_ALIAS: ${{ secrets.WIN_CODE_SIGNING_KEYPAIR_ALIAS }}
+        uses: cognitedata/code-sign-action/@v3
+        with:
+          path-to-binary: 'release\\staged'
+
+      - name: Publish releases - Windows
+        if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'Windows-PlatformBible-${{ steps.release_package_json.outputs.version }}'
+          path: release/staged
+          if-no-files-found: error
+          compression-level: 0
 
       - name: Publish releases - macOS
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),

@@ -3,6 +3,9 @@ module.exports = {
     // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
     // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
     'erb',
+    // https://github.com/import-js/eslint-plugin-import?tab=readme-ov-file#typescript
+    'plugin:import/recommended',
+    'plugin:import/typescript',
     // https://github.com/storybookjs/eslint-plugin-storybook/blob/main/lib/configs/recommended.ts
     'plugin:storybook/recommended',
     // Make sure this is last so it gets the chance to override other configs.
@@ -17,6 +20,7 @@ module.exports = {
 
     // Use `noImplicitReturns` instead. See https://typescript-eslint.io/rules/consistent-return/.
     'consistent-return': 'off',
+    'import/default': 'off',
     'import/extensions': 'off',
     // A temporary hack related to IDE not resolving correct package.json
     'import/no-extraneous-dependencies': 'off',

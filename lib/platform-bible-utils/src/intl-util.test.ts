@@ -1,12 +1,11 @@
+import { vi } from 'vitest';
 import getCurrentLocale from './intl-util';
 
-jest.mock('./intl-date-time-format', () => {
-  return jest.fn().mockImplementation(() => ({
-    resolvedOptions: jest.fn().mockImplementation(() => {
-      return { locale: 'he' };
-    }),
-  }));
-});
+vi.mock('./intl-date-time-format', () => ({
+  default: vi.fn(() => ({
+    resolvedOptions: vi.fn(() => ({ locale: 'he' })),
+  })),
+}));
 
 let originalNavigator: Navigator | undefined;
 

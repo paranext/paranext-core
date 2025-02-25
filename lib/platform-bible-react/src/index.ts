@@ -2,6 +2,7 @@ import './index.css';
 
 // Components and Types
 export { default as BookChapterControl } from './components/advanced/book-chapter-control/book-chapter-control.component';
+export type { BookChapterControlProps } from './components/advanced/book-chapter-control/book-chapter-control.component';
 export { default as BookSelector } from './components/advanced/book-selector.component';
 export {
   BOOK_SELECTOR_STRING_KEYS,
@@ -93,6 +94,7 @@ export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
+export type { Command } from './components/mui/menu-item.component';
 export { default as Toolbar } from './components/mui/toolbar.component';
 export type { ToolbarProps } from './components/mui/toolbar.component';
 
@@ -154,6 +156,7 @@ export {
   type LanguageInfo,
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
+
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
