@@ -117,7 +117,7 @@ export default function SettingsSidebar({
           </SidebarGroupLabel>
           <SidebarGroupContent className="tw-pl-3">
             <ComboBox
-              buttonVariant="ghost"
+              buttonVariant={selectedSidebarItem?.projectId ? 'outline' : 'ghost'}
               buttonClassName="tw-w-full"
               popoverContentClassName="tw-z-[1000]"
               options={projectInfo.flatMap((info) => info.projectId)}
