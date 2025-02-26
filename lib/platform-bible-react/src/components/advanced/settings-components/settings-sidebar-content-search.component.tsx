@@ -43,7 +43,7 @@ export default function SettingsSidebarContentSearch({
         className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto tw-border-t-2 tw-border-muted"
       >
         <SettingsSidebar
-          className="tw-w-[230px] tw-border-e-2 tw-border-muted"
+          className="tw-w-1/2 tw-min-w-[140px] tw-max-w-[220px] tw-border-e-2 tw-border-muted"
           extensionLabels={extensionLabels}
           projectInfo={projectInfo}
           handleSelectSidebarItem={handleSelectSidebarItem}
@@ -52,7 +52,7 @@ export default function SettingsSidebarContentSearch({
           projectsSidebarGroupLabel={projectsSidebarGroupLabel}
           buttonPlaceholderText={buttonPlaceholderText}
         />
-        <SidebarInset className="tw-overflow-y-auto">{children}</SidebarInset>
+        <SidebarInset className="tw-min-w-[215px]">{children}</SidebarInset>
       </SidebarProvider>
     </div>
   );
