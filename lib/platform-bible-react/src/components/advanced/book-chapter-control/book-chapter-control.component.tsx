@@ -97,7 +97,12 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds }: BookChapterControlProps) {
+function BookChapterControl({
+  scrRef,
+  handleSubmit,
+  className,
+  getActiveBookIds,
+}: BookChapterControlProps) {
   const dir: Direction = readDirection();
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedBookId, setSelectedBookId] = useState<string>(

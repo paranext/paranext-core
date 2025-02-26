@@ -132,9 +132,10 @@ interface LanguageStrings {
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
+	className?: string;
 	getActiveBookIds?: () => string[];
 };
-export declare function BookChapterControl({ scrRef, handleSubmit, getActiveBookIds }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	startChapter: number;
 	endChapter: number;
@@ -554,9 +555,11 @@ export type ScrollGroupSelectorProps = {
 	 * ```
 	 */
 	localizedStrings?: LanguageStrings;
+	/** Additional css classes to help with unique styling */
+	className?: string;
 };
 /** Selector component for choosing a scroll group */
-export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
 type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
@@ -980,10 +983,6 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	id?: string;
 	/** Additional css classes to help with unique styling of the toolbar */
 	className?: string;
-<<<<<<< HEAD
-}>;
-export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
-=======
 	/** If to use the toolbar as an area to drag around the application */
 	useAsAppDragArea?: boolean;
 	/** Children put up at the right side in a ltr layout */
@@ -992,7 +991,6 @@ export function Toolbar({ menuProvider, commandHandler, className, id, children,
 	menubarVariant?: "default" | "muted";
 }>;
 export function Toolbar({ menuProvider, commandHandler, className, id, children, configAreaChildren, useAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
->>>>>>> 94f7504ec2 (add a muted menubar variant)
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *
