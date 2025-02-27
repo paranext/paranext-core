@@ -23,10 +23,10 @@ export type ToolbarProps = PropsWithChildren<{
   /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 
-  /** If to use the toolbar as an area to drag around the application */
+  /** Whether the toolbar should be used as a draggable area for moving the application */
   useAsAppDragArea?: boolean;
 
-  /** Children put up at the right side in a ltr layout */
+  /** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
   configAreaChildren?: ReactNode;
 
   /** Variant of the menubar */
@@ -68,6 +68,10 @@ export default function Toolbar({
           >
             {menuProvider ? (
               <>
+                {/*
+                  TODO: When the HamburgerMenuButton is removed, move this component out of the MUI folder
+                  also then remove components/mui/toolbar.component.css
+                */}
                 <HamburgerMenuButton
                   commandHandler={commandHandler}
                   containerRef={containerRef}
