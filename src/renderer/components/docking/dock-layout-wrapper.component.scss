@@ -178,13 +178,13 @@ $tab-bottom-rounding: vars.$space--s;
 .dock-tab.dock-tab-active::before {
   left: -$tab-bottom-rounding;
   border-bottom-right-radius: $tab-bottom-rounding - 2;
-  box-shadow: 2px 2px 0 #fff;
+  box-shadow: 2px 2px 0 vars.$color--active-tab;
 }
 
 .dock-tab.dock-tab-active::after {
   right: -$tab-bottom-rounding;
   border-bottom-left-radius: $tab-bottom-rounding - 2;
-  box-shadow: -2px 2px 0 #fff;
+  box-shadow: -2px 2px 0 vars.$color--active-tab;
 }
 
 // #endregion
