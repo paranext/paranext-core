@@ -219,7 +219,7 @@ async function main() {
       height: mainWindowState.height,
       icon: getAssetPath('icon.png'),
       titleBarStyle: 'hidden',
-      // re-adds Windows controls, what about Linux/macOS?
+      // re-adds Windows controls, TODO: what about Linux/macOS?
       ...(process.platform !== 'darwin' ? { titleBarOverlay: true } : {}),
       webPreferences: {
         preload: app.isPackaged
