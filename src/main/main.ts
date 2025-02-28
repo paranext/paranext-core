@@ -5,6 +5,8 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to `./src/main.js`
  * using webpack. This gives us some performance wins.
  */
+
+import os from 'os';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -219,12 +221,12 @@ async function main() {
       height: mainWindowState.height,
       icon: getAssetPath('icon.png'),
       titleBarStyle: 'hidden',
-      // re-adds Windows controls, TODO: what about Linux/macOS?
+      // re-add window controls
       ...(process.platform !== 'darwin'
         ? {
             titleBarOverlay: {
               height: 47,
-              color: 'hsla(0, 0%, 100%, 0)',
+              color: 'hsla(0, 0%, 100%, 0)', // transparent button background until hovered
             },
           }
         : {}),
@@ -397,6 +399,40 @@ async function main() {
     {
       method: {
         summary: 'Restart the platform, including all processes started by it',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getOSPlatform',
+    async () => {
+      return os.platform();
+    },
+    {
+      method: {
+        summary: 'Get the os platform ("win32", "darwin", "linux")',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.isFullScreen',
+    async () => {
+      return false; // TODO implement;
+    },
+    {
+      method: {
+        summary: 'If platform runs in full screen mode',
         params: [],
         result: {
           name: 'return value',
