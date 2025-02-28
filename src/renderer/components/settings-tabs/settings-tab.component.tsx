@@ -13,13 +13,9 @@ import './settings-tab.component.scss';
 import projectLookupService from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import {
-  formatReplacementString,
-  Localized,
-  LocalizeKey,
-  ProjectSettingProperties,
-  SettingProperties,
-} from 'platform-bible-utils';
+import { formatReplacementString, Localized, LocalizeKey } from 'platform-bible-utils';
+import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
+import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import ProjectOrOtherSettingsList from './settings-components/project-or-other-settings-list.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
@@ -51,6 +47,34 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_noSettingsFound%',
   '%settings_defaultMessage_noSettingsFoundDetails%',
 ];
+
+const filterSettingsContributions = (
+  contributions:
+    | Localized<SettingsContributionInfo['contributions']>
+    | Localized<ProjectSettingsContributionInfo['contributions']>
+    | undefined,
+  searchQuery: string,
+) => {
+  if (!contributions) return undefined;
+
+  return Object.fromEntries(
+    Object.entries(contributions).map(([key, groups]) => {
+      if (!groups) return [key, undefined];
+
+      const filteredGroups = groups.map((group) => {
+        const filteredProperties = Object.fromEntries(
+          Object.entries(group.properties).filter(([, property]) =>
+            property.label.toLowerCase().includes(searchQuery.toLowerCase()),
+          ),
+        );
+
+        return { ...group, properties: filteredProperties };
+      });
+
+      return [key, filteredGroups];
+    }),
+  );
+};
 
 export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
@@ -86,6 +110,11 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
       return filteredContributions;
     }, []),
     useMemo(() => undefined, []),
+  );
+
+  const matchedSettingsContributions = useMemo(
+    () => filterSettingsContributions(settingsContributions, searchQuery),
+    [searchQuery, settingsContributions],
   );
 
   const [projectSettingsContributions, isLoadingProjectSettingsContributions] = usePromise(
@@ -125,6 +154,11 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
       useMemo(() => undefined, []),
     );
 
+  const filteredAndMatchedProjectSettingsContributions = useMemo(
+    () => filterSettingsContributions(filteredProjectSettingsContributions, searchQuery),
+    [searchQuery, filteredProjectSettingsContributions],
+  );
+
   const [allProjectOptions, isLoadingAllProjectOptions] = usePromise(
     useCallback(async () => {
       const allProjectIdsFromMetadata = await getAllProjectIdsFromMetadata();
@@ -144,52 +178,46 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
     [],
   );
 
-  const [searchMatches, setSearchMatches] = useState<Record<string, number>>({});
-
-  const handleSearchMatchesFound = useCallback(
-    (
-      groupKey: string,
-      properties: Localized<ProjectSettingProperties> | Localized<SettingProperties>,
-    ) => {
-      setSearchMatches((prevMatches) => {
-        const numberOfMatchedItems = Object.keys(properties).length;
-        if (prevMatches[groupKey] === numberOfMatchedItems) return prevMatches;
-        return { ...prevMatches, [groupKey]: numberOfMatchedItems };
-      });
-    },
-    [],
-  );
-
-  const hasSearchResults = useMemo(() => {
-    return Object.values(searchMatches).some((count) => count > 0);
-  }, [searchMatches]);
-
   const renderProjectSettingsList = useCallback(
     (projectId: string) => {
-      if (!filteredProjectSettingsContributions)
+      if (!filteredAndMatchedProjectSettingsContributions)
         return <div>{localizedStrings['%settings_defaultMessage_noSettingsForThisProject%']}</div>;
 
-      return Object.entries(filteredProjectSettingsContributions).flatMap(([, settingsGroups]) =>
-        settingsGroups
-          ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
-              <ProjectOrOtherSettingsList
-                key={settingsGroup.label + projectId}
-                settingProperties={settingsGroup.properties}
-                projectId={projectId}
-                groupLabel={settingsGroup.label}
-                groupDescription={settingsGroup.description}
-                searchQuery={searchQuery}
-                onSearchMatchesFound={(matches) =>
-                  handleSearchMatchesFound(settingsGroup.label, matches)
-                }
-                className="project-or-settings-list"
-              />
-            ))
-          : [],
+      return Object.entries(filteredAndMatchedProjectSettingsContributions).flatMap(
+        ([, settingsGroups]) =>
+          settingsGroups
+            ? Object.entries(settingsGroups).map(([, settingsGroup]) => (
+                <ProjectOrOtherSettingsList
+                  key={settingsGroup.label + projectId}
+                  settingProperties={settingsGroup.properties}
+                  projectId={projectId}
+                  groupLabel={settingsGroup.label}
+                  groupDescription={settingsGroup.description}
+                  className="project-or-settings-list"
+                />
+              ))
+            : [],
       );
     },
-    [filteredProjectSettingsContributions, handleSearchMatchesFound, localizedStrings, searchQuery],
+    [filteredAndMatchedProjectSettingsContributions, localizedStrings],
   );
+
+  const showZeroResultsState = useMemo(() => {
+    const contributions = selectedSidebarItem.projectId
+      ? filteredAndMatchedProjectSettingsContributions
+      : matchedSettingsContributions;
+
+    if (!contributions) return true; // If contributions is undefined, show zero results
+
+    // Check if any contribution has at least one property
+    return !Object.values(contributions).some((groups) =>
+      groups?.some((group) => Object.keys(group.properties).length > 0),
+    );
+  }, [
+    filteredAndMatchedProjectSettingsContributions,
+    matchedSettingsContributions,
+    selectedSidebarItem.projectId,
+  ]);
 
   if (projectIdToLimitSettings) {
     return (
@@ -244,21 +272,18 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
           <div className="project-or-settings-list-container">
             {selectedSidebarItem.projectId
               ? renderProjectSettingsList(selectedSidebarItem.projectId)
-              : settingsContributions[selectedSidebarItem.label]?.map((group) => (
+              : matchedSettingsContributions &&
+                matchedSettingsContributions[selectedSidebarItem.label]?.map((group) => (
                   <ProjectOrOtherSettingsList
                     key={group.label}
                     groupLabel={group.label}
                     groupDescription={group.description}
                     settingProperties={group.properties}
-                    searchQuery={searchQuery}
-                    onSearchMatchesFound={(matches) =>
-                      handleSearchMatchesFound(group.label, matches)
-                    }
                     className="project-or-settings-list"
                   />
                 ))}
 
-            {!hasSearchResults && (
+            {showZeroResultsState && (
               <div className="zero-search-results">
                 <span className="zero-search-results-title">
                   {localizedStrings['%settings_defaultMessage_noSettingsFound%']}

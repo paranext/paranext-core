@@ -1,7 +1,6 @@
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'platform-bible-react';
 import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
-import { useEffect, useMemo } from 'react';
 import OtherSetting from './other-setting.component';
 import './project-or-other-settings-list.component.scss';
 import ProjectSetting from './project-setting.component';
@@ -13,12 +12,6 @@ type ProjectOrOtherSettingsListProps = {
   settingProperties: Localized<ProjectSettingProperties> | Localized<SettingProperties>;
   /** Optional projectId, supplied if the list is for project settings */
   projectId?: string;
-  /** Current search query to filter the list by */
-  searchQuery: string;
-  /** Callback function that returns matches based on the search query */
-  onSearchMatchesFound?: (
-    properties: Localized<ProjectSettingProperties> | Localized<SettingProperties>,
-  ) => void;
   /** Settings group label */
   groupLabel: string;
   /** Optional settings group description */
@@ -34,35 +27,11 @@ type ProjectOrOtherSettingsListProps = {
 export default function ProjectOrOtherSettingsList({
   settingProperties,
   projectId,
-  searchQuery,
-  onSearchMatchesFound,
   groupLabel,
   groupDescription,
   className,
 }: ProjectOrOtherSettingsListProps) {
-  const filteredSettingsProperties = useMemo(():
-    | Localized<ProjectSettingProperties>
-    | Localized<SettingProperties> => {
-    const filteredProperties: Localized<ProjectSettingProperties> | Localized<SettingProperties> =
-      Object.fromEntries(
-        Object.entries(settingProperties).filter(([, property]) =>
-          property.label.toLowerCase().includes(searchQuery.toLowerCase()),
-        ),
-      );
-
-    return filteredProperties;
-  }, [searchQuery, settingProperties]);
-
-  useEffect(() => {
-    if (onSearchMatchesFound) onSearchMatchesFound(filteredSettingsProperties);
-  }, [onSearchMatchesFound, filteredSettingsProperties]);
-
-  const hasFilteredProperties = useMemo(
-    () => Object.keys(filteredSettingsProperties).length > 0,
-    [filteredSettingsProperties],
-  );
-
-  if (!hasFilteredProperties) return undefined;
+  if (Object.entries(settingProperties).length === 0) return undefined;
 
   return (
     <Card className={`card ${className}`}>
@@ -71,7 +40,7 @@ export default function ProjectOrOtherSettingsList({
         {groupDescription && <CardDescription>{groupDescription}</CardDescription>}
       </CardHeader>
       <CardContent>
-        {Object.entries(filteredSettingsProperties).map(([key, property]) =>
+        {Object.entries(settingProperties).map(([key, property]) =>
           projectId ? (
             <ProjectSetting
               key={key}
