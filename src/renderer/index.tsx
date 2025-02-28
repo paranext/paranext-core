@@ -10,6 +10,7 @@ import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-so
 import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
 import App from './app.component';
 import THEME, { MUI_OVERRIDES, SCROLLBAR_STYLES } from './theme';
+import startNotificationService from './services/notification.service-host';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -50,6 +51,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startWebViewService(),
       startDialogService(),
       startScrollGroupService(),
+      startNotificationService(),
     );
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);

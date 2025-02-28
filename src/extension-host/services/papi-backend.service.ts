@@ -48,6 +48,8 @@ import { IProjectSettingsService } from '@shared/services/project-settings.servi
 import projectSettingsService from '@shared/services/project-settings.service';
 import { WebViewFactory as PapiWebViewFactory } from '@shared/models/web-view-factory.model';
 import dataProtectionService from '@shared/services/data-protection.service';
+import { INotificationService } from '@shared/models/notification.service-model';
+import notificationService from '@shared/services/notification.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -114,6 +116,8 @@ const papi = {
   scrollGroups: scrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
   localization: localizationService as ILocalizationService,
+  /** JSDOC DESTINATION notificationService */
+  notifications: notificationService as INotificationService,
 };
 /* eslint-enable */
 
@@ -199,3 +203,6 @@ Object.freeze(papi.scrollGroups);
 /** JSDOC DESTINATION localizationDataService */
 export const { localization } = papi;
 Object.freeze(papi.localization);
+/** JSDOC DESTINATION notificationService */
+export const { notifications } = papi;
+Object.freeze(papi.notifications);

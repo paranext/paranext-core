@@ -23,6 +23,7 @@
       "%resources_noProjectsInstruction%": "To get started, ask a teammate to add you to a project, or get resources.",
       "%resources_noSearchResults%": "Nothing found.",
       "%resources_noResults%": "No results found",
+      "%resources_noResultsError%": "Unable to search for resources",
       "%resources_open%": "Open",
       "%resources_remove%": "Remove",
       "%resources_results%": "results",

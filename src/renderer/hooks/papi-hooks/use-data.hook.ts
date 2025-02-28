@@ -23,8 +23,9 @@ type UseDataHook = {
       defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
       subscriberOptions?: DataProviderSubscriberOptions,
     ) => [
+      // Adding undefined to the return type since the data provider could throw an error
       // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-      DataProviderTypes[DataProviderName][TDataType]['getData'],
+      DataProviderTypes[DataProviderName][TDataType]['getData'] | undefined,
       (
         | ((
             // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine

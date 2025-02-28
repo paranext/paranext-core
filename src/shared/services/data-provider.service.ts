@@ -13,15 +13,20 @@ import DataProviderInternal, {
 } from '@shared/models/data-provider.model';
 import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
+  AsyncVariable,
+  CannotHaveOnDidDispose,
+  LanguageStrings,
+  LocalizeKey,
   PlatformEvent,
   PlatformEventEmitter,
   deepEqual,
-  getAllObjectFunctionNames,
-  groupBy,
-  isString,
-  CannotHaveOnDidDispose,
-  AsyncVariable,
   endsWith,
+  formatReplacementString,
+  getAllObjectFunctionNames,
+  getErrorMessage,
+  groupBy,
+  isErrorMessageAboutParatextBlockingInternetAccess,
+  isString,
   startsWith,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
@@ -30,18 +35,36 @@ import { LocalObjectToProxyCreator } from '@shared/models/network-object.model';
 import networkObjectService, { overrideDispose } from '@shared/services/network-object.service';
 import logger from '@shared/services/logger.service';
 import {
+  CommandHandlers,
   DataProviderNames,
   DataProviderTypes,
   DataProviders,
   DisposableDataProviders,
 } from 'papi-shared-types';
 import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
+import notificationService from '@shared/services/notification.service';
+import { PlatformNotification } from '@shared/models/notification.service-model';
+import {
+  ILocalizationService,
+  localizationServiceProviderName,
+} from './localization.service-model';
+import networkObjectStatusService from './network-object-status.service';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
 
 /** Event type for data provider update event */
 const ON_DID_UPDATE = 'onDidUpdate';
+
+const generalOpen = '%general_open%';
+const genericDataLoadingErrorString = '%data_loading_error_general%';
+const paratextDataErrorString = '%data_loading_error_paratextData%';
+const stringsToLocalize: LocalizeKey[] = [
+  generalOpen,
+  genericDataLoadingErrorString,
+  paratextDataErrorString,
+];
+let localizedStrings: LanguageStrings = {};
 
 /**
  * An object reference that is a placeholder for updates for data provider subscribers. We want to
@@ -73,8 +96,36 @@ const initialize = () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
 
-    // TODO: Might be best to make a singleton or something
     await networkService.initialize();
+
+    // We can't import the localization service directly because it would create a circular
+    // dependency, so get it from the network object service instead. Also, we don't want to
+    // localize the strings until we have the localization service, so we have to wait for this
+    // promise to resolve before we can localize the strings.
+    networkObjectStatusService
+      .waitForNetworkObject({
+        id: getDataProviderObjectId(localizationServiceProviderName),
+      })
+      .catch((e) => {
+        logger.error(
+          `Failed to wait for localization service network object. ${getErrorMessage(e)}`,
+        );
+      })
+      .then(async () => {
+        const localizationService = await networkObjectService.get<ILocalizationService>(
+          getDataProviderObjectId(localizationServiceProviderName),
+        );
+        if (localizationService)
+          localizedStrings = await localizationService.getLocalizedStrings({
+            localizeKeys: stringsToLocalize,
+          });
+        return localizedStrings;
+      })
+      .catch((e) => {
+        logger.error(
+          `Failed to get localized strings from localization service. ${getErrorMessage(e)}`,
+        );
+      });
 
     isInitialized = true;
   })();
@@ -91,6 +142,30 @@ const initialize = () => {
  */
 function hasKnown(providerName: string): boolean {
   return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
+}
+
+function constructErrorNotification(exception: unknown, dataType: string): PlatformNotification {
+  let clickCommand: keyof CommandHandlers | undefined;
+  let clickCommandLabel: string | undefined;
+  let notificationMessage = '';
+
+  if (isErrorMessageAboutParatextBlockingInternetAccess(exception)) {
+    // TS doesn't realize this is a valid command handler key for some reason
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    clickCommand = 'paratextRegistration.showParatextRegistration' as keyof CommandHandlers;
+    clickCommandLabel = localizedStrings[generalOpen];
+    notificationMessage = localizedStrings[paratextDataErrorString];
+  } else {
+    notificationMessage = formatReplacementString(localizedStrings[genericDataLoadingErrorString], {
+      dataType,
+    });
+  }
+  return {
+    severity: 'error',
+    message: notificationMessage,
+    clickCommandLabel,
+    clickCommand,
+  };
 }
 
 /**
@@ -197,8 +272,9 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
       } catch (e) {
         const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
         logger.warn(
-          `Tried to retrieve data after an update event for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${e}`,
+          `Tried to retrieve data after an update event for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(e)}`,
         );
+        notificationService.send(constructErrorNotification(e, dataType));
       }
     };
 
@@ -229,9 +305,12 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
             callback(data);
           }
         } catch (e) {
+          const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
           logger.warn(
-            `Tried to retrieve data immediately for ${dataType} with selector ${JSON.stringify(selector).substring(0, 120)}, but it threw. ${e}`,
+            `Tried to retrieve data immediately for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(e)}`,
           );
+          callback(undefined);
+          notificationService.send(constructErrorNotification(e, dataType));
         }
       })();
     }

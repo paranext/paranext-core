@@ -2364,6 +2364,34 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
             : never;
   export default ExtractDataProviderDataTypes;
 }
+declare module 'shared/models/notification.service-model' {
+  import { CommandHandlers } from 'papi-shared-types';
+  export type Severity = 'info' | 'warning' | 'error';
+  /** Data needed to display a notification to the user */
+  export interface PlatformNotification {
+    /** Text to display to the user */
+    message: string;
+    /** Severity of the notification */
+    severity: Severity;
+    /** Optional label for users to click when the notification shows */
+    clickCommandLabel?: string;
+    /** Optional command to run if users click on the label in the notification */
+    clickCommand?: keyof CommandHandlers;
+  }
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export interface INotificationService {
+    /**
+     * Send a notification to the user
+     *
+     * @param notification Notification to send
+     */
+    send(notification: PlatformNotification): Promise<void>;
+  }
+  export const NotificationServiceNetworkObjectName = 'NotificationService';
+}
 declare module 'shared/models/web-view-provider.model' {
   import {
     GetWebViewOptions,
@@ -3063,6 +3091,7 @@ declare module 'papi-shared-types' {
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from 'shared/models/network-object.model';
+  import type { PlatformNotification } from 'shared/models/notification.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -3106,6 +3135,7 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    'platform.sendNotificationToUser': (notification: PlatformNotification) => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -3671,6 +3701,116 @@ declare module 'shared/services/internet.service' {
    */
   const internetService: InternetService;
   export default internetService;
+}
+declare module 'shared/services/notification.service' {
+  import { type INotificationService } from 'shared/models/notification.service-model';
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  const notificationService: INotificationService;
+  export default notificationService;
+}
+declare module 'shared/services/localization.service-model' {
+  import IDataProvider from 'shared/models/data-provider.interface';
+  import {
+    DataProviderDataType,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { LanguageInfo } from 'platform-bible-react';
+  import { LanguageStrings, LocalizeKey, OnDidDispose } from 'platform-bible-utils';
+  export type LocalizationData = LanguageStrings;
+  export type LocalizationSelector = {
+    localizeKey: LocalizeKey;
+    locales?: string[];
+  };
+  export type LocalizationSelectors = {
+    localizeKeys: LocalizeKey[];
+    locales?: string[];
+  };
+  /**
+   *
+   * This name is used to register the localization data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
+  export const localizationServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the localization data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.localizationDataServiceDataProvider';
+  }>;
+  export type LocalizationDataDataTypes = {
+    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
+    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
+    AvailableInterfaceLanguages: DataProviderDataType<
+      undefined,
+      Record<string, LanguageInfo>,
+      never
+    >;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [localizationServiceProviderName]: ILocalizationService;
+    }
+  }
+  /**
+   *
+   * Service that allows to get and store localizations
+   */
+  export type ILocalizationService = {
+    /**
+     * Look up localized string for specific localizeKey
+     *
+     * @param selector Made up of a string key that corresponds to a localized value and an array of
+     *   BCP 47 language codes
+     * @returns Localized string
+     */
+    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
+    /**
+     * Look up localized strings for all localizeKeys provided
+     *
+     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
+     *   string key that corresponds to a localized value and an array of BCP 47 language codes
+     * @returns Object whose keys are localizeKeys and values are localized strings
+     */
+    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
+    /**
+     * Get a collection of known user-interface languages
+     *
+     * @returns All user-interface languages
+     */
+    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @returns Unsubscriber function
+     */
+    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @returns Unsubscriber function
+     */
+    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @returns Unsubscriber function
+     */
+    setAvailableInterfaceLanguages(): Promise<
+      DataProviderUpdateInstructions<LocalizationDataDataTypes>
+    >;
+  } & OnDidDispose &
+    typeof localizationServiceObjectToProxy & {
+      /**
+       * This function is used to take a book number from a verse ref and return the localized name of
+       * the book so that the book name can be displayed in the UI language within the UI
+       */
+      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
+    } & IDataProvider<LocalizationDataDataTypes>;
 }
 declare module 'shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
@@ -5743,107 +5883,6 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
-declare module 'shared/services/localization.service-model' {
-  import IDataProvider from 'shared/models/data-provider.interface';
-  import {
-    DataProviderDataType,
-    DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { LanguageInfo } from 'platform-bible-react';
-  import { LanguageStrings, LocalizeKey, OnDidDispose } from 'platform-bible-utils';
-  export type LocalizationData = LanguageStrings;
-  export type LocalizationSelector = {
-    localizeKey: LocalizeKey;
-    locales?: string[];
-  };
-  export type LocalizationSelectors = {
-    localizeKeys: LocalizeKey[];
-    locales?: string[];
-  };
-  /**
-   *
-   * This name is used to register the localization data provider on the papi. You can use this name
-   * to find the data provider when accessing it using the useData hook
-   */
-  export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
-  export const localizationServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the localization data provider on the papi. You can use this name
-     * to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.localizationDataServiceDataProvider';
-  }>;
-  export type LocalizationDataDataTypes = {
-    LocalizedString: DataProviderDataType<LocalizationSelector, string, never>;
-    LocalizedStrings: DataProviderDataType<LocalizationSelectors, LocalizationData, never>;
-    AvailableInterfaceLanguages: DataProviderDataType<
-      undefined,
-      Record<string, LanguageInfo>,
-      never
-    >;
-  };
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [localizationServiceProviderName]: ILocalizationService;
-    }
-  }
-  /**
-   *
-   * Service that allows to get and store localizations
-   */
-  export type ILocalizationService = {
-    /**
-     * Look up localized string for specific localizeKey
-     *
-     * @param selector Made up of a string key that corresponds to a localized value and an array of
-     *   BCP 47 language codes
-     * @returns Localized string
-     */
-    getLocalizedString: (selector: LocalizationSelector) => Promise<string>;
-    /**
-     * Look up localized strings for all localizeKeys provided
-     *
-     * @param selectors An array of LocalizationSelectors. A LocalizationSelector is made up of a
-     *   string key that corresponds to a localized value and an array of BCP 47 language codes
-     * @returns Object whose keys are localizeKeys and values are localized strings
-     */
-    getLocalizedStrings: (selectors: LocalizationSelectors) => Promise<LocalizationData>;
-    /**
-     * Get a collection of known user-interface languages
-     *
-     * @returns All user-interface languages
-     */
-    getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
-     */
-    setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
-     */
-    setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
-    /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
-     */
-    setAvailableInterfaceLanguages(): Promise<
-      DataProviderUpdateInstructions<LocalizationDataDataTypes>
-    >;
-  } & OnDidDispose &
-    typeof localizationServiceObjectToProxy & {
-      /**
-       * This function is used to take a book number from a verse ref and return the localized name of
-       * the book so that the book name can be displayed in the UI language within the UI
-       */
-      getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
-    } & IDataProvider<LocalizationDataDataTypes>;
-}
 declare module 'shared/data/platform.data' {
   /**
    * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
@@ -6316,6 +6355,7 @@ declare module '@papi/core' {
   export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
+  export type { PlatformNotification } from 'shared/models/notification.service-model';
   export type {
     Components as ComponentsDocumentation,
     MethodDocumentationWithoutName,
@@ -6653,6 +6693,7 @@ declare module '@papi/backend' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
+  import { INotificationService } from 'shared/models/notification.service-model';
   const papi: {
     /**
      *
@@ -6871,6 +6912,11 @@ declare module '@papi/backend' {
      * Service that allows to get and store localizations
      */
     localization: ILocalizationService;
+    /**
+     *
+     * Service that sends notifications to users in the UI
+     */
+    notifications: INotificationService;
   };
   export default papi;
   /**
@@ -7090,6 +7136,11 @@ declare module '@papi/backend' {
    * Service that allows to get and store localizations
    */
   export const localization: ILocalizationService;
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export const notifications: INotificationService;
 }
 declare module 'extension-host/extension-types/extension.interface' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -7297,7 +7348,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        DataProviderTypes[DataProviderName][TDataType]['getData'],
+        DataProviderTypes[DataProviderName][TDataType]['getData'] | undefined,
         (
           | ((
               // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
@@ -7883,6 +7934,7 @@ declare module '@papi/frontend' {
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { INotificationService } from 'shared/models/notification.service-model';
   import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
@@ -7979,6 +8031,11 @@ declare module '@papi/frontend' {
      * Service that allows to get and store localizations
      */
     localization: ILocalizationService;
+    /**
+     *
+     * Service that sends notifications to users in the UI
+     */
+    notifications: INotificationService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
@@ -8075,5 +8132,10 @@ declare module '@papi/frontend' {
    * Service that allows to get and store localizations
    */
   export const localization: ILocalizationService;
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export const notifications: INotificationService;
   export type Papi = typeof papi;
 }

@@ -51,6 +51,6 @@ const useLocalizedStrings = (
     localizationDataService.dataProviderName,
   ).LocalizedStrings(localizationSelectors, defaultState, subscriberOptions);
 
-  return [localizedStrings, isLoading];
+  return [localizedStrings ?? defaultState, isLoading];
 };
 export default useLocalizedStrings;
