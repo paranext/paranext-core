@@ -64,7 +64,14 @@ export default function PlatformBibleToolbar() {
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
   const [osPlatform] = usePromise(
-    useCallback(() => sendCommand('platform.getOSPlatform'), []),
+    useCallback(
+      () =>
+        sendCommand('platform.getOSPlatform').then((platform: string | undefined) => {
+          // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+          return platform === 'linux' ? '' : platform;
+        }),
+      [],
+    ),
     undefined,
   );
 

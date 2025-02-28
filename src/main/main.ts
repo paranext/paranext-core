@@ -220,9 +220,11 @@ async function main() {
       width: mainWindowState.width,
       height: mainWindowState.height,
       icon: getAssetPath('icon.png'),
-      titleBarStyle: 'hidden',
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
       // re-add window controls
-      ...(process.platform !== 'darwin'
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      ...(process.platform !== 'darwin' && process.platform !== 'linux'
         ? {
             titleBarOverlay: {
               height: 47,
