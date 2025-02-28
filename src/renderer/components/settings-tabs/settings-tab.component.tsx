@@ -40,8 +40,8 @@ async function getProjectName(projectIdToGetName: string) {
 const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_defaultMessage_loadingSettings%',
   '%settings_defaultMessage_noSettingsForThisProject%',
-  '%settings_sidebar_extensionsLabel%',
-  '%settings_sidebar_projectsLabel%',
+  '%settings_sidebar_generalSettingsLabel%',
+  '%settings_sidebar_projectSettingsLabel%',
   '%settings_sidebar_projectsComboBoxPlaceholder%',
   '%settings_defaultMessage_noSettings%',
   '%settings_defaultMessage_noSettingsFound%',
@@ -103,9 +103,7 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
       );
 
       // Default selected item to the first settings tab
-      setSelectedSidebarItem({
-        label: Object.keys(filteredContributions)[0],
-      });
+      setSelectedSidebarItem({ label: Object.keys(filteredContributions)[0] });
 
       return filteredContributions;
     }, []),
@@ -265,8 +263,8 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
           selectedSidebarItem={selectedSidebarItem}
           searchValue={searchQuery}
           onSearch={handleSearchInput}
-          extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_extensionsLabel%']}
-          projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectsLabel%']}
+          extensionsSidebarGroupLabel={localizedStrings['%settings_sidebar_generalSettingsLabel%']}
+          projectsSidebarGroupLabel={localizedStrings['%settings_sidebar_projectSettingsLabel%']}
           buttonPlaceholderText={localizedStrings['%settings_sidebar_projectsComboBoxPlaceholder%']}
         >
           <div className="project-or-settings-list-container">
@@ -292,9 +290,7 @@ export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabPro
                   {formatReplacementString(
                     localizedStrings['%settings_defaultMessage_noSettingsFoundDetails%'],
 
-                    {
-                      query: searchQuery,
-                    },
+                    { query: searchQuery },
                   )}
                 </span>
               </div>

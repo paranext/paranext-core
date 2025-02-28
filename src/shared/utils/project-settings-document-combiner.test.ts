@@ -10,9 +10,9 @@ import { LocalizationSelectors } from '@shared/services/localization.service-mod
 vi.mock('@shared/services/localization.service', () => ({
   __esModule: true,
   default: {
-    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
-      [localizeKey: string]: string;
-    }> {
+    async getLocalizedStrings({
+      localizeKeys: keys,
+    }: LocalizationSelectors): Promise<{ [localizeKey: string]: string }> {
       return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
     },
   },
@@ -20,8 +20,8 @@ vi.mock('@shared/services/localization.service', () => ({
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 const platformSettings: ProjectSettingsContribution = {
-  label: '%project_settings_platform_group1_label%',
-  description: '%project_settings_platform_group1_description%',
+  label: '%project_settings_project_group1_label%',
+  description: '%project_settings_project_group1_description%',
   properties: {
     'platform.fullName': {
       label: '%project_settings_platform_fullName_label%',
@@ -34,8 +34,8 @@ const platformSettings: ProjectSettingsContribution = {
   },
 };
 const platformSettingsLocalized: Localized<ProjectSettingsContribution> = {
-  label: 'project_settings_platform_group1_label',
-  description: 'project_settings_platform_group1_description',
+  label: 'project_settings_project_group1_label',
+  description: 'project_settings_project_group1_description',
   properties: {
     'platform.fullName': {
       label: 'project_settings_platform_fullName_label',
@@ -92,10 +92,7 @@ const test2ExtensionContribution: ProjectSettingsContribution = [
     label: '%test2_group1%',
     description: '%test2_group1_description%',
     properties: {
-      'test2.setting1': {
-        label: '%test2.setting1_label%',
-        default: 'hi',
-      },
+      'test2.setting1': { label: '%test2.setting1_label%', default: 'hi' },
       'test2.setting2': {
         label: '%test2.setting2_label%',
         description: '%test2.setting2_description%',
@@ -119,10 +116,7 @@ const test2ExtensionContributionLocalized: Localized<ProjectSettingsContribution
     label: 'test2_group1',
     description: 'test2_group1_description',
     properties: {
-      'test2.setting1': {
-        label: 'test2.setting1_label',
-        default: 'hi',
-      },
+      'test2.setting1': { label: 'test2.setting1_label', default: 'hi' },
       'test2.setting2': {
         label: 'test2.setting2_label',
         description: 'test2.setting2_description',
@@ -208,21 +202,11 @@ test('Duplicate settings are not allowed', () => {
     settingsCombiner.addOrUpdateContribution('shouldFail-DuplicateSettings', [
       {
         label: '%thing%',
-        properties: {
-          'shouldFail-DuplicateSettings.thing': {
-            label: '%thing%',
-            default: 1,
-          },
-        },
+        properties: { 'shouldFail-DuplicateSettings.thing': { label: '%thing%', default: 1 } },
       },
       {
         label: '%thing%',
-        properties: {
-          'shouldFail-DuplicateSettings.thing': {
-            label: '%thing%',
-            default: 1,
-          },
-        },
+        properties: { 'shouldFail-DuplicateSettings.thing': { label: '%thing%', default: 1 } },
       },
     ]),
   ).toThrow(
@@ -235,12 +219,7 @@ test('Setting namespace must match contribution name', () => {
   expect(() =>
     settingsCombiner.addOrUpdateContribution('shouldFail-WrongNamespace', {
       label: '%thing%',
-      properties: {
-        'shouldFail-ThisIsTheWrongNamespace.thing': {
-          label: '%thing%',
-          default: 1,
-        },
-      },
+      properties: { 'shouldFail-ThisIsTheWrongNamespace.thing': { label: '%thing%', default: 1 } },
     }),
   ).toThrow(
     "Project Settings contribution from shouldFail-WrongNamespace provided Project Setting shouldFail-ThisIsTheWrongNamespace.thing which does not start with 'shouldFail-WrongNamespace.'",
