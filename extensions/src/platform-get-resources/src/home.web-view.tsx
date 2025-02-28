@@ -234,11 +234,17 @@ globalThis.webViewComponent = function HomeDialog() {
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
 
+  const [excludePdpFactoryIdsInHome] = useSetting(
+    'platformGetResources.excludePdpFactoryIdsInHome',
+    [],
+  );
+
   useEffect(() => {
     let promiseIsCurrent = true;
     const getLocalProjects = async () => {
       const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+        excludePdpFactoryIds: excludePdpFactoryIdsInHome,
       });
       const projectInfo = await Promise.all(
         projectMetadata.map(async (data) => {
@@ -268,7 +274,7 @@ globalThis.webViewComponent = function HomeDialog() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveInProgress]);
+  }, [isSendReceiveInProgress, excludePdpFactoryIdsInHome]);
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
