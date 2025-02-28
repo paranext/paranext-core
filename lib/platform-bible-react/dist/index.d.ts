@@ -134,7 +134,7 @@ export type BookChapterControlProps = {
 	className?: string;
 	getActiveBookIds?: () => string[];
 };
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	startChapter: number;
 	endChapter: number;
@@ -980,14 +980,16 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	id?: string;
 	/** Additional css classes to help with unique styling of the toolbar */
 	className?: string;
-	/** If to use the toolbar as an area to drag around the application */
+	/** If provided: reserve space for the window controls / macos "traffic lights" */
+	reserveOSSpecificSpace?: string;
+	/** Whether the toolbar should be used as a draggable area for moving the application */
 	useAsAppDragArea?: boolean;
-	/** Children put up at the right side in a ltr layout */
+	/** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
 	configAreaChildren?: React$1.ReactNode;
 	/** Variant of the menubar */
 	menubarVariant?: "default" | "muted";
 }>;
-export function Toolbar({ menuProvider, commandHandler, className, id, children, configAreaChildren, useAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export function Toolbar({ menuProvider, commandHandler, className, id, children, configAreaChildren, useAsAppDragArea, reserveOSSpecificSpace, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *
