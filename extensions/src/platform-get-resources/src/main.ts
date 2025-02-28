@@ -6,6 +6,7 @@ import {
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
+import { isString } from 'platform-bible-utils';
 import getResourcesDialogReactStyles from './get-resources.web-view.scss?inline';
 import getResourcesDialogReact from './get-resources.web-view?inline';
 import homeDialogReactStyles from './home.web-view.scss?inline';
@@ -58,6 +59,20 @@ const homeWebViewProvider: IWebViewProvider = {
 export async function activate(context: ExecutionActivationContext) {
   logger.info('Platform Get Resources Extension is activating!');
 
+  // #region Validate settings
+
+  const excludePdpFactoryIdsInHomeValidatorPromise = papi.settings.registerValidator(
+    'platformGetResources.excludePdpFactoryIdsInHome',
+    async (newExcludeIdsList) => {
+      if (!Array.isArray(newExcludeIdsList)) throw new Error('Must be an array');
+      if (newExcludeIdsList.some((id) => !isString(id)))
+        throw new Error('Array must only contain strings');
+      return true;
+    },
+  );
+
+  // #endregion
+
   const getResourcesWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     GET_RESOURCES_WEB_VIEW_TYPE,
     getResourcesWebViewProvider,
@@ -106,6 +121,7 @@ export async function activate(context: ExecutionActivationContext) {
   );
 
   context.registrations.add(
+    await excludePdpFactoryIdsInHomeValidatorPromise,
     await getResourcesWebViewProviderPromise,
     await homeWebViewProviderPromise,
     await openGetResourcesWebViewCommandPromise,

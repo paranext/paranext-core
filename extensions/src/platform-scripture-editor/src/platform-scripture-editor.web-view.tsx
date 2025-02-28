@@ -16,7 +16,12 @@ import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
-import { useProjectData, useProjectSetting, useSetting } from '@papi/frontend/react';
+import {
+  useLocalizedStrings,
+  useProjectData,
+  useProjectSetting,
+  useSetting,
+} from '@papi/frontend/react';
 import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
@@ -25,9 +30,15 @@ import {
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
-import { Button } from 'platform-bible-react';
+import {
+  Alert,
+  AlertDescription,
+  AlertTitle,
+  Button,
+  MarkdownRenderer,
+} from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
-import { EditorWebViewMessage, SelectionRange } from 'platform-scripture-editor';
+import { EditorDecorations, EditorWebViewMessage, SelectionRange } from 'platform-scripture-editor';
 import {
   convertEditorCommentsToLegacyComments,
   convertLegacyCommentsToEditorThreads,
@@ -35,6 +46,11 @@ import {
   MILESTONE_END,
   MILESTONE_START,
 } from './comments';
+import {
+  getLocalizeKeysFromDecorations,
+  mergeDecorations,
+  removeDecorations,
+} from './decorations.util';
 
 /** The offset in pixels from the top of the window to scroll to show the verse number */
 const VERSE_NUMBER_SCROLL_OFFSET = 80;
@@ -46,6 +62,8 @@ const VERSE_NUMBER_SCROLL_OFFSET = 80;
 const EDITOR_LOAD_DELAY_TIME = 100;
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
+
+const defaultEditorDecorations: EditorDecorations = {};
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -65,19 +83,34 @@ function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefin
       `.editor-container span[data-marker="v"][data-number="${verseLocation.verseNum}"]`,
     ) ?? undefined;
 
-  // Scroll if we find the verse or we're at the start of the chapter
-  if (verseElement || verseLocation.verseNum === 1) {
-    // If we're at the first verse, scroll to the top so we can see intro material
-    let scrollTop = 0;
-    if (verseElement && verseLocation.verseNum > 1)
-      scrollTop =
-        verseElement.getBoundingClientRect().top + window.scrollY - VERSE_NUMBER_SCROLL_OFFSET;
+  const scrollContainerElement =
+    document.querySelector<HTMLElement>('.editor-container') ?? undefined;
 
-    window.scrollTo({
-      top: scrollTop,
+  // Scroll if we find the verse or we're at the start of the chapter
+  if (scrollContainerElement && (verseElement || verseLocation.verseNum === 1)) {
+    // Get the scroll position all the way up to the scroll container
+    let offsetElement = verseElement;
+    // If we're at the first verse, scroll to the top so we can see intro material
+    let verseOffsetTop = 0;
+    if (verseLocation.verseNum > 1) {
+      // Find the y offset from the scrolling container
+      while (offsetElement && offsetElement !== scrollContainerElement) {
+        verseOffsetTop += offsetElement.offsetTop;
+        offsetElement =
+          offsetElement.offsetParent instanceof HTMLElement
+            ? offsetElement.offsetParent
+            : undefined;
+      }
+      // Scroll a bit above the verse so you can see a bit of context
+      verseOffsetTop -= VERSE_NUMBER_SCROLL_OFFSET;
+    }
+
+    scrollContainerElement?.scrollTo({
       behavior: 'smooth',
+      top: verseOffsetTop,
     });
   }
+
   return verseElement;
 }
 
@@ -87,6 +120,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useWebViewScrollGroupScrRef,
 }: WebViewProps): JSX.Element {
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
+  const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
+    'decorations',
+    defaultEditorDecorations,
+  );
 
   // Using react's ref api which uses null, so we must use null
   // eslint-disable-next-line no-null/no-null
@@ -106,10 +143,11 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // listen to messages from the web view controller
   useEffect(() => {
     const webViewMessageListener = ({
-      data: { method, scrRef: targetScrRef, range },
+      data: editorMessage,
     }: MessageEvent<EditorWebViewMessage>) => {
-      switch (method) {
-        case 'selectRange':
+      switch (editorMessage.method) {
+        case 'selectRange': {
+          const { scrRef: targetScrRef, range } = editorMessage;
           logger.debug(`selectRange targetScrRef ${serialize(targetScrRef)} ${serialize(range)}`);
 
           if (compareScrRefs(scrRef, targetScrRef) !== 0) {
@@ -123,9 +161,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           else editorRef.current?.setSelection(range);
 
           break;
+        }
+        case 'updateDecorations': {
+          const { decorationsToAdd, decorationsToRemove } = editorMessage;
+
+          const updatedDecorations = mergeDecorations(decorations, decorationsToAdd);
+
+          removeDecorations(updatedDecorations, decorationsToRemove);
+
+          setDecorations(updatedDecorations);
+          break;
+        }
         default:
           // Unknown method name
-          logger.debug(`Received event with unknown method ${method}`);
+          logger.debug(
+            `Received event with unknown method. Message data: ${serialize(editorMessage)}`,
+          );
           break;
       }
     };
@@ -135,7 +186,30 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return () => {
       window.removeEventListener('message', webViewMessageListener);
     };
-  }, [scrRef, setScrRefWithScroll]);
+  }, [scrRef, setScrRefWithScroll, decorations, setDecorations]);
+
+  const [decorationsLocalizedStringsBase] = useLocalizedStrings(
+    useMemo(() => getLocalizeKeysFromDecorations(decorations), [decorations]),
+  );
+
+  /**
+   * Localized strings from the decorations where we have them. Provides the string directly if
+   * there isn't a localized string for the key used to get
+   */
+  const decorationsLocalizedStrings = useMemo(
+    () =>
+      // We are creating a proxy that provides this conversion, but TS can't tell that is the case
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      new Proxy(decorationsLocalizedStringsBase as Record<string, string>, {
+        get(target, prop: string) {
+          if (prop in target) return target[prop];
+          // If the string is not in the localized strings, just return the string as it is probably
+          // not a localize key
+          return prop;
+        },
+      }),
+    [decorationsLocalizedStringsBase],
+  );
 
   const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
 
@@ -248,7 +322,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const [legacyCommentsFromPdp, saveLegacyCommentsToPdp] = useProjectData(
     'legacyCommentManager.comments',
-    projectId,
+    // Only load comments if we have them turned on
+    commentsEnabled ? projectId : undefined,
   ).Comments(
     useMemo(() => {
       return { bookId: verseLocation.book, chapterNum: verseLocation.chapterNum };
@@ -440,7 +515,39 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [isReadOnly, projectName, verseLocation],
   );
 
-  if (isReadOnly) {
+  function renderEditor() {
+    if (isReadOnly) {
+      return (
+        <>
+          {/* Workaround to pull in platform-bible-react styles into the editor */}
+          <Button className="tw-hidden" />
+          <Editorial
+            ref={editorRef}
+            scrRef={verseLocation}
+            onScrRefChange={setScrRefNoScroll}
+            options={options}
+            logger={logger}
+          />
+        </>
+      );
+    }
+    if (commentsEnabled) {
+      return (
+        <>
+          {/* Workaround to pull in platform-bible-react styles into the editor */}
+          <Button className="tw-hidden" />
+          <Marginal
+            ref={editorRef}
+            scrRef={verseLocation}
+            onScrRefChange={setScrRefNoScroll}
+            onUsjChange={onUsjAndCommentsChange}
+            onCommentChange={saveCommentsToPdp}
+            options={options}
+            logger={logger}
+          />
+        </>
+      );
+    }
     return (
       <>
         {/* Workaround to pull in platform-bible-react styles into the editor */}
@@ -449,41 +556,71 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           ref={editorRef}
           scrRef={verseLocation}
           onScrRefChange={setScrRefNoScroll}
+          onUsjChange={saveUsjToPdpIfUpdated}
           options={options}
           logger={logger}
         />
       </>
     );
   }
-  if (commentsEnabled) {
-    return (
-      <>
-        {/* Workaround to pull in platform-bible-react styles into the editor */}
-        <Button className="tw-hidden" />
-        <Marginal
-          ref={editorRef}
-          scrRef={verseLocation}
-          onScrRefChange={setScrRefNoScroll}
-          onUsjChange={onUsjAndCommentsChange}
-          onCommentChange={saveCommentsToPdp}
-          options={options}
-          logger={logger}
-        />
-      </>
-    );
-  }
+
   return (
-    <>
-      {/* Workaround to pull in platform-bible-react styles into the editor */}
-      <Button className="tw-hidden" />
-      <Editorial
-        ref={editorRef}
-        scrRef={verseLocation}
-        onScrRefChange={setScrRefNoScroll}
-        onUsjChange={saveUsjToPdpIfUpdated}
-        options={options}
-        logger={logger}
-      />
-    </>
+    <div className="tw-h-screen tw-w-screen">
+      {/** Containers */}
+      {Object.entries(decorations.containers ?? {}).reduce(
+        (children, [id, decoration]) => (
+          <div
+            className="tw-h-full"
+            data-container-id={id}
+            key={`container-${id}`}
+            style={decoration.style}
+          >
+            {children}
+          </div>
+        ),
+        <div className="tw-flex tw-flex-col tw-h-full">
+          {/** Headers */}
+          <div className="tw-flex-grow-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
+            {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
+              // Headers
+              <Alert
+                data-header-id={id}
+                key={`header-${id}`}
+                // Must use `any` here because Alert doesn't expose its variant type which is very
+                // specific strings. We are passing in a variant string. If it is not accepted, it uses `default` variant
+                // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                variant={header.variant as any}
+              >
+                {header.iconUrl && (
+                  <img
+                    className="tw-h-4 tw-w-4"
+                    src={header.iconUrl}
+                    alt={
+                      header.iconAltText
+                        ? decorationsLocalizedStrings[header.iconAltText]
+                        : undefined
+                    }
+                  />
+                )}
+                {header.title && (
+                  <AlertTitle>{decorationsLocalizedStrings[header.title]}</AlertTitle>
+                )}
+                {header.descriptionMd && (
+                  <AlertDescription>
+                    <MarkdownRenderer
+                      anchorTarget="_blank"
+                      className="tw-max-w-none tw-text-sm"
+                      markdown={decorationsLocalizedStrings[header.descriptionMd]}
+                    />
+                  </AlertDescription>
+                )}
+              </Alert>
+            ))}
+          </div>
+          {/** Editor */}
+          {renderEditor()}
+        </div>,
+      )}
+    </div>
   );
 };

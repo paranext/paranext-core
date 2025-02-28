@@ -56,4 +56,12 @@ declare module 'papi-shared-types' {
     /** @returns True if Send/Receive is available to the user, false if not */
     'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
   }
+
+  export interface SettingTypes {
+    /**
+     * List of PDP Factory IDs to exclude when searching for projects to display in the Home
+     * projects list
+     */
+    'platformGetResources.excludePdpFactoryIdsInHome': string[];
+  }
 }
