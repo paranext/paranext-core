@@ -23,6 +23,9 @@ export type ToolbarProps = PropsWithChildren<{
   /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 
+  /** If provided: reserve space for the window controls / macos "traffic lights" */
+  reserveOSSpecificSpace?: string;
+
   /** Whether the toolbar should be used as a draggable area for moving the application */
   useAsAppDragArea?: boolean;
 
@@ -41,6 +44,7 @@ export default function Toolbar({
   children,
   configAreaChildren,
   useAsAppDragArea,
+  reserveOSSpecificSpace = undefined,
   menubarVariant = 'default',
 }: ToolbarProps) {
   // This ref will always be defined
@@ -49,13 +53,21 @@ export default function Toolbar({
 
   return (
     <div
-      className={cn('tw-border tw-bg-muted tw-px-4 tw-text-muted-foreground', className)}
+      className={cn(
+        'tw-border tw-px-4 tw-text-foreground',
+        { 'tw-ps-[85px]': reserveOSSpecificSpace === 'darwin' }, // space for macos "traffic lights"
+        {
+          'tw-pe-[calc(138px+1rem)]':
+            reserveOSSpecificSpace === 'win32' || reserveOSSpecificSpace === 'linux',
+        },
+        className,
+      )}
       ref={containerRef}
       style={{ position: 'relative' }}
       id={id}
     >
       <div
-        className="tw-flex tw-h-full tw-w-full tw-justify-between"
+        className="tw-flex tw-h-full tw-w-full tw-justify-between tw-overflow-hidden"
         /* @ts-ignore Electron-only property */
         style={useAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
       >
@@ -84,7 +96,7 @@ export default function Toolbar({
           </div>
         </div>
 
-        {/* Command area */}
+        {/* Content area */}
         <div
           className="tw-flex tw-items-center tw-gap-2 tw-px-2"
           /* @ts-ignore Electron-only property */

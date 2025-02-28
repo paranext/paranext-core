@@ -1,5 +1,6 @@
 import logger from '@shared/services/logger.service';
-import { Toolbar, BookChapterControl, ScrollGroupSelector } from 'platform-bible-react';
+import { Toolbar, BookChapterControl, ScrollGroupSelector, usePromise } from 'platform-bible-react';
+import { User } from 'lucide-react';
 import {
   getLocalizeKeysForScrollGroupIds,
   Localized,
@@ -10,6 +11,7 @@ import { availableScrollGroupIds } from '@renderer/services/scroll-group.service
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { useCallback, useState } from 'react';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { sendCommand } from '@shared/services/command.service';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
 
@@ -61,13 +63,30 @@ export default function PlatformBibleToolbar() {
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const [osPlatform] = usePromise(
+    useCallback(() => sendCommand('platform.getOSPlatform'), []),
+    undefined,
+  );
+
+  const [isFullScreen] = usePromise(
+    useCallback(() => sendCommand('platform.isFullScreen'), []),
+    undefined,
+  );
+
   return (
     <Toolbar
       menuProvider={getMenuData}
       commandHandler={handleMenuCommand}
       className="tw-h-12 tw-bg-transparent"
-      useAsAppDragArea
       menubarVariant="muted"
+      reserveOSSpecificSpace={osPlatform === 'darwin' && isFullScreen ? undefined : osPlatform}
+      useAsAppDragArea
+      configAreaChildren={
+        // This is a placeholder for the actual user menu
+        <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
+          <User className="tw-h-4" />
+        </div>
+      }
     >
       <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
       <ScrollGroupSelector
