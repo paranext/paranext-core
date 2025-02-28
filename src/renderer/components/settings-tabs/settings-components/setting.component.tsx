@@ -9,7 +9,16 @@ import {
   SettingNames,
   SettingTypes,
 } from 'papi-shared-types';
-import { Input, Label, LanguageInfo, Switch, UiLanguageSelector } from 'platform-bible-react';
+import {
+  Input,
+  Label,
+  LanguageInfo,
+  Switch,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  UiLanguageSelector,
+} from 'platform-bible-react';
 import { debounce, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
 import { ChangeEvent, useCallback, useMemo, useState } from 'react';
 import './settings.component.scss';
@@ -33,10 +42,7 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
  * settings
  */
 type SettingProps<TProps, TControls, TValidateProject, TValidateOther> = TProps &
-  TControls & {
-    validateProjectSetting?: TValidateProject;
-    validateOtherSetting?: TValidateOther;
-  };
+  TControls & { validateProjectSetting?: TValidateProject; validateOtherSetting?: TValidateOther };
 
 /** Values of ProjectSettingTypes */
 export type ProjectSettingValues = ProjectSettingTypes[keyof ProjectSettingTypes];
@@ -118,6 +124,7 @@ export default function Setting({
   validateProjectSetting,
   label,
   className,
+  description,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -262,9 +269,14 @@ export default function Setting({
         </Label>
       ) : (
         <div className="setting-label-container">
-          <Label htmlFor={settingKey} className="setting-label">
-            {label}
-          </Label>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Label htmlFor={settingKey} className="setting-label">
+                {label}
+              </Label>
+            </TooltipTrigger>
+            {description && <TooltipContent>{description}</TooltipContent>}
+          </Tooltip>
           {generateComponent()}
         </div>
       )}
