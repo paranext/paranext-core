@@ -14,8 +14,8 @@ vi.mock('@extension-host/data/core-project-settings-info.data', async () => ({
   ...(await vi.importActual('@extension-host/data/core-project-settings-info.data')),
   __esModule: true,
   platformProjectSettings: {
-    label: '%project_settings_platform_group1_label%',
-    description: '%project_settings_platform_group1_description%',
+    label: '%project_settings_project_group1_label%',
+    description: '%project_settings_project_group1_description%',
     properties: {
       'platform.fullName': {
         label: '%project_settings_platform_fullName_label%',
@@ -36,9 +36,9 @@ vi.mock('@extension-host/data/core-project-settings-info.data', async () => ({
 vi.mock('@shared/services/localization.service', () => ({
   __esModule: true,
   default: {
-    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
-      [localizeKey: string]: string;
-    }> {
+    async getLocalizedStrings({
+      localizeKeys: keys,
+    }: LocalizationSelectors): Promise<{ [localizeKey: string]: string }> {
       return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
     },
   },

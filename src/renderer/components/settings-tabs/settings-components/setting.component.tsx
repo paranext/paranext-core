@@ -1,17 +1,27 @@
+import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import localizationDataService from '@shared/services/localization.service';
-import { ChangeEvent, useCallback, useMemo, useState } from 'react';
+import logger from '@shared/services/logger.service';
+import { SettingDataTypes } from '@shared/services/settings.service-model';
 import {
   ProjectSettingNames,
   ProjectSettingTypes,
   SettingNames,
   SettingTypes,
 } from 'papi-shared-types';
-import { Input, Label, LanguageInfo, Switch, UiLanguageSelector } from 'platform-bible-react';
+import {
+  Input,
+  Label,
+  LanguageInfo,
+  Switch,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+  UiLanguageSelector,
+} from 'platform-bible-react';
 import { debounce, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
-import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
-import { SettingDataTypes } from '@shared/services/settings.service-model';
-import logger from '@shared/services/logger.service';
-import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { ChangeEvent, useCallback, useMemo, useState } from 'react';
+import './settings.component.scss';
 
 /** Props shared between the user and project setting components */
 type BaseSettingProps<TSettingKey, TSettingValue> = {
@@ -23,6 +33,8 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
   description?: string;
   /** Default value of the setting */
   defaultSetting: TSettingValue;
+  /** Additional css classes to help with unique styling of the Settings component */
+  className?: string;
 };
 
 /**
@@ -30,10 +42,7 @@ type BaseSettingProps<TSettingKey, TSettingValue> = {
  * settings
  */
 type SettingProps<TProps, TControls, TValidateProject, TValidateOther> = TProps &
-  TControls & {
-    validateProjectSetting?: TValidateProject;
-    validateOtherSetting?: TValidateOther;
-  };
+  TControls & { validateProjectSetting?: TValidateProject; validateOtherSetting?: TValidateOther };
 
 /** Values of ProjectSettingTypes */
 export type ProjectSettingValues = ProjectSettingTypes[keyof ProjectSettingTypes];
@@ -114,6 +123,8 @@ export default function Setting({
   validateOtherSetting,
   validateProjectSetting,
   label,
+  className,
+  description,
 }: CombinedSettingProps) {
   const validateSetting = validateOtherSetting || validateProjectSetting;
 
@@ -223,8 +234,8 @@ export default function Setting({
       if (Array.isArray(setting) && settingKey === 'platform.interfaceLanguage') {
         component = (
           <UiLanguageSelector
+            className="language-selector"
             key={settingKey}
-            className="tw-w-64"
             knownUiLanguages={languages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}
@@ -243,24 +254,29 @@ export default function Setting({
       }
 
     return (
-      <div className="tw-w-1/3">
+      <div className="setting-container">
         {component}
-        {errorMessage && <Label className="tw-text-red-600 tw-pt-4">{errorMessage}</Label>}
+        {errorMessage && <Label className="error-label">{errorMessage}</Label>}
       </div>
     );
   }, [setting, settingKey, debouncedHandleChange, errorMessage, languages, localizedStrings]);
 
   return (
-    <div>
+    <div className={className}>
       {isLoading ? (
-        <Label className="tw-text-sm tw-text-muted-foreground">
+        <Label className="loading-label">
           {localizedStrings['%settings_defaultMessage_loadingOneSetting%']}
         </Label>
       ) : (
-        <div className="tw-flex tw-items-center tw-justify-center">
-          <Label htmlFor={settingKey} className="tw-w-1/3 tw-text-right tw-pr-4">
-            {label}
-          </Label>
+        <div className="setting-label-container">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Label htmlFor={settingKey} className="setting-label">
+                {label}
+              </Label>
+            </TooltipTrigger>
+            {description && <TooltipContent>{description}</TooltipContent>}
+          </Tooltip>
           {generateComponent()}
         </div>
       )}

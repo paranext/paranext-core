@@ -15,7 +15,7 @@ const GET_RESOURCES_WEB_VIEW_TYPE = 'platformGetResources.getResources';
 const HOME_WEB_VIEW_TYPE = 'platformGetResources.home';
 
 const GET_RESOURCES_WEB_VIEW_SIZE = { width: 900, height: 650 };
-const HOME_WEB_VIEW_SIZE = { width: 900, height: 650 };
+const HOME_WEB_VIEW_SIZE = { width: 1000, height: 650 };
 
 let manageExtensions: ManageExtensions;
 
