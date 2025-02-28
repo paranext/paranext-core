@@ -3,6 +3,7 @@ import * as MenubarPrimitive from '@radix-ui/react-menubar';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 
 import { cn } from '@/utils/shadcn-ui.util';
+import { cva } from 'class-variance-authority';
 
 /* #region CUSTOM */
 type MenubarContextProps = {
@@ -20,12 +21,18 @@ function useContext() {
   return context;
 }
 
-function mutedMenuElementClasses(context: MenubarContextProps) {
-  return {
-    'hover:tw-bg-muted hover:tw-text-foreground focus:tw-bg-muted focus:tw-text-foreground data-[state=open]:tw-bg-muted data-[state=open]:tw-text-foreground':
-      context.variant === 'muted',
-  };
-}
+export const menubarVariants = cva('', {
+  variants: {
+    variant: {
+      default: '',
+      muted:
+        'hover:tw-bg-muted hover:tw-text-foreground focus:tw-bg-muted focus:tw-text-foreground data-[state=open]:tw-bg-muted data-[state=open]:tw-text-foreground',
+    },
+  },
+  defaultVariants: {
+    variant: 'default',
+  },
+});
 /* #endregion CUSTOM */
 
 function MenubarMenu({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Menu>) {
@@ -87,8 +94,8 @@ const MenubarTrigger = React.forwardRef<
       ref={ref}
       className={cn(
         'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
-        mutedMenuElementClasses(context),
-        className,
+        // CUSTOM
+        menubarVariants({ variant: context.variant, className }),
       )}
       {...props}
     />
@@ -110,7 +117,7 @@ const MenubarSubTrigger = React.forwardRef<
         'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
         inset && 'tw-pl-8',
         // CUSTOM
-        mutedMenuElementClasses(context),
+        menubarVariants({ variant: context.variant, className }),
         className,
       )}
       {...props}
@@ -186,7 +193,7 @@ const MenubarItem = React.forwardRef<
         'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
         inset && 'tw-pl-8',
         // CUSTOM
-        mutedMenuElementClasses(context),
+        menubarVariants({ variant: context.variant, className }),
         className,
       )}
       {...props}
@@ -206,7 +213,7 @@ const MenubarCheckboxItem = React.forwardRef<
       className={cn(
         'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pl-8 tw-pr-2 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
         // CUSTOM
-        mutedMenuElementClasses(context),
+        menubarVariants({ variant: context.variant, className }),
         className,
       )}
       checked={checked}
@@ -234,7 +241,7 @@ const MenubarRadioItem = React.forwardRef<
       className={cn(
         'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pl-8 tw-pr-2 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
         // CUSTOM
-        mutedMenuElementClasses(context),
+        menubarVariants({ variant: context.variant, className }),
         className,
       )}
       {...props}
