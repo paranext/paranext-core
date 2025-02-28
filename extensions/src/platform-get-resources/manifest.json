@@ -1,5 +1,5 @@
 {
-  "name": "platform-get-resources",
+  "name": "platformGetResources",
   "version": "0.0.1",
   "publisher": "platform",
   "displayData": "assets/displayData.json",
