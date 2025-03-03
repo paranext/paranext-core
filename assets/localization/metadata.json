@@ -13,7 +13,10 @@
   "%project_settings_project_group1_description%": {
     "fallbackKey": "%project_settings_platform_group1_description%"
   },
-  "%project_settings_platform_group1_label%": {
+  "%project_settings_project_group1_label%": {
     "fallbackKey": "%project_settings_platform_group1_label%"
+  },
+  "%settings_platform_group1_label_alternative%": {
+    "fallbackKey": "%settings_platform_group1_label%"
   }
 }
