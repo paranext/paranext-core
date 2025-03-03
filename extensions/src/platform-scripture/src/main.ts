@@ -7,10 +7,6 @@ import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/p
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
 import InventoryWebViewProvider, { InventoryWebViewOptions } from './inventory.web-view-provider';
-import ConfigureChecksWebViewProvider, {
-  configureChecksWebViewType,
-  ConfigureChecksWebViewOptions,
-} from './configure-checks.web-view-provider';
 import CheckResultsWebViewProvider, {
   checkResultsListWebViewType,
   CheckResultsWebViewOptions,
@@ -106,29 +102,6 @@ async function openInventory(
   );
 }
 
-async function configureChecks(webViewId: string | undefined): Promise<string | undefined> {
-  let projectId: string | undefined;
-
-  logger.debug('Configuring checks');
-
-  if (webViewId) {
-    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
-    projectId = webViewDefinition?.projectId;
-  }
-
-  if (!projectId) {
-    logger.debug('No project!');
-    return undefined;
-  }
-
-  const options: ConfigureChecksWebViewOptions = { projectId };
-  return papi.webViews.openWebView(
-    configureChecksWebViewType,
-    { type: 'float', floatSize: { width: 700, height: 800 } },
-    options,
-  );
-}
-
 async function showCheckResults(webViewId: string | undefined): Promise<string | undefined> {
   let editorWebViewId: string | undefined;
   let projectId: string | undefined;
@@ -209,9 +182,7 @@ export async function activate(context: ExecutionActivationContext) {
     punctuationInventoryWebViewType,
   );
   const checkResultsWebViewProvider = new CheckResultsWebViewProvider();
-  const configureChecksWebViewProvider = new ConfigureChecksWebViewProvider(
-    '%webView_configureChecks_title%',
-  );
+
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
 
   const includeProjectsCommandPromise = papi.commands.registerCommand(
@@ -375,32 +346,6 @@ export async function activate(context: ExecutionActivationContext) {
     punctuationInventoryWebViewType,
     punctuationInventoryWebViewProvider,
   );
-  const configureChecksPromise = papi.commands.registerCommand(
-    'platformScripture.openConfigureChecks',
-    configureChecks,
-    {
-      method: {
-        summary: 'Open the configure checks web view',
-        params: [
-          {
-            name: 'webViewId',
-            required: false,
-            summary: 'The ID of the web view tied to the project that the checks are for',
-            schema: { type: 'string' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          summary: 'The ID of the new configure checks web view',
-          schema: { type: 'string' },
-        },
-      },
-    },
-  );
-  const configureChecksWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
-    configureChecksWebViewType,
-    configureChecksWebViewProvider,
-  );
   const showCheckResultsPromise = papi.commands.registerCommand(
     'platformScripture.showCheckResults',
     showCheckResults,
@@ -479,8 +424,6 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidPunctuationPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
-    await configureChecksPromise,
-    await configureChecksWebViewProviderPromise,
     await showCheckResultsPromise,
     await showCheckResultsWebViewProviderPromise,
     await showChecksSidePanelPromise,
