@@ -11,6 +11,7 @@ import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import * as platformBibleUtils from 'platform-bible-utils';
+import * as crypto from 'crypto';
 import logger from '@shared/services/logger.service';
 import {
   getCommandLineArgumentsGroup,
@@ -19,6 +20,7 @@ import {
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import * as papiCore from '@shared/services/papi-core.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
@@ -119,7 +121,7 @@ type DtsInfo = {
  * Key to uniquely identify an extension with some extra certainty that the extension is who it says
  * it is.
  *
- * Format: `<extension-publisher>.<extension-name>`
+ * Format: `<extension-publisher>.<extension-name>`.toLowerCase()
  */
 type ExtensionKey = `${string}.${string}`;
 
@@ -854,7 +856,7 @@ function getExtensionKey(manifest: ExtensionManifest): ExtensionKey {
     throw new Error('Extension publisher must not be empty string, undefined, or contain spaces');
   if (!manifest.name || spaceRegex.test(manifest.name))
     throw new Error('Extension name must not be empty string, undefined, or contain spaces');
-  const extensionKey: ExtensionKey = `${manifest.publisher}.${manifest.name}`;
+  const extensionKey: ExtensionKey = `${manifest.publisher.toLowerCase()}.${manifest.name.toLowerCase()}`;
   return extensionKey;
 }
 
@@ -896,7 +898,7 @@ function handleExtensionUri(uri: string) {
   // Validating the map keys when setting in createRegisterUriHandlerFunction, so this won't match
   // to anything if it is not properly formatted. Implicitly validating as ExtensionKey
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const extensionKey = url?.hostname as ExtensionKey;
+  const extensionKey = url?.hostname.toLowerCase() as ExtensionKey;
   const uriHandler = uriHandlersByExtensionKey.get(extensionKey);
 
   if (!uriHandler) {
@@ -1041,13 +1043,19 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   }));
 
   // Shim out require so extensions can use it only as prescribed.
+  // WARNING: This code should not be edited without serious review. For more information,
+  // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
   // Assert the specific type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi and some other things
     if (moduleName === '@papi/backend') return papi;
+    if (moduleName === '@papi/core') return papiCore;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
     if (moduleName === 'platform-bible-utils') return platformBibleUtils;
+
+    // Node's built-in modules
+    if (moduleName === 'crypto') return crypto;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithCheck.find(
