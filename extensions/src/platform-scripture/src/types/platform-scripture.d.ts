@@ -894,14 +894,6 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openConfigureChecks': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.showCheckResults': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
     'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
