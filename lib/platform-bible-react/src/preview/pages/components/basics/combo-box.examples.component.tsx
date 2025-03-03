@@ -51,6 +51,7 @@ export default function ComboBoxExamples() {
           value={comboBox3Value}
           onChange={setComboBox3Value}
           icon={<BookOpen />}
+          buttonVariant={comboBox3Value ? 'outline' : 'ghost'}
         />
       </div>
       <div>
