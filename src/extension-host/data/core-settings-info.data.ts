@@ -4,7 +4,7 @@ import { isString, ScriptureReference, SettingsContribution } from 'platform-bib
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = {
-  label: '%settings_platform_group1_label%',
+  label: '%settings_platform_group1_label_alternative%',
   description: '%settings_platform_group1_description%',
   properties: {
     'platform.verseRef': {

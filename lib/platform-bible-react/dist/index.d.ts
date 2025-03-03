@@ -12,6 +12,7 @@ import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
+import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
@@ -393,7 +394,7 @@ export type SettingsSidebarProps = {
 	/** Optional id for testing */
 	id?: string;
 	/** Extension labels from contribution */
-	extensionLabels: string[];
+	extensionLabels: Record<string, string>;
 	/** Project names and ids */
 	projectInfo: ProjectInfo[];
 	/** Handler for selecting a sidebar item */
@@ -406,8 +407,10 @@ export type SettingsSidebarProps = {
 	projectsSidebarGroupLabel: string;
 	/** Placeholder text for the button */
 	buttonPlaceholderText: string;
+	/** Additional css classes to help with unique styling of the sidebar */
+	className?: string;
 };
-export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;
@@ -1513,6 +1516,10 @@ export declare const ToggleGroupItem: React$1.ForwardRefExoticComponent<Omit<Tog
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProviderProps>;
+export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
+export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;
