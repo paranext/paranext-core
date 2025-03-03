@@ -28,14 +28,7 @@
             "order": 1
           }
         },
-        "items": [
-          {
-            "label": "%webView_platformScripture_showCheckResults%",
-            "group": "platformScripture.checks",
-            "order": 1,
-            "command": "platformScripture.showCheckResults"
-          }
-        ]
+        "items": []
       },
       "contextMenu": {
         "groups": {},
