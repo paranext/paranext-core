@@ -3,13 +3,20 @@
     "notes": "A confirmation word used in many places. For example, this may be used as the label on a button on a dialog.",
     "fallbackKey": "%confirm%"
   },
-  "%submit%": {
-    "fallbackKey": "%yes%"
-  },
+  "%submit%": { "fallbackKey": "%yes%" },
   "%about_db_ip_attribution_intro%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;  Internet safety features use data&#xA;from &quot;%"
   },
   "%about_db_ip_attribution_terms%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;Terms&quot;%"
+  },
+  "%project_settings_project_group1_description%": {
+    "fallbackKey": "%project_settings_platform_group1_description%"
+  },
+  "%project_settings_project_group1_label%": {
+    "fallbackKey": "%project_settings_platform_group1_label%"
+  },
+  "%settings_platform_group1_label_alternative%": {
+    "fallbackKey": "%settings_platform_group1_label%"
   }
 }
