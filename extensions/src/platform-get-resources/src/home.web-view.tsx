@@ -31,7 +31,14 @@ import {
   TableRow,
   useEvent,
 } from 'platform-bible-react';
-import { formatTimeSpan, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import {
+  formatTimeSpan,
+  getErrorMessage,
+  isErrorMessageAboutParatextBlockingInternetAccess,
+  isErrorMessageAboutRegistryAuthFailure,
+  LocalizeKey,
+  newGuid,
+} from 'platform-bible-utils';
 import { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -190,6 +197,8 @@ globalThis.webViewComponent = function HomeDialog() {
   const [sharedProjectsInfo, setSharedProjectsInfo] = useState<SharedProjectsInfo>();
   const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
 
+  const sharedProjectErrorNotificationId = useMemo(() => newGuid(), []);
+
   useEffect(() => {
     if (!isSendReceiveAvailable) {
       setIsLoadingRemoteProjects(false);
@@ -208,7 +217,26 @@ globalThis.webViewComponent = function HomeDialog() {
           setSharedProjectsInfo(projectsInfo);
         }
       } catch (e) {
-        logger.warn(`Home web view failed to get shared projects: ${getErrorMessage(e)}`);
+        const errorMessage = getErrorMessage(e);
+        if (isErrorMessageAboutParatextBlockingInternetAccess(errorMessage)) {
+          papi.notifications.send({
+            severity: 'error',
+            message: '%data_loading_error_paratextData_internet_disabled%',
+            clickCommandLabel: '%general_open%',
+            clickCommand: 'paratextRegistration.showParatextRegistration',
+            notificationId: sharedProjectErrorNotificationId,
+          });
+        } else if (isErrorMessageAboutRegistryAuthFailure(errorMessage)) {
+          papi.notifications.send({
+            severity: 'error',
+            message: '%data_loading_error_paratextData_auth_failure%',
+            clickCommandLabel: '%general_open%',
+            clickCommand: 'paratextRegistration.showParatextRegistration',
+            notificationId: sharedProjectErrorNotificationId,
+          });
+        } else {
+          logger.warn(`Home web view failed to get shared projects: ${errorMessage}`);
+        }
 
         if (promiseIsCurrent && isMounted.current) {
           setIsLoadingRemoteProjects(false);
@@ -229,7 +257,7 @@ globalThis.webViewComponent = function HomeDialog() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveAvailable, isSendReceiveInProgress]);
+  }, [isSendReceiveAvailable, isSendReceiveInProgress, sharedProjectErrorNotificationId]);
 
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
