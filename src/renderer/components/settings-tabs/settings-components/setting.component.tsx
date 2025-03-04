@@ -237,7 +237,7 @@ export default function Setting({
           <UiLanguageSelector
             className="language-selector"
             key={settingKey}
-            knownUiLanguages={languages}
+            knownUiLanguages={languages ?? defaultLanguages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}
             onLanguagesChange={debouncedHandleChange}
@@ -260,7 +260,15 @@ export default function Setting({
         {errorMessage && <Label className="error-label">{errorMessage}</Label>}
       </div>
     );
-  }, [setting, settingKey, debouncedHandleChange, errorMessage, languages, localizedStrings]);
+  }, [
+    localizedStrings,
+    setting,
+    settingKey,
+    debouncedHandleChange,
+    errorMessage,
+    languages,
+    defaultLanguages,
+  ]);
 
   return (
     <div className={className}>

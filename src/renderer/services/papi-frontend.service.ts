@@ -29,6 +29,8 @@ import scrollGroupService from '@shared/services/scroll-group.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
 import localizationService from '@shared/services/localization.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
+import notificationService from '@shared/services/notification.service';
+import { INotificationService } from '@shared/models/notification.service-model';
 import PapiRendererXMLHttpRequest from './renderer-xml-http-request.service';
 
 // IMPORTANT NOTES:
@@ -84,6 +86,8 @@ const papi = {
   scrollGroups: scrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
   localization: localizationService as ILocalizationService,
+  /** JSDOC DESTINATION notificationService */
+  notifications: notificationService as INotificationService,
 };
 /* eslint-enable */
 
@@ -145,5 +149,8 @@ Object.freeze(papi.scrollGroups);
 /** JSDOC DESTINATION localizationDataService */
 export const { localization } = papi;
 Object.freeze(papi.localization);
+/** JSDOC DESTINATION notificationService */
+export const { notifications } = papi;
+Object.freeze(papi.notifications);
 
 export type Papi = typeof papi;
