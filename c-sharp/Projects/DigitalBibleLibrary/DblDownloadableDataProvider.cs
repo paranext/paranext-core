@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Text.Json;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Archiving;
@@ -116,18 +118,24 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// </returns>
     private List<DblResourceData> GetDblResources(JsonElement _ignore)
     {
-        if (!RegistrationInfo.DefaultUser.IsValid)
-        {
-            throw new Exception(
-                LocalizationService.GetLocalizedString(
-                    PapiClient,
-                    "%getResources_errorRegistrationInvalid%",
-                    $"User registration is not valid. Cannot retrieve resources from DBL."
-                )
-            );
-        }
+        const string INVALID_USER_REGISTRATION_MESSAGE =
+            "User registration is not valid. Cannot retrieve resources from DBL.";
 
-        FetchAvailableDBLResources();
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+
+        TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
+        Trace.Listeners.Add(traceListener);
+        try
+        {
+            FetchAvailableDBLResources();
+        }
+        finally
+        {
+            Trace.Listeners.Remove(traceListener);
+        }
+        if (traceListener.FoundText)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
         return _resources
             .Select(resource => new DblResourceData(

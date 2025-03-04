@@ -15,6 +15,7 @@ declare module 'papi-shared-types' {
   import type IDataProvider from '@shared/models/data-provider.interface';
   import type ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from '@shared/models/network-object.model';
+  import type { PlatformNotification } from '@shared/models/notification.service-model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { WebViewFactory } from '@shared/models/web-view-factory.model';
@@ -65,12 +66,19 @@ declare module 'papi-shared-types' {
      * `target='_blank'`
      */
     'platform.openWindow': (url: string) => Promise<void>;
+
     // These commands are provided in `web-view.service-host.ts`
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+
+    // These commands are provided in `notification.service-host.ts`
+    'platform.sendNotificationToUser': (
+      notification: PlatformNotification,
+    ) => Promise<string | number>;
+
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
     // `extension-host.ts`

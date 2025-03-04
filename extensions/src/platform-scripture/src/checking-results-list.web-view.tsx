@@ -147,7 +147,7 @@ global.webViewComponent = function CheckingResultsListWebView({
   );
 
   const viewableResults = useMemo(
-    () => parseResults(checkResults, availableChecks, projectId, localizedStrings),
+    () => parseResults(checkResults ?? [], availableChecks ?? [], projectId, localizedStrings),
     [availableChecks, checkResults, localizedStrings, projectId],
   );
 
@@ -175,8 +175,9 @@ global.webViewComponent = function CheckingResultsListWebView({
             localizeKey: '%webView_checkResultsList_title%',
           }),
           {
-            resultsCount: checkResults.filter((checkResult) => checkResult.projectId === projectId)
-              .length,
+            resultsCount:
+              checkResults?.filter((checkResult) => checkResult.projectId === projectId).length ??
+              0,
             projectName,
           },
         );
