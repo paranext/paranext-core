@@ -16,6 +16,7 @@ import {
   Switch,
   Tooltip,
   TooltipContent,
+  TooltipProvider,
   TooltipTrigger,
   UiLanguageSelector,
 } from 'platform-bible-react';
@@ -269,14 +270,16 @@ export default function Setting({
         </Label>
       ) : (
         <div className="setting-label-container">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Label htmlFor={settingKey} className="setting-label">
-                {label}
-              </Label>
-            </TooltipTrigger>
-            {description && <TooltipContent>{description}</TooltipContent>}
-          </Tooltip>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Label htmlFor={settingKey} className="setting-label">
+                  {label}
+                </Label>
+              </TooltipTrigger>
+              {description && <TooltipContent>{description}</TooltipContent>}
+            </Tooltip>
+          </TooltipProvider>
           {generateComponent()}
         </div>
       )}
