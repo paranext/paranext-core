@@ -30,16 +30,18 @@ export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';
 
 // Functions
 export {
-  newGuid,
-  isString,
-  deepClone,
+  createSyncProxyForAsyncObject,
   debounce,
-  groupBy,
+  deepClone,
+  getAllObjectFunctionNames,
   getErrorMessage,
+  groupBy,
+  isErrorMessageAboutParatextBlockingInternetAccess,
+  isErrorMessageAboutRegistryAuthFailure,
+  isString,
+  newGuid,
   wait,
   waitForDuration,
-  getAllObjectFunctionNames,
-  createSyncProxyForAsyncObject,
 } from './util';
 export {
   areUsjContentsEqualExceptWhitespace,

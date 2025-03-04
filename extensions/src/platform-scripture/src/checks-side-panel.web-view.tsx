@@ -197,7 +197,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const getLocalizedCheckDescription = useCallback(
     (checkId: string) => {
-      return availableChecks.find((check) => check.checkId === checkId)?.checkDescription ?? '';
+      return availableChecks?.find((check) => check.checkId === checkId)?.checkDescription ?? '';
     },
     [availableChecks],
   );

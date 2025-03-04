@@ -2364,6 +2364,37 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
             : never;
   export default ExtractDataProviderDataTypes;
 }
+declare module 'shared/models/notification.service-model' {
+  import { CommandHandlers } from 'papi-shared-types';
+  export type Severity = 'info' | 'warning' | 'error';
+  /** Data needed to display a notification to the user */
+  export interface PlatformNotification {
+    /** Text to display to the user */
+    message: string;
+    /** Severity of the notification */
+    severity: Severity;
+    /** Optional label for users to click when the notification shows */
+    clickCommandLabel?: string;
+    /** Optional command to run if users click on the label in the notification */
+    clickCommand?: keyof CommandHandlers;
+    /** Optional ID of a previous notification to update instead of showing a new notification */
+    notificationId?: string | number;
+  }
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export interface INotificationService {
+    /**
+     * Send a notification to the user
+     *
+     * @param notification Notification to send
+     * @returns Promise that resolves with the ID of the notification
+     */
+    send(notification: PlatformNotification): Promise<string | number>;
+  }
+  export const NotificationServiceNetworkObjectName = 'NotificationService';
+}
 declare module 'shared/models/web-view-provider.model' {
   import {
     GetWebViewOptions,
@@ -3063,6 +3094,7 @@ declare module 'papi-shared-types' {
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from 'shared/models/network-object.model';
+  import type { PlatformNotification } from 'shared/models/notification.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -3106,6 +3138,9 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    'platform.sendNotificationToUser': (
+      notification: PlatformNotification,
+    ) => Promise<string | number>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -3671,6 +3706,15 @@ declare module 'shared/services/internet.service' {
    */
   const internetService: InternetService;
   export default internetService;
+}
+declare module 'shared/services/notification.service' {
+  import { type INotificationService } from 'shared/models/notification.service-model';
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  const notificationService: INotificationService;
+  export default notificationService;
 }
 declare module 'shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
@@ -6316,6 +6360,7 @@ declare module '@papi/core' {
   export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
+  export type { PlatformNotification } from 'shared/models/notification.service-model';
   export type {
     Components as ComponentsDocumentation,
     MethodDocumentationWithoutName,
@@ -6653,6 +6698,7 @@ declare module '@papi/backend' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
+  import { INotificationService } from 'shared/models/notification.service-model';
   const papi: {
     /**
      *
@@ -6871,6 +6917,11 @@ declare module '@papi/backend' {
      * Service that allows to get and store localizations
      */
     localization: ILocalizationService;
+    /**
+     *
+     * Service that sends notifications to users in the UI
+     */
+    notifications: INotificationService;
   };
   export default papi;
   /**
@@ -7090,6 +7141,11 @@ declare module '@papi/backend' {
    * Service that allows to get and store localizations
    */
   export const localization: ILocalizationService;
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export const notifications: INotificationService;
 }
 declare module 'extension-host/extension-types/extension.interface' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -7297,7 +7353,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        DataProviderTypes[DataProviderName][TDataType]['getData'],
+        DataProviderTypes[DataProviderName][TDataType]['getData'] | undefined,
         (
           | ((
               // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
@@ -7883,6 +7939,7 @@ declare module '@papi/frontend' {
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { INotificationService } from 'shared/models/notification.service-model';
   import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
@@ -7979,6 +8036,11 @@ declare module '@papi/frontend' {
      * Service that allows to get and store localizations
      */
     localization: ILocalizationService;
+    /**
+     *
+     * Service that sends notifications to users in the UI
+     */
+    notifications: INotificationService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
@@ -8075,5 +8137,10 @@ declare module '@papi/frontend' {
    * Service that allows to get and store localizations
    */
   export const localization: ILocalizationService;
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export const notifications: INotificationService;
   export type Papi = typeof papi;
 }

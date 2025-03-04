@@ -641,6 +641,22 @@ export declare function getAllObjectFunctionNames(obj: {
  * @returns A synchronous proxy for the asynchronous object.
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that Paratext is blocking internet access.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
+ */
+export declare function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: unknown): boolean;
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that an authorization failure occurred regarding registry credentials.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates an auth failure, `false` otherwise
+ */
+export declare function isErrorMessageAboutRegistryAuthFailure(errorMessage: unknown): boolean;
 /** Within type T, recursively change all properties to be optional */
 export type DeepPartial<T> = T extends object ? {
 	[P in keyof T]?: DeepPartial<T[P]>;
