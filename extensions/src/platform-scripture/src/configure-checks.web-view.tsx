@@ -40,6 +40,8 @@ const prettyPrintVerseRef = (verseRef: VerseRef): string => {
 global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebViewProps) {
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
+  const emptyArray = useMemo(() => [], []);
+
   // Obtain a subscription ID and cleanup old subscriptions
   const [subscriptionId, setSubscriptionId] = useState<CheckSubscriptionId>('');
   const subscriptionIdRef = useRef<CheckSubscriptionId>('');
@@ -87,6 +89,7 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
           description: 'Please try again later.',
         });
       }
+      if (!availableChecks) return;
       const checkId = findCheckIdFromDescription(availableChecks, checkDescription);
       if (!checkId) throw new Error(`No available check found with checkLabel ${checkDescription}`);
 
@@ -117,6 +120,7 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
   );
 
   useEffect(() => {
+    if (!activeRanges) return;
     sonner(`Active range${activeRanges.length > 1 ? 's' : ''} updated.`, {
       description: `${activeRanges
         .filter((activeRange) => activeRange.projectId === projectId)
@@ -131,9 +135,9 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
     <>
       <ConfigureChecks
         projectId={projectId}
-        availableChecks={availableChecks}
+        availableChecks={availableChecks ?? emptyArray}
         handleSelectCheck={updateSelectedChecks}
-        activeRanges={activeRanges}
+        activeRanges={activeRanges ?? emptyArray}
         handleActiveRangesChange={updateActiveRanges}
       />
       <Sonner />

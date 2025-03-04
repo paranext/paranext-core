@@ -52,6 +52,7 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_languages%',
   '%resources_loading%',
   '%resources_noResults%',
+  '%resources_noResultsError%',
   '%resources_open%',
   '%resources_remove%',
   '%resources_results%',
@@ -170,6 +171,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const languagesText: string = localizedStrings['%resources_languages%'];
   const loadingText: string = localizedStrings['%resources_loading%'];
   const noResultsText: string = localizedStrings['%resources_noResults%'];
+  const noResultsErrorText: string = localizedStrings['%resources_noResultsError%'];
   const openText: string = localizedStrings['%resources_open%'];
   const removeText: string = localizedStrings['%resources_remove%'];
   const resultsText: string = localizedStrings['%resources_results%'];
@@ -211,7 +213,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       setIsInitialized(true);
       return;
     }
-    if (resources.length > 0 && selectedLanguages.length === 0) {
+    if (resources && resources.length > 0 && selectedLanguages.length === 0) {
       setSelectedLanguages(
         Array.from(
           new Set(
@@ -247,7 +249,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   useEffect(() => {
     setInstallInfo((currentInstallInfo) =>
       currentInstallInfo.filter((info) => {
-        const resource = resources.find((res) => res.dblEntryUid === info.dblEntryUid);
+        const resource = resources?.find((res) => res.dblEntryUid === info.dblEntryUid);
 
         if (!resource) return true;
 
@@ -262,7 +264,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [textFilter, setTextFilter] = useState<string>('');
 
   const textFilteredResources = useMemo(() => {
-    return resources.filter((resource) => {
+    return resources?.filter((resource) => {
       const filter = textFilter.toLowerCase();
       return (
         resource.displayName.toLowerCase().includes(filter) ||
@@ -283,14 +285,14 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const textAndTypeFilteredResources = useMemo(() => {
     if (selectedTypes.length === 0) return textFilteredResources;
-    return textFilteredResources.filter((resource) => {
+    return textFilteredResources?.filter((resource) => {
       return selectedTypes.includes(resource.type);
     });
   }, [textFilteredResources, selectedTypes]);
 
   const textAndTypeAndLanguageFilteredResources = useMemo(() => {
     if (selectedLanguages.length === 0) return textAndTypeFilteredResources;
-    return textAndTypeFilteredResources.filter((resource) => {
+    return textAndTypeFilteredResources?.filter((resource) => {
       return selectedLanguages.includes(resource.bestLanguageName);
     });
   }, [selectedLanguages, textAndTypeFilteredResources]);
@@ -301,6 +303,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   });
 
   const sortedResources = useMemo(() => {
+    if (!textAndTypeAndLanguageFilteredResources) return undefined;
     return [...textAndTypeAndLanguageFilteredResources].sort((a, b) => {
       let aValue: string | number;
       let bValue: string | number;
@@ -346,12 +349,14 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   );
 
   const getTypeCount = (option: MultiSelectComboBoxEntry): number => {
-    return resources.filter((resource) => resource.type === option.value).length ?? 0;
+    return resources?.filter((resource) => resource.type === option.value).length ?? 0;
   };
 
   const getLanguageCount = (option: MultiSelectComboBoxEntry): number => {
-    return resources.filter((resource) => resource.bestLanguageName === option.value).length ?? 0;
+    return resources?.filter((resource) => resource.bestLanguageName === option.value).length ?? 0;
   };
+
+  const emptyArray = useMemo(() => [], []);
 
   return (
     <div>
@@ -384,7 +389,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
               />
 
               <Filter
-                entries={getLanguageOptions(resources, selectedLanguages)}
+                entries={getLanguageOptions(resources ?? emptyArray, selectedLanguages)}
                 getEntriesCount={getLanguageCount}
                 selected={selectedLanguages}
                 onChange={setSelectedLanguages}
@@ -397,14 +402,20 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           </div>
         </CardHeader>
         <CardContent className="tw-flex-grow tw-overflow-auto">
-          {isLoadingResources || !resources ? (
+          {isLoadingResources ? (
             <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
               <Label>{loadingText}</Label>
               <Spinner />
             </div>
           ) : (
+            // Can't use if-else here because of how the return statement is structured
+            /* eslint-disable no-nested-ternary */
             <div>
-              {sortedResources.length === 0 ? (
+              {!sortedResources ? (
+                <div className="tw-m-4 tw-flex tw-justify-center">
+                  <Label>{noResultsErrorText}</Label>
+                </div>
+              ) : sortedResources.length === 0 ? (
                 <div className="tw-m-4 tw-flex tw-justify-center">
                   <Label>{noResultsText}</Label>
                 </div>
@@ -486,7 +497,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           )}
         </CardContent>
         <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-border-t tw-p-4">
-          {sortedResources.length > 0 && (
+          {sortedResources && sortedResources.length > 0 && (
             <Label className="tw-font-normal">{`${showingText} ${sortedResources.length} ${resultsText}`}</Label>
           )}
         </CardFooter>
