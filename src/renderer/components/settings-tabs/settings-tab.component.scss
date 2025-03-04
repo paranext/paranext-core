@@ -1,5 +1,7 @@
 .settings-tab {
   height: 100%;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
 }
 
@@ -12,18 +14,17 @@
 }
 
 .sidebar-container {
-  height: 100%;
-  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .project-or-settings-list-container {
-  margin-top: 1rem;
+  overflow-y: auto;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
   padding-inline-end: 1rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  width: 100%;
-  height: 100%;
 }
 
 .project-or-settings-list {
