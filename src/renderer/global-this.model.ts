@@ -31,6 +31,8 @@ declare const webpackRenderer: {
 
 // #region declare items used in `web-view.service.ts`
 
+// WARNING: This code should not be edited without serious review. For more information,
+// see https://github.com/paranext/paranext/wiki/Module-import-restrictions
 // Module types aren't compatible with each other
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const moduleMap = new Map<string, any>();
@@ -53,6 +55,9 @@ const registeredModuleList = [...moduleMap]
 /**
  * Provide a require implementation so we can provide some needed packages for extensions or for
  * packages that extensions import
+ *
+ * WARNING: This code should not be edited without serious review. For more information, see
+ * https://github.com/paranext/paranext/wiki/Module-import-restrictions
  */
 function webViewRequire(moduleName: string) {
   const module = moduleMap.get(moduleName);
