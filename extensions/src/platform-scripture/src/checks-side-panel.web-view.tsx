@@ -12,6 +12,7 @@ import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/re
 import { VerseRef } from '@sillsdev/scripture';
 import {
   getChaptersForBook,
+  isPlatformError,
   LAST_SCR_BOOK_NUM,
   LocalizeKey,
   ScriptureReference,
@@ -197,7 +198,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const getLocalizedCheckDescription = useCallback(
     (checkId: string) => {
-      return availableChecks?.find((check) => check.checkId === checkId)?.checkDescription ?? '';
+      if (isPlatformError(availableChecks)) return '';
+      return availableChecks.find((check) => check.checkId === checkId)?.checkDescription ?? '';
     },
     [availableChecks],
   );
@@ -211,10 +213,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
    */
   const scrollToCheckReferenceInEditor = useCallback(
     (id: string) => {
-      const selectedResult = checkResults?.find(
+      if (isPlatformError(checkResults)) return;
+
+      const selectedResult = checkResults.find(
         (result, index) => writeCheckId(result, index) === id,
       );
-
       if (!selectedResult) return;
 
       const selectedCheckScrRef: ScriptureReference = {
@@ -317,7 +320,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
         </div>
       </div>
       <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3">
-        {checkResults?.length === 0 ? (
+        // TODO: Display something else if there is an error getting check results
+        {isPlatformError(checkResults) || checkResults.length === 0 ? (
           <div className="tw-flex tw-flex-col tw-box-border tw-items-center tw-justify-center tw-h-screen tw-w-full">
             <span className="tw-text-sm">
               {localizedStrings['%webView_checksSidePanel_noCheckResults%']}

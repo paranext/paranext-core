@@ -4,7 +4,7 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { useData, useLocalizedStrings, useWebViewController } from '@papi/frontend/react';
 import { CheckRunnerCheckDetails, CheckRunResult } from 'platform-scripture';
 import { Canon } from '@sillsdev/scripture';
-import { formatReplacementString, LanguageStrings } from 'platform-bible-utils';
+import { formatReplacementString, isPlatformError, LanguageStrings } from 'platform-bible-utils';
 import papi, { logger } from '@papi/frontend';
 import { ScriptureLocation } from 'platform-scripture-editor';
 
@@ -147,7 +147,13 @@ global.webViewComponent = function CheckingResultsListWebView({
   );
 
   const viewableResults = useMemo(
-    () => parseResults(checkResults ?? [], availableChecks ?? [], projectId, localizedStrings),
+    () =>
+      parseResults(
+        isPlatformError(checkResults) ? [] : checkResults,
+        isPlatformError(availableChecks) ? [] : availableChecks,
+        projectId,
+        localizedStrings,
+      ),
     [availableChecks, checkResults, localizedStrings, projectId],
   );
 
@@ -170,14 +176,16 @@ global.webViewComponent = function CheckingResultsListWebView({
     let promiseIsCurrent = true;
     const updateTitle = async () => {
       try {
+        let resultsCount = 0;
+        if (!isPlatformError(checkResults))
+          resultsCount =
+            checkResults.filter((checkResult) => checkResult.projectId === projectId).length ?? 0;
         const newTitle = formatReplacementString(
           await papi.localization.getLocalizedString({
             localizeKey: '%webView_checkResultsList_title%',
           }),
           {
-            resultsCount:
-              checkResults?.filter((checkResult) => checkResult.projectId === projectId).length ??
-              0,
+            resultsCount,
             projectName,
           },
         );

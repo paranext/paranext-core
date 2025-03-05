@@ -10,6 +10,7 @@ import { Canon, VerseRef } from '@sillsdev/scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sonner, sonner } from 'platform-bible-react';
 import { logger } from '@papi/frontend';
+import { isPlatformError } from 'platform-bible-utils';
 import ConfigureChecks from './checks/configure-checks/configure-checks.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
@@ -89,7 +90,7 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
           description: 'Please try again later.',
         });
       }
-      if (!availableChecks) return;
+      if (isPlatformError(availableChecks)) return;
       const checkId = findCheckIdFromDescription(availableChecks, checkDescription);
       if (!checkId) throw new Error(`No available check found with checkLabel ${checkDescription}`);
 
@@ -120,7 +121,7 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
   );
 
   useEffect(() => {
-    if (!activeRanges) return;
+    if (isPlatformError(activeRanges)) return;
     sonner(`Active range${activeRanges.length > 1 ? 's' : ''} updated.`, {
       description: `${activeRanges
         .filter((activeRange) => activeRange.projectId === projectId)
@@ -135,9 +136,9 @@ global.webViewComponent = function ConfigureChecksWebView({ projectId }: WebView
     <>
       <ConfigureChecks
         projectId={projectId}
-        availableChecks={availableChecks ?? emptyArray}
+        availableChecks={isPlatformError(availableChecks) ? emptyArray : availableChecks}
         handleSelectCheck={updateSelectedChecks}
-        activeRanges={activeRanges ?? emptyArray}
+        activeRanges={isPlatformError(activeRanges) ? emptyArray : activeRanges}
         handleActiveRangesChange={updateActiveRanges}
       />
       <Sonner />

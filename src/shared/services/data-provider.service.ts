@@ -25,6 +25,7 @@ import {
   isErrorMessageAboutParatextBlockingInternetAccess,
   isErrorMessageAboutRegistryAuthFailure,
   isString,
+  newPlatformError,
   startsWith,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
@@ -223,6 +224,7 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
         logger.warn(
           `Tried to retrieve data after an update event for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(e)}`,
         );
+        callback(newPlatformError(e));
         const notification = constructErrorNotification(e);
         if (notification) notificationService.send(notification);
       }
@@ -259,7 +261,7 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           logger.warn(
             `Tried to retrieve data immediately for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(e)}`,
           );
-          callback(undefined);
+          callback(newPlatformError(e));
           const notification = constructErrorNotification(e);
           if (notification) notificationService.send(notification);
         }
