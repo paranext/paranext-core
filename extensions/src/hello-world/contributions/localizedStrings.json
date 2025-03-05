@@ -13,6 +13,8 @@
       "%mainMenu_openHelloWorldProject%": "Open Hello World Project",
       "%mainMenu_createNewHelloWorldProject%": "Create New Hello World Project",
       "%mainMenu_deleteHelloWorldProject%": "Delete Hello World Project",
+      "%helloWorld_editor_header_text%": "Editor Header Text",
+      "%helloWorld_editor_border_color%": "Editor Border Color",
       "%helloWorld_greetingLoading%": "Greeting loading",
       "%helloWorld_delete%": "Delete",
       "%helloWorld_frenchLocalizationSubmit%": "French localization of Submit Button",
