@@ -23,7 +23,7 @@ import {
 import type { WebViewProps } from '@papi/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
-import { debounce } from 'platform-bible-utils';
+import { debounce, isPlatformError } from 'platform-bible-utils';
 import Clock from './components/clock.component';
 import Logo from '../../assets/offline.svg';
 import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
@@ -360,7 +360,7 @@ globalThis.webViewComponent = function HelloWorld({
           {localizedTestException}
         </Button>
       </div>
-      <div>{latestVerseText}</div>
+      <div>{isPlatformError(latestVerseText) ? latestVerseText.message : latestVerseText}</div>
       <Clock />
       <div>
         <input value={nameTemp} onChange={(e) => setName(e.target.value)} />
@@ -368,8 +368,8 @@ globalThis.webViewComponent = function HelloWorld({
           {localizedDelete} {name}
         </Button>
       </div>
-      <div>{personGreeting}</div>
-      <div>{personAge}</div>
+      <div>{isPlatformError(personGreeting) ? personGreeting.message : personGreeting}</div>
+      <div>{isPlatformError(personAge) ? personAge.message : personAge}</div>
       <br />
       <div>
         {localizedSelectedProject}: {projectId ?? localizedNone}

@@ -517,6 +517,15 @@ export declare class UnsubscriberAsyncList {
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
 }
+export declare const PLATFORM_ERROR_VERSION = 1;
+export type PlatformError = {
+	cause?: unknown;
+	message: string;
+	platformErrorVersion: number;
+	stack?: string | undefined;
+};
+export declare function newPlatformError(error?: unknown): PlatformError;
+export declare function isPlatformError(error: unknown): error is PlatformError;
 export interface ScriptureReference {
 	bookNum: number;
 	chapterNum: number;

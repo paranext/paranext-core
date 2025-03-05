@@ -4,7 +4,6 @@
   "%about_db_ip_attribution_format%": "{intro} {websiteLink} ({license}, {terms})",
   "%about_db_ip_attribution_intro%": "Internet safety features use data from",
   "%about_db_ip_attribution_terms%": "Terms",
-  "%data_loading_error_general%": "Data loading failed: {dataType}",
   "%data_loading_error_paratextData_internet_disabled%": "Internet access is disabled in Paratext Registration Information. Please enable it and try again.",
   "%data_loading_error_paratextData_auth_failure%": "Paratext Registration is not valid. Please update your registration information and try again.",
   "%downloadUpdateProjectTab_aria_downloadable%": "downloadable projects",

@@ -7336,6 +7336,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
+  import { PlatformError } from 'platform-bible-utils';
   /**
    * React hook to use data from a data provider
    *
@@ -7353,7 +7354,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        DataProviderTypes[DataProviderName][TDataType]['getData'] | undefined,
+        DataProviderTypes[DataProviderName][TDataType]['getData'] | PlatformError,
         (
           | ((
               // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
@@ -7420,7 +7421,8 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * _＠returns_ `[data, setData, isLoading]`
    *
    * - `data`: the current value for the data from the data provider with the specified data type and
-   *   selector, either the `defaultValue` or the resolved data
+   *   selector. This will be the `defaultValue`, the resolved data, or a `PlatformError` if the data
+   *   provider throws an error.
    * - `setData`: asynchronous function to request that the data provider update the data at this data
    *   type and selector. Returns `true` if successful. Note that this function does not update the
    *   data. The data provider sends out an update to this subscription if it successfully updates

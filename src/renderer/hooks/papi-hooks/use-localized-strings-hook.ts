@@ -5,7 +5,7 @@ import {
 } from '@shared/services/localization.service-model';
 import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
 import { useMemo } from 'react';
-import { LocalizeKey } from 'platform-bible-utils';
+import { isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import useData from './use-data.hook';
 
 /**
@@ -51,6 +51,6 @@ const useLocalizedStrings = (
     localizationDataService.dataProviderName,
   ).LocalizedStrings(localizationSelectors, defaultState, subscriberOptions);
 
-  return [localizedStrings ?? defaultState, isLoading];
+  return [isPlatformError(localizedStrings) ? defaultState : localizedStrings, isLoading];
 };
 export default useLocalizedStrings;
