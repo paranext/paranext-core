@@ -2364,37 +2364,6 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
             : never;
   export default ExtractDataProviderDataTypes;
 }
-declare module 'shared/models/notification.service-model' {
-  import { CommandHandlers } from 'papi-shared-types';
-  export type Severity = 'info' | 'warning' | 'error';
-  /** Data needed to display a notification to the user */
-  export interface PlatformNotification {
-    /** Text to display to the user */
-    message: string;
-    /** Severity of the notification */
-    severity: Severity;
-    /** Optional label for users to click when the notification shows */
-    clickCommandLabel?: string;
-    /** Optional command to run if users click on the label in the notification */
-    clickCommand?: keyof CommandHandlers;
-    /** Optional ID of a previous notification to update instead of showing a new notification */
-    notificationId?: string | number;
-  }
-  /**
-   *
-   * Service that sends notifications to users in the UI
-   */
-  export interface INotificationService {
-    /**
-     * Send a notification to the user
-     *
-     * @param notification Notification to send
-     * @returns Promise that resolves with the ID of the notification
-     */
-    send(notification: PlatformNotification): Promise<string | number>;
-  }
-  export const NotificationServiceNetworkObjectName = 'NotificationService';
-}
 declare module 'shared/models/web-view-provider.model' {
   import {
     GetWebViewOptions,
@@ -3094,7 +3063,6 @@ declare module 'papi-shared-types' {
   import type IDataProvider from 'shared/models/data-provider.interface';
   import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from 'shared/models/network-object.model';
-  import type { PlatformNotification } from 'shared/models/notification.service-model';
   import { WebViewId } from 'shared/models/web-view.model';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -3138,9 +3106,6 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
-    'platform.sendNotificationToUser': (
-      notification: PlatformNotification,
-    ) => Promise<string | number>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -3706,6 +3671,46 @@ declare module 'shared/services/internet.service' {
    */
   const internetService: InternetService;
   export default internetService;
+}
+declare module 'shared/models/notification.service-model' {
+  import { CommandHandlers } from 'papi-shared-types';
+  export type Severity = 'info' | 'warning' | 'error';
+  /** Data needed to display a notification to the user */
+  export interface PlatformNotification {
+    /**
+     * Text to display to the user.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     */
+    message: string;
+    /** Severity of the notification */
+    severity: Severity;
+    /**
+     * Optional label for users to click when the notification shows.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     */
+    clickCommandLabel?: string;
+    /** Optional command to run if users click on the label in the notification */
+    clickCommand?: keyof CommandHandlers;
+    /** Optional ID of a previous notification to update instead of showing a new notification */
+    notificationId?: string | number;
+  }
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export interface INotificationService {
+    /**
+     * Send a notification to the user. If a notification with the same ID is already showing, it will
+     * be updated with the new notification.
+     *
+     * @param notification Notification to send
+     * @returns Promise that resolves with the ID of the notification
+     */
+    send(notification: PlatformNotification): Promise<string | number>;
+  }
+  export const NotificationServiceNetworkObjectName = 'NotificationService';
 }
 declare module 'shared/services/notification.service' {
   import { type INotificationService } from 'shared/models/notification.service-model';
@@ -7336,6 +7341,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
+  import { PlatformError } from 'platform-bible-utils';
   /**
    * React hook to use data from a data provider
    *
@@ -7353,7 +7359,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        DataProviderTypes[DataProviderName][TDataType]['getData'] | undefined,
+        DataProviderTypes[DataProviderName][TDataType]['getData'] | PlatformError,
         (
           | ((
               // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
@@ -7420,7 +7426,9 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * _＠returns_ `[data, setData, isLoading]`
    *
    * - `data`: the current value for the data from the data provider with the specified data type and
-   *   selector, either the `defaultValue` or the resolved data
+   *   selector. This will be the `defaultValue`, the resolved data, or a {@link PlatformError} if the
+   *   data provider throws an error. You can call {@link isPlatformError} on this value to check if it
+   *   is an error.
    * - `setData`: asynchronous function to request that the data provider update the data at this data
    *   type and selector. Returns `true` if successful. Note that this function does not update the
    *   data. The data provider sends out an update to this subscription if it successfully updates
