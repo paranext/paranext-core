@@ -118,6 +118,8 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// </returns>
     private List<DblResourceData> GetDblResources(JsonElement _ignore)
     {
+        // The text of this exception message is searched for by our Node.js services, so if you
+        // change it, you may need to change the TypeScript code as well.
         const string INVALID_USER_REGISTRATION_MESSAGE =
             "User registration is not valid. Cannot retrieve resources from DBL.";
 

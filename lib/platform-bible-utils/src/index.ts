@@ -12,6 +12,7 @@ export { default as PromiseChainingMap } from './promise-chaining-map';
 export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
+export { PLATFORM_ERROR_VERSION } from './platform-error';
 export {
   getChaptersForBook,
   offsetBook,
@@ -78,6 +79,7 @@ export {
   transformAndEnsureRegExpArray,
   isWhiteSpace,
 } from './string-util';
+export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
@@ -94,6 +96,7 @@ export type {
   CannotHaveOnDidDispose,
   CanHaveOnDidDispose,
 } from './disposal.model';
+export type { PlatformError } from './platform-error';
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
 export type {
   BookInfo,

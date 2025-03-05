@@ -517,6 +517,51 @@ export declare class UnsubscriberAsyncList {
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
 }
+export declare const PLATFORM_ERROR_VERSION = 1;
+/**
+ * PlatformError is an error type with stronger typing of properties than {@link Error}. It is used
+ * to represent errors that are returned by the platform.
+ *
+ * You can create a new PlatformError object using {@link newPlatformError}. You can check if a value
+ * is a PlatformError object using {@link isPlatformError}.
+ */
+export type PlatformError = {
+	/**
+	 * The underlying cause of the error, if any. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}. If a non-Error object is passed to
+	 * {@link newPlatformError}, it will be stored here.
+	 */
+	cause?: unknown;
+	/**
+	 * A descriptive message explaining the error. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it
+	 * will be stored here.
+	 */
+	message: string;
+	/** The version of the PlatformError type. */
+	platformErrorVersion: number;
+	/**
+	 * The stack trace of the error, if available. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}.
+	 */
+	stack?: string;
+};
+/**
+ * Creates a new PlatformError object. If no argument is provided, a PlatformError object with an
+ * empty `message` is returned.
+ *
+ * @param error The error message as a string, an Error object, or a value to assign to the `cause`
+ *   property of the returned PlatformError object
+ * @returns A new PlatformError object
+ */
+export declare function newPlatformError(error?: unknown): PlatformError;
+/**
+ * Checks if the provided value is a PlatformError object.
+ *
+ * @param error The value to check
+ * @returns `true` if the value is a PlatformError object, otherwise `false`
+ */
+export declare function isPlatformError(error: unknown): error is PlatformError;
 export interface ScriptureReference {
 	bookNum: number;
 	chapterNum: number;
