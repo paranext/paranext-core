@@ -5,7 +5,7 @@ import { CommandHandler } from '@/components/mui/menu-item.component';
 import '@/components/mui/toolbar.component.css';
 import { cn } from '@/utils/shadcn-ui.util';
 import { PropsWithChildren, ReactNode, useRef } from 'react';
-import MenubarExamples from '@/preview/pages/components/basics/menubar.examples.component';
+import AppMenubar from '../advanced/app-menubar.component';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
@@ -89,8 +89,11 @@ export default function Toolbar({
                   containerRef={containerRef}
                   menuProvider={menuProvider}
                 />
-                {/* TODO: This is a placeholder for the actual menu */}
-                <MenubarExamples variant={menubarVariant} />
+                <AppMenubar
+                  menuProvider={menuProvider}
+                  commandHandler={commandHandler}
+                  variant={menubarVariant}
+                />
               </>
             ) : undefined}
           </div>
