@@ -58,6 +58,10 @@ declare module 'papi-shared-types' {
     'platform.quit': () => Promise<void>;
     /** Restart the application */
     'platform.restart': () => Promise<void>;
+    /** Get the operating system platform */
+    'platform.getOSPlatform': () => Promise<string | undefined>;
+    /** If the browser window is in full screen */
+    'platform.isFullScreen': () => Promise<boolean>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
