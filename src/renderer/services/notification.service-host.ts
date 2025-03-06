@@ -8,6 +8,7 @@ import * as commandService from '@shared/services/command.service';
 import networkObjectService from '@shared/services/network-object.service';
 import { isLocalizeKey } from 'platform-bible-utils';
 import localizationService from '@shared/services/localization.service';
+import logger from '@shared/services/logger.service';
 
 const mapOfNotificationIdsToToastIds = new Map<string | number, string | number>();
 
@@ -16,6 +17,14 @@ async function localize(text: string): Promise<string> {
 }
 
 async function send(notification: PlatformNotification): Promise<string | number> {
+  let notificationString = '';
+  try {
+    notificationString = JSON.stringify(notification);
+  } catch (e) {
+    notificationString = '<error stringifying notification>';
+  }
+  logger.info(`Notification service host received notification: ${notificationString}`);
+
   const { message, severity, clickCommand, clickCommandLabel, notificationId } = notification;
   const localizedMessage = await localize(message);
   let toastId = notificationId ? mapOfNotificationIdsToToastIds.get(notificationId) : undefined;

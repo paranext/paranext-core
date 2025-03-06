@@ -10,6 +10,7 @@
   color: hsl(var(--foreground));
   overflow-y: auto;
   flex-grow: 1;
+  margin: 0;
 
   // remove rounded top corners to look better in tabs
   .toolbar {
