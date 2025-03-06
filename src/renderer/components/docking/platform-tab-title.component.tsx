@@ -4,7 +4,7 @@ import './platform-tab-title.component.scss';
 import menuDataService from '@shared/services/menu-data.service';
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { useCallback, useMemo, useRef } from 'react';
-import { isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
+import { isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
 
 type PlatformTabTitleProps = {
@@ -83,12 +83,12 @@ export default function PlatformTabTitle({
   return (
     <Tooltip title={tooltipDiv}>
       <div ref={containerRef} className="title">
-        {isLoading || !webViewMenu?.topMenu ? (
+        {isLoading || isPlatformError(webViewMenu) || !webViewMenu?.topMenu ? (
           icon
         ) : (
           <HamburgerMenuButton
             commandHandler={commandHandler}
-            normalMenu={webViewMenu?.topMenu}
+            normalMenu={isPlatformError(webViewMenu) ? undefined : webViewMenu?.topMenu}
             className="tab-menu-button"
             aria-label={tabLabel}
             containerRef={containerRef}
