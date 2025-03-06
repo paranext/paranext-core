@@ -33,6 +33,7 @@ import {
   stringLength,
   startsWith,
   slice,
+  toKebabCase,
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -532,22 +533,23 @@ function createDtsInfoFromUri(declarationUri: Uri): DtsInfo {
 
 /**
  * Caches type declaration files for each extension. Gets the type declaration file from each
- * extension and copies it to `extension-types/<extension_type_file_name_without_.d.ts>/index.d.ts`
+ * extension and copies it to `extension-types/<extension-type-file-name-without-.d.ts>/index.d.ts`
  * because that is the path that works. If the extension's type declaration file does not start with
- * `<extension_name>`, the folder created will be named `<extension_name>` instead of the name of
- * the extension type declaration file name.
+ * `<extension-name>` (kebab-case version of the extension name), the folder created will be named
+ * `<extension-name>` instead of the name of the extension type declaration file name.
  *
  * We look first at the location provided by the extension manifest's `types` property. If one is
  * not provided, we look for files according to the specification in the JSDoc for
- * {@link ExtensionManifest}'s `types` property order and copy over the first one found.
+ * {@link ExtensionManifest.types} order and copy over the first one found.
  *
  * @param extensionInfos Extension info for extensions whose types to cache
  */
 async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
   return Promise.all(
     extensionInfos.map(async (extensionInfo) => {
+      const extensionNameKebabCase = toKebabCase(extensionInfo.name);
       /** The default assumed name for the dts file including `.d.ts` */
-      const extensionDtsBaseDefault = `${extensionInfo.name}.d.ts`;
+      const extensionDtsBaseDefault = `${extensionNameKebabCase}.d.ts`;
       /** The declaration file uri we are copying for this extension */
       let extensionDtsInfo: DtsInfo | undefined;
       /** The declaration file name we are creating for this extension including `.d.ts` */
@@ -592,7 +594,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // with version number or something
         if (!extensionDtsInfo)
           extensionDtsInfo = dtsInfos.find((dtsInfo) =>
-            startsWith(dtsInfo.base, extensionInfo.name),
+            startsWith(dtsInfo.base, extensionNameKebabCase),
           );
 
         // Try using a dts file whose name is `index.d.ts`
@@ -609,7 +611,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
 
       // If the dts file has stuff after the extension name, we want to use it so they can suffix a
       // version number or something
-      if (startsWith(extensionDtsInfo.base, extensionInfo.name))
+      if (startsWith(extensionDtsInfo.base, extensionNameKebabCase))
         extensionDtsBaseDestination = extensionDtsInfo.base;
 
       // Put the extension's dts in the types cache in its own folder

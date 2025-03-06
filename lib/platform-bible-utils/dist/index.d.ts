@@ -1637,6 +1637,15 @@ export declare function transformAndEnsureRegExpArray(stringMaybeArray: string |
  */
 export declare function isWhiteSpace(ch: string): boolean;
 /**
+ * Converts PascalCase or camelCase string to kebab-case. To detect upper- and lower-case
+ * characters, uses `.toUpperCase` and `.toLowerCase` to be locale-independent.
+ *
+ * Current implementation supports only UTF-16.
+ *
+ * Thanks to ChatGPT https://chatgpt.com/share/67c8aa44-e054-800c-8068-e1e6630081f7
+ */
+export declare function toKebabCase(input: string): string;
+/**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
  * @param a The first object to compare

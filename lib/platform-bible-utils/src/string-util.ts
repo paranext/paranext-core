@@ -768,6 +768,50 @@ export function isWhiteSpace(ch: string) {
   return whiteSpaceRegex.test(ch);
 }
 
+/**
+ * Converts PascalCase or camelCase string to kebab-case. To detect upper- and lower-case
+ * characters, uses `.toUpperCase` and `.toLowerCase` to be locale-independent.
+ *
+ * Current implementation supports only UTF-16.
+ *
+ * Thanks to ChatGPT https://chatgpt.com/share/67c8aa44-e054-800c-8068-e1e6630081f7
+ */
+export function toKebabCase(input: string): string {
+  let result = '';
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    const isUpper = char === char.toUpperCase() && char !== char.toLowerCase();
+
+    if (isUpper) {
+      if (i > 0) {
+        const prevChar = input[i - 1];
+        const isPrevUpper =
+          prevChar === prevChar.toUpperCase() && prevChar !== prevChar.toLowerCase();
+
+        // If previous is not uppercase, always insert dash.
+        if (!isPrevUpper) {
+          result += '-';
+        } else if (i + 1 < input.length) {
+          // Deal with initialisms and acronyms as if they are whole words ("APIFinder" -> "api-finder")
+          // Previous was uppercase; insert dash only if the next character exists and is lowercase.
+          const nextChar = input[i + 1];
+          const isNextLower =
+            nextChar === nextChar.toLowerCase() && nextChar !== nextChar.toUpperCase();
+          if (isNextLower) {
+            result += '-';
+          }
+        }
+      }
+      result += char.toLowerCase();
+    } else {
+      result += char;
+    }
+  }
+
+  return result;
+}
+
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingStringUtils = {
   indexOfClosestClosingCurlyBrace,
