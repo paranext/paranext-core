@@ -70,6 +70,7 @@ export {
   startsWith,
   substring,
   toArray,
+  toKebabCase,
   ordinalCompare,
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,

@@ -22,6 +22,7 @@ import {
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
   formatReplacementStringToArray,
+  toKebabCase,
 } from './string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
@@ -813,5 +814,33 @@ describe('transformAndEnsureRegExpArray', () => {
     const input = ['', 'a', ''];
     const result = transformAndEnsureRegExpArray(input);
     expect(result).toEqual([/(?:)/, /a/, /(?:)/]);
+  });
+});
+
+describe('toKebabCase', () => {
+  it('should transform PascalCase and camelCase', () => {
+    expect(toKebabCase('PascalCase')).toEqual('pascal-case');
+    expect(toKebabCase('camelCase')).toEqual('camel-case');
+  });
+
+  it('should transform various tricky strings', () => {
+    expect(toKebabCase(SHORT_SURROGATE_PAIRS_STRING)).toEqual('look𐐷-at👨‍👩‍👧‍👦👮🏽‍♀️');
+    expect(toKebabCase(MEDIUM_SURROGATE_PAIRS_STRING)).toEqual(
+      'look𐐷-at🦄-this𐐷-thing👮🏽‍♀️-its𐐷-awesome',
+    );
+    expect(toKebabCase('already-kebab-case-string234.2')).toEqual('already-kebab-case-string234.2');
+    // These examples come from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/toLocaleUpperCase
+    expect(toKebabCase('Gesäß')).toEqual('gesäß');
+    expect(toKebabCase('İSTANBUL')).toEqual('i̇stanbul');
+    // These examples come from https://stackoverflow.com/questions/63116039/camelcase-to-kebab-case
+    expect(toKebabCase('StackOverflow')).toEqual('stack-overflow');
+    expect(toKebabCase('alllowercase')).toEqual('alllowercase');
+    expect(toKebabCase('ALLCAPITALLETTERS')).toEqual('allcapitalletters');
+    expect(toKebabCase('CustomXMLParser')).toEqual('custom-xml-parser');
+    expect(toKebabCase('APIFinder')).toEqual('api-finder');
+    expect(toKebabCase('JSONResponseData')).toEqual('json-response-data');
+    expect(toKebabCase('Person20Address')).toEqual('person20-address');
+    expect(toKebabCase('UserAPI2.0Endpoint')).toEqual('user-api2.0-endpoint');
+    expect(toKebabCase('CdÁb')).toEqual('cd-áb');
   });
 });
