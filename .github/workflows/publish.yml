@@ -27,7 +27,7 @@ jobs:
     strategy:
       matrix:
         # Make sure these match with the env values above
-        os: [windows-latest, macos-latest, ubuntu-22.04]
+        os: [ubuntu-22.04]
         dotnet_version: [8.0.x]
 
     steps:
@@ -171,7 +171,8 @@ jobs:
 
       - name: Publish releases to the snap store - Linux
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        # if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        if: ${{ matrix.os == env.OS_LINUX }}
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
@@ -183,11 +184,12 @@ jobs:
           npm exec electron-builder -- --publish never --linux
           snapcraft upload --release=edge ./release/build/*.snap
           mkdir release/staged
-          move release/build/*.snap release/staged
+          mv release/build/*.snap release/staged
 
       - name: Upload Linux artifacts to GitHub
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        # if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        if: ${{ matrix.os == env.OS_LINUX }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         uses: actions/upload-artifact@v4
