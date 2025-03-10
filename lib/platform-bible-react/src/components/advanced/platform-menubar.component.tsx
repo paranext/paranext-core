@@ -1,20 +1,20 @@
-import { useCallback } from 'react';
 import {
   Menubar,
-  MenubarMenu,
-  MenubarTrigger,
   MenubarContent,
   MenubarItem,
+  MenubarMenu,
   MenubarSeparator,
+  MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
 import usePromise from '@/hooks/use-promise.hook';
-import { MultiColumnMenuProvider } from '../mui/hamburger-menu-button.component';
 import {
   Localized,
   MenuItemContainingCommand,
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
+import { useCallback } from 'react';
+import { MultiColumnMenuProvider } from '../mui/hamburger-menu-button.component';
 
 type MenuItemInfoBase = {
   /** Text (displayable in the UI) as the name of the menu item */
@@ -86,8 +86,7 @@ export default function PlatformMenubar({
                         <MenubarItem
                           key={'command' in item ? item.command : item.id}
                           onClick={() => {
-                            console.log('running command from item:', item);
-                            'command' in item && commandHandler(item.command as unknown as Command);
+                            'command' in item && commandHandler(item);
                           }}
                         >
                           {item.label}
@@ -95,11 +94,12 @@ export default function PlatformMenubar({
                       ),
                     );
 
-                  return groupItems.length > 0
-                    ? index < groups.length - 1
-                      ? [...groupItems, <MenubarSeparator key={groupKey + '-separator'} />]
-                      : groupItems
-                    : [];
+                  const itemsWithSeparator = [...groupItems];
+                  if (groupItems.length > 0 && index < groups.length - 1) {
+                    itemsWithSeparator.push(<MenubarSeparator key={`${groupKey}-separator`} />);
+                  }
+
+                  return itemsWithSeparator;
                 });
               })()}
             </MenubarContent>
