@@ -4,6 +4,9 @@ import {
   MenubarItem,
   MenubarMenu,
   MenubarSeparator,
+  MenubarSub,
+  MenubarSubContent,
+  MenubarSubTrigger,
   MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
 import usePromise from '@/hooks/use-promise.hook';
@@ -82,18 +85,26 @@ export default function PlatformMenubar({
                     .filter((item) => item.group === groupKey)
                     .sort((a, b) => a.order - b.order)
                     .map(
-                      (item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => (
-                        <MenubarItem
-                          key={'command' in item ? item.command : item.id}
-                          onClick={() => {
-                            if ('command' in item) {
+                      (item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) =>
+                        'command' in item ? (
+                          <MenubarItem
+                            key={item.command}
+                            onClick={() => {
                               commandHandler(item);
-                            }
-                          }}
-                        >
-                          {item.label}
-                        </MenubarItem>
-                      ),
+                            }}
+                          >
+                            {item.label}
+                          </MenubarItem>
+                        ) : (
+                          <MenubarSub>
+                            <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
+                            <MenubarSubContent>
+                              <MenubarItem>Email link</MenubarItem>
+                              <MenubarItem>Messages</MenubarItem>
+                              <MenubarItem>Notes</MenubarItem>
+                            </MenubarSubContent>
+                          </MenubarSub>
+                        ),
                     );
 
                   const itemsWithSeparator = [...groupItems];

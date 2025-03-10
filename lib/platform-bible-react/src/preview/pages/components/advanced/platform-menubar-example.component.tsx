@@ -15,6 +15,7 @@ const menuData = {
     'platform.layoutGroup': { column: 'platform.layout', order: 1 },
     'platform.helpRegistration': { column: 'platform.help', order: 1, isExtensible: true },
     'platform.helpMisc': { column: 'platform.help', order: 2 },
+    'platform.helpSubMenu': { menuItem: 'platform.helpSubMenuId', order: 3 },
   },
   items: [
     {
@@ -49,8 +50,22 @@ const menuData = {
       label: 'Open Developer Documentation',
       localizeNotes: 'Application main menu > Help > Open Developer Documentation',
       group: 'platform.helpMisc',
-      order: 3,
+      order: 4,
       command: 'platform.openDeveloperDocumentationUrl',
+    },
+    {
+      label: 'Help Sub Menu',
+      localizeNotes: 'Application main menu > Help > Help Sub Menu',
+      group: 'platform.helpMisc',
+      order: 3,
+      id: 'platform.helpSubMenuId',
+    },
+    {
+      label: 'Help Sub Menu Item 1',
+      localizeNotes: 'Application main menu > Help > Help Sub Menu > Item 1',
+      group: 'platform.helpSubMenu',
+      order: 1,
+      command: 'platform.openSettings',
     },
     {
       label: 'Toggle Include My Paratext 9 Projects',
