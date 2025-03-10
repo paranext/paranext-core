@@ -18,7 +18,7 @@ function Layouts() {
       <VerticalTabs defaultValue="Window">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Window">Window or Tab</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Toolbar">MUI Toolbar</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Toolbar">Toolbar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Settings">Settings (n/a)</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Get Resources">Get Resources</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Shadcn Dashboard 5">Shadcn Dashboard 5</VerticalTabsTrigger>

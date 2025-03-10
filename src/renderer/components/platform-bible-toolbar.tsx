@@ -1,5 +1,6 @@
 import logger from '@shared/services/logger.service';
-import { Toolbar, BookChapterControl, ScrollGroupSelector } from 'platform-bible-react';
+import { Toolbar, BookChapterControl, ScrollGroupSelector, usePromise } from 'platform-bible-react';
+import { HomeIcon, User } from 'lucide-react';
 import {
   getLocalizeKeysForScrollGroupIds,
   Localized,
@@ -10,8 +11,10 @@ import { availableScrollGroupIds } from '@renderer/services/scroll-group.service
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { useCallback, useState } from 'react';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { sendCommand } from '@shared/services/command.service';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
+import './platform-bible-toolbar.scss';
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
 
@@ -61,14 +64,49 @@ export default function PlatformBibleToolbar() {
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const [osPlatform] = usePromise(
+    useCallback(
+      () =>
+        sendCommand('platform.getOSPlatform').then((platform: string | undefined) => {
+          // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+          return platform === 'linux' ? '' : platform;
+        }),
+      [],
+    ),
+    undefined,
+  );
+
+  const [isFullScreen] = usePromise(
+    useCallback(() => sendCommand('platform.isFullScreen'), []),
+    undefined,
+  );
+
   return (
-    <Toolbar className="toolbar" menuProvider={getMenuData} commandHandler={handleMenuCommand}>
-      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+    <Toolbar
+      menuProvider={getMenuData}
+      commandHandler={handleMenuCommand}
+      className="tw-h-12 tw-bg-transparent"
+      menubarVariant="muted"
+      reserveOSSpecificSpace={osPlatform === 'darwin' && isFullScreen ? undefined : osPlatform}
+      useAsAppDragArea
+      configAreaChildren={
+        // This is a placeholder for the actual user menu
+        <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
+          <User className="tw-h-4" />
+        </div>
+      }
+    >
+      <HomeIcon
+        className="home-button"
+        onClick={() => sendCommand('platformGetResources.openHome')}
+      />
+      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}
         scrollGroupId={scrollGroupId}
         onChangeScrollGroupId={setScrollGroupId}
         localizedStrings={scrollGroupLocalizedStrings}
+        className="tw-h-8"
       />
     </Toolbar>
   );

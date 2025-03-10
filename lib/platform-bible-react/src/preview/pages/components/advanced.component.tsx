@@ -22,6 +22,7 @@ import SettingsListExamples from './advanced/settings-list.examples.component';
 import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
 import { columns, data } from './data-sources/data-table-content';
 import SettingSidebarContentSearchExamples from './advanced/settings-sidebar-content-search.example.component';
+import PlatformMenubarExample from './advanced/platform-menubar-example.component';
 
 function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -83,6 +84,7 @@ function Compositions() {
           <VerticalTabsTrigger value="Navigation Content Search">
             Navigation Content Search
           </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Platform Menubar">Platform Menubar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Settings List">Settings Components</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Scroll Group Selector">
@@ -152,6 +154,10 @@ function Compositions() {
             searchPlaceholder="Search..."
             searchClassName="tw-w-9/12 tw-py-2"
           />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Platform Menubar">
+          <PlatformMenubarExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Result List">
