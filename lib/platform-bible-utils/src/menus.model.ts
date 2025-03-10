@@ -67,7 +67,7 @@ export type MenuItemBase = OrderedItem & {
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes: string;
   /** Key of the menu in the MacOS menu bar to add this item to */
-  macosMenuKey?: ReferencedItem;
+  macosMenuKey?: MacosMenuKey;
 };
 
 /** Menu item that hosts a submenu */
@@ -215,6 +215,11 @@ export const menuDocumentSchema = {
         'Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command)',
       type: 'string',
       pattern: '^[\\w\\-]+\\.[\\w\\-]+$',
+    },
+    macosMenuKey: {
+      description: 'A group of ReferencedItems specific to the predefined menus in the MacOS menu bar.',
+      type: 'string',
+      pattern: '^(macosMenubar)\\.(appMenu|fileMenu|editMenu|viewMenu|tabMenu|textMenu|layoutMenu|windowMenu|helpMenu|ignore)$',
     },
     columnsWithHeaders: {
       description:
@@ -377,7 +382,7 @@ export const menuDocumentSchema = {
         },
         macosMenuKey: {
           description: 'Key of the menu in the MacOS menu bar to add this item to',
-          $ref: '#/$defs/referencedItem',
+          $ref: '#/$defs/macosMenuKey',
         },
       },
       required: ['label', 'group', 'order'],
