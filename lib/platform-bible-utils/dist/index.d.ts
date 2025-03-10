@@ -774,6 +774,8 @@ export type MenuItemBase = OrderedItem & {
 	tooltip?: LocalizeKey;
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
+	/** Key of the menu in the MacOS menu bar to add this item to */
+	macosMenuKey?: ReferencedItem;
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -1045,6 +1047,10 @@ export declare const menuDocumentSchema: {
 				order: {
 					description: string;
 					type: string;
+				};
+				macosMenuKey: {
+					description: string;
+					$ref: string;
 				};
 			};
 			required: string[];

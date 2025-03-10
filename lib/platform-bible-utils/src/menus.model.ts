@@ -50,6 +50,8 @@ export type MenuItemBase = OrderedItem & {
   tooltip?: LocalizeKey;
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes: string;
+  /** Key of the menu in the MacOS menu bar to add this item to */
+  macosMenuKey?: ReferencedItem;
 };
 
 /** Menu item that hosts a submenu */
@@ -356,6 +358,10 @@ export const menuDocumentSchema = {
           description:
             'Relative order of this menu item compared to other menu items in the same group (sorted ascending)',
           type: 'number',
+        },
+        macosMenuKey: {
+          description: 'Key of the menu in the MacOS menu bar to add this item to',
+          $ref: '#/$defs/referencedItem',
         },
       },
       required: ['label', 'group', 'order'],
