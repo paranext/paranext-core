@@ -217,9 +217,11 @@ export const menuDocumentSchema = {
       pattern: '^[\\w\\-]+\\.[\\w\\-]+$',
     },
     macosMenuKey: {
-      description: 'A group of ReferencedItems specific to the predefined menus in the MacOS menu bar.',
+      description:
+        'A group of ReferencedItems specific to the predefined menus in the MacOS menu bar.',
       type: 'string',
-      pattern: '^(macosMenubar)\\.(appMenu|fileMenu|editMenu|viewMenu|tabMenu|textMenu|layoutMenu|windowMenu|helpMenu|ignore)$',
+      pattern:
+        '^(macosMenubar)\\.(appMenu|fileMenu|editMenu|viewMenu|tabMenu|textMenu|layoutMenu|windowMenu|helpMenu|ignore)$',
     },
     columnsWithHeaders: {
       description:
