@@ -1,8 +1,11 @@
 import { MenuItemConstructorOptions } from 'electron';
-import { Localized, LocalizeKey } from 'platform-bible-utils';
+import { Localized, LocalizeKey, MacosMenuKey } from 'platform-bible-utils';
 
-// TODO: Do the "role" menu items localize? Add localized labels anyways?
-
+/**
+ * This type extends the MenuItemConstructorOptions type from Electron to include an optional order
+ * property, change the types of label and toolTip to be LocalizeKeys. Change the type of id to
+ * MacosMenuKey, so that extensions can contribute menu items into our pre-existing MacOS menus.
+ */
 export type MenuItemConstructorOptionsWithOrder = MenuItemConstructorOptions & {
   label?: LocalizeKey;
   toolTip?: LocalizeKey;
@@ -17,21 +20,10 @@ export type MenuItemConstructorOptionsWithOrder = MenuItemConstructorOptions & {
 
 export type LocalizedMacosMenubar = Localized<MenuItemConstructorOptionsWithOrder>[];
 
-export type MacosMenuKey =
-  | 'macosMenubar.appMenu'
-  | 'macosMenubar.fileMenu'
-  | 'macosMenubar.editMenu'
-  | 'macosMenubar.viewMenu'
-  | 'macosMenubar.tabMenu'
-  | 'macosMenubar.textMenu'
-  | 'macosMenubar.layoutMenu'
-  | 'macosMenubar.windowMenu'
-  | 'macosMenubar.helpMenu'
-  | 'macosMenubar.ignore';
-
-// Cannot contribute this as is in main.ts, need to convert click strings to functions and remove the order property
+// Cannot contribute this as is in main.ts, need to convert labels and tooltips to localized strings and remove order property
 const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
   {
+    label: '%macosMenubar_app%',
     role: 'appMenu',
     id: 'macosMenubar.appMenu',
     submenu: [
@@ -41,15 +33,18 @@ const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
     ],
   },
   {
+    label: '%macosMenubar_file%',
     role: 'fileMenu',
     id: 'macosMenubar.fileMenu',
     submenu: [{ role: 'close', id: 'close', order: 8 }],
   },
   {
+    label: '%macosMenubar_edit%',
     role: 'editMenu',
     id: 'macosMenubar.editMenu',
   },
   {
+    label: '%macosMenubar_view%',
     role: 'viewMenu',
     id: 'macosMenubar.viewMenu',
   },
@@ -66,6 +61,7 @@ const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
     id: 'macosMenubar.layoutMenu',
   },
   {
+    label: '%macosMenubar_window%',
     role: 'windowMenu',
     id: 'macosMenubar.windowMenu',
   },

@@ -119,6 +119,7 @@ export { localizedStringsDocumentSchema } from './localized-strings.model';
 export type {
   LocalizeKey,
   ReferencedItem,
+  MacosMenuKey,
   OrderedItem,
   OrderedExtensibleContainer,
   MenuItemBase,
