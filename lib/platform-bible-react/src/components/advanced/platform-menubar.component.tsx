@@ -86,7 +86,9 @@ export default function PlatformMenubar({
                         <MenubarItem
                           key={'command' in item ? item.command : item.id}
                           onClick={() => {
-                            'command' in item && commandHandler(item);
+                            if ('command' in item) {
+                              commandHandler(item);
+                            }
                           }}
                         >
                           {item.label}
