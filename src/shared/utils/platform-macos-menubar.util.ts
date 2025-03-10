@@ -15,6 +15,7 @@ import localizationService from '@shared/services/localization.service';
 import * as commandService from '@shared/services/command.service';
 import { CommandNames } from 'papi-shared-types';
 import { MenuItemConstructorOptions } from 'electron';
+import logger from '@shared/services/logger.service';
 
 /**
  * Run a command from a menu
@@ -36,19 +37,24 @@ export function handleMenuCommand(command: string) {
 }
 
 /**
- * Get the combined and localized macOS menubar items as an array of
- * `MenuItemConstructorOptionsWithOrder` suitable for passing to the Electron `Menu` constructor.
+ * Get the macOS menubar items as an array of `MenuItemConstructorOptions` suitable for passing to
+ * the Electron `Menu` constructor.
  *
- * @returns A promise that resolves to the combined and localized menubar items if successful, or
- *   `undefined` if there was an error.
+ * If fetching the current platform menus fails, it falls back to `macosMenubarObject`.
+ *
+ * @returns A promise that resolves to the combined and localized menubar items.
  */
-export default async function getCurrentMacosMenubar(): Promise<
-  MenuItemConstructorOptions[] | undefined
-> {
-  const currentPlatformMenus = await menuDataService.getMainMenu();
-  const combinedAndLocalizedMacosMenubar =
-    await translatePlatformMenuItemsAndCombine(currentPlatformMenus);
-  return combinedAndLocalizedMacosMenubar;
+export default async function getCurrentMacosMenubar(): Promise<MenuItemConstructorOptions[]> {
+  try {
+    const currentPlatformMenus = await menuDataService.getMainMenu();
+    return await translatePlatformMenuItemsAndCombine(currentPlatformMenus);
+  } catch (error) {
+    logger.error(
+      'Failed to get current platform menus. Falling back to default macOS menubar.',
+      error,
+    );
+    return fallbackToDefaultMacosMenubar();
+  }
 }
 
 /**
@@ -259,4 +265,9 @@ function sortMenuAndRemoveOrder(localizedMacosMenubar: LocalizedMacosMenubar) {
   // The only difference between MenuItemConstructorOptions[] and LocalizedMacosMenubar is the order property
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   return localizedMacosMenubar as MenuItemConstructorOptions[];
+}
+
+/** Returns the default macOS menubar after localizing and formatting it correctly. */
+async function fallbackToDefaultMacosMenubar(): Promise<MenuItemConstructorOptions[]> {
+  return sortMenuAndRemoveOrder(await localizeMacosMenubar(macosMenubarObject));
 }
