@@ -9,7 +9,7 @@ import {
 } from 'platform-bible-utils';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { sendCommand } from '@shared/services/command.service';
 import { handleMenuCommand } from './platform-bible-menu.commands';
@@ -80,19 +80,6 @@ export default function PlatformBibleToolbar() {
     useCallback(() => sendCommand('platform.isFullScreen'), []),
     undefined,
   );
-
-  const [menuData] = usePromise(
-    useCallback(async () => {
-      return getMenuData(true);
-      // isMenuOpen needs to be included for the menu contents to reevaluate when reopened
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
-    undefined,
-  );
-
-  useEffect(() => {
-    console.log(JSON.stringify(menuData));
-  }, [menuData]);
 
   return (
     <Toolbar
