@@ -20,7 +20,7 @@ import {
   TooltipTrigger,
   UiLanguageSelector,
 } from 'platform-bible-react';
-import { debounce, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import { debounce, getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { ChangeEvent, useCallback, useMemo, useState } from 'react';
 import './settings.component.scss';
 
@@ -237,7 +237,7 @@ export default function Setting({
           <UiLanguageSelector
             className="language-selector"
             key={settingKey}
-            knownUiLanguages={languages}
+            knownUiLanguages={isPlatformError(languages) ? defaultLanguages : languages}
             primaryLanguage={setting[0]}
             fallbackLanguages={setting.slice(1)}
             onLanguagesChange={debouncedHandleChange}
@@ -260,7 +260,15 @@ export default function Setting({
         {errorMessage && <Label className="error-label">{errorMessage}</Label>}
       </div>
     );
-  }, [setting, settingKey, debouncedHandleChange, errorMessage, languages, localizedStrings]);
+  }, [
+    localizedStrings,
+    setting,
+    settingKey,
+    debouncedHandleChange,
+    errorMessage,
+    languages,
+    defaultLanguages,
+  ]);
 
   return (
     <div className={className}>
