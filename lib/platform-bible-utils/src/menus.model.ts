@@ -11,6 +11,22 @@ export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
 export type ReferencedItem = `${string}.${string}`;
 
+/**
+ * A group of ReferencedItems specific to the predefined menus in the MacOS menu bar. If they set
+ * their macosMenuKey to 'macosMenubar.ignore', the item will not be added to the MacOS menubar.
+ */
+export type MacosMenuKey =
+  | 'macosMenubar.appMenu'
+  | 'macosMenubar.fileMenu'
+  | 'macosMenubar.editMenu'
+  | 'macosMenubar.viewMenu'
+  | 'macosMenubar.tabMenu'
+  | 'macosMenubar.textMenu'
+  | 'macosMenubar.layoutMenu'
+  | 'macosMenubar.windowMenu'
+  | 'macosMenubar.helpMenu'
+  | 'macosMenubar.ignore';
+
 export type OrderedItem = {
   /** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
   order: number;
@@ -50,6 +66,8 @@ export type MenuItemBase = OrderedItem & {
   tooltip?: LocalizeKey;
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes: string;
+  /** Key of the menu in the MacOS menu bar to add this item to */
+  macosMenuKey?: MacosMenuKey;
 };
 
 /** Menu item that hosts a submenu */
@@ -197,6 +215,13 @@ export const menuDocumentSchema = {
         'Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command)',
       type: 'string',
       pattern: '^[\\w\\-]+\\.[\\w\\-]+$',
+    },
+    macosMenuKey: {
+      description:
+        'A group of ReferencedItems specific to the predefined menus in the MacOS menu bar.',
+      type: 'string',
+      pattern:
+        '^(macosMenubar)\\.(appMenu|fileMenu|editMenu|viewMenu|tabMenu|textMenu|layoutMenu|windowMenu|helpMenu|ignore)$',
     },
     columnsWithHeaders: {
       description:
@@ -356,6 +381,10 @@ export const menuDocumentSchema = {
           description:
             'Relative order of this menu item compared to other menu items in the same group (sorted ascending)',
           type: 'number',
+        },
+        macosMenuKey: {
+          description: 'Key of the menu in the MacOS menu bar to add this item to',
+          $ref: '#/$defs/macosMenuKey',
         },
       },
       required: ['label', 'group', 'order'],
