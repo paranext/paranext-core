@@ -17,7 +17,8 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { useCallback } from 'react';
+import { RefObject, useCallback, useRef } from 'react';
+import { useHotkeys } from 'react-hotkeys-hook';
 import { MultiColumnMenuProvider } from '../mui/hamburger-menu-button.component';
 
 type MenuItemInfoBase = {
@@ -115,6 +116,69 @@ export default function PlatformMenubar({
     });
   };
 
+  // These refs will always be defined
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const primaryMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const windowMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const layoutMenuRef = useRef<HTMLButtonElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const helpMenuRef = useRef<HTMLButtonElement>(undefined!);
+
+  const getRefForColumn = (columnKey: string) => {
+    switch (columnKey) {
+      case 'paratext.paratext':
+      case 'platform.project':
+        console.log('yes');
+        return primaryMenuRef;
+      case 'platform.window':
+        return windowMenuRef;
+      case 'platform.layout':
+        return layoutMenuRef;
+      case 'platform.help':
+        return helpMenuRef;
+      default:
+        return undefined;
+    }
+  };
+
+  const simulateKeyPress = (ref: RefObject<HTMLButtonElement>) => {
+    setTimeout(() => {
+      ref.current?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }),
+      );
+      ref.current?.dispatchEvent(
+        new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }),
+      );
+    }, 0);
+  };
+
+  useHotkeys(['alt+p', 'alt+l', 'alt+n', 'alt+h'], (event, handler) => {
+    event.preventDefault();
+
+    switch (handler.hotkey) {
+      case 'alt+p':
+        primaryMenuRef.current?.focus();
+        simulateKeyPress(primaryMenuRef);
+        break;
+      case 'alt+l':
+        windowMenuRef.current?.focus();
+        simulateKeyPress(windowMenuRef);
+        break;
+      case 'alt+n':
+        layoutMenuRef.current?.focus();
+        simulateKeyPress(layoutMenuRef);
+        break;
+      case 'alt+h':
+        helpMenuRef.current?.focus();
+        simulateKeyPress(helpMenuRef);
+        break;
+      default:
+        break;
+    }
+  });
+
   if (!menuData) return undefined;
 
   return (
@@ -127,7 +191,7 @@ export default function PlatformMenubar({
         })
         .map(([columnKey, column]) => (
           <MenubarMenu key={columnKey}>
-            <MenubarTrigger>
+            <MenubarTrigger ref={getRefForColumn(columnKey)}>
               {typeof column === 'object' && 'label' in column && column.label}
             </MenubarTrigger>
             <MenubarContent>
