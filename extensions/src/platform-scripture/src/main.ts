@@ -158,40 +158,6 @@ export async function activate(context: ExecutionActivationContext) {
 
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
 
-  const includeProjectsCommandPromise = papi.commands.registerCommand(
-    'platformScripture.toggleIncludeMyParatext9Projects',
-    async (shouldInclude) => {
-      const currentSettingValue =
-        shouldInclude !== undefined
-          ? !shouldInclude
-          : await papi.settings.get('platformScripture.includeMyParatext9Projects');
-      const newSettingValue = !currentSettingValue;
-      await papi.settings.set('platformScripture.includeMyParatext9Projects', newSettingValue);
-      return newSettingValue;
-    },
-    {
-      method: {
-        summary: 'Toggle whether to include My Paratext 9 projects within the platform',
-        params: [
-          {
-            name: 'shouldInclude',
-            required: false,
-            summary: 'Whether to include My Paratext 9 projects',
-            schema: { type: 'boolean' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          summary: 'The new value of the setting',
-          schema: { type: 'boolean' },
-        },
-      },
-    },
-  );
-  const includeProjectsValidatorPromise = papi.settings.registerValidator(
-    'platformScripture.includeMyParatext9Projects',
-    async (newValue) => typeof newValue === 'boolean',
-  );
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
     booksPresentValidator,

@@ -6,8 +6,5 @@ public sealed class Settings
         "platform.paratextDataLastRegistryDataCachedTimes";
     public const string PTX_UTILS_MEMENTO_DATA = "platform.ptxUtilsMementoData";
 
-    public const string INCLUDE_MY_PARATEXT_9_PROJECTS =
-        "platformScripture.includeMyParatext9Projects";
-
     public const string COMMENTS_ENABLED = "platform.commentsEnabled";
 }
