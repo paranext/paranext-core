@@ -53,25 +53,37 @@
   </ItemGroup>
 
   <!-- This dectects the location of ICU libraries on the macOS system whether the user is using MacPorts or Homebrew. -->
-  <ItemGroup>
+  <PropertyGroup>
+    <!-- Check if MacPorts ICU exists -->
+    <UseMacPortsICU Condition="Exists('/opt/local/lib/libicuuc.dylib')">true</UseMacPortsICU>
+    
+    <!-- Check if Apple Silicon Homebrew ICU exists (only if MacPorts is unavailable) -->
+    <UseHomebrewAppleSiliconICU Condition="Exists('/opt/homebrew/opt/icu4c/lib/libicuuc.dylib') AND '$(UseMacPortsICU)' != 'true'">true</UseHomebrewAppleSiliconICU>
+
+    <!-- Check if Intel Homebrew ICU exists (only if MacPorts and Apple Silicon Homebrew are unavailable) -->
+    <UseHomebrewIntelICU Condition="Exists('/usr/local/opt/icu4c/lib/libicuuc.dylib') AND '$(UseMacPortsICU)' != 'true' AND '$(UseHomebrewAppleSiliconICU)' != 'true'">true</UseHomebrewIntelICU>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseMacPortsICU)' == 'true'">
     <!-- MacPorts ICU Libraries -->
     <Content Include="/opt/local/lib/libicu*.??.dylib"
-             Exclude="/opt/local/lib/libicutest*.dylib;/opt/local/lib/libicutu*.dylib"
-             Condition="$([MSBuild]::IsOsPlatform('macOS')) AND Exists('/opt/local/lib/libicuuc.dylib')">
+             Exclude="/opt/local/lib/libicutest*.dylib;/opt/local/lib/libicutu*.dylib">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
 
-    <!-- Homebrew (Intel) ICU Libraries -->
-    <Content Include="/usr/local/opt/icu4c/lib/libicu*.??.dylib"
-             Exclude="/usr/local/opt/icu4c/lib/libicutest*.dylib;/usr/local/opt/icu4c/lib/libicutu*.dylib"
-             Condition="$([MSBuild]::IsOsPlatform('macOS')) AND Exists('/usr/local/opt/icu4c/lib/libicuuc.dylib')">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-
-    <!-- Homebrew (Apple Silicon) ICU Libraries -->
+  <ItemGroup Condition="'$(UseHomebrewAppleSiliconICU)' == 'true'">
+    <!-- Apple Silicon Homebrew ICU Libraries -->
     <Content Include="/opt/homebrew/opt/icu4c/lib/libicu*.??.dylib"
-             Exclude="/opt/homebrew/opt/icu4c/lib/libicutest*.dylib;/opt/homebrew/opt/icu4c/lib/libicutu*.dylib"
-             Condition="$([MSBuild]::IsOsPlatform('macOS')) AND Exists('/opt/homebrew/opt/icu4c/lib/libicuuc.dylib')">
+             Exclude="/opt/homebrew/opt/icu4c/lib/libicutest*.dylib;/opt/homebrew/opt/icu4c/lib/libicutu*.dylib">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseHomebrewIntelICU)' == 'true'">
+    <!-- Intel Homebrew ICU Libraries -->
+    <Content Include="/usr/local/opt/icu4c/lib/libicu*.??.dylib"
+             Exclude="/usr/local/opt/icu4c/lib/libicutest*.dylib;/usr/local/opt/icu4c/lib/libicutu*.dylib">
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
