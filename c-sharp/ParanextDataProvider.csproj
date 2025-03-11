@@ -52,18 +52,30 @@
     </None>
   </ItemGroup>
 
-  <!--
-    This assumes that icu4c libs are installed under "/opt/local/lib" on macOS. This is the default
-    location for libs that MacPorts installs. If we need to start bundling icu4c libs from
-    somewhere other than "/opt/local/lib", this path and some other paths in the build scripts will
-    need to be updated. We have to bundle the icu4c libs somehow unless macOS starts to include them
-    by default.
-    -->
+  <!-- This dectects the location of ICU libraries on the macOS system whether the user is using MacPorts or Homebrew. -->
   <ItemGroup>
-    <Content Include="/opt/local/lib/libicu*.??.dylib" Exclude="/opt/local/lib/libicutest*.dylib;/opt/local/lib/libicutu*.dylib" Condition="$([MSBuild]::IsOsPlatform('macOS'))">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    <!-- MacPorts ICU Libraries -->
+    <Content Include="/opt/local/lib/libicu*.??.dylib"
+             Exclude="/opt/local/lib/libicutest*.dylib;/opt/local/lib/libicutu*.dylib"
+             Condition="$([MSBuild]::IsOsPlatform('macOS')) AND Exists('/opt/local/lib/libicuuc.dylib')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <!-- Homebrew (Intel) ICU Libraries -->
+    <Content Include="/usr/local/opt/icu4c/lib/libicu*.??.dylib"
+             Exclude="/usr/local/opt/icu4c/lib/libicutest*.dylib;/usr/local/opt/icu4c/lib/libicutu*.dylib"
+             Condition="$([MSBuild]::IsOsPlatform('macOS')) AND Exists('/usr/local/opt/icu4c/lib/libicuuc.dylib')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+
+    <!-- Homebrew (Apple Silicon) ICU Libraries -->
+    <Content Include="/opt/homebrew/opt/icu4c/lib/libicu*.??.dylib"
+             Exclude="/opt/homebrew/opt/icu4c/lib/libicutest*.dylib;/opt/homebrew/opt/icu4c/lib/libicutu*.dylib"
+             Condition="$([MSBuild]::IsOsPlatform('macOS')) AND Exists('/opt/homebrew/opt/icu4c/lib/libicuuc.dylib')">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
 
   <!-- This assumes that icu4c libs are installed under "/usr/lib/x86_64-linux-gnu" on Linux. -->
   <ItemGroup>
