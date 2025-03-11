@@ -317,8 +317,6 @@ export async function activate(context: ExecutionActivationContext) {
 
   context.registrations.add(
     await scriptureExtenderPdpefPromise,
-    await includeProjectsCommandPromise,
-    await includeProjectsValidatorPromise,
     await booksPresentPromise,
     await versificationPromise,
     await validCharactersPromise,
