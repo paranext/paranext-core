@@ -1,6 +1,4 @@
-import HamburgerMenuButton, {
-  MultiColumnMenuProvider,
-} from '@/components/mui/hamburger-menu-button.component';
+import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
 import { CommandHandler } from '@/components/mui/menu-item.component';
 import '@/components/mui/toolbar.component.css';
 import { cn } from '@/utils/shadcn-ui.util';
@@ -29,6 +27,9 @@ export type ToolbarProps = PropsWithChildren<{
   /** Whether the toolbar should be used as a draggable area for moving the application */
   useAsAppDragArea?: boolean;
 
+  /** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
+  appMenuAreaChildren?: ReactNode;
+
   /** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
   configAreaChildren?: ReactNode;
 
@@ -42,6 +43,7 @@ export default function Toolbar({
   className,
   id,
   children,
+  appMenuAreaChildren,
   configAreaChildren,
   useAsAppDragArea,
   reserveOSSpecificSpace = undefined,
@@ -72,6 +74,15 @@ export default function Toolbar({
         style={useAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
       >
         {/* App Menu area */}
+        <div className="tw-flex tw-basis-0 tw-justify-start">
+          <div
+            className="tw-flex tw-items-center tw-gap-2"
+            /* @ts-ignore Electron-only property */
+            style={{ WebkitAppRegion: 'no-drag' }}
+          >
+            {appMenuAreaChildren}
+          </div>
+        </div>
         <div className="tw-flex tw-grow tw-basis-0">
           <div
             className="tw-flex tw-items-center"
@@ -84,11 +95,6 @@ export default function Toolbar({
                   TODO: When the HamburgerMenuButton is removed, move this component out of the MUI folder
                   also then remove components/mui/toolbar.component.css
                 */}
-                <HamburgerMenuButton
-                  commandHandler={commandHandler}
-                  containerRef={containerRef}
-                  menuProvider={menuProvider}
-                />
                 <PlatformMenubar
                   menuProvider={menuProvider}
                   commandHandler={commandHandler}

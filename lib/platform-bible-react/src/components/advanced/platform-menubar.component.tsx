@@ -122,7 +122,6 @@ export default function PlatformMenubar({
     switch (columnKey) {
       case 'paratext.paratext':
       case 'platform.project':
-        console.log('yes');
         return primaryMenuRef;
       case 'platform.window':
         return windowMenuRef;
@@ -135,36 +134,40 @@ export default function PlatformMenubar({
     }
   };
 
-  const simulateKeyPress = (ref: RefObject<HTMLButtonElement>) => {
+  const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
     setTimeout(() => {
-      ref.current?.dispatchEvent(
-        new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }),
-      );
-      ref.current?.dispatchEvent(
-        new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true }),
-      );
+      keys.forEach((key) => {
+        ref.current?.dispatchEvent(new KeyboardEvent('keydown', key));
+      });
     }, 0);
   };
 
-  useHotkeys(['alt+p', 'alt+l', 'alt+n', 'alt+h'], (event, handler) => {
+  // This is a quick and dirty way to implement some shortcuts by simulating key presses
+  useHotkeys(['alt', 'alt+p', 'alt+l', 'alt+n', 'alt+h'], (event, handler) => {
     event.preventDefault();
 
+    const escKey: KeyboardEventInit = { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true };
+    const spaceKey: KeyboardEventInit = { key: ' ', code: 'Space', keyCode: 32, bubbles: true };
+
     switch (handler.hotkey) {
+      case 'alt':
+        simulateKeyPress(primaryMenuRef, [escKey]);
+        break;
       case 'alt+p':
         primaryMenuRef.current?.focus();
-        simulateKeyPress(primaryMenuRef);
+        simulateKeyPress(primaryMenuRef, [escKey, spaceKey]);
         break;
       case 'alt+l':
         windowMenuRef.current?.focus();
-        simulateKeyPress(windowMenuRef);
+        simulateKeyPress(windowMenuRef, [escKey, spaceKey]);
         break;
       case 'alt+n':
         layoutMenuRef.current?.focus();
-        simulateKeyPress(layoutMenuRef);
+        simulateKeyPress(layoutMenuRef, [escKey, spaceKey]);
         break;
       case 'alt+h':
         helpMenuRef.current?.focus();
-        simulateKeyPress(helpMenuRef);
+        simulateKeyPress(helpMenuRef, [escKey, spaceKey]);
         break;
       default:
         break;

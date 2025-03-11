@@ -1,7 +1,7 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
 import Toolbar from '@/components/mui/toolbar.component';
-import { Minus, Square, UserRound, X } from 'lucide-react';
+import { BookIcon, Minus, Square, UserRound, X } from 'lucide-react';
 
 import { defaultScrRef, Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { useState } from 'react';
@@ -19,6 +19,13 @@ export default function ToolbarExamples() {
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar menuProvider={menuProvider} commandHandler={() => {}}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar
+        menuProvider={undefined}
+        commandHandler={() => {}}
+        appMenuAreaChildren={<BookIcon />}
+      >
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar

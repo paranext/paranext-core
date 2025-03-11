@@ -987,12 +987,14 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	reserveOSSpecificSpace?: string;
 	/** Whether the toolbar should be used as a draggable area for moving the application */
 	useAsAppDragArea?: boolean;
+	/** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
+	appMenuAreaChildren?: React$1.ReactNode;
 	/** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
 	configAreaChildren?: React$1.ReactNode;
 	/** Variant of the menubar */
 	menubarVariant?: "default" | "muted";
 }>;
-export function Toolbar({ menuProvider, commandHandler, className, id, children, configAreaChildren, useAsAppDragArea, reserveOSSpecificSpace, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export function Toolbar({ menuProvider, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, useAsAppDragArea, reserveOSSpecificSpace, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *

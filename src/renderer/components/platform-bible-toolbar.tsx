@@ -89,6 +89,9 @@ export default function PlatformBibleToolbar() {
       menubarVariant="muted"
       reserveOSSpecificSpace={osPlatform === 'darwin' && isFullScreen ? undefined : osPlatform}
       useAsAppDragArea
+      appMenuAreaChildren={
+        <img width={32} height={32} src="/assets/icon.png" alt="Application Logo" />
+      }
       configAreaChildren={
         // This is a placeholder for the actual user menu
         <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
