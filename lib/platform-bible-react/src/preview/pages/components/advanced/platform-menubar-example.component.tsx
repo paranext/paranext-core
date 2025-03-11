@@ -2,15 +2,15 @@ import PlatformMenubar from '@/components/advanced/platform-menubar.component';
 
 const menuData = {
   columns: {
-    'paratext.paratext': { label: 'Project', order: 1 },
+    'platform.project': { label: 'Project', order: 1 },
     'platform.help': { label: 'Help', order: 4 },
     isExtensible: true,
   },
   groups: {
-    'platform.projectProjects': { column: 'paratext.paratext', order: 1, isExtensible: true },
-    'platform.projectResources': { column: 'paratext.paratext', order: 2, isExtensible: true },
-    'platform.projectSettings': { column: 'paratext.paratext', order: 3 },
-    'platform.projectMisc': { column: 'paratext.paratext', order: 4 },
+    'platform.projectProjects': { column: 'platform.project', order: 1, isExtensible: true },
+    'platform.projectResources': { column: 'platform.project', order: 2, isExtensible: true },
+    'platform.projectSettings': { column: 'platform.project', order: 3 },
+    'platform.projectMisc': { column: 'platform.project', order: 4 },
     'platform.windowGroup': { column: 'platform.window', order: 1 },
     'platform.layoutGroup': { column: 'platform.layout', order: 1 },
     'platform.helpRegistration': { column: 'platform.help', order: 1, isExtensible: true },

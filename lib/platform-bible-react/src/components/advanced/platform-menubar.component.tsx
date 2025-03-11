@@ -1,3 +1,5 @@
+import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
+import { CommandHandler } from '@/components/mui/menu-item.component';
 import {
   Menubar,
   MenubarContent,
@@ -19,23 +21,68 @@ import {
 } from 'platform-bible-utils';
 import { RefObject, useCallback, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
-import { MultiColumnMenuProvider } from '../mui/hamburger-menu-button.component';
 
-type MenuItemInfoBase = {
-  /** Text (displayable in the UI) as the name of the menu item */
-  label: string;
-  /** Text to display when the mouse hovers over the menu item */
-  tooltip?: string;
+const getSubMenuKeyForId = (
+  groups: Localized<GroupsInMultiColumnMenu>,
+  id: string,
+): string | undefined => {
+  return Object.entries(groups).find(
+    ([, value]) => 'menuItem' in value && value.menuItem === id,
+  )?.[0];
 };
 
-export type Command = MenuItemInfoBase & {
-  /** Command to execute (string.string) */
-  command: string;
-};
+const getMenubarContent = (
+  groups: Localized<GroupsInMultiColumnMenu>,
+  items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
+  columnOrSubMenuKey: string | undefined,
+  commandHandler: CommandHandler,
+) => {
+  if (!columnOrSubMenuKey) return undefined;
 
-export interface CommandHandler {
-  (command: Command): void;
-}
+  const sortedGroupsForColumn = Object.entries(groups)
+    .filter(
+      ([key, group]) =>
+        ('column' in group && group.column === columnOrSubMenuKey) || key === columnOrSubMenuKey,
+    )
+    .sort(([, a], [, b]) => a.order - b.order);
+
+  return sortedGroupsForColumn.flatMap(([groupKey], index) => {
+    const groupItems = items
+      .filter((item) => item.group === groupKey)
+      .sort((a, b) => a.order - b.order)
+      .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) =>
+        'command' in item ? (
+          <MenubarItem
+            key={item.command}
+            onClick={() => {
+              commandHandler(item);
+            }}
+          >
+            {item.label}
+          </MenubarItem>
+        ) : (
+          <MenubarSub key={item.id}>
+            <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
+            <MenubarSubContent>
+              {getMenubarContent(
+                groups,
+                items,
+                getSubMenuKeyForId(groups, item.id),
+                commandHandler,
+              )}
+            </MenubarSubContent>
+          </MenubarSub>
+        ),
+      );
+
+    const itemsWithSeparator = [...groupItems];
+    if (groupItems.length > 0 && index < sortedGroupsForColumn.length - 1) {
+      itemsWithSeparator.push(<MenubarSeparator key={`${groupKey}-separator`} />);
+    }
+
+    return itemsWithSeparator;
+  });
+};
 
 type PlatformMenubarProps = {
   /** The delegate to use to get the menu data. */
@@ -60,61 +107,6 @@ export default function PlatformMenubar({
     }, [menuProvider]),
     undefined,
   );
-
-  const getColumnKeyForId = (
-    groups: Localized<GroupsInMultiColumnMenu>,
-    id: string,
-  ): string | undefined => {
-    return Object.entries(groups).find(
-      ([, value]) => 'menuItem' in value && value.menuItem === id,
-    )?.[0];
-  };
-
-  const getMenubarContent = (
-    groups: Localized<GroupsInMultiColumnMenu>,
-    items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
-    columnKey: string | undefined,
-  ) => {
-    if (!columnKey) return undefined;
-
-    const sortedGroupsForColumn = Object.entries(groups)
-      .filter(
-        ([key, group]) => ('column' in group && group.column === columnKey) || key === columnKey,
-      )
-      .sort(([, a], [, b]) => a.order - b.order);
-
-    return sortedGroupsForColumn.flatMap(([groupKey], index) => {
-      const groupItems = items
-        .filter((item) => item.group === groupKey)
-        .sort((a, b) => a.order - b.order)
-        .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) =>
-          'command' in item ? (
-            <MenubarItem
-              key={item.command}
-              onClick={() => {
-                commandHandler(item);
-              }}
-            >
-              {item.label}
-            </MenubarItem>
-          ) : (
-            <MenubarSub key={item.id}>
-              <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
-              <MenubarSubContent>
-                {getMenubarContent(groups, items, getColumnKeyForId(groups, item.id))}
-              </MenubarSubContent>
-            </MenubarSub>
-          ),
-        );
-
-      const itemsWithSeparator = [...groupItems];
-      if (groupItems.length > 0 && index < sortedGroupsForColumn.length - 1) {
-        itemsWithSeparator.push(<MenubarSeparator key={`${groupKey}-separator`} />);
-      }
-
-      return itemsWithSeparator;
-    });
-  };
 
   // These refs will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -195,7 +187,7 @@ export default function PlatformMenubar({
               {typeof column === 'object' && 'label' in column && column.label}
             </MenubarTrigger>
             <MenubarContent>
-              {getMenubarContent(menuData.groups, menuData.items, columnKey)}
+              {getMenubarContent(menuData.groups, menuData.items, columnKey, commandHandler)}
             </MenubarContent>
           </MenubarMenu>
         ))}
