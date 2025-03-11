@@ -11,6 +11,7 @@ import {
 } from '@/components/shadcn-ui/menubar';
 import usePromise from '@/hooks/use-promise.hook';
 import {
+  GroupsInMultiColumnMenu,
   Localized,
   MenuItemContainingCommand,
   MenuItemContainingSubmenu,
@@ -59,6 +60,61 @@ export default function PlatformMenubar({
     undefined,
   );
 
+  const getColumnKeyForId = (
+    groups: Localized<GroupsInMultiColumnMenu>,
+    id: string,
+  ): string | undefined => {
+    return Object.entries(groups).find(
+      ([, value]) => 'menuItem' in value && value.menuItem === id,
+    )?.[0];
+  };
+
+  const getMenubarContent = (
+    groups: Localized<GroupsInMultiColumnMenu>,
+    items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
+    columnKey: string | undefined,
+  ) => {
+    if (!columnKey) return undefined;
+
+    const sortedGroupsForColumn = Object.entries(groups)
+      .filter(
+        ([key, group]) => ('column' in group && group.column === columnKey) || key === columnKey,
+      )
+      .sort(([, a], [, b]) => a.order - b.order);
+
+    return sortedGroupsForColumn.flatMap(([groupKey], index) => {
+      const groupItems = items
+        .filter((item) => item.group === groupKey)
+        .sort((a, b) => a.order - b.order)
+        .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) =>
+          'command' in item ? (
+            <MenubarItem
+              key={item.command}
+              onClick={() => {
+                commandHandler(item);
+              }}
+            >
+              {item.label}
+            </MenubarItem>
+          ) : (
+            <MenubarSub key={item.id}>
+              <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
+              <MenubarSubContent>
+                {getMenubarContent(groups, items, getColumnKeyForId(groups, item.id))}
+              </MenubarSubContent>
+            </MenubarSub>
+          ),
+        );
+
+      const itemsWithSeparator = [...groupItems];
+      if (groupItems.length > 0 && index < sortedGroupsForColumn.length - 1) {
+        itemsWithSeparator.push(<MenubarSeparator key={`${groupKey}-separator`} />);
+      }
+
+      return itemsWithSeparator;
+    });
+  };
+
   if (!menuData) return undefined;
 
   return (
@@ -75,46 +131,7 @@ export default function PlatformMenubar({
               {typeof column === 'object' && 'label' in column && column.label}
             </MenubarTrigger>
             <MenubarContent>
-              {(() => {
-                const groups = Object.entries(menuData.groups)
-                  .filter(([, group]) => 'column' in group && group.column === columnKey)
-                  .sort(([, a], [, b]) => a.order - b.order);
-
-                return groups.flatMap(([groupKey], index) => {
-                  const groupItems = menuData.items
-                    .filter((item) => item.group === groupKey)
-                    .sort((a, b) => a.order - b.order)
-                    .map(
-                      (item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) =>
-                        'command' in item ? (
-                          <MenubarItem
-                            key={item.command}
-                            onClick={() => {
-                              commandHandler(item);
-                            }}
-                          >
-                            {item.label}
-                          </MenubarItem>
-                        ) : (
-                          <MenubarSub>
-                            <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
-                            <MenubarSubContent>
-                              <MenubarItem>Email link</MenubarItem>
-                              <MenubarItem>Messages</MenubarItem>
-                              <MenubarItem>Notes</MenubarItem>
-                            </MenubarSubContent>
-                          </MenubarSub>
-                        ),
-                    );
-
-                  const itemsWithSeparator = [...groupItems];
-                  if (groupItems.length > 0 && index < groups.length - 1) {
-                    itemsWithSeparator.push(<MenubarSeparator key={`${groupKey}-separator`} />);
-                  }
-
-                  return itemsWithSeparator;
-                });
-              })()}
+              {getMenubarContent(menuData.groups, menuData.items, columnKey)}
             </MenubarContent>
           </MenubarMenu>
         ))}

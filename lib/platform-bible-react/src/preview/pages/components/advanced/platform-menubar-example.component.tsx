@@ -16,6 +16,7 @@ const menuData = {
     'platform.helpRegistration': { column: 'platform.help', order: 1, isExtensible: true },
     'platform.helpMisc': { column: 'platform.help', order: 2 },
     'platform.helpSubMenu': { menuItem: 'platform.helpSubMenuId', order: 3 },
+    'platform.helpSubSubMenu': { menuItem: 'platform.helpSubSubMenuId', order: 4 },
   },
   items: [
     {
@@ -64,6 +65,20 @@ const menuData = {
       label: 'Help Sub Menu Item 1',
       localizeNotes: 'Application main menu > Help > Help Sub Menu > Item 1',
       group: 'platform.helpSubMenu',
+      order: 1,
+      command: 'platform.openSettings',
+    },
+    {
+      label: 'Help Sub Sub Menu',
+      localizeNotes: 'Application main menu > Help > Help Sub Menu > Help Sub Sub Menu',
+      group: 'platform.helpSubMenu',
+      order: 3,
+      id: 'platform.helpSubSubMenuId',
+    },
+    {
+      label: 'Help Sub Sub Menu Item 1',
+      localizeNotes: 'Application main menu > Help > Help Sub Menu > Help Sub Sub Menu > Item 1',
+      group: 'platform.helpSubSubMenu',
       order: 1,
       command: 'platform.openSettings',
     },
