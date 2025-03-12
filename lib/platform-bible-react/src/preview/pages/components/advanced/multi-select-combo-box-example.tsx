@@ -1,12 +1,8 @@
-import MultiSelectComboBox from '@/components/advanced/multi-select-combo-box';
+import MultiSelectComboBox, {
+  MultiSelectComboBoxEntry,
+} from '@/components/advanced/multi-select-combo-box.component';
 import { Blocks } from 'lucide-react';
 import { useState } from 'react';
-
-type MultiSelectComboBoxEntry = {
-  value: string;
-  label: string;
-  starred?: boolean;
-};
 
 const types: MultiSelectComboBoxEntry[] = [
   { value: 'resources', label: 'Resource', starred: true },
@@ -123,11 +119,20 @@ const resources = [
   },
 ];
 
+const getOptionsCount = (option: MultiSelectComboBoxEntry): number => {
+  return resources.filter((resource) => resource.type === option.value).length ?? 0;
+};
+
 function MultiSelectComboBoxExample() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>(types.map((type) => type.value));
 
-  const getOptionsCount = (option: MultiSelectComboBoxEntry): number => {
-    return resources.filter((resource) => resource.type === option.value).length ?? 0;
+  const getCustomSelectedText = () => {
+    if (selectedTypes.length === types.length || selectedTypes.length === 0) return 'Any type';
+    if (selectedTypes.length === 1) {
+      const matchingType = types.find((type) => type.value === selectedTypes[0]);
+      if (matchingType) return matchingType.label;
+    }
+    return `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`;
   };
 
   return (
@@ -138,12 +143,8 @@ function MultiSelectComboBoxExample() {
           getEntriesCount={getOptionsCount}
           selected={selectedTypes}
           onChange={setSelectedTypes}
-          placeholder="Select types"
-          customSelectedText={
-            selectedTypes.length === types.length || selectedTypes.length === 0
-              ? 'Any type'
-              : `${selectedTypes.length} type${selectedTypes.length > 1 ? 's' : ''}`
-          }
+          placeholder="Types"
+          customSelectedText={getCustomSelectedText()}
           icon={<Blocks />}
         />
       </div>

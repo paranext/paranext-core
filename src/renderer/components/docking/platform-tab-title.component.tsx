@@ -1,15 +1,8 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import menuDataService from '@shared/services/menu-data.service';
-import {
-  CommandHandler,
-  HamburgerMenuButton,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from 'platform-bible-react';
-import { isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
+import { CommandHandler, HamburgerMenuButton, Tooltip } from 'platform-bible-react';
 import { useCallback, useMemo, useRef } from 'react';
+import { isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
 import './platform-tab-title.component.scss';
 
@@ -85,32 +78,23 @@ export default function PlatformTabTitle({
   );
 
   return (
-    <TooltipProvider>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <div ref={containerRef} className="title">
-            {isLoading || !webViewMenu?.topMenu ? (
-              icon
-            ) : (
-              <HamburgerMenuButton
-                commandHandler={commandHandler}
-                normalMenu={webViewMenu?.topMenu}
-                className="tab-menu-button"
-                aria-label={tabLabel}
-                containerRef={containerRef}
-              >
-                {icon}
-              </HamburgerMenuButton>
-            )}
-            <span>{title}</span>
-          </div>
-        </TooltipTrigger>
-        {tooltip && (
-          <TooltipContent className="tooltip" side="right">
-            <p>{tooltip}</p>
-          </TooltipContent>
+    <Tooltip title={tooltipDiv}>
+      <div ref={containerRef} className="title">
+        {isLoading || isPlatformError(webViewMenu) || !webViewMenu?.topMenu ? (
+          icon
+        ) : (
+          <HamburgerMenuButton
+            commandHandler={commandHandler}
+            normalMenu={isPlatformError(webViewMenu) ? undefined : webViewMenu?.topMenu}
+            className="tab-menu-button"
+            aria-label={tabLabel}
+            containerRef={containerRef}
+          >
+            {icon}
+          </HamburgerMenuButton>
         )}
-      </Tooltip>
-    </TooltipProvider>
+        <span>{title}</span>
+      </div>
+    </Tooltip>
   );
 }

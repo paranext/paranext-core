@@ -47,6 +47,9 @@ import settingsService from '@shared/services/settings.service';
 import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
 import projectSettingsService from '@shared/services/project-settings.service';
 import { WebViewFactory as PapiWebViewFactory } from '@shared/models/web-view-factory.model';
+import dataProtectionService from '@shared/services/data-protection.service';
+import { INotificationService } from '@shared/models/notification.service-model';
+import notificationService from '@shared/services/notification.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -76,6 +79,8 @@ const papi = {
   // Services/modules
   /** JSDOC DESTINATION commandService */
   commands: commandService,
+  /** JSDOC DESTINATION dataProtectionService */
+  dataProtection: dataProtectionService,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION papiWebViewProviderService */
@@ -111,6 +116,8 @@ const papi = {
   scrollGroups: scrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
   localization: localizationService as ILocalizationService,
+  /** JSDOC DESTINATION notificationService */
+  notifications: notificationService as INotificationService,
 };
 /* eslint-enable */
 
@@ -142,6 +149,9 @@ Object.freeze(papi.fetch);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);
+/** JSDOC DESTINATION dataProtectionService */
+export const { dataProtection } = papi;
+Object.freeze(papi.dataProtection);
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
 Object.freeze(papi.webViews);
@@ -193,3 +203,6 @@ Object.freeze(papi.scrollGroups);
 /** JSDOC DESTINATION localizationDataService */
 export const { localization } = papi;
 Object.freeze(papi.localization);
+/** JSDOC DESTINATION notificationService */
+export const { notifications } = papi;
+Object.freeze(papi.notifications);

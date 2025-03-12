@@ -738,6 +738,80 @@ export function transformAndEnsureRegExpArray(
   return regExpArray;
 }
 
+const whiteSpaceRegex =
+  // Using unicode control characters to be very explicit about which characters we are using.
+  // The first 6 characters are the control characters \f\n\r\t\v.
+  // eslint-disable-next-line no-control-regex
+  /^[\u000C\u000A\u000D\u0009\u000B\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/;
+/**
+ * Determines whether a string contains one or more white space characters and no other characters.
+ *
+ * This implementation uses [dotnet's `Char.IsWhiteSpace` definition of white
+ * space](https://learn.microsoft.com/en-us/dotnet/api/system.char.iswhitespace?view=net-9.0):
+ *
+ * ```ts
+ * /^[\u000C\u000A\u000D\u0009\u000B\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/.test(
+ *   ch,
+ * );
+ * ```
+ *
+ * Note: This differs from
+ * [`/\s/.test(ch)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions/Character_classes#:~:text=Matches%20a%20single%20white%20space%20character%2C%20including%20space)
+ * (usually considered the determiner of what is white space in JavaScript) in that it does not
+ * include ZWNBSP (U+FEFF) but rather includes NEXT LINE (U+0085)
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more white space characters and no other
+ *   characters, `false` otherwise
+ */
+export function isWhiteSpace(ch: string) {
+  return whiteSpaceRegex.test(ch);
+}
+
+/**
+ * Converts PascalCase or camelCase string to kebab-case. To detect upper- and lower-case
+ * characters, uses `.toUpperCase` and `.toLowerCase` to be locale-independent.
+ *
+ * Current implementation supports only UTF-16.
+ *
+ * Thanks to ChatGPT https://chatgpt.com/share/67c8aa44-e054-800c-8068-e1e6630081f7
+ */
+export function toKebabCase(input: string): string {
+  let result = '';
+
+  for (let i = 0; i < input.length; i++) {
+    const char = input[i];
+    const isUpper = char === char.toUpperCase() && char !== char.toLowerCase();
+
+    if (isUpper) {
+      if (i > 0) {
+        const prevChar = input[i - 1];
+        const isPrevUpper =
+          prevChar === prevChar.toUpperCase() && prevChar !== prevChar.toLowerCase();
+
+        // If previous is not uppercase, always insert dash.
+        if (!isPrevUpper) {
+          result += '-';
+        } else if (i + 1 < input.length) {
+          // Deal with initialisms and acronyms as if they are whole words ("APIFinder" -> "api-finder")
+          // Previous was uppercase; insert dash only if the next character exists and is lowercase.
+          const nextChar = input[i + 1];
+          const isNextLower =
+            nextChar === nextChar.toLowerCase() && nextChar !== nextChar.toUpperCase();
+          if (isNextLower) {
+            result += '-';
+          }
+        }
+      }
+      result += char.toLowerCase();
+    } else {
+      result += char;
+    }
+  }
+
+  return result;
+}
+
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingStringUtils = {
   indexOfClosestClosingCurlyBrace,

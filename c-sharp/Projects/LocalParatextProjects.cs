@@ -64,7 +64,7 @@ internal class LocalParatextProjects
 
     #region Public properties and methods
 
-    public virtual void Initialize(bool shouldIncludePT9ProjectsOnWindows)
+    public virtual void Initialize()
     {
         if (_isInitialized)
             return;
@@ -83,29 +83,6 @@ internal class LocalParatextProjects
             Console.WriteLine(
                 $"Projects loaded from {ProjectRootFolder}: {string.Join(",", GetScrTexts().Select(scrText => scrText.Name))}"
             );
-
-            // Read the projects in any locations other than project root folder
-            IEnumerable<ProjectDetails> otherProjectDetails = LoadOtherProjectDetails(
-                shouldIncludePT9ProjectsOnWindows
-            );
-
-            if (otherProjectDetails.Any())
-                Console.WriteLine(
-                    $"Projects found in other locations: {string.Join(",", otherProjectDetails.Select(projectDetails => projectDetails.Name))}"
-                );
-
-            foreach (ProjectDetails projectDetails in otherProjectDetails)
-            {
-                try
-                {
-                    AddProjectToScrTextCollection(projectDetails);
-                    Console.WriteLine($"Loaded project details: {projectDetails}");
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Failed to load project for {projectDetails}: {ex}");
-                }
-            }
 
             // If there are no projects available anywhere, throw in the sample WEB one
             if (!GetScrTexts().Any())
@@ -188,55 +165,6 @@ internal class LocalParatextProjects
         ScrTextCollection.Add(new ScrText(projectName, RegistrationInfo.DefaultUser));
     }
 
-    /// <summary>
-    /// Return projects that are available on disk on the local machine
-    /// </summary>
-    /// <returns>Enumeration of (ProjectMetadata, project directory) tuples for all projects</returns>
-    private IEnumerable<ProjectDetails> LoadOtherProjectDetails(
-        bool shouldIncludePT9ProjectsOnWindows
-    )
-    {
-        // Get project info for projects outside the normal project root folder
-        List<string> nonPT9ProjectRootFolders = [];
-        if (
-            OperatingSystem.IsWindows()
-            && shouldIncludePT9ProjectsOnWindows
-            && Directory.Exists(Paratext9ProjectsFolder)
-        )
-            nonPT9ProjectRootFolders.Add(Paratext9ProjectsFolder);
-
-        foreach (var rootFolder in nonPT9ProjectRootFolders)
-        {
-            foreach (var dir in Directory.EnumerateDirectories(rootFolder))
-            {
-                // There are a lot of folders with underscores in the name that we should ignore in
-                // My Paratext 9 Projects
-                if (
-                    rootFolder == Paratext9ProjectsFolder
-                    && Path.GetFileNameWithoutExtension(dir).StartsWith('_')
-                )
-                    continue;
-
-                ProjectDetails? projectDetails;
-                string errorMessage;
-                try
-                {
-                    projectDetails = LoadProjectDetails(dir, out errorMessage);
-                }
-                catch (Exception ex)
-                {
-                    Console.WriteLine($"Error while getting project details from {dir}: {ex}");
-                    continue;
-                }
-
-                if (projectDetails == null)
-                    Console.WriteLine(errorMessage);
-                else
-                    yield return projectDetails;
-            }
-        }
-    }
-
     private static ProjectDetails? LoadProjectDetails(
         string projectHomeDir,
         out string errorMessage
@@ -285,9 +213,10 @@ internal class LocalParatextProjects
         // Add usfm.sty and Attribution.md
         foreach (string requiredFile in _requiredProjectRootFiles)
         {
-            var dest = Path.Join(ProjectRootFolder, requiredFile);
-            if (!File.Exists(dest))
-                File.Copy(Path.Join("assets", requiredFile), dest);
+            string basePath = AppContext.BaseDirectory;
+            string sourcePath = Path.Combine(basePath, "assets", requiredFile);
+            string dest = Path.Join(ProjectRootFolder, requiredFile);
+            File.Copy(sourcePath, dest, true);
         }
     }
 

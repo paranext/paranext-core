@@ -2,6 +2,7 @@ import './index.css';
 
 // Components and Types
 export { default as BookChapterControl } from './components/advanced/book-chapter-control/book-chapter-control.component';
+export type { BookChapterControlProps } from './components/advanced/book-chapter-control/book-chapter-control.component';
 export { default as BookSelector } from './components/advanced/book-selector.component';
 export {
   BOOK_SELECTOR_STRING_KEYS,
@@ -36,7 +37,10 @@ export {
   inventoryCountColumn,
   inventoryStatusColumn,
 } from './components/advanced/inventory/inventory-columns';
-export { default as MultiSelectComboBox } from './components/advanced/multi-select-combo-box';
+export {
+  default as MultiSelectComboBox,
+  type MultiSelectComboBoxEntry,
+} from './components/advanced/multi-select-combo-box.component';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,
@@ -90,11 +94,11 @@ export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
+export type { Command } from './components/mui/menu-item.component';
 export { default as Toolbar } from './components/mui/toolbar.component';
 export type { ToolbarProps } from './components/mui/toolbar.component';
 
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
-export { Avatar, AvatarImage, AvatarFallback } from './components/shadcn-ui/avatar';
 export { Badge, type BadgeProps, badgeVariants } from './components/shadcn-ui/badge';
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export {
@@ -109,6 +113,7 @@ export { default as Checkbox } from './components/shadcn-ui/checkbox';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
+export * from './components/shadcn-ui/popover';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
 export { Separator } from './components/shadcn-ui/separator';
@@ -126,9 +131,9 @@ export {
 export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-group';
 export {
   Tooltip,
-  TooltipTrigger,
   TooltipContent,
   TooltipProvider,
+  TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
 
 export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
@@ -151,13 +156,13 @@ export {
   type VersionHistoryType,
 } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
-export { default as FilterableResourceList } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
-export { FILTERABLE_RESOURCE_LIST_STRING_KEYS } from './components/advanced/filterable-resource-list/filterable-resource-list.component';
+export { default as Filter } from './components/advanced/filter.component';
 export {
   default as UiLanguageSelector,
   type LanguageInfo,
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
+
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';

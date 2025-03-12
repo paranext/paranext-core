@@ -23,10 +23,6 @@ namespace TestParanextDataProvider.Projects
 
             _projectDetails = CreateProjectDetails(_scrText);
             ParatextProjects.FakeAddProject(_projectDetails, _scrText);
-
-            var settingsService = new DummySettingsService(Client);
-            await settingsService.RegisterDataProviderAsync();
-            settingsService.AddSettingValue(Settings.INCLUDE_MY_PARATEXT_9_PROJECTS, true);
         }
 
         [TearDown]

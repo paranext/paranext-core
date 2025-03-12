@@ -78,7 +78,7 @@ export const inventoryAdditionalItemColumn = (
  * Function that creates the count column for inventories. Should be used with the DataTable
  * component.
  *
- * @param itemLabel Localized label for the count column
+ * @param countLabel Localized label for the count column
  * @returns Column that shows the number of occurrences of the related inventory items
  */
 export const inventoryCountColumn = (countLabel: string): ColumnDef<InventoryTableData> => {

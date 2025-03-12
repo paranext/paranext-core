@@ -517,6 +517,51 @@ export declare class UnsubscriberAsyncList {
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
 }
+export declare const PLATFORM_ERROR_VERSION = 1;
+/**
+ * PlatformError is an error type with stronger typing of properties than {@link Error}. It is used
+ * to represent errors that are returned by the platform.
+ *
+ * You can create a new PlatformError object using {@link newPlatformError}. You can check if a value
+ * is a PlatformError object using {@link isPlatformError}.
+ */
+export type PlatformError = {
+	/**
+	 * The underlying cause of the error, if any. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}. If a non-Error object is passed to
+	 * {@link newPlatformError}, it will be stored here.
+	 */
+	cause?: unknown;
+	/**
+	 * A descriptive message explaining the error. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it
+	 * will be stored here.
+	 */
+	message: string;
+	/** The version of the PlatformError type. */
+	platformErrorVersion: number;
+	/**
+	 * The stack trace of the error, if available. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}.
+	 */
+	stack?: string;
+};
+/**
+ * Creates a new PlatformError object. If no argument is provided, a PlatformError object with an
+ * empty `message` is returned.
+ *
+ * @param error The error message as a string, an Error object, or a value to assign to the `cause`
+ *   property of the returned PlatformError object
+ * @returns A new PlatformError object
+ */
+export declare function newPlatformError(error?: unknown): PlatformError;
+/**
+ * Checks if the provided value is a PlatformError object.
+ *
+ * @param error The value to check
+ * @returns `true` if the value is a PlatformError object, otherwise `false`
+ */
+export declare function isPlatformError(error: unknown): error is PlatformError;
 export interface ScriptureReference {
 	bookNum: number;
 	chapterNum: number;
@@ -641,6 +686,22 @@ export declare function getAllObjectFunctionNames(obj: {
  * @returns A synchronous proxy for the asynchronous object.
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that Paratext is blocking internet access.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
+ */
+export declare function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: unknown): boolean;
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that an authorization failure occurred regarding registry credentials.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates an auth failure, `false` otherwise
+ */
+export declare function isErrorMessageAboutRegistryAuthFailure(errorMessage: unknown): boolean;
 /** Within type T, recursively change all properties to be optional */
 export type DeepPartial<T> = T extends object ? {
 	[P in keyof T]?: DeepPartial<T[P]>;
@@ -1133,6 +1194,28 @@ export declare function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (Scroll
  * @returns The formatted reference.
  */
 export declare function formatScrRef(scrRef: ScriptureReference, optionOrLocalizedBookName?: "id" | "English" | string, chapterVerseSeparator?: string, bookChapterSeparator?: string): string;
+/**
+ * Converts all control characters, carriage returns, and tabs into spaces and then strips duplicate
+ * spaces.
+ *
+ * This is mainly intended for use with individual Scripture strings in USFM, USX, USJ, etc. format.
+ * It is not intended to implement the [USFM white space definition or reduction
+ * rules](https://docs.usfm.bible/usfm/3.1/whitespace.html) but strictly follows Paratext 9's white
+ * space rules. It is generally best suited to normalizing spaces within a Scripture marker as it
+ * removes all newlines.
+ *
+ * This function is a direct translation of `UsfmToken.RegularizeSpaces` from `ParatextData.dll`
+ */
+export declare function normalizeScriptureSpaces(str: string): string;
+/**
+ * Determines if the USJ documents or markers (and all contents) are equivalent after regularizing
+ * spaces according to the way `ParatextData.dll` does.
+ *
+ * Note that this will not work properly if there ever exist any properties of USJ document or USJ
+ * markers other than `content` that are complex objects like arrays or objects as the properties
+ * are shallow equaled.
+ */
+export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
 /** USJ content node type for a chapter */
 export declare const CHAPTER_TYPE = "chapter";
 /** USJ content node type for a verse */
@@ -1593,6 +1676,37 @@ export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArr
  */
 export declare function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[];
 /**
+ * Determines whether a string contains one or more white space characters and no other characters.
+ *
+ * This implementation uses [dotnet's `Char.IsWhiteSpace` definition of white
+ * space](https://learn.microsoft.com/en-us/dotnet/api/system.char.iswhitespace?view=net-9.0):
+ *
+ * ```ts
+ * /^[\u000C\u000A\u000D\u0009\u000B\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\u0085]+$/.test(
+ *   ch,
+ * );
+ * ```
+ *
+ * Note: This differs from
+ * [`/\s/.test(ch)`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Regular_expressions/Character_classes#:~:text=Matches%20a%20single%20white%20space%20character%2C%20including%20space)
+ * (usually considered the determiner of what is white space in JavaScript) in that it does not
+ * include ZWNBSP (U+FEFF) but rather includes NEXT LINE (U+0085)
+ *
+ * @param ch Single character or a string of characters
+ * @returns `true` if the string consists of one or more white space characters and no other
+ *   characters, `false` otherwise
+ */
+export declare function isWhiteSpace(ch: string): boolean;
+/**
+ * Converts PascalCase or camelCase string to kebab-case. To detect upper- and lower-case
+ * characters, uses `.toUpperCase` and `.toLowerCase` to be locale-independent.
+ *
+ * Current implementation supports only UTF-16.
+ *
+ * Thanks to ChatGPT https://chatgpt.com/share/67c8aa44-e054-800c-8068-e1e6630081f7
+ */
+export declare function toKebabCase(input: string): string;
+/**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
  * @param a The first object to compare
@@ -1742,6 +1856,22 @@ export function formatBytes(fileSize: number, decimals?: number): string;
  *   returned.
  */
 export function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
+/**
+ * Get a localized string representation of the time between two dates
+ *
+ * @example
+ *
+ * `since` = 3 Aug 2024 8:00 AM
+ *
+ * `to` = 5 Aug 2024 8:000 AM
+ *
+ * Returns: "two days ago"
+ *
+ * @param since "Destination" time. time against which to get the time span.
+ * @param to "Starting" time. Time span will be formatted relative to `to`. Defaults to `new Date()`
+ * @returns Time span in words from `to` to `since`
+ */
+export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeFormat, since: Date, to?: Date): string;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
@@ -1850,7 +1980,7 @@ export declare const localizedStringsDocumentSchema: {
 		};
 	};
 };
-export type ResourceType = "DBLResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
+export type ResourceType = "ScriptureResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;
 	displayName: string;

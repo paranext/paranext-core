@@ -21,6 +21,13 @@ declare module 'platform-get-resources' {
      * @param uid DBL Entry UID that is used to identify the resource
      */
     uninstallDblResource: (uid: string) => Promise<void>;
+    /**
+     * Detects if credentials for the DBL have been configured or not. Does not check if they are
+     * valid or not.
+     *
+     * @returns True if any credentials are configured, false if not.
+     */
+    isGetDblResourcesAvailable: () => Promise<boolean>;
   };
 }
 
@@ -38,5 +45,23 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new Get Resources WebView or `undefined` if not created
      */
     'platformGetResources.openGetResources': () => Promise<string | undefined>;
+
+    /**
+     * Opens a new Home web view and returns the WebView id
+     *
+     * @returns WebView id for new Home WebView or `undefined` if not created
+     */
+    'platformGetResources.openHome': () => Promise<string | undefined>;
+
+    /** @returns True if Send/Receive is available to the user, false if not */
+    'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
+  }
+
+  export interface SettingTypes {
+    /**
+     * List of PDP Factory IDs to exclude when searching for projects to display in the Home
+     * projects list
+     */
+    'platformGetResources.excludePdpFactoryIdsInHome': string[];
   }
 }

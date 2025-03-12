@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Text.Json;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Services;
 using Paratext.Data;
 using Paratext.Data.Archiving;
@@ -30,7 +32,8 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
         public string DisplayName { get; set; } = DisplayName;
         public string FullName { get; set; } = FullName;
         public string BestLanguageName { get; set; } = BestLanguageName;
-        public string Type { get; set; } = Type.ToString() + "Resource";
+        public string Type { get; set; } =
+            Type.ToString() == "DBL" ? "ScriptureResource" : Type.ToString();
         public long Size { get; set; } = Size;
         public bool Installed { get; set; } = Installed;
         public bool UpdateAvailable { get; set; } = UpdateAvailable;
@@ -56,6 +59,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
             ("getDblResources", GetDblResources),
             ("installDblResource", InstallDblResource),
             ("uninstallDblResource", UninstallDblResource),
+            ("isGetDblResourcesAvailable", IsGetDblResourcesAvailable),
         ];
     }
 
@@ -69,6 +73,18 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     #region Private properties and methods
 
     /// <summary>
+    /// Detect if DBL credentials have been configured. Does not check these credentials for
+    /// validity.
+    /// </summary>
+    /// <returns>
+    /// True if any credentials are configured, false if not.
+    /// </returns>
+    private bool IsGetDblResourcesAvailable()
+    {
+        return DblResourcePasswordProvider.IsPasswordAvailable();
+    }
+
+    /// <summary>
     /// Fetch list DBL resources
     /// </summary>
     /// <returns>
@@ -77,12 +93,18 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// </returns>
     private void FetchAvailableDBLResources()
     {
-        _resources = InstallableDBLResource.GetInstallableDBLResources(
+        var allResources = InstallableDBLResource.GetInstallableDBLResources(
             RegistrationInfo.DefaultUser,
             new DBLRESTClientFactory(),
             new DblProjectDeleter(),
             new DblMigrationOperations(),
             new DblResourcePasswordProvider()
+        );
+        _resources = allResources.Where(r => DblResourceWhiteList.IsValidResource(r)).ToList();
+        var excludedResources = allResources.Except(_resources).Select(r => r.Name).ToList();
+        excludedResources.Sort();
+        Console.WriteLine(
+            $"Excluded resources (not confirmed to be compatible): {string.Join(", ", excludedResources)}\n"
         );
     }
 
@@ -96,18 +118,26 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// </returns>
     private List<DblResourceData> GetDblResources(JsonElement _ignore)
     {
-        if (!RegistrationInfo.DefaultUser.IsValid)
-        {
-            throw new Exception(
-                LocalizationService.GetLocalizedString(
-                    PapiClient,
-                    "%getResources_errorRegistrationInvalid%",
-                    $"User registration is not valid. Cannot retrieve resources from DBL."
-                )
-            );
-        }
+        // The text of this exception message is searched for by our Node.js services, so if you
+        // change it, you may need to change the TypeScript code as well.
+        const string INVALID_USER_REGISTRATION_MESSAGE =
+            "User registration is not valid. Cannot retrieve resources from DBL.";
 
-        FetchAvailableDBLResources();
+        if (!RegistrationInfo.DefaultUser.IsValid)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
+
+        TextSearchingTraceListener traceListener = new("REST ProtocolError = 401");
+        Trace.Listeners.Add(traceListener);
+        try
+        {
+            FetchAvailableDBLResources();
+        }
+        finally
+        {
+            Trace.Listeners.Remove(traceListener);
+        }
+        if (traceListener.FoundText)
+            throw new Exception(INVALID_USER_REGISTRATION_MESSAGE);
 
         return _resources
             .Select(resource => new DblResourceData(

@@ -11,10 +11,16 @@ import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import * as platformBibleUtils from 'platform-bible-utils';
+import * as crypto from 'crypto';
 import logger from '@shared/services/logger.service';
-import { getCommandLineArgumentsGroup, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
+import {
+  getCommandLineArgumentsGroup,
+  COMMAND_LINE_ARGS,
+  getCommandLineSwitch,
+} from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
-import papi, { network, fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import * as papiCore from '@shared/services/papi-core.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
@@ -27,10 +33,11 @@ import {
   stringLength,
   startsWith,
   slice,
+  toKebabCase,
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
-import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
+import { APP_URI_SCHEME, PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import {
   ElevatedPrivilegeNames,
   ElevatedPrivileges,
@@ -46,6 +53,16 @@ import { CreateProcess } from '@shared/models/create-process-privilege.model';
 import { wrappedFork, wrappedSpawn } from '@extension-host/services/create-process.service';
 import os from 'os';
 import { resyncContributions } from '@extension-host/services/contribution.service';
+import {
+  HandleUri,
+  RegisterUriHandler,
+  UriHandler,
+} from '@shared/models/handle-uri-privilege.model';
+import {
+  createNetworkEventEmitter,
+  registerRequestHandler,
+} from '@shared/services/network.service';
+import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -100,6 +117,14 @@ type DtsInfo = {
   /** File name including `.d.ts` */
   base: string;
 };
+
+/**
+ * Key to uniquely identify an extension with some extra certainty that the extension is who it says
+ * it is.
+ *
+ * Format: `<extension-publisher>.<extension-name>`.toLowerCase()
+ */
+type ExtensionKey = `${string}.${string}`;
 
 /**
  * Name of the file describing the extension and its capabilities. Provided by the extension
@@ -168,6 +193,12 @@ let isReloading = false;
 /** Whether we should reload extensions again once finished currently reloading */
 let shouldReload = false;
 
+/** Map of registered URI handlers for each extension keyed by the extension publisher name and name */
+const uriHandlersByExtensionKey = new Map<ExtensionKey, UriHandler>();
+
+/** Regex matching to spaces */
+const spaceRegex = /\s/;
+
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest: ExtensionManifest = deserialize(extensionManifestJson);
@@ -185,6 +216,13 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
 }
 
 /**
+ * The directory for extensions bundled into the application
+ *
+ * - In development: `paranext-core/extensions/dist`
+ * - In production: `resources/extensions`
+ */
+const bundledExtensionDir = `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`;
+/**
  * The directories we will search for extension directories and zips.
  *
  * Command-line-provided directories are given priority, so they are provided in this order:
@@ -200,12 +238,30 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
  *    - In production: `resources/extensions`
  */
 const extensionRootDirectories: Uri[] = [
+  // 1. `--extensionDirs`-provided directories
   ...getCommandLineArgumentsGroup(COMMAND_LINE_ARGS.ExtensionsDir).map(
     (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
   ),
+  // 2. Installed extensions directory
   installedExtensionsUri,
-  `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
+  // 3. Core extensions directory
+  bundledExtensionDir,
 ];
+/**
+ * The root extension directories we should watch for changes to extensions.
+ *
+ * We do not want to watch the bundled extension directory if we are in the portable application
+ * because it deletes and unzips all app files every time it is launched including when the user
+ * navigates to a url containing our {@link APP_URI_SCHEME}. See {@link handleExtensionUri} for more
+ * information about navigating to our uri scheme.
+ */
+const extensionRootDirectoriesToWatch: Uri[] = [...extensionRootDirectories];
+if (getCommandLineSwitch(COMMAND_LINE_ARGS.Portable)) {
+  extensionRootDirectoriesToWatch.splice(
+    extensionRootDirectoriesToWatch.indexOf(bundledExtensionDir),
+    1,
+  );
+}
 
 /** Individual extension folders and/or zips to load as provided by command-line `--extensions` */
 const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
@@ -477,22 +533,23 @@ function createDtsInfoFromUri(declarationUri: Uri): DtsInfo {
 
 /**
  * Caches type declaration files for each extension. Gets the type declaration file from each
- * extension and copies it to `extension-types/<extension_type_file_name_without_.d.ts>/index.d.ts`
+ * extension and copies it to `extension-types/<extension-type-file-name-without-.d.ts>/index.d.ts`
  * because that is the path that works. If the extension's type declaration file does not start with
- * `<extension_name>`, the folder created will be named `<extension_name>` instead of the name of
- * the extension type declaration file name.
+ * `<extension-name>` (kebab-case version of the extension name), the folder created will be named
+ * `<extension-name>` instead of the name of the extension type declaration file name.
  *
  * We look first at the location provided by the extension manifest's `types` property. If one is
  * not provided, we look for files according to the specification in the JSDoc for
- * {@link ExtensionManifest}'s `types` property order and copy over the first one found.
+ * {@link ExtensionManifest.types} order and copy over the first one found.
  *
  * @param extensionInfos Extension info for extensions whose types to cache
  */
 async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
   return Promise.all(
     extensionInfos.map(async (extensionInfo) => {
+      const extensionNameKebabCase = toKebabCase(extensionInfo.name);
       /** The default assumed name for the dts file including `.d.ts` */
-      const extensionDtsBaseDefault = `${extensionInfo.name}.d.ts`;
+      const extensionDtsBaseDefault = `${extensionNameKebabCase}.d.ts`;
       /** The declaration file uri we are copying for this extension */
       let extensionDtsInfo: DtsInfo | undefined;
       /** The declaration file name we are creating for this extension including `.d.ts` */
@@ -537,7 +594,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // with version number or something
         if (!extensionDtsInfo)
           extensionDtsInfo = dtsInfos.find((dtsInfo) =>
-            startsWith(dtsInfo.base, extensionInfo.name),
+            startsWith(dtsInfo.base, extensionNameKebabCase),
           );
 
         // Try using a dts file whose name is `index.d.ts`
@@ -554,7 +611,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
 
       // If the dts file has stuff after the extension name, we want to use it so they can suffix a
       // version number or something
-      if (startsWith(extensionDtsInfo.base, extensionInfo.name))
+      if (startsWith(extensionDtsInfo.base, extensionNameKebabCase))
         extensionDtsBaseDestination = extensionDtsInfo.base;
 
       // Put the extension's dts in the types cache in its own folder
@@ -595,7 +652,7 @@ function watchForExtensionChanges(): UnsubscriberAsync {
 
   const watcher = chokidar
     .watch(
-      extensionRootDirectories
+      extensionRootDirectoriesToWatch
         .concat(commandLineExtensionDirectories)
         .map((uri) => getPathFromUri(uri)),
       { ignoreInitial: true, awaitWriteFinish: true },
@@ -794,10 +851,82 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
 
 // #endregion
 
+// #region Extension URI handling privileges
+
+function getExtensionKey(manifest: ExtensionManifest): ExtensionKey {
+  if (!manifest.publisher || spaceRegex.test(manifest.publisher))
+    throw new Error('Extension publisher must not be empty string, undefined, or contain spaces');
+  if (!manifest.name || spaceRegex.test(manifest.name))
+    throw new Error('Extension name must not be empty string, undefined, or contain spaces');
+  const extensionKey: ExtensionKey = `${manifest.publisher.toLowerCase()}.${manifest.name.toLowerCase()}`;
+  return extensionKey;
+}
+
+function getRedirectUri(manifest: ExtensionManifest) {
+  return `${APP_URI_SCHEME}://${getExtensionKey(manifest)}`;
+}
+
+function createRegisterUriHandlerFunction(manifest: ExtensionManifest): RegisterUriHandler {
+  return (uriHandler) => {
+    const extensionKey = getExtensionKey(manifest);
+    if (uriHandlersByExtensionKey.has(extensionKey))
+      throw new Error(
+        `Extension ${extensionKey} already has a registered Uri handler. Cannot have multiple.`,
+      );
+
+    uriHandlersByExtensionKey.set(extensionKey, uriHandler);
+
+    return () => uriHandlersByExtensionKey.delete(extensionKey);
+  };
+}
+
+function handleExtensionUri(uri: string) {
+  // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
+  // when we get there
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch (e) {
+    logger.warn(`Extension service received uri ${uri} but could not parse it. ${e}`);
+    return;
+  }
+  if (url.protocol !== `${APP_URI_SCHEME}:`) {
+    logger.warn(
+      `Extension service received uri ${uri} but protocol does not match ${APP_URI_SCHEME}`,
+    );
+    return;
+  }
+
+  // Validating the map keys when setting in createRegisterUriHandlerFunction, so this won't match
+  // to anything if it is not properly formatted. Implicitly validating as ExtensionKey
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const extensionKey = url?.hostname.toLowerCase() as ExtensionKey;
+  const uriHandler = uriHandlersByExtensionKey.get(extensionKey);
+
+  if (!uriHandler) {
+    logger.warn(
+      `Extension service received uri ${uri}, but there was not a registered URI handler for ${extensionKey}`,
+    );
+    return;
+  }
+
+  (async () => {
+    try {
+      logger.debug(`Extension service sending uri ${uri} to extension ${extensionKey} to handle`);
+      await uriHandler(uri);
+    } catch (e) {
+      logger.warn(`Extension service ran uri handler for ${uri}, but it threw. ${e}`);
+    }
+  })();
+}
+
+// #endregion
+
 function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<ElevatedPrivileges> {
   const retVal: ElevatedPrivileges = {
     createProcess: undefined,
     manageExtensions: undefined,
+    handleUri: undefined,
   };
   if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.createProcess)) {
     const createProcess: CreateProcess = {
@@ -821,6 +950,14 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
     };
     Object.freeze(manageExtensions);
     retVal.manageExtensions = manageExtensions;
+  }
+  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.handleUri)) {
+    const handleUri: HandleUri = {
+      redirectUri: getRedirectUri(manifest),
+      registerUriHandler: createRegisterUriHandlerFunction(manifest),
+    };
+    Object.freeze(handleUri);
+    retVal.handleUri = handleUri;
   }
   Object.freeze(retVal);
   return retVal;
@@ -908,13 +1045,19 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   }));
 
   // Shim out require so extensions can use it only as prescribed.
+  // WARNING: This code should not be edited without serious review. For more information,
+  // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
   // Assert the specific type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi and some other things
     if (moduleName === '@papi/backend') return papi;
+    if (moduleName === '@papi/core') return papiCore;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
     if (moduleName === 'platform-bible-utils') return platformBibleUtils;
+
+    // Node's built-in modules
+    if (moduleName === 'crypto') return crypto;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithCheck.find(
@@ -1001,6 +1144,16 @@ async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | 
   const isUnsubscribed = await activeExtension?.registrations?.runAllUnsubscribers();
   if (!isUnsubscribed)
     logger.error(`Extension '${extension.name}' was not successfully unsubscribed!`);
+
+  let extensionKey: ExtensionKey | undefined;
+  try {
+    extensionKey = getExtensionKey(extension);
+  } catch (e) {
+    logger.debug(
+      `Could not get extension key for extension '${extension.name}'. Skipping attempting to delete uri handler.`,
+    );
+  }
+  if (extensionKey) uriHandlersByExtensionKey.delete(extensionKey);
 
   // Delete the extension module from Node's module cache if we previously loaded it.
   const moduleKey = systemRequire.resolve(getPathFromUri(extension.dirUri));
@@ -1112,9 +1265,11 @@ export const initialize = () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
 
-    reloadFinishedEventEmitter = network.createNetworkEventEmitter<boolean>(
+    reloadFinishedEventEmitter = createNetworkEventEmitter<boolean>(
       'platform.onDidReloadExtensions',
     );
+
+    await registerRequestHandler(HANDLE_URI_REQUEST_TYPE, handleExtensionUri);
 
     await normalizeExtensionFileNames();
 

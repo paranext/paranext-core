@@ -318,8 +318,12 @@ export function addTabToDock(
 
   // Add new tab
   switch (updatedLayout.type) {
-    case 'tab':
-      targetTab = findPreviousTab(dockLayout);
+    case 'tab': {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const dockLayoutDockBoxChildren = dockLayout.getLayout().dockbox.children as PanelData[];
+      const isDockBoxEmpty =
+        dockLayoutDockBoxChildren.length === 1 && dockLayoutDockBoxChildren[0].tabs.length === 0;
+      targetTab = isDockBoxEmpty ? undefined : findPreviousTab(dockLayout);
       if (targetTab) {
         if (previousTabId === undefined)
           // The target tab is the first found tab, so just add this as a new panel on top.
@@ -341,7 +345,7 @@ export function addTabToDock(
         );
       previousTabId = tab.id;
       break;
-
+    }
     case 'float': {
       const floatPosition = getFloatPosition(
         updatedLayout,

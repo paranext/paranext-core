@@ -8,34 +8,49 @@ import type {
 } from '@papi/core';
 import {
   formatReplacementString,
+  isLocalizeKey,
   LanguageStrings,
+  LocalizeKey,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
 import {
+  EditorDecorations,
   EditorWebViewMessage,
+  OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
 } from 'platform-scripture-editor';
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
+import { mergeDecorations } from './decorations.util';
 
 logger.info('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
-const projectIdTitleFormatStr = '%webView_platformScriptureEditor_title_format%';
-const editable = '%webView_platformScriptureEditor_title_editable_indicator%';
-const resourceViewer = '%webView_platformScriptureEditor_title_readonly_no_project%';
-const scriptureEditor = '%webView_platformScriptureEditor_title_editable_no_project%';
+
+const PROJECT_ID_TITLE_FORMAT_STRING_KEY = '%webView_platformScriptureEditor_title_format%';
+const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%';
+const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
+const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
 interface PlatformScriptureEditorOptions extends GetWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
+  options?: OpenEditorOptions;
 }
 
-async function getLocalizations(): Promise<LanguageStrings> {
+/**
+ * Get localized strings for creating the editor WebView tab
+ *
+ * @param tabTitleFormatString Localize key or plain string for title of the tab
+ * @returns Localized strings
+ */
+async function getEditorTabLocalizations(
+  tabTitleFormatString: LocalizeKey,
+): Promise<LanguageStrings> {
   const localizationData = await papi.localization.getLocalizedStrings({
-    localizeKeys: [editable, projectIdTitleFormatStr, resourceViewer, scriptureEditor],
+    localizeKeys: [EDITABLE_KEY, tabTitleFormatString],
     locales: ['en'],
   });
   return localizationData;
@@ -44,22 +59,25 @@ async function getLocalizations(): Promise<LanguageStrings> {
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformScriptureEditor(
   projectId: string | undefined,
+  options?: OpenEditorOptions,
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(projectId, false);
+  return open(projectId, options, false);
 }
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformResourceViewer(
   projectId: string | undefined,
+  options?: OpenEditorOptions,
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(projectId, true);
+  return open(projectId, options, true);
 }
 
 /** Function to prompt for a project and open it in the editor */
 async function open(
   projectId: string | undefined,
+  options: OpenEditorOptions | undefined,
   isReadOnly: boolean,
 ): Promise<string | undefined> {
   const projectForWebView = { projectId, isEditable: !isReadOnly };
@@ -67,6 +85,9 @@ async function open(
     // Get a list of projects that are editable or not editable to show in the select project dialog
     const projectMetadatas = await papi.projectLookup.getMetadataForAllProjects({
       includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
+      excludePdpFactoryIds: await papi.settings.get(
+        'platformGetResources.excludePdpFactoryIdsInHome',
+      ),
     });
     const projectsWithEditable = await Promise.all(
       projectMetadatas.map(async (projectMetadata) => {
@@ -104,13 +125,14 @@ async function open(
     projectForWebView.isEditable = await pdp.getSetting('platform.isEditable');
   }
   if (projectForWebView.projectId) {
-    const options: PlatformScriptureEditorOptions = {
+    const openWebViewOptions: PlatformScriptureEditorOptions = {
       projectId: projectForWebView.projectId,
       isReadOnly: !projectForWebView.isEditable,
+      options,
     };
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
-    return papi.webViews.openWebView(scriptureEditorWebViewType, undefined, options);
+    return papi.webViews.openWebView(scriptureEditorWebViewType, undefined, openWebViewOptions);
   }
   return undefined;
 }
@@ -130,34 +152,50 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
         `${scriptureEditorWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
       );
 
-    const localizedStrings = await getLocalizations();
-    const localizedProjectIdTitleFormatStr = localizedStrings[projectIdTitleFormatStr];
-    const localizedEditable = localizedStrings[editable];
-    const localizedResourceViewer = localizedStrings[resourceViewer];
-    const localizedScriptureEditor = localizedStrings[scriptureEditor];
-
     // We know that the projectId (if present in the state) will be a string.
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
-    let title = '';
-    if (projectId) {
-      const pdp = await papi.projectDataProviders.get('platform.base', projectId);
-      title = formatReplacementString(localizedProjectIdTitleFormatStr, {
-        projectId: (await pdp.getSetting('platform.name')) ?? projectId,
+    let title = getWebViewOptions.options?.title || savedWebView.title;
+    if (!title) {
+      if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
+      else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
+    }
+    if (isLocalizeKey(title)) {
+      const localizedStrings = await getEditorTabLocalizations(title);
+      const localizedTitleFormatStr = localizedStrings[title];
+      const localizedEditable = localizedStrings[EDITABLE_KEY];
+
+      let projectName = projectId;
+      if (projectId) {
+        const pdp = await papi.projectDataProviders.get('platform.base', projectId);
+        projectName = (await pdp.getSetting('platform.name')) ?? projectName;
+      }
+
+      title = formatReplacementString(localizedTitleFormatStr, {
+        projectId: projectName,
         editable: isReadOnly ? '' : localizedEditable,
       });
-    } else title = isReadOnly ? localizedResourceViewer : localizedScriptureEditor;
+    }
 
     return {
-      title,
       ...savedWebView,
+      title,
+      iconUrl: getWebViewOptions.options?.iconUrl ?? savedWebView.iconUrl,
+      tooltip: getWebViewOptions.options?.tooltip ?? savedWebView.tooltip,
       content: platformScriptureEditorWebView,
       styles: platformScriptureEditorWebViewStyles,
       state: {
         ...savedWebView.state,
         isReadOnly,
+        decorations: mergeDecorations(
+          // We know this will be EditorDecorations though webView state doesn't have types
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          savedWebView.state?.decorations as EditorDecorations,
+          getWebViewOptions.options?.decorations,
+        ),
       },
       projectId,
+      allowPopups: true,
     };
   }
 
@@ -308,6 +346,30 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           );
         } catch (e) {
           const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running selectRange! ${e}`;
+          logger.warn(message);
+          throw new Error(message);
+        }
+      },
+      async updateDecorations(decorationsToAdd, decorationsToRemove) {
+        try {
+          logger.debug(
+            `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} received request to updateDecorations(${serialize(decorationsToAdd)},${serialize(decorationsToRemove)})`,
+          );
+          if (!currentWebViewDefinition.projectId)
+            throw new Error(`webViewDefinition.projectId is empty!`);
+
+          const message: EditorWebViewMessage = {
+            method: 'updateDecorations',
+            decorationsToAdd,
+            decorationsToRemove,
+          };
+          await papi.webViewProviders.postMessageToWebView(
+            currentWebViewDefinition.id,
+            webViewNonce,
+            message,
+          );
+        } catch (e) {
+          const message = `Platform Scripture Editor Web View Controller ${currentWebViewDefinition.id} threw while running updateDecorations! ${e}`;
           logger.warn(message);
           throw new Error(message);
         }

@@ -3096,6 +3096,11 @@ declare module 'papi-shared-types' {
     'platform.restart': () => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
+    /**
+     * Open a link in a new browser window. Like `window.open` in the frontend with
+     * `target='_blank'`
+     */
+    'platform.openWindow': (url: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
@@ -3666,6 +3671,56 @@ declare module 'shared/services/internet.service' {
    */
   const internetService: InternetService;
   export default internetService;
+}
+declare module 'shared/models/notification.service-model' {
+  import { CommandHandlers } from 'papi-shared-types';
+  import { LocalizeKey } from 'platform-bible-utils';
+  export type Severity = 'info' | 'warning' | 'error';
+  /** Data needed to display a notification to the user */
+  export interface PlatformNotification {
+    /**
+     * Text to display to the user.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     */
+    message: string | LocalizeKey;
+    /** Severity of the notification */
+    severity: Severity;
+    /**
+     * Optional label for users to click when the notification shows.
+     *
+     * Automatically localized if this is a {@link LocalizeKey}.
+     */
+    clickCommandLabel?: string | LocalizeKey;
+    /** Optional command to run if users click on the label in the notification */
+    clickCommand?: keyof CommandHandlers;
+    /** Optional ID of a previous notification to update instead of showing a new notification */
+    notificationId?: string | number;
+  }
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export interface INotificationService {
+    /**
+     * Send a notification to the user. If a notification with the same ID is already showing, it will
+     * be updated with the new notification.
+     *
+     * @param notification Notification to send
+     * @returns Promise that resolves with the ID of the notification
+     */
+    send(notification: PlatformNotification): Promise<string | number>;
+  }
+  export const NotificationServiceNetworkObjectName = 'NotificationService';
+}
+declare module 'shared/services/notification.service' {
+  import { type INotificationService } from 'shared/models/notification.service-model';
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  const notificationService: INotificationService;
+  export default notificationService;
 }
 declare module 'shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
@@ -4970,7 +5025,7 @@ declare module 'node/services/execution-token.service' {
 }
 declare module 'extension-host/services/extension-storage.service' {
   import { ExecutionToken } from 'node/models/execution-token.model';
-  import { Buffer } from 'buffer';
+  import { Buffer } from 'node:buffer';
   /**
    * This is only intended to be called by the extension service. This service cannot call into the
    * extension service or it causes a circular dependency.
@@ -5464,13 +5519,68 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     getInstalledExtensions: GetInstalledExtensionsFunction;
   };
 }
+declare module 'shared/models/handle-uri-privilege.model' {
+  import { Unsubscriber } from 'platform-bible-utils';
+  /** Function that is called when the system navigates to a URI that this handler is set up to handle. */
+  export type UriHandler = (uri: string) => Promise<void> | void;
+  /**
+   * Function that registers a {@link UriHandler} to be called when the system navigates to a URI that
+   * matches the handler's scope
+   */
+  export type RegisterUriHandler = (uriHandler: UriHandler) => Unsubscriber;
+  /**
+   * Functions and properties related to listening for when the system navigates to a URI built for an
+   * extension
+   */
+  export type HandleUri = {
+    /**
+     * Register a handler function to listen for when the system navigates to a URI built for this
+     * extension. Each extension can only register one uri handler at a time.
+     *
+     * Each extension has its own exclusive URI that it can handle. Extensions cannot handle each
+     * others' URIs. The URIs this extension's handler will receive will have the following
+     * structure:
+     *
+     *     `<redirect-uri><additional-data>`;
+     *
+     * - `<redirect-uri>` is {@link HandleUri.redirectUri}.
+     * - `<additional-data>` is anything else that is on the URI as the application receives it. This
+     *   could include path, query (aka parameters), and fragment (aka anchor).
+     *
+     * Handling URIs is useful for authentication workflows and other interactions with this extension
+     * from outside the application.
+     *
+     * Note: There is currently no check in place to guarantee that a call to this handler will only
+     * come from navigating to the uri; a process connecting over the PAPI WebSocket could fake a call
+     * to this handler. However, there is no expectation for this to happen.
+     */
+    registerUriHandler: RegisterUriHandler;
+    /**
+     * The most basic URI this extension can handle with {@link HandleUri.registerUriHandler}. This
+     * `redirectUri` has the following structure:
+     *
+     *     `<app-uri-scheme>://<extension-publisher>.<extension-name>`;
+     *
+     * - `<app-uri-scheme>` is the URI scheme this application supports. TODO: link name here
+     * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
+     *   manifest
+     * - `<extension-name>` is the name of this extension as specified in the extension manifest
+     *
+     * Additional data can be added to the end of the URI; this is just the scheme and authority. See
+     * {@link HandleUri.registerUriHandler} for more information.
+     */
+    redirectUri: string;
+  };
+}
 declare module 'shared/models/elevated-privileges.model' {
   import { CreateProcess } from 'shared/models/create-process-privilege.model';
   import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  import { HandleUri } from 'shared/models/handle-uri-privilege.model';
   /** String constants that are listed in an extension's manifest.json to state needed privileges */
   export enum ElevatedPrivilegeNames {
     createProcess = 'createProcess',
     manageExtensions = 'manageExtensions',
+    handleUri = 'handleUri',
   }
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
@@ -5478,6 +5588,11 @@ declare module 'shared/models/elevated-privileges.model' {
     createProcess: CreateProcess | undefined;
     /** Functions that can be run to manage what extensions are running */
     manageExtensions: ManageExtensions | undefined;
+    /**
+     * Functions and properties related to listening for when the system navigates to a URI built for
+     * this extension
+     */
+    handleUri: HandleUri | undefined;
   };
 }
 declare module 'extension-host/extension-types/extension-activation-context.model' {
@@ -5785,6 +5900,23 @@ declare module 'shared/data/platform.data' {
    * Platform.Bible core
    */
   export const PLATFORM_NAMESPACE = 'platform';
+  /**
+   * Name of this application like `platform-bible`.
+   *
+   * Note: this is an identifier for the application, not this application's executable file name
+   */
+  export const APP_NAME: string;
+  /** Version of this application in [semver](https://semver.org/) format. */
+  export const APP_VERSION: string;
+  /**
+   * URI scheme that this application handles. Navigating to a URI with this scheme will open this
+   * application. This application will handle the URI as it sees fit. For example, the URI may be
+   * handled by an extension - see {@link ElevatedPrivileges.registerUriHandler } for more
+   * information.
+   *
+   * This is the same as {@link APP_NAME}.
+   */
+  export const APP_URI_SCHEME: string;
   /** Query string passed to the renderer when starting if it should enable noisy dev mode */
   export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
 }
@@ -6214,6 +6346,11 @@ declare module '@papi/core' {
     InstalledExtensions,
     ManageExtensions,
   } from 'shared/models/manage-extensions-privilege.model';
+  export type {
+    HandleUri,
+    RegisterUriHandler,
+    UriHandler,
+  } from 'shared/models/handle-uri-privilege.model';
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
@@ -6229,6 +6366,7 @@ declare module '@papi/core' {
   export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
+  export type { PlatformNotification } from 'shared/models/notification.service-model';
   export type {
     Components as ComponentsDocumentation,
     MethodDocumentationWithoutName,
@@ -6441,6 +6579,103 @@ declare module 'shared/services/project-settings.service' {
   const projectSettingsService: IProjectSettingsService;
   export default projectSettingsService;
 }
+declare module 'shared/models/data-protection.service-model' {
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  export interface IDataProtectionService {
+    /**
+     * Encrypts a string using Electron's
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API. Transforms the
+     * returned buffer to a base64-encoded string using
+     * [`buffer.toString('base64')`](https://nodejs.org/api/buffer.html#buftostringencoding-start-end).
+     *
+     * This method throws if the encryption mechanism is not available such as on Linux without a
+     * supported package installed. See
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) for more information.
+     *
+     * Note that this encryption mechanism is not transferrable between computers. We recommend using
+     * it with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @param text String to encrypt
+     * @returns Encrypted string. Use `papi.dataProtection.decryptString` to decrypt
+     */
+    encryptString(text: string): Promise<string>;
+    /**
+     * Decrypts a string using Electron's
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API. Transforms the
+     * input base64-encoded string to a buffer using [`Buffer.from(text,
+     * 'base64')`](https://nodejs.org/api/buffer.html#static-method-bufferfromstring-encoding).
+     *
+     * This method throws if the decryption mechanism is not available such as on Linux without a
+     * supported package installed. See
+     * [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) for more information.
+     *
+     * Note that this encryption mechanism is not transferrable between computers. We recommend using
+     * it with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @param encryptedText String to decrypt. This string should have been encrypted by
+     *   `papi.dataProtection.encryptString`
+     * @returns Decrypted string
+     */
+    decryptString(encryptedText: string): Promise<string>;
+    /**
+     * Returns `true` if encryption is currently available. Returns `false` if the decryption
+     * mechanism is not available such as on Linux without a supported package installed. See
+     * Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API for
+     * more information.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt
+     * data to be stored securely in local files. It is not intended to protect data passed over a
+     * network connection. Please note that using this service passes the unencrypted string between
+     * local processes using the PAPI WebSocket.
+     *
+     * @returns `true` if encryption is currently available; `false` otherwise
+     */
+    isEncryptionAvailable(): Promise<boolean>;
+  }
+  export const dataProtectionServiceNetworkObjectName = 'DataProtectionService';
+}
+declare module 'shared/services/data-protection.service' {
+  import { IDataProtectionService } from 'shared/models/data-protection.service-model';
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  const dataProtectionService: IDataProtectionService;
+  export default dataProtectionService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -6469,6 +6704,7 @@ declare module '@papi/backend' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
+  import { INotificationService } from 'shared/models/notification.service-model';
   const papi: {
     /**
      *
@@ -6554,6 +6790,21 @@ declare module '@papi/backend' {
      * other services and extensions that have registered commands.
      */
     commands: typeof commandService;
+    /**
+     *
+     * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+     *
+     * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+     *
+     * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+     * them with `papi.storage` methods to store data safely.
+     *
+     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+     * to be stored securely in local files. It is not intended to protect data passed over a network
+     * connection. Please note that using this service passes the unencrypted string between local
+     * processes using the PAPI WebSocket.
+     */
+    dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -6672,6 +6923,11 @@ declare module '@papi/backend' {
      * Service that allows to get and store localizations
      */
     localization: ILocalizationService;
+    /**
+     *
+     * Service that sends notifications to users in the UI
+     */
+    notifications: INotificationService;
   };
   export default papi;
   /**
@@ -6758,6 +7014,21 @@ declare module '@papi/backend' {
    * other services and extensions that have registered commands.
    */
   export const commands: typeof commandService;
+  /**
+   *
+   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
+   *
+   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
+   *
+   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
+   * them with `papi.storage` methods to store data safely.
+   *
+   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
+   * to be stored securely in local files. It is not intended to protect data passed over a network
+   * connection. Please note that using this service passes the unencrypted string between local
+   * processes using the PAPI WebSocket.
+   */
+  export const dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
   /**
    *
    * Service exposing various functions related to using webViews
@@ -6876,6 +7147,11 @@ declare module '@papi/backend' {
    * Service that allows to get and store localizations
    */
   export const localization: ILocalizationService;
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export const notifications: INotificationService;
 }
 declare module 'extension-host/extension-types/extension.interface' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -6925,8 +7201,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      *
      * If not provided, Platform.Bible will look in the following locations:
      *
-     * 1. `<extension_name>.d.ts`
-     * 2. `<extension_name><other_stuff>.d.ts`
+     * 1. `<extension-name>.d.ts` (kebab-case version of the extension name)
+     * 2. `<extension-name><other_stuff>.d.ts` (kebab-case version of the extension name)
      * 3. `index.d.ts`
      *
      * See [Extension Anatomy - Type Declaration
@@ -6947,6 +7223,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      * implemented.
      */
     activationEvents: string[];
+    /** Id of publisher who published this extension on the extension marketplace */
+    publisher?: string;
   };
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
@@ -7064,6 +7342,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
+  import { PlatformError } from 'platform-bible-utils';
   /**
    * React hook to use data from a data provider
    *
@@ -7081,7 +7360,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        DataProviderTypes[DataProviderName][TDataType]['getData'],
+        DataProviderTypes[DataProviderName][TDataType]['getData'] | PlatformError,
         (
           | ((
               // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
@@ -7148,7 +7427,9 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * _＠returns_ `[data, setData, isLoading]`
    *
    * - `data`: the current value for the data from the data provider with the specified data type and
-   *   selector, either the `defaultValue` or the resolved data
+   *   selector. This will be the `defaultValue`, the resolved data, or a {@link PlatformError} if the
+   *   data provider throws an error. You can call {@link isPlatformError} on this value to check if it
+   *   is an error.
    * - `setData`: asynchronous function to request that the data provider update the data at this data
    *   type and selector. Returns `true` if successful. Note that this function does not update the
    *   data. The data provider sends out an update to this subscription if it successfully updates
@@ -7667,6 +7948,7 @@ declare module '@papi/frontend' {
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { INotificationService } from 'shared/models/notification.service-model';
   import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
@@ -7763,6 +8045,11 @@ declare module '@papi/frontend' {
      * Service that allows to get and store localizations
      */
     localization: ILocalizationService;
+    /**
+     *
+     * Service that sends notifications to users in the UI
+     */
+    notifications: INotificationService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
@@ -7859,5 +8146,10 @@ declare module '@papi/frontend' {
    * Service that allows to get and store localizations
    */
   export const localization: ILocalizationService;
+  /**
+   *
+   * Service that sends notifications to users in the UI
+   */
+  export const notifications: INotificationService;
   export type Papi = typeof papi;
 }

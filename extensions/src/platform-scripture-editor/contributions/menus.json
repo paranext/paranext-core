@@ -97,16 +97,10 @@
             "command": "platformScripture.openPunctuationInventory"
           },
           {
-            "label": "%webView_platformScriptureEditor_configureChecks%",
+            "label": "%webView_platformScriptureEditor_openChecksSidePanel%",
             "group": "platformScriptureEditor.checks",
-            "order": 1,
-            "command": "platformScripture.openConfigureChecks"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_showCheckResults%",
-            "group": "platformScriptureEditor.checks",
-            "order": 2,
-            "command": "platformScripture.showCheckResults"
+            "order": 3,
+            "command": "platformScripture.openChecksSidePanel"
           },
           {
             "label": "%webView_platformScriptureEditor_thickBorders%",

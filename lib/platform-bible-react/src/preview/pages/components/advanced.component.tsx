@@ -11,6 +11,7 @@ import {
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
 import BookSelectorExample from './advanced/book-selector-example.component';
+import FilterExample from './advanced/filter-example';
 import InventoryExample from './advanced/inventory-example.component';
 import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
 import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
@@ -18,8 +19,8 @@ import MarketplaceExamples from './advanced/marketplace.example.component';
 import MultiSelectComboBoxExample from './advanced/multi-select-combo-box-example';
 import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
 import SettingsListExamples from './advanced/settings-list.examples.component';
-import { columns, data } from './data-sources/data-table-content';
 import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
+import { columns, data } from './data-sources/data-table-content';
 import SettingSidebarContentSearchExamples from './advanced/settings-sidebar-content-search.example.component';
 
 function Compositions() {
@@ -73,6 +74,7 @@ function Compositions() {
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Multi-select Combo Box">
@@ -108,6 +110,10 @@ function Compositions() {
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Filter">
+          <FilterExample />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Marketplace">
           <VerticalTabs>
             <VerticalTabsList>
@@ -141,6 +147,7 @@ function Compositions() {
           <TabNavigationContentSearch
             headerTitle={`Testing the NavigationContentSearch, current search value: ${searchValue}`}
             tabList={tabList}
+            searchValue={searchValue}
             onSearch={handleSearchChange}
             searchPlaceholder="Search..."
             searchClassName="tw-w-9/12 tw-py-2"

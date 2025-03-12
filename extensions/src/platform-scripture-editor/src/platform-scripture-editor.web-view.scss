@@ -2,6 +2,8 @@
 @use './commenting';
 @use './editor';
 @use './editor-overrides';
+@use './nodes-menu';
+@use './tailwind';
 
 body {
   background-color: hsl(var(--background));

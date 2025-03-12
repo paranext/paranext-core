@@ -9,7 +9,7 @@ import WindowOrTabExample from './layouts/window.layout.component';
 import Dashboard5Examples from './layouts/dashboard5.layout.component';
 import ToolbarExamples from './layouts/toolbar.layout.component';
 import DialogExamples from './layouts/dialog.layout.component';
-import GetResourcesExample from './layouts/resource-manager.layout.component';
+import GetResourcesExamples from './layouts/get-resources.layout.component';
 
 function Layouts() {
   return (
@@ -40,7 +40,7 @@ function Layouts() {
         <VerticalTabsContent value="Settings">TODO</VerticalTabsContent>
 
         <VerticalTabsContent value="Get Resources">
-          <GetResourcesExample />
+          <GetResourcesExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Shadcn Dashboard 5">

@@ -1,5 +1,12 @@
 name: Publish
 
+# Make sure these match with the matrix.os values below
+env:
+  OS_WINDOWS: windows-latest
+  OS_MACOS: macos-latest
+  # The Ubuntu version must align with the "core" version in electron-builder.json5
+  OS_LINUX: ubuntu-22.04
+
 on:
   push:
     branches: [release/*]
@@ -19,26 +26,33 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        # Make sure these match with the env values above
+        os: [windows-latest, macos-latest, ubuntu-22.04]
         dotnet_version: [8.0.x]
 
     steps:
       - name: Install MacPorts
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         uses: melusina-org/setup-macports@v1
 
+      - name: Update MacPorts ports tree
+        if: ${{ matrix.os == env.OS_MACOS }}
+        # Not using `-v` for verbose because it is very slow and does not add much value
+        run: |
+          sudo port sync
+
       - name: Install loader tools on macOS
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         run: |
           sudo port -v install ld64
 
       - name: Install icu4c on macOS
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         run: |
           sudo port -v install icu @76.1_0 +universal
 
       - name: Fixup loader paths for icu4c
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         # LIB_DEPENDENCIES are of the form "<ICU lib short name> <dependency as ICU lib short name>"
         # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
         # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
@@ -58,6 +72,23 @@ jobs:
             sudo install_name_tool -change "/opt/local/lib/libicu$2.$ICU_VERSION.dylib" "@loader_path/libicu$2.$ICU_VERSION.dylib" "/opt/local/lib/libicu$1.$ICU_VERSION.dylib"
           done <<< "$LIB_DEPENDENCIES"
 
+      - name: Install snap tools on Linux
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: |
+          sudo apt update
+          sudo apt install -y snapd
+          sudo snap install snapcraft --classic
+          sudo snap install lxd
+          sudo snap refresh lxd
+          sudo lxd init --auto
+          # Add the current user to the lxd group
+          getent group lxd | grep -qwF "$USER" || sudo usermod -aG lxd "$USER"
+          newgrp lxd
+          # Force the socket to be usable by the current user
+          sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
+          # https://github.com/canonical/action-build/blob/master/src/tools.ts#L54
+          sudo iptables -P FORWARD ACCEPT
+
       - name: Checkout git repo
         uses: actions/checkout@v4
 
@@ -72,6 +103,12 @@ jobs:
         with:
           file_path: 'package.json'
 
+      - name: Read release/app/package.json
+        id: release_package_json
+        uses: zoexx/github-action-json-file-properties@1.0.6
+        with:
+          file_path: 'release/app/package.json'
+
       - name: Install Node and NPM
         uses: actions/setup-node@v4
         with:
@@ -83,17 +120,44 @@ jobs:
           npm ci
           npm run build
 
-      - name: Publish releases - Windows
+      - name: Prepare release - Windows
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == 'windows-latest' && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:
-          # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm exec electron-builder -- --publish always --win
+        run: |
+          npm exec electron-builder -- --win
+          mkdir release\\staged
+          move release\\build\\*Setup*.exe release\\staged
+
+      - name: Code signing - Windows
+        if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        # See https://github.com/cognitedata/code-sign-action/blob/main/README.md for descriptions
+        env:
+          CERTIFICATE_HOST: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST }}
+          CERTIFICATE_HOST_API_KEY: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST_API_KEY }}
+          CERTIFICATE_SHA1_HASH: ${{ secrets.WIN_CERTIFICATE_SHA1_HASH }}
+          CLIENT_CERTIFICATE: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT }}
+          CLIENT_CERTIFICATE_PASSWORD: ${{ secrets.WIN_CODE_SIGNING_CLIENT_CERT_PASSWORD }}
+          KEYPAIR_ALIAS: ${{ secrets.WIN_CODE_SIGNING_KEYPAIR_ALIAS }}
+        uses: cognitedata/code-sign-action/@v3
+        with:
+          path-to-binary: 'release\\staged'
+
+      - name: Publish releases - Windows
+        if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'Windows-PlatformBible-${{ steps.release_package_json.outputs.version }}'
+          path: release/staged
+          if-no-files-found: error
+          compression-level: 0
 
       - name: Publish releases - macOS
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == 'macos-latest' && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        if: ${{ matrix.os == env.OS_MACOS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:
           # The APPLE_* values are used for auto updates signing
           # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASS }}
@@ -105,15 +169,33 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm exec electron-builder -- --publish always --mac
 
-      - name: Publish releases - Linux
+      - name: Publish releases to the snap store - Linux
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == 'ubuntu-latest' && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
-          # This is used for uploading release assets to github
+          # This is used by electron-builder to prepare the release
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm exec electron-builder -- --publish always --linux
+          # This is required to upload automatically to the snap store
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.LINUX_SNAP_STORE_CREDENTIALS }}
+        run: |
+          npm exec electron-builder -- --publish never --linux
+          snapcraft upload --release=edge ./release/build/*.snap
+          mkdir release/staged
+          mv release/build/*.snap release/staged
+
+      - name: Upload Linux artifacts to GitHub
+        # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
+        if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'Linux-PlatformBible-${{ steps.release_package_json.outputs.version }}'
+          path: release/staged
+          if-no-files-found: error
+          compression-level: 0
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

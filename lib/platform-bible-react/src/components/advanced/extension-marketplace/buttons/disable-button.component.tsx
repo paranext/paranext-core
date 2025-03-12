@@ -13,8 +13,7 @@ type DisableButtonProps = {
  * The DisableButton component is a button designed for initiating disabling of downloads. It
  * includes visuals for active disabling and idle states.
  *
- * @param isDisabling The disabling boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
+ * @param DisableButtonProps
  * @returns A button that can be used to disable.
  */
 export default function DisableButton({

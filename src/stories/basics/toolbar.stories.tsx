@@ -1,6 +1,7 @@
 import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
 import type { Meta, StoryObj } from '@storybook/react';
-import { Toolbar, Command, MultiColumnMenu, Localized, Label } from 'platform-bible-react';
+import { Toolbar, Command, Label } from 'platform-bible-react';
+import { MultiColumnMenu, Localized } from 'platform-bible-utils';
 
 const meta: Meta<typeof Toolbar> = {
   title: 'Basics/Toolbar',

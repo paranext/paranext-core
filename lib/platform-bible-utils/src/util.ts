@@ -239,6 +239,43 @@ export function createSyncProxyForAsyncObject<T extends object>(
   });
 }
 
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that Paratext is blocking internet access.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
+ */
+export function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: unknown): boolean {
+  // Copied from ParatextData/InternetAccess.cs, not a localized string
+  const paratextExceptionMessage =
+    'Bug in Paratext caused attempted access to Internet. Request has been blocked.';
+
+  if (isString(errorMessage)) return errorMessage.includes(paratextExceptionMessage);
+  return getErrorMessage(errorMessage).includes(paratextExceptionMessage);
+}
+
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that an authorization failure occurred regarding registry credentials.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates an auth failure, `false` otherwise
+ */
+export function isErrorMessageAboutRegistryAuthFailure(errorMessage: unknown): boolean {
+  // Copied from ParatextProjectSendReceiveService.cs, not a localized string
+  const paratextExceptionMessage1 = '401 Unauthorized error while getting shared projects.';
+  // Copied from DblDownloadableDataProvider.cs, not a localized string
+  const paratextExceptionMessage2 =
+    'User registration is not valid. Cannot retrieve resources from DBL.';
+
+  const errorString = isString(errorMessage) ? errorMessage : getErrorMessage(errorMessage);
+  return (
+    errorString.includes(paratextExceptionMessage1) ||
+    errorString.includes(paratextExceptionMessage2)
+  );
+}
+
 /** Within type T, recursively change all properties to be optional */
 export type DeepPartial<T> = T extends object ? { [P in keyof T]?: DeepPartial<T[P]> } : T;
 

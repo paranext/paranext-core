@@ -7,12 +7,14 @@ import {
   useDialogCallback,
   useDataProvider,
   useLocalizedStrings,
+  useWebViewController,
 } from '@papi/frontend/react';
 import {
   BookChapterControl,
   Button,
   Checkbox,
   ComboBox,
+  Input,
   Slider,
   Switch,
   TextField,
@@ -21,7 +23,7 @@ import {
 import type { WebViewProps } from '@papi/core';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { HelloWorldEvent } from 'hello-world';
-import { debounce } from 'platform-bible-utils';
+import { debounce, isPlatformError } from 'platform-bible-utils';
 import Clock from './components/clock.component';
 import Logo from '../../assets/offline.svg';
 import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
@@ -50,6 +52,8 @@ globalThis.webViewComponent = function HelloWorld({
 
   const deleteKey = '%helloWorld_delete%';
   const frenchLocalizationSubmit = '%helloWorld_frenchLocalizationSubmit%';
+  const editorHeaderTextLabel = '%helloWorld_editor_header_text%';
+  const editorBorderColorLabel = '%helloWorld_editor_border_color%';
   const greetingLoading = '%helloWorld_greetingLoading%';
   const helloWorld = '%helloWorld_helloWorld%';
   const listOfSelectedIds = '%helloWorld_listOfSelectedIds%';
@@ -78,6 +82,8 @@ globalThis.webViewComponent = function HelloWorld({
       () => [
         deleteKey,
         frenchLocalizationSubmit,
+        editorHeaderTextLabel,
+        editorBorderColorLabel,
         greetingLoading,
         helloWorld,
         listOfSelectedIds,
@@ -108,6 +114,8 @@ globalThis.webViewComponent = function HelloWorld({
 
   const localizedDelete = localizedStrings[deleteKey];
   const localizedFrenchLocalizationSubmit = localizedStrings[frenchLocalizationSubmit];
+  const localizedEditorHeaderTextLabel = localizedStrings[editorHeaderTextLabel];
+  const localizedEditorBorderColorLabel = localizedStrings[editorBorderColorLabel];
   const localizedGreetingLoading = localizedStrings[greetingLoading];
   const localizedHelloWorld = localizedStrings[helloWorld];
   const localizedListOfSelectedIds = localizedStrings[listOfSelectedIds];
@@ -150,6 +158,11 @@ globalThis.webViewComponent = function HelloWorld({
   const currentRender = useRef(-1);
   currentRender.current += 1;
 
+  const [excludePdpFactoryIdsInHome] = useSetting(
+    'platformGetResources.excludePdpFactoryIdsInHome',
+    useMemo(() => [], []),
+  );
+
   const showProjectDialog = useDialogCallback(
     'platform.selectProject',
     // This is intentionally not a stable reference like `useMemo` or something because we are
@@ -163,6 +176,7 @@ globalThis.webViewComponent = function HelloWorld({
       currentRender: currentRender.current,
       optionsSource: 'hook',
       includeProjectInterfaces: ['platformScripture.USFM_Verse'],
+      excludePdpFactoryIds: excludePdpFactoryIdsInHome,
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
@@ -258,6 +272,56 @@ globalThis.webViewComponent = function HelloWorld({
   const helloWorldProjectSettings = useHelloWorldProjectSettings(projectId);
   const { headerStyle } = helloWorldProjectSettings;
 
+  // #region testing Scripture editor decorations
+
+  // WebViewId for editor web view we opened for editing decorations
+  const [projectWebViewId, setProjectWebViewId] = useWebViewState<string | undefined>(
+    'projectWebViewId',
+    undefined,
+  );
+
+  const [editorHeaderText, setEditorHeaderText] = useWebViewState(
+    'editorHeaderText',
+    'Hello World!',
+  );
+  const [editorBorderColor, setEditorBorderColor] = useWebViewState('editorBorderColor', '#000000');
+
+  const editorWebViewController = useWebViewController(
+    'platformScriptureEditor.react',
+    projectWebViewId,
+  );
+
+  const editorDecorations = useMemo(
+    () => ({
+      containers: {
+        'hello-world-container': {
+          style: {
+            borderColor: editorBorderColor,
+            borderWidth: 4,
+          },
+        },
+      },
+      headers: editorHeaderText
+        ? {
+            'hello-world-header': {
+              descriptionMd: editorHeaderText,
+            },
+          }
+        : undefined,
+    }),
+    [editorHeaderText, editorBorderColor],
+  );
+
+  useEffect(() => {
+    editorWebViewController?.updateDecorations(
+      editorDecorations,
+      // Delete the header if there isn't any text
+      editorHeaderText ? undefined : ['hello-world-header'],
+    );
+  }, [editorWebViewController, editorDecorations, editorHeaderText]);
+
+  // #endregion
+
   const genericComboBoxOptions = useMemo(
     () => [localizedOption1, localizedOption2],
     [localizedOption1, localizedOption2],
@@ -296,7 +360,7 @@ globalThis.webViewComponent = function HelloWorld({
           {localizedTestException}
         </Button>
       </div>
-      <div>{latestVerseText}</div>
+      <div>{isPlatformError(latestVerseText) ? latestVerseText.message : latestVerseText}</div>
       <Clock />
       <div>
         <input value={nameTemp} onChange={(e) => setName(e.target.value)} />
@@ -304,8 +368,8 @@ globalThis.webViewComponent = function HelloWorld({
           {localizedDelete} {name}
         </Button>
       </div>
-      <div>{personGreeting}</div>
-      <div>{personAge}</div>
+      <div>{isPlatformError(personGreeting) ? personGreeting.message : personGreeting}</div>
+      <div>{isPlatformError(personAge) ? personAge.message : personAge}</div>
       <br />
       <div>
         {localizedSelectedProject}: {projectId ?? localizedNone}
@@ -315,19 +379,54 @@ globalThis.webViewComponent = function HelloWorld({
       </div>
       <div>
         <Button
-          onClick={() =>
-            papi.commands.sendCommand('platformScriptureEditor.openScriptureEditor', projectId)
-          }
+          onClick={async () => {
+            setProjectWebViewId(
+              await papi.commands.sendCommand(
+                'platformScriptureEditor.openScriptureEditor',
+                projectId,
+                {
+                  decorations: editorDecorations,
+                },
+              ),
+            );
+          }}
         >
           {localizedOpenScriptureEditor}
         </Button>
         <Button
-          onClick={() =>
-            papi.commands.sendCommand('platformScriptureEditor.openResourceViewer', projectId)
-          }
+          onClick={async () => {
+            setProjectWebViewId(
+              await papi.commands.sendCommand(
+                'platformScriptureEditor.openResourceViewer',
+                projectId,
+                {
+                  decorations: editorDecorations,
+                },
+              ),
+            );
+          }}
         >
           {localizedOpenResourceViewer}
         </Button>
+      </div>
+      <div>
+        <div className="tw-flex tw-align-middle tw-gap-2">
+          <span>{localizedEditorHeaderTextLabel}</span>
+          <Input
+            disabled={!editorWebViewController}
+            value={editorHeaderText}
+            onChange={(event) => setEditorHeaderText(event.target.value)}
+          />
+        </div>
+        <div className="tw-flex tw-align-middle tw-gap-2">
+          <span>{localizedEditorBorderColorLabel}</span>
+          <Input
+            disabled={!editorWebViewController}
+            type="color"
+            value={editorBorderColor}
+            onChange={(event) => setEditorBorderColor(event.target.value)}
+          />
+        </div>
       </div>
       <h3 style={headerStyle}>{verseRef.toString()}</h3>
       <div>{currentProjectVerse}</div>

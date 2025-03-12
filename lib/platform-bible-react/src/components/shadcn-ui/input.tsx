@@ -1,8 +1,20 @@
 import React from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * Props for Input component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
 
+/**
+ * Input component displays a form input field or a component that looks like an input field. This
+ * components is built and styled with Shadcn UI.
+ *
+ * @param InputProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
+ */
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, ...props }, ref) => {
     return (

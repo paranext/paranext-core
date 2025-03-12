@@ -1,5 +1,12 @@
 name: Test
 
+# Make sure these match with the matrix.os values below
+env:
+  OS_WINDOWS: windows-latest
+  OS_MACOS: macos-latest
+  # The Ubuntu version must align with the "core" version in electron-builder.json5
+  OS_LINUX: ubuntu-22.04
+
 on:
   push:
     branches: ['main']
@@ -22,26 +29,33 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        # Make sure these match with the env values above
+        os: [windows-latest, macos-latest, ubuntu-22.04]
         dotnet_version: [8.0.x]
 
     steps:
       - name: Install MacPorts
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         uses: melusina-org/setup-macports@v1
 
-      - name: Install loader tools on macOS
+      - name: Update MacPorts ports tree
         if: ${{ matrix.os == 'macos-latest' }}
+        # Not using `-v` for verbose because it is very slow and does not add much value
+        run: |
+          sudo port sync
+
+      - name: Install loader tools on macOS
+        if: ${{ matrix.os == env.OS_MACOS }}
         run: |
           sudo port -v install ld64
 
       - name: Install icu4c on macOS
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         run: |
           sudo port -v install icu @76.1_0 +universal
 
       - name: Fixup loader paths for icu4c
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         # LIB_DEPENDENCIES are of the form "<ICU lib short name> <dependency as ICU lib short name>"
         # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
         # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
@@ -60,6 +74,23 @@ jobs:
             set -- $line
             sudo install_name_tool -change "/opt/local/lib/libicu$2.$ICU_VERSION.dylib" "@loader_path/libicu$2.$ICU_VERSION.dylib" "/opt/local/lib/libicu$1.$ICU_VERSION.dylib"
           done <<< "$LIB_DEPENDENCIES"
+
+      - name: Install snap tools on Linux
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: |
+          sudo apt update
+          sudo apt install -y snapd
+          sudo snap install snapcraft --classic
+          sudo snap install lxd
+          sudo snap refresh lxd
+          sudo lxd init --auto
+          # Add the current user to the lxd group
+          getent group lxd | grep -qwF "$USER" || sudo usermod -aG lxd "$USER"
+          newgrp lxd
+          # Force the socket to be usable by the current user
+          sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
+          # https://github.com/canonical/action-build/blob/master/src/tools.ts#L54
+          sudo iptables -P FORWARD ACCEPT
 
       - name: Check out Git repository
         uses: actions/checkout@v4

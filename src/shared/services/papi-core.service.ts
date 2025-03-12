@@ -11,6 +11,11 @@ export type {
   InstalledExtensions,
   ManageExtensions,
 } from '@shared/models/manage-extensions-privilege.model';
+export type {
+  HandleUri,
+  RegisterUriHandler,
+  UriHandler,
+} from '@shared/models/handle-uri-privilege.model';
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export type {
@@ -26,6 +31,7 @@ export type { WithNotifyUpdate } from '@shared/models/data-provider-engine.model
 export type { default as IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 export type { DialogOptions } from '@shared/models/dialog-options.model';
 export type { NetworkableObject, NetworkObject } from '@shared/models/network-object.model';
+export type { PlatformNotification } from '@shared/models/notification.service-model';
 export type {
   Components as ComponentsDocumentation,
   MethodDocumentationWithoutName,

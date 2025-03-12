@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "label": "%settings_get_resources_group1_label%",
+    "properties": {
+      "platformGetResources.excludePdpFactoryIdsInHome": {
+        "label": "%settings_get_resources_excludePdpFactoryIdsInHome_label%",
+        "description": "%settings_get_resources_excludePdpFactoryIdsInHome_description%",
+        "default": []
+      }
+    }
+  }
+]

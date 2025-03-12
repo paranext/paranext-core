@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <RootNamespace>Paranext.DataProvider</RootNamespace>
     <SelfContained>true</SelfContained>
-    <Company>SIL International</Company>
-    <Copyright>SIL International</Copyright>
+    <Company>SIL Global and United Bible Societies</Company>
+    <Copyright>Copyright © 2017-2025 SIL Global and United Bible Societies</Copyright>
     <Authors>sillsdev</Authors>
     <Product>Paratext Data Provider for Platform.Bible</Product>
     <Title>Paratext Data Provider for Platform.Bible</Title>
@@ -29,17 +29,17 @@
 
   <ItemGroup>
     <PackageReference Include="icu.net" Version="3.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration" Version="8.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="8.0.1" />
-    <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.1" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
-    <PackageReference Include="ParatextChecks" Version="9.5.0.6" />
-    <PackageReference Include="ParatextData" Version="9.5.0.6" />
-    <PackageReference Include="SIL.Core" Version="14.2.0-beta0009" />
-    <PackageReference Include="SIL.Scripture" Version="14.2.0-beta0009" />
-    <PackageReference Include="SIL.WritingSystems" Version="14.2.0-beta0009" />
-    <PackageReference Include="StreamJsonRpc" Version="2.19.27" />
+    <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.1" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.1" />
+    <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
+    <PackageReference Include="ParatextChecks" Version="9.5.0.9" />
+    <PackageReference Include="ParatextData" Version="9.5.0.9" />
+    <PackageReference Include="SIL.Core" Version="16.0.0-beta0031" />
+    <PackageReference Include="SIL.Scripture" Version="16.0.0-beta0031" />
+    <PackageReference Include="SIL.WritingSystems" Version="16.0.0-beta0031" />
+    <PackageReference Include="StreamJsonRpc" Version="2.20.20" />
     <PackageReference Include="System.Net.WebSockets" Version="4.3.0" />
-    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="9.0.1" />
   </ItemGroup>
 
   <!--
@@ -47,23 +47,65 @@
     For some reason, the .config file only copies inconsistently from the NuGet package without this explicit reference.
   -->
   <ItemGroup>
-    <None Update="$(NuGetPackageRoot)\icu.net\2.10.0\contentFiles\any\any\icu.net.dll.config">
+    <None Update="$(NuGetPackageRoot)\icu.net\3.0.0\contentFiles\any\any\icu.net.dll.config">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
-  <!--
-    This assumes that icu4c libs are installed under "/opt/local/lib" on macOS. This is the default
-    location for libs that MacPorts installs. If we need to start bundling icu4c libs from
-    somewhere other than "/opt/local/lib", this path and some other paths in the build scripts will
-    need to be updated. We have to bundle the icu4c libs somehow unless macOS starts to include them
-    by default.
-    -->
+  <!-- This dectects the location of ICU libraries on the macOS system whether the user is using MacPorts or Homebrew. -->
+  <PropertyGroup>
+    <!-- Check if MacPorts ICU exists -->
+    <UseMacPortsICU Condition="Exists('/opt/local/lib/libicuuc.dylib')">true</UseMacPortsICU>
+    
+    <!-- Check if Apple Silicon Homebrew ICU exists (only if MacPorts is unavailable) -->
+    <UseHomebrewAppleSiliconICU Condition="Exists('/opt/homebrew/opt/icu4c/lib/libicuuc.dylib') AND '$(UseMacPortsICU)' != 'true'">true</UseHomebrewAppleSiliconICU>
+
+    <!-- Check if Intel Homebrew ICU exists (only if MacPorts and Apple Silicon Homebrew are unavailable) -->
+    <UseHomebrewIntelICU Condition="Exists('/usr/local/opt/icu4c/lib/libicuuc.dylib') AND '$(UseMacPortsICU)' != 'true' AND '$(UseHomebrewAppleSiliconICU)' != 'true'">true</UseHomebrewIntelICU>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(UseMacPortsICU)' == 'true'">
+    <!-- MacPorts ICU Libraries -->
+    <Content Include="/opt/local/lib/libicu*.??.dylib"
+             Exclude="/opt/local/lib/libicutest*.dylib;/opt/local/lib/libicutu*.dylib">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseHomebrewAppleSiliconICU)' == 'true'">
+    <!-- Apple Silicon Homebrew ICU Libraries -->
+    <Content Include="/opt/homebrew/opt/icu4c/lib/libicu*.??.dylib"
+             Exclude="/opt/homebrew/opt/icu4c/lib/libicutest*.dylib;/opt/homebrew/opt/icu4c/lib/libicutu*.dylib">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(UseHomebrewIntelICU)' == 'true'">
+    <!-- Intel Homebrew ICU Libraries -->
+    <Content Include="/usr/local/opt/icu4c/lib/libicu*.??.dylib"
+             Exclude="/usr/local/opt/icu4c/lib/libicutest*.dylib;/usr/local/opt/icu4c/lib/libicutu*.dylib">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+
+  <!-- This assumes that icu4c libs are installed under "/usr/lib/x86_64-linux-gnu" on Linux. -->
   <ItemGroup>
-    <Content Include="/opt/local/lib/libicu*.??.dylib" Exclude="/opt/local/lib/libicutest*.dylib;/opt/local/lib/libicutu*.dylib" Condition="$([MSBuild]::IsOsPlatform('macOS'))">
+    <Content Include="/usr/lib/x86_64-linux-gnu/libicu*.so.??" Exclude="/usr/lib/x86_64-linux-gnu/libicutest*;/usr/lib/x86_64-linux-gnu/libicutu*" Condition="$([MSBuild]::IsOsPlatform('Linux'))">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <!--
+    Workaround for .NET bug: https://github.com/dotnet/runtime/issues/57784
+    We also set the environment variable DOTNET_LTTNG to 0 to disable LTTng tracing in the snap.
+    We're copying the approach from https://github.com/jellyfin/jellyfin/pull/11008/files.
+    -->
+  <Target Name="DeleteClrTracePointProvider" Condition="$([MSBuild]::IsOsPlatform('Linux'))" AfterTargets="Publish">
+    <Message Text="Deleting libcoreclrtraceptprovider.so"/>
+    <Delete Files="$(OutDir)libcoreclrtraceptprovider.so" />
+    <Delete Files="$(PublishDir)libcoreclrtraceptprovider.so" />
+  </Target>
 
   <ItemGroup>
     <Content Include="assets\**\*.*">

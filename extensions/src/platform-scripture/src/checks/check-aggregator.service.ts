@@ -304,6 +304,11 @@ class CheckAggregatorDataProviderEngine
     return this.subscriptionsBySubscriptionId.delete(subscriptionId);
   }
 
+  async validateSubscription(subscriptionId: CheckSubscriptionId): Promise<boolean> {
+    const subscription = this.subscriptionsBySubscriptionId.get(subscriptionId);
+    return !!subscription;
+  }
+
   // #endregion
 
   // #region Helper methods

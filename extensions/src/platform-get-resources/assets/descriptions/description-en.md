@@ -1,1 +1,1 @@
-Get resources extension for Platform.Bible.
+Resource manager extension for Platform.Bible
