@@ -33,7 +33,7 @@ public class LocalParatextProjectsTests
     {
         CreateTempProject(folder, CreateParatextProjectDetails(folder, name, id));
 
-        _localProjects.Initialize(false);
+        _localProjects.Initialize();
         var details = _localProjects.GetAllProjectDetails().Single();
         Assert.That(details, Is.EqualTo(_localProjects.GetProjectDetails(id)));
         Assert.That(details.HomeDirectory, Does.EndWith(folder));

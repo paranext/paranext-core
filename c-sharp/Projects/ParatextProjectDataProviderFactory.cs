@@ -23,17 +23,7 @@ internal class ParatextProjectDataProviderFactory : ProjectDataProviderFactory
 
     protected override Task StartFactoryAsync()
     {
-        bool? shouldIncludePT9ProjectsOnWindows = false;
-        if (OperatingSystem.IsWindows())
-        {
-            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSetting<bool?>(
-                PapiClient,
-                Settings.INCLUDE_MY_PARATEXT_9_PROJECTS
-            );
-            if (!shouldIncludePT9ProjectsOnWindows.HasValue)
-                throw new Exception($"Setting {Settings.INCLUDE_MY_PARATEXT_9_PROJECTS} was null!");
-        }
-        _paratextProjects.Initialize(shouldIncludePT9ProjectsOnWindows.Value);
+        _paratextProjects.Initialize();
         return Task.CompletedTask;
     }
 
