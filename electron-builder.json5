@@ -14,7 +14,7 @@
   files: ['dist', 'node_modules', 'package.json'],
   mac: {
     sign: '.erb/scripts/notarize.js',
-    notarize: false,
+    notarize: true,
     target: {
       target: 'default',
       arch: ['arm64', 'x64'],
