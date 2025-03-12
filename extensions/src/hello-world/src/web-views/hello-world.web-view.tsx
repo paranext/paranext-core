@@ -313,12 +313,15 @@ globalThis.webViewComponent = function HelloWorld({
   );
 
   useEffect(() => {
+    const decorationsToRemove: string[] = [];
+    if (!editorHeaderText) decorationsToRemove.push('hello-world-header');
+    if (!editorBorderColor) decorationsToRemove.push('hello-world-container');
     editorWebViewController?.updateDecorations(
       editorDecorations,
       // Delete the header if there isn't any text
-      editorHeaderText ? undefined : ['hello-world-header'],
+      decorationsToRemove,
     );
-  }, [editorWebViewController, editorDecorations, editorHeaderText]);
+  }, [editorWebViewController, editorDecorations, editorHeaderText, editorBorderColor]);
 
   // #endregion
 
