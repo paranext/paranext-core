@@ -1,16 +1,10 @@
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { sendCommand } from '@shared/services/command.service';
-import logger from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon, User } from 'lucide-react';
 import { BookChapterControl, ScrollGroupSelector, Toolbar, usePromise } from 'platform-bible-react';
-import {
-  getLocalizeKeysForScrollGroupIds,
-  Localized,
-  MultiColumnMenu,
-  ScrollGroupId,
-} from 'platform-bible-utils';
+import { getLocalizeKeysForScrollGroupIds, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
 import logo from '../../../assets/icon.png';
 import { handleMenuCommand } from './platform-bible-menu.commands';
@@ -18,22 +12,6 @@ import provideMenuData from './platform-bible-menu.data';
 import './platform-bible-toolbar.scss';
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
-
-/**
- * Providing empty menu data if the software fails to load fully so we can shift click the menu and
- * click Reload Extensions if it fails the first time
- *
- * @param isSupportAndDevelopment
- * @returns
- */
-async function getMenuData(isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>> {
-  try {
-    return await provideMenuData(isSupportAndDevelopment);
-  } catch (e) {
-    logger.error(`Could not get platform-bible-toolbar menu data! ${e}`);
-    return { columns: {}, groups: {}, items: [] };
-  }
-}
 
 // Exclude no scroll group in the top selector because it would be pointless otherwise
 const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
@@ -82,9 +60,14 @@ export default function PlatformBibleToolbar() {
     undefined,
   );
 
+  const [menuData] = usePromise(
+    useCallback(async () => provideMenuData(false), []),
+    { columns: {}, groups: {}, items: [] },
+  );
+
   return (
     <Toolbar
-      menuProvider={getMenuData}
+      menuData={menuData}
       commandHandler={handleMenuCommand}
       className="tw-h-12 tw-bg-transparent"
       menubarVariant="muted"

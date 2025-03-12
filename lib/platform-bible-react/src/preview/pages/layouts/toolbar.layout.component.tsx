@@ -1,35 +1,26 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
+import * as jsonMenu from '@/components/mui/test.menu.json';
 import Toolbar from '@/components/mui/toolbar.component';
 import { BookIcon, Minus, Square, UserRound, X } from 'lucide-react';
-
-import { defaultScrRef, Localized, MultiColumnMenu } from 'platform-bible-utils';
+import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 
 export default function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);
-  const menu: MultiColumnMenu = { columns: {}, groups: {}, items: [] };
-  const menuProvider: MultiColumnMenuProvider = () =>
-    new Promise<Localized<MultiColumnMenu>>((resolve) => {
-      resolve(menu);
-    });
+
   return (
     <div className="tw-flex tw-flex-col tw-gap-4">
-      <Toolbar menuProvider={undefined} commandHandler={() => {}}>
+      <Toolbar menuData={undefined} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar menuProvider={menuProvider} commandHandler={() => {}}>
+      <Toolbar menuData={jsonMenu.mainMenu} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar
-        menuProvider={undefined}
-        commandHandler={() => {}}
-        appMenuAreaChildren={<BookIcon />}
-      >
+      <Toolbar menuData={undefined} commandHandler={() => {}} appMenuAreaChildren={<BookIcon />}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar
-        menuProvider={menuProvider}
+        menuData={jsonMenu.mainMenu}
         commandHandler={() => {}}
         className="tw-h-8 tw-bg-muted tw-text-muted-foreground"
         configAreaChildren={
@@ -51,7 +42,7 @@ export default function ToolbarExamples() {
           </div>
         </div>
         <Toolbar
-          menuProvider={menuProvider}
+          menuData={jsonMenu.mainMenu}
           commandHandler={() => {}}
           className="tw-h-8 tw-bg-background"
           configAreaChildren={<div className="tw-h-8">End</div>}
@@ -63,7 +54,7 @@ export default function ToolbarExamples() {
       Windows / Linux
       <div className="tw-relative">
         <Toolbar
-          menuProvider={menuProvider}
+          menuData={jsonMenu.mainMenu}
           commandHandler={() => {}}
           className="tw-h-10 tw-bg-background"
           configAreaChildren={<div className="tw-h-8">End</div>}
@@ -86,7 +77,7 @@ export default function ToolbarExamples() {
       Muted Variant
       <div className="tw-items-center tw-rounded-md tw-bg-muted/50 tw-py-2">
         <Toolbar
-          menuProvider={menuProvider}
+          menuData={jsonMenu.mainMenu}
           commandHandler={() => {}}
           className="tw-h-8 tw-border-0 tw-bg-transparent"
           menubarVariant="muted"

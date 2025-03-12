@@ -1,19 +1,19 @@
-import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
-import { CommandHandler } from '@/components/mui/menu-item.component';
+import PlatformMenubar from '@/components/advanced/platform-menubar.component';
 import '@/components/mui/toolbar.component.css';
 import { cn } from '@/utils/shadcn-ui.util';
+import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { PropsWithChildren, ReactNode, useRef } from 'react';
-import PlatformMenubar from '../advanced/platform-menubar.component';
+import { CommandHandler } from './menu-item.component';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
   commandHandler: CommandHandler;
 
   /**
-   * The optional delegate to use to get the menu data. If not specified, the "hamburger" menu will
-   * not display.
+   * Menu data that is used to populate the Menubar component. If empty object, no menus will be
+   * shown on the App Menubar
    */
-  menuProvider?: MultiColumnMenuProvider;
+  menuData?: Localized<MultiColumnMenu>;
 
   /** Optional unique identifier */
   id?: string;
@@ -38,7 +38,7 @@ export type ToolbarProps = PropsWithChildren<{
 }>;
 
 export default function Toolbar({
-  menuProvider,
+  menuData,
   commandHandler,
   className,
   id,
@@ -89,19 +89,13 @@ export default function Toolbar({
             /* @ts-ignore Electron-only property */
             style={{ WebkitAppRegion: 'no-drag' }}
           >
-            {menuProvider ? (
-              <>
-                {/*
-                  TODO: When the HamburgerMenuButton is removed, move this component out of the MUI folder
-                  also then remove components/mui/toolbar.component.css
-                */}
-                <PlatformMenubar
-                  menuProvider={menuProvider}
-                  commandHandler={commandHandler}
-                  variant={menubarVariant}
-                />
-              </>
-            ) : undefined}
+            {menuData && (
+              <PlatformMenubar
+                menuData={menuData}
+                commandHandler={commandHandler}
+                variant={menubarVariant}
+              />
+            )}
           </div>
         </div>
 

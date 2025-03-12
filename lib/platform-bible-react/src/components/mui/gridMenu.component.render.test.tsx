@@ -1,5 +1,5 @@
 import GridMenu from '@/components/mui/grid-menu.component';
-import * as jsonMenu from '@/components/mui/sample.composed.full.menu.json';
+import * as jsonMenu from '@/components/mui/test.menu.json';
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import { PropsWithChildren } from 'react';
@@ -45,7 +45,7 @@ describe('GridMenu renders', () => {
   it('column label correctly', () => {
     const expectedColumns = [
       {
-        html: screen.getByRole('menu', { name: 'paratext.paratext' }),
+        html: screen.getByRole('menu', { name: 'platform.project' }),
         label: '%mainMenu_Paratext%',
       },
       { html: screen.getByRole('menu', { name: 'platform.window' }), label: '%mainMenu_window%' },
