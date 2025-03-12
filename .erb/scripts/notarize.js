@@ -5,6 +5,7 @@ const JSON5 = require('json5');
 const build = JSON5.parse(fs.readFileSync('./electron-builder.json5', 'utf8'));
 
 exports.default = async function notarizeMacos(context) {
+  console.log('Running custom notarize script');
   const { electronPlatformName, appOutDir } = context;
   if (electronPlatformName !== 'darwin') {
     return;
