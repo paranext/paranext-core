@@ -11,10 +11,6 @@ namespace TestParanextDataProvider.Projects
         public override async Task TestSetupAsync()
         {
             await base.TestSetupAsync();
-
-            var settingsService = new DummySettingsService(Client);
-            await settingsService.RegisterDataProviderAsync();
-            settingsService.AddSettingValue(Settings.INCLUDE_MY_PARATEXT_9_PROJECTS, true);
         }
 
         [TestCase("00", typeof(Paratext.Data.ProjectNotFoundException), "Project not found: 00")]
