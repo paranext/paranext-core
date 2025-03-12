@@ -1,17 +1,18 @@
+import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { sendCommand } from '@shared/services/command.service';
 import logger from '@shared/services/logger.service';
-import { Toolbar, BookChapterControl, ScrollGroupSelector, usePromise } from 'platform-bible-react';
+import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon, User } from 'lucide-react';
+import { BookChapterControl, ScrollGroupSelector, Toolbar, usePromise } from 'platform-bible-react';
 import {
   getLocalizeKeysForScrollGroupIds,
   Localized,
   MultiColumnMenu,
   ScrollGroupId,
 } from 'platform-bible-utils';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
-import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { useCallback, useState } from 'react';
-import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { sendCommand } from '@shared/services/command.service';
+import logo from '../../../assets/icon.png';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
 import './platform-bible-toolbar.scss';
@@ -89,9 +90,7 @@ export default function PlatformBibleToolbar() {
       menubarVariant="muted"
       reserveOSSpecificSpace={osPlatform === 'darwin' && isFullScreen ? undefined : osPlatform}
       useAsAppDragArea
-      appMenuAreaChildren={
-        <img width={32} height={32} src="/assets/icon.png" alt="Application Logo" />
-      }
+      appMenuAreaChildren={<img width={32} height={32} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         // This is a placeholder for the actual user menu
         <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
