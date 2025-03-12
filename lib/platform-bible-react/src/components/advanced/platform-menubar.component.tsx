@@ -1,4 +1,3 @@
-import { CommandHandler } from '@/components/mui/menu-item.component';
 import {
   Menubar,
   MenubarContent,
@@ -19,6 +18,22 @@ import {
 } from 'platform-bible-utils';
 import { RefObject, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
+
+export type MenuItemInfoBase = {
+  /** Text (displayable in the UI) as the name of the menu item */
+  label: string;
+  /** Text to display when the mouse hovers over the menu item */
+  tooltip?: string;
+};
+
+export type Command = MenuItemInfoBase & {
+  /** Command to execute (string.string) */
+  command: string;
+};
+
+export interface CommandHandler {
+  (command: Command): void;
+}
 
 const getSubMenuKeyForId = (
   groups: Localized<GroupsInMultiColumnMenu>,

@@ -1,9 +1,9 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import * as jsonMenu from '@/components/mui/test.menu.json';
-import Toolbar from '@/components/mui/toolbar.component';
+import Toolbar from '@/components/advanced/toolbar.component';
 import { BookIcon, Minus, Square, UserRound, X } from 'lucide-react';
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
+import * as jsonMenu from './test.menu.json';
 
 export default function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);

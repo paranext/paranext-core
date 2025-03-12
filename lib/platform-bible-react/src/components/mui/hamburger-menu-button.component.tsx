@@ -1,5 +1,5 @@
+import { Command, CommandHandler } from '@/components/advanced/platform-menubar.component';
 import GridMenu from '@/components/mui/grid-menu.component';
-import { Command, CommandHandler } from '@/components/mui/menu-item.component';
 import usePromise from '@/hooks/use-promise.hook';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import { Drawer, IconButton } from '@mui/material';

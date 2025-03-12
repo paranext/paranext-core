@@ -1,9 +1,7 @@
-import PlatformMenubar from '@/components/advanced/platform-menubar.component';
-import '@/components/mui/toolbar.component.css';
+import PlatformMenubar, { CommandHandler } from '@/components/advanced/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { PropsWithChildren, ReactNode, useRef } from 'react';
-import { CommandHandler } from './menu-item.component';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */

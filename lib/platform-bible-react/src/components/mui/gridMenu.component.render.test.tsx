@@ -1,5 +1,5 @@
 import GridMenu from '@/components/mui/grid-menu.component';
-import * as jsonMenu from '@/components/mui/test.menu.json';
+import * as jsonMenu from '@/preview/pages/layouts/test.menu.json';
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
 import { PropsWithChildren } from 'react';

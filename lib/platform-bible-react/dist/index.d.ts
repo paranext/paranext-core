@@ -188,6 +188,274 @@ interface DataTableProps<TData, TValue> {
  * from TanStack's React Table library
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
+type ClassValue$1 = ClassValue;
+type ClassProp = {
+	class: ClassValue$1;
+	className?: never;
+} | {
+	class?: never;
+	className: ClassValue$1;
+} | {
+	class?: never;
+	className?: never;
+};
+type OmitUndefined<T> = T extends undefined ? never : T;
+type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
+/**
+ * Style variants for the Button component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const buttonVariants: (props?: ({
+	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Props for Button component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+	asChild?: boolean;
+}
+/**
+ * The Button component displays a button or a component that looks like a button. The component is
+ * built and styled by Shadcn UI.
+ *
+ * @param ButtonProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
+type InstallButtonProps = {
+	/** The installing boolean value determines the state of the button. */
+	isInstalling: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+	/** Optional text for the button. */
+	buttonText?: string;
+} & ButtonProps;
+/**
+ * The InstallButton component is a button designed for initiating installs. It includes visuals for
+ * active installing and idle states.
+ *
+ * @param InstallButtonProps
+ * @returns A install button.
+ */
+export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
+type EnableButtonProps = {
+	/** The enabling boolean value determines the state of the button. */
+	isEnabling: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+} & ButtonProps;
+/**
+ * The EnableButton component is a button designed for initiating enabling of downloads. It includes
+ * visuals for active enabling and idle states.
+ *
+ * @param EnableButtonProps
+ * @returns A button that can be used to enable.
+ */
+export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
+type DisableButtonProps = {
+	/** The disabling boolean value determines the state of the button. */
+	isDisabling: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+} & ButtonProps;
+/**
+ * The DisableButton component is a button designed for initiating disabling of downloads. It
+ * includes visuals for active disabling and idle states.
+ *
+ * @param DisableButtonProps
+ * @returns A button that can be used to disable.
+ */
+export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
+type UpdateButtonProps = {
+	/** The updating boolean value determines the state of the button. */
+	isUpdating: boolean;
+	/** The handleClick function is called when the button is clicked. */
+	handleClick: () => void;
+} & ButtonProps;
+/**
+ * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
+ * It includes visuals for active updating and idle states.
+ *
+ * @param UpdateButtonProps
+ * @returns A button that can be used to update.
+ */
+export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
+interface MarkdownRendererProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The markdown string to render */
+	markdown: string;
+	className?: string;
+	/**
+	 * The [`target` attribute for `a` html
+	 * tags](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#target). Defaults to not
+	 * adding a `target` to `a` tags
+	 */
+	anchorTarget?: string;
+}
+/**
+ * This component renders markdown content given a markdown string. It uses typography styles from
+ * the platform.
+ *
+ * @param MarkdownRendererProps
+ * @returns A div containing the rendered markdown content.
+ */
+export function MarkdownRenderer({ id, markdown, className, anchorTarget, }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export declare enum DropdownMenuItemType {
+	Check = 0,
+	Radio = 1
+}
+export type DropdownItem = {
+	/** The label is the text that will be displayed on the dropdown item. */
+	label: string;
+	/** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
+	itemType: DropdownMenuItemType;
+	/** The onClick function is called when the item is clicked. */
+	onClick: () => void;
+};
+export type DropdownGroup = {
+	/**
+	 * The label is the text that will be displayed on the dropdown group. It is used to categorize
+	 * the items in the group.
+	 */
+	label: string;
+	/** The items array contains the items that will be displayed in the dropdown group */
+	items: DropdownItem[];
+};
+type FilterDropdownProps = {
+	/** Object unique identifier */
+	id?: string;
+	/** The groups array contains the groups that will be displayed in the dropdown */
+	groups: DropdownGroup[];
+};
+/**
+ * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
+ * items that can be checkboxes or radio items.
+ *
+ * @param FilterDropdownProps
+ * @returns A filter dropdown.
+ */
+export function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * The FilterButton component is a button designed for initiating filtering of data. It is designed
+ * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
+ * asChild.
+ *
+ * @returns A button that can be used to filter.
+ */
+export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
+interface NoExtensionsFoundProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The message to display */
+	message: string;
+}
+/**
+ * This component displays a message to the user when no extensions are found in the marketplace.
+ *
+ * @param NoExtensionsFoundProps
+ * @returns {JSX.Element} - Returns the message component that displays the message to the user.
+ */
+export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
+interface MoreInfoProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** The category of the extension */
+	category: string;
+	/** The number of downloads for the extension */
+	downloads: Record<string, number>;
+	/** The languages supported by the extension */
+	languages: string[];
+	/** The URL to the more info page of the extension */
+	moreInfoUrl: string;
+}
+/**
+ * This component displays the more info section of the extension which includes the category,
+ * number of downloads, languages, and links to the website and support
+ *
+ * @param MoreInfoProps
+ * @returns {JSX.Element} - Returns the more info component that displays the category, number of
+ *   downloads, languages, and links to the website and support
+ */
+export function MoreInfo({ id, category, downloads, languages, moreInfoUrl, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
+export type VersionInformation = {
+	/** Date the version was published */
+	date: string;
+	/** Description of the changes in the version */
+	description: string;
+};
+/** Type to store the version history information */
+export type VersionHistoryType = Record<string, VersionInformation>;
+interface VersionHistoryProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** Object containing the versions mapped with their information */
+	versionHistory: VersionHistoryType;
+}
+/**
+ * Component to render the version history information shown in the footer component. Lists the 5
+ * most recent versions, with the options to show all versions by pressing a button.
+ *
+ * @param VersionHistoryProps
+ * @returns Rendered version history for the Footer component
+ */
+export function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
+interface FooterProps {
+	/** Optional unique identifier */
+	id?: string;
+	/** Name of the publisher */
+	publisherDisplayName: string;
+	/** Size of the extension file in bytes */
+	fileSize: number;
+	/** List of language codes supported by the extension */
+	locales: string[];
+	/** Object containing the version history mapped with their information */
+	versionHistory: VersionHistoryType;
+}
+/**
+ * Component to render the footer for the extension details which contains information on the
+ * publisher, version history, languages, and file size.
+ *
+ * @param FooterProps
+ * @returns The rendered Footer component
+ */
+export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export type MultiSelectComboBoxEntry = {
+	value: string;
+	label: string;
+	starred?: boolean;
+};
+interface MultiSelectComboBoxProps {
+	entries: MultiSelectComboBoxEntry[];
+	getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
+	selected: string[];
+	onChange: (values: string[]) => void;
+	placeholder: string;
+	commandEmptyMessage?: string;
+	customSelectedText?: string;
+	sortSelected?: boolean;
+	icon?: React$1.ReactNode;
+	className?: string;
+}
+export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
+interface FilterProps extends MultiSelectComboBoxProps {
+	/**
+	 * Placeholder text that will be displayed when no items are selected. It will appear at the
+	 * location where the badges would be if any items were selected.
+	 */
+	badgesPlaceholder: string;
+}
+/**
+ * This is a variant of the {@link MultiSelectComboBox}, that shows a {@link Badge} component for each
+ * selected item in the combo box. Clicking the 'X' icon on the badge will clear the item from the
+ * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
+ * displayed if no items are selected,
+ */
+export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -345,44 +613,19 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  *   current status of the item is selected
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
-export type MultiSelectComboBoxEntry = {
-	value: string;
+type MenuItemInfoBase = {
+	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
-	starred?: boolean;
+	/** Text to display when the mouse hovers over the menu item */
+	tooltip?: string;
 };
-interface MultiSelectComboBoxProps {
-	entries: MultiSelectComboBoxEntry[];
-	getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
-	selected: string[];
-	onChange: (values: string[]) => void;
-	placeholder: string;
-	commandEmptyMessage?: string;
-	customSelectedText?: string;
-	sortSelected?: boolean;
-	icon?: React$1.ReactNode;
-	className?: string;
+export type Command = MenuItemInfoBase & {
+	/** Command to execute (string.string) */
+	command: string;
+};
+export interface CommandHandler {
+	(command: Command): void;
 }
-export declare function MultiSelectComboBox({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, }: MultiSelectComboBoxProps): import("react/jsx-runtime").JSX.Element;
-export type TabKeyValueContent = {
-	key: string;
-	value: string;
-	content: React$1.ReactNode;
-};
-type TabNavigationContentSearchProps = {
-	/** List of values and keys for each tab this component should provide */
-	tabList: TabKeyValueContent[];
-	/** The search query in the search bar */
-	searchValue: string;
-	/** Handler to run when the value of the search bar changes */
-	onSearch: (searchQuery: string) => void;
-	/** Optional placeholder for the search bar */
-	searchPlaceholder?: string;
-	/** Optional title to include in the header */
-	headerTitle?: string;
-	/** Optional className to modify the search input */
-	searchClassName?: string;
-};
-declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type SelectedSettingsSidebarItem = {
 	label: string;
 	projectId?: string;
@@ -600,6 +843,103 @@ type SettingsListHeaderProps = {
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
+export type TabKeyValueContent = {
+	key: string;
+	value: string;
+	content: React$1.ReactNode;
+};
+type TabNavigationContentSearchProps = {
+	/** List of values and keys for each tab this component should provide */
+	tabList: TabKeyValueContent[];
+	/** The search query in the search bar */
+	searchValue: string;
+	/** Handler to run when the value of the search bar changes */
+	onSearch: (searchQuery: string) => void;
+	/** Optional placeholder for the search bar */
+	searchPlaceholder?: string;
+	/** Optional title to include in the header */
+	headerTitle?: string;
+	/** Optional className to modify the search input */
+	searchClassName?: string;
+};
+declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export type ToolbarProps = React$1.PropsWithChildren<{
+	/** The handler to use for menu commands (and eventually toolbar commands). */
+	commandHandler: CommandHandler;
+	/**
+	 * Menu data that is used to populate the Menubar component. If empty object, no menus will be
+	 * shown on the App Menubar
+	 */
+	menuData?: Localized<MultiColumnMenu>;
+	/** Optional unique identifier */
+	id?: string;
+	/** Additional css classes to help with unique styling of the toolbar */
+	className?: string;
+	/** If provided: reserve space for the window controls / macos "traffic lights" */
+	reserveOSSpecificSpace?: string;
+	/** Whether the toolbar should be used as a draggable area for moving the application */
+	useAsAppDragArea?: boolean;
+	/** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
+	appMenuAreaChildren?: React$1.ReactNode;
+	/** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
+	configAreaChildren?: React$1.ReactNode;
+	/** Variant of the menubar */
+	menubarVariant?: "default" | "muted";
+}>;
+export function Toolbar({ menuData, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, useAsAppDragArea, reserveOSSpecificSpace, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
+	"%settings_uiLanguageSelector_selectFallbackLanguages%"
+];
+type UiLanguageSelectorLocalizedStrings = {
+	[localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+export type LanguageInfo = {
+	/** The name of the language to be displayed (in its native script) */
+	autonym: string;
+	/**
+	 * The name of the language in other languages, so that the language can also be displayed in the
+	 * current UI language, if known.
+	 */
+	uiNames?: Record<string, string>;
+	/**
+	 * Other known names of the language (for searching). This can include pejorative names and should
+	 * never be displayed unless typed by the user.
+	 */
+	otherNames?: string[];
+};
+export type UiLanguageSelectorProps = {
+	/** Full set of known languages to display. The keys are valid BCP-47 tags. */
+	knownUiLanguages: Record<string, LanguageInfo>;
+	/** IETF BCP-47 language tag of the current primary UI language. `undefined` => 'en' */
+	primaryLanguage: string;
+	/**
+	 * Ordered list of fallback language tags to use if the localization key can't be found in the
+	 * current primary UI language. This list never contains English ('en') because it is the ultimate
+	 * fallback.
+	 */
+	fallbackLanguages: string[] | undefined;
+	/**
+	 * Handler for when either the primary or the fallback languages change (or both). For this
+	 * handler, the primary UI language is the first one in the array, followed by the fallback
+	 * languages in order of decreasing preference.
+	 */
+	onLanguagesChange?: (newUiLanguages: string[]) => void;
+	/** Handler for the primary language changes. */
+	onPrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
+	/**
+	 * Handler for when the fallback languages change. The array contains the fallback languages in
+	 * order of decreasing preference.
+	 */
+	onFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
+	/**
+	 * Map whose keys are localized string keys as contained in UI_LANGUAGE_SELECTOR_STRING_KEYS and
+	 * whose values are the localized strings (in the current UI language).
+	 */
+	localizedStrings: UiLanguageSelectorLocalizedStrings;
+	/** Additional css classes to help with unique styling of the control */
+	className?: string;
+};
+export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
@@ -626,44 +966,6 @@ export type ChecklistProps = {
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
 export function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
-type ClassValue$1 = ClassValue;
-type ClassProp = {
-	class: ClassValue$1;
-	className?: never;
-} | {
-	class?: never;
-	className: ClassValue$1;
-} | {
-	class?: never;
-	className?: never;
-};
-type OmitUndefined<T> = T extends undefined ? never : T;
-type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
-/**
- * Style variants for the Button component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
-} & ClassProp) | undefined) => string;
-/**
- * Props for Button component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-	asChild?: boolean;
-}
-/**
- * The Button component displays a button or a component that looks like a button. The component is
- * built and styled by Shadcn UI.
- *
- * @param ButtonProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type ComboBoxLabelOption = {
 	label: string;
 };
@@ -711,104 +1013,6 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-type MenuItemInfoBase = {
-	/** Text (displayable in the UI) as the name of the menu item */
-	label: string;
-	/** Text to display when the mouse hovers over the menu item */
-	tooltip?: string;
-};
-export type Command = MenuItemInfoBase & {
-	/** Command to execute (string.string) */
-	command: string;
-};
-type SubMenu = MenuItemInfoBase & {
-	/** Command to execute (string.string) */
-	items: MenuItemInfo[];
-};
-export interface CommandHandler {
-	(command: Command): void;
-}
-type MenuPropsBase = {
-	menuDefinition: Localized<SingleColumnMenu>;
-	commandHandler: CommandHandler;
-	/**
-	 * Additional action to perform when any menu item is clicked. Allows the caller to handle event
-	 * (e.g., to close the menu).
-	 */
-	onClick?: (event: React$1.MouseEvent<HTMLElement>) => void;
-};
-export type MenuItemListProps = MenuPropsBase & {
-	/** Optional unique (column) identifier */
-	columnId?: ReferencedItem;
-};
-type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
-	/** Optional unique identifier */
-	id?: string;
-	onClick: (event: React$1.MouseEvent<HTMLElement>) => void;
-}>;
-type MenuItemInfo = (Command | SubMenu) & {
-	/**
-	 * If specified, menu item will be inset if it does not have a leading icon.
-	 *
-	 * @default true
-	 */
-	allowForLeadingIcons?: boolean;
-	/**
-	 * If specified, the path to the icon image to display on the leading side of the menu text.
-	 *
-	 * @default undefined (no leading icon will be shown)
-	 */
-	iconPathBefore?: string;
-	/**
-	 * If specified, the path to the icon image to display on the trailing side of the menu text.
-	 *
-	 * @default undefined (no trailing icon will be shown)
-	 */
-	iconPathAfter?: string;
-	/**
-	 * If true, list item is focused during the first mount
-	 *
-	 * @default false
-	 */
-	hasAutoFocus?: boolean;
-	/** Additional css classes to help with unique styling of the menu item */
-	className?: string;
-	/**
-	 * If true, the menu item will appear disabled and it will not respond to clicks or mouse hovers.
-	 *
-	 * @default false
-	 */
-	isDisabled?: boolean;
-	/**
-	 * If true, compact vertical padding designed for keyboard and mouse input is used.
-	 *
-	 * @default true
-	 */
-	isDense?: boolean;
-	/**
-	 * If true, a right-arrow icon will be displayed (iconPathAfter, if specified, will be ignored).
-	 *
-	 * @default false
-	 */
-	isSubMenuParent?: boolean;
-	/**
-	 * If true, the left and right padding is removed
-	 *
-	 * @default false
-	 */
-	hasDisabledGutters?: boolean;
-	/**
-	 * If true, a 1px light border is added to bottom of menu item
-	 *
-	 * @default false
-	 */
-	hasDivider?: boolean;
-	/** Help identify which element has keyboard focus */
-	focusVisibleClassName?: string;
-	/** If it's a submenu, it should have the items property */
-	items?: MenuItemInfo[];
-};
-export function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
 export type GridMenuInfo = {
 	/** The menu object containing information about the columns, groups, and items to display. */
 	multiColumnMenu: Localized<MultiColumnMenu>;
@@ -898,6 +1102,91 @@ export type IconButtonProps = React$1.PropsWithChildren<{
  * https://mui.com/material-ui/getting-started/overview/
  */
 export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
+type SubMenu = MenuItemInfoBase & {
+	/** Command to execute (string.string) */
+	items: MenuItemInfo[];
+};
+type MenuPropsBase = {
+	menuDefinition: Localized<SingleColumnMenu>;
+	commandHandler: CommandHandler;
+	/**
+	 * Additional action to perform when any menu item is clicked. Allows the caller to handle event
+	 * (e.g., to close the menu).
+	 */
+	onClick?: (event: React$1.MouseEvent<HTMLElement>) => void;
+};
+export type MenuItemListProps = MenuPropsBase & {
+	/** Optional unique (column) identifier */
+	columnId?: ReferencedItem;
+};
+type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
+	/** Optional unique identifier */
+	id?: string;
+	onClick: (event: React$1.MouseEvent<HTMLElement>) => void;
+}>;
+type MenuItemInfo = (Command | SubMenu) & {
+	/**
+	 * If specified, menu item will be inset if it does not have a leading icon.
+	 *
+	 * @default true
+	 */
+	allowForLeadingIcons?: boolean;
+	/**
+	 * If specified, the path to the icon image to display on the leading side of the menu text.
+	 *
+	 * @default undefined (no leading icon will be shown)
+	 */
+	iconPathBefore?: string;
+	/**
+	 * If specified, the path to the icon image to display on the trailing side of the menu text.
+	 *
+	 * @default undefined (no trailing icon will be shown)
+	 */
+	iconPathAfter?: string;
+	/**
+	 * If true, list item is focused during the first mount
+	 *
+	 * @default false
+	 */
+	hasAutoFocus?: boolean;
+	/** Additional css classes to help with unique styling of the menu item */
+	className?: string;
+	/**
+	 * If true, the menu item will appear disabled and it will not respond to clicks or mouse hovers.
+	 *
+	 * @default false
+	 */
+	isDisabled?: boolean;
+	/**
+	 * If true, compact vertical padding designed for keyboard and mouse input is used.
+	 *
+	 * @default true
+	 */
+	isDense?: boolean;
+	/**
+	 * If true, a right-arrow icon will be displayed (iconPathAfter, if specified, will be ignored).
+	 *
+	 * @default false
+	 */
+	isSubMenuParent?: boolean;
+	/**
+	 * If true, the left and right padding is removed
+	 *
+	 * @default false
+	 */
+	hasDisabledGutters?: boolean;
+	/**
+	 * If true, a 1px light border is added to bottom of menu item
+	 *
+	 * @default false
+	 */
+	hasDivider?: boolean;
+	/** Help identify which element has keyboard focus */
+	focusVisibleClassName?: string;
+	/** If it's a submenu, it should have the items property */
+	items?: MenuItemInfo[];
+};
+export function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Seach query for the search bar */
@@ -971,30 +1260,6 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
-export type ToolbarProps = React$1.PropsWithChildren<{
-	/** The handler to use for menu commands (and eventually toolbar commands). */
-	commandHandler: CommandHandler;
-	/**
-	 * Menu data that is used to populate the Menubar component. If empty object, no menus will be
-	 * shown on the App Menubar
-	 */
-	menuData?: Localized<MultiColumnMenu>;
-	/** Optional unique identifier */
-	id?: string;
-	/** Additional css classes to help with unique styling of the toolbar */
-	className?: string;
-	/** If provided: reserve space for the window controls / macos "traffic lights" */
-	reserveOSSpecificSpace?: string;
-	/** Whether the toolbar should be used as a draggable area for moving the application */
-	useAsAppDragArea?: boolean;
-	/** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
-	appMenuAreaChildren?: React$1.ReactNode;
-	/** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
-	configAreaChildren?: React$1.ReactNode;
-	/** Variant of the menubar */
-	menubarVariant?: "default" | "muted";
-}>;
-export function Toolbar({ menuData, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, useAsAppDragArea, reserveOSSpecificSpace, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *
@@ -1533,271 +1798,6 @@ export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProvide
 export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
 export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
-type InstallButtonProps = {
-	/** The installing boolean value determines the state of the button. */
-	isInstalling: boolean;
-	/** The handleClick function is called when the button is clicked. */
-	handleClick: () => void;
-	/** Optional text for the button. */
-	buttonText?: string;
-} & ButtonProps;
-/**
- * The InstallButton component is a button designed for initiating installs. It includes visuals for
- * active installing and idle states.
- *
- * @param InstallButtonProps
- * @returns A install button.
- */
-export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
-type EnableButtonProps = {
-	/** The enabling boolean value determines the state of the button. */
-	isEnabling: boolean;
-	/** The handleClick function is called when the button is clicked. */
-	handleClick: () => void;
-} & ButtonProps;
-/**
- * The EnableButton component is a button designed for initiating enabling of downloads. It includes
- * visuals for active enabling and idle states.
- *
- * @param EnableButtonProps
- * @returns A button that can be used to enable.
- */
-export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
-type DisableButtonProps = {
-	/** The disabling boolean value determines the state of the button. */
-	isDisabling: boolean;
-	/** The handleClick function is called when the button is clicked. */
-	handleClick: () => void;
-} & ButtonProps;
-/**
- * The DisableButton component is a button designed for initiating disabling of downloads. It
- * includes visuals for active disabling and idle states.
- *
- * @param DisableButtonProps
- * @returns A button that can be used to disable.
- */
-export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
-type UpdateButtonProps = {
-	/** The updating boolean value determines the state of the button. */
-	isUpdating: boolean;
-	/** The handleClick function is called when the button is clicked. */
-	handleClick: () => void;
-} & ButtonProps;
-/**
- * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
- * It includes visuals for active updating and idle states.
- *
- * @param UpdateButtonProps
- * @returns A button that can be used to update.
- */
-export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
-interface MarkdownRendererProps {
-	/** Optional unique identifier */
-	id?: string;
-	/** The markdown string to render */
-	markdown: string;
-	className?: string;
-	/**
-	 * The [`target` attribute for `a` html
-	 * tags](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/a#target). Defaults to not
-	 * adding a `target` to `a` tags
-	 */
-	anchorTarget?: string;
-}
-/**
- * This component renders markdown content given a markdown string. It uses typography styles from
- * the platform.
- *
- * @param MarkdownRendererProps
- * @returns A div containing the rendered markdown content.
- */
-export function MarkdownRenderer({ id, markdown, className, anchorTarget, }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
-export declare enum DropdownMenuItemType {
-	Check = 0,
-	Radio = 1
-}
-export type DropdownItem = {
-	/** The label is the text that will be displayed on the dropdown item. */
-	label: string;
-	/** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
-	itemType: DropdownMenuItemType;
-	/** The onClick function is called when the item is clicked. */
-	onClick: () => void;
-};
-export type DropdownGroup = {
-	/**
-	 * The label is the text that will be displayed on the dropdown group. It is used to categorize
-	 * the items in the group.
-	 */
-	label: string;
-	/** The items array contains the items that will be displayed in the dropdown group */
-	items: DropdownItem[];
-};
-type FilterDropdownProps = {
-	/** Object unique identifier */
-	id?: string;
-	/** The groups array contains the groups that will be displayed in the dropdown */
-	groups: DropdownGroup[];
-};
-/**
- * The FilterDropdown component is a dropdown designed for filtering content. It includes groups of
- * items that can be checkboxes or radio items.
- *
- * @param FilterDropdownProps
- * @returns A filter dropdown.
- */
-export function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
-/**
- * The FilterButton component is a button designed for initiating filtering of data. It is designed
- * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
- * asChild.
- *
- * @returns A button that can be used to filter.
- */
-export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
-interface NoExtensionsFoundProps {
-	/** Optional unique identifier */
-	id?: string;
-	/** The message to display */
-	message: string;
-}
-/**
- * This component displays a message to the user when no extensions are found in the marketplace.
- *
- * @param NoExtensionsFoundProps
- * @returns {JSX.Element} - Returns the message component that displays the message to the user.
- */
-export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
-interface MoreInfoProps {
-	/** Optional unique identifier */
-	id?: string;
-	/** The category of the extension */
-	category: string;
-	/** The number of downloads for the extension */
-	downloads: Record<string, number>;
-	/** The languages supported by the extension */
-	languages: string[];
-	/** The URL to the more info page of the extension */
-	moreInfoUrl: string;
-}
-/**
- * This component displays the more info section of the extension which includes the category,
- * number of downloads, languages, and links to the website and support
- *
- * @param MoreInfoProps
- * @returns {JSX.Element} - Returns the more info component that displays the category, number of
- *   downloads, languages, and links to the website and support
- */
-export function MoreInfo({ id, category, downloads, languages, moreInfoUrl, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
-export type VersionInformation = {
-	/** Date the version was published */
-	date: string;
-	/** Description of the changes in the version */
-	description: string;
-};
-/** Type to store the version history information */
-export type VersionHistoryType = Record<string, VersionInformation>;
-interface VersionHistoryProps {
-	/** Optional unique identifier */
-	id?: string;
-	/** Object containing the versions mapped with their information */
-	versionHistory: VersionHistoryType;
-}
-/**
- * Component to render the version history information shown in the footer component. Lists the 5
- * most recent versions, with the options to show all versions by pressing a button.
- *
- * @param VersionHistoryProps
- * @returns Rendered version history for the Footer component
- */
-export function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
-interface FooterProps {
-	/** Optional unique identifier */
-	id?: string;
-	/** Name of the publisher */
-	publisherDisplayName: string;
-	/** Size of the extension file in bytes */
-	fileSize: number;
-	/** List of language codes supported by the extension */
-	locales: string[];
-	/** Object containing the version history mapped with their information */
-	versionHistory: VersionHistoryType;
-}
-/**
- * Component to render the footer for the extension details which contains information on the
- * publisher, version history, languages, and file size.
- *
- * @param FooterProps
- * @returns The rendered Footer component
- */
-export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
-interface FilterProps extends MultiSelectComboBoxProps {
-	/**
-	 * Placeholder text that will be displayed when no items are selected. It will appear at the
-	 * location where the badges would be if any items were selected.
-	 */
-	badgesPlaceholder: string;
-}
-/**
- * This is a variant of the {@link MultiSelectComboBox}, that shows a {@link Badge} component for each
- * selected item in the combo box. Clicking the 'X' icon on the badge will clear the item from the
- * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
- * displayed if no items are selected,
- */
-export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
-declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
-	"%settings_uiLanguageSelector_selectFallbackLanguages%"
-];
-type UiLanguageSelectorLocalizedStrings = {
-	[localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
-};
-export type LanguageInfo = {
-	/** The name of the language to be displayed (in its native script) */
-	autonym: string;
-	/**
-	 * The name of the language in other languages, so that the language can also be displayed in the
-	 * current UI language, if known.
-	 */
-	uiNames?: Record<string, string>;
-	/**
-	 * Other known names of the language (for searching). This can include pejorative names and should
-	 * never be displayed unless typed by the user.
-	 */
-	otherNames?: string[];
-};
-export type UiLanguageSelectorProps = {
-	/** Full set of known languages to display. The keys are valid BCP-47 tags. */
-	knownUiLanguages: Record<string, LanguageInfo>;
-	/** IETF BCP-47 language tag of the current primary UI language. `undefined` => 'en' */
-	primaryLanguage: string;
-	/**
-	 * Ordered list of fallback language tags to use if the localization key can't be found in the
-	 * current primary UI language. This list never contains English ('en') because it is the ultimate
-	 * fallback.
-	 */
-	fallbackLanguages: string[] | undefined;
-	/**
-	 * Handler for when either the primary or the fallback languages change (or both). For this
-	 * handler, the primary UI language is the first one in the array, followed by the fallback
-	 * languages in order of decreasing preference.
-	 */
-	onLanguagesChange?: (newUiLanguages: string[]) => void;
-	/** Handler for the primary language changes. */
-	onPrimaryLanguageChange?: (newPrimaryUiLanguage: string) => void;
-	/**
-	 * Handler for when the fallback languages change. The array contains the fallback languages in
-	 * order of decreasing preference.
-	 */
-	onFallbackLanguagesChange?: (newFallbackLanguages: string[]) => void;
-	/**
-	 * Map whose keys are localized string keys as contained in UI_LANGUAGE_SELECTOR_STRING_KEYS and
-	 * whose values are the localized strings (in the current UI language).
-	 */
-	localizedStrings: UiLanguageSelectorLocalizedStrings;
-	/** Additional css classes to help with unique styling of the control */
-	className?: string;
-};
-export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
