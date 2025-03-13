@@ -5,6 +5,7 @@ import {
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
 import ExampleAlerts from './basics/alert.examples.component';
+import AvatarExample from './basics/avatar.examples.component';
 import BadgeExamples from './basics/badge.examples.component';
 import ButtonExamples from './basics/button.examples.component';
 import CardExamples from './basics/card.examples.component';
@@ -15,6 +16,7 @@ import ComboBoxExamples from './basics/combo-box.examples.component';
 import DialogExamples from './basics/dialog.examples.component';
 import DropdownExamples from './basics/dropdown.examples.component';
 import InputExamples from './basics/input.examples.component';
+import MenubarExamples from './basics/menubar.examples.component';
 import RadioGroupExamples from './basics/radio-group.examples';
 import SearchBarExamples from './basics/search.examples.component';
 import SelectExamples from './basics/select.examples.component';
@@ -27,7 +29,6 @@ import TabExamples from './basics/tab.examples.component';
 import TableExamples from './basics/table.examples.component';
 import ToggleGroupExamples from './basics/toggle-group.examples.component';
 import TooltipExamples from './basics/tooltip.examples.component';
-import MenubarExamples from './basics/menubar.examples.component';
 
 function Basics() {
   return (
@@ -36,6 +37,7 @@ function Basics() {
       <VerticalTabs defaultValue="Button">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Alert">Alert</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Avatar">Avatar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Badge">Badge</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
@@ -65,6 +67,10 @@ function Basics() {
 
         <VerticalTabsContent value="Alert">
           <ExampleAlerts />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Avatar">
+          <AvatarExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Badge">
