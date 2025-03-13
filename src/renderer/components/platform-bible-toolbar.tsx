@@ -1,35 +1,17 @@
-import logger from '@shared/services/logger.service';
-import { Toolbar, BookChapterControl, ScrollGroupSelector } from 'platform-bible-react';
-import {
-  getLocalizeKeysForScrollGroupIds,
-  Localized,
-  MultiColumnMenu,
-  ScrollGroupId,
-} from 'platform-bible-utils';
-import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
-import { useCallback, useState } from 'react';
+import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { HomeIcon, User } from 'lucide-react';
+import { BookChapterControl, ScrollGroupSelector, Toolbar, usePromise } from 'platform-bible-react';
+import { getLocalizeKeysForScrollGroupIds, ScrollGroupId } from 'platform-bible-utils';
+import { useCallback, useState } from 'react';
+import logo from '../../../assets/icon.png';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
+import './platform-bible-toolbar.scss';
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
-
-/**
- * Providing empty menu data if the software fails to load fully so we can shift click the menu and
- * click Reload Extensions if it fails the first time
- *
- * @param isSupportAndDevelopment
- * @returns
- */
-async function getMenuData(isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>> {
-  try {
-    return await provideMenuData(isSupportAndDevelopment);
-  } catch (e) {
-    logger.error(`Could not get platform-bible-toolbar menu data! ${e}`);
-    return { columns: {}, groups: {}, items: [] };
-  }
-}
 
 // Exclude no scroll group in the top selector because it would be pointless otherwise
 const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
@@ -61,14 +43,55 @@ export default function PlatformBibleToolbar() {
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
+  const [osPlatform] = usePromise(
+    useCallback(
+      () =>
+        sendCommand('platform.getOSPlatform').then((platform: string | undefined) => {
+          // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+          return platform === 'linux' ? '' : platform;
+        }),
+      [],
+    ),
+    undefined,
+  );
+
+  const [isFullScreen] = usePromise(
+    useCallback(() => sendCommand('platform.isFullScreen'), []),
+    undefined,
+  );
+
+  const [menuData] = usePromise(
+    useCallback(async () => provideMenuData(false), []),
+    { columns: {}, groups: {}, items: [] },
+  );
+
   return (
-    <Toolbar className="toolbar" menuProvider={getMenuData} commandHandler={handleMenuCommand}>
-      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+    <Toolbar
+      menuData={menuData}
+      commandHandler={handleMenuCommand}
+      className="tw-h-12 tw-bg-transparent"
+      menubarVariant="muted"
+      reserveOSSpecificSpace={osPlatform === 'darwin' && isFullScreen ? undefined : osPlatform}
+      useAsAppDragArea
+      appMenuAreaChildren={<img width={32} height={32} src={`${logo}`} alt="Application Logo" />}
+      configAreaChildren={
+        // This is a placeholder for the actual user menu
+        <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
+          <User className="tw-h-4" />
+        </div>
+      }
+    >
+      <HomeIcon
+        className="home-button"
+        onClick={() => sendCommand('platformGetResources.openHome')}
+      />
+      <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}
         scrollGroupId={scrollGroupId}
         onChangeScrollGroupId={setScrollGroupId}
         localizedStrings={scrollGroupLocalizedStrings}
+        className="tw-h-8"
       />
     </Toolbar>
   );

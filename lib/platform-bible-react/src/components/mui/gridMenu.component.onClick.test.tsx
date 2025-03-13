@@ -1,6 +1,6 @@
+import { Command } from '@/components/advanced/platform-menubar.component';
 import GridMenu from '@/components/mui/grid-menu.component';
-import { Command } from '@/components/mui/menu-item.component';
-import * as jsonMenu from '@/components/mui/sample.composed.full.menu.json';
+import * as jsonMenu from '@/preview/pages/layouts/test.menu.json';
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';

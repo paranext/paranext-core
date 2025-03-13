@@ -25,20 +25,21 @@
 // #region GENERAL //////////////////////////////////////////////
 /* space around app and in between windows */
 .dock-divider {
-  flex: 0 0 4px;
+  flex: 0 0 8px;
 }
 
 .dock-hbox > .dock-divider {
-  transform: scaleX(3);
+  transform: scaleX(1);
 }
 
 .dock-vbox > .dock-divider {
-  transform: scaleY(3);
+  transform: scaleY(1);
 }
 
 .dock-layout {
   flex-grow: 1;
-  margin: 4px;
+  margin: 8px;
+  margin-top: 0;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible {
@@ -115,6 +116,8 @@
   color: vars.$color--text;
   border-bottom: 0;
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
+
+  box-shadow: 0 4px 20px 0 vars.$color--shadow; // Box shadow around active tab
 }
 // #endregion
 
@@ -131,26 +134,28 @@
 // #endregion
 
 // #region STRAIGHT CORNERS //////////////////////////////////////////////
+/*
 .dock-layout .dock-panel.dock-style-platform-bible,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   border-radius: 0;
 }
+*/
 // #endregion
 
 // #region ROUNDED CORNERS //////////////////////////////////////////////
-/*
-  Un-comment this section (instead of previous "STRAIGHT CORNER") for a rounded corner style.
-  It's currently not decided which one we will finally use
-*/
-/*
+
 // Curved top corners, including on floating window
 // .dock-fbox > .dock-panel - would be for floating windows only
-$tab-top-rounding: $space--xs;
+$tab-top-rounding: vars.$space--xs;
+
+.dock.dock-top,
 .dock-layout .dock-panel.dock-style-platform-bible {
   border-radius: $tab-top-rounding;
 }
+
+.dock-nav-wrap,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
@@ -158,32 +163,30 @@ $tab-top-rounding: $space--xs;
 }
 
 // Bottom outside corner rounding for active tab
-$tab-bottom-rounding: $space--s;
-.dock-tab.dock-tab-active:before,
-.dock-tab.dock-tab-active:after {
+$tab-bottom-rounding: vars.$space--s;
+
+.dock-tab.dock-tab-active::before,
+.dock-tab.dock-tab-active::after {
   content: ' ';
   height: $tab-bottom-rounding;
   width: $tab-bottom-rounding;
   position: absolute;
   bottom: 0;
-  border-width: 0 $border-width $border-width 0;
-}
-.dock-tab.dock-tab-active:before {
-  left: -$tab-bottom-rounding;
-  border-bottom-right-radius: $tab-bottom-rounding - 2;
-  box-shadow: 2px 2px 0 #fff;
-}
-.dock-tab.dock-tab-active:after {
-  right: -$tab-bottom-rounding;
-  border-bottom-left-radius: $tab-bottom-rounding - 2;
-  box-shadow: -2px 2px 0 #fff;
+  border-width: 0 vars.$border-width vars.$border-width 0;
 }
 
-// Box shadow around active tab
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  box-shadow: 0 4px 20px 0 $color--shadow;
+.dock-tab.dock-tab-active::before {
+  left: -$tab-bottom-rounding;
+  border-bottom-right-radius: $tab-bottom-rounding - 2;
+  box-shadow: 2px 2px 0 vars.$color--active-tab;
 }
-//*/
+
+.dock-tab.dock-tab-active::after {
+  right: -$tab-bottom-rounding;
+  border-bottom-left-radius: $tab-bottom-rounding - 2;
+  box-shadow: -2px 2px 0 vars.$color--active-tab;
+}
+
 // #endregion
 
 // #region CONTROLS //////////////////////////////////////////////
