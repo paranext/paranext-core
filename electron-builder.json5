@@ -2,11 +2,11 @@
  * @see https://www.electron.build/configuration/configuration
  */
 {
-  productName: 'Platform.Bible TEST 1',
+  productName: 'Platform.Bible',
   appId: 'org.paranext.PlatformBible',
   copyright: 'Copyright © 2017-2025 SIL Global and United Bible Societies',
   protocols: {
-    name: 'Platform.Bible TEST 2',
+    name: 'Platform.Bible',
     schemes: ['platform-bible'],
   },
   asar: true,
