@@ -6,7 +6,7 @@
   appId: 'org.paranext.PlatformBible',
   copyright: 'Copyright © 2017-2025 SIL Global and United Bible Societies',
   protocols: {
-    name: 'Platform.Bible',
+    name: 'platform-bible',
     schemes: ['platform-bible'],
   },
   asar: true,
