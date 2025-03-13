@@ -23,11 +23,13 @@ export type ToolbarProps = PropsWithChildren<{
   /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 
-  /** If provided: reserve space for the window controls / macos "traffic lights" */
-  reserveOSSpecificSpace?: string;
-
-  /** Whether the toolbar should be used as a draggable area for moving the application */
-  useAsAppDragArea?: boolean;
+  /**
+   * Whether the toolbar should be used as a draggable area for moving the application. This will
+   * add an electron specific style `WebkitAppRegion: 'drag'` to the toolbar in order to make it
+   * draggable. See:
+   * https://www.electronjs.org/docs/latest/tutorial/custom-title-bar#create-a-custom-title-bar
+   */
+  shouldUseAsAppDragArea?: boolean;
 
   /** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
   configAreaChildren?: ReactNode;
@@ -36,6 +38,27 @@ export type ToolbarProps = PropsWithChildren<{
   menubarVariant?: 'default' | 'muted';
 }>;
 
+/**
+ * If provided: reserve space for the window controls / macos "traffic lights". Passing 'darwin'
+ * will reserve the necessary space for macos traffic lights at the start, otherwise a different
+ * amount of space at the end for the window controls.
+ *
+ * @param operatingSystem The os platform: 'darwin' (macos) | anything else
+ * @returns The class name to apply to the toolbar if os specific space should be reserved
+ */
+export function getToolbarOSReservedSpaceClassName(
+  operatingSystem: string | undefined,
+): string | undefined {
+  switch (operatingSystem) {
+    case undefined:
+      return undefined;
+    case 'darwin':
+      return 'tw-ps-[85px]';
+    default:
+      return 'tw-pe-[calc(138px+1rem)]';
+  }
+}
+
 export default function Toolbar({
   menuProvider,
   commandHandler,
@@ -43,8 +66,7 @@ export default function Toolbar({
   id,
   children,
   configAreaChildren,
-  useAsAppDragArea,
-  reserveOSSpecificSpace = undefined,
+  shouldUseAsAppDragArea: useAsAppDragArea,
   menubarVariant = 'default',
 }: ToolbarProps) {
   // This ref will always be defined
@@ -53,15 +75,7 @@ export default function Toolbar({
 
   return (
     <div
-      className={cn(
-        'tw-border tw-px-4 tw-text-foreground',
-        { 'tw-ps-[85px]': reserveOSSpecificSpace === 'darwin' }, // space for macos "traffic lights"
-        {
-          'tw-pe-[calc(138px+1rem)]':
-            reserveOSSpecificSpace === 'win32' || reserveOSSpecificSpace === 'linux',
-        },
-        className,
-      )}
+      className={cn('tw-border tw-px-4 tw-text-foreground', className)}
       ref={containerRef}
       style={{ position: 'relative' }}
       id={id}
