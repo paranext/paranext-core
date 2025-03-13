@@ -1,5 +1,12 @@
 import logger from '@shared/services/logger.service';
-import { Toolbar, BookChapterControl, ScrollGroupSelector, usePromise } from 'platform-bible-react';
+import {
+  Toolbar,
+  BookChapterControl,
+  ScrollGroupSelector,
+  usePromise,
+  getToolbarOSReservedSpaceClassName,
+  cn,
+} from 'platform-bible-react';
 import { User } from 'lucide-react';
 import {
   getLocalizeKeysForScrollGroupIds,
@@ -63,20 +70,18 @@ export default function PlatformBibleToolbar() {
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
-  const [osPlatform] = usePromise(
-    useCallback(
-      () =>
-        sendCommand('platform.getOSPlatform').then((platform: string | undefined) => {
-          // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-          return platform === 'linux' ? '' : platform;
-        }),
-      [],
-    ),
-    undefined,
-  );
+  const [osPlatformToReserveSpaceFor] = usePromise(
+    useCallback(async () => {
+      const osPlatform: string | undefined = await sendCommand('platform.getOSPlatform');
+      const isFullScreen: boolean = await sendCommand('platform.isFullScreen');
 
-  const [isFullScreen] = usePromise(
-    useCallback(() => sendCommand('platform.isFullScreen'), []),
+      // no need to reserve space for macos "traffic lights" when in full screen
+      if (osPlatform === 'darwin' && isFullScreen) return undefined;
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      if (osPlatform === 'linux') return undefined;
+      return osPlatform;
+    }, []),
+
     undefined,
   );
 
@@ -84,10 +89,12 @@ export default function PlatformBibleToolbar() {
     <Toolbar
       menuProvider={getMenuData}
       commandHandler={handleMenuCommand}
-      className="tw-h-12 tw-bg-transparent"
+      className={cn(
+        'tw-h-12 tw-bg-transparent',
+        getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
+      )}
       menubarVariant="muted"
-      reserveOSSpecificSpace={osPlatform === 'darwin' && isFullScreen ? undefined : osPlatform}
-      useAsAppDragArea
+      shouldUseAsAppDragArea
       configAreaChildren={
         // This is a placeholder for the actual user menu
         <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
