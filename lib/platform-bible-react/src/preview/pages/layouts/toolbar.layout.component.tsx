@@ -1,9 +1,12 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import Toolbar from '@/components/advanced/toolbar.component';
-import * as menuData from '@/preview/pages/components/advanced/sample.menu.json';
+import Toolbar, {
+  getToolbarOSReservedSpaceClassName,
+} from '@/components/advanced/toolbar.component';
+import { cn } from '@/utils/shadcn-ui.util';
 import { BookIcon, Minus, Square, UserRound, X } from 'lucide-react';
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
+import * as menuData from './test.menu.json';
 
 export default function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);
@@ -13,14 +16,25 @@ export default function ToolbarExamples() {
       <Toolbar menuData={undefined} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar menuData={menuData} commandHandler={() => {}}>
-        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
-      </Toolbar>
-      <Toolbar menuData={undefined} commandHandler={() => {}} appMenuAreaChildren={<BookIcon />}>
+      <Toolbar
+        menuData={menuData.mainMenu}
+        appMenuAreaChildren={<BookIcon />}
+        commandHandler={() => {}}
+      >
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar
-        menuData={menuData}
+        menuData={menuData.mainMenu}
+        appMenuAreaChildren={<BookIcon />}
+        commandHandler={() => {}}
+      >
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar menuData={menuData.mainMenu} commandHandler={() => {}}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar
+        menuData={menuData.mainMenu}
         commandHandler={() => {}}
         className="tw-h-8 tw-bg-muted tw-text-muted-foreground"
         configAreaChildren={
@@ -42,11 +56,10 @@ export default function ToolbarExamples() {
           </div>
         </div>
         <Toolbar
-          menuData={menuData}
+          menuData={menuData.mainMenu}
           commandHandler={() => {}}
-          className="tw-h-8 tw-bg-background"
+          className={cn('tw-h-8 tw-bg-background', getToolbarOSReservedSpaceClassName('darwin'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
-          reserveOSSpecificSpace="darwin"
         >
           <div className="tw-h-8">Middle</div>
         </Toolbar>
@@ -54,11 +67,10 @@ export default function ToolbarExamples() {
       Windows / Linux
       <div className="tw-relative">
         <Toolbar
-          menuData={menuData}
+          menuData={menuData.mainMenu}
           commandHandler={() => {}}
-          className="tw-h-10 tw-bg-background"
+          className={cn('tw-h-10 tw-bg-background', getToolbarOSReservedSpaceClassName('linux'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
-          reserveOSSpecificSpace="linux"
         >
           <div className="tw-h-8">Middle</div>
         </Toolbar>
@@ -77,7 +89,7 @@ export default function ToolbarExamples() {
       Muted Variant
       <div className="tw-items-center tw-rounded-md tw-bg-muted/50 tw-py-2">
         <Toolbar
-          menuData={menuData}
+          menuData={menuData.mainMenu}
           commandHandler={() => {}}
           className="tw-h-8 tw-border-0 tw-bg-transparent"
           menubarVariant="muted"
