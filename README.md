@@ -146,6 +146,10 @@ Please see the [Extension Template wiki](https://github.com/paranext/paranext-ex
 
 - Check out the utility functions, types, and classes available to use.
 
+**[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
+
+- Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
+
 ## JavaScript Tool Manager
 
 You can use [Volta](https://volta.sh/) with this repo to use the right version of tools such as **node** and **npm**.
