@@ -1,9 +1,9 @@
 import { Command } from '@/components/advanced/platform-menubar.component';
 import GridMenu from '@/components/mui/grid-menu.component';
-import * as jsonMenu from '@/preview/pages/layouts/test.menu.json';
 import '@testing-library/jest-dom';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
+import * as jsonMenu from './test.menu.json';
 
 let lastCommandHandled: string;
 let numberOfCommandsHandled: number = 0;
