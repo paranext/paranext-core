@@ -29,35 +29,40 @@
         "localizeNotes": "Application main menu > Project > Settings",
         "group": "platform.projectSettings",
         "order": 1,
-        "command": "platform.openSettings"
+        "command": "platform.openSettings",
+        "macosMenuKey": "macosMenubar.appMenu"
       },
       {
         "label": "%mainMenu_exit%",
         "localizeNotes": "Application main menu > Project > Exit",
         "group": "platform.projectMisc",
         "order": 999999999,
-        "command": "platform.quit"
+        "command": "platform.quit",
+        "macosMenuKey": "macosMenubar.ignore"
       },
       {
         "label": "%mainMenu_visitSupportBible%",
         "localizeNotes": "Application main menu > Help > Visit Support.Bible",
         "group": "platform.helpMisc",
         "order": 1,
-        "command": "platform.visitSupportPage"
+        "command": "platform.visitSupportPage",
+        "macosMenuKey": "macosMenubar.helpMenu"
       },
       {
         "label": "%mainMenu_about%",
         "localizeNotes": "Application main menu > Help > About Platform.Bible",
         "group": "platform.helpMisc",
         "order": 2,
-        "command": "platform.about"
+        "command": "platform.about",
+        "macosMenuKey": "macosMenubar.appMenu"
       },
       {
         "label": "%mainMenu_openDeveloperDocumentation%",
         "localizeNotes": "Application main menu > Help > Open Developer Documentation",
         "group": "platform.helpMisc",
         "order": 3,
-        "command": "platform.openDeveloperDocumentationUrl"
+        "command": "platform.openDeveloperDocumentationUrl",
+        "macosMenuKey": "macosMenubar.helpMenu"
       }
     ]
   },
@@ -77,14 +82,16 @@
         "localizeNotes": "Web view main menu > Project > Assignments and progress...",
         "group": "platform.projectTop",
         "order": 2,
-        "command": "platform.assignments"
+        "command": "platform.assignments",
+        "macosMenuKey": "macosMenubar.ignore"
       },
       {
         "label": "%webView_openProjectSettings%",
         "localizeNotes": "Web view main menu > Project > Open Project Settings...",
         "group": "platform.projectTop",
         "order": 3,
-        "command": "platform.openSettings"
+        "command": "platform.openSettings",
+        "macosMenuKey": "macosMenubar.ignore"
       }
     ]
   },
@@ -99,14 +106,16 @@
         "localizeNotes": "Web view context menu > Insert note...",
         "group": "platform.insert",
         "order": 1,
-        "command": "platform.insertNote"
+        "command": "platform.insertNote",
+        "macosMenuKey": "macosMenubar.ignore"
       },
       {
         "label": "%menuItemName_wordList%",
         "localizeNotes": "Web view context menu > Word list...",
         "group": "platform.wordList",
         "order": 1,
-        "command": "platform.openWordList"
+        "command": "platform.openWordList",
+        "macosMenuKey": "macosMenubar.ignore"
       }
     ]
   },
