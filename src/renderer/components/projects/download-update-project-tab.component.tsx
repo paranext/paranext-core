@@ -7,9 +7,7 @@ import {
   ListItemText,
   ListSubheader,
 } from '@mui/material';
-import DownloadIcon from '@mui/icons-material/Download';
-import UpdateIcon from '@mui/icons-material/Update';
-import DeleteIcon from '@mui/icons-material/Delete';
+import { Download, ArrowDownFromLine, Delete } from 'lucide-react';
 import logger from '@shared/services/logger.service';
 import { useMemo } from 'react';
 import ProjectList, {
@@ -74,7 +72,7 @@ export default function DownloadUpdateProjectTab() {
           handleSelectProject={downloadProject}
         >
           <ListItemIcon>
-            <DownloadIcon />
+            <Download />
           </ListItemIcon>
         </ProjectList>
       </nav>
@@ -86,13 +84,13 @@ export default function DownloadUpdateProjectTab() {
             <ListItem key={project.id}>
               <ListItemButton onClick={() => updateProject(project)}>
                 <ListItemIcon>
-                  <UpdateIcon />
+                  <ArrowDownFromLine />
                 </ListItemIcon>
                 <ListItemText primary={project.name} />
               </ListItemButton>
               <ListItemButton onClick={() => deleteProject(project)}>
                 <ListItemIcon>
-                  <DeleteIcon />
+                  <Delete />
                 </ListItemIcon>
                 <ListItemText primary={localizedDeleteListItem} />
               </ListItemButton>

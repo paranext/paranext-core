@@ -1,8 +1,7 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import { useMemo, useState } from 'react';
 import logger from '@shared/services/logger.service';
-import { Typography } from '@mui/material';
-import { Button } from 'platform-bible-react';
+import { Button, Label } from 'platform-bible-react';
+import { useMemo, useState } from 'react';
 import ExtensionList, { Extension } from './extension-list.component';
 import './extension-manager-tab.component.scss';
 
@@ -88,7 +87,7 @@ export default function ExtensionManagerTab() {
   return (
     <div className="extension-manager-dialog">
       <div className="extension-manager-label">
-        <Typography>Extension Toggle</Typography>
+        <Label>Extension Toggle</Label>
       </div>
       <div className="extension-manager-instance">
         <ExtensionList

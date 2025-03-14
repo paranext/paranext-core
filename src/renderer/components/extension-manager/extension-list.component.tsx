@@ -1,7 +1,6 @@
-import { Typography } from '@mui/material';
-import { Button } from 'platform-bible-react';
-import './extension-list.component.scss';
+import { Button, Label } from 'platform-bible-react';
 import { PropsWithChildren, useMemo } from 'react';
+import './extension-list.component.scss';
 import ExtensionToggle, { ExtensionToggleProps } from './extension-toggle.component';
 
 export type Extension = {
@@ -60,9 +59,7 @@ export default function ExtensionList({
 
   return (
     <div>
-      <Typography fontWeight="fontWeightBold" className="extensions-label" variant="subtitle2">
-        {label}
-      </Typography>
+      <Label className="extensions-label">{label}</Label>
       <div className="extension-list">
         {extensions.map((ext) => (
           <ExtensionToggle
