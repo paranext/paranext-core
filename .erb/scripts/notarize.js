@@ -16,10 +16,14 @@ exports.default = async function notarizeMacos(context) {
   }
 
   if (
-    !('APPLE_ID' in process.env && 'APPLE_ID_PASS' in process.env && 'APPLE_TEAM_ID' in process.env)
+    !(
+      'APPLE_ID' in process.env &&
+      'APPLE_APP_SPECIFIC_PASSWORD' in process.env &&
+      'APPLE_TEAM_ID' in process.env
+    )
   ) {
     console.warn(
-      'Skipping notarizing step. APPLE_ID, APPLE_ID_PASS, and APPLE_TEAM_ID env variables must be set',
+      'Skipping notarizing step. APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, and APPLE_TEAM_ID env variables must be set',
     );
     return;
   }
@@ -31,7 +35,7 @@ exports.default = async function notarizeMacos(context) {
     appBundleId: build.appId,
     appPath: `${appOutDir}/${appName}.app`,
     appleId: process.env.APPLE_ID,
-    appleIdPassword: process.env.APPLE_ID_PASS,
+    appleIdPassword: process.env.APPLE_APP_SPECIFIC_PASSWORD,
     teamId: process.env.APPLE_TEAM_ID,
   });
 };
