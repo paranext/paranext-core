@@ -1,5 +1,3 @@
-import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
-import { CommandHandler } from '@/components/mui/menu-item.component';
 import {
   Menubar,
   MenubarContent,
@@ -11,7 +9,6 @@ import {
   MenubarSubTrigger,
   MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
-import usePromise from '@/hooks/use-promise.hook';
 import {
   GroupsInMultiColumnMenu,
   Localized,
@@ -19,8 +16,24 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { RefObject, useCallback, useRef } from 'react';
+import { RefObject, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
+
+export type MenuItemInfoBase = {
+  /** Text (displayable in the UI) as the name of the menu item */
+  label: string;
+  /** Text to display when the mouse hovers over the menu item */
+  tooltip?: string;
+};
+
+export type Command = MenuItemInfoBase & {
+  /** Command to execute (string.string) */
+  command: string;
+};
+
+export interface CommandHandler {
+  (command: Command): void;
+}
 
 const getSubMenuKeyForId = (
   groups: Localized<GroupsInMultiColumnMenu>,
@@ -85,8 +98,8 @@ const getMenubarContent = (
 };
 
 type PlatformMenubarProps = {
-  /** The delegate to use to get the menu data. */
-  menuProvider: MultiColumnMenuProvider;
+  /** Menu data that is used to populate the Menubar component. */
+  menuData: Localized<MultiColumnMenu>;
 
   /** The handler to use for menu commands. */
   commandHandler: CommandHandler;
@@ -97,20 +110,13 @@ type PlatformMenubarProps = {
 
 /** Menubar component tailored to work with Platform.Bible menu data */
 export default function PlatformMenubar({
-  menuProvider,
+  menuData,
   commandHandler,
   variant,
 }: PlatformMenubarProps) {
-  const [menuData] = usePromise(
-    useCallback(async (): Promise<Localized<MultiColumnMenu>> => {
-      return menuProvider?.(false);
-    }, [menuProvider]),
-    undefined,
-  );
-
   // These refs will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const primaryMenuRef = useRef<HTMLButtonElement>(undefined!);
+  const projectMenuRef = useRef<HTMLButtonElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const windowMenuRef = useRef<HTMLButtonElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -120,9 +126,8 @@ export default function PlatformMenubar({
 
   const getRefForColumn = (columnKey: string) => {
     switch (columnKey) {
-      case 'paratext.paratext':
       case 'platform.project':
-        return primaryMenuRef;
+        return projectMenuRef;
       case 'platform.window':
         return windowMenuRef;
       case 'platform.layout':
@@ -151,11 +156,11 @@ export default function PlatformMenubar({
 
     switch (handler.hotkey) {
       case 'alt':
-        simulateKeyPress(primaryMenuRef, [escKey]);
+        simulateKeyPress(projectMenuRef, [escKey]);
         break;
       case 'alt+p':
-        primaryMenuRef.current?.focus();
-        simulateKeyPress(primaryMenuRef, [escKey, spaceKey]);
+        projectMenuRef.current?.focus();
+        simulateKeyPress(projectMenuRef, [escKey, spaceKey]);
         break;
       case 'alt+l':
         windowMenuRef.current?.focus();

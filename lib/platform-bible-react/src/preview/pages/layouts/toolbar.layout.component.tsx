@@ -1,55 +1,32 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
-import Toolbar, { getToolbarOSReservedSpaceClassName } from '@/components/mui/toolbar.component';
+import Toolbar, {
+  getToolbarOSReservedSpaceClassName,
+} from '@/components/advanced/toolbar.component';
 import { cn } from '@/utils/shadcn-ui.util';
 import { BookIcon, Minus, Square, UserRound, X } from 'lucide-react';
-
-import { defaultScrRef, Localized, MultiColumnMenu } from 'platform-bible-utils';
+import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
+import * as menuData from './sample.menu.json';
 
 export default function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);
-  const menu: Localized<MultiColumnMenu> = {
-    columns: { 'paratext.paratext': { label: 'Paratext', order: 0 } },
-    groups: { 'paratext.sendReceive': { column: 'paratext.paratext', order: 1 } },
-    items: [
-      {
-        label: 'Send Receive Project',
-        localizeNotes: 'Main application menu > Paratext column > Send/Receive Projects',
-        group: 'paratext.sendReceive',
-        order: 1,
-        command: 'paratext.sendReceiveProjects',
-      },
-    ],
-  };
-  const menuProvider: MultiColumnMenuProvider = () =>
-    new Promise<Localized<MultiColumnMenu>>((resolve) => {
-      resolve(menu);
-    });
+
   return (
     <div className="tw-flex tw-flex-col tw-gap-4">
-      <Toolbar menuProvider={undefined} commandHandler={() => {}}>
+      <Toolbar menuData={undefined} commandHandler={() => {}}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar menuData={undefined} appMenuAreaChildren={<BookIcon />} commandHandler={() => {}}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar menuData={menuData} appMenuAreaChildren={<BookIcon />} commandHandler={() => {}}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar menuData={menuData} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar
-        menuProvider={undefined}
-        appMenuAreaChildren={<BookIcon />}
-        commandHandler={() => {}}
-      >
-        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
-      </Toolbar>
-      <Toolbar
-        menuProvider={menuProvider}
-        appMenuAreaChildren={<BookIcon />}
-        commandHandler={() => {}}
-      >
-        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
-      </Toolbar>
-      <Toolbar menuProvider={menuProvider} commandHandler={() => {}}>
-        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
-      </Toolbar>
-      <Toolbar
-        menuProvider={menuProvider}
+        menuData={menuData}
         commandHandler={() => {}}
         className="tw-h-8 tw-bg-muted tw-text-muted-foreground"
         configAreaChildren={
@@ -71,7 +48,7 @@ export default function ToolbarExamples() {
           </div>
         </div>
         <Toolbar
-          menuProvider={menuProvider}
+          menuData={menuData}
           commandHandler={() => {}}
           className={cn('tw-h-8 tw-bg-background', getToolbarOSReservedSpaceClassName('darwin'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
@@ -82,7 +59,7 @@ export default function ToolbarExamples() {
       Windows / Linux
       <div className="tw-relative">
         <Toolbar
-          menuProvider={menuProvider}
+          menuData={menuData}
           commandHandler={() => {}}
           className={cn('tw-h-10 tw-bg-background', getToolbarOSReservedSpaceClassName('linux'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
@@ -104,7 +81,7 @@ export default function ToolbarExamples() {
       Muted Variant
       <div className="tw-items-center tw-rounded-md tw-bg-muted/50 tw-py-2">
         <Toolbar
-          menuProvider={menuProvider}
+          menuData={menuData}
           commandHandler={() => {}}
           className="tw-h-8 tw-border-0 tw-bg-transparent"
           menubarVariant="muted"

@@ -1,0 +1,89 @@
+{
+  "columns": {
+    "platform.project": { "label": "Paratext", "order": 0 },
+    "platform.help": { "label": "Help", "order": 3, "isExtensible": true },
+    "isExtensible": true
+  },
+  "groups": {
+    "paratext.sendReceive": { "column": "platform.project", "order": 1 },
+    "paratext.openCreate": { "column": "platform.project", "order": 2 },
+    "paratext.saveDelete": { "column": "platform.project", "order": 3 },
+    "paratext.misc": { "column": "platform.project", "order": 9999999, "isExtensible": true },
+    "platform.windowGroup1": { "column": "platform.window", "order": 1 },
+    "platform.windowGroup2": { "column": "platform.window", "order": 2 },
+    "platform.layoutSaveDelete": { "column": "platform.layout", "order": 1 },
+    "platform.helpGroup1": { "column": "platform.help", "order": 1 },
+    "paratext.helpGroup": { "column": "platform.help", "order": 100 },
+    "paratext.helpSubgroup": { "menuItem": "paratext.helpRoot", "order": 1 }
+  },
+  "items": [
+    {
+      "label": "Send/Receive Project",
+      "tooltip": "%sendReceiveProjects_tooltip%",
+      "localizeNotes": "Main application menu > Paratext column > Send/Receive Projects",
+      "group": "paratext.sendReceive",
+      "order": 1,
+      "command": "paratext.sendReceiveProjects"
+    },
+    {
+      "label": "Download/Install Resources",
+      "tooltip": "%downloadInstallResources_tooltip%",
+      "localizeNotes": "Main application menu > Paratext column > Download/Install Resources",
+      "group": "paratext.sendReceive",
+      "order": 2,
+      "command": "paratext.downloadInstallResources"
+    },
+    {
+      "label": "New Project",
+      "tooltip": "%newProject_tooltip%",
+      "localizeNotes": "Main application menu > Paratext column > New Project",
+      "group": "paratext.openCreate",
+      "order": 1,
+      "command": "paratext.createNewProject"
+    },
+    {
+      "label": "Open Project",
+      "tooltip": "%openProject_tooltip%",
+      "localizeNotes": "Main application menu > Paratext column > Open Project",
+      "group": "paratext.openCreate",
+      "order": 2,
+      "command": "paratext.openProject"
+    },
+    {
+      "label": "Open Text Collection",
+      "localizeNotes": "Main application menu > Paratext column > Open Text Collection",
+      "group": "paratext.openCreate",
+      "order": 3,
+      "command": "paratext.openTextCollection"
+    },
+    {
+      "label": "Help",
+      "localizeNotes": "Main application menu > Help column > Paratext",
+      "group": "paratext.helpGroup",
+      "order": 100,
+      "id": "paratext.helpRoot"
+    },
+    {
+      "label": "Videos",
+      "localizeNotes": "Main application menu > Help column > Paratext > Videos",
+      "group": "paratext.helpSubgroup",
+      "order": 1,
+      "command": "paratext.showHelpVideos"
+    },
+    {
+      "label": "Guide",
+      "tooltip": "%paratext_helpGuide_tooltip%",
+      "localizeNotes": "Main application menu > Help column > Paratext > Guide",
+      "group": "paratext.helpSubgroup",
+      "order": 1,
+      "command": "paratext.showHelpGuide"
+    },
+    {
+      "label": "Paratext Video",
+      "localizeNotes": "Main application menu > Paratext column > Add Video",
+      "group": "paratext.misc",
+      "order": 1,
+      "command": "videoExtension.addParatextVideo"
+    }
+  ]
+}

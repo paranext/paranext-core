@@ -1,6 +1,6 @@
+import { CommandHandler } from '@/components/advanced/platform-menubar.component';
 import '@/components/mui/grid-menu.component.css';
 import { GroupedMenuPropsBase } from '@/components/mui/grouped-menu-item-list.component';
-import { CommandHandler } from '@/components/mui/menu-item.component';
 import TopLevelMenu from '@/components/mui/top-level-menu.component';
 import { Grid, List } from '@mui/material';
 import {
