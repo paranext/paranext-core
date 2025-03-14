@@ -1,9 +1,12 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import Toolbar from '@/components/advanced/toolbar.component';
-import * as menuData from '@/preview/pages/components/advanced/sample.menu.json';
+import Toolbar, {
+  getToolbarOSReservedSpaceClassName,
+} from '@/components/advanced/toolbar.component';
+import { cn } from '@/utils/shadcn-ui.util';
 import { BookIcon, Minus, Square, UserRound, X } from 'lucide-react';
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
+import * as menuData from './sample.menu.json';
 
 export default function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);
@@ -13,10 +16,13 @@ export default function ToolbarExamples() {
       <Toolbar menuData={undefined} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar menuData={menuData} commandHandler={() => {}}>
+      <Toolbar menuData={undefined} appMenuAreaChildren={<BookIcon />} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar menuData={undefined} commandHandler={() => {}} appMenuAreaChildren={<BookIcon />}>
+      <Toolbar menuData={menuData} appMenuAreaChildren={<BookIcon />} commandHandler={() => {}}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar menuData={menuData} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar
@@ -44,9 +50,8 @@ export default function ToolbarExamples() {
         <Toolbar
           menuData={menuData}
           commandHandler={() => {}}
-          className="tw-h-8 tw-bg-background"
+          className={cn('tw-h-8 tw-bg-background', getToolbarOSReservedSpaceClassName('darwin'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
-          reserveOSSpecificSpace="darwin"
         >
           <div className="tw-h-8">Middle</div>
         </Toolbar>
@@ -56,9 +61,8 @@ export default function ToolbarExamples() {
         <Toolbar
           menuData={menuData}
           commandHandler={() => {}}
-          className="tw-h-10 tw-bg-background"
+          className={cn('tw-h-10 tw-bg-background', getToolbarOSReservedSpaceClassName('linux'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
-          reserveOSSpecificSpace="linux"
         >
           <div className="tw-h-8">Middle</div>
         </Toolbar>

@@ -175,3 +175,4 @@ export type { UsePromiseOptions } from './hooks/use-promise.hook';
 
 // Utils
 export { cn } from './utils/shadcn-ui.util';
+export { getToolbarOSReservedSpaceClassName } from './components/advanced/toolbar.component';

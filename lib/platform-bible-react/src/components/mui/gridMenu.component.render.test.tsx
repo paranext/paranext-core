@@ -1,10 +1,10 @@
 import GridMenu from '@/components/mui/grid-menu.component';
-import * as jsonMenu from '@/preview/pages/layouts/test.menu.json';
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
+import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
 import { PropsWithChildren } from 'react';
 import { vi } from 'vitest';
-import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
+import * as jsonMenu from './test.menu.json';
 
 vi.mock('@mui/material', async () => {
   const mui = await vi.importActual('@mui/material'); // Import the actual MUI components
