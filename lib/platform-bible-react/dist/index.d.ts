@@ -996,15 +996,19 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	menubarVariant?: "default" | "muted";
 }>;
 /**
- * If provided: reserve space for the window controls / macos "traffic lights". Passing 'darwin'
- * will reserve the necessary space for macos traffic lights at the start, otherwise a different
- * amount of space at the end for the window controls.
+ * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
+ * 'darwin' will reserve the necessary space for macos traffic lights at the start, otherwise a
+ * different amount of space at the end for the window controls.
+ *
+ * Apply to the toolbar like: `<Toolbar className={cn('tw-h-8 tw-bg-background',
+ * getToolbarOSReservedSpaceClassName('darwin'))}>` or `<Toolbar
+ * className={getToolbarOSReservedSpaceClassName('linux')}>`
  *
  * @param operatingSystem The os platform: 'darwin' (macos) | anything else
  * @returns The class name to apply to the toolbar if os specific space should be reserved
  */
 export declare function getToolbarOSReservedSpaceClassName(operatingSystem: string | undefined): string | undefined;
-export function Toolbar({ menuProvider, commandHandler, className, id, children, configAreaChildren, shouldUseAsAppDragArea: useAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export function Toolbar({ menuProvider, commandHandler, className, id, children, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *
