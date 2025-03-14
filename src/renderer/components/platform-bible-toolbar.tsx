@@ -1,19 +1,18 @@
+import logo from '@assets/icon.png';
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import logger from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon, User } from 'lucide-react';
-import { BookChapterControl, ScrollGroupSelector, Toolbar, usePromise } from 'platform-bible-react';
 import {
-  Toolbar,
   BookChapterControl,
-  ScrollGroupSelector,
-  usePromise,
-  getToolbarOSReservedSpaceClassName,
   cn,
+  getToolbarOSReservedSpaceClassName,
+  ScrollGroupSelector,
+  Toolbar,
+  usePromise,
 } from 'platform-bible-react';
-import { User } from 'lucide-react';
 import {
   getLocalizeKeysForScrollGroupIds,
   Localized,
@@ -21,9 +20,6 @@ import {
   ScrollGroupId,
 } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
-import logo from '../../../assets/icon.png';
-import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { sendCommand } from '@shared/services/command.service';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
 import './platform-bible-toolbar.scss';
