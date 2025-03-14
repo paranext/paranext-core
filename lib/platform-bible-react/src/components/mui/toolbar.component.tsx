@@ -21,11 +21,13 @@ export type ToolbarProps = PropsWithChildren<{
   /** Additional css classes to help with unique styling of the toolbar */
   className?: string;
 
-  /** If provided: reserve space for the window controls / macos "traffic lights" */
-  reserveOSSpecificSpace?: string;
-
-  /** Whether the toolbar should be used as a draggable area for moving the application */
-  useAsAppDragArea?: boolean;
+  /**
+   * Whether the toolbar should be used as a draggable area for moving the application. This will
+   * add an electron specific style `WebkitAppRegion: 'drag'` to the toolbar in order to make it
+   * draggable. See:
+   * https://www.electronjs.org/docs/latest/tutorial/custom-title-bar#create-a-custom-title-bar
+   */
+  shouldUseAsAppDragArea?: boolean;
 
   /** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
   appMenuAreaChildren?: ReactNode;
@@ -37,6 +39,31 @@ export type ToolbarProps = PropsWithChildren<{
   menubarVariant?: 'default' | 'muted';
 }>;
 
+/**
+ * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
+ * 'darwin' will reserve the necessary space for macos traffic lights at the start, otherwise a
+ * different amount of space at the end for the window controls.
+ *
+ * Apply to the toolbar like: `<Toolbar className={cn('tw-h-8 tw-bg-background',
+ * getToolbarOSReservedSpaceClassName('darwin'))}>` or `<Toolbar
+ * className={getToolbarOSReservedSpaceClassName('linux')}>`
+ *
+ * @param operatingSystem The os platform: 'darwin' (macos) | anything else
+ * @returns The class name to apply to the toolbar if os specific space should be reserved
+ */
+export function getToolbarOSReservedSpaceClassName(
+  operatingSystem: string | undefined,
+): string | undefined {
+  switch (operatingSystem) {
+    case undefined:
+      return undefined;
+    case 'darwin':
+      return 'tw-ps-[85px]';
+    default:
+      return 'tw-pe-[calc(138px+1rem)]';
+  }
+}
+
 export default function Toolbar({
   menuProvider,
   commandHandler,
@@ -45,8 +72,7 @@ export default function Toolbar({
   children,
   appMenuAreaChildren,
   configAreaChildren,
-  useAsAppDragArea,
-  reserveOSSpecificSpace = undefined,
+  shouldUseAsAppDragArea,
   menubarVariant = 'default',
 }: ToolbarProps) {
   // This ref will always be defined
@@ -55,15 +81,7 @@ export default function Toolbar({
 
   return (
     <div
-      className={cn(
-        'tw-border tw-px-4 tw-text-foreground',
-        { 'tw-ps-[85px]': reserveOSSpecificSpace === 'darwin' }, // space for macos "traffic lights"
-        {
-          'tw-pe-[calc(138px+1rem)]':
-            reserveOSSpecificSpace === 'win32' || reserveOSSpecificSpace === 'linux',
-        },
-        className,
-      )}
+      className={cn('tw-border tw-px-4 tw-text-foreground', className)}
       ref={containerRef}
       style={{ position: 'relative' }}
       id={id}
@@ -71,24 +89,16 @@ export default function Toolbar({
       <div
         className="tw-flex tw-h-full tw-w-full tw-justify-between tw-overflow-hidden"
         /* @ts-ignore Electron-only property */
-        style={useAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
+        style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'drag' } : undefined}
       >
         {/* App Menu area */}
-        <div className="tw-flex tw-basis-0 tw-justify-start">
-          <div
-            className="tw-flex tw-items-center tw-gap-2"
-            /* @ts-ignore Electron-only property */
-            style={{ WebkitAppRegion: 'no-drag' }}
-          >
-            {appMenuAreaChildren}
-          </div>
-        </div>
         <div className="tw-flex tw-grow tw-basis-0">
           <div
             className="tw-flex tw-items-center"
             /* @ts-ignore Electron-only property */
-            style={{ WebkitAppRegion: 'no-drag' }}
+            style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
+            {appMenuAreaChildren}
             {menuProvider ? (
               <>
                 {/*
@@ -109,7 +119,7 @@ export default function Toolbar({
         <div
           className="tw-flex tw-items-center tw-gap-2 tw-px-2"
           /* @ts-ignore Electron-only property */
-          style={{ WebkitAppRegion: 'no-drag' }}
+          style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
         >
           {children}
         </div>
@@ -119,7 +129,7 @@ export default function Toolbar({
           <div
             className="tw-flex tw-items-center tw-gap-2"
             /* @ts-ignore Electron-only property */
-            style={{ WebkitAppRegion: 'no-drag' }}
+            style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
             {configAreaChildren}
           </div>

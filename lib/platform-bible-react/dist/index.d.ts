@@ -983,10 +983,13 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	id?: string;
 	/** Additional css classes to help with unique styling of the toolbar */
 	className?: string;
-	/** If provided: reserve space for the window controls / macos "traffic lights" */
-	reserveOSSpecificSpace?: string;
-	/** Whether the toolbar should be used as a draggable area for moving the application */
-	useAsAppDragArea?: boolean;
+	/**
+	 * Whether the toolbar should be used as a draggable area for moving the application. This will
+	 * add an electron specific style `WebkitAppRegion: 'drag'` to the toolbar in order to make it
+	 * draggable. See:
+	 * https://www.electronjs.org/docs/latest/tutorial/custom-title-bar#create-a-custom-title-bar
+	 */
+	shouldUseAsAppDragArea?: boolean;
 	/** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
 	appMenuAreaChildren?: React$1.ReactNode;
 	/** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
@@ -994,7 +997,20 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	/** Variant of the menubar */
 	menubarVariant?: "default" | "muted";
 }>;
-export function Toolbar({ menuProvider, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, useAsAppDragArea, reserveOSSpecificSpace, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
+ * 'darwin' will reserve the necessary space for macos traffic lights at the start, otherwise a
+ * different amount of space at the end for the window controls.
+ *
+ * Apply to the toolbar like: `<Toolbar className={cn('tw-h-8 tw-bg-background',
+ * getToolbarOSReservedSpaceClassName('darwin'))}>` or `<Toolbar
+ * className={getToolbarOSReservedSpaceClassName('linux')}>`
+ *
+ * @param operatingSystem The os platform: 'darwin' (macos) | anything else
+ * @returns The class name to apply to the toolbar if os specific space should be reserved
+ */
+export declare function getToolbarOSReservedSpaceClassName(operatingSystem: string | undefined): string | undefined;
+export function Toolbar({ menuProvider, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *

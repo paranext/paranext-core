@@ -6,6 +6,15 @@ import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon, User } from 'lucide-react';
 import { BookChapterControl, ScrollGroupSelector, Toolbar, usePromise } from 'platform-bible-react';
 import {
+  Toolbar,
+  BookChapterControl,
+  ScrollGroupSelector,
+  usePromise,
+  getToolbarOSReservedSpaceClassName,
+  cn,
+} from 'platform-bible-react';
+import { User } from 'lucide-react';
+import {
   getLocalizeKeysForScrollGroupIds,
   Localized,
   MultiColumnMenu,
@@ -13,6 +22,8 @@ import {
 } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
 import logo from '../../../assets/icon.png';
+import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { sendCommand } from '@shared/services/command.service';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
 import './platform-bible-toolbar.scss';
@@ -65,20 +76,18 @@ export default function PlatformBibleToolbar() {
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
-  const [osPlatform] = usePromise(
-    useCallback(
-      () =>
-        sendCommand('platform.getOSPlatform').then((platform: string | undefined) => {
-          // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
-          return platform === 'linux' ? '' : platform;
-        }),
-      [],
-    ),
-    undefined,
-  );
+  const [osPlatformToReserveSpaceFor] = usePromise(
+    useCallback(async () => {
+      const osPlatform: string | undefined = await sendCommand('platform.getOSPlatform');
+      const isFullScreen: boolean = await sendCommand('platform.isFullScreen');
 
-  const [isFullScreen] = usePromise(
-    useCallback(() => sendCommand('platform.isFullScreen'), []),
+      // no need to reserve space for macos "traffic lights" when in full screen
+      if (osPlatform === 'darwin' && isFullScreen) return undefined;
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      if (osPlatform === 'linux') return undefined;
+      return osPlatform;
+    }, []),
+
     undefined,
   );
 
@@ -86,10 +95,12 @@ export default function PlatformBibleToolbar() {
     <Toolbar
       menuProvider={getMenuData}
       commandHandler={handleMenuCommand}
-      className="tw-h-12 tw-bg-transparent"
+      className={cn(
+        'tw-h-12 tw-bg-transparent',
+        getToolbarOSReservedSpaceClassName(osPlatformToReserveSpaceFor),
+      )}
       menubarVariant="muted"
-      reserveOSSpecificSpace={osPlatform === 'darwin' && isFullScreen ? undefined : osPlatform}
-      useAsAppDragArea
+      shouldUseAsAppDragArea
       appMenuAreaChildren={<img width={32} height={32} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         // This is a placeholder for the actual user menu

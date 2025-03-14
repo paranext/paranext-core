@@ -1,6 +1,7 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
-import Toolbar from '@/components/mui/toolbar.component';
+import Toolbar, { getToolbarOSReservedSpaceClassName } from '@/components/mui/toolbar.component';
+import { cn } from '@/utils/shadcn-ui.util';
 import { BookIcon, Minus, Square, UserRound, X } from 'lucide-react';
 
 import { defaultScrRef, Localized, MultiColumnMenu } from 'platform-bible-utils';
@@ -8,7 +9,19 @@ import { useState } from 'react';
 
 export default function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);
-  const menu: MultiColumnMenu = { columns: {}, groups: {}, items: [] };
+  const menu: Localized<MultiColumnMenu> = {
+    columns: { 'paratext.paratext': { label: 'Paratext', order: 0 } },
+    groups: { 'paratext.sendReceive': { column: 'paratext.paratext', order: 1 } },
+    items: [
+      {
+        label: 'Send Receive Project',
+        localizeNotes: 'Main application menu > Paratext column > Send/Receive Projects',
+        group: 'paratext.sendReceive',
+        order: 1,
+        command: 'paratext.sendReceiveProjects',
+      },
+    ],
+  };
   const menuProvider: MultiColumnMenuProvider = () =>
     new Promise<Localized<MultiColumnMenu>>((resolve) => {
       resolve(menu);
@@ -18,14 +31,21 @@ export default function ToolbarExamples() {
       <Toolbar menuProvider={undefined} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
-      <Toolbar menuProvider={menuProvider} commandHandler={() => {}}>
+      <Toolbar
+        menuProvider={undefined}
+        appMenuAreaChildren={<BookIcon />}
+        commandHandler={() => {}}
+      >
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar
-        menuProvider={undefined}
-        commandHandler={() => {}}
+        menuProvider={menuProvider}
         appMenuAreaChildren={<BookIcon />}
+        commandHandler={() => {}}
       >
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar menuProvider={menuProvider} commandHandler={() => {}}>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar
@@ -53,9 +73,8 @@ export default function ToolbarExamples() {
         <Toolbar
           menuProvider={menuProvider}
           commandHandler={() => {}}
-          className="tw-h-8 tw-bg-background"
+          className={cn('tw-h-8 tw-bg-background', getToolbarOSReservedSpaceClassName('darwin'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
-          reserveOSSpecificSpace="darwin"
         >
           <div className="tw-h-8">Middle</div>
         </Toolbar>
@@ -65,9 +84,8 @@ export default function ToolbarExamples() {
         <Toolbar
           menuProvider={menuProvider}
           commandHandler={() => {}}
-          className="tw-h-10 tw-bg-background"
+          className={cn('tw-h-10 tw-bg-background', getToolbarOSReservedSpaceClassName('linux'))}
           configAreaChildren={<div className="tw-h-8">End</div>}
-          reserveOSSpecificSpace="linux"
         >
           <div className="tw-h-8">Middle</div>
         </Toolbar>
