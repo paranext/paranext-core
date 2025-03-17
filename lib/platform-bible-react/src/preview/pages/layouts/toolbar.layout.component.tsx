@@ -1,15 +1,28 @@
 import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
 import Toolbar, { getToolbarOSReservedSpaceClassName } from '@/components/mui/toolbar.component';
+import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui.util';
-import { Minus, Square, UserRound, X } from 'lucide-react';
+import { BookIcon, HomeIcon, Minus, Square, UserRound, X } from 'lucide-react';
 
 import { defaultScrRef, Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { useState } from 'react';
 
 export default function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);
-  const menu: MultiColumnMenu = { columns: {}, groups: {}, items: [] };
+  const menu: Localized<MultiColumnMenu> = {
+    columns: { 'paratext.paratext': { label: 'Paratext', order: 0 } },
+    groups: { 'paratext.sendReceive': { column: 'paratext.paratext', order: 1 } },
+    items: [
+      {
+        label: 'Send Receive Project',
+        localizeNotes: 'Main application menu > Paratext column > Send/Receive Projects',
+        group: 'paratext.sendReceive',
+        order: 1,
+        command: 'paratext.sendReceiveProjects',
+      },
+    ],
+  };
   const menuProvider: MultiColumnMenuProvider = () =>
     new Promise<Localized<MultiColumnMenu>>((resolve) => {
       resolve(menu);
@@ -17,6 +30,23 @@ export default function ToolbarExamples() {
   return (
     <div className="tw-flex tw-flex-col tw-gap-4">
       <Toolbar menuProvider={undefined} commandHandler={() => {}}>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar
+        menuProvider={undefined}
+        appMenuAreaChildren={<BookIcon />}
+        commandHandler={() => {}}
+      >
+        <Button variant="ghost">
+          <HomeIcon />
+        </Button>
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
+      </Toolbar>
+      <Toolbar
+        menuProvider={menuProvider}
+        appMenuAreaChildren={<BookIcon />}
+        commandHandler={() => {}}
+      >
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar menuProvider={menuProvider} commandHandler={() => {}}>

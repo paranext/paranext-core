@@ -1,11 +1,9 @@
-import HamburgerMenuButton, {
-  MultiColumnMenuProvider,
-} from '@/components/mui/hamburger-menu-button.component';
+import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
 import { CommandHandler } from '@/components/mui/menu-item.component';
 import '@/components/mui/toolbar.component.css';
 import { cn } from '@/utils/shadcn-ui.util';
 import { PropsWithChildren, ReactNode, useRef } from 'react';
-import MenubarExamples from '@/preview/pages/components/basics/menubar.examples.component';
+import PlatformMenubar from '../advanced/platform-menubar.component';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
@@ -30,6 +28,9 @@ export type ToolbarProps = PropsWithChildren<{
    * https://www.electronjs.org/docs/latest/tutorial/custom-title-bar#create-a-custom-title-bar
    */
   shouldUseAsAppDragArea?: boolean;
+
+  /** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
+  appMenuAreaChildren?: ReactNode;
 
   /** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
   configAreaChildren?: ReactNode;
@@ -69,6 +70,7 @@ export default function Toolbar({
   className,
   id,
   children,
+  appMenuAreaChildren,
   configAreaChildren,
   shouldUseAsAppDragArea,
   menubarVariant = 'default',
@@ -96,19 +98,18 @@ export default function Toolbar({
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
+            {appMenuAreaChildren}
             {menuProvider ? (
               <>
                 {/*
                   TODO: When the HamburgerMenuButton is removed, move this component out of the MUI folder
                   also then remove components/mui/toolbar.component.css
                 */}
-                <HamburgerMenuButton
-                  commandHandler={commandHandler}
-                  containerRef={containerRef}
+                <PlatformMenubar
                   menuProvider={menuProvider}
+                  commandHandler={commandHandler}
+                  variant={menubarVariant}
                 />
-                {/* TODO: This is a placeholder for the actual menu */}
-                <MenubarExamples variant={menubarVariant} />
               </>
             ) : undefined}
           </div>

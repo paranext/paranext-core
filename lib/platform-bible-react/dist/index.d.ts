@@ -990,6 +990,8 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	 * https://www.electronjs.org/docs/latest/tutorial/custom-title-bar#create-a-custom-title-bar
 	 */
 	shouldUseAsAppDragArea?: boolean;
+	/** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
+	appMenuAreaChildren?: React$1.ReactNode;
 	/** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
 	configAreaChildren?: React$1.ReactNode;
 	/** Variant of the menubar */
@@ -1008,7 +1010,7 @@ export type ToolbarProps = React$1.PropsWithChildren<{
  * @returns The class name to apply to the toolbar if os specific space should be reserved
  */
 export declare function getToolbarOSReservedSpaceClassName(operatingSystem: string | undefined): string | undefined;
-export function Toolbar({ menuProvider, commandHandler, className, id, children, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export function Toolbar({ menuProvider, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *
