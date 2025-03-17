@@ -7,6 +7,7 @@ import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon, User } from 'lucide-react';
 import {
   BookChapterControl,
+  Button,
   cn,
   getToolbarOSReservedSpaceClassName,
   ScrollGroupSelector,
@@ -22,7 +23,6 @@ import {
 import { useCallback, useState } from 'react';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
-import './platform-bible-toolbar.scss';
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
 
@@ -97,7 +97,7 @@ export default function PlatformBibleToolbar() {
       )}
       menubarVariant="muted"
       shouldUseAsAppDragArea
-      appMenuAreaChildren={<img width={32} height={32} src={`${logo}`} alt="Application Logo" />}
+      appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         // This is a placeholder for the actual user menu
         <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
@@ -105,10 +105,9 @@ export default function PlatformBibleToolbar() {
         </div>
       }
     >
-      <HomeIcon
-        className="home-button"
-        onClick={() => sendCommand('platformGetResources.openHome')}
-      />
+      <Button variant="ghost" onClick={() => sendCommand('platformGetResources.openHome')}>
+        <HomeIcon />
+      </Button>
       <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}
