@@ -89,7 +89,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
 
       if (webViewDefinition.id !== webViewId)
         throw new Error(
-          `${this.webViewType} WebViewFactory changed web view id from ${webViewId} to ${webViewDefinition.id} while in getWebViewDefinition. This is not expected and could cause problems. Attempting to continue with new id.`,
+          `${this.webViewType} WebViewFactory changed web view id from ${webViewId} to ${webViewDefinition.id} while in getWebViewDefinition. This is not expected and will cause problems.`,
         );
 
       // If there is already a web view controller for this web view (so the web view is reloading),

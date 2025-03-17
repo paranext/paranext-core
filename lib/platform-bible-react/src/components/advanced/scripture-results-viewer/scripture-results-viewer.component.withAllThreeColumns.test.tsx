@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ScriptureResultsViewer from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 
@@ -48,16 +48,18 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
     },
   ];
 
-  beforeEach(() => {
-    render(
-      <ScriptureResultsViewer
-        sources={sources}
-        typeColumnName={checkTypeHeader}
-        detailsColumnName={errorDetailsTypeHeader}
-        showColumnHeaders
-        showSourceColumn
-      />,
-    );
+  beforeEach(async () => {
+    await act(async () => {
+      render(
+        <ScriptureResultsViewer
+          sources={sources}
+          typeColumnName={checkTypeHeader}
+          detailsColumnName={errorDetailsTypeHeader}
+          showColumnHeaders
+          showSourceColumn
+        />,
+      );
+    });
   });
 
   it('should render column headers', () => {

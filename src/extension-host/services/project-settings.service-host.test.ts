@@ -1,20 +1,21 @@
+import { vi } from 'vitest';
 import { testingProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { ProjectSettingValidator } from '@shared/services/project-settings.service-model';
 import { slice } from 'platform-bible-utils';
 
-jest.mock('@shared/services/network.service', () => ({
-  ...jest.requireActual('@shared/services/network.service'),
+vi.mock('@shared/services/network.service', async () => ({
+  ...(await vi.importActual('@shared/services/network.service')),
   registerRequestHandler: () => {
     return {};
   },
 }));
-jest.mock('@extension-host/data/core-project-settings-info.data', () => ({
-  ...jest.requireActual('@extension-host/data/core-project-settings-info.data'),
+vi.mock('@extension-host/data/core-project-settings-info.data', async () => ({
+  ...(await vi.importActual('@extension-host/data/core-project-settings-info.data')),
   __esModule: true,
   platformProjectSettings: {
-    label: '%project_settings_platform_group1_label%',
-    description: '%project_settings_platform_group1_description%',
+    label: '%project_settings_project_group1_label%',
+    description: '%project_settings_project_group1_description%',
     properties: {
       'platform.fullName': {
         label: '%project_settings_platform_fullName_label%',
@@ -32,18 +33,18 @@ jest.mock('@extension-host/data/core-project-settings-info.data', () => ({
     },
   },
 }));
-jest.mock('@shared/services/localization.service', () => ({
+vi.mock('@shared/services/localization.service', () => ({
   __esModule: true,
   default: {
-    async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
-      [localizeKey: string]: string;
-    }> {
+    async getLocalizedStrings({
+      localizeKeys: keys,
+    }: LocalizationSelectors): Promise<{ [localizeKey: string]: string }> {
       return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
     },
   },
 }));
-jest.mock('@extension-host/services/contribution.service', () => ({
-  ...jest.requireActual('@extension-host/services/contribution.service'),
+vi.mock('@extension-host/services/contribution.service', async () => ({
+  ...(await vi.importActual('@extension-host/services/contribution.service')),
   // Don't actually wait because we're not syncing any contributions in these tests
   waitForResyncContributions: async () => {},
 }));

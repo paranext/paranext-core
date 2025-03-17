@@ -2,11 +2,8 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
-      "%mainMenu_toggleIncludeMyParatext9Projects%": "Toggle Include My Paratext 9 Projects",
       "%settings_platformScripture_paratext_group_label%": "Paratext 9-related Settings",
       "%settings_platformScripture_paratext_group_description%": "Settings related to how Platform.Bible should interact with older Paratext installations",
-      "%settings_platformScripture_includeMyParatext9Projects_label%": "Include My Paratext 9 Projects",
-      "%settings_platformScripture_includeMyParatext9Projects_description%": "Whether to look in the Paratext 9 project storage folder for Paratext projects to load (Windows only). Located at \"C:\\My Paratext 9 Projects\". Note: you must restart Platform.Bible in order for a change in this setting to take effect.",
       "%project_settings_platformScripture_group1_label%": "Scripture Project Settings",
       "%project_settings_platformScripture_booksPresent_label%": "Scripture Books Present",
       "%project_settings_platformScripture_booksPresent_description%": "Which books of the Bible are present in this Scripture project",
@@ -98,11 +95,8 @@
       "%webView_inventory_occurrences_table_header_occurrence%": "Occurrence"
     },
     "es": {
-      "%mainMenu_toggleIncludeMyParatext9Projects%": "Alternar Incluir Mis Proyectos de Paratext 9",
       "%settings_platformScripture_paratext_group_label%": "Configuraciones Relacionadas con Paratext 9",
       "%settings_platformScripture_paratext_group_description%": "Configuraciones relacionadas con cómo Platform.Bible debería interactuar con instalaciones anteriores de Paratext",
-      "%settings_platformScripture_includeMyParatext9Projects_label%": "Incluir Mis Proyectos de Paratext 9",
-      "%settings_platformScripture_includeMyParatext9Projects_description%": "Si se deben buscar en la carpeta de almacenamiento de proyectos de Paratext 9 los proyectos de Paratext para cargar (solo Windows). Ubicado en \"C:\\My Paratext 9 Projects\". Nota: debe reiniciar Platform.Bible para que el cambio en esta configuración surta efecto.",
       "%project_settings_platformScripture_group1_label%": "Configuración del Proyecto de Escrituras",
       "%project_settings_platformScripture_booksPresent_label%": "Libros de las Escrituras Presentes",
       "%project_settings_platformScripture_booksPresent_description%": "Qué libros de la Biblia están presentes en este proyecto bíblico",

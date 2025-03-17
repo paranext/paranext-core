@@ -770,7 +770,38 @@ declare module 'platform-scripture' {
     };
 
   // #endregion
+  // #region Send/Receive Types
 
+  /**
+   * In what state the project to S/R is
+   *
+   * - `undefined` or `''` = project has not been edited
+   * - `edited` = project has been edited
+   * - `new` = project not present on the system and available for download
+   */
+  export type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
+
+  /** Information about a S/R-able project needed to display it in the S/R dialog */
+  export type SharedProjectInfo = {
+    id: string;
+    name: string;
+    fullName: string;
+    language: string;
+    editedStatus: EditedStatus;
+    lastSendReceiveDate: string;
+    /** Names of admins on this project. Only filled if project is new */
+    adminNames?: string[];
+    warnings?: string[];
+  };
+
+  /**
+   * Map of projects that can be S/Red to display in the S/R dialog.
+   *
+   * Maps project id to {@link SharedProjectInfo} for that project id
+   */
+  export type SharedProjectsInfo = { [projectId: string]: SharedProjectInfo };
+
+  // #endregion
   // #region ChecksSetup Types
   export type ChecksSetUpProps = {
     /** Optional string representing the id attribute of the Checks dropdown */
@@ -838,16 +869,6 @@ declare module 'papi-shared-types' {
 
   export interface CommandHandlers {
     /**
-     * Toggle the `platformScripture.includeMyParatext9Projects` setting on or off
-     *
-     * @param shouldIncludeMyParatext9Projects Provide this parameter to set it to `true` or `false`
-     *   instead of toggling
-     * @returns New value of the setting
-     */
-    'platformScripture.toggleIncludeMyParatext9Projects': (
-      shouldIncludeMyParatext9Projects?: boolean,
-    ) => Promise<boolean>;
-    /**
      * Register a new check so it is runnable. It will not produce any check results until
      * {@link ICheckRunner.enableCheck} is run by something else.
      *
@@ -879,28 +900,11 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openConfigureChecks': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
-    'platformScripture.showCheckResults': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
-
     'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
   }
 
-  export interface SettingTypes {
-    /**
-     * Whether to look in the Paratext 9 project storage folder for Paratext projects to load
-     * (Windows only).
-     *
-     * Located at "C:\My Paratext 9 Projects"
-     */
-    'platformScripture.includeMyParatext9Projects': boolean;
-  }
   export interface ProjectSettingTypes {
     /**
      * Which versification scheme this Scripture project uses

@@ -12,6 +12,7 @@ import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/re
 import { Canon, VerseRef } from '@sillsdev/scripture';
 import {
   getChaptersForBook,
+  isPlatformError,
   LAST_SCR_BOOK_NUM,
   LocalizeKey,
   ScriptureReference,
@@ -212,6 +213,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const getLocalizedCheckDescription = useCallback(
     (checkId: string) => {
+      if (isPlatformError(availableChecks)) return '';
       return availableChecks.find((check) => check.checkId === checkId)?.checkDescription ?? '';
     },
     [availableChecks],
@@ -234,10 +236,11 @@ global.webViewComponent = function ChecksSidePanelWebView({
    */
   const scrollToCheckReferenceInEditor = useCallback(
     (id: string) => {
-      const selectedResult = checkResults?.find(
+      if (isPlatformError(checkResults)) return;
+
+      const selectedResult = checkResults.find(
         (result, index) => writeCheckId(result, index) === id,
       );
-
       if (!selectedResult) return;
 
       const selectedCheckScrRef: ScriptureReference = {
@@ -353,30 +356,33 @@ global.webViewComponent = function ChecksSidePanelWebView({
         </div>
       </div>
       <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3">
-        {checkResults?.length === 0 ? (
-          <div className="tw-flex tw-flex-col tw-box-border tw-items-center tw-justify-center tw-h-screen tw-w-full">
-            <span className="tw-text-sm">
-              {localizedStrings['%webView_checksSidePanel_noCheckResults%']}
-            </span>
-          </div>
-        ) : (
-          checkResults?.map((result, index) => (
-            <CheckCard
-              key={writeCheckId(result, index)}
-              checkResult={result}
-              checkId={writeCheckId(result, index)}
-              isSelected={selectedCheckId === writeCheckId(result, index)}
-              handleSelectCheck={handleSelectCheck}
-              checkCardTitle={writeCheckTitle(result)}
-              checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
-              handleDenyCheck={handleDenyCheck}
-              handleAllowCheck={handleAllowCheck}
-              handleOpenSettingsAndInventories={openSettingsAndInventories}
-              showBadge
-              checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
-            />
-          ))
-        )}
+        {
+          // TODO: Display something else if there is an error getting check results
+          isPlatformError(checkResults) || checkResults.length === 0 ? (
+            <div className="tw-flex tw-flex-col tw-box-border tw-items-center tw-justify-center tw-h-screen tw-w-full">
+              <span className="tw-text-sm">
+                {localizedStrings['%webView_checksSidePanel_noCheckResults%']}
+              </span>
+            </div>
+          ) : (
+            checkResults?.map((result, index) => (
+              <CheckCard
+                key={writeCheckId(result, index)}
+                checkResult={result}
+                checkId={writeCheckId(result, index)}
+                isSelected={selectedCheckId === writeCheckId(result, index)}
+                handleSelectCheck={handleSelectCheck}
+                checkCardTitle={writeCheckTitle(result)}
+                checkState={result.isDenied ? CheckStates.Denied : CheckStates.DefaultFailed}
+                handleDenyCheck={handleDenyCheck}
+                handleAllowCheck={handleAllowCheck}
+                handleOpenSettingsAndInventories={openSettingsAndInventories}
+                showBadge
+                checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
+              />
+            ))
+          )
+        }
       </div>
     </div>
   );

@@ -5,6 +5,8 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to `./src/main.js`
  * using webpack. This gives us some performance wins.
  */
+
+import os from 'os';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -217,7 +219,20 @@ async function main() {
       y: mainWindowState.y,
       width: mainWindowState.width,
       height: mainWindowState.height,
+      minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
       icon: getAssetPath('icon.png'),
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
+      // re-add window controls
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      ...(process.platform !== 'darwin' && process.platform !== 'linux'
+        ? {
+            titleBarOverlay: {
+              height: 47,
+              color: 'hsla(0, 0%, 100%, 0)', // transparent button background until hovered
+            },
+          }
+        : {}),
       webPreferences: {
         preload: app.isPackaged
           ? path.join(__dirname, 'preload.js')
@@ -387,6 +402,40 @@ async function main() {
     {
       method: {
         summary: 'Restart the platform, including all processes started by it',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getOSPlatform',
+    async () => {
+      return os.platform();
+    },
+    {
+      method: {
+        summary: 'Get the os platform ("win32", "darwin", "linux")',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.isFullScreen',
+    async () => {
+      return false; // TODO implement;
+    },
+    {
+      method: {
+        summary: 'If platform runs in full screen mode',
         params: [],
         result: {
           name: 'return value',

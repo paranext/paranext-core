@@ -22,6 +22,7 @@ import {
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
   formatReplacementStringToArray,
+  toKebabCase,
 } from './string-util';
 
 const SHORT_SURROGATE_PAIRS_STRING = 'Look𐐷At👨‍👩‍👧‍👦👮🏽‍♀️';
@@ -43,73 +44,73 @@ const NORMALIZE_STRING = '\u0041\u006d\u00e9\u006c\u0069\u0065';
 const NORMALIZE_SURROGATE_PAIRS = '\u0041\u006d\u0065\u0301\u006c\u0069\u0065';
 
 describe('at', () => {
-  test('at with in bounds index', () => {
+  it('at with in bounds index', () => {
     const result = at(LONG_SURROGATE_PAIRS_STRING, 4);
     expect(result).toEqual('𐐷');
   });
 
-  test('at with negative index returns last character', () => {
+  it('at with negative index returns last character', () => {
     const result = at(LONG_SURROGATE_PAIRS_STRING, -1);
     expect(result).toEqual('🌟');
   });
 
-  test('at with index greater than length returns undefined', () => {
+  it('at with index greater than length returns undefined', () => {
     const result = at(LONG_SURROGATE_PAIRS_STRING, stringLength(LONG_SURROGATE_PAIRS_STRING) + 10);
     expect(result).toEqual(undefined);
   });
 
-  test('at with index smaller than -length returns undefined', () => {
+  it('at with index smaller than -length returns undefined', () => {
     const result = at(LONG_SURROGATE_PAIRS_STRING, -stringLength(LONG_SURROGATE_PAIRS_STRING) - 10);
     expect(result).toEqual(undefined);
   });
 });
 
 describe('charAt', () => {
-  test('0 < index < string length', () => {
+  it('0 < index < string length', () => {
     const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, 7);
     expect(result).toEqual('🦄');
   });
 
-  test('index < 0', () => {
+  it('index < 0', () => {
     const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, -2);
     expect(result).toEqual('');
   });
 
-  test('index > string length', () => {
+  it('index > string length', () => {
     const result = charAt(MEDIUM_SURROGATE_PAIRS_STRING, 50);
     expect(result).toEqual('');
   });
 });
 
 describe('codePointAt', () => {
-  test('codePointAt for regular character', () => {
+  it('codePointAt for regular character', () => {
     const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, 11);
     expect(result).toEqual(115);
   });
 
-  test('codePointAt for surrogate pair', () => {
+  it('codePointAt for surrogate pair', () => {
     const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, 7);
     expect(result).toEqual(129412);
   });
 
-  test('codePointAt index < 0', () => {
+  it('codePointAt index < 0', () => {
     const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, -1);
     expect(result).toEqual(undefined);
   });
 
-  test('codePointAt index > string length', () => {
+  it('codePointAt index > string length', () => {
     const result = codePointAt(MEDIUM_SURROGATE_PAIRS_STRING, 50);
     expect(result).toEqual(undefined);
   });
 });
 
 describe('endsWith', () => {
-  test('endsWith without position', () => {
+  it('endsWith without position', () => {
     const result = endsWith(LONG_SURROGATE_PAIRS_STRING, '💋!🌟');
     expect(result).toEqual(true);
   });
 
-  test('endsWith with position', () => {
+  it('endsWith with position', () => {
     const result = endsWith(LONG_SURROGATE_PAIRS_STRING, 'At🦄', 8);
     expect(result).toEqual(true);
   });
@@ -121,7 +122,7 @@ describe('indexOfClosestClosingCurlyBrace', () => {
     // 23 456 78901 2 345678901 23456
     'Thi\\{s👮🏽‍♀️{is}👨‍👩‍👧‍👦\\}a {stri\\}ng}!';
 
-  test('gets the closest un-escaped curly brace', () => {
+  it('gets the closest un-escaped curly brace', () => {
     let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 0, false);
     expect(result).toBe(10);
     result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 4, false);
@@ -138,7 +139,7 @@ describe('indexOfClosestClosingCurlyBrace', () => {
     expect(result).toBe(25);
   });
 
-  test('gets the closest escaped curly brace', () => {
+  it('gets the closest escaped curly brace', () => {
     let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 0, true);
     expect(result).toBe(13);
     result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, 4, true);
@@ -155,7 +156,7 @@ describe('indexOfClosestClosingCurlyBrace', () => {
     expect(result).toBe(22);
   });
 
-  test('returns -1 when out of bounds or no more curly braces are found', () => {
+  it('returns -1 when out of bounds or no more curly braces are found', () => {
     const strLength = stringLength(curlyString);
     let result = testingStringUtils.indexOfClosestClosingCurlyBrace(curlyString, -1, true);
     expect(result).toBe(-1);
@@ -181,49 +182,49 @@ describe('indexOfClosestClosingCurlyBrace', () => {
 });
 
 describe('formatReplacementStringToArray', () => {
-  test('combines all strings into one', () => {
+  it('combines all strings into one', () => {
     const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual(['Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesome']);
   });
 
-  test('with curly braces', () => {
+  it('with curly braces', () => {
     const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': ['Unicorn'],
     });
     expect(result).toEqual(['Look𐐷At🦄This𐐷', ['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
-  test('with surrogate pairs in the escape sequence', () => {
+  it('with surrogate pairs in the escape sequence', () => {
     const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{one👮🏽‍♀️horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one👮🏽‍♀️horned': ['Unicorn'],
     });
     expect(result).toEqual(['Look𐐷At🦄This𐐷', ['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
-  test('with curly braces at the start', () => {
+  it('with curly braces at the start', () => {
     const result = formatReplacementStringToArray('{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': ['Unicorn'],
     });
     expect(result).toEqual([['Unicorn'], 'Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
-  test('with curly braces as the whole string', () => {
+  it('with curly braces as the whole string', () => {
     const result = formatReplacementStringToArray('{one-horned}', {
       'one-horned': ['Unicorn'],
     });
     expect(result).toEqual([['Unicorn']]);
   });
 
-  test('with curly braces and an empty string replacer', () => {
+  it('with curly braces and an empty string replacer', () => {
     const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': '',
     });
     expect(result).toEqual(['Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
-  test('with multiple pairs of curly braces', () => {
+  it('with multiple pairs of curly braces', () => {
     const result = formatReplacementStringToArray(
       'Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome{sauce}',
       {
@@ -239,21 +240,21 @@ describe('formatReplacementStringToArray', () => {
     ]);
   });
 
-  test('with empty curly braces', () => {
+  it('with empty curly braces', () => {
     const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{}', {
       'one-horned': ['Unicorn'],
     });
     expect(result).toEqual(['Look𐐷At🦄This𐐷']);
   });
 
-  test('with unknown word in curly braces', () => {
+  it('with unknown word in curly braces', () => {
     const result = formatReplacementStringToArray('Look𐐷At🦄This𐐷{UFO}', {
       'one-horned': ['Unicorn'],
     });
     expect(result).toEqual(['Look𐐷At🦄This𐐷UFO']);
   });
 
-  test('with escaped curly braces', () => {
+  it('with escaped curly braces', () => {
     const result = formatReplacementStringToArray(
       'Look𐐷At🦄This𐐷\\{one-horned\\}Thing👮🏽‍♀️Its𐐷Awesome',
       {
@@ -263,7 +264,7 @@ describe('formatReplacementStringToArray', () => {
     expect(result).toEqual(['Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
-  test('with multiple pairs of escaped curly braces', () => {
+  it('with multiple pairs of escaped curly braces', () => {
     const result = formatReplacementStringToArray(
       'Look𐐷At🦄This𐐷\\{one-horned\\}Thing👮🏽‍♀️Its𐐷Awesome\\{:)\\}',
       {
@@ -274,7 +275,7 @@ describe('formatReplacementStringToArray', () => {
     expect(result).toEqual(['Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome{:)}']);
   });
 
-  test('with curly braces and escaped curly braces', () => {
+  it('with curly braces and escaped curly braces', () => {
     const result = formatReplacementStringToArray(
       'Hi, this is {name}! I like \\{curly braces\\}!',
       {
@@ -284,7 +285,7 @@ describe('formatReplacementStringToArray', () => {
     expect(result).toEqual(['Hi, this is ', ['Jim'], '! I like {curly braces}!']);
   });
 
-  test('with multiple pairs of curly braces and escaped curly braces', () => {
+  it('with multiple pairs of curly braces and escaped curly braces', () => {
     const result = formatReplacementStringToArray(
       'Hi, this is {name}! I like \\{curly braces\\}!Hi, this is {name}! I like \\{curly braces\\}!',
       {
@@ -300,7 +301,7 @@ describe('formatReplacementStringToArray', () => {
     ]);
   });
 
-  test('with interesting types as keys and values', () => {
+  it('with interesting types as keys and values', () => {
     const result = formatReplacementStringToArray(
       'Hi, this is {name}! I use {0} weights when I curl {weightLbs}lb weights. I do {1} reps {interval}. I have a weakness level of {weakness}.',
       {
@@ -327,42 +328,42 @@ describe('formatReplacementStringToArray', () => {
 });
 
 describe('formatReplacementString', () => {
-  test('with curly braces', () => {
+  it('with curly braces', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesome');
   });
 
-  test('with surrogate pairs in the escape sequence', () => {
+  it('with surrogate pairs in the escape sequence', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷{one👮🏽‍♀️horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one👮🏽‍♀️horned': 'Unicorn',
     });
     expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesome');
   });
 
-  test('with curly braces at the start', () => {
+  it('with curly braces at the start', () => {
     const result = formatReplacementString('{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual('UnicornThing👮🏽‍♀️Its𐐷Awesome');
   });
 
-  test('with curly braces as the whole string', () => {
+  it('with curly braces as the whole string', () => {
     const result = formatReplacementString('{one-horned}', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual('Unicorn');
   });
 
-  test('with curly braces and an empty string replacer', () => {
+  it('with curly braces and an empty string replacer', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': '',
     });
     expect(result).toEqual('Look𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
   });
 
-  test('with multiple pairs of curly braces', () => {
+  it('with multiple pairs of curly braces', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome{sauce}', {
       'one-horned': 'Unicorn',
       sauce: 'ness',
@@ -370,28 +371,28 @@ describe('formatReplacementString', () => {
     expect(result).toEqual('Look𐐷At🦄This𐐷UnicornThing👮🏽‍♀️Its𐐷Awesomeness');
   });
 
-  test('with empty curly braces', () => {
+  it('with empty curly braces', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷{}', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual('Look𐐷At🦄This𐐷');
   });
 
-  test('with unknown word in curly braces', () => {
+  it('with unknown word in curly braces', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷{UFO}', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual('Look𐐷At🦄This𐐷UFO');
   });
 
-  test('with escaped curly braces', () => {
+  it('with escaped curly braces', () => {
     const result = formatReplacementString('Look𐐷At🦄This𐐷\\{one-horned\\}Thing👮🏽‍♀️Its𐐷Awesome', {
       'one-horned': 'Unicorn',
     });
     expect(result).toEqual('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome');
   });
 
-  test('with multiple pairs of escaped curly braces', () => {
+  it('with multiple pairs of escaped curly braces', () => {
     const result = formatReplacementString(
       'Look𐐷At🦄This𐐷\\{one-horned\\}Thing👮🏽‍♀️Its𐐷Awesome\\{:)\\}',
       {
@@ -402,14 +403,14 @@ describe('formatReplacementString', () => {
     expect(result).toEqual('Look𐐷At🦄This𐐷{one-horned}Thing👮🏽‍♀️Its𐐷Awesome{:)}');
   });
 
-  test('with curly braces and escaped curly braces', () => {
+  it('with curly braces and escaped curly braces', () => {
     const result = formatReplacementString('Hi, this is {name}! I like \\{curly braces\\}!', {
       name: 'Jim',
     });
     expect(result).toEqual('Hi, this is Jim! I like {curly braces}!');
   });
 
-  test('with multiple pairs of curly braces and escaped curly braces', () => {
+  it('with multiple pairs of curly braces and escaped curly braces', () => {
     const result = formatReplacementString(
       'Hi, this is {name}! I like \\{curly braces\\}!Hi, this is {name}! I like \\{curly braces\\}!',
       {
@@ -421,7 +422,7 @@ describe('formatReplacementString', () => {
     );
   });
 
-  test('with interesting types as keys and values', () => {
+  it('with interesting types as keys and values', () => {
     const result = formatReplacementString(
       'Hi, this is {name}! I use {0} weights when I curl {weightLbs}lb weights. I do {1} reps {interval}. I have a weakness level of {weakness}.',
       {
@@ -440,78 +441,78 @@ describe('formatReplacementString', () => {
 });
 
 describe('includes', () => {
-  test('includes without position', () => {
+  it('includes without position', () => {
     const result = includes(LONG_SURROGATE_PAIRS_STRING, '🍕Symbols💩');
     expect(result).toEqual(true);
   });
 
-  test('includes with position', () => {
+  it('includes with position', () => {
     const result = includes(LONG_SURROGATE_PAIRS_STRING, '🦄All😎', 7);
     expect(result).toEqual(true);
   });
 
-  test('includes with position that is to high, so no matches are found', () => {
+  it('includes with position that is to high, so no matches are found', () => {
     const result = includes(LONG_SURROGATE_PAIRS_STRING, '🦄All😎', 10);
     expect(result).toEqual(false);
   });
 });
 
 describe('indexOf', () => {
-  test('indexOf without position', () => {
+  it('indexOf without position', () => {
     const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🍕');
     expect(result).toEqual(POS_FIRST_PIZZA);
   });
 
-  test('indexOf with position', () => {
+  it('indexOf with position', () => {
     const result = indexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', 40);
     expect(result).toEqual(POS_SECOND_PIZZA);
   });
 });
 
 describe('lastIndexOf', () => {
-  test('lastIndexOf without position', () => {
+  it('lastIndexOf without position', () => {
     const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🍕');
     expect(result).toEqual(POS_SECOND_PIZZA);
   });
 
-  test('lastIndexOf with position', () => {
+  it('lastIndexOf with position', () => {
     const result = lastIndexOf(LONG_SURROGATE_PAIRS_STRING, '🍕', 5);
     expect(result).toEqual(-1);
   });
 });
 
 describe('length', () => {
-  test('length is correct', () => {
+  it('length is correct', () => {
     const result = stringLength(LONG_SURROGATE_PAIRS_STRING);
     expect(result).toEqual(SURROGATE_PAIRS_STRING_LENGTH);
   });
 });
 
 describe('normalize', () => {
-  test('normalize with no forms, compare strings', () => {
+  it('normalize with no forms, compare strings', () => {
     const regularStringResult = normalize(NORMALIZE_STRING, 'none');
     const surrogatePairStringResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'none');
     expect(regularStringResult === surrogatePairStringResult).toEqual(false);
   });
 
-  test('normalize with different forms, compare strings', () => {
+  it('normalize with different forms, compare strings', () => {
     const NFCResult = normalize(NORMALIZE_STRING, 'NFC');
     const NFDResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFD');
     expect(NFCResult === NFDResult).toEqual(false);
   });
 
-  test('normalize with same form, compare strings', () => {
+  it('normalize with same form, compare strings', () => {
     const regularStringResult = normalize(NORMALIZE_STRING, 'NFC');
     const surrogatePairStringResult = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFC');
     expect(regularStringResult === surrogatePairStringResult).toEqual(true);
   });
 
-  test('normalize surrogate pairs string', () => {
+  it('normalize surrogate pairs string', () => {
     const result = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFC');
     expect(result).toEqual(NORMALIZE_STRING);
   });
 
-  test('normalize surrogate pairs string as its own form', () => {
+  it('normalize surrogate pairs string as its own form', () => {
     const result = normalize(NORMALIZE_SURROGATE_PAIRS, 'NFD');
     expect(result).toEqual(NORMALIZE_SURROGATE_PAIRS);
   });
@@ -532,7 +533,7 @@ describe('ordinalCompare', () => {
 });
 
 describe('padEnd', () => {
-  test('padEnd without padString', () => {
+  it('padEnd without padString', () => {
     const result = padEnd(
       LONG_SURROGATE_PAIRS_STRING,
       SURROGATE_PAIRS_STRING_LENGTH + 10,
@@ -541,7 +542,7 @@ describe('padEnd', () => {
     expect(result).toEqual(LONG_SURROGATE_PAIRS_STRING + TEN_SPACES);
   });
 
-  test('padEnd with padString', () => {
+  it('padEnd with padString', () => {
     const result = padEnd(LONG_SURROGATE_PAIRS_STRING, SURROGATE_PAIRS_STRING_LENGTH + 7, 'X');
     expect(result).toEqual(LONG_SURROGATE_PAIRS_STRING + SEVEN_XS);
   });
@@ -556,7 +557,7 @@ describe('padEnd', () => {
 });
 
 describe('padStart', () => {
-  test('padStart without padString', () => {
+  it('padStart without padString', () => {
     const result = padStart(
       LONG_SURROGATE_PAIRS_STRING,
       SURROGATE_PAIRS_STRING_LENGTH + 10,
@@ -565,7 +566,7 @@ describe('padStart', () => {
     expect(result).toEqual(TEN_SPACES + LONG_SURROGATE_PAIRS_STRING);
   });
 
-  test('padStart with padString', () => {
+  it('padStart with padString', () => {
     const result = padStart(LONG_SURROGATE_PAIRS_STRING, SURROGATE_PAIRS_STRING_LENGTH + 7, 'X');
     expect(result).toEqual(SEVEN_XS + LONG_SURROGATE_PAIRS_STRING);
   });
@@ -580,96 +581,96 @@ describe('padStart', () => {
 });
 
 describe('slice', () => {
-  test('start (-inf)-(-L)', () => {
+  it('start (-inf)-(-L)', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100);
     expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_STRING);
   });
-  test('start (-L)-0', () => {
+  it('start (-L)-0', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -3);
     expect(result).toEqual('ome');
   });
-  test('start 0-L', () => {
+  it('start 0-L', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 3);
     expect(result).toEqual('k𐐷At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
   });
-  test('start L-inf', () => {
+  it('start L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50);
     expect(result).toEqual('');
   });
-  test('start (-inf)-(-L) end (-inf)-(-L)', () => {
+  it('start (-inf)-(-L) end (-inf)-(-L)', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -200, -100);
     expect(result).toEqual('');
   });
-  test('start (-inf)-(-L) end (-L)-0', () => {
+  it('start (-inf)-(-L) end (-L)-0', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100, -10);
     expect(result).toEqual('Look𐐷At🦄This𐐷Thing👮🏽‍♀️I');
   });
-  test('start (-inf)-(-L) end 0-L', () => {
+  it('start (-inf)-(-L) end 0-L', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100, 8);
     expect(result).toEqual('Look𐐷At🦄');
   });
-  test('start (-inf)-(-L) end L-inf', () => {
+  it('start (-inf)-(-L) end L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -100, 100);
     expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_STRING);
   });
-  test('start (-L)-0 end (-inf)-(-L)', () => {
+  it('start (-L)-0 end (-inf)-(-L)', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, -100);
     expect(result).toEqual('');
   });
-  test('start (-L)-0 end (-L)-0', () => {
+  it('start (-L)-0 end (-L)-0', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, -10);
     expect(result).toEqual('');
   });
 
-  test('start (-L)-0 end (-L)-0 and start < end', () => {
+  it('start (-L)-0 end (-L)-0 and start < end', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -10, -5);
     expect(result).toEqual('ts𐐷Aw');
   });
-  test('start (-L)-0 end 0-L', () => {
+  it('start (-L)-0 end 0-L', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, 8);
     expect(result).toEqual('');
   });
-  test('start (-L)-0 end L-inf', () => {
+  it('start (-L)-0 end L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, -5, 100);
     expect(result).toEqual('esome');
   });
-  test('start 0-L end (-inf)-(-L)', () => {
+  it('start 0-L end (-inf)-(-L)', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, -100);
     expect(result).toEqual('');
   });
-  test('start 0-L end (-L)-0', () => {
+  it('start 0-L end (-L)-0', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, -10);
     expect(result).toEqual('At🦄This𐐷Thing👮🏽‍♀️I');
   });
-  test('start 0-L end 0-L', () => {
+  it('start 0-L end 0-L', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, 8);
     expect(result).toEqual('At🦄');
   });
-  test('start 0-L end 0-L, and start > end', () => {
+  it('start 0-L end 0-L, and start > end', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 8, 5);
     expect(result).toEqual('');
   });
-  test('start 0-L end L-inf', () => {
+  it('start 0-L end L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 5, 100);
     expect(result).toEqual('At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome');
   });
-  test('start L-inf end (-inf)-(-L)', () => {
+  it('start L-inf end (-inf)-(-L)', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, -100);
     expect(result).toEqual('');
   });
-  test('start L-inf end (-L)-0', () => {
+  it('start L-inf end (-L)-0', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, -10);
     expect(result).toEqual('');
   });
-  test('start L-inf end 0-L', () => {
+  it('start L-inf end 0-L', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, 8);
     expect(result).toEqual('');
   });
-  test('start L-inf end L-inf', () => {
+  it('start L-inf end L-inf', () => {
     const result = slice(MEDIUM_SURROGATE_PAIRS_STRING, 50, 100);
     expect(result).toEqual('');
   });
-  test('starting index is 0', () => {
+  it('starting index is 0', () => {
     const str = 'hello-someone.d.ts';
     expect(slice(str, 0)).toBe('hello-someone.d.ts');
     expect(slice(str, 0, 2)).toBe('he');
@@ -678,114 +679,114 @@ describe('slice', () => {
 });
 
 describe('split', () => {
-  test('split without splitLimit', () => {
+  it('split without splitLimit', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '𐐷');
     expect(result).toEqual(MEDIUM_SURROGATE_PAIRS_ARRAY);
   });
 
-  test('split with splitLimit', () => {
+  it('split with splitLimit', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, '𐐷', 2);
     expect(result).toEqual(['Look', 'At🦄This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
-  test('split by empty string', () => {
+  it('split by empty string', () => {
     const result = split(SHORT_SURROGATE_PAIRS_STRING, '');
     expect(result).toEqual(SHORT_SURROGATE_PAIRS_ARRAY);
   });
 
-  test('split by empty string with splitLimit', () => {
+  it('split by empty string with splitLimit', () => {
     const result = split(SHORT_SURROGATE_PAIRS_STRING, '', 3);
     expect(result).toEqual(['L', 'o', 'o']);
   });
 
-  test('split with RegExp separator', () => {
+  it('split with RegExp separator', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /[A-Z]/);
     expect(result).toEqual(['', 'ook𐐷', 't🦄', 'his𐐷', 'hing👮🏽‍♀️', 'ts𐐷', 'wesome']);
   });
 
-  test('split with RegExp separator that contains surrogate pairs', () => {
+  it('split with RegExp separator that contains surrogate pairs', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /🦄/);
     expect(result).toEqual(['Look𐐷At', 'This𐐷Thing👮🏽‍♀️Its𐐷Awesome']);
   });
 
-  test('split with RegExp separator that matches nothing in the string', () => {
+  it('split with RegExp separator that matches nothing in the string', () => {
     const result = split(MEDIUM_SURROGATE_PAIRS_STRING, /\d/);
     expect(result).toEqual([MEDIUM_SURROGATE_PAIRS_STRING]);
   });
 });
 
 describe('startsWith', () => {
-  test('startsWith without position', () => {
+  it('startsWith without position', () => {
     const result = startsWith(LONG_SURROGATE_PAIRS_STRING, 'Look𐐷');
     expect(result).toEqual(true);
   });
 
-  test('startsWith with position, searchString is not the start', () => {
+  it('startsWith with position, searchString is not the start', () => {
     const result = startsWith(LONG_SURROGATE_PAIRS_STRING, 'Look𐐷', 5);
     expect(result).toEqual(false);
   });
 
-  test('startsWith with position, searchString is the start', () => {
+  it('startsWith with position, searchString is the start', () => {
     const result = startsWith(LONG_SURROGATE_PAIRS_STRING, 'At🦄', 5);
     expect(result).toEqual(true);
   });
 });
 
 describe('substring', () => {
-  test('substring with begin', () => {
+  it('substring with begin', () => {
     const result = substring(LONG_SURROGATE_PAIRS_STRING, POS_FIRST_PIZZA);
     expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By🍕Surrogate🔥Pairs💋!🌟');
   });
 
-  test('substring with end', () => {
+  it('substring with end', () => {
     const result = substring(LONG_SURROGATE_PAIRS_STRING, 0, POS_FIRST_PIZZA);
     expect(result).toEqual('Look𐐷At🦄All😎These😁Awesome');
   });
 
-  test('substring with begin and end', () => {
+  it('substring with begin and end', () => {
     const result = substring(LONG_SURROGATE_PAIRS_STRING, POS_FIRST_PIZZA, POS_SECOND_PIZZA);
     expect(result).toEqual('🍕Symbols💩That🚀Are📷Represented👮🏽‍♀️By');
   });
 });
 
 describe('toArray', () => {
-  test('toArray returns correct array', () => {
+  it('toArray returns correct array', () => {
     const result = toArray(SHORT_SURROGATE_PAIRS_STRING);
     expect(result).toEqual(SHORT_SURROGATE_PAIRS_ARRAY);
   });
 });
 
 describe('escapeStringRegexp', () => {
-  test('properly escapes stuff', () => {
+  it('properly escapes stuff', () => {
     const result = escapeStringRegexp('How much $ for a 🦄?');
     expect(result).toEqual('How much \\$ for a 🦄\\?');
   });
 });
 
 describe('transformAndEnsureRegExpRegExpArray', () => {
-  test('should return an empty array when input is undefined', () => {
+  it('should return an empty array when input is undefined', () => {
     expect(transformAndEnsureRegExpRegExpArray(undefined)).toEqual([]);
   });
 
-  test('should convert a single string to an array with one RegExp', () => {
+  it('should convert a single string to an array with one RegExp', () => {
     const input = 'test';
     const result = transformAndEnsureRegExpRegExpArray(input);
     expect(result).toEqual([/test/]);
   });
 
-  test('should convert an array of strings to an array of RegExp objects', () => {
+  it('should convert an array of strings to an array of RegExp objects', () => {
     const input = ['test1', 'test2', 'test3'];
     const result = transformAndEnsureRegExpRegExpArray(input);
     expect(result).toEqual([/test1/, /test2/, /test3/]);
   });
 
-  test('should convert nested arrays of strings to arrays of RegExp arrays', () => {
+  it('should convert nested arrays of strings to arrays of RegExp arrays', () => {
     const input = ['test1', ['nested1', 'nested2'], 'test2'];
     const result = transformAndEnsureRegExpRegExpArray(input);
     expect(result).toEqual([/test1/, [/nested1/, /nested2/], /test2/]);
   });
 
-  test('should handle an array of single strings and nested arrays', () => {
+  it('should handle an array of single strings and nested arrays', () => {
     const input = ['a', ['b', 'c'], 'd'];
     const result = transformAndEnsureRegExpRegExpArray(input);
     expect(result).toEqual([/a/, [/b/, /c/], /d/]);
@@ -793,25 +794,53 @@ describe('transformAndEnsureRegExpRegExpArray', () => {
 });
 
 describe('transformAndEnsureRegExpArray', () => {
-  test('should return an empty array when input is undefined', () => {
+  it('should return an empty array when input is undefined', () => {
     expect(transformAndEnsureRegExpArray(undefined)).toEqual([]);
   });
 
-  test('should convert a single string to an array with one RegExp', () => {
+  it('should convert a single string to an array with one RegExp', () => {
     const input = 'test';
     const result = transformAndEnsureRegExpArray(input);
     expect(result).toEqual([/test/]);
   });
 
-  test('should convert an array of strings to an array of RegExp objects', () => {
+  it('should convert an array of strings to an array of RegExp objects', () => {
     const input = ['test1', 'test2', 'test3'];
     const result = transformAndEnsureRegExpArray(input);
     expect(result).toEqual([/test1/, /test2/, /test3/]);
   });
 
-  test('should handle empty strings in the input array', () => {
+  it('should handle empty strings in the input array', () => {
     const input = ['', 'a', ''];
     const result = transformAndEnsureRegExpArray(input);
     expect(result).toEqual([/(?:)/, /a/, /(?:)/]);
+  });
+});
+
+describe('toKebabCase', () => {
+  it('should transform PascalCase and camelCase', () => {
+    expect(toKebabCase('PascalCase')).toEqual('pascal-case');
+    expect(toKebabCase('camelCase')).toEqual('camel-case');
+  });
+
+  it('should transform various tricky strings', () => {
+    expect(toKebabCase(SHORT_SURROGATE_PAIRS_STRING)).toEqual('look𐐷-at👨‍👩‍👧‍👦👮🏽‍♀️');
+    expect(toKebabCase(MEDIUM_SURROGATE_PAIRS_STRING)).toEqual(
+      'look𐐷-at🦄-this𐐷-thing👮🏽‍♀️-its𐐷-awesome',
+    );
+    expect(toKebabCase('already-kebab-case-string234.2')).toEqual('already-kebab-case-string234.2');
+    // These examples come from https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String/toLocaleUpperCase
+    expect(toKebabCase('Gesäß')).toEqual('gesäß');
+    expect(toKebabCase('İSTANBUL')).toEqual('i̇stanbul');
+    // These examples come from https://stackoverflow.com/questions/63116039/camelcase-to-kebab-case
+    expect(toKebabCase('StackOverflow')).toEqual('stack-overflow');
+    expect(toKebabCase('alllowercase')).toEqual('alllowercase');
+    expect(toKebabCase('ALLCAPITALLETTERS')).toEqual('allcapitalletters');
+    expect(toKebabCase('CustomXMLParser')).toEqual('custom-xml-parser');
+    expect(toKebabCase('APIFinder')).toEqual('api-finder');
+    expect(toKebabCase('JSONResponseData')).toEqual('json-response-data');
+    expect(toKebabCase('Person20Address')).toEqual('person20-address');
+    expect(toKebabCase('UserAPI2.0Endpoint')).toEqual('user-api2.0-endpoint');
+    expect(toKebabCase('CdÁb')).toEqual('cd-áb');
   });
 });

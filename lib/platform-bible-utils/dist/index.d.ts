@@ -517,6 +517,51 @@ export declare class UnsubscriberAsyncList {
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
 }
+export declare const PLATFORM_ERROR_VERSION = 1;
+/**
+ * PlatformError is an error type with stronger typing of properties than {@link Error}. It is used
+ * to represent errors that are returned by the platform.
+ *
+ * You can create a new PlatformError object using {@link newPlatformError}. You can check if a value
+ * is a PlatformError object using {@link isPlatformError}.
+ */
+export type PlatformError = {
+	/**
+	 * The underlying cause of the error, if any. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}. If a non-Error object is passed to
+	 * {@link newPlatformError}, it will be stored here.
+	 */
+	cause?: unknown;
+	/**
+	 * A descriptive message explaining the error. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it
+	 * will be stored here.
+	 */
+	message: string;
+	/** The version of the PlatformError type. */
+	platformErrorVersion: number;
+	/**
+	 * The stack trace of the error, if available. Normally this will be copied from an {@link Error}
+	 * object passed to {@link newPlatformError}.
+	 */
+	stack?: string;
+};
+/**
+ * Creates a new PlatformError object. If no argument is provided, a PlatformError object with an
+ * empty `message` is returned.
+ *
+ * @param error The error message as a string, an Error object, or a value to assign to the `cause`
+ *   property of the returned PlatformError object
+ * @returns A new PlatformError object
+ */
+export declare function newPlatformError(error?: unknown): PlatformError;
+/**
+ * Checks if the provided value is a PlatformError object.
+ *
+ * @param error The value to check
+ * @returns `true` if the value is a PlatformError object, otherwise `false`
+ */
+export declare function isPlatformError(error: unknown): error is PlatformError;
 export interface ScriptureReference {
 	bookNum: number;
 	chapterNum: number;
@@ -641,6 +686,22 @@ export declare function getAllObjectFunctionNames(obj: {
  * @returns A synchronous proxy for the asynchronous object.
  */
 export declare function createSyncProxyForAsyncObject<T extends object>(getObject: (args?: unknown[]) => Promise<T>, objectToProxy?: Partial<T>): T;
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that Paratext is blocking internet access.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates Paratext is blocking internet access, `false` otherwise
+ */
+export declare function isErrorMessageAboutParatextBlockingInternetAccess(errorMessage: unknown): boolean;
+/**
+ * Indicates if the exception or error message provided appears to be from ParatextData.dll
+ * indicating that an authorization failure occurred regarding registry credentials.
+ *
+ * @param errorMessage Error message or exception to check
+ * @returns `true` if the message indicates an auth failure, `false` otherwise
+ */
+export declare function isErrorMessageAboutRegistryAuthFailure(errorMessage: unknown): boolean;
 /** Within type T, recursively change all properties to be optional */
 export type DeepPartial<T> = T extends object ? {
 	[P in keyof T]?: DeepPartial<T[P]>;
@@ -1637,6 +1698,15 @@ export declare function transformAndEnsureRegExpArray(stringMaybeArray: string |
  */
 export declare function isWhiteSpace(ch: string): boolean;
 /**
+ * Converts PascalCase or camelCase string to kebab-case. To detect upper- and lower-case
+ * characters, uses `.toUpperCase` and `.toLowerCase` to be locale-independent.
+ *
+ * Current implementation supports only UTF-16.
+ *
+ * Thanks to ChatGPT https://chatgpt.com/share/67c8aa44-e054-800c-8068-e1e6630081f7
+ */
+export declare function toKebabCase(input: string): string;
+/**
  * Check that two objects are deeply equal, comparing members of each object and such
  *
  * @param a The first object to compare
@@ -1910,7 +1980,7 @@ export declare const localizedStringsDocumentSchema: {
 		};
 	};
 };
-export type ResourceType = "DBLResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
+export type ResourceType = "ScriptureResource" | "EnhancedResource" | "XmlResource" | "SourceLanguageResource";
 export type DblResourceData = {
 	dblEntryUid: string;
 	displayName: string;

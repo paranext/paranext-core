@@ -1,5 +1,5 @@
 import { WebViewProps } from '@papi/core';
-import papi from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import {
   BookOpen,
@@ -35,7 +35,12 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-import { DblResourceData, getErrorMessage, LocalizeKey } from 'platform-bible-utils';
+import {
+  DblResourceData,
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+} from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
 
 const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
@@ -50,8 +55,9 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_installed%',
   '%resources_language%',
   '%resources_languages%',
-  '%resources_loadingResources%',
+  '%resources_loading%',
   '%resources_noResults%',
+  '%resources_noResultsError%',
   '%resources_open%',
   '%resources_remove%',
   '%resources_results%',
@@ -59,7 +65,7 @@ const GET_RESOURCES_STRING_KEYS: LocalizeKey[] = [
   '%resources_size%',
   '%resources_type%',
   '%resources_types%',
-  '%resources_type_DBL%',
+  '%resources_type_Scripture%',
   '%resources_type_ER%',
   '%resources_type_SLR%',
   '%resources_type_XR%',
@@ -154,6 +160,8 @@ const getActionContent = (
   return <Label className="tw-my-2 tw-flex tw-h-6 tw-items-center">{installedText}</Label>;
 };
 
+const emptyArray: DblResourceData[] = [];
+
 globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: WebViewProps) {
   const [localizedStrings] = useLocalizedStrings(GET_RESOURCES_STRING_KEYS);
 
@@ -168,8 +176,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const installedText: string = localizedStrings['%resources_installed%'];
   const languageText: string = localizedStrings['%resources_language%'];
   const languagesText: string = localizedStrings['%resources_languages%'];
-  const loadingResourcesText: string = localizedStrings['%resources_loadingResources%'];
+  const loadingText: string = localizedStrings['%resources_loading%'];
   const noResultsText: string = localizedStrings['%resources_noResults%'];
+  const noResultsErrorText: string = localizedStrings['%resources_noResultsError%'];
   const openText: string = localizedStrings['%resources_open%'];
   const removeText: string = localizedStrings['%resources_remove%'];
   const resultsText: string = localizedStrings['%resources_results%'];
@@ -177,7 +186,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const sizeText: string = localizedStrings['%resources_size%'];
   const typeText: string = localizedStrings['%resources_type%'];
   const typesText: string = localizedStrings['%resources_types%'];
-  const typeDblText: string = localizedStrings['%resources_type_DBL%'];
+  const typeScriptureText: string = localizedStrings['%resources_type_Scripture%'];
   const typeErText: string = localizedStrings['%resources_type_ER%'];
   const typeSlrText: string = localizedStrings['%resources_type_SLR%'];
   const typeXrText: string = localizedStrings['%resources_type_XR%'];
@@ -195,7 +204,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
 
   const [selectedTypes, setSelectedTypes] = useWebViewState<string[]>('typeFilter', [
-    'DBLResource',
+    'ScriptureResource',
   ]);
 
   const [selectedLanguages, setSelectedLanguages] = useWebViewState<string[]>('languageFilter', []);
@@ -211,7 +220,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
       setIsInitialized(true);
       return;
     }
-    if (resources.length > 0 && selectedLanguages.length === 0) {
+    if (!isPlatformError(resources) && resources.length > 0 && selectedLanguages.length === 0) {
       setSelectedLanguages(
         Array.from(
           new Set(
@@ -239,7 +248,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
     const actionFunction = action === 'install' ? installResource : uninstallResource;
 
     actionFunction(dblEntryUid).catch((error) => {
-      console.debug(getErrorMessage(error));
+      logger.debug(getErrorMessage(error));
     });
   };
 
@@ -247,8 +256,9 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   useEffect(() => {
     setInstallInfo((currentInstallInfo) =>
       currentInstallInfo.filter((info) => {
-        const resource = resources.find((res) => res.dblEntryUid === info.dblEntryUid);
+        if (isPlatformError(resources)) return true;
 
+        const resource = resources.find((res) => res.dblEntryUid === info.dblEntryUid);
         if (!resource) return true;
 
         if (info.action === 'installing' && resource.installed) return false;
@@ -262,6 +272,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   const [textFilter, setTextFilter] = useState<string>('');
 
   const textFilteredResources = useMemo(() => {
+    if (isPlatformError(resources)) return [];
     return resources.filter((resource) => {
       const filter = textFilter.toLowerCase();
       return (
@@ -274,12 +285,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
 
   const typeOptions: MultiSelectComboBoxEntry[] = useMemo(() => {
     return [
-      { value: 'DBLResource', label: typeDblText },
+      { value: 'ScriptureResource', label: typeScriptureText },
       { value: 'EnhancedResource', label: typeErText },
       { value: 'SourceLanguageResource', label: typeSlrText },
       { value: 'XmlResource', label: typeXrText },
     ];
-  }, [typeDblText, typeErText, typeSlrText, typeXrText]);
+  }, [typeScriptureText, typeErText, typeSlrText, typeXrText]);
 
   const textAndTypeFilteredResources = useMemo(() => {
     if (selectedTypes.length === 0) return textFilteredResources;
@@ -346,10 +357,12 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
   );
 
   const getTypeCount = (option: MultiSelectComboBoxEntry): number => {
+    if (isPlatformError(resources)) return 0;
     return resources.filter((resource) => resource.type === option.value).length ?? 0;
   };
 
   const getLanguageCount = (option: MultiSelectComboBoxEntry): number => {
+    if (isPlatformError(resources)) return 0;
     return resources.filter((resource) => resource.bestLanguageName === option.value).length ?? 0;
   };
 
@@ -384,7 +397,10 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
               />
 
               <Filter
-                entries={getLanguageOptions(resources, selectedLanguages)}
+                entries={getLanguageOptions(
+                  isPlatformError(resources) ? emptyArray : resources,
+                  selectedLanguages,
+                )}
                 getEntriesCount={getLanguageCount}
                 selected={selectedLanguages}
                 onChange={setSelectedLanguages}
@@ -397,14 +413,20 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
           </div>
         </CardHeader>
         <CardContent className="tw-flex-grow tw-overflow-auto">
-          {isLoadingResources || !resources ? (
+          {isLoadingResources ? (
             <div className="tw-flex tw-flex-col tw-items-center tw-gap-2">
-              <Label>{loadingResourcesText}</Label>
+              <Label>{loadingText}</Label>
               <Spinner />
             </div>
           ) : (
+            // Can't use if-else here because of how the return statement is structured
+            /* eslint-disable no-nested-ternary */
             <div>
-              {sortedResources.length === 0 ? (
+              {isPlatformError(resources) ? (
+                <div className="tw-m-4 tw-flex tw-justify-center">
+                  <Label>{noResultsErrorText}</Label>
+                </div>
+              ) : sortedResources.length === 0 ? (
                 <div className="tw-m-4 tw-flex tw-justify-center">
                   <Label>{noResultsText}</Label>
                 </div>

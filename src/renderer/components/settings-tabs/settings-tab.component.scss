@@ -1,6 +1,7 @@
 .settings-tab {
-  padding: 2%;
   height: 100%;
+  display: flex;
+  flex-direction: column;
   box-sizing: border-box;
 }
 
@@ -13,6 +14,33 @@
 }
 
 .sidebar-container {
+  overflow: hidden;
+  min-height: 100%;
+}
+
+.project-or-settings-list-container {
+  overflow-y: auto;
+  padding-top: 1rem;
+  padding-bottom: 1rem;
+  padding-inline-end: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.project-or-settings-list {
+  max-width: 100%;
+}
+
+.zero-search-results {
+  display: flex;
+  flex-grow: 1;
   height: 100%;
-  box-sizing: border-box;
+  flex-direction: column;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.zero-search-results-title {
+  font-weight: 700;
 }

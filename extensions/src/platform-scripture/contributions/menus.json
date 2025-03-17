@@ -2,16 +2,7 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": [
-      {
-        "label": "%mainMenu_toggleIncludeMyParatext9Projects%",
-        "tooltip": "%settings_platformScripture_includeMyParatext9Projects_description%",
-        "localizeNotes": "Application main menu > Project > Settings > Toggle Include My Paratext 9 Projects",
-        "group": "platform.projectProjects",
-        "order": 1005,
-        "command": "platformScripture.toggleIncludeMyParatext9Projects"
-      }
-    ]
+    "items": []
   },
   "webViewMenus": {
     "platformScripture.configureChecks": {
@@ -28,14 +19,7 @@
             "order": 1
           }
         },
-        "items": [
-          {
-            "label": "%webView_platformScripture_showCheckResults%",
-            "group": "platformScripture.checks",
-            "order": 1,
-            "command": "platformScripture.showCheckResults"
-          }
-        ]
+        "items": []
       },
       "contextMenu": {
         "groups": {},

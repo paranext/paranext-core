@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ScriptureResultsViewer, {
   ScriptureSrcItemDetail,
@@ -64,15 +64,17 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
     },
   ];
 
-  beforeEach(() => {
-    render(
-      <ScriptureResultsViewer
-        sources={sources}
-        typeColumnName={checkTypeHeader}
-        detailsColumnName={errorDetailsTypeHeader}
-        onRowSelected={RememberSelectedRow}
-      />,
-    );
+  beforeEach(async () => {
+    await act(async () => {
+      render(
+        <ScriptureResultsViewer
+          sources={sources}
+          typeColumnName={checkTypeHeader}
+          detailsColumnName={errorDetailsTypeHeader}
+          onRowSelected={RememberSelectedRow}
+        />,
+      );
+    });
   });
 
   // TODO (https://github.com/paranext/paranext-core/issues/923) More unit tests needed.

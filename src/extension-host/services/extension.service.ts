@@ -11,6 +11,7 @@ import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import * as platformBibleUtils from 'platform-bible-utils';
+import * as crypto from 'crypto';
 import logger from '@shared/services/logger.service';
 import {
   getCommandLineArgumentsGroup,
@@ -19,6 +20,7 @@ import {
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import * as papiCore from '@shared/services/papi-core.service';
 import executionTokenService from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
@@ -31,6 +33,7 @@ import {
   stringLength,
   startsWith,
   slice,
+  toKebabCase,
 } from 'platform-bible-utils';
 import LogError from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -119,7 +122,7 @@ type DtsInfo = {
  * Key to uniquely identify an extension with some extra certainty that the extension is who it says
  * it is.
  *
- * Format: `<extension-publisher>.<extension-name>`
+ * Format: `<extension-publisher>.<extension-name>`.toLowerCase()
  */
 type ExtensionKey = `${string}.${string}`;
 
@@ -530,22 +533,23 @@ function createDtsInfoFromUri(declarationUri: Uri): DtsInfo {
 
 /**
  * Caches type declaration files for each extension. Gets the type declaration file from each
- * extension and copies it to `extension-types/<extension_type_file_name_without_.d.ts>/index.d.ts`
+ * extension and copies it to `extension-types/<extension-type-file-name-without-.d.ts>/index.d.ts`
  * because that is the path that works. If the extension's type declaration file does not start with
- * `<extension_name>`, the folder created will be named `<extension_name>` instead of the name of
- * the extension type declaration file name.
+ * `<extension-name>` (kebab-case version of the extension name), the folder created will be named
+ * `<extension-name>` instead of the name of the extension type declaration file name.
  *
  * We look first at the location provided by the extension manifest's `types` property. If one is
  * not provided, we look for files according to the specification in the JSDoc for
- * {@link ExtensionManifest}'s `types` property order and copy over the first one found.
+ * {@link ExtensionManifest.types} order and copy over the first one found.
  *
  * @param extensionInfos Extension info for extensions whose types to cache
  */
 async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
   return Promise.all(
     extensionInfos.map(async (extensionInfo) => {
+      const extensionNameKebabCase = toKebabCase(extensionInfo.name);
       /** The default assumed name for the dts file including `.d.ts` */
-      const extensionDtsBaseDefault = `${extensionInfo.name}.d.ts`;
+      const extensionDtsBaseDefault = `${extensionNameKebabCase}.d.ts`;
       /** The declaration file uri we are copying for this extension */
       let extensionDtsInfo: DtsInfo | undefined;
       /** The declaration file name we are creating for this extension including `.d.ts` */
@@ -590,7 +594,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // with version number or something
         if (!extensionDtsInfo)
           extensionDtsInfo = dtsInfos.find((dtsInfo) =>
-            startsWith(dtsInfo.base, extensionInfo.name),
+            startsWith(dtsInfo.base, extensionNameKebabCase),
           );
 
         // Try using a dts file whose name is `index.d.ts`
@@ -607,7 +611,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
 
       // If the dts file has stuff after the extension name, we want to use it so they can suffix a
       // version number or something
-      if (startsWith(extensionDtsInfo.base, extensionInfo.name))
+      if (startsWith(extensionDtsInfo.base, extensionNameKebabCase))
         extensionDtsBaseDestination = extensionDtsInfo.base;
 
       // Put the extension's dts in the types cache in its own folder
@@ -854,7 +858,7 @@ function getExtensionKey(manifest: ExtensionManifest): ExtensionKey {
     throw new Error('Extension publisher must not be empty string, undefined, or contain spaces');
   if (!manifest.name || spaceRegex.test(manifest.name))
     throw new Error('Extension name must not be empty string, undefined, or contain spaces');
-  const extensionKey: ExtensionKey = `${manifest.publisher}.${manifest.name}`;
+  const extensionKey: ExtensionKey = `${manifest.publisher.toLowerCase()}.${manifest.name.toLowerCase()}`;
   return extensionKey;
 }
 
@@ -896,7 +900,7 @@ function handleExtensionUri(uri: string) {
   // Validating the map keys when setting in createRegisterUriHandlerFunction, so this won't match
   // to anything if it is not properly formatted. Implicitly validating as ExtensionKey
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const extensionKey = url?.hostname as ExtensionKey;
+  const extensionKey = url?.hostname.toLowerCase() as ExtensionKey;
   const uriHandler = uriHandlersByExtensionKey.get(extensionKey);
 
   if (!uriHandler) {
@@ -1041,13 +1045,19 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   }));
 
   // Shim out require so extensions can use it only as prescribed.
+  // WARNING: This code should not be edited without serious review. For more information,
+  // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
   // Assert the specific type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi and some other things
     if (moduleName === '@papi/backend') return papi;
+    if (moduleName === '@papi/core') return papiCore;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
     if (moduleName === 'platform-bible-utils') return platformBibleUtils;
+
+    // Node's built-in modules
+    if (moduleName === 'crypto') return crypto;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithCheck.find(

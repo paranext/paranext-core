@@ -12,103 +12,61 @@ import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
+import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
-import { VariantProps } from 'class-variance-authority';
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode } from 'react';
 import { Toaster, toast as sonner } from 'sonner';
 
-/** Function to run to dispose of something. Returns true if successfully unsubscribed */
-export type Unsubscriber = () => boolean;
-/**
- * Function to run to dispose of something that runs asynchronously. The promise resolves to true if
- * successfully unsubscribed
- */
-export type UnsubscriberAsync = () => Promise<boolean>;
-/** Callback function that accepts an event and should run when an event is emitted */
-export type PlatformEventHandler<T> = (event: T) => void;
-/**
- * Function that subscribes the provided callback to run when this event is emitted.
- *
- * @param callback Function to run with the event when it is emitted
- * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
- *   emitted
- */
-export type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
-/**
- * A PapiEvent that subscribes asynchronously and resolves an asynchronous unsubscriber.
- *
- * Note: The callback itself is not asynchronous.
- */
-export type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
-export interface ScriptureReference {
+type Unsubscriber = () => boolean;
+type UnsubscriberAsync = () => Promise<boolean>;
+type PlatformEventHandler<T> = (event: T) => void;
+type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
+type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
+interface ScriptureReference {
 	bookNum: number;
 	chapterNum: number;
 	verseNum: number;
 }
-/**
- * Represents a "node" in the JSON used to present Scripture in the editor, with a path that is
- * relative to the start of a verse.
- */
-export type ScriptureNode = ScriptureReference & {
+type ScriptureNode = ScriptureReference & {
 	jsonPath: string;
 };
-/** Represents a specific character offset in the text of a textual Scripture node (in the editor.) */
-export type ScriptureTextAnchor = ScriptureNode & {
+type ScriptureTextAnchor = ScriptureNode & {
 	offset: number;
 };
-/**
- * Represents a range of text in the Scripture editor. The start and end node are expected to be in
- * the same book.
- */
-export type ScriptureSelection = {
+type ScriptureSelection = {
 	start: ScriptureNode | ScriptureTextAnchor;
 	end?: ScriptureNode | ScriptureTextAnchor;
 };
-/**
- * An identifier corresponding to a Scripture reference shared by a group of Scripture reference
- * consumers.
- *
- * For example, a few web views that share a Scroll Group Id would all change Scripture Reference
- * together.
- *
- * These are generally expected to be non-negative numbers (starting at 0).
- */
-export type ScrollGroupId = number;
-/** Within type T, recursively change properties that were of type A to be of type B */
-export type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
+type ScrollGroupId = number;
+type ReplaceType<T, A, B> = T extends A ? B : T extends object ? {
 	[K in keyof T]: ReplaceType<T[K], A, B>;
 } : T;
-/** Identifier for a string that will be localized in a menu based on the user's UI language */
-export type LocalizeKey = `%${string}%`;
-/** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
-export type ReferencedItem = `${string}.${string}`;
-export type OrderedItem = {
+type LocalizeKey = `%${string}%`;
+type ReferencedItem = `${string}.${string}`;
+type OrderedItem = {
 	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
 	order: number;
 };
-export type OrderedExtensibleContainer = OrderedItem & {
+type OrderedExtensibleContainer = OrderedItem & {
 	/** Determines whether other items can be added to this after it has been defined */
 	isExtensible?: boolean;
 };
-/** Group of menu items that belongs in a column */
-export type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
+type MenuGroupDetailsInColumn = OrderedExtensibleContainer & {
 	/** ID of column in which this group resides */
 	column: ReferencedItem;
 };
-/** Group of menu items that belongs in a submenu */
-export type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
+type MenuGroupDetailsInSubMenu = OrderedExtensibleContainer & {
 	/** ID of menu item hosting the submenu in which this group resides */
 	menuItem: ReferencedItem;
 };
-/** Column that includes header text in a menu */
-export type MenuColumnWithHeader = OrderedExtensibleContainer & {
+type MenuColumnWithHeader = OrderedExtensibleContainer & {
 	/** Key that represents the text of the header text of the column */
 	label: LocalizeKey;
 };
-export type MenuItemBase = OrderedItem & {
+type MenuItemBase = OrderedItem & {
 	/** Menu group to which this menu item belongs */
 	group: ReferencedItem;
 	/** Key that represents the text of this menu item to display */
@@ -120,13 +78,11 @@ export type MenuItemBase = OrderedItem & {
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
 };
-/** Menu item that hosts a submenu */
-export type MenuItemContainingSubmenu = MenuItemBase & {
+type MenuItemContainingSubmenu = MenuItemBase & {
 	/** ID for this menu item that holds a submenu */
 	id: ReferencedItem;
 };
-/** Menu item that runs a command */
-export type MenuItemContainingCommand = MenuItemBase & {
+type MenuItemContainingCommand = MenuItemBase & {
 	/** Name of the PAPI command to run when this menu item is selected. */
 	command: ReferencedItem;
 	/**
@@ -140,38 +96,27 @@ export type MenuItemContainingCommand = MenuItemBase & {
 	 */
 	iconPathBefore?: string;
 };
-/**
- * Group of menu items that can be combined with other groups to form a single context menu/submenu.
- * Groups are separated using a line within the menu/submenu.
- */
-export type GroupsInSingleColumnMenu = {
+type GroupsInSingleColumnMenu = {
 	/** Named menu group */
 	[property: ReferencedItem]: OrderedExtensibleContainer | MenuGroupDetailsInSubMenu;
 };
-/**
- * Group of menu items that can be combined with other groups to form a single menu/submenu within a
- * multi-column menu. Groups are separated using a line within the menu/submenu.
- */
-export type GroupsInMultiColumnMenu = {
+type GroupsInMultiColumnMenu = {
 	/** Named menu group */
 	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
 };
-/** Group of columns that can be combined with other columns to form a multi-column menu */
-export type ColumnsWithHeaders = {
+type ColumnsWithHeaders = {
 	/** Named column of a menu */
 	[property: ReferencedItem]: MenuColumnWithHeader;
 	/** Defines whether columns can be added to this multi-column menu */
 	isExtensible?: boolean;
 };
-/** Menu that contains a column without a header */
-export type SingleColumnMenu = {
+type SingleColumnMenu = {
 	/** Groups that belong in this menu */
 	groups: GroupsInSingleColumnMenu;
 	/** List of menu items that belong in this menu */
 	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
-/** Menu that contains multiple columns with headers */
-export type MultiColumnMenu = {
+type MultiColumnMenu = {
 	/** Columns that belong in this menu */
 	columns: ColumnsWithHeaders;
 	/** Groups that belong in this menu */
@@ -179,25 +124,18 @@ export type MultiColumnMenu = {
 	/** List of menu items that belong in this menu */
 	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
-/**
- * Type that converts any menu type before it is localized to what it is after it is localized. This
- * can be applied to any menu type as needed.
- */
-export type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
-/** Localized string value associated with this key */
-export type LocalizedStringValue = string;
-/**
- * Map whose keys are localized string keys and whose values provide information about how to
- * localize strings for the localized string key
- */
-export interface LanguageStrings {
+type Localized<T> = ReplaceType<ReplaceType<T, LocalizeKey, string>, ReferencedItem, string>;
+type LocalizedStringValue = string;
+interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
 export type BookChapterControlProps = {
 	scrRef: ScriptureReference;
 	handleSubmit: (scrRef: ScriptureReference) => void;
+	className?: string;
+	getActiveBookIds?: () => string[];
 };
-export declare function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	startChapter: number;
 	endChapter: number;
@@ -224,7 +162,7 @@ export declare const BOOK_SELECTOR_STRING_KEYS: readonly [
 export type BookSelectorLocalizedStrings = {
 	[localizedBookSelectorKey in (typeof BOOK_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
-export type BookSelectorProps = ChapterRangeSelectorProps & {
+type BookSelectorProps = ChapterRangeSelectorProps & {
 	handleBookSelectionModeChange: (newMode: BookSelectionMode) => void;
 	currentBookName: string;
 	onSelectBooks: () => void;
@@ -236,7 +174,7 @@ export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
 export type SortDirection = TSSortDirection;
-export interface DataTableProps<TData, TValue> {
+interface DataTableProps<TData, TValue> {
 	columns: ColumnDef<TData, TValue>[];
 	data: TData[];
 	enablePagination?: boolean;
@@ -250,11 +188,7 @@ export interface DataTableProps<TData, TValue> {
  * from TanStack's React Table library
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
-/**
- * Status of items that appear in inventories. 'approved' and 'unapproved' items are defined in the
- * project's `Settings.xml`. All other items are defined as 'unknown'
- */
-export type Status = "approved" | "unapproved" | "unknown";
+type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
 	/** Reference to scripture where the item appears */
@@ -333,13 +267,11 @@ export type InventoryLocalizedStrings = {
 };
 /** Scope of scripture that the inventory can operate on */
 export type Scope = "book" | "chapter" | "verse";
-/** Text labels for the inventory columns and the control components of additional inventory items */
-export type AdditionalItemsLabels = {
+type AdditionalItemsLabels = {
 	checkboxText?: string;
 	tableHeaders?: string[];
 };
-/** Props for the Inventory component */
-export type InventoryProps = {
+type InventoryProps = {
 	/** The scripture reference that the application is currently set to */
 	scriptureReference: ScriptureReference;
 	/** Callback function that is executed when the scripture reference is changed */
@@ -418,7 +350,7 @@ export type MultiSelectComboBoxEntry = {
 	label: string;
 	starred?: boolean;
 };
-export interface MultiSelectComboBoxProps {
+interface MultiSelectComboBoxProps {
 	entries: MultiSelectComboBoxEntry[];
 	getEntriesCount?: (option: MultiSelectComboBoxEntry) => number;
 	selected: string[];
@@ -436,7 +368,7 @@ export type TabKeyValueContent = {
 	value: string;
 	content: React$1.ReactNode;
 };
-export type TabNavigationContentSearchProps = {
+type TabNavigationContentSearchProps = {
 	/** List of values and keys for each tab this component should provide */
 	tabList: TabKeyValueContent[];
 	/** The search query in the search bar */
@@ -463,7 +395,7 @@ export type SettingsSidebarProps = {
 	/** Optional id for testing */
 	id?: string;
 	/** Extension labels from contribution */
-	extensionLabels: string[];
+	extensionLabels: Record<string, string>;
 	/** Project names and ids */
 	projectInfo: ProjectInfo[];
 	/** Handler for selecting a sidebar item */
@@ -476,9 +408,11 @@ export type SettingsSidebarProps = {
 	projectsSidebarGroupLabel: string;
 	/** Placeholder text for the button */
 	buttonPlaceholderText: string;
+	/** Additional css classes to help with unique styling of the sidebar */
+	className?: string;
 };
-export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
-export type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
+export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;
 	/** The search query in the search bar */
@@ -621,11 +555,12 @@ export type ScrollGroupSelectorProps = {
 	 * ```
 	 */
 	localizedStrings?: LanguageStrings;
+	/** Additional css classes to help with unique styling */
+	className?: string;
 };
 /** Selector component for choosing a scroll group */
-export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
-/** Props for the SettingsList component, currently just children */
-export type SettingsListProps = React$1.PropsWithChildren;
+export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
  *
@@ -633,8 +568,7 @@ export type SettingsListProps = React$1.PropsWithChildren;
  * @returns Formatted div encompassing the children
  */
 export declare function SettingsList({ children }: SettingsListProps): import("react/jsx-runtime").JSX.Element;
-/** Props for SettingsListItem component */
-export type SettingsListItemProps = React$1.PropsWithChildren & {
+type SettingsListItemProps = React$1.PropsWithChildren & {
 	/** Primary text of the list item */
 	primary: string;
 	/** Optional text of the list item */
@@ -651,8 +585,7 @@ export type SettingsListItemProps = React$1.PropsWithChildren & {
  * @returns Formatted div encompassing the list item content
  */
 export declare function SettingsListItem({ primary, secondary, children, isLoading, loadingMessage, }: SettingsListItemProps): import("react/jsx-runtime").JSX.Element;
-/** Props for SettingsListHeader component */
-export type SettingsListHeaderProps = {
+type SettingsListHeaderProps = {
 	/** The primary text of the list header */
 	primary: string;
 	/** Optional secondary text of the list header */
@@ -702,6 +635,19 @@ export type ChecklistProps = {
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
 export function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+type ClassValue$1 = ClassValue;
+type ClassProp = {
+	class: ClassValue$1;
+	className?: never;
+} | {
+	class?: never;
+	className: ClassValue$1;
+} | {
+	class?: never;
+	className?: never;
+};
+type OmitUndefined<T> = T extends undefined ? never : T;
+type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
 /**
  * Style variants for the Button component.
  *
@@ -710,7 +656,7 @@ export function Checklist({ id, className, listItems, selectedListItems, handleS
 export declare const buttonVariants: (props?: ({
 	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
-} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+} & ClassProp) | undefined) => string;
 /**
  * Props for Button component
  *
@@ -774,7 +720,7 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-export type MenuItemInfoBase = {
+type MenuItemInfoBase = {
 	/** Text (displayable in the UI) as the name of the menu item */
 	label: string;
 	/** Text to display when the mouse hovers over the menu item */
@@ -784,14 +730,14 @@ export type Command = MenuItemInfoBase & {
 	/** Command to execute (string.string) */
 	command: string;
 };
-export type SubMenu = MenuItemInfoBase & {
+type SubMenu = MenuItemInfoBase & {
 	/** Command to execute (string.string) */
 	items: MenuItemInfo[];
 };
 export interface CommandHandler {
 	(command: Command): void;
 }
-export type MenuPropsBase = {
+type MenuPropsBase = {
 	menuDefinition: Localized<SingleColumnMenu>;
 	commandHandler: CommandHandler;
 	/**
@@ -804,12 +750,12 @@ export type MenuItemListProps = MenuPropsBase & {
 	/** Optional unique (column) identifier */
 	columnId?: ReferencedItem;
 };
-export type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
+type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
 	onClick: (event: React$1.MouseEvent<HTMLElement>) => void;
 }>;
-export type MenuItemInfo = (Command | SubMenu) & {
+type MenuItemInfo = (Command | SubMenu) & {
 	/**
 	 * If specified, menu item will be inset if it does not have a leading icon.
 	 *
@@ -887,7 +833,7 @@ export function GridMenu({ commandHandler, className, multiColumnMenu, id, }: Gr
 export interface MultiColumnMenuProvider {
 	(isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;
 }
-export type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
+type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
 	/** The handler to use for menu commands (and eventually toolbar commands). */
 	commandHandler: CommandHandler;
 	/**
@@ -1046,8 +992,34 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	id?: string;
 	/** Additional css classes to help with unique styling of the toolbar */
 	className?: string;
+	/**
+	 * Whether the toolbar should be used as a draggable area for moving the application. This will
+	 * add an electron specific style `WebkitAppRegion: 'drag'` to the toolbar in order to make it
+	 * draggable. See:
+	 * https://www.electronjs.org/docs/latest/tutorial/custom-title-bar#create-a-custom-title-bar
+	 */
+	shouldUseAsAppDragArea?: boolean;
+	/** Toolbar children to be put at the start of the toolbar (left side in ltr, right side in rtl) */
+	appMenuAreaChildren?: React$1.ReactNode;
+	/** Toolbar children to be put at the end of the toolbar (right side in ltr, left side in rtl) */
+	configAreaChildren?: React$1.ReactNode;
+	/** Variant of the menubar */
+	menubarVariant?: "default" | "muted";
 }>;
-export function Toolbar({ menuProvider, commandHandler, className, id, children, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Get tailwind class for reserved space for the window controls / macos "traffic lights". Passing
+ * 'darwin' will reserve the necessary space for macos traffic lights at the start, otherwise a
+ * different amount of space at the end for the window controls.
+ *
+ * Apply to the toolbar like: `<Toolbar className={cn('tw-h-8 tw-bg-background',
+ * getToolbarOSReservedSpaceClassName('darwin'))}>` or `<Toolbar
+ * className={getToolbarOSReservedSpaceClassName('linux')}>`
+ *
+ * @param operatingSystem The os platform: 'darwin' (macos) | anything else
+ * @returns The class name to apply to the toolbar if os specific space should be reserved
+ */
+export declare function getToolbarOSReservedSpaceClassName(operatingSystem: string | undefined): string | undefined;
+export function Toolbar({ menuProvider, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  *
@@ -1055,7 +1027,7 @@ export function Toolbar({ menuProvider, commandHandler, className, id, children,
  */
 export declare const Alert: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLDivElement> & VariantProps<(props?: ({
 	variant?: "default" | "destructive" | null | undefined;
-} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
+} & ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * @inheritdoc Alert
  * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
@@ -1073,7 +1045,7 @@ export declare const AlertDescription: React$1.ForwardRefExoticComponent<React$1
  */
 export declare const badgeVariants: (props?: ({
 	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "blueIndicator" | "mutedIndicator" | null | undefined;
-} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string;
+} & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
  *
@@ -1317,12 +1289,7 @@ export declare function DropdownMenuShortcut({ className, ...props }: DropdownMe
 export declare namespace DropdownMenuShortcut {
 	var displayName: string;
 }
-/**
- * Props for Input component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/input}
- */
-export interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement> {
+interface InputProps extends React$1.InputHTMLAttributes<HTMLInputElement> {
 }
 /**
  * Input component displays a form input field or a component that looks like an input field. This
@@ -1339,7 +1306,7 @@ export declare const Input: React$1.ForwardRefExoticComponent<InputProps & React
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/label}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/label}
  */
-export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: import("class-variance-authority/dist/types").ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
+export declare const Label: React$1.ForwardRefExoticComponent<Omit<LabelPrimitive.LabelProps & React$1.RefAttributes<HTMLLabelElement>, "ref"> & VariantProps<(props?: ClassProp | undefined) => string> & React$1.RefAttributes<HTMLLabelElement>>;
 /**
  * The Popover component displays rich content in a portal, triggered by a button. This popover is
  * built on Radix UI's Popover component and styled by Shadcn UI.
@@ -1445,13 +1412,7 @@ export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<Sel
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/separator}
  */
 export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
-/**
- * Props for SOnner component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
- * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
- */
-export type SonnerProps = React$1.ComponentProps<typeof Toaster>;
+type SonnerProps = React$1.ComponentProps<typeof Toaster>;
 /**
  * The Sonner component is an opinionated toast component for React. It is built on Sonner and
  * styled with Shadcn UI.
@@ -1532,12 +1493,7 @@ export declare const TableCaption: React$1.ForwardRefExoticComponent<React$1.HTM
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
  */
 export declare const Tabs: React$1.ForwardRefExoticComponent<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>>;
-/**
- * @inheritdoc Tabs
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/tabs}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/tabs}
- */
-export type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
+type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Trigger> & {
 	className?: string;
 };
 /**
@@ -1564,7 +1520,7 @@ export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPri
 export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
-export type LeftTabsTriggerProps = TabsTriggerProps & {
+type LeftTabsTriggerProps = TabsTriggerProps & {
 	value: string;
 	ref?: React$1.Ref<HTMLButtonElement>;
 };
@@ -1588,7 +1544,7 @@ export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit
 export declare const ToggleGroup: React$1.ForwardRefExoticComponent<((Omit<ToggleGroupPrimitive.ToggleGroupSingleProps & React$1.RefAttributes<HTMLDivElement>, "ref"> | Omit<ToggleGroupPrimitive.ToggleGroupMultipleProps & React$1.RefAttributes<HTMLDivElement>, "ref">) & VariantProps<(props?: ({
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
-} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string>) & React$1.RefAttributes<HTMLDivElement>>;
+} & ClassProp) | undefined) => string>) & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * @inheritdoc ToggleGroup
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/toggle-group}
@@ -1597,8 +1553,12 @@ export declare const ToggleGroup: React$1.ForwardRefExoticComponent<((Omit<Toggl
 export declare const ToggleGroupItem: React$1.ForwardRefExoticComponent<Omit<ToggleGroupPrimitive.ToggleGroupItemProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & VariantProps<(props?: ({
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
-} & import("class-variance-authority/dist/types").ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLButtonElement>>;
-export type InstallButtonProps = {
+} & ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProviderProps>;
+export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
+export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+type InstallButtonProps = {
 	/** The installing boolean value determines the state of the button. */
 	isInstalling: boolean;
 	/** The handleClick function is called when the button is clicked. */
@@ -1614,7 +1574,7 @@ export type InstallButtonProps = {
  * @returns A install button.
  */
 export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
-export type EnableButtonProps = {
+type EnableButtonProps = {
 	/** The enabling boolean value determines the state of the button. */
 	isEnabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
@@ -1628,7 +1588,7 @@ export type EnableButtonProps = {
  * @returns A button that can be used to enable.
  */
 export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
-export type DisableButtonProps = {
+type DisableButtonProps = {
 	/** The disabling boolean value determines the state of the button. */
 	isDisabling: boolean;
 	/** The handleClick function is called when the button is clicked. */
@@ -1642,7 +1602,7 @@ export type DisableButtonProps = {
  * @returns A button that can be used to disable.
  */
 export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
-export type UpdateButtonProps = {
+type UpdateButtonProps = {
 	/** The updating boolean value determines the state of the button. */
 	isUpdating: boolean;
 	/** The handleClick function is called when the button is clicked. */
@@ -1656,7 +1616,7 @@ export type UpdateButtonProps = {
  * @returns A button that can be used to update.
  */
 export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
-export interface MarkdownRendererProps {
+interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
 	/** The markdown string to render */
@@ -1698,7 +1658,7 @@ export type DropdownGroup = {
 	/** The items array contains the items that will be displayed in the dropdown group */
 	items: DropdownItem[];
 };
-export type FilterDropdownProps = {
+type FilterDropdownProps = {
 	/** Object unique identifier */
 	id?: string;
 	/** The groups array contains the groups that will be displayed in the dropdown */
@@ -1720,7 +1680,7 @@ export function FilterDropdown({ id, groups }: FilterDropdownProps): import("rea
  * @returns A button that can be used to filter.
  */
 export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
-export interface NoExtensionsFoundProps {
+interface NoExtensionsFoundProps {
 	/** Optional unique identifier */
 	id?: string;
 	/** The message to display */
@@ -1733,8 +1693,7 @@ export interface NoExtensionsFoundProps {
  * @returns {JSX.Element} - Returns the message component that displays the message to the user.
  */
 export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
-/** Interface that stores the parameters passed to the More Info component */
-export interface MoreInfoProps {
+interface MoreInfoProps {
 	/** Optional unique identifier */
 	id?: string;
 	/** The category of the extension */
@@ -1763,8 +1722,7 @@ export type VersionInformation = {
 };
 /** Type to store the version history information */
 export type VersionHistoryType = Record<string, VersionInformation>;
-/** Interface that stores the parameters passed to the Version History component */
-export interface VersionHistoryProps {
+interface VersionHistoryProps {
 	/** Optional unique identifier */
 	id?: string;
 	/** Object containing the versions mapped with their information */
@@ -1778,8 +1736,7 @@ export interface VersionHistoryProps {
  * @returns Rendered version history for the Footer component
  */
 export function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
-/** Interface to store the parameters passed to the Footer component */
-export interface FooterProps {
+interface FooterProps {
 	/** Optional unique identifier */
 	id?: string;
 	/** Name of the publisher */
@@ -1799,7 +1756,7 @@ export interface FooterProps {
  * @returns The rendered Footer component
  */
 export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
-export interface FilterProps extends MultiSelectComboBoxProps {
+interface FilterProps extends MultiSelectComboBoxProps {
 	/**
 	 * Placeholder text that will be displayed when no items are selected. It will appear at the
 	 * location where the badges would be if any items were selected.
@@ -1816,7 +1773,7 @@ export declare function Filter({ entries, getEntriesCount, selected, onChange, p
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];
-export type UiLanguageSelectorLocalizedStrings = {
+type UiLanguageSelectorLocalizedStrings = {
 	[localizedUiLanguageSelectorKey in (typeof UI_LANGUAGE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
 export type LanguageInfo = {

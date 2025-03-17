@@ -7,14 +7,6 @@ import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/p
 import checkHostingService from './checks/extension-host-check-runner.service';
 import checkAggregatorService from './checks/check-aggregator.service';
 import InventoryWebViewProvider, { InventoryWebViewOptions } from './inventory.web-view-provider';
-import ConfigureChecksWebViewProvider, {
-  configureChecksWebViewType,
-  ConfigureChecksWebViewOptions,
-} from './configure-checks.web-view-provider';
-import CheckResultsWebViewProvider, {
-  checkResultsListWebViewType,
-  CheckResultsWebViewOptions,
-} from './checking-results-list.web-view-provider';
 import ChecksSidePanelWebViewProvider, {
   ChecksSidePanelWebViewOptions,
   checksSidePanelWebViewType,
@@ -106,51 +98,6 @@ async function openInventory(
   );
 }
 
-async function configureChecks(webViewId: string | undefined): Promise<string | undefined> {
-  let projectId: string | undefined;
-
-  logger.debug('Configuring checks');
-
-  if (webViewId) {
-    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
-    projectId = webViewDefinition?.projectId;
-  }
-
-  if (!projectId) {
-    logger.debug('No project!');
-    return undefined;
-  }
-
-  const options: ConfigureChecksWebViewOptions = { projectId };
-  return papi.webViews.openWebView(
-    configureChecksWebViewType,
-    { type: 'float', floatSize: { width: 700, height: 800 } },
-    options,
-  );
-}
-
-async function showCheckResults(webViewId: string | undefined): Promise<string | undefined> {
-  let editorWebViewId: string | undefined;
-  let projectId: string | undefined;
-
-  logger.debug('Running checks');
-
-  if (webViewId) {
-    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
-    projectId = webViewDefinition?.projectId;
-    if (webViewDefinition?.webViewType === 'platformScriptureEditor.react')
-      editorWebViewId = webViewId;
-  }
-
-  if (!projectId) {
-    logger.debug('No project!');
-    return undefined;
-  }
-
-  const options: CheckResultsWebViewOptions = { editorWebViewId, projectId };
-  return papi.webViews.openWebView(checkResultsListWebViewType, { type: 'tab' }, options);
-}
-
 async function openChecksSidePanel(
   editorWebViewId: string | undefined,
 ): Promise<string | undefined> {
@@ -208,46 +155,9 @@ export async function activate(context: ExecutionActivationContext) {
     '%webView_punctuationInventory_title%',
     punctuationInventoryWebViewType,
   );
-  const checkResultsWebViewProvider = new CheckResultsWebViewProvider();
-  const configureChecksWebViewProvider = new ConfigureChecksWebViewProvider(
-    '%webView_configureChecks_title%',
-  );
+
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
 
-  const includeProjectsCommandPromise = papi.commands.registerCommand(
-    'platformScripture.toggleIncludeMyParatext9Projects',
-    async (shouldInclude) => {
-      const currentSettingValue =
-        shouldInclude !== undefined
-          ? !shouldInclude
-          : await papi.settings.get('platformScripture.includeMyParatext9Projects');
-      const newSettingValue = !currentSettingValue;
-      await papi.settings.set('platformScripture.includeMyParatext9Projects', newSettingValue);
-      return newSettingValue;
-    },
-    {
-      method: {
-        summary: 'Toggle whether to include My Paratext 9 projects within the platform',
-        params: [
-          {
-            name: 'shouldInclude',
-            required: false,
-            summary: 'Whether to include My Paratext 9 projects',
-            schema: { type: 'boolean' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          summary: 'The new value of the setting',
-          schema: { type: 'boolean' },
-        },
-      },
-    },
-  );
-  const includeProjectsValidatorPromise = papi.settings.registerValidator(
-    'platformScripture.includeMyParatext9Projects',
-    async (newValue) => typeof newValue === 'boolean',
-  );
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
     booksPresentValidator,
@@ -375,58 +285,6 @@ export async function activate(context: ExecutionActivationContext) {
     punctuationInventoryWebViewType,
     punctuationInventoryWebViewProvider,
   );
-  const configureChecksPromise = papi.commands.registerCommand(
-    'platformScripture.openConfigureChecks',
-    configureChecks,
-    {
-      method: {
-        summary: 'Open the configure checks web view',
-        params: [
-          {
-            name: 'webViewId',
-            required: false,
-            summary: 'The ID of the web view tied to the project that the checks are for',
-            schema: { type: 'string' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          summary: 'The ID of the new configure checks web view',
-          schema: { type: 'string' },
-        },
-      },
-    },
-  );
-  const configureChecksWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
-    configureChecksWebViewType,
-    configureChecksWebViewProvider,
-  );
-  const showCheckResultsPromise = papi.commands.registerCommand(
-    'platformScripture.showCheckResults',
-    showCheckResults,
-    {
-      method: {
-        summary: 'Show the check results',
-        params: [
-          {
-            name: 'webViewId',
-            required: false,
-            summary: 'The ID of the web view tied to the project that the checks are for',
-            schema: { type: 'string' },
-          },
-        ],
-        result: {
-          name: 'return value',
-          summary: 'The ID of the new check results web view',
-          schema: { type: 'string' },
-        },
-      },
-    },
-  );
-  const showCheckResultsWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
-    checkResultsListWebViewType,
-    checkResultsWebViewProvider,
-  );
   const showChecksSidePanelPromise = papi.commands.registerCommand(
     'platformScripture.openChecksSidePanel',
     openChecksSidePanel,
@@ -459,8 +317,6 @@ export async function activate(context: ExecutionActivationContext) {
 
   context.registrations.add(
     await scriptureExtenderPdpefPromise,
-    await includeProjectsCommandPromise,
-    await includeProjectsValidatorPromise,
     await booksPresentPromise,
     await versificationPromise,
     await validCharactersPromise,
@@ -479,10 +335,6 @@ export async function activate(context: ExecutionActivationContext) {
     await invalidPunctuationPromise,
     await openPunctuationInventoryPromise,
     await punctuationInventoryWebViewProviderPromise,
-    await configureChecksPromise,
-    await configureChecksWebViewProviderPromise,
-    await showCheckResultsPromise,
-    await showCheckResultsWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
     checkHostingService.dispose,

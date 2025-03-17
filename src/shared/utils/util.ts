@@ -33,6 +33,7 @@ export const MODULE_SIMILAR_APIS: Readonly<{
     [ProcessType.Renderer]: 'the papi-extension: protocol',
     [ProcessType.ExtensionHost]: 'papi.storage',
   },
+  child_process: 'createProcess (requires requesting in elevatedPrivileges)',
 });
 
 /**
