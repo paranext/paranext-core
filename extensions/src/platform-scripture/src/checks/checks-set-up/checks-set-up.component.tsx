@@ -43,8 +43,7 @@ function createLabel(item: string): ReactNode {
 export default function ChecksSetUp({
   availableChecks,
   id,
-  handleSelectCheck,
-  handleSelectCheckType,
+  handleSelectCheckType: handleSelectCheck,
   selectedChecks,
 }: ChecksSetUpProps) {
   return (

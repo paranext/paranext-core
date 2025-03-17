@@ -219,13 +219,15 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [availableChecks],
   );
 
-  const checkNamesAndIds = useMemo(
-    () =>
-      availableChecks.map(
-        (check) => `${getLocalizedCheckDescription(check.checkId)},${check.checkId}`,
-      ),
-    [availableChecks, getLocalizedCheckDescription],
-  );
+  const checkNamesAndIds = useMemo(() => {
+    if (!Array.isArray(availableChecks)) {
+      // This means availableChecks has type PlatformError
+      return [];
+    }
+    return availableChecks.map(
+      (check) => `${getLocalizedCheckDescription(check.checkId)},${check.checkId}`,
+    );
+  }, [availableChecks, getLocalizedCheckDescription]);
 
   // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
