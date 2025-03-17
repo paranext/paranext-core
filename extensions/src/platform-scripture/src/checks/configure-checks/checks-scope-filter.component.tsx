@@ -3,8 +3,6 @@ import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import { DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'platform-bible-react';
 import ChecksFilterDropdown from './checks-filter-dropdown.component';
-import { Label, RadioGroup, RadioGroupItem } from 'platform-bible-react';
-import FilterPopover from './filter-popover.component';
 
 /**
  * Enum representing the different scopes that can be selected for checks.
@@ -49,8 +47,6 @@ export default function ChecksScopeFilter({
   selectedScope: selectedScopeFromWebView,
 }: ChecksScopeFilterProps) {
   const [selectedScope, setSelectedScope] = useState<CheckScopes>(selectedScopeFromWebView);
-export default function ChecksScopeFilter({ handleSelectScope }: ChecksScopeFilterProps) {
-  const [selectedScope, setSelectedScope] = useState<CheckScopes>(CheckScopes.Chapter);
   const [localizedStrings] = useLocalizedStrings(
     useMemo(() => Object.values(CHECK_SCOPE_FILTER_STRINGS).concat(LOCALIZED_STRINGS), []),
   );
@@ -77,27 +73,17 @@ export default function ChecksScopeFilter({ handleSelectScope }: ChecksScopeFilt
 
   return (
     <ChecksFilterDropdown
-    <FilterPopover
       selectedValue={selectedScope}
       radioGroupLabel={localizedStrings['%webView_checksSidePanel_scopeFilter_label%']}
       getSelectedValueLabel={getScopeLabel}
     >
       <DropdownMenuRadioGroup value={selectedScope} onValueChange={onScopeChange}>
-      <RadioGroup value={selectedScope} onValueChange={onScopeChange} className="tw-p-3">
         {Object.values(CheckScopes).map((scope) => (
           <DropdownMenuRadioItem key={scope} value={scope} id={scope}>
             {getScopeLabel(scope)}
           </DropdownMenuRadioItem>
-          <div key={scope} className="tw-flex tw-gap-2 tw-items-center">
-            <RadioGroupItem value={scope} id={scope} />
-            <Label htmlFor={scope} className="tw-flex-1 tw-text-sm tw-font-normal">
-              {getScopeLabel(scope)}
-            </Label>
-          </div>
         ))}
       </DropdownMenuRadioGroup>
     </ChecksFilterDropdown>
-      </RadioGroup>
-    </FilterPopover>
   );
 }

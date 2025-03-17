@@ -7,7 +7,12 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useData, useDataProvider, useLocalizedStrings, useWebViewController } from '@papi/frontend/react';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useWebViewController,
+} from '@papi/frontend/react';
 import {
   CheckRunnerCheckDetails,
   CheckRunResult,
@@ -167,10 +172,10 @@ global.webViewComponent = function CheckingResultsListWebView({
       }
     };
 
-  const editorWebViewController = useWebViewController(
-    'platformScriptureEditor.react',
-    editorWebViewId,
-  );
+    const editorWebViewController = useWebViewController(
+      'platformScriptureEditor.react',
+      editorWebViewId,
+    );
     fetchSubscriptionId();
 
     return () => {
@@ -324,7 +329,7 @@ global.webViewComponent = function CheckingResultsListWebView({
       <ScriptureResultsViewer
         sources={viewableResults}
         onRowSelected={async (selectedRow) => {
-          if (!selectedRow || !editorWebViewController) return;
+          if (!selectedRow) return;
 
           try {
             const startOffset = 'offset' in selectedRow.start ? selectedRow.start.offset : 0;
@@ -362,16 +367,11 @@ global.webViewComponent = function CheckingResultsListWebView({
                     offset: endOffset,
                   };
             }
-            editorWebViewController.selectRange({
-              start,
-              end,
-            });
-          } catch (e) {
-            logger.warn(
-              `Check results list failed to select range in editor for row ${JSON.stringify(selectedRow)}: ${e}`,
-            );
+          } catch {
+            logger.log('');
           }
         }}
+      />
       <ScriptureResultsViewer sources={viewableResults} />
       {/* <div>{availableChecksIsLoading ? <p> Checks loading...</p> : <p>Checks are loaded</p>}</div>
       <div>
@@ -379,7 +379,7 @@ global.webViewComponent = function CheckingResultsListWebView({
       </div> */}
       <ChecksSetUp
         availableChecks={availableChecks}
-        handleSelectCheck={updateSelectedChecks}
+        handleSelectCheckType={updateSelectedChecks}
         selectedChecks={selectedChecks}
       />
     </div>

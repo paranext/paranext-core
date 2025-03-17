@@ -2,11 +2,8 @@ import papi, { projectDataProviders } from '@papi/frontend';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { usePromise, DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'platform-bible-react';
 import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
-import { usePromise, RadioGroupItem, Label, RadioGroup } from 'platform-bible-react';
-import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import ChecksFilterDropdown from './checks-filter-dropdown.component';
-import FilterPopover from './filter-popover.component';
 
 /** Props for ChecksProjectFilter component */
 type ChecksProjectFilterProps = {
@@ -47,7 +44,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_projectFilter_projectName_format%',
 ];
 
-/** Dropdown component to select a project to run the checks for */
+/** Dropdown component to select a project to run checks for */
 export default function ChecksProjectFilter({
   handleSelectProject,
   selectedProjectId: selectedProjectIdFromWebView,
@@ -93,9 +90,6 @@ export default function ChecksProjectFilter({
     },
     [localizedStrings],
   );
-  const writeProjectName = useCallback((fullName: string, shortName: string) => {
-    return `${fullName} (${shortName})`;
-  }, []);
 
   const getProjectShortNameLabel = useCallback(() => {
     return (
@@ -106,34 +100,21 @@ export default function ChecksProjectFilter({
 
   return (
     <ChecksFilterDropdown
-    <FilterPopover
       selectedValue={selectedProjectId}
       radioGroupLabel={localizedStrings['%webView_checksSidePanel_projectFilter_label%']}
       getSelectedValueLabel={getProjectShortNameLabel}
-      shouldDisableButton
     >
       <DropdownMenuRadioGroup value={selectedProjectId} onValueChange={onProjectChange}>
-      <RadioGroup value={selectedProjectId} onValueChange={onProjectChange} className="tw-p-3">
         {Object.entries(projectIdsAndNames).length === 0
           ? localizedStrings['%webView_checksSidePanel_projectFilter_noProjectsFound%']
           : Object.entries(projectIdsAndNames).map(([projectId, project]) => (
               <DropdownMenuRadioItem key={projectId} value={projectId} id={projectId}>
                 <div className="tw-text-ellipsis tw-overflow-hidden tw-w-full">
-              <div key={projectId} className="tw-flex tw-items-start tw-gap-2">
-                <RadioGroupItem value={projectId} id={projectId} className="tw-mt-0.5" />
-                <Label
-                  htmlFor={projectId}
-                  className="tw-flex-1 tw-text-sm tw-font-normal tw-leading-5"
-                >
                   {writeProjectName(project.fullName, project.shortName)}
                 </div>
               </DropdownMenuRadioItem>
-                </Label>
-              </div>
             ))}
       </DropdownMenuRadioGroup>
     </ChecksFilterDropdown>
-      </RadioGroup>
-    </FilterPopover>
   );
 }

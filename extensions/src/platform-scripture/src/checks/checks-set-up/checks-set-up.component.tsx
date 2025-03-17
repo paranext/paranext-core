@@ -44,6 +44,7 @@ export default function ChecksSetUp({
   availableChecks,
   id,
   handleSelectCheck,
+  handleSelectCheckType,
   selectedChecks,
 }: ChecksSetUpProps) {
   return (

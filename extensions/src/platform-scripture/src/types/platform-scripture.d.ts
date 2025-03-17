@@ -783,7 +783,7 @@ declare module 'platform-scripture' {
      * @param checkLabel Name of the check
      * @param selected True if selected, false if not selected
      */
-    handleSelectCheck: (checkLabel: string, selected: boolean) => void;
+    handleSelectCheckType: (checkLabel: string, selected: boolean) => void;
     /** List of checks that have been selected */
     selectedChecks: string[];
   };
