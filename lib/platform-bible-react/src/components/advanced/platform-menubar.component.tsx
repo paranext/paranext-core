@@ -35,6 +35,14 @@ export interface CommandHandler {
   (command: Command): void;
 }
 
+const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
+  setTimeout(() => {
+    keys.forEach((key) => {
+      ref.current?.dispatchEvent(new KeyboardEvent('keydown', key));
+    });
+  }, 0);
+};
+
 const getSubMenuKeyForId = (
   groups: Localized<GroupsInMultiColumnMenu>,
   id: string,
@@ -137,14 +145,6 @@ export default function PlatformMenubar({
       default:
         return undefined;
     }
-  };
-
-  const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
-    setTimeout(() => {
-      keys.forEach((key) => {
-        ref.current?.dispatchEvent(new KeyboardEvent('keydown', key));
-      });
-    }, 0);
   };
 
   // This is a quick and dirty way to implement some shortcuts by simulating key presses
