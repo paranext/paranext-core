@@ -127,7 +127,7 @@ After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit
 
 ### Developing Extensions
 
-Platofrom.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
+Platfrom.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
 `extensions/README.md` to develop core extensions.
 
 Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core.
