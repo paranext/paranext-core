@@ -231,7 +231,9 @@ export default function PlatformMenubar({
             <MenubarTrigger ref={getRefForColumn(columnKey)}>
               {typeof column === 'object' && 'label' in column && column.label}
             </MenubarTrigger>
-            <MenubarContent>
+            <MenubarContent
+              className="tw-z-[250]" // Need to get over the floating web view z-index 200
+            >
               {getMenubarContent(menuData.groups, menuData.items, columnKey, commandHandler)}
             </MenubarContent>
           </MenubarMenu>
