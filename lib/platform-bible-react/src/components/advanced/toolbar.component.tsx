@@ -13,6 +13,9 @@ export type ToolbarProps = PropsWithChildren<{
    */
   menuData?: Localized<MultiColumnMenu>;
 
+  /** Optional callback function that is executed whenever a menu on the Menubar is opened. */
+  onOpenMenu?: () => void;
+
   /** Optional unique identifier */
   id?: string;
 
@@ -64,6 +67,7 @@ export function getToolbarOSReservedSpaceClassName(
 
 export default function Toolbar({
   menuData,
+  onOpenMenu,
   commandHandler,
   className,
   id,
@@ -101,6 +105,7 @@ export default function Toolbar({
             {menuData && (
               <PlatformMenubar
                 menuData={menuData}
+                onOpenMenu={onOpenMenu}
                 commandHandler={commandHandler}
                 variant={menubarVariant}
               />

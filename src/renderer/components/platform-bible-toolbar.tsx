@@ -66,14 +66,25 @@ export default function PlatformBibleToolbar() {
     undefined,
   );
 
+  const [updateMenuData, setUpdateMenuData] = useState<boolean>(false);
+
   const [menuData] = usePromise(
-    useCallback(async () => provideMenuData(false), []),
+    useCallback(async () => {
+      if (updateMenuData) {
+        console.log('getting new menu data');
+        setUpdateMenuData(false);
+        return provideMenuData(false);
+      }
+    }, [updateMenuData]),
     { columns: {}, groups: {}, items: [] },
   );
 
   return (
     <Toolbar
       menuData={menuData}
+      onOpenMenu={() => {
+        setUpdateMenuData(true);
+      }}
       commandHandler={handleMenuCommand}
       className={cn(
         'tw-h-12 tw-bg-transparent',

@@ -871,6 +871,8 @@ export type ToolbarProps = React$1.PropsWithChildren<{
 	 * shown on the App Menubar
 	 */
 	menuData?: Localized<MultiColumnMenu>;
+	/** Optional callback function that is executed whenever a menu on the Menubar is opened. */
+	onOpenMenu?: () => void;
 	/** Optional unique identifier */
 	id?: string;
 	/** Additional css classes to help with unique styling of the toolbar */
@@ -902,7 +904,7 @@ export type ToolbarProps = React$1.PropsWithChildren<{
  * @returns The class name to apply to the toolbar if os specific space should be reserved
  */
 export declare function getToolbarOSReservedSpaceClassName(operatingSystem: string | undefined): string | undefined;
-export function Toolbar({ menuData, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export function Toolbar({ menuData, onOpenMenu, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];

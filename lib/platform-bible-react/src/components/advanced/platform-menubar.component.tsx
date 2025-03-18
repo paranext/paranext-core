@@ -16,7 +16,7 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { RefObject, useRef } from 'react';
+import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 
 export type MenuItemInfoBase = {
@@ -112,6 +112,9 @@ type PlatformMenubarProps = {
   /** The handler to use for menu commands. */
   commandHandler: CommandHandler;
 
+  /** Optional callback function that is executed whenever a menu on the Menubar is opened. */
+  onOpenMenu?: () => void;
+
   /** Style variant for the app menubar component. */
   variant?: 'default' | 'muted';
 };
@@ -120,9 +123,12 @@ type PlatformMenubarProps = {
 export default function PlatformMenubar({
   menuData,
   commandHandler,
+  onOpenMenu,
   variant,
 }: PlatformMenubarProps) {
   // These refs will always be defined
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const menubarRef = useRef<HTMLDivElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const projectMenuRef = useRef<HTMLButtonElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -179,10 +185,35 @@ export default function PlatformMenubar({
     }
   });
 
+  useEffect(() => {
+    if (!onOpenMenu || !menubarRef.current) return;
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'data-state' && mutation.target instanceof HTMLElement) {
+          const state = mutation.target.getAttribute('data-state');
+
+          if (state === 'open') {
+            onOpenMenu();
+          }
+        }
+      });
+    });
+
+    const menubarElement = menubarRef.current;
+    const dataStateAttributes = menubarElement.querySelectorAll('[data-state]');
+
+    dataStateAttributes.forEach((element) => {
+      observer.observe(element, { attributes: true });
+    });
+
+    return () => observer.disconnect();
+  }, [onOpenMenu]);
+
   if (!menuData) return undefined;
 
   return (
-    <Menubar className="pr-twp tw-border-0 tw-bg-transparent" variant={variant}>
+    <Menubar ref={menubarRef} className="pr-twp tw-border-0 tw-bg-transparent" variant={variant}>
       {Object.entries(menuData.columns)
         .filter(([, column]) => typeof column === 'object')
         .sort(([, a], [, b]) => {
