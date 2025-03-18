@@ -6,6 +6,7 @@ import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon, User } from 'lucide-react';
 import {
   BookChapterControl,
+  Button,
   cn,
   getToolbarOSReservedSpaceClassName,
   ScrollGroupSelector,
@@ -65,14 +66,24 @@ export default function PlatformBibleToolbar() {
     undefined,
   );
 
+  const [updateMenuData, setUpdateMenuData] = useState<boolean>(false);
+
   const [menuData] = usePromise(
-    useCallback(async () => provideMenuData(false), []),
+    useCallback(async () => {
+      setUpdateMenuData(false);
+      return provideMenuData(false);
+      // updateMenuData needs to be included for the menu contents to reevaluate when menu is (re)opened
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [updateMenuData]),
     { columns: {}, groups: {}, items: [] },
   );
 
   return (
     <Toolbar
       menuData={menuData}
+      onOpenChange={(isOpen: boolean) => {
+        setUpdateMenuData(isOpen);
+      }}
       commandHandler={handleMenuCommand}
       className={cn(
         'tw-h-12 tw-bg-transparent',
@@ -80,7 +91,7 @@ export default function PlatformBibleToolbar() {
       )}
       menubarVariant="muted"
       shouldUseAsAppDragArea
-      appMenuAreaChildren={<img width={32} height={32} src={`${logo}`} alt="Application Logo" />}
+      appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         // This is a placeholder for the actual user menu
         <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
@@ -88,10 +99,9 @@ export default function PlatformBibleToolbar() {
         </div>
       }
     >
-      <HomeIcon
-        className="home-button"
-        onClick={() => sendCommand('platformGetResources.openHome')}
-      />
+      <Button variant="ghost" onClick={() => sendCommand('platformGetResources.openHome')}>
+        <HomeIcon />
+      </Button>
       <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}

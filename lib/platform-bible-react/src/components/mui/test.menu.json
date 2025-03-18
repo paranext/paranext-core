@@ -86,6 +86,7 @@
         "localizeNotes": "Main application menu > Paratext column > Add Video",
         "group": "paratext.misc",
         "order": 1,
+
         "command": "videoExtension.addParatextVideo"
       }
     ]

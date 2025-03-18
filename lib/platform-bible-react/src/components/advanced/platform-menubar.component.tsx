@@ -16,7 +16,7 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { RefObject, useRef } from 'react';
+import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
 
 export type MenuItemInfoBase = {
@@ -34,6 +34,14 @@ export type Command = MenuItemInfoBase & {
 export interface CommandHandler {
   (command: Command): void;
 }
+
+const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
+  setTimeout(() => {
+    keys.forEach((key) => {
+      ref.current?.dispatchEvent(new KeyboardEvent('keydown', key));
+    });
+  }, 0);
+};
 
 const getSubMenuKeyForId = (
   groups: Localized<GroupsInMultiColumnMenu>,
@@ -104,6 +112,13 @@ type PlatformMenubarProps = {
   /** The handler to use for menu commands. */
   commandHandler: CommandHandler;
 
+  /**
+   * Optional callback function that is executed whenever a menu on the Menubar is opened or closed.
+   * Helpful for handling updates to the menu, as changing menu data when the menu is opened is not
+   * desirable.
+   */
+  onOpenChange?: (isOpen: boolean) => void;
+
   /** Style variant for the app menubar component. */
   variant?: 'default' | 'muted';
 };
@@ -112,9 +127,12 @@ type PlatformMenubarProps = {
 export default function PlatformMenubar({
   menuData,
   commandHandler,
+  onOpenChange,
   variant,
 }: PlatformMenubarProps) {
   // These refs will always be defined
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const menubarRef = useRef<HTMLDivElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const projectMenuRef = useRef<HTMLButtonElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -137,14 +155,6 @@ export default function PlatformMenubar({
       default:
         return undefined;
     }
-  };
-
-  const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
-    setTimeout(() => {
-      keys.forEach((key) => {
-        ref.current?.dispatchEvent(new KeyboardEvent('keydown', key));
-      });
-    }, 0);
   };
 
   // This is a quick and dirty way to implement some shortcuts by simulating key presses
@@ -179,10 +189,37 @@ export default function PlatformMenubar({
     }
   });
 
+  useEffect(() => {
+    if (!onOpenChange || !menubarRef.current) return;
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'data-state' && mutation.target instanceof HTMLElement) {
+          const state = mutation.target.getAttribute('data-state');
+
+          if (state === 'open') {
+            onOpenChange(true);
+          } else {
+            onOpenChange(false);
+          }
+        }
+      });
+    });
+
+    const menubarElement = menubarRef.current;
+    const dataStateAttributes = menubarElement.querySelectorAll('[data-state]');
+
+    dataStateAttributes.forEach((element) => {
+      observer.observe(element, { attributes: true });
+    });
+
+    return () => observer.disconnect();
+  }, [onOpenChange]);
+
   if (!menuData) return undefined;
 
   return (
-    <Menubar className="pr-twp tw-border-0 tw-bg-transparent" variant={variant}>
+    <Menubar ref={menubarRef} className="pr-twp tw-border-0 tw-bg-transparent" variant={variant}>
       {Object.entries(menuData.columns)
         .filter(([, column]) => typeof column === 'object')
         .sort(([, a], [, b]) => {

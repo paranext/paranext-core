@@ -2,8 +2,9 @@ import BookChapterControl from '@/components/advanced/book-chapter-control/book-
 import Toolbar, {
   getToolbarOSReservedSpaceClassName,
 } from '@/components/advanced/toolbar.component';
+import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui.util';
-import { BookIcon, Minus, Square, UserRound, X } from 'lucide-react';
+import { BookIcon, HomeIcon, Minus, Square, UserRound, X } from 'lucide-react';
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 import * as menuData from './sample.menu.json';
@@ -17,6 +18,9 @@ export default function ToolbarExamples() {
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar menuData={undefined} appMenuAreaChildren={<BookIcon />} commandHandler={() => {}}>
+        <Button variant="ghost">
+          <HomeIcon />
+        </Button>
         <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       <Toolbar menuData={menuData} appMenuAreaChildren={<BookIcon />} commandHandler={() => {}}>
