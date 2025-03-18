@@ -112,8 +112,12 @@ type PlatformMenubarProps = {
   /** The handler to use for menu commands. */
   commandHandler: CommandHandler;
 
-  /** Optional callback function that is executed whenever a menu on the Menubar is opened. */
-  onOpenMenu?: () => void;
+  /**
+   * Optional callback function that is executed whenever a menu on the Menubar is opened or closed.
+   * Helpful for handling updates to the menu, as changing menu data when the menu is opened is not
+   * desirable.
+   */
+  onOpenChange?: (isOpen: boolean) => void;
 
   /** Style variant for the app menubar component. */
   variant?: 'default' | 'muted';
@@ -123,7 +127,7 @@ type PlatformMenubarProps = {
 export default function PlatformMenubar({
   menuData,
   commandHandler,
-  onOpenMenu,
+  onOpenChange,
   variant,
 }: PlatformMenubarProps) {
   // These refs will always be defined
@@ -186,7 +190,7 @@ export default function PlatformMenubar({
   });
 
   useEffect(() => {
-    if (!onOpenMenu || !menubarRef.current) return;
+    if (!onOpenChange || !menubarRef.current) return;
 
     const observer = new MutationObserver((mutations) => {
       mutations.forEach((mutation) => {
@@ -194,7 +198,9 @@ export default function PlatformMenubar({
           const state = mutation.target.getAttribute('data-state');
 
           if (state === 'open') {
-            onOpenMenu();
+            onOpenChange(true);
+          } else {
+            onOpenChange(false);
           }
         }
       });
@@ -208,7 +214,7 @@ export default function PlatformMenubar({
     });
 
     return () => observer.disconnect();
-  }, [onOpenMenu]);
+  }, [onOpenChange]);
 
   if (!menuData) return undefined;
 

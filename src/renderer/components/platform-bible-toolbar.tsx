@@ -70,11 +70,10 @@ export default function PlatformBibleToolbar() {
 
   const [menuData] = usePromise(
     useCallback(async () => {
-      if (updateMenuData) {
-        console.log('getting new menu data');
-        setUpdateMenuData(false);
-        return provideMenuData(false);
-      }
+      setUpdateMenuData(false);
+      return provideMenuData(false);
+      // updateMenuData needs to be included for the menu contents to reevaluate when menu is (re)opened
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [updateMenuData]),
     { columns: {}, groups: {}, items: [] },
   );
@@ -82,8 +81,8 @@ export default function PlatformBibleToolbar() {
   return (
     <Toolbar
       menuData={menuData}
-      onOpenMenu={() => {
-        setUpdateMenuData(true);
+      onOpenChange={(isOpen: boolean) => {
+        setUpdateMenuData(isOpen);
       }}
       commandHandler={handleMenuCommand}
       className={cn(
