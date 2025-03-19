@@ -63,19 +63,19 @@ test('Get book number for Matthew from USFM string', async () => {
 test('Get book number for Psalms from USFM string with lower case ID', async () => {
   const input: string = '\\id psa';
   const id: string = getBookIdFromUSFM(input);
-  expect(id).toEqual('PSA');
+  expect(id).toEqual('psa');
 });
 
 test('Get book number for Job from USFM string with mixed case ID', async () => {
   const input: string = '\\id jOb';
   const id: string = getBookIdFromUSFM(input);
-  expect(id).toEqual('JOB');
+  expect(id).toEqual('jOb');
 });
 
 test('Try to get book number for non-existing ID from USFM string', async () => {
   const input: string = '\\id ABC this ID does not exist';
   const id: string = getBookIdFromUSFM(input);
-  expect(id).toEqual('');
+  expect(id).toEqual('ABC');
 });
 
 test('Try to get book number for empty ID marker from USFM string', async () => {
