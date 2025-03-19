@@ -4,9 +4,10 @@ import {
 } from '@shared/models/web-view.model';
 import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { useEvent } from 'platform-bible-react';
-import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
 import { useState, useCallback } from 'react';
 import useScrollGroupScrRef from '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 // We don't add this to PAPI directly like other hooks because `this` has to be bound to a web view's iframe context
 /** See `web-view.model.ts` for normal hook documentation */
@@ -19,8 +20,8 @@ export default function useWebViewScrollGroupScrRef(this: {
     };
   };
 }): [
-  scrRef: ScriptureReference,
-  setScrRef: (newScrRef: ScriptureReference) => void,
+  scrRef: SerializedVerseRef,
+  setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,
   setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
 ] {

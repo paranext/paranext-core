@@ -1,8 +1,4 @@
-export interface ScriptureReference {
-  bookNum: number;
-  chapterNum: number;
-  verseNum: number;
-}
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 export interface BookInfo {
   shortName: string;
@@ -14,7 +10,7 @@ export interface BookInfo {
  * Represents a "node" in the JSON used to present Scripture in the editor, with a path that is
  * relative to the start of a verse.
  */
-export type ScriptureNode = ScriptureReference & {
+export type ScriptureNode = SerializedVerseRef & {
   jsonPath: string;
 };
 

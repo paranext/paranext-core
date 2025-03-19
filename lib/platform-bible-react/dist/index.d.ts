@@ -13,6 +13,7 @@ import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
@@ -20,17 +21,19 @@ import React$1 from 'react';
 import { ChangeEventHandler, ComponentProps, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode } from 'react';
 import { Toaster, toast as sonner } from 'sonner';
 
+export type BookChapterControlProps = {
+	scrRef: SerializedVerseRef;
+	handleSubmit: (scrRef: SerializedVerseRef) => void;
+	className?: string;
+	getActiveBookIds?: () => string[];
+};
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 type Unsubscriber = () => boolean;
 type UnsubscriberAsync = () => Promise<boolean>;
 type PlatformEventHandler<T> = (event: T) => void;
 type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
 type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
-interface ScriptureReference {
-	bookNum: number;
-	chapterNum: number;
-	verseNum: number;
-}
-type ScriptureNode = ScriptureReference & {
+type ScriptureNode = SerializedVerseRef & {
 	jsonPath: string;
 };
 type ScriptureTextAnchor = ScriptureNode & {
@@ -129,13 +132,6 @@ type LocalizedStringValue = string;
 interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
-export type BookChapterControlProps = {
-	scrRef: ScriptureReference;
-	handleSubmit: (scrRef: ScriptureReference) => void;
-	className?: string;
-	getActiveBookIds?: () => string[];
-};
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	startChapter: number;
 	endChapter: number;
@@ -460,7 +456,7 @@ type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
 	/** Reference to scripture where the item appears */
-	reference: ScriptureReference;
+	reference: SerializedVerseRef;
 	/** Snippet of scripture that contains the occurrence */
 	text: string;
 };
@@ -502,7 +498,7 @@ export declare const getNumberFromUSFM: (text: string) => number | undefined;
  * @returns Book number corresponding to the \id marker in the input text. Returns 0 if no marker is
  *   found or the marker is not valid
  */
-export declare const getBookNumFromId: (text: string) => number;
+export declare const getBookIdFromUSFM: (text: string) => string;
 /**
  * Gets the status for an item, typically used in the Inventory component
  *
@@ -541,9 +537,9 @@ type AdditionalItemsLabels = {
 };
 type InventoryProps = {
 	/** The scripture reference that the application is currently set to */
-	scriptureReference: ScriptureReference;
+	verseRef: SerializedVerseRef;
 	/** Callback function that is executed when the scripture reference is changed */
-	setScriptureReference: (scriptureReference: ScriptureReference) => void;
+	setVerseRef: (scriptureReference: SerializedVerseRef) => void;
 	/**
 	 * Object with all localized strings that the Inventory needs to work well across multiple
 	 * languages. When using this component with Platform.Bible, you can import
@@ -559,7 +555,7 @@ type InventoryProps = {
 	 * for the related columns and control elements to show by setting the `additionalItemsLabels`
 	 * prop
 	 */
-	extractItems: RegExp | ((text: string | undefined, scriptureRef: ScriptureReference, approvedItems: string[], unapprovedItems: string[]) => InventoryTableData[]);
+	extractItems: RegExp | ((text: string | undefined, scriptureRef: SerializedVerseRef, approvedItems: string[], unapprovedItems: string[]) => InventoryTableData[]);
 	/**
 	 * Text labels for control elements and additional column headers in case your Inventory has more
 	 * than one item to show (e.g. The 'Preceding Marker' in the Markers Inventory)
@@ -584,7 +580,7 @@ type InventoryProps = {
 	columns: ColumnDef<InventoryTableData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export function Inventory({ verseRef, setVerseRef, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *

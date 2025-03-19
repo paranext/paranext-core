@@ -1,10 +1,9 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
-import { ScriptureReference } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
-import { VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import papi from '@papi/frontend';
 import CharacterInventory from './checks/inventories/character-inventory.component';
 import RepeatedWordsInventory from './checks/inventories/repeated-words-inventory.component';
@@ -22,11 +21,11 @@ import PunctuationInventory from './checks/inventories/punctuation-inventory.com
  */
 const getText = async (
   scope: Scope,
-  scriptureRef: ScriptureReference,
+  scriptureRef: SerializedVerseRef,
   projectId: string,
 ): Promise<string | undefined> => {
   const verseRef = new VerseRef(
-    scriptureRef.bookNum,
+    Canon.bookIdToNumber(scriptureRef.book),
     scriptureRef.chapterNum,
     scriptureRef.verseNum,
   );
@@ -106,7 +105,7 @@ global.webViewComponent = function InventoryWebView({
   return (
     <InventoryVariant
       scriptureReference={scriptureRef}
-      setScriptureReference={setScriptureRef}
+      setVerseRef={setScriptureRef}
       localizedStrings={localizedStrings}
       approvedItems={validItemsArray}
       onApprovedItemsChange={(items: string[]) => setValidItems?.(items.join(' '))}

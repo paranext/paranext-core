@@ -1,5 +1,4 @@
-import { Canon } from '@sillsdev/scripture';
-import { ScriptureReference } from 'platform-bible-utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 /* #region Types */
 
@@ -12,7 +11,7 @@ export type Status = 'approved' | 'unapproved' | 'unknown';
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
   /** Reference to scripture where the item appears */
-  reference: ScriptureReference;
+  reference: SerializedVerseRef;
   /** Snippet of scripture that contains the occurrence */
   text: string;
 };
@@ -74,13 +73,13 @@ export const getNumberFromUSFM = (text: string): number | undefined => {
  * @returns Book number corresponding to the \id marker in the input text. Returns 0 if no marker is
  *   found or the marker is not valid
  */
-export const getBookNumFromId = (text: string): number => {
+export const getBookIdFromUSFM = (text: string): string => {
   // Captures all digits that follow an \id marker followed by whitespace located at the start of a string
   const match = text.match(/^\\id\s+([A-Za-z]+)/);
   if (match) {
-    return Canon.bookIdToNumber(match[1]);
+    return match[1];
   }
-  return 0;
+  return '';
 };
 
 /**

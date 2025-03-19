@@ -26,7 +26,6 @@ import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   deepClone,
-  ScriptureReference,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -244,13 +243,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      const newScrRef: ScriptureReference = {
-        bookNum: Canon.bookIdToNumber(newVerseLocation.book),
-        chapterNum: newVerseLocation.chapterNum,
-        verseNum: newVerseLocation.verseNum,
-      };
       internalVerseLocationRef.current = newVerseLocation;
-      setScrRefWithScroll(newScrRef);
+      setScrRefWithScroll(newVerseLocation);
     },
     [setScrRefWithScroll],
   );

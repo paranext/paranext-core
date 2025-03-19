@@ -4,8 +4,9 @@ declare module 'platform-scripture-editor' {
   import type { CheckLocation } from 'platform-scripture';
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import type { NetworkableObject } from '@papi/core';
-  import type { LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+  import type { LocalizeKey } from 'platform-bible-utils';
   import { CSSProperties } from 'react';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   // #region copied from @biblionexus-foundation/platform-editor because they are not yet properly
   // exported
@@ -26,7 +27,7 @@ declare module 'platform-scripture-editor' {
   export type EditorMessageSelectRange = {
     method: 'selectRange';
     /** Goes to this Scripture Reference before setting the selection */
-    scrRef: ScriptureReference;
+    scrRef: SerializedVerseRef;
     /** Endpoints of the selection. Should start at the same place as the scrRef */
     range: SelectionRange;
   };
@@ -45,8 +46,8 @@ declare module 'platform-scripture-editor' {
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
-   * {@link CheckLocation} but using a `ScriptureReference` instead of a `VerseRef` since `VerseRef`
-   * doesn't travel across processes well
+   * {@link CheckLocation} but using a `SerializedVerseRef` instead of a `VerseRef` since `VerseRef`
+   * doesn't travel across processes well TODO: This might need some more thought?
    *
    * Also added `bookNum` and `chapterNum` to the `jsonPath` result
    */
@@ -72,7 +73,7 @@ declare module 'platform-scripture-editor' {
       }
     | {
         /** Verse reference to a location with the document */
-        scrRef: ScriptureReference;
+        scrRef: SerializedVerseRef;
         /** Offset to apply to start of the verse indicated by `verseRef` */
         offset?: number;
       };

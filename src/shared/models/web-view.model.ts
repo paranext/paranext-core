@@ -1,7 +1,8 @@
 import type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 // Used in JSDoc link
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ScriptureReference, ScrollGroupId, LocalizeKey } from 'platform-bible-utils';
+import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
 
 /** The type of code that defines a webview's content */
 export enum WebViewContentType {
@@ -109,8 +110,8 @@ type WebViewDefinitionBase = {
    */
   projectId?: string;
   /**
-   * With which scroll group this web view is synced or the {@link ScriptureReference} this web view
-   * is focusing independently of a scroll group
+   * With which scroll group this web view is synced or the SerializedVerseRef this web view is
+   * focusing independently of a scroll group
    */
   scrollGroupScrRef?: ScrollGroupScrRef;
   /**
@@ -372,7 +373,7 @@ export type UseWebViewStateHook = <T>(
  * JSDOC SOURCE UseWebViewScrollGroupScrRefHook
  *
  * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
- * value and a function to set the value for both the {@link ScriptureReference} and the
+ * value and a function to set the value for both the SerializedVerseRef and the
  * {@link ScrollGroupId} with which this web view is synced (using this web view's
  * `scrollGroupScrRef` property). Use similarly to `useState`.
  *
@@ -394,8 +395,8 @@ export type UseWebViewStateHook = <T>(
  * ```
  */
 export type UseWebViewScrollGroupScrRefHook = () => [
-  scrRef: ScriptureReference,
-  setScrRef: (newScrRef: ScriptureReference) => void,
+  scrRef: SerializedVerseRef,
+  setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,
   setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
 ];
