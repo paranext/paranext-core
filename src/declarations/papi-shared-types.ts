@@ -1,5 +1,5 @@
 declare module 'papi-shared-types' {
-  import type { ScriptureReference, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -22,6 +22,7 @@ declare module 'papi-shared-types' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
   import { WebViewId } from '@shared/models/web-view.model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   // #region Commands
 
@@ -124,7 +125,7 @@ declare module 'papi-shared-types' {
      * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
      * `useWebViewScrollGroupScrRef`
      */
-    'platform.verseRef': ScriptureReference;
+    'platform.verseRef': SerializedVerseRef;
     /**
      * List of locales to use when localizing the interface. First in the list receives highest
      * priority. Please always add 'en' (English) at the end when using this setting so everything

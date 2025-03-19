@@ -15,15 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
-import {
-  deepEqual,
-  LocalizedStringValue,
-  ScriptureReference,
-  substring,
-} from 'platform-bible-utils';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { deepEqual, LocalizedStringValue, substring } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
+import { inventoryAdditionalItemColumn } from './inventory-columns';
 import {
-  getBookNumFromId,
+  getBookIdFromUSFM,
   getLinesFromUSFM,
   getNumberFromUSFM,
   getStatusForItem,
@@ -31,7 +28,6 @@ import {
   InventoryTableData,
   Status,
 } from './inventory-utils';
-import { inventoryAdditionalItemColumn } from './inventory-columns';
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -113,7 +109,7 @@ const filterItemData = (
  */
 const createTableData = (
   text: string | undefined,
-  scriptureRef: ScriptureReference,
+  scriptureRef: SerializedVerseRef,
   approvedItems: string[],
   unapprovedItems: string[],
   itemRegex: RegExp,
@@ -122,7 +118,7 @@ const createTableData = (
 
   const tableData: InventoryTableData[] = [];
 
-  let currentBook: number | undefined = scriptureRef.bookNum;
+  let currentBook: string | undefined = scriptureRef.book;
   let currentChapter: number | undefined = scriptureRef.chapterNum;
   let currentVerse: number | undefined = scriptureRef.verseNum;
 
@@ -130,7 +126,7 @@ const createTableData = (
 
   lines.forEach((line: string) => {
     if (line.startsWith('\\id')) {
-      currentBook = getBookNumFromId(line);
+      currentBook = getBookIdFromUSFM(line);
       currentChapter = 0;
       currentVerse = 0;
     }
@@ -153,7 +149,7 @@ const createTableData = (
       const existingItem = tableData.find((tableEntry) => deepEqual(tableEntry.items, items));
       const newReference: InventoryItemOccurrence = {
         reference: {
-          bookNum: currentBook !== undefined ? currentBook : -1,
+          book: currentBook !== undefined ? currentBook : '',
           chapterNum: currentChapter !== undefined ? currentChapter : -1,
           verseNum: currentVerse !== undefined ? currentVerse : -1,
         },
@@ -197,9 +193,9 @@ const localizeString = (
 /** Props for the Inventory component */
 type InventoryProps = {
   /** The scripture reference that the application is currently set to */
-  scriptureReference: ScriptureReference;
+  verseRef: SerializedVerseRef;
   /** Callback function that is executed when the scripture reference is changed */
-  setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   /**
    * Object with all localized strings that the Inventory needs to work well across multiple
    * languages. When using this component with Platform.Bible, you can import
@@ -219,7 +215,7 @@ type InventoryProps = {
     | RegExp
     | ((
         text: string | undefined,
-        scriptureRef: ScriptureReference,
+        scriptureRef: SerializedVerseRef,
         approvedItems: string[],
         unapprovedItems: string[],
       ) => InventoryTableData[]);
@@ -249,8 +245,8 @@ type InventoryProps = {
 
 /** Inventory component that is used to view and control the status of provided project settings */
 export default function Inventory({
-  scriptureReference,
-  setScriptureReference,
+  verseRef,
+  setVerseRef,
   localizedStrings,
   extractItems,
   additionalItemsLabels,
@@ -282,15 +278,9 @@ export default function Inventory({
   const tableData: InventoryTableData[] = useMemo(() => {
     if (!text) return [];
     if (extractItems instanceof RegExp)
-      return createTableData(
-        text,
-        scriptureReference,
-        approvedItems,
-        unapprovedItems,
-        extractItems,
-      );
-    return extractItems(text, scriptureReference, approvedItems, unapprovedItems);
-  }, [text, extractItems, scriptureReference, approvedItems, unapprovedItems]);
+      return createTableData(text, verseRef, approvedItems, unapprovedItems, extractItems);
+    return extractItems(text, verseRef, approvedItems, unapprovedItems);
+  }, [text, extractItems, verseRef, approvedItems, unapprovedItems]);
 
   const reducedTableData: InventoryTableData[] = useMemo(() => {
     if (showAdditionalItems) return tableData;
@@ -452,7 +442,7 @@ export default function Inventory({
         <div className="tw-m-1 tw-flex-1 tw-overflow-auto tw-rounded-md tw-border">
           <OccurrencesTable
             occurrenceData={occurrenceData}
-            setScriptureReference={setScriptureReference}
+            setScriptureReference={setVerseRef}
             localizedStrings={localizedStrings}
           />
         </div>

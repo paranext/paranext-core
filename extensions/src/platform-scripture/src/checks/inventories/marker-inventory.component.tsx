@@ -1,8 +1,9 @@
 import { useLocalizedStrings, useProjectData, useSetting } from '@papi/frontend/react';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
   ColumnDef,
-  getBookNumFromId,
+  getBookIdFromUSFM,
   getLinesFromUSFM,
   getNumberFromUSFM,
   getStatusForItem,
@@ -19,7 +20,6 @@ import {
   defaultScrRef,
   LanguageStrings,
   LocalizeKey,
-  ScriptureReference,
   substring,
 } from 'platform-bible-utils';
 import { useMemo } from 'react';
@@ -36,7 +36,7 @@ const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
 
 const extractMarkers = (
   text: string | undefined,
-  scriptureRef: ScriptureReference,
+  scriptureRef: SerializedVerseRef,
   approvedItems: string[],
   unapprovedItems: string[],
 ): InventoryTableData[] => {
@@ -44,7 +44,7 @@ const extractMarkers = (
 
   const tableData: InventoryTableData[] = [];
 
-  let currentBook: number | undefined = scriptureRef.bookNum;
+  let currentBook: string = scriptureRef.book;
   let currentChapter: number | undefined = scriptureRef.chapterNum;
   let currentVerse: number | undefined = scriptureRef.verseNum;
 
@@ -58,7 +58,7 @@ const extractMarkers = (
 
   lines.forEach((line: string) => {
     if (line.startsWith('\\id')) {
-      currentBook = getBookNumFromId(line);
+      currentBook = getBookIdFromUSFM(line);
       currentChapter = 0;
       currentVerse = 0;
     }
@@ -85,7 +85,7 @@ const extractMarkers = (
       const existingItem = tableData.find((tableEntry) => deepEqual(tableEntry.items, items));
       const newReference: InventoryItemOccurrence = {
         reference: {
-          bookNum: currentBook !== undefined ? currentBook : -1,
+          book: currentBook !== undefined ? currentBook : '',
           chapterNum: currentChapter !== undefined ? currentChapter : -1,
           verseNum: currentVerse !== undefined ? currentVerse : -1,
         },
@@ -167,8 +167,8 @@ const createColumns = (
 ];
 
 type MarkerInventoryProps = {
-  scriptureReference: ScriptureReference;
-  setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  verseRef: SerializedVerseRef;
+  setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
@@ -181,8 +181,8 @@ type MarkerInventoryProps = {
 };
 
 function MarkerInventory({
-  scriptureReference,
-  setScriptureReference,
+  verseRef,
+  setVerseRef,
   localizedStrings,
   approvedItems,
   onApprovedItemsChange,
@@ -198,7 +198,7 @@ function MarkerInventory({
   const [markerNames] = useProjectData(
     'platformScripture.MarkerNames',
     projectId ?? undefined,
-  ).MarkerNames(scrRef.bookNum, []);
+  ).MarkerNames(Canon.bookIdToNumber(scrRef.book), []);
 
   const [markerInventoryStrings] = useLocalizedStrings(MARKER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
@@ -260,8 +260,8 @@ function MarkerInventory({
 
   return (
     <Inventory
-      scriptureReference={scriptureReference}
-      setScriptureReference={setScriptureReference}
+      verseRef={verseRef}
+      setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
       extractItems={extractMarkers}
       approvedItems={approvedItems}

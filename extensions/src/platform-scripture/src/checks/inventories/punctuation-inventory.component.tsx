@@ -1,4 +1,4 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import {
   Button,
   ColumnDef,
@@ -16,6 +16,7 @@ import {
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { useMemo, useState } from 'react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 const PUNCTUATION_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
@@ -41,13 +42,13 @@ const punctuationRegex: RegExp = /[\p{P}]/gu;
 //   showSequences: boolean,
 // ): ((
 //   text: string | undefined,
-//   scriptureRef: ScriptureReference,
+//   scriptureRef: SerializedVerseRef,
 //   approvedItems: string[],
 //   unapprovedItems: string[],
 // ) => InventoryTableData[]) => {
 //   return (
 //     text: string | undefined,
-//     scriptureRef: ScriptureReference,
+//     scriptureRef: SerializedVerseRef ,
 //     approvedItems: string[],
 //     unapprovedItems: string[],
 //   ) => {
@@ -252,8 +253,8 @@ const createColumns = (
 };
 
 type PunctuationInventoryProps = {
-  scriptureReference: ScriptureReference;
-  setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  verseRef: SerializedVerseRef;
+  setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
@@ -265,8 +266,8 @@ type PunctuationInventoryProps = {
 };
 
 function PunctuationInventory({
-  scriptureReference,
-  setScriptureReference,
+  verseRef,
+  setVerseRef,
   localizedStrings,
   approvedItems,
   onApprovedItemsChange,
@@ -375,8 +376,8 @@ function PunctuationInventory({
         {showSequences ? showSinglePunctuationCharacterLabel : showSequencesLabel}
       </Button>
       <Inventory
-        scriptureReference={scriptureReference}
-        setScriptureReference={setScriptureReference}
+        verseRef={verseRef}
+        setVerseRef={setVerseRef}
         localizedStrings={localizedStrings}
         // extractItems={extractPunctuation(showSequences)}
         extractItems={punctuationRegex}

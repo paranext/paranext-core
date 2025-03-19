@@ -35,7 +35,7 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
       source: repeatedWordsCheck,
       data: [
         {
-          start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
+          start: { book: 'GEN', chapterNum: 1, verseNum: 1, ...textAnchor },
           detail: frogRepeatedError,
         },
       ],
@@ -44,11 +44,11 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
       source: markersCheck,
       data: [
         {
-          start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
+          start: { book: 'EXO', chapterNum: 2, verseNum: 3, ...textAnchor },
           detail: unknownMarkerError,
         },
         {
-          start: { bookNum: 66, chapterNum: 10, verseNum: 15, ...textAnchor },
+          start: { book: 'REV', chapterNum: 10, verseNum: 15, ...textAnchor },
           detail: unclosedMarkerError,
         },
       ],
@@ -57,7 +57,7 @@ describe('ScriptureResultsViewer default display mode (with combobox for groupin
       source: quotationsCheck,
       data: [
         {
-          start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
+          start: { book: 'MAT', chapterNum: 20, verseNum: 1, ...textAnchor },
           detail: missingEndQuote,
         },
       ],

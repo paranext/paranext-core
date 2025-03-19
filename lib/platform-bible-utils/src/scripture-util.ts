@@ -1,11 +1,11 @@
-import { Canon, VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import {
   MarkerContent,
   MarkerObject,
   Usj,
   USJ_TYPE,
 } from '@biblionexus-foundation/scripture-utilities';
-import { BookInfo, ScriptureReference, ScrollGroupId } from './scripture.model';
+import { BookInfo, ScrollGroupId } from './scripture.model';
 import { at, isWhiteSpace, slice, split, startsWith } from './string-util';
 import { LocalizeKey } from './menus.model';
 import { isString } from './util';
@@ -97,8 +97,8 @@ export const LAST_SCR_BOOK_NUM = scrBookData.length - 1;
 export const FIRST_SCR_CHAPTER_NUM = 1;
 export const FIRST_SCR_VERSE_NUM = 1;
 
-export const defaultScrRef: ScriptureReference = {
-  bookNum: 1,
+export const defaultScrRef: SerializedVerseRef = {
+  book: 'GEN',
   chapterNum: 1,
   verseNum: 1,
 };
@@ -107,22 +107,27 @@ export const getChaptersForBook = (bookNum: number): number => {
   return scrBookData[bookNum]?.chapters ?? -1;
 };
 
-export const offsetBook = (scrRef: ScriptureReference, offset: number): ScriptureReference => ({
-  bookNum: Math.max(FIRST_SCR_BOOK_NUM, Math.min(scrRef.bookNum + offset, LAST_SCR_BOOK_NUM)),
+export const offsetBook = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
+  book: Canon.bookNumberToId(
+    Math.max(
+      FIRST_SCR_BOOK_NUM,
+      Math.min(Canon.bookIdToNumber(scrRef.book) + offset, LAST_SCR_BOOK_NUM),
+    ),
+  ),
   chapterNum: 1,
   verseNum: 1,
 });
 
-export const offsetChapter = (scrRef: ScriptureReference, offset: number): ScriptureReference => ({
+export const offsetChapter = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   ...scrRef,
   chapterNum: Math.min(
     Math.max(FIRST_SCR_CHAPTER_NUM, scrRef.chapterNum + offset),
-    getChaptersForBook(scrRef.bookNum),
+    getChaptersForBook(Canon.bookIdToNumber(scrRef.book)),
   ),
   verseNum: 1,
 });
 
-export const offsetVerse = (scrRef: ScriptureReference, offset: number): ScriptureReference => ({
+export const offsetVerse = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   ...scrRef,
   verseNum: Math.max(FIRST_SCR_VERSE_NUM, scrRef.verseNum + offset),
 });
@@ -176,8 +181,9 @@ export async function getLocalizedIdFromBookNumber(
  * @returns An integer where the first three digits represent the book, the next three represent the
  *   chapter and the last three represent the verse.
  */
-export function scrRefToBBBCCCVVV(scrRef: ScriptureReference): number {
-  return new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum).BBBCCCVVV;
+export function scrRefToBBBCCCVVV(scrRef: SerializedVerseRef): number {
+  return new VerseRef(Canon.bookIdToNumber(scrRef.book), scrRef.chapterNum, scrRef.verseNum)
+    .BBBCCCVVV;
 }
 
 /**
@@ -189,7 +195,7 @@ export function scrRefToBBBCCCVVV(scrRef: ScriptureReference): number {
  *   scrRef2 in sorting order. - Zero if scrRef1 and scrRef2 are equivalent in sorting order. -
  *   Positive value if scrRef1 follows scrRef2 in sorting order.
  */
-export function compareScrRefs(scrRef1: ScriptureReference, scrRef2: ScriptureReference): number {
+export function compareScrRefs(scrRef1: SerializedVerseRef, scrRef2: SerializedVerseRef): number {
   // TODO: consider edge cases for invalid references (current implementation should suffice for
   // all but the most extreme cases)
   return scrRefToBBBCCCVVV(scrRef1) - scrRefToBBBCCCVVV(scrRef2);
@@ -235,7 +241,7 @@ export function getLocalizeKeysForScrollGroupIds(scrollGroupIds: (ScrollGroupId 
  * @returns The formatted reference.
  */
 export function formatScrRef(
-  scrRef: ScriptureReference,
+  scrRef: SerializedVerseRef,
   optionOrLocalizedBookName?: 'id' | 'English' | string,
   chapterVerseSeparator?: string,
   bookChapterSeparator?: string,
@@ -243,10 +249,10 @@ export function formatScrRef(
   let book: string;
   switch (optionOrLocalizedBookName ?? 'id') {
     case 'English':
-      book = Canon.bookNumberToEnglishName(scrRef.bookNum);
+      book = Canon.bookIdToEnglishName(scrRef.book);
       break;
     case 'id':
-      book = Canon.bookNumberToId(scrRef.bookNum);
+      book = scrRef.book;
       break;
     default:
       // We already dealt with undefined about in the switch, but TS is getting confused.

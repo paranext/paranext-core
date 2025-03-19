@@ -100,7 +100,6 @@ export type { PlatformError } from './platform-error';
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
 export type {
   BookInfo,
-  ScriptureReference,
   ScrollGroupId,
   ScriptureNode,
   ScriptureSelection,

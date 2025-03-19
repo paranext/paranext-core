@@ -1,4 +1,4 @@
-import { getNumberFromUSFM, getLinesFromUSFM, getBookNumFromId } from './inventory-utils';
+import { getNumberFromUSFM, getLinesFromUSFM, getBookIdFromUSFM } from './inventory-utils';
 
 test('Get lines from USFM string', async () => {
   const input: string = `Input text line 1\nThis is line 2\\v This is line 3\\c This is line 4\\id This is line 5\nThis is line 6
@@ -50,42 +50,42 @@ test('Unsuccessfully trying to get number from random string', async () => {
 
 test('Get book number for Exodus from USFM string', async () => {
   const input: string = '\\id EXO this is Exodus';
-  const number: number | undefined = getBookNumFromId(input);
-  expect(number).toEqual(2);
+  const id: string = getBookIdFromUSFM(input);
+  expect(id).toEqual('EXO');
 });
 
 test('Get book number for Matthew from USFM string', async () => {
   const input: string = '\\id MAT this is Matthew';
-  const number: number | undefined = getBookNumFromId(input);
-  expect(number).toEqual(40);
+  const id: string = getBookIdFromUSFM(input);
+  expect(id).toEqual('MAT');
 });
 
 test('Get book number for Psalms from USFM string with lower case ID', async () => {
   const input: string = '\\id psa';
-  const number: number | undefined = getBookNumFromId(input);
-  expect(number).toEqual(19);
+  const id: string = getBookIdFromUSFM(input);
+  expect(id).toEqual('PSA');
 });
 
 test('Get book number for Job from USFM string with mixed case ID', async () => {
   const input: string = '\\id jOb';
-  const number: number | undefined = getBookNumFromId(input);
-  expect(number).toEqual(18);
+  const id: string = getBookIdFromUSFM(input);
+  expect(id).toEqual('JOB');
 });
 
 test('Try to get book number for non-existing ID from USFM string', async () => {
   const input: string = '\\id ABC this ID does not exist';
-  const number: number | undefined = getBookNumFromId(input);
-  expect(number).toEqual(0);
+  const id: string = getBookIdFromUSFM(input);
+  expect(id).toEqual('');
 });
 
 test('Try to get book number for empty ID marker from USFM string', async () => {
   const input: string = '\\id';
-  const number: number | undefined = getBookNumFromId(input);
-  expect(number).toEqual(0);
+  const id: string = getBookIdFromUSFM(input);
+  expect(id).toEqual('');
 });
 
 test('Try to get book number for random (non-USFM) string', async () => {
   const input: string = 'No USFM here';
-  const number: number | undefined = getBookNumFromId(input);
-  expect(number).toEqual(0);
+  const id: string = getBookIdFromUSFM(input);
+  expect(id).toEqual('');
 });

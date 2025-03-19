@@ -9,13 +9,12 @@ import {
   SettableCheckDetails,
 } from 'platform-scripture';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import {
   getChaptersForBook,
   isPlatformError,
   LAST_SCR_BOOK_NUM,
   LocalizeKey,
-  ScriptureReference,
 } from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
 import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';
@@ -220,8 +219,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
       );
       if (!selectedResult) return;
 
-      const selectedCheckScrRef: ScriptureReference = {
-        bookNum: selectedResult.verseRef.bookNum,
+      const selectedCheckScrRef: SerializedVerseRef = {
+        book: Canon.bookNumberToId(selectedResult.verseRef.bookNum),
         chapterNum: selectedResult.verseRef.chapterNum,
         verseNum: selectedResult.verseRef.verseNum,
       };

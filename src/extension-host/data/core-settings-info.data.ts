@@ -1,6 +1,7 @@
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import localizationService from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
-import { isString, ScriptureReference, SettingsContribution } from 'platform-bible-utils';
+import { isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = {
@@ -10,7 +11,7 @@ export const platformSettings: SettingsContribution = {
     'platform.verseRef': {
       label: '%settings_platform_verseRef_label%',
       description: '%settings_platform_verseRef_description%',
-      default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+      default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
       label: '%settings_platform_interfaceLanguage_label%',
@@ -35,16 +36,16 @@ export const platformSettings: SettingsContribution = {
 
 // TODO: Add range checking of BCV numbers given the current versification
 export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = async (
-  newValue: ScriptureReference,
+  newValue: SerializedVerseRef,
 ): Promise<boolean> => {
   return (
-    'bookNum' in newValue &&
+    'book' in newValue &&
     'chapterNum' in newValue &&
     'verseNum' in newValue &&
-    typeof newValue.bookNum === 'number' &&
+    typeof newValue.book === 'string' &&
     typeof newValue.chapterNum === 'number' &&
     typeof newValue.verseNum === 'number' &&
-    newValue.bookNum >= 0 &&
+    newValue.book !== '' && // TODO: This might need more thought, even though the >= 0 wasn't very good either
     newValue.chapterNum >= 0 &&
     newValue.verseNum >= 0
   );
