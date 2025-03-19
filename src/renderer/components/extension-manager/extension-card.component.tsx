@@ -1,4 +1,13 @@
-import { Avatar, Card, CardActions, CardContent, CardHeader, Typography } from '@mui/material';
+import {
+  Avatar,
+  AvatarFallback,
+  AvatarImage,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Label,
+} from 'platform-bible-react';
 import { PropsWithChildren, ReactNode, useMemo } from 'react';
 import './extension-card.component.scss';
 
@@ -29,8 +38,9 @@ export default function ExtensionCard({
 }: ExtensionCardProps) {
   const avatar = useMemo(
     () => (
-      <Avatar variant="square" src={iconFilePath ?? undefined} alt={extensionDescription}>
-        {!iconFilePath ? extensionName[0] : undefined}
+      <Avatar>
+        <AvatarImage src={iconFilePath ?? undefined} alt={extensionDescription} />
+        <AvatarFallback>{extensionName[0]}</AvatarFallback>
       </Avatar>
     ),
     [extensionDescription, extensionName, iconFilePath],
@@ -39,27 +49,20 @@ export default function ExtensionCard({
   const isGallery = useMemo(() => className && className === 'square', [className]);
 
   return (
-    <Card
-      className={isGallery ? 'extension-card-square' : 'extension-card-wide'}
-      variant="outlined"
-    >
-      <CardHeader
-        className="extension-card-content"
-        avatar={avatar}
-        title={extensionName}
-        titleTypographyProps={{ variant: 'h6' }}
-        action={headerAction}
-        subheader={!isGallery ? extensionDescription : undefined}
-        subheaderTypographyProps={{ variant: 'body2' }}
-      />
+    <Card className={isGallery ? 'extension-card-square' : 'extension-card-wide'}>
+      <div>
+        <CardTitle>{extensionName}</CardTitle>
+        <CardHeader className="extension-card-content" />
+        {avatar}
+        {extensionDescription}
+        {headerAction}
+      </div>
       {isGallery ? (
         <CardContent className="extension-card-description">
-          <Typography variant="body2">{extensionDescription}</Typography>
+          <Label>{extensionDescription}</Label>
+          {children}
         </CardContent>
       ) : undefined}
-      <CardActions className={isGallery ? 'card-action-square' : 'card-action-wide'}>
-        {children}
-      </CardActions>
     </Card>
   );
 }
