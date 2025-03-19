@@ -2,6 +2,7 @@ import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { Button, Checkbox, Label } from 'platform-bible-react';
 import { ProjectInterfaces } from 'papi-shared-types';
 import { PropsWithChildren, useCallback, JSX } from 'react';
+import './project-list.component.scss';
 
 /** Project metadata and some display information */
 export type ProjectMetadataDisplay = ProjectMetadata & {
@@ -169,7 +170,7 @@ export default function ProjectList({
   return (
     <div className="project-list">
       <Label>{subheader}</Label>
-      <ul>
+      <ul className="list">
         {projects.map((project) => (
           <li key={project.id}>{createListItemContents(project)}</li>
         ))}
