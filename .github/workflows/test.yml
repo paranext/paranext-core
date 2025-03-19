@@ -158,6 +158,55 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package
 
+      - name: Delete previous Windows artifacts created by this workflow
+        if: ${{ matrix.os == env.OS_WINDOWS }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          (gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-windows-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id') -split "`n" | ForEach-Object { gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/$_ }
+
+      - name: Upload Windows artifacts
+        if: ${{ matrix.os == env.OS_WINDOWS }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-windows-test
+          retention-days: 14
+          path: |
+            ./release/build/*.exe
+            !./release/build/*Setup*.exe
+
+      - name: Delete previous macOS artifacts created by this workflow
+        if: ${{ matrix.os == env.OS_MACOS }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-macos-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
+
+      - name: Upload macOS artifacts
+        if: ${{ matrix.os == env.OS_MACOS }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-macos-test
+          retention-days: 14
+          path: |
+            ./release/build/*.dmg
+
+      - name: Delete previous Linux artifacts created by this workflow
+        if: ${{ matrix.os == env.OS_LINUX }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-linux-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
+
+      - name: Upload Linux artifacts
+        if: ${{ matrix.os == env.OS_LINUX }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-linux-test
+          retention-days: 14
+          path: |
+            ./release/build/*.snap
+
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.debug_enabled }}
