@@ -18,7 +18,7 @@ Extensible Bible translation software
 
 Platform.Bible is extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
 
-This repository contains the core Platform.Bible software (Electron client, extension host including "PAPI", and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional extensions.
+This repository contains the core Platform.Bible software (Electron client, extension host including the Platform API (PAPI), and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional extensions.
 
 ## Users
 
@@ -123,14 +123,14 @@ Start the app in the `dev` environment:
 npm start
 ```
 
-After you run `npm start` (or, in VSCode, launch `Debug Paranext Core`), you can edit the code, and the relevant processes will hot reload.
+After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit the code, and the relevant processes will hot reload.
 
 ### Developing Extensions
 
-Paranext Core extensions are found in the `extensions` folder. Please follow the instructions in
-`extensions/README.md` to develop extensions.
+Platfrom.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
+`extensions/README.md` to develop core extensions.
 
-Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing extensions.
+Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core.
 
 ## GitHub Pages
 
@@ -145,6 +145,10 @@ Please see the [Extension Template wiki](https://github.com/paranext/paranext-ex
 **[Platform.Bible Utilities Documentation](https://paranext.github.io/paranext-core/platform-bible-utils)**
 
 - Check out the utility functions, types, and classes available to use.
+
+**[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
+
+- Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
 
 ## JavaScript Tool Manager
 
