@@ -42,35 +42,27 @@ Some users may find that not everything works properly in Linux without some add
 
 ### Mac Users
 
-If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is damaged and can't be opened. You should move it to the Trash." or something very similar:
+If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is an app downloaded from the Internet. Are you sure you want to open it?":
 
-![mac-arm-damaged-warning](doc-meta/mac-arm-damaged-warning.png)
+![mac-arm-downloaded-internet-warning](doc-meta/mac-arm-downloaded-internet-warning.png)
 
-Unfortunately, this is the message Apple chose to display for ARM applications that are not signed (including Platform.Bible, since we have not yet set up application code signing on Mac).
-
-If you trust Platform.Bible and would like to run it even though it is not code signed, you will need to run the following terminal command every time you install a new version of it:
-
-`xattr -c /Applications/Platform.Bible.app`
-
-[`xattr -c` clears all attributes on the provided file](https://ss64.com/mac/xattr.html). Running this command removes all attributes on the currently-installed Platform.Bible application file including the quarantine flag Gatekeeper puts on unsigned ARM applications downloaded from the internet.
+Don't be alarmed! This is a typical warning, seen when downloading most apps from the Internet. It also says "Apple checked it for malicious software and none was detected." If you trust Platform.Bible and would like to run it select "Open."
 
 ## Developer Install
 
-Set up pre-requisites for building:
+Set up prerequisites for building:
 
-### Linux Development Pre-requisites
+### Linux Development Prerequisites
 
 Add the system libraries needed for Electron, [Build Instructions (Linux)](https://www.electronjs.org/docs/latest/development/build-instructions-linux).
 
-### macOS Development Pre-requisites
+### macOS Development Prerequisites
 
 macOS doesn't come preinstalled with all the
 [icu4c](https://unicode-org.github.io/icu/userguide/icu4c/) libraries. They must be
 installed separately to provide Unicode support to our .NET code. Platform.Bible is
 configured to expect those libraries to be installed using
-[MacPorts](https://www.macports.org/). The
-[icu package on MacPorts](https://ports.macports.org/port/icu/) has the icu4c
-libraries needed for icu.net to run properly.
+[MacPorts](https://www.macports.org/) or [Homebrew](https://brew.sh/).
 
 The build processes are configured to automatically download and package icu4c
 libraries with the application, but for development this has to be done manually.
@@ -86,7 +78,16 @@ export DYLD_FALLBACK_LIBRARY_PATH="$HOME/lib:/usr/local/lib:/usr/lib:/opt/local/
 If you need to set environment variables like the above, consider adding them to
 your `.zprofile` so you don't have to remember to do it manually.
 
-### All Platforms Development Pre-requisites
+#### Configuring ICU with MacPorts
+
+Use the
+[icu package on MacPorts](https://ports.macports.org/port/icu/).
+
+#### Configuring ICU with Homebrew
+
+Use the [icu4c package on Homebrew](https://formulae.brew.sh/formula/icu4c@77#default).
+
+### All Platforms Development Prerequisites
 
 Install [`Node.js` version >=18.0.0](https://nodejs.org/) (18.0.0 or greater is required for using `fetch`). We recommend using [Volta](#javascript-tool-manager).
 
@@ -241,7 +242,7 @@ On Windows, you can install [WSL](https://learn.microsoft.com/en-us/windows/wsl/
 
 1. Here is how to [install Linux on Windows with WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 2. You'll want to follow that by setting up to use **VS Code**, **Git** and **NodeJS** with WSL. See the various [tutorials](https://learn.microsoft.com/en-us/windows/wsl/setup/environment).
-3. In the WSL distribution, add system libraries needed for Electron, see [Linux Development Pre-requisites](#linux-development-pre-requisites) above.
+3. In the WSL distribution, add system libraries needed for Electron, see [Linux Development Prerequisites](#linux-development-prerequisites) above.
 4. In the WSL distribution, clone the repo as described above under [Developer Install](#developer-install).
 
 You'll be running a copy of the repo in both Windows and WSL so make sure they are both up-to-date.
