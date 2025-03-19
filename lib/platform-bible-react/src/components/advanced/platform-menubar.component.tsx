@@ -1,5 +1,3 @@
-import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
-import { CommandHandler } from '@/components/mui/menu-item.component';
 import {
   Menubar,
   MenubarContent,
@@ -11,7 +9,6 @@ import {
   MenubarSubTrigger,
   MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
-import usePromise from '@/hooks/use-promise.hook';
 import {
   GroupsInMultiColumnMenu,
   Localized,
@@ -19,8 +16,24 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { RefObject, useCallback, useRef } from 'react';
+import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
+
+export type MenuItemInfoBase = {
+  /** Text (displayable in the UI) as the name of the menu item */
+  label: string;
+  /** Text to display when the mouse hovers over the menu item */
+  tooltip?: string;
+};
+
+export type Command = MenuItemInfoBase & {
+  /** Command to execute (string.string) */
+  command: string;
+};
+
+export interface CommandHandler {
+  (command: Command): void;
+}
 
 const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
   setTimeout(() => {
@@ -93,11 +106,18 @@ const getMenubarContent = (
 };
 
 type PlatformMenubarProps = {
-  /** The delegate to use to get the menu data. */
-  menuProvider: MultiColumnMenuProvider;
+  /** Menu data that is used to populate the Menubar component. */
+  menuData: Localized<MultiColumnMenu>;
 
   /** The handler to use for menu commands. */
   commandHandler: CommandHandler;
+
+  /**
+   * Optional callback function that is executed whenever a menu on the Menubar is opened or closed.
+   * Helpful for handling updates to the menu, as changing menu data when the menu is opened is not
+   * desirable.
+   */
+  onOpenChange?: (isOpen: boolean) => void;
 
   /** Style variant for the app menubar component. */
   variant?: 'default' | 'muted';
@@ -105,20 +125,16 @@ type PlatformMenubarProps = {
 
 /** Menubar component tailored to work with Platform.Bible menu data */
 export default function PlatformMenubar({
-  menuProvider,
+  menuData,
   commandHandler,
+  onOpenChange,
   variant,
 }: PlatformMenubarProps) {
-  const [menuData] = usePromise(
-    useCallback(async (): Promise<Localized<MultiColumnMenu>> => {
-      return menuProvider?.(false);
-    }, [menuProvider]),
-    undefined,
-  );
-
   // These refs will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const primaryMenuRef = useRef<HTMLButtonElement>(undefined!);
+  const menubarRef = useRef<HTMLDivElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const projectMenuRef = useRef<HTMLButtonElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const windowMenuRef = useRef<HTMLButtonElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -128,9 +144,8 @@ export default function PlatformMenubar({
 
   const getRefForColumn = (columnKey: string) => {
     switch (columnKey) {
-      case 'paratext.paratext':
       case 'platform.project':
-        return primaryMenuRef;
+        return projectMenuRef;
       case 'platform.window':
         return windowMenuRef;
       case 'platform.layout':
@@ -151,11 +166,11 @@ export default function PlatformMenubar({
 
     switch (handler.hotkey) {
       case 'alt':
-        simulateKeyPress(primaryMenuRef, [escKey]);
+        simulateKeyPress(projectMenuRef, [escKey]);
         break;
       case 'alt+p':
-        primaryMenuRef.current?.focus();
-        simulateKeyPress(primaryMenuRef, [escKey, spaceKey]);
+        projectMenuRef.current?.focus();
+        simulateKeyPress(projectMenuRef, [escKey, spaceKey]);
         break;
       case 'alt+l':
         windowMenuRef.current?.focus();
@@ -174,10 +189,37 @@ export default function PlatformMenubar({
     }
   });
 
+  useEffect(() => {
+    if (!onOpenChange || !menubarRef.current) return;
+
+    const observer = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => {
+        if (mutation.attributeName === 'data-state' && mutation.target instanceof HTMLElement) {
+          const state = mutation.target.getAttribute('data-state');
+
+          if (state === 'open') {
+            onOpenChange(true);
+          } else {
+            onOpenChange(false);
+          }
+        }
+      });
+    });
+
+    const menubarElement = menubarRef.current;
+    const dataStateAttributes = menubarElement.querySelectorAll('[data-state]');
+
+    dataStateAttributes.forEach((element) => {
+      observer.observe(element, { attributes: true });
+    });
+
+    return () => observer.disconnect();
+  }, [onOpenChange]);
+
   if (!menuData) return undefined;
 
   return (
-    <Menubar className="pr-twp tw-border-0 tw-bg-transparent" variant={variant}>
+    <Menubar ref={menubarRef} className="pr-twp tw-border-0 tw-bg-transparent" variant={variant}>
       {Object.entries(menuData.columns)
         .filter(([, column]) => typeof column === 'object')
         .sort(([, a], [, b]) => {
@@ -189,7 +231,9 @@ export default function PlatformMenubar({
             <MenubarTrigger ref={getRefForColumn(columnKey)}>
               {typeof column === 'object' && 'label' in column && column.label}
             </MenubarTrigger>
-            <MenubarContent>
+            <MenubarContent
+              className="tw-z-[250]" // Need to get over the floating web view z-index 200
+            >
               {getMenubarContent(menuData.groups, menuData.items, columnKey, commandHandler)}
             </MenubarContent>
           </MenubarMenu>

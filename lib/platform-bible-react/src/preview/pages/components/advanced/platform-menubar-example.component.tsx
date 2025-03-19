@@ -127,7 +127,7 @@ export default function PlatformMenubarExample() {
   return (
     <PlatformMenubar
       commandHandler={(command) => console.log('Run command: ', command)}
-      menuProvider={async () => menuData}
+      menuData={menuData}
     />
   );
 }

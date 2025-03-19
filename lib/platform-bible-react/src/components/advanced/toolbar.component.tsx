@@ -1,19 +1,24 @@
-import { MultiColumnMenuProvider } from '@/components/mui/hamburger-menu-button.component';
-import { CommandHandler } from '@/components/mui/menu-item.component';
-import '@/components/mui/toolbar.component.css';
+import PlatformMenubar, { CommandHandler } from '@/components/advanced/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui.util';
+import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { PropsWithChildren, ReactNode, useRef } from 'react';
-import PlatformMenubar from '../advanced/platform-menubar.component';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
   commandHandler: CommandHandler;
 
   /**
-   * The optional delegate to use to get the menu data. If not specified, the "hamburger" menu will
-   * not display.
+   * Menu data that is used to populate the Menubar component. If empty object, no menus will be
+   * shown on the App Menubar
    */
-  menuProvider?: MultiColumnMenuProvider;
+  menuData?: Localized<MultiColumnMenu>;
+
+  /**
+   * Optional callback function that is executed whenever a menu on the App Menubar is opened or
+   * closed. Helpful for handling updates to the menu, as changing menu data when the menu is opened
+   * is not desirable.
+   */
+  onOpenChange?: (isOpen: boolean) => void;
 
   /** Optional unique identifier */
   id?: string;
@@ -65,7 +70,8 @@ export function getToolbarOSReservedSpaceClassName(
 }
 
 export default function Toolbar({
-  menuProvider,
+  menuData,
+  onOpenChange,
   commandHandler,
   className,
   id,
@@ -99,19 +105,15 @@ export default function Toolbar({
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
             {appMenuAreaChildren}
-            {menuProvider ? (
-              <>
-                {/*
-                  TODO: When the HamburgerMenuButton is removed, move this component out of the MUI folder
-                  also then remove components/mui/toolbar.component.css
-                */}
-                <PlatformMenubar
-                  menuProvider={menuProvider}
-                  commandHandler={commandHandler}
-                  variant={menubarVariant}
-                />
-              </>
-            ) : undefined}
+
+            {menuData && (
+              <PlatformMenubar
+                menuData={menuData}
+                onOpenChange={onOpenChange}
+                commandHandler={commandHandler}
+                variant={menubarVariant}
+              />
+            )}
           </div>
         </div>
 
