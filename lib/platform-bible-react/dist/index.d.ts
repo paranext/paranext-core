@@ -145,7 +145,7 @@ export type ChapterRangeSelectorProps = {
 	isDisabled?: boolean;
 	chapterCount: number;
 };
-export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export declare enum BookSelectionMode {
 	CURRENT_BOOK = "current book",
 	CHOOSE_BOOKS = "choose books"
@@ -170,7 +170,7 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
 	selectedBookIds: string[];
 	localizedStrings: BookSelectorLocalizedStrings;
 };
-export function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -242,7 +242,7 @@ type InstallButtonProps = {
  * @param InstallButtonProps
  * @returns A install button.
  */
-export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
 type EnableButtonProps = {
 	/** The enabling boolean value determines the state of the button. */
 	isEnabling: boolean;
@@ -256,7 +256,7 @@ type EnableButtonProps = {
  * @param EnableButtonProps
  * @returns A button that can be used to enable.
  */
-export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
 type DisableButtonProps = {
 	/** The disabling boolean value determines the state of the button. */
 	isDisabling: boolean;
@@ -270,7 +270,7 @@ type DisableButtonProps = {
  * @param DisableButtonProps
  * @returns A button that can be used to disable.
  */
-export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
 type UpdateButtonProps = {
 	/** The updating boolean value determines the state of the button. */
 	isUpdating: boolean;
@@ -284,7 +284,7 @@ type UpdateButtonProps = {
  * @param UpdateButtonProps
  * @returns A button that can be used to update.
  */
-export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -305,7 +305,7 @@ interface MarkdownRendererProps {
  * @param MarkdownRendererProps
  * @returns A div containing the rendered markdown content.
  */
-export function MarkdownRenderer({ id, markdown, className, anchorTarget, }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkdownRenderer({ id, markdown, className, anchorTarget }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
 export declare enum DropdownMenuItemType {
 	Check = 0,
 	Radio = 1
@@ -340,7 +340,7 @@ type FilterDropdownProps = {
  * @param FilterDropdownProps
  * @returns A filter dropdown.
  */
-export function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
+export declare function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The FilterButton component is a button designed for initiating filtering of data. It is designed
  * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
@@ -361,7 +361,7 @@ interface NoExtensionsFoundProps {
  * @param NoExtensionsFoundProps
  * @returns {JSX.Element} - Returns the message component that displays the message to the user.
  */
-export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
+export declare function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
 interface MoreInfoProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -382,7 +382,7 @@ interface MoreInfoProps {
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */
-export function MoreInfo({ id, category, downloads, languages, moreInfoUrl, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
+export declare function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
 export type VersionInformation = {
 	/** Date the version was published */
 	date: string;
@@ -404,7 +404,7 @@ interface VersionHistoryProps {
  * @param VersionHistoryProps
  * @returns Rendered version history for the Footer component
  */
-export function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
 interface FooterProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -424,7 +424,7 @@ interface FooterProps {
  * @param FooterProps
  * @returns The rendered Footer component
  */
-export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;
@@ -585,7 +585,7 @@ type InventoryProps = {
 	columns: ColumnDef<InventoryTableData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
@@ -655,7 +655,7 @@ export type SettingsSidebarProps = {
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
 };
-export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;
@@ -664,7 +664,7 @@ type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWit
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
 };
-export function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -748,7 +748,7 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a {@link ScrollGroupId} or `undefined` for
@@ -803,7 +803,7 @@ export type ScrollGroupSelectorProps = {
 	className?: string;
 };
 /** Selector component for choosing a scroll group */
-export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
 type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
@@ -909,7 +909,7 @@ export type ToolbarProps = React$1.PropsWithChildren<{
  * @returns The class name to apply to the toolbar if os specific space should be reserved
  */
 export declare function getToolbarOSReservedSpaceClassName(operatingSystem: string | undefined): string | undefined;
-export function Toolbar({ menuData, onOpenChange, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];
@@ -962,7 +962,7 @@ export type UiLanguageSelectorProps = {
 	/** Additional css classes to help with unique styling of the control */
 	className?: string;
 };
-export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
@@ -988,7 +988,7 @@ export type ChecklistProps = {
 	createLabel?: (item: string) => string;
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
-export function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
 export type ComboBoxLabelOption = {
 	label: string;
 };
@@ -1047,7 +1047,7 @@ export type GridMenuProps = GridMenuInfo & {
 	/** Additional css classes to help with unique styling of the grid menu */
 	className?: string;
 };
-export function GridMenu({ commandHandler, className, multiColumnMenu, id, }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
+export declare function GridMenu({ commandHandler, className, multiColumnMenu, id }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
 export interface MultiColumnMenuProvider {
 	(isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;
 }
@@ -1080,7 +1080,7 @@ type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
 	/** Value to use as prefix for ARIA labels on interactive sub-components */
 	ariaLabelPrefix?: string;
 };
-export function HamburgerMenuButton({ menuProvider, normalMenu, fullMenu, commandHandler, containerRef, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function HamburgerMenuButton({ menuProvider, normalMenu, fullMenu, commandHandler, containerRef, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
 export type IconButtonProps = React$1.PropsWithChildren<{
 	/** Optional unique identifier */
 	id?: string;
@@ -1209,7 +1209,7 @@ type MenuItemInfo = (Command | SubMenu) & {
 	/** If it's a submenu, it should have the items property */
 	items?: MenuItemInfo[];
 };
-export function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
+export declare function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Seach query for the search bar */
@@ -1227,7 +1227,7 @@ export type SearchBarProps = {
 	/** Additional css classes to help with unique styling of the search bar */
 	className?: string;
 };
-export function SearchBar({ value, onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SearchBar({ value, onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {

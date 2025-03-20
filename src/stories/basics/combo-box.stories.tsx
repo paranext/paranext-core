@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { ComboBox } from 'platform-bible-react';
 
-const meta: Meta<typeof ComboBox> = {
+export const meta: Meta<typeof ComboBox> = {
   title: 'Basics/ComboBox',
   component: ComboBox,
   tags: ['autodocs'],

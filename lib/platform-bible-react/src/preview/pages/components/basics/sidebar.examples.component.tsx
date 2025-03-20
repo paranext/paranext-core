@@ -14,7 +14,7 @@ import {
 } from '@/components/shadcn-ui/sidebar';
 import { useState } from 'react';
 
-export default function SidebarExamples() {
+export function SidebarExamples() {
   const [sidebarSelection, setSidebarSelection] = useState('button');
 
   const sidebarItems: { [title: string]: string } = {
@@ -85,3 +85,5 @@ export default function SidebarExamples() {
     </>
   );
 }
+
+export default SidebarExamples;

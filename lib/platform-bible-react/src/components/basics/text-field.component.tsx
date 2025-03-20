@@ -56,7 +56,7 @@ export type TextFieldProps = {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/input#with-label
  */
-function TextField({
+export function TextField({
   id,
   isDisabled = false,
   hasError = false,

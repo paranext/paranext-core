@@ -108,6 +108,14 @@ module.exports = {
   globals: {
     globalThis: 'readonly',
   },
+  overrides: [
+    {
+      files: ['*.ts', '*.tsx'],
+      rules: {
+        'import/prefer-default-export': 'off',
+      },
+    },
+  ],
   parserOptions: {
     ecmaVersion: 2022,
     sourceType: 'module',

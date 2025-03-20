@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ScriptureResultsViewer, {
+import {
+  ScriptureResultsViewer,
   ScriptureSrcItemDetail,
 } from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 

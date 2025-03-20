@@ -1,7 +1,7 @@
 import { SidebarInset, SidebarProvider } from '@/components/shadcn-ui/sidebar';
 import { PropsWithChildren } from 'react';
-import SearchBar from '@/components/basics/search-bar.component';
-import SettingsSidebar, { SettingsSidebarProps } from './settings-sidebar.component';
+import { SearchBar } from '@/components/basics/search-bar.component';
+import { SettingsSidebar, SettingsSidebarProps } from './settings-sidebar.component';
 
 export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
   PropsWithChildren & {
@@ -15,7 +15,7 @@ export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
     onSearch: (searchQuery: string) => void;
   };
 
-export default function SettingsSidebarContentSearch({
+export function SettingsSidebarContentSearch({
   id,
   extensionLabels,
   projectInfo,
@@ -57,3 +57,5 @@ export default function SettingsSidebarContentSearch({
     </div>
   );
 }
+
+export default SettingsSidebarContentSearch;

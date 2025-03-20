@@ -42,7 +42,7 @@ function mapParametersToProjectDataProviderSource<ProjectInterface extends Proje
 
 // Assert to specific data type for this hook.
 // eslint-disable-next-line no-type-assertion/no-type-assertion
-const useProjectDataProvider = createUseNetworkObjectHook(
+export const useProjectDataProvider = createUseNetworkObjectHook(
   papiFrontendProjectDataProviderService.get,
   mapParametersToProjectDataProviderSource,
 ) as <ProjectInterface extends ProjectInterfaces>(

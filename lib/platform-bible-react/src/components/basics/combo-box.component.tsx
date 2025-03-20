@@ -68,7 +68,7 @@ function getOptionLabelDefault(option: ComboBoxOption): string {
  * Thanks to Shadcn for heavy inspiration and documentation
  * https://ui.shadcn.com/docs/components/combobox
  */
-function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
+export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
   id,
   options = [],
   className,

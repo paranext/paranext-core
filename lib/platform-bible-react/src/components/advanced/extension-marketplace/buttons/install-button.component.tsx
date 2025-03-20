@@ -1,5 +1,5 @@
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
-import Spinner from '@/components/basics/spinner.component';
+import { Spinner } from '@/components/basics/spinner.component';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Download } from 'lucide-react';
 
@@ -19,7 +19,7 @@ type InstallButtonProps = {
  * @param InstallButtonProps
  * @returns A install button.
  */
-export default function InstallButton({
+export function InstallButton({
   isInstalling,
   handleClick,
   buttonText,
@@ -52,3 +52,5 @@ export default function InstallButton({
     </Button>
   );
 }
+
+export default InstallButton;

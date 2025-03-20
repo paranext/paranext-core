@@ -11,15 +11,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import ParatextLogo from './paratext-logo.component';
-import ShadCnLogo from './shadcn-logo.component';
+import { ParatextLogo } from './paratext-logo.component';
+import { ShadCnLogo } from './shadcn-logo.component';
 import { Theme, useTheme } from './theme-provider.component';
 
 export type ThemeToggleProps = ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
   className?: string;
 };
 
-const ThemeToggle = React.forwardRef<
+export const ThemeToggle = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   ThemeToggleProps
 >(({ className }, ref) => {
