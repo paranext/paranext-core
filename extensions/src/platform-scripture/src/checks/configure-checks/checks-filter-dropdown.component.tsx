@@ -28,7 +28,7 @@ type ChecksFilterDropdownProps = PropsWithChildren & {
  * down icon. When the button is clicked, a menu is displayed with a label and the children passed
  * to the component.
  */
-export default function ChecksFilterDropdown({
+export function ChecksFilterDropdown({
   selectedValue,
   radioGroupLabel,
   getSelectedValueLabel,
@@ -57,3 +57,5 @@ export default function ChecksFilterDropdown({
     </DropdownMenu>
   );
 }
+
+export default ChecksFilterDropdown;

@@ -28,7 +28,7 @@ export type ExtensionCardProps = PropsWithChildren<{
   className?: string;
 }>;
 
-export default function ExtensionCard({
+export function ExtensionCard({
   extensionName,
   extensionDescription,
   iconFilePath,
@@ -66,3 +66,5 @@ export default function ExtensionCard({
     </Card>
   );
 }
+
+export default ExtensionCard;

@@ -1,10 +1,11 @@
 import { NetworkObjectDetails } from '@shared/models/network-object.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import {
   NetworkObjectStatusRemoteServiceType,
   networkObjectStatusServiceNetworkObjectName,
 } from '@shared/models/network-object-status.service-model';
-import networkObjectService, {
+import {
+  networkObjectService,
   onDidCreateNetworkObject,
   onDidDisposeNetworkObject,
 } from '@shared/services/network-object.service';
@@ -40,9 +41,6 @@ const networkObjectStatusService: NetworkObjectStatusRemoteServiceType = {
 };
 
 /** Register the network object that backs the network object status service */
-// This doesn't really represent this service module, so we're not making it default. To use this
-// service, you should use `network-object-status.service.ts`
-// eslint-disable-next-line import/prefer-default-export
 export async function startNetworkObjectStatusService(): Promise<void> {
   await networkObjectService.set<NetworkObjectStatusRemoteServiceType>(
     networkObjectStatusServiceNetworkObjectName,

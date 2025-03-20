@@ -1,13 +1,14 @@
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   ProjectDataProviderFactoryMetadataInfo,
   ProjectMetadata,
   ProjectMetadataWithoutFactoryInfo,
 } from '@shared/models/project-metadata.model';
-import logger from '@shared/services/logger.service';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
+import { logger } from '@shared/services/logger.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { ProjectInterfaces } from 'papi-shared-types';
-import IProjectDataProviderFactory, {
+import {
+  IProjectDataProviderFactory,
   PDP_FACTORY_OBJECT_TYPE,
   ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';

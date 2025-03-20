@@ -15,7 +15,7 @@ import {
 import { IRpcMethodRegistrar, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import { getErrorMessage, Mutex } from 'platform-bible-utils';
 import { WebSocketServer } from 'ws';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { JSONRPCErrorCode, JSONRPCResponse } from 'json-rpc-2.0';
 import { bindClassMethods, SerializedRequestType } from '@shared/utils/util';
 import {
@@ -24,7 +24,7 @@ import {
   OpenRpc,
   SingleMethodDocumentation,
 } from '@shared/models/openrpc.model';
-import RpcServer from './rpc-server';
+import { RpcServer } from './rpc-server';
 
 /**
  * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
@@ -37,7 +37,7 @@ import RpcServer from './rpc-server';
  *
  * Created by the main process on start up when the network service initializes
  */
-export default class RpcWebSocketListener implements IRpcMethodRegistrar {
+export class RpcWebSocketListener implements IRpcMethodRegistrar {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   private localEventHandler: EventHandler | undefined;
   private webSocketServer: WebSocketServer | undefined;
@@ -282,3 +282,5 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
     }
   }
 }
+
+export default RpcWebSocketListener;

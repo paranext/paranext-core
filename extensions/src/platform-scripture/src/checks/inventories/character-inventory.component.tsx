@@ -77,7 +77,7 @@ type CharacterInventoryProps = {
   onScopeChange: (scope: Scope) => void;
 };
 
-function CharacterInventory({
+export function CharacterInventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,

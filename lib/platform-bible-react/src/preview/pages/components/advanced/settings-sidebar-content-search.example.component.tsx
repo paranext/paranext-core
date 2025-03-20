@@ -1,7 +1,7 @@
-import SettingsSidebarContentSearch from '@/components/advanced/settings-components/settings-sidebar-content-search.component';
+import { SettingsSidebarContentSearch } from '@/components/advanced/settings-components/settings-sidebar-content-search.component';
 import { useState } from 'react';
 
-export default function SettingSidebarContentSearchExamples() {
+export function SettingSidebarContentSearchExamples() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   return (
@@ -31,3 +31,5 @@ export default function SettingSidebarContentSearchExamples() {
     </div>
   );
 }
+
+export default SettingSidebarContentSearchExamples;

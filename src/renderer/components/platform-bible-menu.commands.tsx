@@ -1,5 +1,5 @@
 import * as commandService from '@shared/services/command.service';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { Command } from 'platform-bible-react';
 import { CommandNames } from 'papi-shared-types';
 import { openWindow } from '@renderer/services/web-view.service-host';

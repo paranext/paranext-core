@@ -1,7 +1,7 @@
-import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import DataTable from '@/components/advanced/data-table/data-table.component';
-import ScrollGroupSelector from '@/components/advanced/scroll-group-selector.component';
-import TabNavigationContentSearch from '@/components/advanced/tab-navigation-content-search.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { DataTable } from '@/components/advanced/data-table/data-table.component';
+import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
+import { TabNavigationContentSearch } from '@/components/advanced/tab-navigation-content-search.component';
 import {
   VerticalTabs,
   VerticalTabsContent,
@@ -10,21 +10,21 @@ import {
 } from '@/components/basics/tabs-vertical';
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
-import BookSelectorExample from './advanced/book-selector-example.component';
-import FilterExample from './advanced/filter-example';
-import InventoryExample from './advanced/inventory-example.component';
-import MarkdownRendererExample from './advanced/markdown-renderer-example.component';
-import MarketplaceButtonExamples from './advanced/marketplace-buttons.example.component';
-import MarketplaceExamples from './advanced/marketplace.example.component';
-import MultiSelectComboBoxExample from './advanced/multi-select-combo-box-example';
-import ScriptureResultsViewerExample from './advanced/scripture-results-viewer.examples.component';
-import SettingsListExamples from './advanced/settings-list.examples.component';
-import UiLanguageSelectorExample from './advanced/ui-language-selector-example.component';
+import { BookSelectorExample } from './advanced/book-selector-example.component';
+import { FilterExample } from './advanced/filter-example';
+import { InventoryExample } from './advanced/inventory-example.component';
+import { MarkdownRendererExample } from './advanced/markdown-renderer-example.component';
+import { MarketplaceButtonExamples } from './advanced/marketplace-buttons.example.component';
+import { MarketplaceExamples } from './advanced/marketplace.example.component';
+import { MultiSelectComboBoxExample } from './advanced/multi-select-combo-box-example';
+import { ScriptureResultsViewerExample } from './advanced/scripture-results-viewer.examples.component';
+import { SettingsListExamples } from './advanced/settings-list.examples.component';
+import { UiLanguageSelectorExample } from './advanced/ui-language-selector-example.component';
 import { columns, data } from './data-sources/data-table-content';
-import SettingSidebarContentSearchExamples from './advanced/settings-sidebar-content-search.example.component';
-import PlatformMenubarExample from './advanced/platform-menubar-example.component';
+import { SettingSidebarContentSearchExamples } from './advanced/settings-sidebar-content-search.example.component';
+import { PlatformMenubarExample } from './advanced/platform-menubar-example.component';
 
-function Compositions() {
+export function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   const [scrollGroupId, setScrollGroupId] = useState<ScrollGroupId | undefined>(0);
   const [searchValue, setSearchValue] = useState<string>('');

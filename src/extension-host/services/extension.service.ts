@@ -12,7 +12,7 @@ import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import * as platformBibleUtils from 'platform-bible-utils';
 import * as crypto from 'crypto';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import {
   getCommandLineArgumentsGroup,
   COMMAND_LINE_ARGS,
@@ -21,7 +21,7 @@ import {
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
 import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import * as papiCore from '@shared/services/papi-core.service';
-import executionTokenService from '@node/services/execution-token.service';
+import { executionTokenService } from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
   debounce,
