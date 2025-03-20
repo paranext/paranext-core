@@ -17,37 +17,37 @@ declare module 'platform-scripture' {
   /** Provides Scripture data in USFM format by book */
   export type USFMBookProjectInterfaceDataTypes = {
     /** Gets/sets the "raw" USFM data for the specified book */
-    BookUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
+    BookUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USFM format by chapter */
   export type USFMChapterProjectInterfaceDataTypes = {
     /** Gets/sets the "raw" USFM data for the specified chapter */
-    ChapterUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
+    ChapterUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USFM format by verse */
   export type USFMVerseProjectInterfaceDataTypes = {
     /** Gets the "raw" USFM data for the specified verse */
-    VerseUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
+    VerseUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USX format by book */
   export type USXBookProjectInterfaceDataTypes = {
     /** Gets/sets the data in USX form for the specified book */
-    BookUSX: DataProviderDataType<VerseRef, string | undefined, string>;
+    BookUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USX format by chapter */
   export type USXChapterProjectInterfaceDataTypes = {
     /** Gets/sets the data in USX form for the specified chapter */
-    ChapterUSX: DataProviderDataType<VerseRef, string | undefined, string>;
+    ChapterUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USX format by verse */
   export type USXVerseProjectInterfaceDataTypes = {
     /** Gets the "raw" data in USX form for the specified verse */
-    VerseUSX: DataProviderDataType<VerseRef, string | undefined, string>;
+    VerseUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USJ format by book */
@@ -57,7 +57,7 @@ declare module 'platform-scripture' {
      *
      * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
      */
-    BookUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
+    BookUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
   };
 
   /** Provides Scripture data in USJ format by chapter */
@@ -67,7 +67,7 @@ declare module 'platform-scripture' {
      *
      * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
      */
-    ChapterUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
+    ChapterUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
   };
 
   /** Provides Scripture data in USJ format by verse */
@@ -77,7 +77,7 @@ declare module 'platform-scripture' {
      *
      * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
      */
-    VerseUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
+    VerseUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
   };
 
   /**
@@ -89,7 +89,7 @@ declare module 'platform-scripture' {
      * Gets the data in plain text form for the specified verse. Plain text does not include notes,
      * figures, and other things that are not considered "verse text".
      */
-    VersePlainText: DataProviderDataType<VerseRef, string | undefined, string>;
+    VersePlainText: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides information about markers */
