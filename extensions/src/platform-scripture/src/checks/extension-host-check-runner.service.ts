@@ -432,7 +432,7 @@ async function initialize(): Promise<void> {
 
 // #endregion
 
-const checkHostingService: ICheckHostingService = {
+export const checkHostingService: ICheckHostingService = {
   initialize,
   dispose: async () => unsubscribers.runAllUnsubscribers(),
   getCheckRunner: async () => {

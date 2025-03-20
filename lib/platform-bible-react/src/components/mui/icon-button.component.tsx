@@ -46,7 +46,7 @@ export type IconButtonProps = PropsWithChildren<{
  * Thanks to MUI for heavy inspiration and documentation
  * https://mui.com/material-ui/getting-started/overview/
  */
-function IconButton({
+export function IconButton({
   id,
   label,
   isDisabled = false,

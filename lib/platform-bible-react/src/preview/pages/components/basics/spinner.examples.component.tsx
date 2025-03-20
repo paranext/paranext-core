@@ -1,6 +1,6 @@
-import Spinner from '@/components/basics/spinner.component';
+import { Spinner } from '@/components/basics/spinner.component';
 
-export default function SpinnerExamples() {
+export function SpinnerExamples() {
   return (
     <div>
       <Spinner /> Default
@@ -9,3 +9,5 @@ export default function SpinnerExamples() {
     </div>
   );
 }
+
+export default SpinnerExamples;

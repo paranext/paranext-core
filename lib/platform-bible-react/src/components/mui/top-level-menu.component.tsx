@@ -1,4 +1,4 @@
-import GroupedMenuItemList from '@/components/mui/grouped-menu-item-list.component';
+import { GroupedMenuItemList } from '@/components/mui/grouped-menu-item-list.component';
 import { MenuItemListProps } from '@/components/mui/menu-item.component';
 import { MultiColumnMenu } from 'platform-bible-utils';
 
@@ -6,7 +6,7 @@ import { MultiColumnMenu } from 'platform-bible-utils';
  * This component is internal; it does not need to be exposed to the outside world since it is not
  * useful on its own. Use either GridMenu or ContextMenu.
  */
-export default function TopLevelMenu(props: MenuItemListProps) {
+export function TopLevelMenu(props: MenuItemListProps) {
   const { menuDefinition, columnId } = props;
 
   const groupEntries = Object.entries(menuDefinition.groups);
@@ -32,3 +32,5 @@ export default function TopLevelMenu(props: MenuItemListProps) {
 
   return <GroupedMenuItemList {...props} includedGroups={includedGroups} />;
 }
+
+export default TopLevelMenu;

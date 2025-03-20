@@ -1,6 +1,6 @@
 import { Button } from '@/components/shadcn-ui/button';
 
-export default function ButtonExamples() {
+export function ButtonExamples() {
   return (
     <table>
       <tbody>
@@ -34,3 +34,5 @@ export default function ButtonExamples() {
     </table>
   );
 }
+
+export default ButtonExamples;

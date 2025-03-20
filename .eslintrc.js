@@ -22,6 +22,7 @@ module.exports = {
     'consistent-return': 'off',
     'import/default': 'off',
     'import/extensions': 'off',
+    'import/prefer-default-export': 'off',
     // A temporary hack related to IDE not resolving correct package.json
     'import/no-extraneous-dependencies': 'off',
     'import/no-import-module-exports': 'off',

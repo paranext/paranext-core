@@ -3,7 +3,7 @@ import { useLocalizedStrings } from '@papi/frontend/react';
 import { usePromise, DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'platform-bible-react';
 import { formatReplacementStringToArray, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
-import ChecksFilterDropdown from './checks-filter-dropdown.component';
+import { ChecksFilterDropdown } from './checks-filter-dropdown.component';
 
 /** Props for ChecksProjectFilter component */
 type ChecksProjectFilterProps = {
@@ -45,7 +45,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
 ];
 
 /** Dropdown component to select a project to run checks for */
-export default function ChecksProjectFilter({
+export function ChecksProjectFilter({
   handleSelectProject,
   selectedProjectId: selectedProjectIdFromWebView,
 }: ChecksProjectFilterProps) {
@@ -118,3 +118,5 @@ export default function ChecksProjectFilter({
     </ChecksFilterDropdown>
   );
 }
+
+export default ChecksProjectFilter;

@@ -2,7 +2,7 @@ import {
   NotificationServiceNetworkObjectName,
   type INotificationService,
 } from '@shared/models/notification.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: INotificationService;
@@ -36,7 +36,7 @@ async function initialize(): Promise<void> {
  *
  * Service that sends notifications to users in the UI
  */
-const notificationService = createSyncProxyForAsyncObject<INotificationService>(async () => {
+export const notificationService = createSyncProxyForAsyncObject<INotificationService>(async () => {
   await initialize();
   return networkObject;
 });

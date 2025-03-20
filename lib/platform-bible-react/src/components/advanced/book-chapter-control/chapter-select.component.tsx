@@ -22,7 +22,7 @@ export type ChapterSelectProps = {
   handleHighlightedChapter: (chapterNumber: number) => void;
 };
 
-function ChapterSelect({
+export function ChapterSelect({
   handleSelectChapter,
   endChapter,
   activeChapter,

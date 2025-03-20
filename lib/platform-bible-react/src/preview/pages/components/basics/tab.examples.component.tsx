@@ -8,7 +8,7 @@ import { Button } from '@/components/shadcn-ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-export default function TabExamples() {
+export function TabExamples() {
   const dir: Direction = readDirection();
   return (
     <>
@@ -54,3 +54,5 @@ export default function TabExamples() {
     </>
   );
 }
+
+export default TabExamples;

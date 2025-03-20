@@ -6,7 +6,7 @@ import {
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
 
-export default function TooltipExamples() {
+export function TooltipExamples() {
   return (
     <TooltipProvider>
       <Tooltip>
@@ -20,3 +20,5 @@ export default function TooltipExamples() {
     </TooltipProvider>
   );
 }
+
+export default TooltipExamples;
