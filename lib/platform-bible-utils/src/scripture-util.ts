@@ -175,6 +175,18 @@ export async function getLocalizedIdFromBookNumber(
 }
 
 /**
+ * Get the Scripture reference as an easily comparable/sortable integer, without considering the
+ * verse.
+ *
+ * @param scrRef The Scripture reference.
+ * @returns An integer where the first three digits represent the book, the next three represent the
+ *   chapter and the last three represent the verse.
+ */
+export function scrRefToBBBCCC(scrRef: SerializedVerseRef): number {
+  return new VerseRef(Canon.bookIdToNumber(scrRef.book), scrRef.chapterNum, scrRef.verseNum).BBBCCC;
+}
+
+/**
  * Get the Scripture reference as an easily comparable/sortable integer.
  *
  * @param scrRef The Scripture reference.

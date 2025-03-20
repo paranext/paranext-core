@@ -50,6 +50,7 @@ export {
   formatScrRef,
   getLocalizedIdFromBookNumber,
   normalizeScriptureSpaces,
+  scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
 } from './scripture-util';
 export {

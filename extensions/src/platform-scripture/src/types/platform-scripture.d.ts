@@ -580,7 +580,7 @@ declare module 'platform-scripture' {
       }
     | {
         /** Verse reference to a location with the document */
-        verseRef: VerseRef;
+        verseRef: SerializedVerseRef;
         /** Offset to apply to start of the verse indicated by `verseRef` */
         offset?: number;
       };
@@ -618,7 +618,7 @@ declare module 'platform-scripture' {
     /** Indicates if a user decided this check result should be considered incorrect going forward */
     isDenied: boolean;
     /** VerseRef that most closely identifies a single place where the check applies */
-    verseRef: VerseRef;
+    verseRef: SerializedVerseRef;
     /** Starting point where the check result applies in the document */
     start: CheckLocation;
     /** Ending point where the check result applies in the document */
@@ -668,7 +668,7 @@ declare module 'platform-scripture' {
       checkId: string,
       checkResultType: string,
       projectId: string,
-      verseRef: VerseRef,
+      verseRef: SerializedVerseRef,
       selectedText: string,
       checkResultUniqueId?: string,
     ) => Promise<boolean>;
@@ -677,7 +677,7 @@ declare module 'platform-scripture' {
       checkId: string,
       checkResultType: string,
       projectId: string,
-      verseRef: VerseRef,
+      verseRef: SerializedVerseRef,
       selectedText: string,
       checkResultUniqueId?: string,
     ) => Promise<boolean>;

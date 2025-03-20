@@ -20,7 +20,7 @@ import {
   ICheckHostingService,
   ICheckRunner,
 } from 'platform-scripture';
-import { VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
 import { PersistedCheckRunResults } from './persisted-check-run-result.model';
@@ -149,7 +149,7 @@ class CheckRunnerEngine
           this.subscribedProjects.set(projectId, pdps);
           // We just need something to tell us when project data changes
           await usfmBookPdp.subscribeBookUSFM(
-            new VerseRef(1, 1, 1),
+            { book: 'GEN', chapterNum: 1, verseNum: 1 },
             async () => {
               // Ideally we'd want to check if the text that changed is inside of an active range
               // This isn't available to subscriptions right now, so just rebuild everything
@@ -233,7 +233,7 @@ class CheckRunnerEngine
     _checkId: string,
     checkResultType: string,
     projectId: string,
-    verseRef: VerseRef,
+    verseRef: SerializedVerseRef,
     selectedText: string,
     checkResultUniqueId?: string,
   ): Promise<boolean> {
@@ -252,7 +252,7 @@ class CheckRunnerEngine
     _checkId: string,
     checkResultType: string,
     projectId: string,
-    verseRef: VerseRef,
+    verseRef: SerializedVerseRef,
     selectedText: string,
     checkResultUniqueId?: string,
   ): Promise<boolean> {
