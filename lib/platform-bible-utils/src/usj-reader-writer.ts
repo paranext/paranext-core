@@ -6,7 +6,7 @@ import {
   type MarkerObject,
   type Usj,
 } from '@biblionexus-foundation/scripture-utilities';
-import { VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
 import { JSONPath } from 'jsonpath-plus';
 import {
   CHAPTER_TYPE,
@@ -487,7 +487,10 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
 
   // #region VerseRef + offset -> Node + JSONPath + offset
 
-  verseRefToUsjContentLocation(verseRef: VerseRef, verseRefOffset: number = 0): UsjContentLocation {
+  verseRefToUsjContentLocation(
+    verseRef: SerializedVerseRef,
+    verseRefOffset: number = 0,
+  ): UsjContentLocation {
     if (verseRefOffset < 0) throw new Error('offset must be >= 0');
 
     // Prefer getting the book ID from the USJ itself, but it might not be available

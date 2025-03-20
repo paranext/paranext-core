@@ -1,5 +1,5 @@
 import { type MarkerContent, type MarkerObject } from '@biblionexus-foundation/scripture-utilities';
-import { VerseRef } from '@sillsdev/scripture';
+import { VerseRef, SerializedVerseRef } from '@sillsdev/scripture';
 
 /** USJ content node type for a chapter */
 export const CHAPTER_TYPE = 'chapter';
@@ -124,5 +124,8 @@ export interface IUsjReaderWriter {
    *   object, it is the same object that is within this USJ data. So if you change it, you are
    *   changing this USJ data.
    */
-  verseRefToUsjContentLocation(verseRef: VerseRef, verseRefOffset: number): UsjContentLocation;
+  verseRefToUsjContentLocation(
+    verseRef: SerializedVerseRef,
+    verseRefOffset: number,
+  ): UsjContentLocation;
 }

@@ -1314,7 +1314,7 @@ export interface IUsjReaderWriter {
 	 *   object, it is the same object that is within this USJ data. So if you change it, you are
 	 *   changing this USJ data.
 	 */
-	verseRefToUsjContentLocation(verseRef: VerseRef, verseRefOffset: number): UsjContentLocation;
+	verseRefToUsjContentLocation(verseRef: SerializedVerseRef, verseRefOffset: number): UsjContentLocation;
 }
 /**
  * This function mirrors the `at` function from the JavaScript Standard String object. It handles
@@ -2796,7 +2796,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 		offset: number;
 	} | undefined;
 	jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset;
-	verseRefToUsjContentLocation(verseRef: VerseRef, verseRefOffset?: number): UsjContentLocation;
+	verseRefToUsjContentLocation(verseRef: SerializedVerseRef, verseRefOffset?: number): UsjContentLocation;
 	findNextLocationOfMatchingText(startingPoint: UsjContentLocation, text: string, maxTextLengthToSearch?: number): UsjContentLocation | undefined;
 	extractText(start: UsjContentLocation, desiredLength: number): string;
 	extractTextBetweenPoints(start: UsjContentLocation, end: UsjContentLocation, maxLength?: number): string;

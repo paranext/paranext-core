@@ -110,12 +110,17 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const checkInputRange: CheckInputRange = useMemo(() => {
     // Default is chapter
-    let start = new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1);
-    let end = new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1);
+    const defaultScrRef: SerializedVerseRef = {
+      book: scrRef.book,
+      chapterNum: scrRef.chapterNum,
+      verseNum: 1,
+    };
+    let start = defaultScrRef;
+    let end = defaultScrRef;
 
     if (scope === CheckScopes.Book) {
-      start = new VerseRef(scrRef.bookNum, 1, 1);
-      end = new VerseRef(scrRef.bookNum, getChaptersForBook(scrRef.bookNum), 1);
+      start.chapterNum = 1;
+      end.chapterNum = getChaptersForBook(Canon.bookIdToNumber(scrRef.book));
     }
 
     return {

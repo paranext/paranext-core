@@ -54,7 +54,7 @@ declare module 'platform-scripture-editor' {
   export type ScriptureLocation =
     | {
         /** To which book this jsonPath is relative */
-        bookNum: number;
+        book: string;
         /** To which chapter this jsonPath is relative */
         chapterNum: number;
         /** JSONPath expression pointing to a location within USJ data */

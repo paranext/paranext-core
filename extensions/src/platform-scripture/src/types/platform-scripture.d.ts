@@ -1,5 +1,5 @@
 declare module 'platform-scripture' {
-  import { VerseRef } from '@sillsdev/scripture';
+  import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
   import type {
     DataProviderDataType,
     DataProviderSubscriberOptions,
@@ -362,7 +362,7 @@ declare module 'platform-scripture' {
        *
        * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
        */
-      getChapterUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
+      getChapterUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified chapter
        *
@@ -537,12 +537,12 @@ declare module 'platform-scripture' {
   /** Represents a selection of scripture text */
   export type ScriptureRange = {
     /** Location within a project that is the start of the range */
-    start: VerseRef;
+    start: SerializedVerseRef;
     /**
      * Location within a project that is the end of the range. If not provided, then the end of the
      * book mentioned in `start` should be assumed.
      */
-    end?: VerseRef;
+    end?: SerializedVerseRef;
   };
 
   /** Represents a selection of scripture text to feed into a check */
