@@ -141,7 +141,6 @@ const configBase: webpack.Configuration = {
     alias: {
       '@emotion/react': path.resolve(__dirname, '..', '../../../node_modules/@emotion/react'),
       '@emotion/styled': path.resolve(__dirname, '..', '../../../node_modules/@emotion/styled'),
-      '@mui/material': path.resolve(__dirname, '..', '../../../node_modules/@mui/material'),
     },
   },
 };

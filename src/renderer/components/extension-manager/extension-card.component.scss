@@ -18,7 +18,7 @@
 
 .extension-card-description {
   flex-grow: 1;
-  // Only set important here because MUI forces padding on each Card element
+  // Only set important here because MUI forced padding on each Card element
   // Didn't need all the padding at the top to match UX mockup, intended to change later
   padding-top: 0 !important;
 }

@@ -1,18 +1,11 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import {
-  List,
-  ListItem,
-  ListItemButton,
-  ListItemIcon,
-  ListItemText,
-  ListSubheader,
-} from '@mui/material';
-import { Download, ArrowDownFromLine, Delete } from 'lucide-react';
+
+// import { Download, ArrowDownFromLine, Delete } from 'lucide-react';
 import logger from '@shared/services/logger.service';
 import { useMemo } from 'react';
 import ProjectList, {
   fetchProjects,
-  Project,
+  // Project,
 } from '@renderer/components/projects/project-list.component';
 import './download-update-project-tab.component.scss';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
@@ -23,13 +16,13 @@ function downloadProject(projectId: string) {
   logger.info(`Downloading Project ${projectId}`);
 }
 
-function updateProject(project: Project) {
-  logger.info(`Updating Project ${project.name}`);
-}
+// function updateProject(project: Project) {
+//   logger.info(`Updating Project ${project.name}`);
+// }
 
-function deleteProject(project: Project) {
-  logger.info(`Deleting Project ${project.name}`);
-}
+// function deleteProject(project: Project) {
+//   logger.info(`Deleting Project ${project.name}`);
+// }
 
 export default function DownloadUpdateProjectTab() {
   const downloadableProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadable%';
@@ -52,16 +45,19 @@ export default function DownloadUpdateProjectTab() {
   const localizedDownloadableProjectsAria = localizedStrings[downloadableProjectsAriaKey];
   const localizedDownloadableProjectsHeader = localizedStrings[downloadableProjectsHeaderKey];
   const localizedDownloadedProjectsAria = localizedStrings[downloadedProjectsAriaKey];
-  const localizedDownloadedProjectsHeader = localizedStrings[downloadedProjectsHeaderKey];
-  const localizedDeleteListItem = localizedStrings[deleteListItemKey];
+  // const localizedDownloadedProjectsHeader = localizedStrings[downloadedProjectsHeaderKey];
+  // const localizedDeleteListItem = localizedStrings[deleteListItemKey];
 
-  const [downloadableProjects, downloadedProjects] = useMemo(() => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [downloadableProjects, _downloadedProjects] = useMemo(() => {
     const projects = fetchProjects();
     return [
       projects.filter((project) => project.isDownloadable && !project.isDownloaded),
       projects.filter((project) => project.isDownloaded),
     ];
   }, []);
+
+  // Can we remove this component? We're not using it.
 
   return (
     <div className="download-update-project-dialog">
@@ -71,14 +67,14 @@ export default function DownloadUpdateProjectTab() {
           subheader={localizedDownloadableProjectsHeader}
           handleSelectProject={downloadProject}
         >
-          <ListItemIcon>
+          {/* <ListItemIcon>
             <Download />
-          </ListItemIcon>
+          </ListItemIcon> */}
         </ProjectList>
       </nav>
 
       <nav aria-label={localizedDownloadedProjectsAria}>
-        <List>
+        {/* <List>
           <ListSubheader>{localizedDownloadedProjectsHeader}</ListSubheader>
           {downloadedProjects.map((project) => (
             <ListItem key={project.id}>
@@ -96,7 +92,7 @@ export default function DownloadUpdateProjectTab() {
               </ListItemButton>
             </ListItem>
           ))}
-        </List>
+        </List> */}
       </nav>
     </div>
   );
