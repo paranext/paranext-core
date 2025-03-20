@@ -90,6 +90,7 @@ export {
   SettingsListHeader,
   SettingsListItem,
 } from './components/advanced/settings-components/settings-list.component';
+export { default as TabDropdownMenu } from './components/advanced/tab-dropdown-menu.component';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,

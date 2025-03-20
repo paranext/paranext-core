@@ -2,7 +2,7 @@ import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import menuDataService from '@shared/services/menu-data.service';
 import {
   CommandHandler,
-  HamburgerMenuButton,
+  TabDropdownMenu,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -92,15 +92,13 @@ export default function PlatformTabTitle({
             {isLoading || isPlatformError(webViewMenu) || !webViewMenu?.topMenu ? (
               icon
             ) : (
-              <HamburgerMenuButton
+              <TabDropdownMenu
                 commandHandler={commandHandler}
-                normalMenu={isPlatformError(webViewMenu) ? undefined : webViewMenu?.topMenu}
-                className="tab-menu-button"
-                aria-label={tabLabel}
-                containerRef={containerRef}
+                menuData={webViewMenu.topMenu}
+                tabLabel={tabLabel}
               >
                 {icon}
-              </HamburgerMenuButton>
+              </TabDropdownMenu>
             )}
             <span>{title}</span>
           </div>
