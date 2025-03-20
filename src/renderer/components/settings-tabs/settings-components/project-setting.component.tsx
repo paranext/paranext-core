@@ -7,7 +7,7 @@ import Setting, { ProjectSettingProps, ProjectSettingValues } from './setting.co
  * Provides a project-specific setting component by using the `Setting` component with
  * project-specific validation
  */
-export default function ProjectSetting({
+export function ProjectSetting({
   settingKey,
   label,
   description,
@@ -42,3 +42,5 @@ export default function ProjectSetting({
     />
   );
 }
+
+export default ProjectSetting;

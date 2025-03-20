@@ -31,7 +31,7 @@ function deleteProject(project: Project) {
   logger.info(`Deleting Project ${project.name}`);
 }
 
-export default function DownloadUpdateProjectTab() {
+export function DownloadUpdateProjectTab() {
   const downloadableProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadable%';
   const downloadableProjectsHeaderKey = '%downloadUpdateProjectTab_listHeader_downloadable%';
   const downloadedProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloaded%';
@@ -109,3 +109,5 @@ export const loadDownloadUpdateProjectTab = (savedTabInfo: SavedTabInfo): TabInf
     content: <DownloadUpdateProjectTab />,
   };
 };
+
+export default DownloadUpdateProjectTab;

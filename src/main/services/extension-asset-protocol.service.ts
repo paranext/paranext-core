@@ -120,7 +120,7 @@ const initialize = () => {
  * - `papi-extension://extension-name/assets/subdirectory/asset.xyz` -> load "asset.xyz" from
  *   "assets/subdirectory" directory in "extension-name"
  */
-const extensionAssetProtocolService = {
+export const extensionAssetProtocolService = {
   initialize,
 };
 

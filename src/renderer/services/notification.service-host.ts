@@ -62,7 +62,7 @@ const notificationService: INotificationService = {
 };
 
 /** Register the network object that backs the notification service */
-export default async function startNotificationService(): Promise<void> {
+export async function startNotificationService(): Promise<void> {
   await networkObjectService.set(
     NotificationServiceNetworkObjectName,
     notificationService,
@@ -101,3 +101,5 @@ export default async function startNotificationService(): Promise<void> {
     },
   );
 }
+
+export default startNotificationService;

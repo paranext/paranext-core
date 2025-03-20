@@ -167,7 +167,7 @@ export interface ExtensionStorageService {
  * the extension identity and current user (as identified by the OS). This service will not work
  * within the renderer.
  */
-const extensionStorageService: ExtensionStorageService = {
+export const extensionStorageService: ExtensionStorageService = {
   readTextFileFromInstallDirectory,
   readBinaryFileFromInstallDirectory,
   readUserData,

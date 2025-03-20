@@ -1,4 +1,4 @@
-import Checkbox from '@/components/shadcn-ui/checkbox';
+import { Checkbox } from '@/components/shadcn-ui/checkbox';
 import { Label } from '@/components/shadcn-ui/label';
 
 export type ChecklistProps = {
@@ -28,7 +28,7 @@ export type ChecklistProps = {
 };
 
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
-export default function Checklist({
+export function Checklist({
   id,
   className,
   listItems,
@@ -51,3 +51,5 @@ export default function Checklist({
     </div>
   );
 }
+
+export default Checklist;

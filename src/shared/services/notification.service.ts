@@ -36,7 +36,7 @@ async function initialize(): Promise<void> {
  *
  * Service that sends notifications to users in the UI
  */
-const notificationService = createSyncProxyForAsyncObject<INotificationService>(async () => {
+export const notificationService = createSyncProxyForAsyncObject<INotificationService>(async () => {
   await initialize();
   return networkObject;
 });

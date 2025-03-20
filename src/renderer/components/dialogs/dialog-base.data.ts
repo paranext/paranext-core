@@ -146,7 +146,7 @@ export function hookUpDialogService({
  * to a nonexistent `Component`. Instead of inheriting this as a class, any dialog definition can
  * spread this `{ ...DIALOG_BASE }`
  */
-const DIALOG_BASE: DialogDefinitionBase = {
+export const DIALOG_BASE: DialogDefinitionBase = {
   initialSize: DIALOG_DEFAULT_SIZE,
   loadDialog(savedTabInfo) {
     // Assert the more specific type.

@@ -14,7 +14,7 @@ import {
   MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
 
-export default function MenubarExamples({ variant }: { variant?: 'default' | 'muted' }) {
+export function MenubarExamples({ variant }: { variant?: 'default' | 'muted' }) {
   return (
     <Menubar className="pr-twp tw-border-0 tw-bg-transparent" variant={variant}>
       <MenubarMenu>
@@ -103,3 +103,5 @@ export default function MenubarExamples({ variant }: { variant?: 'default' | 'mu
     </Menubar>
   );
 }
+
+export default MenubarExamples;

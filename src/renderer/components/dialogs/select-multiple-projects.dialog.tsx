@@ -102,7 +102,7 @@ function SelectMultipleProjectsDialog({
 
 const localizeSelectProjectsKey: LocalizeKey = '%selectMultipleProjects_title_selectProjects%';
 
-const SELECT_MULTIPLE_PROJECTS_DIALOG: DialogDefinition<
+export const SELECT_MULTIPLE_PROJECTS_DIALOG: DialogDefinition<
   typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE
 > = Object.freeze({
   ...DIALOG_BASE,

@@ -27,7 +27,7 @@ const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIdsTop);
 
-export default function PlatformBibleToolbar() {
+export function PlatformBibleToolbar() {
   // Internal state tracker for scroll group in local storage
   const [scrollGroupIdInternal, setScrollGroupIdInternal] = useState<ScrollGroupId>(() =>
     JSON.parse(localStorage.getItem(scrollGroupIdLocalStorageKey) ?? '0'),
@@ -112,3 +112,5 @@ export default function PlatformBibleToolbar() {
     </Toolbar>
   );
 }
+
+export default PlatformBibleToolbar;

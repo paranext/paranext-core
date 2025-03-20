@@ -58,7 +58,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const webViewService = createSyncProxyForAsyncObject<WebViewServiceType>(
+export const webViewService = createSyncProxyForAsyncObject<WebViewServiceType>(
   async () => {
     await initialize();
     return networkObject;

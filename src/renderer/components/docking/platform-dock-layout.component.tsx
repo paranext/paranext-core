@@ -33,7 +33,7 @@ import {
   RCDockTabInfo,
 } from '@renderer/components/docking/docking-framework-internal.model';
 
-export default function PlatformDockLayout() {
+export function PlatformDockLayout() {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockLayoutRef = useRef<DockLayout>(undefined!);
@@ -148,3 +148,5 @@ export default function PlatformDockLayout() {
     />
   );
 }
+
+export default PlatformDockLayout;

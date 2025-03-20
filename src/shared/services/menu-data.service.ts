@@ -27,7 +27,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
+export const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
   await initialize();
   return dataProvider;
 }, menuDataServiceObjectToProxy);

@@ -4,7 +4,7 @@ import settingsService from '@shared/services/settings.service';
 import Setting, { OtherSettingProps, OtherSettingValues } from './setting.component';
 
 /** Provides a non-project setting component by utilizing the `Setting` component validation */
-export default function OtherSetting({
+export function OtherSetting({
   settingKey,
   label,
   description,
@@ -37,3 +37,5 @@ export default function OtherSetting({
     />
   );
 }
+
+export default OtherSetting;

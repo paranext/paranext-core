@@ -179,5 +179,5 @@ if (isClient()) {
  *
  * All extensions and services should use this logger to provide a unified output of logs
  */
-const logger = log;
+export const logger = log;
 export default logger;

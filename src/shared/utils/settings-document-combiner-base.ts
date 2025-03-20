@@ -140,7 +140,7 @@ async function localizeSettingsContributionInfo(
 
 // #endregion
 
-export default abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
+export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
   /** Name for type of setting to use in error messages */
   protected readonly settingTypeName: string = 'Setting';
 
@@ -256,3 +256,5 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
   /** Validate the base and contribution documents against the JSON schema */
   protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
 }
+
+export default SettingsDocumentCombinerBase;

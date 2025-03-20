@@ -106,9 +106,12 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const projectSettingsService = createSyncProxyForAsyncObject<IProjectSettingsService>(async () => {
-  await initialize();
-  return networkObject;
-}, projectSettingsServiceObjectToProxy);
+export const projectSettingsService = createSyncProxyForAsyncObject<IProjectSettingsService>(
+  async () => {
+    await initialize();
+    return networkObject;
+  },
+  projectSettingsServiceObjectToProxy,
+);
 
 export default projectSettingsService;

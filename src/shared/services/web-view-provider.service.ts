@@ -301,7 +301,7 @@ export interface PapiWebViewProviderService {
   postMessageToWebView: typeof postMessageToWebView;
 }
 
-const webViewProviderService: WebViewProviderService = {
+export const webViewProviderService: WebViewProviderService = {
   initialize,
   registerWebViewProvider,
   getWebViewProvider,

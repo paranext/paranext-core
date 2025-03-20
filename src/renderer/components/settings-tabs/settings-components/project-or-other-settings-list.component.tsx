@@ -24,7 +24,7 @@ type ProjectOrOtherSettingsListProps = {
  * Filters and displays a list of settings based on a search query and whether it's for project or
  * user settings, rendering either `ProjectSetting` or `UserSetting` components accordingly.
  */
-export default function ProjectOrOtherSettingsList({
+export function ProjectOrOtherSettingsList({
   settingProperties,
   projectId,
   groupLabel,
@@ -74,3 +74,5 @@ export default function ProjectOrOtherSettingsList({
     </Card>
   );
 }
+
+export default ProjectOrOtherSettingsList;

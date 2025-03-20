@@ -928,7 +928,7 @@ export interface DataProviderService {
  *
  * Service that allows extensions to send and receive data to/from other extensions
  */
-const dataProviderService: DataProviderService = {
+export const dataProviderService: DataProviderService = {
   hasKnown,
   registerEngine,
   get,

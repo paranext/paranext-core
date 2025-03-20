@@ -95,7 +95,7 @@ function logDialogError(error: unknown) {
  *       specify as many or as few properties here as you want to overwrite the properties in the
  *       `options` you provide to the hook
  */
-function useDialogCallback<
+export function useDialogCallback<
   DialogTabType extends DialogTabTypes,
   DialogOptions extends DialogTypes[DialogTabType]['options'],
 >(
@@ -109,7 +109,7 @@ function useDialogCallback<
   rejectCallback: (error: unknown, dialogType: DialogTabType, options: DialogOptions) => void,
 ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
 /** JSDOC DESTINATION useDialogCallback */
-function useDialogCallback<
+export function useDialogCallback<
   DialogTabType extends DialogTabTypes,
   DialogOptions extends DialogTypes[DialogTabType]['options'],
 >(
@@ -121,7 +121,7 @@ function useDialogCallback<
     options: DialogOptions,
   ) => void,
 ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
-function useDialogCallback<
+export function useDialogCallback<
   DialogTabType extends DialogTabTypes,
   DialogOptions extends DialogTypes[DialogTabType]['options'],
 >(

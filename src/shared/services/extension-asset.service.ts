@@ -92,7 +92,7 @@ export interface ExtensionAssetService {
   getExtensionAsset: typeof getExtensionAsset;
 }
 
-const extensionAssetService: ExtensionAssetService = {
+export const extensionAssetService: ExtensionAssetService = {
   initialize,
   getExtensionAsset,
 };

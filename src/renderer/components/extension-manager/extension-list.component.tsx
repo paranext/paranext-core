@@ -45,7 +45,7 @@ type ExtensionListProps = Omit<ExtensionToggleProps, 'extensionName' | 'extensio
  * @param ExtensionListProps
  * @returns <ExtensionList />
  */
-export default function ExtensionList({
+export function ExtensionList({
   extensions,
   toggledExtensionNames,
   headerAction,
@@ -85,3 +85,5 @@ export default function ExtensionList({
     </div>
   );
 }
+
+export default ExtensionList;

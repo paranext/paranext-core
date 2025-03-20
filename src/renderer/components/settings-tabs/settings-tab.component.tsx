@@ -76,7 +76,7 @@ const filterSettingsContributions = (
   );
 };
 
-export default function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
+export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 
   const [selectedSidebarItem, setSelectedSidebarItem] = useState<SelectedSettingsSidebarItem>({
@@ -319,3 +319,5 @@ export const loadSettingsTab = (savedTabInfo: SavedTabInfo): TabInfo => {
     content: <SettingsTab projectIdToLimitSettings={tabData.projectIdToLimitSettings} />,
   };
 };
+
+export default SettingsTab;

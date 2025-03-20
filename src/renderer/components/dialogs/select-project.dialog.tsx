@@ -78,15 +78,16 @@ function SelectProjectDialog({
 
 const localizeSelectProject: LocalizeKey = '%selectProject_title%';
 
-const SELECT_PROJECT_DIALOG: DialogDefinition<typeof SELECT_PROJECT_DIALOG_TYPE> = Object.freeze({
-  ...DIALOG_BASE,
-  tabType: SELECT_PROJECT_DIALOG_TYPE,
-  defaultTitle: localizeSelectProject,
-  initialSize: {
-    width: 500,
-    height: 350,
-  },
-  Component: SelectProjectDialog,
-});
+export const SELECT_PROJECT_DIALOG: DialogDefinition<typeof SELECT_PROJECT_DIALOG_TYPE> =
+  Object.freeze({
+    ...DIALOG_BASE,
+    tabType: SELECT_PROJECT_DIALOG_TYPE,
+    defaultTitle: localizeSelectProject,
+    initialSize: {
+      width: 500,
+      height: 350,
+    },
+    Component: SelectProjectDialog,
+  });
 
 export default SELECT_PROJECT_DIALOG;

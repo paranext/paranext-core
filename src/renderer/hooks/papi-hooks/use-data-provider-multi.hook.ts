@@ -29,7 +29,7 @@ import { DataProviderNames, DataProviders } from 'papi-shared-types';
  */
 // We don't know what types the data providers serve
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
+export function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
   dataProviderSources: (
     | EachDataProviderName[number]
     | DataProviders[EachDataProviderName[number]]

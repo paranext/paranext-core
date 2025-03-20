@@ -11,9 +11,9 @@ import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
 import { Switch } from '@/components/shadcn-ui/switch';
 import { BellRing, Check } from 'lucide-react';
-import SelectExamples from './select.examples.component';
+import { SelectExamples } from './select.examples.component';
 
-export default function CardExamples() {
+export function CardExamples() {
   const cardContent = (
     <div className="tw-flex tw-items-center tw-gap-x-4 tw-rounded-md tw-border tw-p-4">
       <BellRing />
@@ -101,3 +101,5 @@ export default function CardExamples() {
     </div>
   );
 }
+
+export default CardExamples;

@@ -37,7 +37,7 @@ import RpcServer from './rpc-server';
  *
  * Created by the main process on start up when the network service initializes
  */
-export default class RpcWebSocketListener implements IRpcMethodRegistrar {
+export class RpcWebSocketListener implements IRpcMethodRegistrar {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   private localEventHandler: EventHandler | undefined;
   private webSocketServer: WebSocketServer | undefined;
@@ -282,3 +282,5 @@ export default class RpcWebSocketListener implements IRpcMethodRegistrar {
     }
   }
 }
+
+export default RpcWebSocketListener;

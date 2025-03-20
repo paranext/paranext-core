@@ -213,7 +213,7 @@ async function localizeMenuItems(menuItems: Localized<MenuItemBase>[] | undefine
  * represent menus in Platform.Bible. The starting document is expected to be provided by the
  * platform, and all the contribution documents are expected to be provided by extensions.
  */
-export default class MenuDocumentCombiner extends DocumentCombiner {
+export class MenuDocumentCombiner extends DocumentCombiner {
   private localizedOutput: LocalizedMenus | undefined;
   private originalOutputThatWasLocalized: JsonDocumentLike | undefined;
 
@@ -403,3 +403,5 @@ export default class MenuDocumentCombiner extends DocumentCombiner {
     return retVal;
   }
 }
+
+export default MenuDocumentCombiner;

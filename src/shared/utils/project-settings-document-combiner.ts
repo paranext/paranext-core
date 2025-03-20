@@ -48,7 +48,7 @@ function performSchemaValidation(document: JsonDocumentLike, docType: string): v
 
 // #endregion
 
-export default class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
+export class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
   protected override readonly settingTypeName = 'Project Setting';
 
   /**
@@ -97,3 +97,5 @@ export default class ProjectSettingsDocumentCombiner extends SettingsDocumentCom
     performSchemaValidation(document, docType);
   }
 }
+
+export default ProjectSettingsDocumentCombiner;

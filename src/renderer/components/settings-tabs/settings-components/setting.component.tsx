@@ -116,7 +116,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
  * Renders a setting component based on the type of setting (string, number, boolean, or object) and
  * includes validating the setting and displaying errors
  */
-export default function Setting({
+export function Setting({
   settingKey,
   setting,
   setSetting,
@@ -294,3 +294,5 @@ export default function Setting({
     </div>
   );
 }
+
+export default Setting;

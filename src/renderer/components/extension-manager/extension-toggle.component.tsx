@@ -15,7 +15,7 @@ export type ExtensionToggleProps = ExtensionCardProps &
     handleExtensionToggle: ExtensionToggleHandler;
   }>;
 
-export default function ExtensionToggle({
+export function ExtensionToggle({
   toggledExtensionNames,
   handleExtensionToggle,
   headerAction,
@@ -43,3 +43,5 @@ export default function ExtensionToggle({
     </ExtensionCard>
   );
 }
+
+export default ExtensionToggle;

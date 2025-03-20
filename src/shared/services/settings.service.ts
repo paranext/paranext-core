@@ -27,7 +27,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const settingsService = createSyncProxyForAsyncObject<ISettingsService>(async () => {
+export const settingsService = createSyncProxyForAsyncObject<ISettingsService>(async () => {
   await initialize();
   return dataProvider;
 }, settingsServiceObjectToProxy);

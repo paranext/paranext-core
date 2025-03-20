@@ -33,7 +33,7 @@ type PlatformTabTitleProps = {
  * @param text The text to show on the tab title
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  */
-export default function PlatformTabTitle({
+export function PlatformTabTitle({
   webViewType,
   tabId,
   iconUrl,
@@ -114,3 +114,5 @@ export default function PlatformTabTitle({
     </TooltipProvider>
   );
 }
+
+export default PlatformTabTitle;

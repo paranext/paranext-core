@@ -93,7 +93,7 @@ async function waitForNetworkObject(
  *
  * Provides functions related to the set of available network objects
  */
-const networkObjectStatusService: NetworkObjectStatusServiceType = {
+export const networkObjectStatusService: NetworkObjectStatusServiceType = {
   getAllNetworkObjectDetails,
   waitForNetworkObject,
 };

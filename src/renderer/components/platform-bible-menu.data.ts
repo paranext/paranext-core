@@ -114,8 +114,10 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
   ],
 };
 
-export default async function provideMenuData(
+export async function provideMenuData(
   isSupportAndDevelopment: boolean,
 ): Promise<Localized<MultiColumnMenu>> {
   return isSupportAndDevelopment ? supportAndDevelopmentMenuLayout : menuDataService.getMainMenu();
 }
+
+export default provideMenuData;

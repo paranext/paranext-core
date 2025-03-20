@@ -124,7 +124,7 @@ type PlatformMenubarProps = {
 };
 
 /** Menubar component tailored to work with Platform.Bible menu data */
-export default function PlatformMenubar({
+export function PlatformMenubar({
   menuData,
   commandHandler,
   onOpenChange,
@@ -241,3 +241,5 @@ export default function PlatformMenubar({
     </Menubar>
   );
 }
+
+export default PlatformMenubar;

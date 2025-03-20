@@ -210,7 +210,7 @@ async function startExtensionHost() {
 }
 
 /** Service that runs the extension-host process from the main file */
-const extensionHostService = {
+export const extensionHostService = {
   start: startExtensionHost,
   kill: hardKillExtensionHost,
   waitForClose: waitForExtensionHost,

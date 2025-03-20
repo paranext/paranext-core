@@ -8,7 +8,7 @@ import SELECT_BOOKS_DIALOG from './select-books-dialog.component';
  *
  * If you add a dialog here, you must also add it on {@link DialogTypes}
  */
-const DIALOGS: { [DialogTabType in DialogTabTypes]: DialogDefinition<DialogTabType> } = {
+export const DIALOGS: { [DialogTabType in DialogTabTypes]: DialogDefinition<DialogTabType> } = {
   [SELECT_PROJECT_DIALOG.tabType]: SELECT_PROJECT_DIALOG,
   [SELECT_MULTIPLE_PROJECTS_DIALOG.tabType]: SELECT_MULTIPLE_PROJECTS_DIALOG,
   [SELECT_BOOKS_DIALOG.tabType]: SELECT_BOOKS_DIALOG,

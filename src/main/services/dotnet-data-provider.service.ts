@@ -98,9 +98,10 @@ function startDotnetDataProvider() {
   });
 }
 
-const dotnetDataProvider = {
+export const dotnetDataProvider = {
   start: startDotnetDataProvider,
   kill: killDotnetDataProvider,
   waitForClose: waitForDotnetDataProvider,
 };
+
 export default dotnetDataProvider;

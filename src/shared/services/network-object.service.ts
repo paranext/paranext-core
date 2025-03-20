@@ -594,7 +594,7 @@ export interface NetworkObjectService extends MinimalNetworkObjectService {
  * event handler will be called. After an object is disposed, calls to its functions will no longer
  * be proxied to the original object.
  */
-const networkObjectService: NetworkObjectService = {
+export const networkObjectService: NetworkObjectService = {
   initialize,
   hasKnown,
   get,

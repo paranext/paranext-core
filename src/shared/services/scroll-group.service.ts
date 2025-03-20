@@ -48,7 +48,7 @@ async function initialize(): Promise<void> {
  *
  * Provides functions related to scroll groups and Scripture references at those scroll groups
  */
-const scrollGroupService = createSyncProxyForAsyncObject<IScrollGroupService>(
+export const scrollGroupService = createSyncProxyForAsyncObject<IScrollGroupService>(
   async () => {
     await initialize();
     return networkObject;
