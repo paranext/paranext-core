@@ -115,8 +115,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
       chapterNum: scrRef.chapterNum,
       verseNum: 1,
     };
-    let start = defaultScrRef;
-    let end = defaultScrRef;
+    const start = defaultScrRef;
+    const end = defaultScrRef;
 
     if (scope === CheckScopes.Book) {
       start.chapterNum = 1;

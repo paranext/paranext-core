@@ -20,7 +20,6 @@ import {
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
 } from 'platform-scripture-editor';
-import { Canon, VerseRef } from '@sillsdev/scripture';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import { mergeDecorations } from './decorations.util';
