@@ -1,4 +1,4 @@
-import menuDataService from '@shared/services/menu-data.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { Localized, MultiColumnMenu, PlatformMenus } from 'platform-bible-utils';
 
 type LocalizedMainMenu = Localized<PlatformMenus['mainMenu']>;

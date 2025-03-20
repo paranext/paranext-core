@@ -21,7 +21,7 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
-import localizationService from '@shared/services/localization.service';
+import { localizationService } from '@shared/services/localization.service';
 
 export type LocalizedMenus = Localized<PlatformMenus>;
 

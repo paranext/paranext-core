@@ -2,7 +2,7 @@ import {
   dataProtectionServiceNetworkObjectName,
   IDataProtectionService,
 } from '@shared/models/data-protection.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { safeStorage } from 'electron';
 
 /** If encryption is not available, return reason why. If encryption is available, return `undefined` */

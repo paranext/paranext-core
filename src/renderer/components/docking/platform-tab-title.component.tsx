@@ -1,5 +1,5 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import menuDataService from '@shared/services/menu-data.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import {
   CommandHandler,
   HamburgerMenuButton,

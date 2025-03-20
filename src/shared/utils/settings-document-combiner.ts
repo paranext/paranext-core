@@ -1,8 +1,9 @@
 import { JsonDocumentLike, settingsDocumentSchema } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
-import SettingsDocumentCombinerBase, {
+import {
   LocalizedSettingsContributionInfo,
   SettingsContributionInfo,
+  SettingsDocumentCombinerBase,
 } from '@shared/utils/settings-document-combiner-base';
 
 // #region Helper functions

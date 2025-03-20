@@ -5,7 +5,7 @@ import {
   COMMAND_LINE_ARGS,
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
-import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
+import { formatLog, logger, WARN_TAG } from '@shared/services/logger.service';
 import { AsyncVariable, includes, split, waitForDuration } from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';

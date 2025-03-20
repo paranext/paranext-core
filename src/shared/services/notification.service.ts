@@ -2,7 +2,7 @@ import {
   NotificationServiceNetworkObjectName,
   type INotificationService,
 } from '@shared/models/notification.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: INotificationService;

@@ -1,7 +1,7 @@
-import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
-import SELECT_MULTIPLE_PROJECTS_DIALOG from '@renderer/components/dialogs/select-multiple-projects.dialog';
+import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
+import { SELECT_MULTIPLE_PROJECTS_DIALOG } from '@renderer/components/dialogs/select-multiple-projects.dialog';
 import { DialogDefinition, DialogTabTypes } from './dialog-definition.model';
-import SELECT_BOOKS_DIALOG from './select-books-dialog.component';
+import { SELECT_BOOKS_DIALOG } from './select-books-dialog.component';
 
 /**
  * Map of all available dialog definitions used to create dialogs

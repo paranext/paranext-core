@@ -13,7 +13,7 @@ import {
   updateWebViewDefinitionSync,
   isWebViewNonceCorrect,
 } from '@renderer/services/web-view.service-host';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,
   UnsubscriberAsync,

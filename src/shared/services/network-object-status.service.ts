@@ -4,7 +4,8 @@ import {
   NetworkObjectStatusRemoteServiceType,
   NetworkObjectStatusServiceType,
 } from '@shared/models/network-object-status.service-model';
-import networkObjectService, {
+import {
+  networkObjectService,
   onDidCreateNetworkObject,
 } from '@shared/services/network-object.service';
 import { AsyncVariable, isSubset } from 'platform-bible-utils';

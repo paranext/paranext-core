@@ -6,7 +6,7 @@ import {
   deleteFile,
 } from '@node/services/node-file-system.service';
 import { ExecutionToken } from '@node/models/execution-token.model';
-import executionTokenService from '@node/services/execution-token.service';
+import { executionTokenService } from '@node/services/execution-token.service';
 import { Buffer } from 'node:buffer';
 import { stringLength, includes } from 'platform-bible-utils';
 

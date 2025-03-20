@@ -1,6 +1,6 @@
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import LogError from '@shared/log-error.model';
-import localizationService from '@shared/services/localization.service';
+import { LogError } from '@shared/log-error.model';
+import { localizationService } from '@shared/services/localization.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   DocumentCombiner,

@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { testingLocalizationService } from '@extension-host/services/localization.service-host';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { SettingNames } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
 

@@ -8,11 +8,12 @@ import {
   ListSubheader,
 } from '@mui/material';
 import { Download, ArrowDownFromLine, Delete } from 'lucide-react';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { useMemo } from 'react';
-import ProjectList, {
+import {
   fetchProjects,
   Project,
+  ProjectList,
 } from '@renderer/components/projects/project-list.component';
 import './download-update-project-tab.component.scss';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';

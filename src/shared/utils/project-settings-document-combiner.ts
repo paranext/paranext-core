@@ -7,7 +7,7 @@ import {
   ProjectSettingsGroup,
   projectSettingsDocumentSchema,
 } from 'platform-bible-utils';
-import SettingsDocumentCombinerBase from '@shared/utils/settings-document-combiner-base';
+import { SettingsDocumentCombinerBase } from '@shared/utils/settings-document-combiner-base';
 
 /**
  * Information about one specific setting. Basically just {@link Setting} but with specific default

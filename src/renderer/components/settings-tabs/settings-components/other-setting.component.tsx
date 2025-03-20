@@ -1,7 +1,7 @@
-import useSetting from '@renderer/hooks/papi-hooks/use-setting.hook';
+import { useSetting } from '@renderer/hooks/papi-hooks/use-setting.hook';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
-import settingsService from '@shared/services/settings.service';
-import Setting, { OtherSettingProps, OtherSettingValues } from './setting.component';
+import { settingsService } from '@shared/services/settings.service';
+import { OtherSettingProps, OtherSettingValues, Setting } from './setting.component';
 
 /** Provides a non-project setting component by utilizing the `Setting` component validation */
 export function OtherSetting({

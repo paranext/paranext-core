@@ -5,18 +5,19 @@ import {
   usePromise,
 } from 'platform-bible-react';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import projectSettingsService, {
+import {
   filterProjectSettingsContributionsByProjectInterfaces,
+  projectSettingsService,
 } from '@shared/services/project-settings.service';
-import settingsService from '@shared/services/settings.service';
+import { settingsService } from '@shared/services/settings.service';
 import './settings-tab.component.scss';
-import projectLookupService from '@shared/services/project-lookup.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { projectDataProviders } from '@renderer/services/papi-frontend.service';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { formatReplacementString, Localized, LocalizeKey } from 'platform-bible-utils';
 import { SettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
 import { ProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
-import ProjectOrOtherSettingsList from './settings-components/project-or-other-settings-list.component';
+import { ProjectOrOtherSettingsList } from './settings-components/project-or-other-settings-list.component';
 
 export const TAB_TYPE_SETTINGS_TAB = 'settings-tab';
 

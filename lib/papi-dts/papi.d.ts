@@ -3066,9 +3066,11 @@ declare module 'papi-shared-types' {
     PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from 'shared/models/project-data-provider.model';
-  import type { IDisposableDataProvider } from 'shared/models/data-provider.interface';
-  import type IDataProvider from 'shared/models/data-provider.interface';
-  import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
+  import type {
+    IDataProvider,
+    IDisposableDataProvider,
+  } from 'shared/models/data-provider.interface';
+  import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
   /**
@@ -3736,8 +3738,9 @@ declare module 'shared/services/notification.service' {
 declare module 'shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
   import { DataProviderDataTypes } from 'shared/models/data-provider.model';
-  import IDataProviderEngine, {
+  import {
     DataProviderEngine,
+    IDataProviderEngine,
   } from 'shared/models/data-provider-engine.model';
   import {
     DataProviderNames,
@@ -3745,7 +3748,7 @@ declare module 'shared/services/data-provider.service' {
     DataProviders,
     DisposableDataProviders,
   } from 'papi-shared-types';
-  import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
   /**
    *
    * Indicate if we are aware of an existing data provider with the given name. If a data provider
@@ -5805,7 +5808,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   export default useDialogCallback;
 }
 declare module 'shared/services/localization.service-model' {
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
   import {
     DataProviderDataType,
     DataProviderUpdateInstructions,
@@ -6014,7 +6017,7 @@ declare module 'shared/utils/settings-document-combiner-base' {
 declare module 'shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
   import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
@@ -6174,7 +6177,7 @@ declare module 'shared/utils/project-settings-document-combiner' {
     ProjectSetting,
     ProjectSettingsGroup,
   } from 'platform-bible-utils';
-  import SettingsDocumentCombinerBase from 'shared/utils/settings-document-combiner-base';
+  import { SettingsDocumentCombinerBase } from 'shared/utils/settings-document-combiner-base';
   /**
    * Information about one specific setting. Basically just {@link Setting} but with specific default
    * type info

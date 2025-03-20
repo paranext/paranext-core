@@ -9,7 +9,7 @@ import {
   JSONRPCResponse,
   JSONRPCServer,
 } from 'json-rpc-2.0';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { IRpcHandler, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import {
   ConnectionStatus,

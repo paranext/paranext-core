@@ -1,4 +1,4 @@
-import dataProviderService from '@shared/services/data-provider.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { createSyncProxyForAsyncObject, getLocalizedIdFromBookNumber } from 'platform-bible-utils';
 import {
   ILocalizationService,

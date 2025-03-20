@@ -1,5 +1,5 @@
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
-import dataProviderService from './data-provider.service';
+import { dataProviderService } from './data-provider.service';
 import {
   ISettingsService,
   settingsServiceDataProviderName,

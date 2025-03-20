@@ -8,14 +8,14 @@ import {
   IWebViewProvider,
   IRegisteredWebViewProvider,
 } from '@shared/models/web-view-provider.model';
-import networkObjectService, { overrideDispose } from '@shared/services/network-object.service';
+import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
 import * as networkService from '@shared/services/network.service';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { isSerializable } from 'platform-bible-utils';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
 import { DisposableNetworkObject } from '@shared/models/network-object.model';
-import webViewService from '@shared/services/web-view.service';
+import { webViewService } from '@shared/services/web-view.service';
 import {
   getWebViewControllerObjectId,
   getWebViewMessageRequestType,

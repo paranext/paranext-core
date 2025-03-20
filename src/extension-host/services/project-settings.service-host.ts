@@ -1,6 +1,6 @@
 import * as networkService from '@shared/services/network.service';
 import { coreProjectSettingsValidators } from '@extension-host/data/core-project-settings-info.data';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR,
   IProjectSettingsService,

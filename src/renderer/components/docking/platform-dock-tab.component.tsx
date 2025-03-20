@@ -2,8 +2,8 @@ import { TabInfo } from '@shared/models/docking-framework.model';
 
 import { WebViewDefinition } from '@shared/models/web-view.model';
 import { TAB_GROUP } from './platform-dock-layout-positioning.util';
-import PlatformPanel from './platform-panel.component';
-import PlatformTabTitle from './platform-tab-title.component';
+import { PlatformPanel } from './platform-panel.component';
+import { PlatformTabTitle } from './platform-tab-title.component';
 
 /**
  * Creates a tab ready to go into rc-dock from platform tab info

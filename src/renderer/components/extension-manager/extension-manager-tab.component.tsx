@@ -1,8 +1,8 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { Button, Label } from 'platform-bible-react';
 import { useMemo, useState } from 'react';
-import ExtensionList, { Extension } from './extension-list.component';
+import { Extension, ExtensionList } from './extension-list.component';
 import './extension-manager-tab.component.scss';
 
 export const TAB_TYPE_EXTENSION_MANAGER = 'extension-manager-dialog';

@@ -1,9 +1,9 @@
 import { ProjectSettingNames, SettingNames } from 'papi-shared-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'platform-bible-react';
 import { Localized, ProjectSettingProperties, SettingProperties } from 'platform-bible-utils';
-import OtherSetting from './other-setting.component';
+import { OtherSetting } from './other-setting.component';
 import './project-or-other-settings-list.component.scss';
-import ProjectSetting from './project-setting.component';
+import { ProjectSetting } from './project-setting.component';
 import { OtherSettingValues, ProjectSettingValues } from './setting.component';
 
 /** Properties for a settings list component that displays either project or user settings */

@@ -20,10 +20,10 @@ import {
   Mutex,
 } from 'platform-bible-utils';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
-import PapiNetworkEventEmitter from '@shared/models/papi-network-event-emitter.model';
+import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
 import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 
 // #region Local event handling

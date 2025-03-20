@@ -1,8 +1,9 @@
 /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
 
-import DataProviderInternal, {
+import {
   DataProviderDataTypes,
   DataProviderGetter,
+  DataProviderInternal,
   DataProviderUpdateInstructions,
   DataProviderSetter,
   DataProviderSubscriber,
@@ -11,7 +12,7 @@ import DataProviderInternal, {
   getDataProviderDataTypeFromFunctionName,
   DataProviderDataType,
 } from '@shared/models/data-provider.model';
-import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
   AsyncVariable,
   CannotHaveOnDidDispose,
@@ -31,8 +32,8 @@ import {
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { LocalObjectToProxyCreator } from '@shared/models/network-object.model';
-import networkObjectService, { overrideDispose } from '@shared/services/network-object.service';
-import logger from '@shared/services/logger.service';
+import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
+import { logger } from '@shared/services/logger.service';
 import {
   CommandHandlers,
   DataProviderNames,
@@ -40,8 +41,8 @@ import {
   DataProviders,
   DisposableDataProviders,
 } from 'papi-shared-types';
-import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
-import notificationService from '@shared/services/notification.service';
+import { IDataProvider, IDisposableDataProvider } from '@shared/models/data-provider.interface';
+import { notificationService } from '@shared/services/notification.service';
 import { PlatformNotification } from '@shared/models/notification.service-model';
 
 /** Suffix on network objects that indicates that the network object is a data provider */

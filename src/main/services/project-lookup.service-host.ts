@@ -3,7 +3,7 @@ import {
   ProjectLookupServiceType,
   projectLookupServiceBase,
 } from '@shared/models/project-lookup.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 
 const projectLookupService = projectLookupServiceBase;
 

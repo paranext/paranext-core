@@ -1,7 +1,7 @@
 import { Button, Label } from 'platform-bible-react';
 import { PropsWithChildren, useMemo } from 'react';
 import './extension-list.component.scss';
-import ExtensionToggle, { ExtensionToggleProps } from './extension-toggle.component';
+import { ExtensionToggle, ExtensionToggleProps } from './extension-toggle.component';
 
 export type Extension = {
   /** The name of the extension */

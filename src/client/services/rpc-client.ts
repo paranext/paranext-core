@@ -7,7 +7,7 @@ import {
   JSONRPCServerAndClient,
   JSONRPCServerMiddlewareNext,
 } from 'json-rpc-2.0';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import {
   ConnectionStatus,

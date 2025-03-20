@@ -1,7 +1,7 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
-import localizationDataService from '@shared/services/localization.service';
-import logger from '@shared/services/logger.service';
+import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import {
   ProjectSettingNames,
@@ -154,7 +154,7 @@ export function Setting({
     return languages;
   }, [setting, settingKey]);
 
-  const [languages] = useData(localizationDataService.dataProviderName).AvailableInterfaceLanguages(
+  const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
     undefined,
     defaultLanguages,
   );

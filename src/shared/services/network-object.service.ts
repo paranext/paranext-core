@@ -22,7 +22,7 @@ import {
   LocalObjectToProxyCreator,
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { getEmptyMethodDocs, NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 // #endregion

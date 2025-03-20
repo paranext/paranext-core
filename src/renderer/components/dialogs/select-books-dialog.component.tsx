@@ -3,7 +3,7 @@ import { Button, Checklist, Label } from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
 import { LocalizeKey } from 'platform-bible-utils';
-import DIALOG_BASE from './dialog-base.data';
+import { DIALOG_BASE } from './dialog-base.data';
 import { DialogDefinition, DialogTypes, SELECT_BOOKS_DIALOG_TYPE } from './dialog-definition.model';
 import './select-books-dialog.component.scss';
 

@@ -3,7 +3,7 @@ import {
   IProjectSettingsService,
   projectSettingsServiceObjectToProxy,
 } from '@shared/services/project-settings.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   createSyncProxyForAsyncObject,
   Localized,

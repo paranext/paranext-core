@@ -13,13 +13,13 @@ import {
 } from '@shared/models/docking-framework.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 
-import testLayout from '@renderer/testing/test-layout.data';
+import { testLayout } from '@renderer/testing/test-layout.data';
 import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-host';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
 
-import DockLayoutWrapper from '@renderer/components/docking/dock-layout-wrapper.component';
+import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrapper.component';
 import {
   addTabToDock,
   addWebViewToDock,

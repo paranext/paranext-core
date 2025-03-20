@@ -1,6 +1,6 @@
 import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
-import extensionAssetService from '@shared/services/extension-asset.service';
+import { extensionAssetService } from '@shared/services/extension-asset.service';
 import { includes, indexOf, lastIndexOf, stringLength, substring } from 'platform-bible-utils';
 
 /** Here some of the most common MIME types that we expect to handle */

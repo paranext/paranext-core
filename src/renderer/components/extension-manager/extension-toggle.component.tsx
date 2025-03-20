@@ -1,6 +1,6 @@
 import { PropsWithChildren } from 'react';
 import { Switch } from 'platform-bible-react';
-import ExtensionCard, { ExtensionCardProps } from './extension-card.component';
+import { ExtensionCard, ExtensionCardProps } from './extension-card.component';
 import './extension-toggle.component.scss';
 
 export interface ExtensionToggleHandler {

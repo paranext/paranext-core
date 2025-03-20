@@ -1,10 +1,11 @@
 import { NetworkObjectDetails } from '@shared/models/network-object.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import {
   NetworkObjectStatusRemoteServiceType,
   networkObjectStatusServiceNetworkObjectName,
 } from '@shared/models/network-object-status.service-model';
-import networkObjectService, {
+import {
+  networkObjectService,
   onDidCreateNetworkObject,
   onDidDisposeNetworkObject,
 } from '@shared/services/network-object.service';

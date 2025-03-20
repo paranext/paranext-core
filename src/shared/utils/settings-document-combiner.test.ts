@@ -1,7 +1,7 @@
 import { vi } from 'vitest';
 import { Localized, SettingsContribution, slice } from 'platform-bible-utils';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
+import { SettingsDocumentCombiner } from '@shared/utils/settings-document-combiner';
 import {
   LocalizedSettingsContributionInfo,
   SettingsContributionInfo,
