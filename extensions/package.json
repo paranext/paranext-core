@@ -45,8 +45,6 @@
     "platform-bible-utils": "file:../lib/platform-bible-utils"
   },
   "devDependencies": {
-    "@emotion/react": "^11.11.4",
-    "@emotion/styled": "^11.11.0",
     "@swc/core": "^1.10.18",
     "@tailwindcss/typography": "^0.5.16",
     "@types/node": "^20.17.10",

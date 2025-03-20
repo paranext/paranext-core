@@ -143,16 +143,6 @@ const configBase: webpack.Configuration = {
       // use tsconfig.json paths https://www.npmjs.com/package/tsconfig-paths-webpack-plugin
       new TsconfigPathsPlugin(),
     ],
-    // Load `platform-bible-react`' `dependencies` from `paranext-core` so the extension will share
-    // these dependencies with the bundled copy of `platform-bible-react` and avoid duplicate
-    // packages. These paths are broken up like this so multi-extension folder can format the path
-    // properly
-    // https://webpack.js.org/configuration/resolve/#resolvealias
-    // TODO: Remove this when `platform-bible-react` is published to npm
-    alias: {
-      '@emotion/react': path.resolve(__dirname, '..', '../node_modules/@emotion/react'),
-      '@emotion/styled': path.resolve(__dirname, '..', '../node_modules/@emotion/styled'),
-    },
   },
 };
 
