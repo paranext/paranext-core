@@ -1,12 +1,7 @@
 import { ReactNode, useCallback, useMemo, useState } from 'react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import {
-  Checklist,
-  DropdownMenuGroup,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-} from 'platform-bible-react';
+import { Checklist, DropdownMenuGroup, Separator } from 'platform-bible-react';
 import { logger } from '@papi/frontend';
 import ChecksFilterDropdown from './checks-filter-dropdown.component';
 
@@ -113,9 +108,16 @@ export default function ChecksCheckTypeFilter({
   }, [localizedStrings, selectedCheckTypeIds.length]);
 
   const onSelectionToggle = useCallback(() => {
-    if (selectedCheckTypeIds.length > 0) setSelectedCheckTypeIds([]);
-    else setSelectedCheckTypeIds(checkNameToDetails.map((check) => check.checkId));
-  }, [checkNameToDetails, selectedCheckTypeIds.length]);
+    if (selectedCheckTypeIds.length > 0) {
+      const newIds: string[] = [];
+      setSelectedCheckTypeIds(newIds);
+      handleSelectCheckTypeToggle(newIds);
+    } else {
+      const newIds = checkNameToDetails.map((check) => check.checkId);
+      setSelectedCheckTypeIds(newIds);
+      handleSelectCheckTypeToggle(newIds);
+    }
+  }, [checkNameToDetails, handleSelectCheckTypeToggle, selectedCheckTypeIds]);
 
   const onSelectedCheckTypesChange = useCallback(
     (toggledCheckName: string) => {
@@ -143,13 +145,10 @@ export default function ChecksCheckTypeFilter({
   return (
     <ChecksFilterDropdown
       selectedValue=""
-      radioGroupLabel=""
+      radioGroupLabel={localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
       getSelectedValueLabel={() => selectedChecksCountLabel}
+      separatorColorCss="tw-bg-slate-300"
     >
-      <DropdownMenuLabel className="tw-font-bold">
-        {localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
-      </DropdownMenuLabel>
-      <DropdownMenuSeparator className="tw-bg-slate-300" />
       <DropdownMenuGroup>
         <Checklist
           id="checksCheckList"
@@ -163,7 +162,7 @@ export default function ChecksCheckTypeFilter({
           createComplexLabel={createComplexLabel}
         />
       </DropdownMenuGroup>
-      <DropdownMenuSeparator className="tw-bg-slate-300" />
+      <Separator className="tw-bg-slate-300" />
       <div className="tw-text-center tw-p-2">
         <button type="button" onClick={onSelectionToggle}>
           {getSelectionLabel()}

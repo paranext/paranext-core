@@ -19,6 +19,8 @@ type ChecksFilterDropdownProps = PropsWithChildren & {
   getSelectedValueLabel: (value: string) => string;
   /** Whether or not the popover trigger should be disabled. Default is false */
   shouldDisableButton?: boolean;
+  /** CSS color of the separator bar between the label and dropdown content. Optional. */
+  separatorColorCss?: string;
 };
 
 /**
@@ -33,6 +35,7 @@ export default function ChecksFilterDropdown({
   radioGroupLabel,
   getSelectedValueLabel,
   shouldDisableButton,
+  separatorColorCss,
   children,
 }: ChecksFilterDropdownProps) {
   return (
@@ -51,7 +54,7 @@ export default function ChecksFilterDropdown({
       </DropdownMenuTrigger>
       <DropdownMenuContent className="tw-max-w-sm" align="start">
         <DropdownMenuLabel>{radioGroupLabel}</DropdownMenuLabel>
-        <Separator />
+        <Separator className={separatorColorCss ?? ''} />
         {children}
       </DropdownMenuContent>
     </DropdownMenu>
