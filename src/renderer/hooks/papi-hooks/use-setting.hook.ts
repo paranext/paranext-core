@@ -1,12 +1,12 @@
-import { useCallback } from 'react';
-import settingsService from '@shared/services/settings.service';
-import { SettingNames, SettingTypes } from 'papi-shared-types';
-import useData from '@renderer/hooks/papi-hooks/use-data.hook';
+import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
 import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
+import { settingsService } from '@shared/services/settings.service';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
+import { SettingNames, SettingTypes } from 'papi-shared-types';
+import { useCallback } from 'react';
 
 /**
  * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes

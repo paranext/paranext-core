@@ -1,6 +1,7 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext } from '@papi/core';
-import ParatextRegistrationWebViewProvider, {
+import {
+  ParatextRegistrationWebViewProvider,
   paratextRegistrationWebViewType,
 } from './paratext-registration.web-view-provider';
 

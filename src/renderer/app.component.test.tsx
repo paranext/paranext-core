@@ -1,9 +1,11 @@
+import { App } from '@renderer/app.component';
+import { ProcessType } from '@shared/global-this.model';
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
-import { vi } from 'vitest';
-import { ProcessType } from '@shared/global-this.model';
 import { PlatformEventEmitter } from 'platform-bible-utils';
-import { App } from '@renderer/app.component';
+import { PlatformEventEmitter } from 'platform-bible-utils';
+import App from '@renderer/app.component';
+import { vi } from 'vitest';
 
 // #region globalThis setup
 
@@ -31,10 +33,12 @@ vi.mock('@shared/services/network.service', () => ({
 vi.mock('@renderer/components/docking/platform-dock-layout.component', () => ({
   __esModule: true,
   default: /** ParanextDockLayout Mock */ () => undefined,
+  PlatformDockLayout: /** PlatformDockLayout Named Export Mock */ () => <div />,
 }));
 vi.mock('@renderer/components/platform-bible-toolbar', () => ({
   __esModule: true,
   default: /** PlatformBibleToolbar Mock */ () => <div />,
+  PlatformBibleToolbar: /** PlatformBibleToolbar Named Export Mock */ () => <div />,
 }));
 
 describe('App', () => {

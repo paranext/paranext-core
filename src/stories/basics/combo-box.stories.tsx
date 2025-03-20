@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { ComboBox } from 'platform-bible-react';
 
-export const meta: Meta<typeof ComboBox> = {
+export const Meta: MetaBase<typeof ComboBox> = {
   title: 'Basics/ComboBox',
   component: ComboBox,
   tags: ['autodocs'],
@@ -10,7 +10,7 @@ export const meta: Meta<typeof ComboBox> = {
     buttonClassName: { control: 'text' },
   },
 };
-export default meta;
+export default Meta;
 
 type Story = StoryObj<typeof ComboBox>;
 

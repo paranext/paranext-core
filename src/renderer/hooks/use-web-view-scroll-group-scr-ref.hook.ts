@@ -1,3 +1,4 @@
+import { useScrollGroupScrRef } from '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
 import {
   GetSavedWebViewDefinition,
   WebViewDefinitionUpdateInfo,
