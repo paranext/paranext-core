@@ -1,13 +1,13 @@
+import { useScrollGroupScrRef } from '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
 import {
   GetSavedWebViewDefinition,
   WebViewDefinitionUpdateInfo,
 } from '@shared/models/web-view.model';
 import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent } from 'platform-bible-react';
 import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
-import { useState, useCallback } from 'react';
-import useScrollGroupScrRef from '@renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { useCallback, useState } from 'react';
 
 // We don't add this to PAPI directly like other hooks because `this` has to be bound to a web view's iframe context
 /** See `web-view.model.ts` for normal hook documentation */

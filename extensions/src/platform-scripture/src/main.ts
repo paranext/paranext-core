@@ -1,16 +1,18 @@
 import papi, { logger } from '@papi/backend';
 import { ExecutionActivationContext, ProjectSettingValidator } from '@papi/core';
-import ScriptureExtenderProjectDataProviderEngineFactory, {
-  SCRIPTURE_EXTENDER_PDPF_ID,
-} from './project-data-provider/platform-scripture-extender-pdpef.model';
-import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
-import checkHostingService from './checks/extension-host-check-runner.service';
-import checkAggregatorService from './checks/check-aggregator.service';
-import InventoryWebViewProvider, { InventoryWebViewOptions } from './inventory.web-view-provider';
-import ChecksSidePanelWebViewProvider, {
+import {
   ChecksSidePanelWebViewOptions,
+  ChecksSidePanelWebViewProvider,
   checksSidePanelWebViewType,
 } from './checks-side-panel.web-view-provider';
+import { checkAggregatorService } from './checks/check-aggregator.service';
+import { checkHostingService } from './checks/extension-host-check-runner.service';
+import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
+import { SCRIPTURE_EXTENDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-extender-pdpe.model';
+import {
+  SCRIPTURE_EXTENDER_PDPF_ID,
+  ScriptureExtenderProjectDataProviderEngineFactory,
+} from './project-data-provider/platform-scripture-extender-pdpef.model';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';

@@ -7,7 +7,7 @@ import {
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
-import settingsService from '@shared/services/settings.service';
+import { settingsService } from '@shared/services/settings.service';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   compareScrRefs,

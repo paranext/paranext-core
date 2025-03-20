@@ -1,5 +1,5 @@
-import { useDataProvider } from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import { createUseDataHook } from '@renderer/hooks/hook-generators/create-use-data-hook.util';
+import { useDataProvider } from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
   DataProviderSubscriberOptions,

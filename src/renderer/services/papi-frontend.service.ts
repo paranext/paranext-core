@@ -4,35 +4,35 @@
  * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
  */
 
-import * as commandService from '@shared/services/command.service';
-import papiLogger from '@shared/services/logger.service';
-import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
-import { WebViewServiceType } from '@shared/services/web-view.service-model';
-import { webViewService } from '@shared/services/web-view.service';
-import { internetService, InternetService } from '@shared/services/internet.service';
-import { dataProviderService, DataProviderService } from '@shared/services/data-provider.service';
+import * as papiReact from '@renderer/services/papi-frontend-react.service';
+import { PapiRendererWebSocket } from '@renderer/services/renderer-web-socket.service';
+import { INotificationService } from '@shared/models/notification.service-model';
 import { ProjectLookupServiceType } from '@shared/models/project-lookup.service-model';
-import { projectLookupService } from '@shared/services/project-lookup.service';
+import { appService } from '@shared/services/app.service';
+import * as commandService from '@shared/services/command.service';
+import { dataProviderService, DataProviderService } from '@shared/services/data-provider.service';
+import { dialogService } from '@shared/services/dialog.service';
+import { DialogService } from '@shared/services/dialog.service-model';
+import { internetService, InternetService } from '@shared/services/internet.service';
+import { localizationService } from '@shared/services/localization.service';
+import { ILocalizationService } from '@shared/services/localization.service-model';
+import papiLogger from '@shared/services/logger.service';
+import { menuDataService } from '@shared/services/menu-data.service';
+import { IMenuDataService } from '@shared/services/menu-data.service-model';
+import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
+import { notificationService } from '@shared/services/notification.service';
 import {
   papiFrontendProjectDataProviderService,
   PapiFrontendProjectDataProviderService,
 } from '@shared/services/project-data-provider.service';
-import { settingsService } from '@shared/services/settings.service';
-import { ISettingsService } from '@shared/services/settings.service-model';
-import { dialogService } from '@shared/services/dialog.service';
-import { DialogService } from '@shared/services/dialog.service-model';
-import * as papiReact from '@renderer/services/papi-frontend-react.service';
-import { PapiRendererWebSocket } from '@renderer/services/renderer-web-socket.service';
-import { menuDataService } from '@shared/services/menu-data.service';
-import { IMenuDataService } from '@shared/services/menu-data.service-model';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
-import { localizationService } from '@shared/services/localization.service';
-import { ILocalizationService } from '@shared/services/localization.service-model';
-import { notificationService } from '@shared/services/notification.service';
-import { INotificationService } from '@shared/models/notification.service-model';
-import { PapiRendererXMLHttpRequest } from '@renderer/services/renderer-xml-http-request.service';
-import { appService } from '@shared/services/app.service';
+import { settingsService } from '@shared/services/settings.service';
+import { ISettingsService } from '@shared/services/settings.service-model';
+import { webViewService } from '@shared/services/web-view.service';
+import { WebViewServiceType } from '@shared/services/web-view.service-model';
+import { PapiRendererXMLHttpRequest } from './renderer-xml-http-request.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.

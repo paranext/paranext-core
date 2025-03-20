@@ -1,6 +1,6 @@
-import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import localizationService from '@shared/services/localization.service';
+import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
