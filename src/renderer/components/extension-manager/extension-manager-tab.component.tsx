@@ -1,8 +1,8 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { Button, Label } from 'platform-bible-react';
 import { useMemo, useState } from 'react';
-import ExtensionList, { Extension } from './extension-list.component';
+import { Extension, ExtensionList } from './extension-list.component';
 import './extension-manager-tab.component.scss';
 
 export const TAB_TYPE_EXTENSION_MANAGER = 'extension-manager-dialog';
@@ -68,7 +68,7 @@ export function fetchExtensions(): Extension[] {
   ];
 }
 
-export default function ExtensionManagerTab() {
+export function ExtensionManagerTab() {
   const installedExtensions = useMemo(() => fetchExtensions(), []);
   // Set the initial value to the extensions fetched so all toggles are checked
   const [toggledExtensions, setToggledExtensions] = useState<string[]>(
@@ -122,3 +122,5 @@ export const loadExtensionManagerTab = (savedTabInfo: SavedTabInfo): TabInfo => 
     content: <ExtensionManagerTab />,
   };
 };
+
+export default ExtensionManagerTab;

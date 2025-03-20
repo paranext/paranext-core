@@ -1,8 +1,9 @@
 import { JsonDocumentLike, settingsDocumentSchema } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
-import SettingsDocumentCombinerBase, {
+import {
   LocalizedSettingsContributionInfo,
   SettingsContributionInfo,
+  SettingsDocumentCombinerBase,
 } from '@shared/utils/settings-document-combiner-base';
 
 // #region Helper functions
@@ -17,7 +18,7 @@ function performSchemaValidation(document: JsonDocumentLike, docType: string): v
 
 // #endregion
 
-export default class SettingsDocumentCombiner extends SettingsDocumentCombinerBase {
+export class SettingsDocumentCombiner extends SettingsDocumentCombinerBase {
   /**
    * Get the current set of settings contribution info given all the input documents. Localized
    * string keys have not been localized to corresponding strings.
@@ -58,3 +59,5 @@ export default class SettingsDocumentCombiner extends SettingsDocumentCombinerBa
     performSchemaValidation(document, docType);
   }
 }
+
+export default SettingsDocumentCombiner;

@@ -1,6 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn-ui/toggle-group';
 
-export default function ToggleGroupExamples() {
+export function ToggleGroupExamples() {
   return (
     <div className="*:tw-m-4">
       <ToggleGroup variant="outline" type="multiple">
@@ -16,3 +16,5 @@ export default function ToggleGroupExamples() {
     </div>
   );
 }
+
+export default ToggleGroupExamples;

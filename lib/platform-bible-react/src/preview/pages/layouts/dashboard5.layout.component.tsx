@@ -52,7 +52,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui
 import { useState } from 'react';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-export default function Dashboard5Examples() {
+export function Dashboard5Examples() {
   const [progress, setProgress] = useState<number[]>([25]);
   const dir: Direction = readDirection();
   return (
@@ -574,3 +574,5 @@ export default function Dashboard5Examples() {
     </div>
   );
 }
+
+export default Dashboard5Examples;

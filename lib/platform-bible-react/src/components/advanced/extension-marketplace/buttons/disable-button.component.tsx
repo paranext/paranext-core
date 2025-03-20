@@ -1,5 +1,5 @@
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
-import Spinner from '@/components/basics/spinner.component';
+import { Spinner } from '@/components/basics/spinner.component';
 import { cn } from '@/utils/shadcn-ui.util';
 
 type DisableButtonProps = {
@@ -16,7 +16,7 @@ type DisableButtonProps = {
  * @param DisableButtonProps
  * @returns A button that can be used to disable.
  */
-export default function DisableButton({
+export function DisableButton({
   isDisabling,
   handleClick,
   className,
@@ -45,3 +45,5 @@ export default function DisableButton({
     </Button>
   );
 }
+
+export default DisableButton;

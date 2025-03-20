@@ -2,7 +2,7 @@ import * as networkService from '@shared/services/network.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
-import IDataProvider from '@shared/models/data-provider.interface';
+import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,

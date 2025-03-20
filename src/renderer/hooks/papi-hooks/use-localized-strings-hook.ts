@@ -30,7 +30,7 @@ import useData from './use-data.hook';
  *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
  *       state on the papi, if any
  */
-const useLocalizedStrings = (
+export const useLocalizedStrings = (
   localizationKeys: LocalizeKey[],
   localizationLocales?: string[],
   subscriberOptions?: DataProviderSubscriberOptions,

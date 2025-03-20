@@ -22,13 +22,7 @@ interface MoreInfoProps {
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */
-export default function MoreInfo({
-  id,
-  category,
-  downloads,
-  languages,
-  moreInfoUrl,
-}: MoreInfoProps) {
+export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: MoreInfoProps) {
   /**
    * This constant formats the number of downloads into a more readable format.
    *
@@ -113,3 +107,5 @@ export default function MoreInfo({
     </div>
   );
 }
+
+export default MoreInfo;

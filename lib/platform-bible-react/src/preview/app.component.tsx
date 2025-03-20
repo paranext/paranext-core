@@ -1,19 +1,19 @@
 import { persistDirection } from '@/utils/dir-helper.util';
 import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '..';
-import Compositions from './pages/components/advanced.component';
-import Basics from './pages/components/basics.component';
-import Guide from './pages/guide.component';
-import Layouts from './pages/layouts.component';
-import Playground from './pages/playground.component';
-import ContactButtons from './preview-components/contact-buttons.component';
+import { Compositions } from './pages/components/advanced.component';
+import { Basics } from './pages/components/basics.component';
+import { Guide } from './pages/guide.component';
+import { Layouts } from './pages/layouts.component';
+import { Playground } from './pages/playground.component';
+import { ContactButtons } from './preview-components/contact-buttons.component';
 import { DirToggle, Direction } from './preview-components/direction-toggle.component';
 import { ThemeProvider } from './preview-components/theme-provider.component';
 import { ThemeButton } from './preview-components/theme-toggle.component';
 
 const initialDirection: Direction = 'ltr';
 
-function App() {
+export function App() {
   const [direction, setDirection] = useState<Direction>(initialDirection);
   const changeDirectionHandler = (dir: Direction) => {
     setDirection(dir);
