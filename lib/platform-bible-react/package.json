@@ -29,9 +29,7 @@
     "import": "./dist/index.js",
     "require": "./dist/index.cjs"
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "start": "vite --host --open",
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
