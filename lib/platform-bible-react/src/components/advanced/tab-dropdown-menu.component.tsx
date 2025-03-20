@@ -3,7 +3,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuPortal,
   DropdownMenuSeparator,
   DropdownMenuSub,
@@ -120,13 +119,9 @@ export default function TabDropdownMenu({
             if (typeof a === 'boolean' || typeof b === 'boolean') return 0;
             return a.order - b.order;
           })
-          .map(([columnKey, column], index, array) => (
+          .map(([columnKey], index, array) => (
             <>
-              <DropdownMenuLabel key={columnKey}>
-                {typeof column === 'object' && 'label' in column && column.label}
-              </DropdownMenuLabel>
-
-              <DropdownMenuGroup>
+              <DropdownMenuGroup key={columnKey}>
                 {getGroupContent(menuData.groups, menuData.items, columnKey, commandHandler)}
               </DropdownMenuGroup>
 
