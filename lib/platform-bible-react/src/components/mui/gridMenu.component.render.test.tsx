@@ -1,10 +1,10 @@
 import GridMenu from '@/components/mui/grid-menu.component';
-import * as jsonMenu from '@/components/mui/sample.composed.full.menu.json';
 import '@testing-library/jest-dom';
 import { render, screen } from '@testing-library/react';
+import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
 import { PropsWithChildren } from 'react';
 import { vi } from 'vitest';
-import { NonValidatingDocumentCombiner, PlatformMenus } from 'platform-bible-utils';
+import * as jsonMenu from './test.menu.json';
 
 vi.mock('@mui/material', async () => {
   const mui = await vi.importActual('@mui/material'); // Import the actual MUI components
@@ -45,7 +45,7 @@ describe('GridMenu renders', () => {
   it('column label correctly', () => {
     const expectedColumns = [
       {
-        html: screen.getByRole('menu', { name: 'paratext.paratext' }),
+        html: screen.getByRole('menu', { name: 'platform.project' }),
         label: '%mainMenu_Paratext%',
       },
       { html: screen.getByRole('menu', { name: 'platform.window' }), label: '%mainMenu_window%' },

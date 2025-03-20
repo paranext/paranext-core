@@ -176,7 +176,7 @@ export function createEmptyOpenRpc(papiVersion: string): OpenRpc {
       version: papiVersion,
       title: 'Live PAPI documentation',
       description:
-        'All methods currently registered with PAPI. They change dynamically as methods are registered and unregistered. This page does not automatically refresh to show any changes.',
+        'All methods currently registered with PAPI. They change dynamically as methods are registered and unregistered. This page does not automatically refresh to show any changes.\n\nSee additional helpful documentation for [extension developers](https://github.com/paranext/paranext-extension-template/wiki).',
       contact: {
         name: 'Platform.Bible Team',
         url: 'https://discord.gg/tzw22PUEAY',
