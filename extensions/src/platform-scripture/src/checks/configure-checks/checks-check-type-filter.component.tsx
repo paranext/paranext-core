@@ -13,16 +13,16 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webview_checksSidePanel_checkTypeFilter_setUp%',
 ];
 
-function SetUp(setUpLink: string, localizedSetUp: string) {
-  if (setUpLink && setUpLink !== '') {
-    return (
-      <div className="tw-text-blue-700 tw-text-right">
-        {/* <a href="www.google.com">{localizedSetUp}</a> */}
-      </div>
-    );
-  }
-  return <div className="tw-text-right" />;
-}
+// function SetUp(setUpLink: string, localizedSetUp: string) {
+//   if (setUpLink && setUpLink !== '') {
+//     return (
+//       <div className="tw-text-blue-700 tw-text-right">
+//         <a href="www.google.com">{localizedSetUp}</a>
+//       </div>
+//     );
+//   }
+//   return <div className="tw-text-right" />;
+// }
 
 /** Props for ChecksCheckTypeFilter component */
 type ChecksCheckTypeFilterProps = {
@@ -77,11 +77,11 @@ export default function ChecksCheckTypeFilter({
 
   const createComplexLabel = useCallback(
     (item: string): ReactNode => {
-      const link = checkNameToDetails.find((check) => check.checkName === item)?.setUpLink ?? '';
+      // const link = checkNameToDetails.find((check) => check.checkName === item)?.setUpLink ?? '';
       return (
         <div>
           <div className="tw-text-start">{item}</div>
-          {SetUp(link, localizedStrings['%webview_checksSidePanel_checkTypeFilter_setUp%'])}
+          {/* {SetUp(link, localizedStrings['%webview_checksSidePanel_checkTypeFilter_setUp%'])} */}
         </div>
       );
     },
@@ -147,7 +147,6 @@ export default function ChecksCheckTypeFilter({
       selectedValue=""
       radioGroupLabel={localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
       getSelectedValueLabel={() => selectedChecksCountLabel}
-      separatorColorCss="tw-bg-slate-300"
     >
       <DropdownMenuGroup>
         <Checklist
@@ -162,7 +161,7 @@ export default function ChecksCheckTypeFilter({
           createComplexLabel={createComplexLabel}
         />
       </DropdownMenuGroup>
-      <Separator className="tw-bg-slate-300" />
+      <Separator />
       <div className="tw-text-center tw-p-2">
         <button type="button" onClick={onSelectionToggle}>
           {getSelectionLabel()}

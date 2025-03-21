@@ -10,6 +10,12 @@ import {
   MenubarTrigger,
 } from '@/components/shadcn-ui/menubar';
 import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
+import {
   GroupsInMultiColumnMenu,
   Localized,
   MenuItemContainingCommand,
@@ -71,30 +77,39 @@ const getMenubarContent = (
     const groupItems = items
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
-      .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) =>
-        'command' in item ? (
-          <MenubarItem
-            key={item.command}
-            onClick={() => {
-              commandHandler(item);
-            }}
-          >
-            {item.label}
-          </MenubarItem>
-        ) : (
-          <MenubarSub key={item.id}>
-            <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
-            <MenubarSubContent>
-              {getMenubarContent(
-                groups,
-                items,
-                getSubMenuKeyForId(groups, item.id),
-                commandHandler,
-              )}
-            </MenubarSubContent>
-          </MenubarSub>
-        ),
-      );
+      .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {'command' in item ? (
+                  <MenubarItem
+                    key={item.command}
+                    onClick={() => {
+                      commandHandler(item);
+                    }}
+                  >
+                    {item.label}
+                  </MenubarItem>
+                ) : (
+                  <MenubarSub key={item.id}>
+                    <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
+                    <MenubarSubContent>
+                      {getMenubarContent(
+                        groups,
+                        items,
+                        getSubMenuKeyForId(groups, item.id),
+                        commandHandler,
+                      )}
+                    </MenubarSubContent>
+                  </MenubarSub>
+                )}
+              </TooltipTrigger>
+              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+            </Tooltip>
+          </TooltipProvider>
+        );
+      });
 
     const itemsWithSeparator = [...groupItems];
     if (groupItems.length > 0 && index < sortedGroupsForColumn.length - 1) {
