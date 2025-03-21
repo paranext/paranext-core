@@ -1,3 +1,8 @@
+import {
+  Command,
+  CommandHandler,
+  MenuItemInfoBase,
+} from '@/components/advanced/platform-menubar.component';
 import '@/components/mui/menu-item.component.css';
 import ArrowRightIcon from '@mui/icons-material/ArrowRight';
 import {
@@ -9,26 +14,10 @@ import Tooltip from '@mui/material/Tooltip';
 import { Localized, ReferencedItem, SingleColumnMenu } from 'platform-bible-utils';
 import { MouseEvent, PropsWithChildren } from 'react';
 
-type MenuItemInfoBase = {
-  /** Text (displayable in the UI) as the name of the menu item */
-  label: string;
-  /** Text to display when the mouse hovers over the menu item */
-  tooltip?: string;
-};
-
-export type Command = MenuItemInfoBase & {
-  /** Command to execute (string.string) */
-  command: string;
-};
-
 type SubMenu = MenuItemInfoBase & {
   /** Command to execute (string.string) */
   items: MenuItemInfo[];
 };
-
-export interface CommandHandler {
-  (command: Command): void;
-}
 
 export type MenuPropsBase = {
   /*

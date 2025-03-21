@@ -1,7 +1,6 @@
 ﻿import type { Meta, StoryObj } from '@storybook/react';
-import DangerousIcon from '@mui/icons-material/Dangerous';
-import ArrowCircleUp from '@mui/icons-material/ArrowCircleUp';
 import { IconButton } from 'platform-bible-react';
+import { CircleAlert, CircleArrowUp } from 'lucide-react';
 
 const meta: Meta<typeof IconButton> = {
   title: 'Basics/IconButton',
@@ -9,7 +8,7 @@ const meta: Meta<typeof IconButton> = {
   tags: ['autodocs'],
   args: {
     label: 'default',
-    children: <DangerousIcon />,
+    children: <CircleAlert />,
   },
   argTypes: {
     isDisabled: { control: 'boolean' },
@@ -27,7 +26,7 @@ export const Primary: Story = {
   args: {
     className: 'primary',
     label: 'primary',
-    children: <ArrowCircleUp />,
+    children: <CircleArrowUp />,
   },
 };
 
@@ -35,7 +34,7 @@ export const Secondary: Story = {
   args: {
     label: 'secondary',
     className: 'secondary',
-    children: <ArrowCircleUp />,
+    children: <CircleArrowUp />,
   },
 };
 

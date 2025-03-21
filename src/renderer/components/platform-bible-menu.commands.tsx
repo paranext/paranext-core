@@ -4,7 +4,7 @@ import { Command } from 'platform-bible-react';
 import { CommandNames } from 'papi-shared-types';
 import { openWindow } from '@renderer/services/web-view.service-host';
 
-export function VisitPage(url: string) {
+export function visitPage(url: string) {
   openWindow(url);
 }
 
@@ -30,7 +30,7 @@ export function handleMenuCommand(command: Command, tabId?: string) {
       logger.info(`TODO: display text collection modal. tabId: ${tabId}`);
       break;
     case 'platform.visitSupportPage':
-      VisitPage('https://support.bible');
+      visitPage('https://support.bible');
       break;
     case 'platform.about':
       logger.info(`TODO: display about. tabId: ${tabId}`);
