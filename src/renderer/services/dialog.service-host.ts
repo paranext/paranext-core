@@ -14,15 +14,12 @@ import {
 } from 'platform-bible-utils';
 import * as webViewService from '@renderer/services/web-view.service-host';
 import { serializeRequestType } from '@shared/utils/util';
-import logger from '@shared/services/logger.service';
-import SELECT_PROJECT_DIALOG from '@renderer/components/dialogs/select-project.dialog';
-import {
-  DialogTabTypes,
-  type DialogTypes,
-} from '@renderer/components/dialogs/dialog-definition.model';
+import { logger } from '@shared/services/logger.service';
+import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-project.dialog';
+import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
-import localizationService from '@shared/services/localization.service';
+import { localizationService } from '@shared/services/localization.service';
 
 /** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
 // TODO: preserve requests between refreshes - save the request id or something?

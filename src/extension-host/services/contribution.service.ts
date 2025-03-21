@@ -2,14 +2,14 @@ import { ExtensionManifest } from '@extension-host/extension-types/extension-man
 import { AsyncVariable, JsonDocumentLike, Unsubscriber } from 'platform-bible-utils';
 import * as nodeFS from '@node/services/node-file-system.service';
 import { joinUriPaths } from '@node/utils/util';
-import logger from '@shared/services/logger.service';
-import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
+import { logger } from '@shared/services/logger.service';
+import { SettingsDocumentCombiner } from '@shared/utils/settings-document-combiner';
 import { platformSettings } from '@extension-host/data/core-settings-info.data';
-import MenuDocumentCombiner from '@shared/utils/menu-document-combiner';
+import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
 import menuDataObject from '@extension-host/data/menu.data.json';
-import ProjectSettingsDocumentCombiner from '@shared/utils/project-settings-document-combiner';
+import { ProjectSettingsDocumentCombiner } from '@shared/utils/project-settings-document-combiner';
 import { platformProjectSettings } from '@extension-host/data/core-project-settings-info.data';
-import LocalizedStringsDocumentCombiner from '@shared/utils/localized-strings-document-combiner';
+import { LocalizedStringsDocumentCombiner } from '@shared/utils/localized-strings-document-combiner';
 
 // #region document combiners - manage the extension contributions. Services should layer over these
 

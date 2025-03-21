@@ -20,7 +20,7 @@ export interface InternetService {
  *
  * Service that provides a way to call `fetch` since the original function is not available
  */
-const internetService: InternetService = {
+export const internetService: InternetService = {
   fetch: papiFetch,
 };
 export default internetService;

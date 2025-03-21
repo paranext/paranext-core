@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { formatBytes } from 'platform-bible-utils';
-import VersionHistory, { VersionHistoryType } from './version-history.component';
+import { VersionHistory, VersionHistoryType } from './version-history.component';
 
 /** Interface to store the parameters passed to the Footer component */
 interface FooterProps {
@@ -23,7 +23,7 @@ interface FooterProps {
  * @param FooterProps
  * @returns The rendered Footer component
  */
-export default function Footer({
+export function Footer({
   id,
   publisherDisplayName,
   fileSize,
@@ -72,3 +72,5 @@ export default function Footer({
     </div>
   );
 }
+
+export default Footer;

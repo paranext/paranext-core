@@ -9,7 +9,7 @@ import { Button } from '@/components/shadcn-ui/button';
  *
  * @returns A button that can be used to filter.
  */
-const FilterButton = forwardRef<HTMLButtonElement>((props, ref) => {
+export const FilterButton = forwardRef<HTMLButtonElement>((props, ref) => {
   return (
     <Button
       ref={ref}

@@ -2,7 +2,7 @@ import { Switch } from '@/components/shadcn-ui/switch';
 
 import { useState } from 'react';
 
-export default function SwitchExamples() {
+export function SwitchExamples() {
   const [value, setValue] = useState<boolean>(false);
 
   return (
@@ -13,3 +13,5 @@ export default function SwitchExamples() {
     </div>
   );
 }
+
+export default SwitchExamples;

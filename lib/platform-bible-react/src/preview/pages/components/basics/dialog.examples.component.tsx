@@ -9,7 +9,7 @@ import {
   DialogTrigger,
 } from '@/components/shadcn-ui/dialog';
 
-export default function DialogExamples() {
+export function DialogExamples() {
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -27,3 +27,5 @@ export default function DialogExamples() {
     </Dialog>
   );
 }
+
+export default DialogExamples;

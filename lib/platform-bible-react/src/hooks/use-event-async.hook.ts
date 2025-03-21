@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { PlatformEvent, PlatformEventAsync, PlatformEventHandler } from 'platform-bible-utils';
-import usePromise from './use-promise.hook';
+import { usePromise } from './use-promise.hook';
 
 const noopUnsubscriber = () => false;
 
@@ -20,7 +20,7 @@ const noopUnsubscriber = () => false;
  *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
  *   every render
  */
-const useEventAsync = <T>(
+export const useEventAsync = <T>(
   event: PlatformEvent<T> | PlatformEventAsync<T> | undefined,
   eventHandler: PlatformEventHandler<T>,
 ) => {

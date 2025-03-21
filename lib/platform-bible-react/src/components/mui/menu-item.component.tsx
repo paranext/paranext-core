@@ -131,7 +131,7 @@ function getIcon(icon: string | undefined, menuLabel: string, leading: boolean) 
   ) : undefined;
 }
 
-export default function MenuItem(props: MenuItemProps) {
+export function MenuItem(props: MenuItemProps) {
   const {
     onClick,
     label,
@@ -190,3 +190,5 @@ export default function MenuItem(props: MenuItemProps) {
     menuItem
   );
 }
+
+export default MenuItem;

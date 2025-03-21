@@ -1,16 +1,17 @@
-import DIALOG_BASE from '@renderer/components/dialogs/dialog-base.data';
+import { DIALOG_BASE } from '@renderer/components/dialogs/dialog-base.data';
 import {
   DialogDefinition,
   DialogTypes,
   SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE,
 } from '@renderer/components/dialogs/dialog-definition.model';
 import '@renderer/components/dialogs/select-multiple-projects.dialog.scss';
-import ProjectList, {
+import {
+  ProjectList,
   ProjectMetadataDisplay,
 } from '@renderer/components/projects/project-list.component';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
-import projectLookupService from '@shared/services/project-lookup.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { Check, FolderOpenIcon } from 'lucide-react';
 import { Button, usePromise } from 'platform-bible-react';
 import { LocalizeKey } from 'platform-bible-utils';
@@ -102,7 +103,7 @@ function SelectMultipleProjectsDialog({
 
 const localizeSelectProjectsKey: LocalizeKey = '%selectMultipleProjects_title_selectProjects%';
 
-const SELECT_MULTIPLE_PROJECTS_DIALOG: DialogDefinition<
+export const SELECT_MULTIPLE_PROJECTS_DIALOG: DialogDefinition<
   typeof SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE
 > = Object.freeze({
   ...DIALOG_BASE,

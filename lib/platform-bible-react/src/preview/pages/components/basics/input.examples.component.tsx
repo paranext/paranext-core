@@ -1,7 +1,7 @@
-import TextField from '@/components/basics/text-field.component';
+import { TextField } from '@/components/basics/text-field.component';
 import { Input } from '@/components/shadcn-ui/input';
 
-export default function InputExamples() {
+export function InputExamples() {
   return (
     <table>
       <tbody>
@@ -52,3 +52,5 @@ export default function InputExamples() {
     </table>
   );
 }
+
+export default InputExamples;

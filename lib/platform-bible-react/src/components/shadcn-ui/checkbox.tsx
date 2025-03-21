@@ -11,7 +11,7 @@ import { cn } from '@/utils/shadcn-ui.util';
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/checkbox}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
  */
-const Checkbox = React.forwardRef<
+export const Checkbox = React.forwardRef<
   React.ElementRef<typeof CheckboxPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof CheckboxPrimitive.Root>
 >(({ className, ...props }, ref) => (

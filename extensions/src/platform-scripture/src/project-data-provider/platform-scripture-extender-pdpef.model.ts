@@ -22,7 +22,7 @@ const SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES_REGEX_STRINGS = [
   ),
 ];
 
-class ScriptureExtenderProjectDataProviderEngineFactory
+export class ScriptureExtenderProjectDataProviderEngineFactory
   extends LayeringProjectDataProviderEngineFactory<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
   implements IProjectDataProviderEngineFactory<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
 {

@@ -9,9 +9,9 @@ import { PlatformEvent } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
 import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
 import { NetworkObject } from '@shared/models/network-object.model';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
-import networkObjectService from '@shared/services/network-object.service';
-import logger from '@shared/services/logger.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import { logger } from '@shared/services/logger.service';
 
 /**
  * JSDOC SOURCE papiWebViewService

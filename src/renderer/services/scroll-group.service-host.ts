@@ -1,5 +1,5 @@
-import logger from '@shared/services/logger.service';
-import networkObjectService from '@shared/services/network-object.service';
+import { logger } from '@shared/services/logger.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   ScrollGroupUpdateInfo,
@@ -7,7 +7,7 @@ import {
   IScrollGroupRemoteService,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
 } from '@shared/services/scroll-group.service-model';
-import settingsService from '@shared/services/settings.service';
+import { settingsService } from '@shared/services/settings.service';
 import {
   ScriptureReference,
   deepClone,

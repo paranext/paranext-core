@@ -1,7 +1,7 @@
 import { CommandHandler } from '@/components/advanced/platform-menubar.component';
 import '@/components/mui/grid-menu.component.css';
 import { GroupedMenuPropsBase } from '@/components/mui/grouped-menu-item-list.component';
-import TopLevelMenu from '@/components/mui/top-level-menu.component';
+import { TopLevelMenu } from '@/components/mui/top-level-menu.component';
 import { Grid, List } from '@mui/material';
 import {
   Localized,
@@ -79,12 +79,7 @@ function MenuColumn({
   );
 }
 
-export default function GridMenu({
-  commandHandler,
-  className,
-  multiColumnMenu,
-  id,
-}: GridMenuProps) {
+export function GridMenu({ commandHandler, className, multiColumnMenu, id }: GridMenuProps) {
   const { columns } = multiColumnMenu;
 
   const sortedColumns = useMemo(() => {
@@ -147,3 +142,5 @@ export default function GridMenu({
     </Grid>
   );
 }
+
+export default GridMenu;

@@ -78,7 +78,7 @@ type UseDataHookGeneric<TUseDataProviderParams extends unknown[]> = {
  *   providers
  * @returns `useData` hook for getting data from a data provider
  */
-function createUseDataHook<TUseDataProviderParams extends unknown[]>(
+export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
   useDataProviderHook: (...args: TUseDataProviderParams) => IDataProvider | undefined,
 ): UseDataHookGeneric<TUseDataProviderParams> {
   function createUseDataHookForDataProviderInternal<

@@ -1,4 +1,4 @@
-const scriptureSnippet: string = `\\id MAT 40-MAT-web.sfm World English Bible (WEB)
+export const scriptureSnippet: string = `\\id MAT 40-MAT-web.sfm World English Bible (WEB)
 \\ide UTF-8
 \\h Matthew
 \\toc1 The Good News According to Matthew

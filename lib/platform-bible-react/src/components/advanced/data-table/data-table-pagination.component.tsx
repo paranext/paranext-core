@@ -14,7 +14,7 @@ interface DataTablePaginationProps<TData> {
   table: Table<TData>;
 }
 
-function DataTablePagination<TData>({ table }: DataTablePaginationProps<TData>) {
+export function DataTablePagination<TData>({ table }: DataTablePaginationProps<TData>) {
   return (
     <div className="tw-flex tw-items-center tw-justify-between tw-px-2 tw-pb-3 tw-pt-3">
       <div className="tw-flex tw-items-center tw-space-x-6 lg:tw-space-x-8">

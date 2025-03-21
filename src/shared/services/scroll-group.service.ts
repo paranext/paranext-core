@@ -6,8 +6,8 @@ import {
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 
 const onDidUpdateScrRef = getNetworkEvent<ScrollGroupUpdateInfo>(EVENT_NAME_ON_DID_UPDATE_SCR_REF);
 
@@ -48,7 +48,7 @@ async function initialize(): Promise<void> {
  *
  * Provides functions related to scroll groups and Scripture references at those scroll groups
  */
-const scrollGroupService = createSyncProxyForAsyncObject<IScrollGroupService>(
+export const scrollGroupService = createSyncProxyForAsyncObject<IScrollGroupService>(
   async () => {
     await initialize();
     return networkObject;

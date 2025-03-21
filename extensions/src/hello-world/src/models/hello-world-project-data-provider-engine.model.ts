@@ -32,7 +32,7 @@ function getExtensionDataKey(scope: ExtensionDataScope): string {
   return `${scope.extensionName}/${scope.dataQualifier}`;
 }
 
-class HelloWorldProjectDataProviderEngine
+export class HelloWorldProjectDataProviderEngine
   extends BaseProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
   implements IBaseProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
 {

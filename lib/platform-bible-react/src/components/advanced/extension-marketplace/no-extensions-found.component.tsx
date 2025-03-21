@@ -10,7 +10,7 @@ interface NoExtensionsFoundProps {
  * @param NoExtensionsFoundProps
  * @returns {JSX.Element} - Returns the message component that displays the message to the user.
  */
-export default function NoExtensionsFound({ id, message }: NoExtensionsFoundProps) {
+export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps) {
   return (
     <div id={id} className="tw-mb-20 tw-mt-20 tw-flex tw-items-center tw-justify-center">
       <div className="tw-w-3/4 tw-rounded-lg tw-bg-gray-100 tw-p-8 tw-text-center">
@@ -19,3 +19,5 @@ export default function NoExtensionsFound({ id, message }: NoExtensionsFoundProp
     </div>
   );
 }
+
+export default NoExtensionsFound;

@@ -10,7 +10,7 @@ import useScrollGroupScrRef from '@renderer/hooks/papi-hooks/use-scroll-group-sc
 
 // We don't add this to PAPI directly like other hooks because `this` has to be bound to a web view's iframe context
 /** See `web-view.model.ts` for normal hook documentation */
-export default function useWebViewScrollGroupScrRef(this: {
+export function useWebViewScrollGroupScrRef(this: {
   getSavedWebViewDefinition: GetSavedWebViewDefinition;
   updateWebViewDefinition: (webView: WebViewDefinitionUpdateInfo) => boolean;
   papi: {
@@ -55,3 +55,5 @@ export default function useWebViewScrollGroupScrRef(this: {
     ),
   );
 }
+
+export default useWebViewScrollGroupScrRef;

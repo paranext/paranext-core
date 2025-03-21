@@ -3,7 +3,7 @@ import { HTMLColorNames } from 'hello-world';
 import useHelloWorldProjectSettings from './use-hello-world-project-settings.hook';
 import { HTML_COLOR_NAMES } from '../../util';
 
-function ProjectSettingsEditor({
+export function ProjectSettingsEditor({
   headerSize,
   setHeaderSize,
   resetHeaderSize,

@@ -1,5 +1,6 @@
-import UiLanguageSelector, {
+import {
   LanguageInfo,
+  UiLanguageSelector,
 } from '@/components/advanced/ui-language-selector.component';
 import { Label } from '@radix-ui/react-dropdown-menu';
 import { useEffect, useState } from 'react';
@@ -25,7 +26,7 @@ const languagesWithInvalidOption: Record<string, LanguageInfo> = {
 
 /* This is intentionally a little overcomplicated in order to easily illustrate the problem
  described in issue #1377 */
-function UiLanguageSelectorExample() {
+export function UiLanguageSelectorExample() {
   const [primary, setPrimary] = useState('fr');
   const [invalidSelection, setInvalidSelection] = useState(false);
   const [fallback, setFallback] = useState<string[] | undefined>(undefined);

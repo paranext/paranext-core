@@ -10,7 +10,7 @@ import { PlatformEvent, PlatformEventHandler } from './platform-event';
  * private, and its event should be public. That way, the emitter is not publicized, but anyone can
  * subscribe to the event.
  */
-export default class PlatformEventEmitter<T> implements Dispose {
+export class PlatformEventEmitter<T> implements Dispose {
   /**
    * Subscribes a function to run when this event is emitted.
    *
@@ -112,3 +112,5 @@ export default class PlatformEventEmitter<T> implements Dispose {
     return Promise.resolve(true);
   }
 }
+
+export default PlatformEventEmitter;

@@ -3,7 +3,7 @@ import { LocalStorage } from 'node-localstorage';
 import path from 'path';
 
 /** Polyfills LocalStorage into node so you can use localstorage just like in a browser */
-const polyfillLocalStorage = () => {
+export const polyfillLocalStorage = () => {
   // Polyfill logic needs null
   // eslint-disable-next-line no-null/no-null
   if (typeof localStorage === 'undefined' || localStorage === null) {

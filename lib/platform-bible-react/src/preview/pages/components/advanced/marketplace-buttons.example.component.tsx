@@ -1,12 +1,13 @@
-import InstallButton from '@/components/advanced/extension-marketplace/buttons/install-button.component';
-import DisableButton from '@/components/advanced/extension-marketplace/buttons/disable-button.component';
-import UpdateButton from '@/components/advanced/extension-marketplace/buttons/update-button.component';
-import EnableButton from '@/components/advanced/extension-marketplace/buttons/enable-button.component';
-import FilterDropdown, {
+import { InstallButton } from '@/components/advanced/extension-marketplace/buttons/install-button.component';
+import { DisableButton } from '@/components/advanced/extension-marketplace/buttons/disable-button.component';
+import { UpdateButton } from '@/components/advanced/extension-marketplace/buttons/update-button.component';
+import { EnableButton } from '@/components/advanced/extension-marketplace/buttons/enable-button.component';
+import {
   DropdownMenuItemType,
+  FilterDropdown,
 } from '@/components/advanced/extension-marketplace/filter-dropdown.component';
 
-export default function MarketplaceButtonExamples() {
+export function MarketplaceButtonExamples() {
   const publisherFilterItems = ['All', 'Verified', 'Experimental'];
 
   const filterGroup = {
@@ -66,3 +67,5 @@ export default function MarketplaceButtonExamples() {
     </div>
   );
 }
+
+export default MarketplaceButtonExamples;

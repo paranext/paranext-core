@@ -2,7 +2,7 @@ import {
   dataProtectionServiceNetworkObjectName,
   IDataProtectionService,
 } from '@shared/models/data-protection.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { safeStorage } from 'electron';
 
 /** If encryption is not available, return reason why. If encryption is available, return `undefined` */
@@ -46,9 +46,6 @@ const dataProtectionService: IDataProtectionService = {
 };
 
 /** Register the network object that backs this service */
-// This doesn't really represent this service module, so we're not making it default. To use this
-// service, you should use `data-protection.service.ts`
-// eslint-disable-next-line import/prefer-default-export
 export async function startDataProtectionService(): Promise<void> {
   await networkObjectService.set<IDataProtectionService>(
     dataProtectionServiceNetworkObjectName,

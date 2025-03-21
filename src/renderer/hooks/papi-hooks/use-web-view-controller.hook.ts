@@ -44,7 +44,7 @@ function mapParametersToWebViewId<WebViewType extends WebViewControllerTypes>(
 
 // Assert to specific data type for this hook.
 // eslint-disable-next-line no-type-assertion/no-type-assertion
-const useWebViewController = createUseNetworkObjectHook(
+export const useWebViewController = createUseNetworkObjectHook(
   webViewService.getWebViewController,
   mapParametersToWebViewId,
 ) as <WebViewType extends WebViewControllerTypes>(

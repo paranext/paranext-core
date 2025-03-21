@@ -13,13 +13,13 @@ import {
 } from '@shared/models/docking-framework.model';
 import { DialogData } from '@shared/models/dialog-options.model';
 
-import testLayout from '@renderer/testing/test-layout.data';
+import { testLayout } from '@renderer/testing/test-layout.data';
 import { openWebView, registerDockLayout } from '@renderer/services/web-view.service-host';
 import { hasDialogRequest, resolveDialogRequest } from '@renderer/services/dialog.service-host';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
 
-import DockLayoutWrapper from '@renderer/components/docking/dock-layout-wrapper.component';
+import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrapper.component';
 import {
   addTabToDock,
   addWebViewToDock,
@@ -33,7 +33,7 @@ import {
   RCDockTabInfo,
 } from '@renderer/components/docking/docking-framework-internal.model';
 
-export default function PlatformDockLayout() {
+export function PlatformDockLayout() {
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const dockLayoutRef = useRef<DockLayout>(undefined!);
@@ -148,3 +148,5 @@ export default function PlatformDockLayout() {
     />
   );
 }
+
+export default PlatformDockLayout;

@@ -24,7 +24,7 @@ const STRING_KEYS: LocalizeKey[] = [
   '%about_db_ip_attribution_terms%',
 ];
 
-export default function AboutPanel() {
+export function AboutPanel() {
   const [
     {
       '%product_name%': productName,
@@ -75,3 +75,5 @@ export function loadAboutTab(savedTabInfo: SavedTabInfo): TabInfo {
     minHeight: 230,
   };
 }
+
+export default AboutPanel;

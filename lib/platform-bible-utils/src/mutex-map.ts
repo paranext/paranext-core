@@ -1,7 +1,7 @@
 import Mutex from './mutex';
 
 /** Map of {@link Mutex}es that automatically (lazily) generates a new {@link Mutex} for any new key */
-class MutexMap {
+export class MutexMap {
   private mutexesByID = new Map<string, Mutex>();
 
   get(mutexID: string): Mutex {

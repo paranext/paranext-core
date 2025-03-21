@@ -32,7 +32,7 @@ function mapParametersToNetworkObjectSourceDefault(
  *
  * @returns A function that takes in a networkObjectSource and returns a NetworkObject
  */
-function createUseNetworkObjectHook<THookParams extends unknown[]>(
+export function createUseNetworkObjectHook<THookParams extends unknown[]>(
   getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
   mapParametersToNetworkObjectSource?: (
     ...args: THookParams

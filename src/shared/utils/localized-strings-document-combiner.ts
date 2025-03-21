@@ -41,7 +41,7 @@ function transformLocalizedStringDataToCanonicalLocales(
 // #endregion
 
 /** Combines Localized String contributions. Normalizes locales to BCP 47 form */
-export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
+export class LocalizedStringsDocumentCombiner extends DocumentCombiner {
   constructor(baseDocument: JsonDocumentLike) {
     super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: true });
   }
@@ -122,3 +122,5 @@ export default class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     performSchemaValidation(output, 'output');
   }
 }
+
+export default LocalizedStringsDocumentCombiner;

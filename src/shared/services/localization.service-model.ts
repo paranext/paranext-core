@@ -1,4 +1,4 @@
-import IDataProvider from '@shared/models/data-provider.interface';
+import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
   DataProviderDataType,
   DataProviderUpdateInstructions,

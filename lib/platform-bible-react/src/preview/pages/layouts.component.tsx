@@ -5,13 +5,13 @@ import {
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
 
-import WindowOrTabExample from './layouts/window.layout.component';
-import Dashboard5Examples from './layouts/dashboard5.layout.component';
-import ToolbarExamples from './layouts/toolbar.layout.component';
-import DialogExamples from './layouts/dialog.layout.component';
-import GetResourcesExamples from './layouts/get-resources.layout.component';
+import { WindowOrTabExample } from './layouts/window.layout.component';
+import { Dashboard5Examples } from './layouts/dashboard5.layout.component';
+import { ToolbarExamples } from './layouts/toolbar.layout.component';
+import { DialogExamples } from './layouts/dialog.layout.component';
+import { GetResourcesExamples } from './layouts/get-resources.layout.component';
 
-function Layouts() {
+export function Layouts() {
   return (
     <div>
       <p className="tw-mb-2 tw-text-muted-foreground">A place to add examples for layouts</p>

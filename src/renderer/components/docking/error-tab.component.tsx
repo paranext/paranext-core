@@ -5,7 +5,7 @@ export type ErrorTabData = { errorMessage: string };
 
 export const TAB_TYPE_ERROR = 'error';
 
-export default function ErrorTab({ errorMessage }: { errorMessage: string }) {
+export function ErrorTab({ errorMessage }: { errorMessage: string }) {
   return (
     <>
       <div>
@@ -39,3 +39,5 @@ export function saveErrorTab(): SavedTabInfo | undefined {
   // No need to preserve error tabs between refreshes, I imagine
   return undefined;
 }
+
+export default ErrorTab;

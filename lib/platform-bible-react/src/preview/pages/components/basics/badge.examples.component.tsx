@@ -1,7 +1,7 @@
 import { Badge } from '@/components/shadcn-ui/badge';
 import { X } from 'lucide-react';
 
-export default function BadgeExamples() {
+export function BadgeExamples() {
   return (
     <div className="tw-flex tw-flex-col tw-items-start tw-gap-2">
       <Badge variant="default">default</Badge>
@@ -17,3 +17,5 @@ export default function BadgeExamples() {
     </div>
   );
 }
+
+export default BadgeExamples;

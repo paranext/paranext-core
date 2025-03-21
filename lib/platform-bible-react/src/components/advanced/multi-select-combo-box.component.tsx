@@ -31,7 +31,7 @@ export interface MultiSelectComboBoxProps {
   className?: string;
 }
 
-function MultiSelectComboBox({
+export function MultiSelectComboBox({
   entries,
   getEntriesCount = undefined,
   selected,

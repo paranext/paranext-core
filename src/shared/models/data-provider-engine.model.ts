@@ -112,7 +112,7 @@ export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  *   functions.
  */
 // Try using DataProviderName here instead of TDataTypes?
-type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+export type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
   NetworkableObject &
     /**
      * Set of all `set<data_type>` methods that a data provider engine must provide according to its

@@ -180,7 +180,7 @@ type MarkerInventoryProps = {
   projectId?: string;
 };
 
-function MarkerInventory({
+export function MarkerInventory({
   scriptureReference,
   setScriptureReference,
   localizedStrings,

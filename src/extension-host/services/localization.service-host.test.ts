@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { testingLocalizationService } from '@extension-host/services/localization.service-host';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { SettingNames } from 'papi-shared-types';
 import { LocalizeKey } from 'platform-bible-utils';
 
@@ -26,7 +26,7 @@ const MOCK_FILES: { [uri: string]: string } = {
 
 vi.mock('@shared/services/settings.service', () => ({
   __esModule: true,
-  default: {
+  settingsService: {
     get<SettingName extends SettingNames>(key: SettingName) {
       if (key === 'platform.interfaceLanguage') return ['en'];
       return undefined;
@@ -55,7 +55,7 @@ vi.mock('@node/services/node-file-system.service', () => ({
 
 vi.mock('@shared/services/logger.service', () => ({
   __esModule: true,
-  default: {
+  logger: {
     warn: vi.fn(() => {}),
   },
 }));

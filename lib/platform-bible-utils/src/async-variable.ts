@@ -1,5 +1,5 @@
 /** This class provides a convenient way for one task to wait on a variable that another task sets. */
-export default class AsyncVariable<T> {
+export class AsyncVariable<T> {
   private readonly variableName: string;
   private readonly promiseToValue: Promise<T>;
   private resolver: ((value: T) => void) | undefined;
@@ -92,3 +92,5 @@ export default class AsyncVariable<T> {
     Object.freeze(this);
   }
 }
+
+export default AsyncVariable;

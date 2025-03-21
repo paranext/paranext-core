@@ -1,5 +1,5 @@
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
-import Spinner from '@/components/basics/spinner.component';
+import { Spinner } from '@/components/basics/spinner.component';
 import { cn } from '@/utils/shadcn-ui.util';
 
 type EnableButtonProps = {
@@ -16,12 +16,7 @@ type EnableButtonProps = {
  * @param EnableButtonProps
  * @returns A button that can be used to enable.
  */
-export default function EnableButton({
-  isEnabling,
-  handleClick,
-  className,
-  ...props
-}: EnableButtonProps) {
+export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps) {
   return (
     <Button
       className={cn(
@@ -45,3 +40,5 @@ export default function EnableButton({
     </Button>
   );
 }
+
+export default EnableButton;

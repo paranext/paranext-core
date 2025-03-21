@@ -1,7 +1,7 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { Sonner, sonner } from '@/components/shadcn-ui/sonner';
 
-export default function SonnerExamples() {
+export function SonnerExamples() {
   return (
     <div className="*:tw-m-4">
       <Button
@@ -15,3 +15,5 @@ export default function SonnerExamples() {
     </div>
   );
 }
+
+export default SonnerExamples;

@@ -2,7 +2,7 @@ import { Slider } from '@/components/shadcn-ui/slider';
 
 import { useState } from 'react';
 
-export default function SliderExamples() {
+export function SliderExamples() {
   const [sliderValue, setSlider] = useState<number[]>([33]);
   return (
     <>
@@ -20,3 +20,5 @@ export default function SliderExamples() {
     </>
   );
 }
+
+export default SliderExamples;

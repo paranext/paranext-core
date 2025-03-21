@@ -1,4 +1,5 @@
-import MultiSelectComboBox, {
+import {
+  MultiSelectComboBox,
   MultiSelectComboBoxEntry,
 } from '@/components/advanced/multi-select-combo-box.component';
 import { Blocks } from 'lucide-react';
@@ -123,7 +124,7 @@ const getOptionsCount = (option: MultiSelectComboBoxEntry): number => {
   return resources.filter((resource) => resource.type === option.value).length ?? 0;
 };
 
-function MultiSelectComboBoxExample() {
+export function MultiSelectComboBoxExample() {
   const [selectedTypes, setSelectedTypes] = useState<string[]>(types.map((type) => type.value));
 
   const getCustomSelectedText = () => {

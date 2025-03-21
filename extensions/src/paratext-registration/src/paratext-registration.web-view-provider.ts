@@ -8,7 +8,7 @@ export const paratextRegistrationWebViewType = 'paratextRegistration.registratio
 const titleKey = '%paratextRegistration_webView_title%';
 const tooltipKey = '%paratextRegistration_webView_tooltip%';
 
-export default class ParatextRegistrationWebViewProvider implements IWebViewProvider {
+export class ParatextRegistrationWebViewProvider implements IWebViewProvider {
   // needs to be a class method, not static method
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
@@ -32,3 +32,5 @@ export default class ParatextRegistrationWebViewProvider implements IWebViewProv
     };
   }
 }
+
+export default ParatextRegistrationWebViewProvider;

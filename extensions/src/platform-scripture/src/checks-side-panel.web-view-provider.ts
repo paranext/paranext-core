@@ -16,7 +16,7 @@ export interface ChecksSidePanelWebViewOptions extends GetWebViewOptions {
   editorScrollGroupId: ScrollGroupScrRef | undefined;
 }
 
-export default class ChecksSidePanelWebViewProvider implements IWebViewProvider {
+export class ChecksSidePanelWebViewProvider implements IWebViewProvider {
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getWebView(
     savedWebView: SavedWebViewDefinition,
@@ -41,3 +41,5 @@ export default class ChecksSidePanelWebViewProvider implements IWebViewProvider 
     };
   }
 }
+
+export default ChecksSidePanelWebViewProvider;

@@ -1,7 +1,7 @@
 import { Input } from '@/components/shadcn-ui/input';
 import { ThemeButton } from '@/preview/preview-components/theme-toggle.component';
 
-export default function ThemingGuide() {
+export function ThemingGuide() {
   return (
     <>
       <p>By default we are sticking to use the existing shadcn styles.</p>
@@ -89,3 +89,5 @@ export default function ThemingGuide() {
     </>
   );
 }
+
+export default ThemingGuide;

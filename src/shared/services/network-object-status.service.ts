@@ -4,7 +4,8 @@ import {
   NetworkObjectStatusRemoteServiceType,
   NetworkObjectStatusServiceType,
 } from '@shared/models/network-object-status.service-model';
-import networkObjectService, {
+import {
+  networkObjectService,
   onDidCreateNetworkObject,
 } from '@shared/services/network-object.service';
 import { AsyncVariable, isSubset } from 'platform-bible-utils';
@@ -93,7 +94,7 @@ async function waitForNetworkObject(
  *
  * Provides functions related to the set of available network objects
  */
-const networkObjectStatusService: NetworkObjectStatusServiceType = {
+export const networkObjectStatusService: NetworkObjectStatusServiceType = {
   getAllNetworkObjectDetails,
   waitForNetworkObject,
 };

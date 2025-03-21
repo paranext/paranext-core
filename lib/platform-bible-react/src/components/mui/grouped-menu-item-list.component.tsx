@@ -1,4 +1,5 @@
-import MenuItem, {
+import {
+  MenuItem,
   MenuItemListProps,
   MenuItemProps,
   MenuPropsBase,
@@ -124,7 +125,7 @@ const getOrderedGroupItems = (
  * useful on its own. It is used to generate and lay out the MenuItems that appear either on a
  * top-level menu (in a GridMenu or ContextMenu) or in a submenu.
  */
-export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps) {
+export function GroupedMenuItemList(menuProps: GroupedMenuItemListProps) {
   const { menuDefinition, onClick, commandHandler, includedGroups } = menuProps;
 
   const { items, allowForLeadingIcons } = useMemo(() => {
@@ -209,3 +210,5 @@ export default function GroupedMenuItemList(menuProps: GroupedMenuItemListProps)
     </div>
   );
 }
+
+export default GroupedMenuItemList;

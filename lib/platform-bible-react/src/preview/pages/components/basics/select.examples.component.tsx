@@ -6,7 +6,7 @@ import {
   SelectItem,
 } from '@/components/shadcn-ui/select';
 
-export default function SelectExamples() {
+export function SelectExamples() {
   return (
     <Select>
       <SelectTrigger id="framework">
@@ -21,3 +21,5 @@ export default function SelectExamples() {
     </Select>
   );
 }
+
+export default SelectExamples;

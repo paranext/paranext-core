@@ -27,7 +27,7 @@ type BookMenuItemProps = PropsWithChildren<{
   bookType: BookType;
 }>;
 
-const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
+export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
   (
     {
       bookId,

@@ -14,8 +14,8 @@ import {
   setWebViewStateById,
   resetWebViewStateById,
 } from '@renderer/services/web-view-state.service';
-import useWebViewState from '@renderer/hooks/use-web-view-state.hook';
-import useWebViewScrollGroupScrRef from '@renderer/hooks/use-web-view-scroll-group-scr-ref.hook';
+import { useWebViewState } from '@renderer/hooks/use-web-view-state.hook';
+import { useWebViewScrollGroupScrRef } from '@renderer/hooks/use-web-view-scroll-group-scr-ref.hook';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import * as platformBibleReact from 'platform-bible-react';
 import * as platformBibleUtils from 'platform-bible-utils';

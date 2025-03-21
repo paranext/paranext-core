@@ -22,7 +22,7 @@ function createEmptyHelloWorldProjectData(projectName: string): HelloWorldProjec
   };
 }
 
-class HelloWorldProjectDataProviderEngineFactory
+export class HelloWorldProjectDataProviderEngineFactory
   implements IProjectDataProviderEngineFactory<typeof HELLO_WORLD_PROJECT_INTERFACES>
 {
   /** Do not use directly as it may not have a value. Use `getAllProjectData` */

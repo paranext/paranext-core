@@ -18,7 +18,7 @@ const SECONDS_PER_DAY = SECONDS_PER_HOUR * 24;
  * @param to "Starting" time. Time span will be formatted relative to `to`. Defaults to `new Date()`
  * @returns Time span in words from `to` to `since`
  */
-function formatTimeSpan(
+export function formatTimeSpan(
   relativeTimeFormatter: Intl.RelativeTimeFormat,
   since: Date,
   to = new Date(),

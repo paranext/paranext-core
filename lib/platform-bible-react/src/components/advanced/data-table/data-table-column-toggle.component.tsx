@@ -15,7 +15,7 @@ interface DataTableViewOptionsProps<TData> {
   table: Table<TData>;
 }
 
-function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps<TData>) {
+export function DataTableViewOptions<TData>({ table }: DataTableViewOptionsProps<TData>) {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>

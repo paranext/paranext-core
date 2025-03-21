@@ -1,8 +1,9 @@
-import BookChapterInput from '@/components/advanced/book-chapter-control/book-chapter-input.component';
-import BookMenuItem, {
+import { BookChapterInput } from '@/components/advanced/book-chapter-control/book-chapter-input.component';
+import {
+  BookMenuItem,
   BookType,
 } from '@/components/advanced/book-chapter-control/book-menu-item.component';
-import ChapterSelect from '@/components/advanced/book-chapter-control/chapter-select.component';
+import { ChapterSelect } from '@/components/advanced/book-chapter-control/chapter-select.component';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -97,7 +98,7 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({
+export function BookChapterControl({
   scrRef,
   handleSubmit,
   className,

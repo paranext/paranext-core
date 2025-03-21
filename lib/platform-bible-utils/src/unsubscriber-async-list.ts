@@ -2,7 +2,7 @@ import { Dispose } from './disposal.model';
 import { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 
 /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
-export default class UnsubscriberAsyncList {
+export class UnsubscriberAsyncList {
   readonly unsubscribers = new Set<UnsubscriberAsync | Unsubscriber>();
 
   constructor(private name = 'Anonymous') {}
@@ -37,3 +37,5 @@ export default class UnsubscriberAsyncList {
     });
   }
 }
+
+export default UnsubscriberAsyncList;

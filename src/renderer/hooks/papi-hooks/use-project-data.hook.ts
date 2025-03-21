@@ -123,7 +123,7 @@ type UseProjectDataHook = {
  */
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */
-const useProjectData = createUseDataHook(
+export const useProjectData = createUseDataHook(
   useProjectDataProvider as (
     projectInterface: ProjectInterfaces,
     dataProviderSource: string | IDataProvider | undefined,

@@ -13,7 +13,7 @@ import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils
  *
  * WARNING: You cannot emit events with complex types on the network.
  */
-export default class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
+export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
   /**
    * Creates a NetworkEventEmitter
    *
@@ -56,3 +56,5 @@ export default class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> 
     return retVal;
   };
 }
+
+export default PapiNetworkEventEmitter;

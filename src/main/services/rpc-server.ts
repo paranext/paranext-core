@@ -9,7 +9,7 @@ import {
   JSONRPCResponse,
   JSONRPCServer,
 } from 'json-rpc-2.0';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { IRpcHandler, RegisteredRpcMethodDetails } from '@shared/models/rpc.interface';
 import {
   ConnectionStatus,
@@ -37,7 +37,7 @@ type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) 
  * Created by RpcWebSocketListener when a client connects to the web socket server. There is one
  * RpcServer object per client that connects to the web socket server.
  */
-export default class RpcServer implements IRpcHandler {
+export class RpcServer implements IRpcHandler {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   private ws: WebSocket | undefined;
   private requestId: number = 1;
@@ -254,3 +254,5 @@ export default class RpcServer implements IRpcHandler {
     }
   }
 }
+
+export default RpcServer;

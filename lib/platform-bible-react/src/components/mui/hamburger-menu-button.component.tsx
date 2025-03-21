@@ -1,6 +1,6 @@
 import { Command, CommandHandler } from '@/components/advanced/platform-menubar.component';
-import GridMenu from '@/components/mui/grid-menu.component';
-import usePromise from '@/hooks/use-promise.hook';
+import { GridMenu } from '@/components/mui/grid-menu.component';
+import { usePromise } from '@/hooks/use-promise.hook';
 import { Menu as MenuIcon } from '@mui/icons-material';
 import { Drawer, IconButton } from '@mui/material';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
@@ -53,7 +53,7 @@ export type HamburgerMenuButtonProps = PropsWithChildren & {
   ariaLabelPrefix?: string;
 };
 
-export default function HamburgerMenuButton({
+export function HamburgerMenuButton({
   menuProvider,
   normalMenu,
   fullMenu,
@@ -166,3 +166,5 @@ export default function HamburgerMenuButton({
     </>
   );
 }
+
+export default HamburgerMenuButton;

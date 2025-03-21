@@ -1,5 +1,5 @@
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
-import Spinner from '@/components/basics/spinner.component';
+import { Spinner } from '@/components/basics/spinner.component';
 import { cn } from '@/utils/shadcn-ui.util';
 
 type UpdateButtonProps = {
@@ -16,12 +16,7 @@ type UpdateButtonProps = {
  * @param UpdateButtonProps
  * @returns A button that can be used to update.
  */
-export default function UpdateButton({
-  isUpdating,
-  handleClick,
-  className,
-  ...props
-}: UpdateButtonProps) {
+export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps) {
   return (
     <Button
       className={cn(
@@ -45,3 +40,5 @@ export default function UpdateButton({
     </Button>
   );
 }
+
+export default UpdateButton;

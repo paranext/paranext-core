@@ -4,7 +4,8 @@ import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 import { Canon } from '@sillsdev/scripture';
 import { LocalizedStringValue } from 'platform-bible-utils';
 import { useState } from 'react';
-import ChapterRangeSelector, {
+import {
+  ChapterRangeSelector,
   ChapterRangeSelectorProps,
 } from '../basics/chapter-range-selector.component';
 
@@ -51,7 +52,7 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
   localizedStrings: BookSelectorLocalizedStrings;
 };
 
-export default function BookSelector({
+export function BookSelector({
   handleBookSelectionModeChange,
   currentBookName,
   onSelectBooks,
@@ -121,3 +122,5 @@ export default function BookSelector({
     </RadioGroup>
   );
 }
+
+export default BookSelector;

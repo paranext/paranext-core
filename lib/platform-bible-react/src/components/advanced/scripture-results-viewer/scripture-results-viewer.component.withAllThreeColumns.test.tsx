@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ScriptureResultsViewer from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
+import { ScriptureResultsViewer } from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 
 describe('ScriptureResultsViewer with all three column headers (showing Check Type/source column)', () => {
   const repeatedWordsCheck = { id: 'testCheck1', displayName: 'Repeated Words' };

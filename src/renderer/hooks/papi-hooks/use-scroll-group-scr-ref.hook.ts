@@ -45,7 +45,7 @@ function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): ScriptureReference
  *   - `setScrollGroupId`: Function to use to update the scroll group with which this
  *       `scrollGroupScrRef` is synced
  */
-export default function useScrollGroupScrRef(
+export function useScrollGroupScrRef(
   scrollGroupScrRef: ScrollGroupScrRef | undefined,
   setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
 ): [
@@ -129,3 +129,5 @@ export default function useScrollGroupScrRef(
 
   return [scrRefLocal, setScrRef, scrollGroupIdLocal, setScrollGroupId];
 }
+
+export default useScrollGroupScrRef;

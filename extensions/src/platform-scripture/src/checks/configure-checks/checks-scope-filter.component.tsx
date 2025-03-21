@@ -2,7 +2,7 @@ import { useLocalizedStrings } from '@papi/frontend/react';
 import { LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import { DropdownMenuRadioGroup, DropdownMenuRadioItem } from 'platform-bible-react';
-import ChecksFilterDropdown from './checks-filter-dropdown.component';
+import { ChecksFilterDropdown } from './checks-filter-dropdown.component';
 
 /**
  * Enum representing the different scopes that can be selected for checks.
@@ -42,7 +42,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = ['%webView_checksSidePanel_scopeFilter_
  * choose between Chapter, Book, or All scopes. The component leverages popover and radio group
  * elements for the UI and triggers a callback function when the scope changes.
  */
-export default function ChecksScopeFilter({
+export function ChecksScopeFilter({
   handleSelectScope,
   selectedScope: selectedScopeFromWebView,
 }: ChecksScopeFilterProps) {
@@ -87,3 +87,5 @@ export default function ChecksScopeFilter({
     </ChecksFilterDropdown>
   );
 }
+
+export default ChecksScopeFilter;

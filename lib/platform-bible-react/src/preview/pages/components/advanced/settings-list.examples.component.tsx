@@ -5,7 +5,7 @@ import {
 } from '@/components/advanced/settings-components/settings-list.component';
 import { Input } from '@/components/shadcn-ui/input';
 
-export default function SettingsListExamples() {
+export function SettingsListExamples() {
   const generateComponent = (placeholder: string) => {
     return (
       <>
@@ -48,3 +48,5 @@ export default function SettingsListExamples() {
     </SettingsList>
   );
 }
+
+export default SettingsListExamples;

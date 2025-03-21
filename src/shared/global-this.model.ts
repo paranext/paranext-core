@@ -68,7 +68,6 @@ declare global {
 /* eslint-enable */
 
 /** Type of Paranext process */
-// eslint-disable-next-line import/prefer-default-export
 export enum ProcessType {
   Main = 'main',
   Renderer = 'renderer',

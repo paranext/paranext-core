@@ -1,4 +1,4 @@
-import PlatformMenubar from '@/components/advanced/platform-menubar.component';
+import { PlatformMenubar } from '@/components/advanced/platform-menubar.component';
 
 const menuData = {
   columns: {
@@ -123,7 +123,7 @@ const menuData = {
   ],
 };
 
-export default function PlatformMenubarExample() {
+export function PlatformMenubarExample() {
   return (
     <PlatformMenubar
       commandHandler={(command) => console.log('Run command: ', command)}
@@ -131,3 +131,5 @@ export default function PlatformMenubarExample() {
     />
   );
 }
+
+export default PlatformMenubarExample;

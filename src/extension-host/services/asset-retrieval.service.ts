@@ -4,10 +4,12 @@ import { startsWith } from 'platform-bible-utils';
 
 export type GetAsset = typeof getAsset;
 
-export default async function getAsset(extensionName: string, assetName: string): Promise<Buffer> {
+export async function getAsset(extensionName: string, assetName: string): Promise<Buffer> {
   if (!startsWith(assetName, 'assets/') && !startsWith(assetName, 'assets\\')) {
     throw Error('Requests are limited to files in the "assets" directory');
   }
   const pathToAsset = buildExtensionPathFromName(extensionName, assetName);
   return readFileBinary(pathToAsset);
 }
+
+export default getAsset;

@@ -44,7 +44,7 @@ function getUsePromiseOptionsDefaults(options: UsePromiseOptions): UsePromiseOpt
  *   - `value`: the current value for the promise, either the defaultValue or the resolved promise value
  *   - `isLoading`: whether the promise is waiting to be resolved
  */
-const usePromise = <T>(
+export const usePromise = <T>(
   promiseFactoryCallback: (() => Promise<T>) | undefined,
   defaultValue: T,
   options: UsePromiseOptions = {},

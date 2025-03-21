@@ -4,7 +4,7 @@ export const TAB_TYPE_TEST = 'tab';
 
 type TestTabData = { content?: string } | undefined;
 
-export default function TestPanel({ content }: { content: string }) {
+export function TestPanel({ content }: { content: string }) {
   return <div className="test-panel">{content}</div>;
 }
 
@@ -23,3 +23,5 @@ export function loadTestTab(savedTabInfo: SavedTabInfo): TabInfo {
     content: <TestPanel content={content} />,
   };
 }
+
+export default TestPanel;

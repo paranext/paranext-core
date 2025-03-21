@@ -7,7 +7,11 @@ export type GoToMenuItemProps = {
   handleBookmarks: () => void;
 };
 
-function GoToMenuItem({ handleSort, handleLocationHistory, handleBookmarks }: GoToMenuItemProps) {
+export function GoToMenuItem({
+  handleSort,
+  handleLocationHistory,
+  handleBookmarks,
+}: GoToMenuItemProps) {
   return (
     <DropdownMenuLabel className="tw-flex tw-justify-between">
       <p className="tw-inline-block tw-align-middle">Go To</p>

@@ -1,6 +1,7 @@
-import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import Toolbar, {
+import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import {
   getToolbarOSReservedSpaceClassName,
+  Toolbar,
 } from '@/components/advanced/toolbar.component';
 import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui.util';
@@ -9,7 +10,7 @@ import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 import * as menuData from './sample.menu.json';
 
-export default function ToolbarExamples() {
+export function ToolbarExamples() {
   const [scrRef] = useState(defaultScrRef);
 
   return (
@@ -103,3 +104,5 @@ export default function ToolbarExamples() {
     </div>
   );
 }
+
+export default ToolbarExamples;

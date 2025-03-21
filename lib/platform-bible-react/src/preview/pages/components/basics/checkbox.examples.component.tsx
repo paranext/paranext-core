@@ -1,7 +1,7 @@
-import Checkbox from '@/components/shadcn-ui/checkbox';
+import { Checkbox } from '@/components/shadcn-ui/checkbox';
 import { Label } from '@/components/shadcn-ui/label';
 
-export default function CheckboxExamples() {
+export function CheckboxExamples() {
   return (
     <div className="tw-flex tw-flex-col tw-gap-2">
       <p>Note: that the bug of checkboxes jumping up and down is already coming from Shadcn</p>
@@ -32,3 +32,5 @@ export default function CheckboxExamples() {
     </div>
   );
 }
+
+export default CheckboxExamples;

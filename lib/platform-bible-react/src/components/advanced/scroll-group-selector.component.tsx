@@ -99,7 +99,7 @@ export type ScrollGroupSelectorProps = {
 };
 
 /** Selector component for choosing a scroll group */
-export default function ScrollGroupSelector({
+export function ScrollGroupSelector({
   availableScrollGroupIds,
   scrollGroupId,
   onChangeScrollGroupId,
@@ -154,3 +154,5 @@ export default function ScrollGroupSelector({
     </Select>
   );
 }
+
+export default ScrollGroupSelector;

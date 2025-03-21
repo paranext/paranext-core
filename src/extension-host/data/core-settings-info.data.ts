@@ -1,4 +1,4 @@
-import localizationService from '@shared/services/localization.service';
+import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
 import { isString, ScriptureReference, SettingsContribution } from 'platform-bible-utils';
 

@@ -110,7 +110,7 @@ type UseDataHook = {
  */
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */
-const useData = createUseDataHook(
+export const useData = createUseDataHook(
   useDataProvider as (
     dataProviderSource: string | IDataProvider | undefined,
   ) => IDataProvider | undefined,

@@ -1,4 +1,4 @@
-function Playground() {
+export function Playground() {
   return (
     <>
       <p>Put here whatever you want </p>

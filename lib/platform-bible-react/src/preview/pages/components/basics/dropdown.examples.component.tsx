@@ -15,7 +15,7 @@ import {
 
 import { ChevronDown } from 'lucide-react';
 
-export default function DropdownExamples() {
+export function DropdownExamples() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -49,3 +49,5 @@ export default function DropdownExamples() {
     </DropdownMenu>
   );
 }
+
+export default DropdownExamples;

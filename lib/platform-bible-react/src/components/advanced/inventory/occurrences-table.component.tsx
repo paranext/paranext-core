@@ -29,7 +29,7 @@ type OccurrencesTableProps = {
  * scripture reference. The second column shows the snippet of scripture that contains the specified
  * inventory item
  */
-function OccurrencesTable({
+export function OccurrencesTable({
   occurrenceData,
   setScriptureReference,
   localizedStrings,

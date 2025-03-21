@@ -32,7 +32,7 @@ const invoices = [
 
 const lotsOfInvoices = Array(10).fill(invoices).flat();
 
-export default function TableExamples() {
+export function TableExamples() {
   return (
     <>
       <Table className="tw-border">
@@ -101,3 +101,5 @@ export default function TableExamples() {
     </>
   );
 }
+
+export default TableExamples;

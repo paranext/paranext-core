@@ -1,4 +1,4 @@
-import dataProviderService from '@shared/services/data-provider.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { createSyncProxyForAsyncObject, getLocalizedIdFromBookNumber } from 'platform-bible-utils';
 import {
   ILocalizationService,
@@ -27,7 +27,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const localizationService = createSyncProxyForAsyncObject<ILocalizationService>(
+export const localizationService = createSyncProxyForAsyncObject<ILocalizationService>(
   async () => {
     await initialize();
     return dataProvider;

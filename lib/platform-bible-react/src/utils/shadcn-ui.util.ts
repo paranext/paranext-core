@@ -56,8 +56,6 @@ const twMergeCustom = extendTailwindMerge({ prefix: 'tw-' });
  * @returns Class string containing all applicable classes from the arguments based on the rules
  *   described above
  */
-// shadcn/ui uses this export in its boilerplate code
-// eslint-disable-next-line import/prefer-default-export
 export function cn(...inputs: ClassValue[]) {
   return twMergeCustom(clsx(inputs));
 }

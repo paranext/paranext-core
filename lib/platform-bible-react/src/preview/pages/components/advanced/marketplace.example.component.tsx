@@ -1,8 +1,8 @@
-import Footer from '@/components/advanced/extension-marketplace/footer.component';
-import NoExtensionsFound from '@/components/advanced/extension-marketplace/no-extensions-found.component';
-import MoreInfo from '@/components/advanced/extension-marketplace/more-info.component';
+import { Footer } from '@/components/advanced/extension-marketplace/footer.component';
+import { NoExtensionsFound } from '@/components/advanced/extension-marketplace/no-extensions-found.component';
+import { MoreInfo } from '@/components/advanced/extension-marketplace/more-info.component';
 
-export default function MarketplaceExamples() {
+export function MarketplaceExamples() {
   return (
     <div className="tw-w-1/3 tw-space-y-4">
       <MoreInfo
@@ -21,3 +21,5 @@ export default function MarketplaceExamples() {
     </div>
   );
 }
+
+export default MarketplaceExamples;

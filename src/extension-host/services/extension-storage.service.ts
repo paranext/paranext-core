@@ -6,7 +6,7 @@ import {
   deleteFile,
 } from '@node/services/node-file-system.service';
 import { ExecutionToken } from '@node/models/execution-token.model';
-import executionTokenService from '@node/services/execution-token.service';
+import { executionTokenService } from '@node/services/execution-token.service';
 import { Buffer } from 'node:buffer';
 import { stringLength, includes } from 'platform-bible-utils';
 
@@ -167,7 +167,7 @@ export interface ExtensionStorageService {
  * the extension identity and current user (as identified by the OS). This service will not work
  * within the renderer.
  */
-const extensionStorageService: ExtensionStorageService = {
+export const extensionStorageService: ExtensionStorageService = {
   readTextFileFromInstallDirectory,
   readBinaryFileFromInstallDirectory,
   readUserData,

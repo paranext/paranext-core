@@ -1,4 +1,4 @@
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { SerializedRequestType } from '@shared/utils/util';
 import {
   JSONRPC,

@@ -11,9 +11,11 @@ declare module 'papi-shared-types' {
     PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from '@shared/models/project-data-provider.model';
-  import type { IDisposableDataProvider } from '@shared/models/data-provider.interface';
-  import type IDataProvider from '@shared/models/data-provider.interface';
-  import type ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
+  import type {
+    IDataProvider,
+    IDisposableDataProvider,
+  } from '@shared/models/data-provider.interface';
+  import type { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from '@shared/models/network-object.model';
   // Used in JSDocs
   // eslint-disable-next-line @typescript-eslint/no-unused-vars

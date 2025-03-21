@@ -17,8 +17,8 @@ import {
   VisibilityState,
 } from '@tanstack/react-table';
 
-import DataTableViewOptions from '@/components/advanced/data-table/data-table-column-toggle.component';
-import DataTablePagination from '@/components/advanced/data-table/data-table-pagination.component';
+import { DataTableViewOptions } from '@/components/advanced/data-table/data-table-column-toggle.component';
+import { DataTablePagination } from '@/components/advanced/data-table/data-table-pagination.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Table,
@@ -49,7 +49,7 @@ interface DataTableProps<TData, TValue> {
  * Feature-rich table component that infuses our basic shadcn-based Table component with features
  * from TanStack's React Table library
  */
-function DataTable<TData, TValue>({
+export function DataTable<TData, TValue>({
   columns,
   data,
   enablePagination = false,

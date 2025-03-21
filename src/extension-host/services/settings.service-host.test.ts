@@ -63,7 +63,7 @@ vi.mock('@extension-host/data/core-settings-info.data', async () => ({
 }));
 vi.mock('@shared/services/localization.service', () => ({
   __esModule: true,
-  default: {
+  localizationService: {
     async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
       [localizeKey: string]: string;
     }> {

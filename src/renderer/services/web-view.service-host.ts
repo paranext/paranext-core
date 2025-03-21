@@ -40,10 +40,10 @@ import {
   TabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import webViewProviderService from '@shared/services/web-view-provider.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
 import { LayoutBase } from 'rc-dock';
-import logger from '@shared/services/logger.service';
-import LogError from '@shared/log-error.model';
+import { logger } from '@shared/services/logger.service';
+import { LogError } from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
 import {
   OpenWebViewEvent,
@@ -57,7 +57,7 @@ import {
   UpdateWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   getFullWebViewStateById,
   setFullWebViewStateById,
@@ -68,7 +68,7 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import THEME, { SCROLLBAR_STYLES, MUI_OVERRIDES } from '@renderer/theme';
+import { MUI_OVERRIDES, SCROLLBAR_STYLES, THEME } from '@renderer/theme';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to

@@ -1,7 +1,7 @@
 ﻿/** Module to set up globalThis and polyfills in the extension host */
 
 import { LogLevel } from 'electron-log';
-import polyfillLocalStorage from '@node/polyfills/local-storage.polyfill';
+import { polyfillLocalStorage } from '@node/polyfills/local-storage.polyfill';
 import {
   COMMAND_LINE_ARGS,
   getCommandLineArgument,

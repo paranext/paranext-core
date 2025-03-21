@@ -33,7 +33,7 @@ import { SettingDataTypes } from '@shared/services/settings.service-model';
  * @throws When subscription callback function is called with an update that has an unexpected
  *   message type
  */
-const useSetting = <SettingName extends SettingNames>(
+export const useSetting = <SettingName extends SettingNames>(
   key: SettingName,
   defaultState: SettingTypes[SettingName],
   subscriberOptions?: DataProviderSubscriberOptions,

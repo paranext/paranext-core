@@ -1,4 +1,4 @@
-import PlatformMenubar, { CommandHandler } from '@/components/advanced/platform-menubar.component';
+import { CommandHandler, PlatformMenubar } from '@/components/advanced/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { PropsWithChildren, ReactNode, useRef } from 'react';
@@ -69,7 +69,7 @@ export function getToolbarOSReservedSpaceClassName(
   }
 }
 
-export default function Toolbar({
+export function Toolbar({
   menuData,
   onOpenChange,
   commandHandler,
@@ -140,3 +140,5 @@ export default function Toolbar({
     </div>
   );
 }
+
+export default Toolbar;

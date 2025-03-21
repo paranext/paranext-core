@@ -1,8 +1,8 @@
-import MarkdownRenderer from '@/components/advanced/extension-marketplace/markdown-renderer.component';
+import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Input } from '@/components/shadcn-ui/input';
 import { useState } from 'react';
 
-function MarkdownRendererExample() {
+export function MarkdownRendererExample() {
   const [markdown, setMarkdown] = useState(`
 # Sample Markdown
 

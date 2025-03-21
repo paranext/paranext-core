@@ -10,7 +10,7 @@ export interface PapiContext {
  *
  * All React contexts to be exposed on the papi
  */
-const papiContext: PapiContext = {
+export const papiContext: PapiContext = {
   TestContext,
 };
 

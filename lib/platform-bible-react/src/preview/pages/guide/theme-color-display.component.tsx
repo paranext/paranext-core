@@ -24,7 +24,7 @@ function createPreviewCell(color: string, foreground: string, text: string) {
   );
 }
 
-export default function ThemeColorDisplay() {
+export function ThemeColorDisplay() {
   return (
     <>
       <p>
@@ -95,3 +95,5 @@ export default function ThemeColorDisplay() {
     </>
   );
 }
+
+export default ThemeColorDisplay;

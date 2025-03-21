@@ -17,7 +17,7 @@ import { Dispose, OnDidDispose } from 'platform-bible-utils';
 // Basically a layer over NetworkObject from DataProviderInternal.
 // Used to be `NetworkObject<DataProviderInternal<TDataTypes>>`, but it had problems with `infer`
 // See https://github.com/paranext/paranext-core/issues/318#issuecomment-1791317605 for more info
-type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+export type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
   DataProviderSetters<TDataTypes> &
     DataProviderGetters<TDataTypes> &
     DataProviderSubscribers<TDataTypes> &

@@ -1,4 +1,4 @@
-import ComboBox from '@/components/basics/combo-box.component';
+import { ComboBox } from '@/components/basics/combo-box.component';
 import { Label } from '@/components/shadcn-ui/label';
 import { useMemo } from 'react';
 
@@ -11,7 +11,7 @@ export type ChapterRangeSelectorProps = {
   chapterCount: number;
 };
 
-export default function ChapterRangeSelector({
+export function ChapterRangeSelector({
   startChapter,
   endChapter,
   handleSelectStartChapter,
@@ -64,3 +64,5 @@ export default function ChapterRangeSelector({
     </>
   );
 }
+
+export default ChapterRangeSelector;

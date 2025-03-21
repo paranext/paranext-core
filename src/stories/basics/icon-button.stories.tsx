@@ -2,7 +2,7 @@
 import { IconButton } from 'platform-bible-react';
 import { CircleAlert, CircleArrowUp } from 'lucide-react';
 
-const meta: Meta<typeof IconButton> = {
+export const meta: Meta<typeof IconButton> = {
   title: 'Basics/IconButton',
   component: IconButton,
   tags: ['autodocs'],

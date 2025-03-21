@@ -1,5 +1,5 @@
 import { deepEqual } from 'platform-bible-utils';
-import MenuDocumentCombiner from './menu-document-combiner';
+import { MenuDocumentCombiner } from './menu-document-combiner';
 
 const startingDoc = {
   mainMenu: {

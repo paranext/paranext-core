@@ -1,8 +1,8 @@
-import MarkdownRenderer from '@/components/advanced/extension-marketplace/markdown-renderer.component';
+import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Alert, AlertDescription, AlertTitle } from '@/components/shadcn-ui/alert';
 import { AlertCircle, Terminal } from 'lucide-react';
 
-export default function ExampleAlerts() {
+export function ExampleAlerts() {
   return (
     <div className="tw-flex tw-flex-col tw-gap-2">
       <Alert>
@@ -97,3 +97,5 @@ export default function ExampleAlerts() {
     </div>
   );
 }
+
+export default ExampleAlerts;
