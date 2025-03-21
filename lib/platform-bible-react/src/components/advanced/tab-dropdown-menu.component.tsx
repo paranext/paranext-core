@@ -10,6 +10,12 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/shadcn-ui/tooltip';
 import { cn } from '@/utils/shadcn-ui.util';
 import { MenuIcon } from 'lucide-react';
 import {
@@ -50,33 +56,42 @@ const getGroupContent = (
     const groupItems = items
       .filter((item) => item.group === groupKey)
       .sort((a, b) => a.order - b.order)
-      .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) =>
-        'command' in item ? (
-          <DropdownMenuItem
-            key={item.command}
-            onClick={() => {
-              commandHandler(item);
-            }}
-          >
-            {item.label}
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuSub key={item.id}>
-            <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
+      .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {'command' in item ? (
+                  <DropdownMenuItem
+                    key={item.command}
+                    onClick={() => {
+                      commandHandler(item);
+                    }}
+                  >
+                    {item.label}
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuSub key={item.id}>
+                    <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
 
-            <DropdownMenuPortal>
-              <DropdownMenuSubContent>
-                {getGroupContent(
-                  groups,
-                  items,
-                  getSubMenuKeyForId(groups, item.id),
-                  commandHandler,
+                    <DropdownMenuPortal>
+                      <DropdownMenuSubContent>
+                        {getGroupContent(
+                          groups,
+                          items,
+                          getSubMenuKeyForId(groups, item.id),
+                          commandHandler,
+                        )}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuPortal>
+                  </DropdownMenuSub>
                 )}
-              </DropdownMenuSubContent>
-            </DropdownMenuPortal>
-          </DropdownMenuSub>
-        ),
-      );
+              </TooltipTrigger>
+              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+            </Tooltip>
+          </TooltipProvider>
+        );
+      });
 
     return groupItems;
   });
@@ -94,14 +109,25 @@ export type TabDropdownMenuProps = PropsWithChildren & {
 
   /** Additional css class(es) to help with unique styling of the tab dropdown menu */
   className?: string;
+
+  /** Optional unique identifier */
+  id?: string;
 };
 
+/**
+ * Dropdown menu designed to be used with Platform.Bible menu data. Column headers are ignored.
+ * Column data is separated by a horizontal divider, so groups are not distinguishable. Tooltips are
+ * displayed on hovering over menu items, if a tooltip is defined for them.
+ *
+ * A child component can be passed in to show as an icon on the menu trigger button.
+ */
 export default function TabDropdownMenu({
   commandHandler,
   menuData,
   tabLabel,
   className,
   children,
+  id,
 }: TabDropdownMenuProps) {
   return (
     <DropdownMenu>
@@ -109,6 +135,7 @@ export default function TabDropdownMenu({
         aria-label={tabLabel}
         className={cn('tw-cursor-pointer', className)}
         asChild
+        id={id}
       >
         {children ?? <MenuIcon />}
       </DropdownMenuTrigger>

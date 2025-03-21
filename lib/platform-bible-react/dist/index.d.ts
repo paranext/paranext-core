@@ -843,8 +843,17 @@ type TabDropdownMenuProps = React$1.PropsWithChildren & {
 	tabLabel: string;
 	/** Additional css class(es) to help with unique styling of the tab dropdown menu */
 	className?: string;
+	/** Optional unique identifier */
+	id?: string;
 };
-export function TabDropdownMenu({ commandHandler, menuData, tabLabel, className, children, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Dropdown menu designed to be used with Platform.Bible menu data. Column headers are ignored.
+ * Column data is separated by a horizontal divider, so groups are not distinguishable. Tooltips are
+ * displayed on hovering over menu items, if a tooltip is defined for them.
+ *
+ * A child component can be passed in to show as an icon on the menu trigger button.
+ */
+export function TabDropdownMenu({ commandHandler, menuData, tabLabel, className, children, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
