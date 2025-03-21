@@ -128,15 +128,18 @@ public class UsfmBookIndexer
                 if (chapterNumber.HasValue && chapterNumber.Value > 1)
                 {
                     onChapter = chapterNumber.Value;
-                    retVal.Add(onChapter, []);
-                    retVal[onChapter].Add(0, i);
+                    if (!retVal.TryAdd(onChapter, []) || !retVal[onChapter].TryAdd(0, i))
+                        Console.WriteLine($"Unexpected duplicate chapter number: {chapterNumber}");
                 }
             }
             else if (_usfm[i + 1] == 'v')
             {
                 var verseNumber = ExtractNumber(_usfm, i + 2);
                 if (verseNumber.HasValue)
-                    retVal[onChapter].Add(verseNumber.Value, i);
+                {
+                    if (!retVal[onChapter].TryAdd(verseNumber.Value, i))
+                        Console.WriteLine($"Unexpected duplicate verse number: {verseNumber}");
+                }
             }
         }
 
