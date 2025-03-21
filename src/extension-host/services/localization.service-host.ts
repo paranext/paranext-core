@@ -325,6 +325,12 @@ class LocalizationDataProviderEngine
     return loadedLocales;
   }
 
+  // This method legitimately does not need to call anything else in this class as of now
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async retrieveCurrentLocalizedStringData(): Promise<LocalizedStringDataContribution> {
+    return localizedStringsDocumentCombiner.getLocalizedStringData();
+  }
+
   // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>> {

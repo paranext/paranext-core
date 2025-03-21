@@ -5804,7 +5804,12 @@ declare module 'shared/services/localization.service-model' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { LanguageInfo } from 'platform-bible-react';
-  import { LanguageStrings, LocalizeKey, OnDidDispose } from 'platform-bible-utils';
+  import {
+    LanguageStrings,
+    LocalizedStringDataContribution,
+    LocalizeKey,
+    OnDidDispose,
+  } from 'platform-bible-utils';
   export type LocalizationData = LanguageStrings;
   export type LocalizationSelector = {
     localizeKey: LocalizeKey;
@@ -5869,6 +5874,12 @@ declare module 'shared/services/localization.service-model' {
      * @returns All user-interface languages
      */
     getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
+    /**
+     * Get all localized string data currently loaded by the platform
+     *
+     * @returns All localized string data from all sources formatted a single, combined contribution
+     */
+    retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
