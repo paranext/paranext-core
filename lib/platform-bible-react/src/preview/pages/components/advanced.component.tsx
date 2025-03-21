@@ -23,6 +23,7 @@ import UiLanguageSelectorExample from './advanced/ui-language-selector-example.c
 import { columns, data } from './data-sources/data-table-content';
 import SettingSidebarContentSearchExamples from './advanced/settings-sidebar-content-search.example.component';
 import PlatformMenubarExample from './advanced/platform-menubar-example.component';
+import TabDropdownMenuExample from './advanced/tab-dropdown-menu-example.component';
 
 function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -77,6 +78,7 @@ function Compositions() {
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Multi-select Combo Box">
             Multi-select Combo Box
@@ -93,7 +95,7 @@ function Compositions() {
           <VerticalTabsTrigger value="Settings Sidebar Content Search">
             Settings Sidebar Content Search
           </VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Tab Dropdown Menu">Tab Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="UI Language Selector">
             UI Language Selector
           </VerticalTabsTrigger>
@@ -114,6 +116,10 @@ function Compositions() {
 
         <VerticalTabsContent value="Filter">
           <FilterExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Markdown Renderer">
+          <MarkdownRendererExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
@@ -181,8 +187,8 @@ function Compositions() {
           <SettingSidebarContentSearchExamples />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Markdown Renderer">
-          <MarkdownRendererExample />
+        <VerticalTabsContent value="Tab Dropdown Menu">
+          <TabDropdownMenuExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="UI Language Selector">

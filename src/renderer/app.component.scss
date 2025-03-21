@@ -24,12 +24,6 @@ body {
   flex-direction: column;
 }
 
-/* hide default box shadow of AppBar */
-/* stylelint-disable-next-line selector-class-pattern */
-.MuiPaper-root.MuiAppBar-root {
-  box-shadow: none;
-}
-
 li {
   list-style: none;
 }

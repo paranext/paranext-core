@@ -11,7 +11,6 @@ import {
 } from '@papi/core';
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
-import emotionTestWebView from './emotion-test.web-view?inline';
 
 logger.info('Hello Someone is importing!');
 
@@ -261,23 +260,6 @@ const peopleWebViewProvider: IWebViewProvider = {
   },
 };
 
-const emotionTestWebViewType = 'helloSomeone.emotionTest';
-
-/** Simple web view provider that provides `@emotion/react` test web views when papi requests them */
-const emotionTestWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== emotionTestWebViewType)
-      throw new Error(
-        `${emotionTestWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
-      );
-    return {
-      ...savedWebView,
-      title: 'Emotion Test',
-      content: emotionTestWebView,
-    };
-  },
-};
-
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello Someone is activating!');
 
@@ -289,11 +271,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   const peopleWebViewProviderPromise = papi.webViewProviders.register(
     peopleWebViewType,
     peopleWebViewProvider,
-  );
-
-  const emotionTestWebViewProviderPromise = papi.webViewProviders.register(
-    emotionTestWebViewType,
-    emotionTestWebViewProvider,
   );
 
   const helloSomeoneCommandPromise = papi.commands.registerCommand(
@@ -355,13 +332,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     );
   }, 1000);
 
-  papi.webViews.getWebView(emotionTestWebViewType, undefined, { existingId: '?' });
-
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await peopleDataProviderPromise,
     await peopleWebViewProviderPromise,
-    await emotionTestWebViewProviderPromise,
     await helloSomeoneCommandPromise,
     papi.webViews.onDidAddWebView((addWebViewEvent) => {
       if (addWebViewEvent.webView.webViewType === peopleWebViewType)

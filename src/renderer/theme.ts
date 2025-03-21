@@ -96,18 +96,4 @@ export const SCROLLBAR_STYLES = `
   }
   `;
 
-export const MUI_OVERRIDES = `
-  .MuiSvgIcon-root,
-  .MuiFormLabel-root.MuiFormLabel-colorPrimary,
-  .MuiCheckbox-root.MuiCheckbox-colorPrimary,
-  .MuiRadio-root.MuiRadio-colorPrimary,
-  .MuiFormLabel-root.MuiFormLabel-colorPrimary {
-    color: hsl(var(--foreground));
-  }
-
-  .MuiTypography-root.MuiTypography-body1.MuiFormControlLabel-label.Mui-disabled {
-    color: hsl(var(--foreground) / 0.5);
-  }
-`;
-
 export default THEME;
