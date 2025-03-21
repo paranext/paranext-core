@@ -296,8 +296,8 @@ type ExtensionManifest = {
    *
    * If not provided, Platform.Bible will look in the following locations:
    *
-   * 1. `<extension_name>.d.ts`
-   * 2. `<extension_name><other_stuff>.d.ts`
+   * 1. `<extension-name>.d.ts` (kebab-case version of the extension name)
+   * 2. `<extension-name><other_stuff>.d.ts` (kebab-case version of the extension name)
    * 3. `index.d.ts`
    *
    * See [Extension Anatomy - Type Declaration
