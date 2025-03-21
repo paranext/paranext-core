@@ -130,7 +130,7 @@ After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit
 Platfrom.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
 `extensions/README.md` to develop core extensions.
 
-Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core.
+Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core. Once you have packaged an extension, it can be distributed for Platform.Bible users to install. See [Running your extension in an app](https://github.com/paranext/paranext-extension-template/wiki/Debugging-Your-Extension-in-the-Production-Application#running-your-extension-in-an-app) for installation information.
 
 ## GitHub Pages
 
