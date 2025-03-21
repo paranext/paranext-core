@@ -77,6 +77,7 @@ export default function ChecksCheckTypeFilter({
 
   const createComplexLabel = useCallback(
     (item: string): ReactNode => {
+      // The following commented out lines will be relevant once set up link support is implemented.
       // const link = checkNameToDetails.find((check) => check.checkName === item)?.setUpLink ?? '';
       return (
         <div>
@@ -85,7 +86,8 @@ export default function ChecksCheckTypeFilter({
         </div>
       );
     },
-    [checkNameToDetails, localizedStrings],
+    // [checkNameToDetails, localizedStrings],
+    [],
   );
 
   const selectedChecksCountLabel = useMemo(
