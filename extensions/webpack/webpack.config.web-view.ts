@@ -7,7 +7,12 @@ import { getWebViewEntries } from './webpack.util';
 
 /** Webpack configuration for building webViews */
 const configWebView: webpack.Configuration = merge(configBase, {
-  // Build for web since Platform.Bible loads WebViews in browser https://webpack.js.org/concepts/targets/
+  // Build for web since Platform.Bible loads WebViews in browser. Platform.Bible provides specific
+  // modules that extensions may import as listed in `webpack.config.base`'s `externals`. Read more at
+  // https://github.com/paranext/paranext/wiki/Module-import-restrictions
+  // Note: Extensions can include polyfills of built-in modules using `resolve.fallback` as
+  // documented at https://webpack.js.org/configuration/resolve/#resolvefallback
+  // https://webpack.js.org/concepts/targets/
   target: 'web',
   // configuration name so we can depend on it in main
   name: 'webView',
