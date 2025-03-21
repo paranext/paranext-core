@@ -17,7 +17,7 @@ function SetUp(setUpLink: string, localizedSetUp: string) {
   if (setUpLink && setUpLink !== '') {
     return (
       <div className="tw-text-blue-700 tw-text-right">
-        <a href="www.google.com">{localizedSetUp}</a>
+        {/* <a href="www.google.com">{localizedSetUp}</a> */}
       </div>
     );
   }
@@ -80,7 +80,7 @@ export default function ChecksCheckTypeFilter({
       const link = checkNameToDetails.find((check) => check.checkName === item)?.setUpLink ?? '';
       return (
         <div>
-          <div className="tw-text-left">{item}</div>
+          <div className="tw-text-start">{item}</div>
           {SetUp(link, localizedStrings['%webview_checksSidePanel_checkTypeFilter_setUp%'])}
         </div>
       );

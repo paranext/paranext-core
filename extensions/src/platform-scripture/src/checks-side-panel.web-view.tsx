@@ -9,7 +9,7 @@ import {
   SettableCheckDetails,
 } from 'platform-scripture';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { Canon, VerseRef } from '@sillsdev/scripture';
+import { VerseRef } from '@sillsdev/scripture';
 import {
   getChaptersForBook,
   isPlatformError,
@@ -59,7 +59,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'subscriptionId',
     '',
   );
-  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRINGS);
+  const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
 
   const checkAggregator = useDataProvider('platformScripture.checkAggregator');
 
@@ -124,12 +124,6 @@ global.webViewComponent = function ChecksSidePanelWebView({
       end = new VerseRef(scrRef.bookNum, getChaptersForBook(scrRef.bookNum), 1);
     }
 
-    // TODO does all mean all books all chapters
-    if (scope === CheckScopes.All) {
-      start = new VerseRef(1, 1, 1);
-      end = new VerseRef(Canon.lastBook, getChaptersForBook(Canon.lastBook), 1);
-    }
-
     return {
       projectId: projectId ?? '',
       start,
@@ -184,9 +178,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'platformScripture.checkAggregator',
   ).CheckResults(
     subscriptionId,
-    useMemo(() => {
-      return [];
-    }, []),
+    useMemo(() => [], []),
   );
 
   const openSettingsAndInventories = useCallback(() => {
