@@ -34,6 +34,7 @@ jobs:
         run: | # need to specify --out so pages links at /{their name} instead of at /docs
           cd lib/platform-bible-react
           npm run build:docs -- --out platform-bible-react
+
           cd ../platform-bible-utils
           npm run build:docs -- --out platform-bible-utils
           cd ../papi-dts
@@ -43,6 +44,11 @@ jobs:
           mv lib/platform-bible-react/platform-bible-react docs-for-pages
           mv lib/platform-bible-utils/platform-bible-utils docs-for-pages
           mv lib/papi-dts/papi-dts docs-for-pages
+
+      - name: Build Storybook for platform-bible-react
+        run: |
+          cd lib/platform-bible-react
+          npm run build-storybook -- --output-dir ../../docs-for-pages/platform-bible-react-storybook
 
       - name: Add nojekyll # needed so that HTML pages that start with _ do not cause 404
         run: touch docs-for-pages/.nojekyll

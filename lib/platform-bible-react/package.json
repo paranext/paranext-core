@@ -37,6 +37,7 @@
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
     "build:docs": "typedoc",
     "build": "npm run build:basic && npm run lint-fix",
+    "build-storybook": "storybook build",
     "watch": "tsc && vite build --watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
