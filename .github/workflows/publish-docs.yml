@@ -35,7 +35,6 @@ jobs:
         run: | # need to specify --out so pages links at /{their name} instead of at /docs
           cd lib/platform-bible-react
           npm run build:docs -- --out platform-bible-react
-
           cd ../platform-bible-utils
           npm run build:docs -- --out platform-bible-utils
           cd ../papi-dts

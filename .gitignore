@@ -45,3 +45,10 @@ c-sharp/**/*.BAK
 # yalc
 .yalc
 yalc.lock
+
+# Build artifacts
+dist/
+docs-for-pages/
+lib/platform-bible-react/platform-bible-react/
+lib/platform-bible-utils/platform-bible-utils/
+lib/papi-dts/papi-dts/

@@ -1,14 +1,5 @@
-import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { Button } from '../components/shadcn-ui/button';
-
-interface ComponentProps {
-  // Define your component props here
-}
-
-const ComponentName: React.FC<ComponentProps> = (props) => {
-  // Your component implementation
-};
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
@@ -41,4 +32,4 @@ export const Destructive: Story = {
   },
 };
 
-// Add more stories for different variants and sizes
+// Add more stories for different variants and sizes as needed

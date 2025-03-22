@@ -1,12 +1,7 @@
-import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 
-interface ComponentProps {
-  // Define your component props here
-}
-
-const ComponentName: React.FC<ComponentProps> = (props) => {
-  // Your component implementation
+const ComponentName = () => {
+  return <div>Story Template</div>;
 };
 
 const meta: Meta<typeof ComponentName> = {
@@ -25,5 +20,3 @@ export const Default: Story = {
     // Define your default args here
   },
 };
-
-// Add more stories as needed
