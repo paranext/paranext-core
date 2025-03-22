@@ -44,6 +44,11 @@ jobs:
           mv lib/platform-bible-utils/platform-bible-utils docs-for-pages
           mv lib/papi-dts/papi-dts docs-for-pages
 
+      - name: Build Storybook for platform-bible-react
+        run: |
+          cd lib/platform-bible-react
+          npm run build-storybook -- --output-dir ../../docs-for-pages/platform-bible-react-storybook
+
       - name: Add nojekyll # needed so that HTML pages that start with _ do not cause 404
         run: touch docs-for-pages/.nojekyll
 
