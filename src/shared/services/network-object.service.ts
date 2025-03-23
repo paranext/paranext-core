@@ -22,7 +22,7 @@ import {
   LocalObjectToProxyCreator,
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { getEmptyMethodDocs, NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 // #endregion
@@ -594,7 +594,7 @@ export interface NetworkObjectService extends MinimalNetworkObjectService {
  * event handler will be called. After an object is disposed, calls to its functions will no longer
  * be proxied to the original object.
  */
-const networkObjectService: NetworkObjectService = {
+export const networkObjectService: NetworkObjectService = {
   initialize,
   hasKnown,
   get,

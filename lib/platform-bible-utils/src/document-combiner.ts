@@ -25,7 +25,7 @@ export type DocumentCombinerOptions = {
  * Base class for any code that wants to compose JSON documents (primarily in the form of JS objects
  * or arrays) together into a single output document.
  */
-export default class DocumentCombiner {
+export class DocumentCombiner {
   protected baseDocument: JsonDocumentLike;
   protected readonly contributions = new Map<string, JsonDocumentLike>();
   protected latestOutput: JsonDocumentLike | undefined;
@@ -392,3 +392,5 @@ function mergeObjectsInternal(
 }
 
 // #endregion
+
+export default DocumentCombiner;

@@ -2,13 +2,13 @@ import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
 import { Label } from '@/components/shadcn-ui/label';
 import { X } from 'lucide-react';
-import MultiSelectComboBox, { MultiSelectComboBoxProps } from '../multi-select-combo-box.component';
+import { MultiSelectComboBox, MultiSelectComboBoxProps } from '../multi-select-combo-box.component';
 
 interface FilterProps extends MultiSelectComboBoxProps {
   badgesPlaceholder: string;
 }
 
-function Filter({
+export function Filter({
   entries,
   getEntriesCount,
   selected,

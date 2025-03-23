@@ -7,8 +7,8 @@
   LocalizationSelectors,
   localizationServiceObjectToProxy,
 } from '@shared/services/localization.service-model';
-import dataProviderService from '@shared/services/data-provider.service';
-import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { dataProviderService } from '@shared/services/data-provider.service';
+import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import * as nodeFS from '@node/services/node-file-system.service';
 import {
@@ -19,10 +19,10 @@ import {
   LocalizeKey,
   getCurrentLocale,
 } from 'platform-bible-utils';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { joinUriPaths } from '@node/utils/util';
 import path from 'path';
-import settingsService from '@shared/services/settings.service';
+import { settingsService } from '@shared/services/settings.service';
 import {
   localizedStringsDocumentCombiner,
   waitForResyncContributions,

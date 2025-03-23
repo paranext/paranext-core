@@ -1,5 +1,5 @@
 import { LocalizedStringDataContribution } from 'platform-bible-utils';
-import LocalizedStringsDocumentCombiner from './localized-strings-document-combiner';
+import { LocalizedStringsDocumentCombiner } from './localized-strings-document-combiner';
 
 const platformLocalizedStrings: LocalizedStringDataContribution = {
   localizedStrings: {

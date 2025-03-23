@@ -1,4 +1,4 @@
-import Spinner from '@/components/basics/spinner.component';
+import { Spinner } from '@/components/basics/spinner.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Card,
@@ -34,12 +34,12 @@ import {
   Shapes,
 } from 'lucide-react';
 
-import Filter from '@/components/advanced/filter.component';
+import { Filter } from '@/components/advanced/filter.component';
 import type { MultiSelectComboBoxEntry } from '@/components/advanced/multi-select-combo-box.component';
 import { DblResourceData, getErrorMessage } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
-import SearchBar from '@/components/basics/search-bar.component';
-import resourceExamples from './resource-examples';
+import { SearchBar } from '@/components/basics/search-bar.component';
+import { resourceExamples } from './resource-examples';
 
 type InstallInfo = {
   dblEntryUid: string;
@@ -136,7 +136,7 @@ const uninstallResource = async (_uid: string) => {};
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const openResource = (_id: string) => {};
 
-function GetResourcesExamples() {
+export function GetResourcesExamples() {
   const actionText: string = 'Action';
   const anyText: string = 'Any';
   const dialogSubtitleText: string = 'Add resources to Home';

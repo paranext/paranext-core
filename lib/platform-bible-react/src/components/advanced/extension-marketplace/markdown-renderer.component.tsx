@@ -23,12 +23,7 @@ interface MarkdownRendererProps {
  * @param MarkdownRendererProps
  * @returns A div containing the rendered markdown content.
  */
-export default function MarkdownRenderer({
-  id,
-  markdown,
-  className,
-  anchorTarget,
-}: MarkdownRendererProps) {
+export function MarkdownRenderer({ id, markdown, className, anchorTarget }: MarkdownRendererProps) {
   const options: MarkdownToJSX.Options = useMemo(
     () => ({
       overrides: {
@@ -47,3 +42,5 @@ export default function MarkdownRenderer({
     </div>
   );
 }
+
+export default MarkdownRenderer;

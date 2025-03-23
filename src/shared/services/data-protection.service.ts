@@ -46,9 +46,11 @@ async function initialize(): Promise<void> {
  * connection. Please note that using this service passes the unencrypted string between local
  * processes using the PAPI WebSocket.
  */
-const dataProtectionService = createSyncProxyForAsyncObject<IDataProtectionService>(async () => {
-  await initialize();
-  return networkObject;
-});
+export const dataProtectionService = createSyncProxyForAsyncObject<IDataProtectionService>(
+  async () => {
+    await initialize();
+    return networkObject;
+  },
+);
 
 export default dataProtectionService;

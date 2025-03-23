@@ -1729,7 +1729,7 @@ export declare function toKebabCase(input: string): string;
  *
  * @returns True if a and b are deeply equal; false otherwise
  */
-export function deepEqual(a: unknown, b: unknown): boolean;
+export declare function deepEqual(a: unknown, b: unknown): boolean;
 /**
  * Check if one object is a subset of the other object. "Subset" means that all properties of one
  * object are present in the other object, and if they are present that all values of those
@@ -1755,7 +1755,7 @@ export function deepEqual(a: unknown, b: unknown): boolean;
  * @returns True if `objectWithAllProperties` contains all the properties of
  *   `objectWithPartialProperties` and all values of those properties are deeply equal
  */
-export function isSubset(objectWithAllProperties: unknown, objectWithPartialProperties: unknown): boolean;
+export declare function isSubset(objectWithAllProperties: unknown, objectWithPartialProperties: unknown): boolean;
 /**
  * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
  * object to `null` properties in the JSON string.
@@ -1826,7 +1826,7 @@ export declare const htmlEncode: (str: string) => string;
  * @returns A string representing the current locale. If the locale cannot be determined, the
  *   function returns an empty string.
  */
-export function getCurrentLocale(): string;
+export declare function getCurrentLocale(): string;
 /**
  * Formats a number according to the locale and formatting options of this NumberFormat object
  *
@@ -1839,7 +1839,7 @@ export function getCurrentLocale(): string;
  * @returns String representing the given number formatted according to the locale and formatting
  *   options of this NumberFormat object
  */
-export function formatBytes(fileSize: number, decimals?: number): string;
+export declare function formatBytes(fileSize: number, decimals?: number): string;
 /**
  * Ensures that the given input is returned as an array.
  *
@@ -1855,7 +1855,7 @@ export function formatBytes(fileSize: number, decimals?: number): string;
  * @returns An array containing the input value(s). If the input is `undefined`, an empty array is
  *   returned.
  */
-export function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
+export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 /**
  * Get a localized string representation of the time between two dates
  *

@@ -16,7 +16,7 @@ const defaultPromise = Promise.resolve();
  * a promise is added while another promise in the map for that key is running, the new promise will
  * be chained to the existing one.
  */
-export default class PromiseChainingMap<TKey = string> {
+export class PromiseChainingMap<TKey = string> {
   private readonly map = new Map<TKey, Promise<unknown>>();
   private readonly logger: { warn: (message: string) => void };
 
@@ -75,3 +75,5 @@ export default class PromiseChainingMap<TKey = string> {
     this.map.set(key, newPromise);
   }
 }
+
+export default PromiseChainingMap;

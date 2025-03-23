@@ -1,6 +1,6 @@
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/shadcn-ui/avatar';
 
-export default function AvatarExample() {
+export function AvatarExample() {
   return (
     <Avatar>
       <AvatarImage src="https://github.com/shadcn.png" alt="@shadcn" />
@@ -8,3 +8,5 @@ export default function AvatarExample() {
     </Avatar>
   );
 }
+
+export default AvatarExample;

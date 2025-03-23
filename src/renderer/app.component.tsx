@@ -15,7 +15,7 @@ function Main() {
   );
 }
 
-export default function App() {
+export function App() {
   return (
     <Router>
       <Routes>
@@ -24,3 +24,5 @@ export default function App() {
     </Router>
   );
 }
+
+export default App;

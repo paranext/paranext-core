@@ -1,4 +1,4 @@
-import SearchBar from '@/components/basics/search-bar.component';
+import { SearchBar } from '@/components/basics/search-bar.component';
 import {
   VerticalTabs,
   VerticalTabsContent,
@@ -33,7 +33,7 @@ export type TabNavigationContentSearchProps = {
   searchClassName?: string;
 };
 
-export default function TabNavigationContentSearch({
+export function TabNavigationContentSearch({
   tabList,
   searchValue,
   onSearch,
@@ -69,3 +69,5 @@ export default function TabNavigationContentSearch({
     </div>
   );
 }
+
+export default TabNavigationContentSearch;

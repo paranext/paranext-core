@@ -11,8 +11,8 @@ import {
   WebViewServiceType,
   getWebViewController,
 } from '@shared/services/web-view.service-model';
-import networkObjectService from '@shared/services/network-object.service';
-import networkObjectStatusService from './network-object-status.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import { networkObjectStatusService } from './network-object-status.service';
 
 const onDidOpenWebView: PlatformEvent<OpenWebViewEvent> = getNetworkEvent<OpenWebViewEvent>(
   EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
@@ -58,7 +58,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const webViewService = createSyncProxyForAsyncObject<WebViewServiceType>(
+export const webViewService = createSyncProxyForAsyncObject<WebViewServiceType>(
   async () => {
     await initialize();
     return networkObject;

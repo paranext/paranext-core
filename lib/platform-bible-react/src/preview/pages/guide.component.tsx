@@ -6,12 +6,12 @@ import {
 } from '@/components/basics/tabs-vertical';
 
 import { DirectionProps } from '@/preview/preview-components/direction-toggle.component';
-import DirectionGuide from './guide/direction.guide.component';
-import ThemeColorDisplay from './guide/theme-color-display.component';
-import ThemingGuide from './guide/theming.guide.component';
-import HowToGuide from './guide/howto.component';
+import { DirectionGuide } from './guide/direction.guide.component';
+import { ThemeColorDisplay } from './guide/theme-color-display.component';
+import { ThemingGuide } from './guide/theming.guide.component';
+import { HowToGuide } from './guide/howto.component';
 
-function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
+export function Guide({ direction, onChangeDirection: setDirection }: DirectionProps) {
   return (
     <div>
       <p className="tw-mb-2 tw-text-muted-foreground">

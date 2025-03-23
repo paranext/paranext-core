@@ -16,7 +16,7 @@ import {
 import { getLocalizeKeysForScrollGroupIds, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
 import { handleMenuCommand } from './platform-bible-menu.commands';
-import provideMenuData from './platform-bible-menu.data';
+import { provideMenuData } from './platform-bible-menu.data';
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
 
@@ -27,7 +27,7 @@ const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIdsTop);
 
-export default function PlatformBibleToolbar() {
+export function PlatformBibleToolbar() {
   // Internal state tracker for scroll group in local storage
   const [scrollGroupIdInternal, setScrollGroupIdInternal] = useState<ScrollGroupId>(() =>
     JSON.parse(localStorage.getItem(scrollGroupIdLocalStorageKey) ?? '0'),
@@ -112,3 +112,5 @@ export default function PlatformBibleToolbar() {
     </Toolbar>
   );
 }
+
+export default PlatformBibleToolbar;

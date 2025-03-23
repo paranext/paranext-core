@@ -11,27 +11,28 @@ import {
   getPDPFactoryNetworkObjectNameFromId,
   testingProjectLookupService,
 } from '@shared/models/project-lookup.service-model';
-import networkObjectService from '@shared/services/network-object.service';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
-import IProjectDataProviderFactory, {
+import { networkObjectService } from '@shared/services/network-object.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
+import {
+  IProjectDataProviderFactory,
   PDP_FACTORY_OBJECT_TYPE,
   ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
 import { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { ProjectInterfaces } from 'papi-shared-types';
-import projectLookupService from '@shared/services/project-lookup.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { LayeringProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model';
 
 vi.mock('@shared/services/network-object.service', () => ({
   __esModule: true,
-  default: {
+  networkObjectService: {
     get: vi.fn(),
   },
 }));
 
 vi.mock('@shared/services/network-object-status.service', () => ({
   __esModule: true,
-  default: {
+  networkObjectStatusService: {
     getAllNetworkObjectDetails: vi.fn(),
     // Not a full implementation - we just don't need whatever is returned here
     waitForNetworkObject: vi.fn(async () => {}),
