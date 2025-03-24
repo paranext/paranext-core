@@ -1,13 +1,15 @@
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
+  useDataProvider,
+  useDialogCallback,
+  useLocalizedStrings,
   useProjectData,
   useSetting,
-  useDialogCallback,
-  useDataProvider,
-  useLocalizedStrings,
   useWebViewController,
 } from '@papi/frontend/react';
+import { VerseRef } from '@sillsdev/scripture';
+import type { HelloWorldEvent } from 'hello-world';
 import {
   BookChapterControl,
   Button,
@@ -19,14 +21,12 @@ import {
   TextField,
   useEvent,
 } from 'platform-bible-react';
-import type { WebViewProps } from '@papi/core';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { HelloWorldEvent } from 'hello-world';
 import { debounce, isPlatformError } from 'platform-bible-utils';
-import Clock from './components/clock.component';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Logo from '../../assets/offline.svg';
-import ProjectSettingsEditor from './hello-world-project/project-settings-editor.component';
-import useHelloWorldProjectSettings from './hello-world-project/use-hello-world-project-settings.hook';
+import { Clock } from './components/clock.component';
+import { ProjectSettingsEditor } from './hello-world-project/project-settings-editor.component';
+import { useHelloWorldProjectSettings } from './hello-world-project/use-hello-world-project-settings.hook';
 
 const NAME = 'Hello World React WebView';
 
