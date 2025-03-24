@@ -5,11 +5,17 @@ import {
   DataProviderUpdateInstructions,
   DataTypeNames,
 } from '@shared/models/data-provider.model';
-import IDataProvider from '@shared/models/data-provider.interface';
+import { IDataProvider } from '@shared/models/data-provider.interface';
 import { useEventAsync } from 'platform-bible-react';
-import { useMemo, useRef, useState } from 'react';
-import { isString, PlatformEventAsync, PlatformEventHandler } from 'platform-bible-utils';
-import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  EventRollingTimeCounter,
+  isString,
+  PlatformEventAsync,
+  PlatformEventHandler,
+} from 'platform-bible-utils';
+import { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
+import { logger } from '@shared/services/logger.service';
 
 /**
  * The final function called as part of the `useData` hook that is the actual React hook
@@ -106,6 +112,25 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       ),
       boolean,
     ] => {
+      // 100+ renders within 1 second is an arbitrary threshold based on observing a dev environment
+      const maxRenderRollingCount = 100;
+      const minRenderRollingTimeMs = 1000;
+      const renderCountRef = useRef(new EventRollingTimeCounter(maxRenderRollingCount));
+      const tooManyRenders = useRef(false);
+      useEffect(() => {
+        renderCountRef.current.recordInstance();
+        if (renderCountRef.current.hasViolatedThreshold(minRenderRollingTimeMs)) {
+          logger.warn(
+            `Data of type ${String(dataType)} was updated ${maxRenderRollingCount} times in the last ${minRenderRollingTimeMs} milliseconds. Please ensure hook calls and their parameters are memoized.`,
+          );
+          tooManyRenders.current = true;
+        }
+      });
+
+      if (tooManyRenders.current) {
+        return [defaultValue, undefined, false];
+      }
+
       // Use subscriberOptions as a ref so it doesn't update dependency arrays
       const subscriberOptionsRef = useRef(subscriberOptions);
       subscriberOptionsRef.current = subscriberOptions;
@@ -129,7 +154,7 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                 const unsub =
                   // We need any here because for some reason IDataProvider loses its ability to
                   // index subscribe. Assert to specified generic type.
-                  /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
+                  /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion */
                   await (
                     (dataProvider as any)[
                       `subscribe${dataType as DataTypeNames<TDataTypes>}`
@@ -169,7 +194,7 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
             ? async (newData: TDataTypes[TDataType]['setData']) =>
                 // We need any here because for some reason IDataProvider loses its ability to index
                 // subscribe. Assert to specified generic type.
-                /* eslint-disable @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion */
+                /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion */
                 (
                   (dataProvider as any)[
                     `set${dataType as DataTypeNames<TDataTypes>}`

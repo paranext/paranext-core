@@ -1,6 +1,6 @@
 import { Usj, USJ_TYPE, USJ_VERSION } from '@biblionexus-foundation/scripture-utilities';
 import { VerseRef } from '@sillsdev/scripture';
-import UsjReaderWriter from './usj-reader-writer';
+import { UsjReaderWriter } from './usj-reader-writer';
 
 const usj: Usj = JSON.parse(`{
   "content": [

@@ -1,4 +1,4 @@
-import DateTimeFormat from './intl-date-time-format';
+import { DateTimeFormat } from './intl-date-time-format';
 
 /**
  * Retrieves the current locale of the user's environment.
