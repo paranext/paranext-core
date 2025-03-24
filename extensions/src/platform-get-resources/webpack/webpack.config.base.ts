@@ -27,9 +27,13 @@ const configBase: webpack.Configuration = {
   // Use require for externals as it is the only type of importing that Platform.Bible supports
   // https://webpack.js.org/configuration/externals/#externalstypecommonjs
   externalsType: LIBRARY_TYPE,
-  // Modules that Platform.Bible supplies to extensions https://webpack.js.org/configuration/externals/
-  // All other dependencies must be bundled into the extension
+  // Modules that Platform.Bible supplies to extensions. All other dependencies must be bundled into
+  // the extension. Read more at https://github.com/paranext/paranext/wiki/Module-import-restrictions
+  // https://webpack.js.org/configuration/externals/
   externals: [
+    // Built-in node modules that are not blocked by Platform.Bible
+    'crypto',
+    // Additional modules provided by Platform.Bible
     'react',
     'react/jsx-runtime',
     'react-dom',
