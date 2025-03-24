@@ -14,7 +14,7 @@ export type BookChapterInputProps = {
 };
 
 // Shadcn Input sets type to "button"- HAVE to prop spread before setting type
-const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
+export const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputProps>(
   (
     {
       handleSearch,

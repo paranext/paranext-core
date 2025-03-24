@@ -16,7 +16,7 @@ import { useEffect } from 'react';
  *   WARNING: MUST BE STABLE - const or wrapped in useCallback. The reference must not be updated
  *   every render
  */
-const useEvent = <T>(
+export const useEvent = <T>(
   event: PlatformEvent<T> | undefined,
   eventHandler: PlatformEventHandler<T>,
 ) => {

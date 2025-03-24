@@ -1,6 +1,6 @@
 # paranext-core/extensions
 
-Official extensions provided by Paranext.
+Extensions included as part of Platform.Bible. Any products derived from Platform.Bible will most likely also include these extensions, although this is not strictly required.
 
 <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 
@@ -54,7 +54,7 @@ Note: if you [update this repo and extensions from the templates](#to-update-thi
 
 ## Summary
 
-This is a Webpack project configured to build Platform.Bible extensions. The general file structure is as follows:
+This is a Webpack project configured to build extensions included as part of Platform.Bible. The general file structure is as follows:
 
 - `src/` contains the source code for all extensions
   - Each sub-folder in `src/` with a `manifest.json` in it is an extension
@@ -150,7 +150,7 @@ Alternatively, you can create a new extension manually:
 ```bash
 git fetch paranext-extension-template main
 
-git subtree add --prefix src/<extension-name> paranext-extension-template main --squash
+git subtree add --prefix extensions/src/<extension-name> paranext-extension-template main --squash
 ```
 
 After running these commands, run a regex find and replace inside the new extension folder to fix
@@ -166,7 +166,7 @@ information.
 
 ## To update this folder and extensions from the templates
 
-This folder is forked from [`paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template), and its extensions are derived from [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template). Both are updated periodically and will sometimes receive updates that help with breaking changes on [`paranext-core`](https://github.com/paranext/paranext-core). We recommend you periodically update this folder and extensions by merging the latest template updates into them.
+This folder is forked from [`paranext-multi-extension-template`](https://github.com/paranext/paranext-multi-extension-template), and its extensions are derived from [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template). Both are updated periodically and will sometimes receive updates that help with breaking changes on [`paranext-core`](https://github.com/paranext/paranext-core). This folder and its extensions should be periodically updated by merging the latest template updates into them.
 
 To update this folder including all extensions to have the latest updates and upgrades from the templates, make sure this repo has no working changes, then run the following `npm` script:
 
@@ -242,7 +242,7 @@ Please see the wiki's [Tailwind CSS in Web Views](https://github.com/paranext/pa
 
 - Adding `?inline` to the end of a file import causes that file to be imported as a string after being transformed by Webpack loaders but before bundling dependencies (except if that file is a React WebView file, in which case dependencies will be bundled). The contents of the file will be on the file's default export.
   - Ex: `import myFile from './file-path?inline`
-- Adding `?raw` to the end of a file import treats a file the same way as `?inline` except that it will be imported directly without being transformed by webpack.
+- Adding `?raw` to the end of a file import treats a file the same way as `?inline` except that it will be imported directly without being transformed by Webpack.
 
 ### Misc features
 

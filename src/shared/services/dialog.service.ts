@@ -12,7 +12,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const dialogService: DialogService = {
+export const dialogService: DialogService = {
   showDialog: async (...args) => {
     await initialize();
     return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'showDialog'), ...args);

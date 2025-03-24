@@ -1,10 +1,10 @@
-import Checklist from '@/components/basics/checklist.component';
+import { Checklist } from '@/components/basics/checklist.component';
 import { Card, CardContent } from '@/components/shadcn-ui/card';
 import { useState } from 'react';
 
 const listItems: string[] = ['Box A', 'Box B', 'Box C', 'Box D', 'Box E', 'Box F'];
 
-export default function ChecklistExamples() {
+export function ChecklistExamples() {
   const [selectedListItems, setSelectedListItems] = useState<string[]>(['Box B', 'Box E']);
 
   const handleSelectListItem = (item: string, selected: boolean): void => {
@@ -27,3 +27,5 @@ export default function ChecklistExamples() {
     </Card>
   );
 }
+
+export default ChecklistExamples;

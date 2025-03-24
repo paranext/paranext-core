@@ -13,8 +13,10 @@
  * @returns An array containing the input value(s). If the input is `undefined`, an empty array is
  *   returned.
  */
-export default function ensureArray<T>(maybeArray: T | T[] | undefined): T[] {
+export function ensureArray<T>(maybeArray: T | T[] | undefined): T[] {
   if (!maybeArray) return [];
 
   return Array.isArray(maybeArray) ? maybeArray : [maybeArray];
 }
+
+export default ensureArray;

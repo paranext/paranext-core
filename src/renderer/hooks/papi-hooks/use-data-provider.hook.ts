@@ -16,7 +16,7 @@ import IDataProvider from '@shared/models/data-provider.interface';
 
 // Assert to the specific data provider types for this hook
 // eslint-disable-next-line no-type-assertion/no-type-assertion
-const useDataProvider = createUseNetworkObjectHook(
+export const useDataProvider = createUseNetworkObjectHook(
   // Type assert to more general function signature because the hook wants it to be more general.
   // This is fine in this case since we're also casting the hook itself to the correct specific type
   // eslint-disable-next-line no-type-assertion/no-type-assertion

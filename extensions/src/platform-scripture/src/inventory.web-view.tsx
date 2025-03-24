@@ -6,10 +6,10 @@ import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { VerseRef } from '@sillsdev/scripture';
 import papi from '@papi/frontend';
-import CharacterInventory from './checks/inventories/character-inventory.component';
-import RepeatedWordsInventory from './checks/inventories/repeated-words-inventory.component';
-import MarkerInventory from './checks/inventories/marker-inventory.component';
-import PunctuationInventory from './checks/inventories/punctuation-inventory.component';
+import { CharacterInventory } from './checks/inventories/character-inventory.component';
+import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inventory.component';
+import { MarkerInventory } from './checks/inventories/marker-inventory.component';
+import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
 
 /**
  * Get scripture text for the provided scope and reference for the specified projectId

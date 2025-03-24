@@ -3,7 +3,7 @@ import {
   IProjectSettingsService,
   projectSettingsServiceObjectToProxy,
 } from '@shared/services/project-settings.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   createSyncProxyForAsyncObject,
   Localized,
@@ -106,9 +106,12 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const projectSettingsService = createSyncProxyForAsyncObject<IProjectSettingsService>(async () => {
-  await initialize();
-  return networkObject;
-}, projectSettingsServiceObjectToProxy);
+export const projectSettingsService = createSyncProxyForAsyncObject<IProjectSettingsService>(
+  async () => {
+    await initialize();
+    return networkObject;
+  },
+  projectSettingsServiceObjectToProxy,
+);
 
 export default projectSettingsService;

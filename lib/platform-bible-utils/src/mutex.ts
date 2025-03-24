@@ -24,6 +24,6 @@ import { Mutex as AsyncMutex } from 'async-mutex';
  *
  * See [`async-mutex`](https://www.npmjs.com/package/async-mutex) for more information.
  */
-class Mutex extends AsyncMutex {}
+export class Mutex extends AsyncMutex {}
 
 export default Mutex;

@@ -160,7 +160,7 @@ const menuData = {
   ],
 };
 
-export default function TabDropdownMenuExample() {
+export function TabDropdownMenuExample() {
   return (
     <TabDropdownMenu
       commandHandler={(command) => console.log('Run command: ', command)}
@@ -170,3 +170,5 @@ export default function TabDropdownMenuExample() {
     />
   );
 }
+
+export default TabDropdownMenuExample;

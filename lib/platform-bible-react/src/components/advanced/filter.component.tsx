@@ -2,7 +2,7 @@ import { Badge } from '@/components/shadcn-ui/badge';
 import { Button } from '@/components/shadcn-ui/button';
 import { Label } from '@/components/shadcn-ui/label';
 import { X } from 'lucide-react';
-import MultiSelectComboBox, { MultiSelectComboBoxProps } from './multi-select-combo-box.component';
+import { MultiSelectComboBox, MultiSelectComboBoxProps } from './multi-select-combo-box.component';
 
 interface FilterProps extends MultiSelectComboBoxProps {
   /**
@@ -18,7 +18,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * selected options. A placeholder text must be provided through 'badgesPlaceholder'. This will be
  * displayed if no items are selected,
  */
-function Filter({
+export function Filter({
   entries,
   getEntriesCount,
   selected,

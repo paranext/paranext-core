@@ -1,9 +1,9 @@
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 
 // import { Download, ArrowDownFromLine, Delete } from 'lucide-react';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { useMemo } from 'react';
-import ProjectList, {
+import {
   fetchProjects,
   // Project,
 } from '@renderer/components/projects/project-list.component';
@@ -24,7 +24,7 @@ function downloadProject(projectId: string) {
 //   logger.info(`Deleting Project ${project.name}`);
 // }
 
-export default function DownloadUpdateProjectTab() {
+export function DownloadUpdateProjectTab() {
   const downloadableProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadable%';
   const downloadableProjectsHeaderKey = '%downloadUpdateProjectTab_listHeader_downloadable%';
   const downloadedProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloaded%';
@@ -105,3 +105,5 @@ export const loadDownloadUpdateProjectTab = (savedTabInfo: SavedTabInfo): TabInf
     content: <DownloadUpdateProjectTab />,
   };
 };
+
+export default DownloadUpdateProjectTab;

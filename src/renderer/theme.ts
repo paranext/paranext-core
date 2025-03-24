@@ -1,4 +1,4 @@
-const THEME = ''; // currently available: '', 'dark', 'paratext-light', 'paratext-dark'
+export const THEME = ''; // currently available: '', 'dark', 'paratext-light', 'paratext-dark'
 
 export const SCROLLBAR_STYLES = `
   ::-webkit-scrollbar {

@@ -7,7 +7,7 @@ import {
   JSONRPCServerAndClient,
   JSONRPCServerMiddlewareNext,
 } from 'json-rpc-2.0';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import {
   ConnectionStatus,
@@ -32,7 +32,7 @@ import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
  *
  * Created by any process that connects to the websocket server owned by main
  */
-export default class RpcClient implements IRpcMethodRegistrar {
+export class RpcClient implements IRpcMethodRegistrar {
   connectionStatus: ConnectionStatus = ConnectionStatus.Disconnected;
   private ws: WebSocket | undefined;
   private requestId: number = 1;
@@ -224,3 +224,5 @@ export default class RpcClient implements IRpcMethodRegistrar {
     }
   }
 }
+
+export default RpcClient;

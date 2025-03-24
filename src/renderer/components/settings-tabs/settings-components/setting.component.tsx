@@ -1,7 +1,7 @@
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
-import localizationDataService from '@shared/services/localization.service';
-import logger from '@shared/services/logger.service';
+import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 import { SettingDataTypes } from '@shared/services/settings.service-model';
 import {
   ProjectSettingNames,
@@ -116,7 +116,7 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
  * Renders a setting component based on the type of setting (string, number, boolean, or object) and
  * includes validating the setting and displaying errors
  */
-export default function Setting({
+export function Setting({
   settingKey,
   setting,
   setSetting,
@@ -154,7 +154,7 @@ export default function Setting({
     return languages;
   }, [setting, settingKey]);
 
-  const [languages] = useData(localizationDataService.dataProviderName).AvailableInterfaceLanguages(
+  const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
     undefined,
     defaultLanguages,
   );
@@ -294,3 +294,5 @@ export default function Setting({
     </div>
   );
 }
+
+export default Setting;
