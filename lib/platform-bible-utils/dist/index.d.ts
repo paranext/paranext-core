@@ -291,6 +291,38 @@ export declare class DocumentCombiner {
 	 */
 	protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike;
 }
+/** Class that tracks how long it has taken the last N events to occur */
+export declare class EventRollingTimeCounter {
+	/** The ring buffer to store times */
+	private readonly ringBuffer;
+	/** The size of the ring buffer */
+	private readonly bufferSize;
+	/** The next location where a time will be written */
+	private writerIndex;
+	/** The location where the first time in the buffer will be read */
+	private readerIndex;
+	/** The most recent difference in time between the newest and oldest events */
+	private lastTimeDifference;
+	/** How many instances in total have been recorded */
+	private totalInstanceCount;
+	/**
+	 * Create a new instance of the InstanceTimeCounter class
+	 *
+	 * @param bufferSize - Maximum number of instances to track
+	 */
+	constructor(bufferSize: number);
+	/** Get the total number of instances that have been recorded */
+	get totalInstances(): number;
+	/** Add a new time measurement for an instance of an event */
+	recordInstance(): void;
+	/**
+	 * Check if the time between the last N events is less than the provided threshold
+	 *
+	 * @param minRollingTimeMs - Minimum time that must have passed when the last N events occurred
+	 * @returns - True if the threshold is violated, false otherwise
+	 */
+	hasViolatedThreshold(minRollingTimeMs: number): boolean;
+}
 /**
  * Class that allows calling asynchronous functions multiple times at once while only running one at
  * a time.

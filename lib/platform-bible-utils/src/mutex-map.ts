@@ -1,4 +1,4 @@
-import Mutex from './mutex';
+import { Mutex } from './mutex';
 
 /** Map of {@link Mutex}es that automatically (lazily) generates a new {@link Mutex} for any new key */
 export class MutexMap {

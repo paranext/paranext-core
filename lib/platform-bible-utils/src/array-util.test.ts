@@ -1,4 +1,4 @@
-import ensureArray from './array-util';
+import { ensureArray } from './array-util';
 
 describe('ensureArray', () => {
   it('should return an empty array when input is undefined', () => {

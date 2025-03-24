@@ -1,4 +1,4 @@
-import DocumentCombiner, { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
+import { DocumentCombiner, DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 
 export class NonValidatingDocumentCombiner extends DocumentCombiner {
   // Making the protected base constructor public

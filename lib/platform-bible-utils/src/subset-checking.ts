@@ -1,4 +1,4 @@
-import deepEqual from './equality-checking';
+import { deepEqual } from './equality-checking';
 
 /**
  * Check if one object is a subset of the other object. "Subset" means that all properties of one

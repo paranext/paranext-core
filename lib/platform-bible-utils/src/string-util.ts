@@ -7,7 +7,7 @@ import {
   limit as stringzLimit,
   substr as stringzSubstr,
 } from 'stringz';
-import ensureArray from './array-util';
+import { ensureArray } from './array-util';
 import { isString } from './util';
 
 /**

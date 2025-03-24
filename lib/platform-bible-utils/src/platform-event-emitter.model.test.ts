@@ -1,4 +1,4 @@
-import PlatformEventEmitter from './platform-event-emitter.model';
+import { PlatformEventEmitter } from './platform-event-emitter.model';
 
 describe('unsubscribing', () => {
   it('does not prevent other subscribers from running when unsubscribing in a callback', () => {

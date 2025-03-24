@@ -1,15 +1,16 @@
 // Classes
-export { default as AsyncVariable } from './async-variable';
-export { default as Collator } from './intl-collator';
-export { default as DateTimeFormat } from './intl-date-time-format';
-export { default as DocumentCombiner } from './document-combiner';
-export { default as Mutex } from './mutex';
-export { default as MutexMap } from './mutex-map';
-export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
-export { default as NumberFormat } from './intl-number-format';
-export { default as PlatformEventEmitter } from './platform-event-emitter.model';
-export { default as PromiseChainingMap } from './promise-chaining-map';
-export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
+export { AsyncVariable } from './async-variable';
+export { Collator } from './intl-collator';
+export { DateTimeFormat } from './intl-date-time-format';
+export { DocumentCombiner } from './document-combiner';
+export { EventRollingTimeCounter } from './event-rolling-time-counter';
+export { Mutex } from './mutex';
+export { MutexMap } from './mutex-map';
+export { NonValidatingDocumentCombiner } from './non-validating-document-combiner';
+export { NumberFormat } from './intl-number-format';
+export { PlatformEventEmitter } from './platform-event-emitter.model';
+export { PromiseChainingMap } from './promise-chaining-map';
+export { UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
 export { PLATFORM_ERROR_VERSION } from './platform-error';
