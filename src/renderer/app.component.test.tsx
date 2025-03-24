@@ -1,7 +1,7 @@
+import { App } from '@renderer/app.component';
+import { ProcessType } from '@shared/global-this.model';
 import '@testing-library/jest-dom';
 import { render } from '@testing-library/react';
-import { vi } from 'vitest';
-import { ProcessType } from '@shared/global-this.model';
 import { PlatformEventEmitter } from 'platform-bible-utils';
 import { App } from '@renderer/app.component';
 

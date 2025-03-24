@@ -1,10 +1,11 @@
-import { IProjectDataProviderEngine, IProjectDataProviderEngineFactory } from '@papi/core';
 import papi, { LayeringProjectDataProviderEngineFactory } from '@papi/backend';
+import { IProjectDataProviderEngine, IProjectDataProviderEngineFactory } from '@papi/core';
 import { escapeStringRegexp } from 'platform-bible-utils';
-import ScriptureExtenderProjectDataProviderEngine, {
+import {
   SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES,
   SCRIPTURE_EXTENDER_PROJECT_INTERFACES,
   ScriptureExtenderOverlayPDPs,
+  ScriptureExtenderProjectDataProviderEngine,
 } from './platform-scripture-extender-pdpe.model';
 
 /** PDP Factory ID for the Scripture Extender PDPF */

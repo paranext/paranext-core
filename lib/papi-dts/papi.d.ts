@@ -1698,10 +1698,10 @@ declare module 'shared/services/network-object.service' {
 }
 declare module 'shared/models/network-object.model' {
   import {
+    CanHaveOnDidDispose,
+    CannotHaveOnDidDispose,
     Dispose,
     OnDidDispose,
-    CannotHaveOnDidDispose,
-    CanHaveOnDidDispose,
   } from 'platform-bible-utils';
   /**
    * An object of this type is returned from {@link networkObjectService.get}.
@@ -2350,9 +2350,9 @@ declare module 'shared/models/data-provider-engine.model' {
   }
 }
 declare module 'shared/models/extract-data-provider-data-types.model' {
-  import IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
-  import DataProviderInternal from 'shared/models/data-provider.model';
+  import { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import { DataProviderInternal } from 'shared/models/data-provider.model';
   /**
    * Get the `DataProviderDataTypes` associated with the `IDataProvider` - essentially, returns
    * `TDataTypes` from `IDataProvider<TDataTypes>`.
@@ -4396,10 +4396,10 @@ declare module 'shared/services/project-lookup.service' {
   export default projectLookupService;
 }
 declare module 'shared/models/project-data-provider-engine-factory.model' {
-  import { ProjectInterfaces } from 'papi-shared-types';
+  import { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
   import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
-  import { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
+  import { ProjectInterfaces } from 'papi-shared-types';
   /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
    * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
@@ -4543,11 +4543,12 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
   }
 }
 declare module 'shared/models/project-data-provider-engine.model' {
-  import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
-  import IDataProviderEngine, {
+  import {
     DataProviderEngine,
+    IDataProviderEngine,
   } from 'shared/models/data-provider-engine.model';
   import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import { ProjectInterfaceDataTypes, ProjectInterfaces } from 'papi-shared-types';
   import { UnionToIntersection } from 'platform-bible-utils';
   /**
    * The object to return from
@@ -7544,12 +7545,12 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   export default useScrollGroupScrRef;
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
-  import { SettingTypes } from 'papi-shared-types';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { SettingDataTypes } from 'shared/services/settings.service-model';
+  import { SettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
    * and gets updated when the setting is changed by others.
@@ -7743,8 +7744,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   export default useProjectData;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
-  import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
    * subscribers when the project setting changes and gets updated when the project setting is changed
@@ -7831,8 +7832,8 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   export default useDataProviderMulti;
 }
 declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
-  import { LocalizationData } from 'shared/services/localization.service-model';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { LocalizationData } from 'shared/services/localization.service-model';
   import { LocalizeKey } from 'platform-bible-utils';
   /**
    * Gets localizations on the papi.
@@ -7864,9 +7865,9 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   export default useLocalizedStrings;
 }
 declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
-  import { WebViewControllers } from 'papi-shared-types';
   import { NetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
+  import { WebViewControllers } from 'papi-shared-types';
   /**
    * Gets a Web View Controller with specified provider name
    *
@@ -7972,22 +7973,22 @@ declare module '@papi/frontend' {
    *
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  import * as commandService from 'shared/services/command.service';
-  import { PapiNetworkService } from 'shared/services/network.service';
-  import { WebViewServiceType } from 'shared/services/web-view.service-model';
-  import { InternetService } from 'shared/services/internet.service';
-  import { DataProviderService } from 'shared/services/data-provider.service';
-  import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
-  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
-  import { ISettingsService } from 'shared/services/settings.service-model';
-  import { DialogService } from 'shared/services/dialog.service-model';
   import * as papiReact from '@papi/frontend/react';
-  import PapiRendererWebSocket from 'renderer/services/renderer-web-socket.service';
-  import { IMenuDataService } from 'shared/services/menu-data.service-model';
-  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
-  import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { PapiRendererWebSocket } from 'renderer/services/renderer-web-socket.service';
   import { INotificationService } from 'shared/models/notification.service-model';
-  import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
+  import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
+  import * as commandService from 'shared/services/command.service';
+  import { DataProviderService } from 'shared/services/data-provider.service';
+  import { DialogService } from 'shared/services/dialog.service-model';
+  import { InternetService } from 'shared/services/internet.service';
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { PapiNetworkService } from 'shared/services/network.service';
+  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
+  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
+  import { ISettingsService } from 'shared/services/settings.service-model';
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
+  import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;

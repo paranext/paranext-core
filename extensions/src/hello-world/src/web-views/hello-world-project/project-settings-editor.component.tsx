@@ -1,7 +1,7 @@
-import { ComboBox } from 'platform-bible-react';
 import { HTMLColorNames } from 'hello-world';
-import useHelloWorldProjectSettings from './use-hello-world-project-settings.hook';
+import { ComboBox } from 'platform-bible-react';
 import { HTML_COLOR_NAMES } from '../../util';
+import { useHelloWorldProjectSettings } from './use-hello-world-project-settings.hook';
 
 export function ProjectSettingsEditor({
   headerSize,
