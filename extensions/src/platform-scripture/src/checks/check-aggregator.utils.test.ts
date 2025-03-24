@@ -1,4 +1,3 @@
-import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   aggregateProjectIdsByCheckId,
   aggregateRanges,
@@ -44,7 +43,7 @@ describe('aggregateRanges', () => {
     ]);
 
     const result = aggregateRanges(subscriptions);
-    // Using JSON.stringify here because the constructors for VerseRef set different internal fields
+    // Using JSON.stringify here because the constructors for SerializedVerseRef set different internal fields
     expect(JSON.stringify(result)).toEqual(
       JSON.stringify([
         {
@@ -76,7 +75,7 @@ describe('aggregateRanges', () => {
     ]);
 
     const result = aggregateRanges(subscriptions);
-    // Using JSON.stringify here because the constructors for VerseRef set different internal fields
+    // Using JSON.stringify here because the constructors for SerializedVerseRef set different internal fields
     expect(JSON.stringify(result)).toEqual(
       JSON.stringify([{ start: { book: 'GEN', chapterNum: 1, verseNum: 1 }, projectId: 'proj1' }]),
     );

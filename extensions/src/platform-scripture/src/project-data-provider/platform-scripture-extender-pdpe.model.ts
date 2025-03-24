@@ -3,7 +3,7 @@
 
 import papi, { ProjectDataProviderEngine, logger } from '@papi/backend';
 import { DataProviderUpdateInstructions, IProjectDataProviderEngine } from '@papi/core';
-import { VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import { UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
 import {
@@ -64,7 +64,7 @@ class ScriptureExtenderProjectDataProviderEngine
     this.bookUSXUnsubscriberPromise = this.pdps['platformScripture.USX_Book'].subscribeBookUSX(
       // Just picked a key for no reason in particular because we don't need anything in particular
       // here because we're listening for all updates
-      new VerseRef(1, 1, 1),
+      { book: 'GEN', chapterNum: 1, verseNum: 1 },
       () => {
         this.notifyUpdate('BookUSJ');
       },
@@ -88,7 +88,7 @@ class ScriptureExtenderProjectDataProviderEngine
     ].subscribeChapterUSX(
       // Just picked a key for no reason in particular because we don't need anything in particular
       // here because we're listening for all updates
-      new VerseRef(1, 1, 1),
+      { book: 'GEN', chapterNum: 1, verseNum: 1 },
       () => {
         this.notifyUpdate('ChapterUSJ');
       },
@@ -108,7 +108,7 @@ class ScriptureExtenderProjectDataProviderEngine
     this.verseUSXUnsubscriberPromise = this.pdps['platformScripture.USX_Verse'].subscribeVerseUSX(
       // Just picked a key for no reason in particular because we don't need anything in particular
       // here because we're listening for all updates
-      new VerseRef(1, 1, 1),
+      { book: 'GEN', chapterNum: 1, verseNum: 1 },
       () => {
         this.notifyUpdate('VerseUSJ');
       },
@@ -130,7 +130,7 @@ class ScriptureExtenderProjectDataProviderEngine
   // and sending out update events in the constructor
   @papi.dataProviders.decorators.doNotNotify
   async setBookUSJ(
-    verseRef: VerseRef,
+    verseRef: SerializedVerseRef,
     bookUsj: Usj,
   ): Promise<DataProviderUpdateInstructions<USJBookProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Book'].setBookUSX(
@@ -145,7 +145,7 @@ class ScriptureExtenderProjectDataProviderEngine
   // and sending out update events in the constructor
   @papi.dataProviders.decorators.doNotNotify
   async setChapterUSJ(
-    verseRef: VerseRef,
+    verseRef: SerializedVerseRef,
     chapterUsj: Usj,
   ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>> {
     const didSucceed = await this.pdps['platformScripture.USX_Chapter'].setChapterUSX(
@@ -162,17 +162,17 @@ class ScriptureExtenderProjectDataProviderEngine
     throw new Error('Cannot call setVerseUSJ, use setChapterUSJ or setBookUSJ instead');
   }
 
-  async getBookUSJ(verseRef: VerseRef): Promise<Usj | undefined> {
+  async getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
     return usx ? usxStringToUsj(usx) : undefined;
   }
 
-  async getChapterUSJ(verseRef: VerseRef): Promise<Usj | undefined> {
+  async getChapterUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef);
     return usx ? usxStringToUsj(usx) : undefined;
   }
 
-  async getVerseUSJ(verseRef: VerseRef): Promise<Usj | undefined> {
+  async getVerseUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined> {
     const usx = await this.pdps['platformScripture.USX_Verse'].getVerseUSX(verseRef);
     return usx ? usxStringToUsj(usx) : undefined;
   }

@@ -47,7 +47,8 @@ declare module 'platform-scripture-editor' {
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
    * {@link CheckLocation} but using a `SerializedVerseRef` instead of a `VerseRef` since `VerseRef`
-   * doesn't travel across processes well TODO: This might need some more thought?
+   * doesn't travel across processes well TODO: This might need some more thought? // TODO: This
+   * comment might need to be updated?
    *
    * Also added `bookNum` and `chapterNum` to the `jsonPath` result
    */

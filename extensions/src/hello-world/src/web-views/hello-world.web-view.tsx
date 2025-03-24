@@ -1,4 +1,3 @@
-import { SerializedVerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,

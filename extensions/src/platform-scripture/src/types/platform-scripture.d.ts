@@ -1,5 +1,5 @@
 declare module 'platform-scripture' {
-  import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
   import type {
     DataProviderDataType,
     DataProviderSubscriberOptions,
@@ -167,10 +167,10 @@ declare module 'platform-scripture' {
   export type IUSFMBookProjectDataProvider =
     IProjectDataProvider<USFMBookProjectInterfaceDataTypes> & {
       /** Gets the "raw" USFM data for the specified book */
-      getBookUSFM(verseRef: VerseRef): Promise<string | undefined>;
+      getBookUSFM(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USFM data for the specified book */
       setBookUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usfm: string,
       ): Promise<DataProviderUpdateInstructions<USFMBookProjectInterfaceDataTypes>>;
       /**
@@ -182,7 +182,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usfm: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -192,10 +192,10 @@ declare module 'platform-scripture' {
   export type IUSFMChapterProjectDataProvider =
     IProjectDataProvider<USFMChapterProjectInterfaceDataTypes> & {
       /** Gets the "raw" USFM data for the specified chapter */
-      getChapterUSFM(verseRef: VerseRef): Promise<string | undefined>;
+      getChapterUSFM(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USFM data for the specified chapter */
       setChapterUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usfm: string,
       ): Promise<DataProviderUpdateInstructions<USFMChapterProjectInterfaceDataTypes>>;
       /**
@@ -207,7 +207,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usfm: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -217,10 +217,10 @@ declare module 'platform-scripture' {
   export type IUSFMVerseProjectDataProvider =
     IProjectDataProvider<USFMVerseProjectInterfaceDataTypes> & {
       /** Gets the "raw" USFM data for the specified verse */
-      getVerseUSFM(verseRef: VerseRef): Promise<string | undefined>;
+      getVerseUSFM(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USFM data for the specified verse */
       setVerseUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usfm: string,
       ): Promise<DataProviderUpdateInstructions<USFMVerseProjectInterfaceDataTypes>>;
       /**
@@ -232,7 +232,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usfm: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -242,10 +242,10 @@ declare module 'platform-scripture' {
   export type IUSXBookProjectDataProvider =
     IProjectDataProvider<USXBookProjectInterfaceDataTypes> & {
       /** Gets the "raw" USX data for the specified book */
-      getBookUSX(verseRef: VerseRef): Promise<string | undefined>;
+      getBookUSX(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USX data for the specified book */
       setBookUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usx: string,
       ): Promise<DataProviderUpdateInstructions<USXBookProjectInterfaceDataTypes>>;
       /**
@@ -257,7 +257,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usx: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -267,10 +267,10 @@ declare module 'platform-scripture' {
   export type IUSXChapterProjectDataProvider =
     IProjectDataProvider<USXChapterProjectInterfaceDataTypes> & {
       /** Gets the Scripture text in USX format for the specified chapter */
-      getChapterUSX(verseRef: VerseRef): Promise<string | undefined>;
+      getChapterUSX(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the Scripture text in USX format for the specified chapter */
       setChapterUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usx: string,
       ): Promise<DataProviderUpdateInstructions<USXChapterProjectInterfaceDataTypes>>;
       /**
@@ -282,7 +282,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usx: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -292,10 +292,10 @@ declare module 'platform-scripture' {
   export type IUSXVerseProjectDataProvider =
     IProjectDataProvider<USXVerseProjectInterfaceDataTypes> & {
       /** Gets the "raw" USX data for the specified verse */
-      getVerseUSX(verseRef: VerseRef): Promise<string | undefined>;
+      getVerseUSX(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USX data for the specified verse */
       setVerseUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usx: string,
       ): Promise<DataProviderUpdateInstructions<USXVerseProjectInterfaceDataTypes>>;
       /**
@@ -307,7 +307,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usx: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -323,7 +323,7 @@ declare module 'platform-scripture' {
        * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
        * change over time.
        */
-      getBookUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
+      getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified book
        *
@@ -332,7 +332,7 @@ declare module 'platform-scripture' {
        * change over time.
        */
       setBookUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usj: Usj,
       ): Promise<DataProviderUpdateInstructions<USJBookProjectInterfaceDataTypes>>;
       /**
@@ -348,7 +348,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -369,7 +369,7 @@ declare module 'platform-scripture' {
        * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
        */
       setChapterUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usj: Usj,
       ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>>;
       /**
@@ -383,7 +383,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -399,7 +399,7 @@ declare module 'platform-scripture' {
        * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
        * change over time.
        */
-      getVerseUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
+      getVerseUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified verse
        *
@@ -408,7 +408,7 @@ declare module 'platform-scripture' {
        * change over time.
        */
       setVerseUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usj: Usj,
       ): Promise<DataProviderUpdateInstructions<USJVerseProjectInterfaceDataTypes>>;
       /**
@@ -424,7 +424,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -440,13 +440,13 @@ declare module 'platform-scripture' {
        * Gets the data in plain text form for the specified verse. Plain text does not include
        * notes, figures, and other things that are not considered "verse text"
        */
-      getVersePlainText(verseRef: VerseRef): Promise<Usj | undefined>;
+      getVersePlainText(verseRef: SerializedVerseRef): Promise<Usj | undefined>;
       /**
        * Sets the data in plain text form for the specified verse. Plain text does not include
        * notes, figures, and other things that are not considered "verse text"
        */
       setVersePlainText(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         data: string,
       ): Promise<DataProviderUpdateInstructions<PlainTextVerseProjectInterfaceDataTypes>>;
       /**
@@ -459,7 +459,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVersePlainText(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;

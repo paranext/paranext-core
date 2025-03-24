@@ -243,8 +243,9 @@ export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComm
   threads.forEach((thread) => {
     const lc = thread.legacyComment;
     const verseRef: VerseRef = new VerseRef(lc.verseRef);
+    const serializedVerseRef = verseRef.toJSON();
     // BUG: PT9 comments give offset in USFM space, not verse text space
-    let start = usjRW.verseRefToUsjContentLocation(verseRef, lc.startPosition);
+    let start = usjRW.verseRefToUsjContentLocation(serializedVerseRef, lc.startPosition);
     const startAnchorInserted = insertAnchorIfNeeded(usjRW, 'start', thread.id, start);
     if (!startAnchorInserted) {
       // If the start anchor is there already, see if the end anchor is there, too
