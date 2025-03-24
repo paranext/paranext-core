@@ -35,7 +35,7 @@ import {
   slice,
   toKebabCase,
 } from 'platform-bible-utils';
-import LogError from '@shared/log-error.model';
+import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import { APP_URI_SCHEME, PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import {

@@ -1,12 +1,12 @@
+import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
 import localizationDataService from '@shared/services/localization.service';
 import {
   LocalizationData,
   LocalizationSelectors,
 } from '@shared/services/localization.service-model';
-import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
-import { useMemo } from 'react';
 import { isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import useData from './use-data.hook';
+import { useMemo } from 'react';
+import { useData } from './use-data.hook';
 
 /**
  * Gets localizations on the papi.

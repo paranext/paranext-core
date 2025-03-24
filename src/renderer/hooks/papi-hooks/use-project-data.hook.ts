@@ -1,10 +1,10 @@
-import createUseDataHook from '@renderer/hooks/hook-generators/create-use-data-hook.util';
+import { createUseDataHook } from '@renderer/hooks/hook-generators/create-use-data-hook.util';
+import { useProjectDataProvider } from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
+import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import IDataProvider from '@shared/models/data-provider.interface';
-import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import {
   ProjectDataProviderInterfaces,
   ProjectInterfaceDataTypes,

@@ -5,11 +5,11 @@ import {
   DataProviderUpdateInstructions,
   DataTypeNames,
 } from '@shared/models/data-provider.model';
-import IDataProvider from '@shared/models/data-provider.interface';
+import { IDataProvider } from '@shared/models/data-provider.interface';
 import { useEventAsync } from 'platform-bible-react';
 import { useMemo, useRef, useState } from 'react';
 import { isString, PlatformEventAsync, PlatformEventHandler } from 'platform-bible-utils';
-import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
+import { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
 
 /**
  * The final function called as part of the `useData` hook that is the actual React hook
