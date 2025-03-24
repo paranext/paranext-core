@@ -17,11 +17,12 @@ import {
   LocalizeKey,
 } from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
-import CheckCard, { CheckStates } from './checks/checks-side-panel/check-card.component';
-import ChecksScopeFilter, {
+import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
+import {
+  ChecksScopeFilter,
   CheckScopes,
 } from './checks/configure-checks/checks-scope-filter.component';
-import ChecksProjectFilter from './checks/configure-checks/checks-project-filter.component';
+import { ChecksProjectFilter } from './checks/configure-checks/checks-project-filter.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',

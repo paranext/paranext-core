@@ -224,7 +224,7 @@ const getRowKey = (row: ScriptureSrcItemDetail) =>
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export default function ScriptureResultsViewer({
+export function ScriptureResultsViewer({
   sources,
   showColumnHeaders = false,
   showSourceColumn = false,
@@ -490,3 +490,5 @@ export default function ScriptureResultsViewer({
     </div>
   );
 }
+
+export default ScriptureResultsViewer;

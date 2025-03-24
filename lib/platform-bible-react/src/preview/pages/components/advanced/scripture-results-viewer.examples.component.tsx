@@ -1,9 +1,9 @@
-import ScriptureResultsViewer from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
+import { ScriptureResultsViewer } from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 import { Button } from '@/components/shadcn-ui/button';
 import { useState } from 'react';
-import generateRandomCheckingData from '../data-sources/generate-random-checking-data';
+import { generateRandomCheckingData } from '../data-sources/generate-random-checking-data';
 
-export default function ScriptureResultsViewerExample() {
+export function ScriptureResultsViewerExample() {
   const checks = [
     {
       id: 'preview.repeatedWords',
@@ -83,3 +83,5 @@ export default function ScriptureResultsViewerExample() {
     </div>
   );
 }
+
+export default ScriptureResultsViewerExample;

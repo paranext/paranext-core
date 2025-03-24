@@ -265,7 +265,7 @@ type PunctuationInventoryProps = {
   onScopeChange: (scope: Scope) => void;
 };
 
-function PunctuationInventory({
+export function PunctuationInventory({
   verseRef,
   setVerseRef,
   localizedStrings,

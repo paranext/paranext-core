@@ -5,10 +5,10 @@ import {
   type PlatformNotification,
 } from '@shared/models/notification.service-model';
 import * as commandService from '@shared/services/command.service';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { isLocalizeKey } from 'platform-bible-utils';
-import localizationService from '@shared/services/localization.service';
-import logger from '@shared/services/logger.service';
+import { localizationService } from '@shared/services/localization.service';
+import { logger } from '@shared/services/logger.service';
 
 const mapOfNotificationIdsToToastIds = new Map<string | number, string | number>();
 
@@ -62,7 +62,7 @@ const notificationService: INotificationService = {
 };
 
 /** Register the network object that backs the notification service */
-export default async function startNotificationService(): Promise<void> {
+export async function startNotificationService(): Promise<void> {
   await networkObjectService.set(
     NotificationServiceNetworkObjectName,
     notificationService,
@@ -101,3 +101,5 @@ export default async function startNotificationService(): Promise<void> {
     },
   );
 }
+
+export default startNotificationService;

@@ -43,7 +43,7 @@ export type ScriptureExtenderOverlayPDPs = {
   [ProjectInterface in (typeof SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES)[number]]: ProjectDataProviderInterfaces[ProjectInterface];
 };
 
-class ScriptureExtenderProjectDataProviderEngine
+export class ScriptureExtenderProjectDataProviderEngine
   extends ProjectDataProviderEngine<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
   implements IProjectDataProviderEngine<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
 {

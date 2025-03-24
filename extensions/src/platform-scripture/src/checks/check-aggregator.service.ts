@@ -452,7 +452,7 @@ function dispose() {
 }
 
 /** Service for communicating with all {@link ICheckRunner} instances on the network. */
-const checkAggregatorService = {
+export const checkAggregatorService = {
   initialize,
   dispose,
   serviceObject,

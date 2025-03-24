@@ -1,11 +1,12 @@
-import DataTable, {
+import {
   ColumnDef,
+  DataTable,
   RowContents,
   RowSelectionState,
   TableContents,
 } from '@/components/advanced/data-table/data-table.component';
-import OccurrencesTable from '@/components/advanced/inventory/occurrences-table.component';
-import Checkbox from '@/components/shadcn-ui/checkbox';
+import { OccurrencesTable } from '@/components/advanced/inventory/occurrences-table.component';
+import { Checkbox } from '@/components/shadcn-ui/checkbox';
 import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
 import {
@@ -244,7 +245,7 @@ type InventoryProps = {
 };
 
 /** Inventory component that is used to view and control the status of provided project settings */
-export default function Inventory({
+export function Inventory({
   verseRef,
   setVerseRef,
   localizedStrings,
@@ -450,3 +451,5 @@ export default function Inventory({
     </div>
   );
 }
+
+export default Inventory;

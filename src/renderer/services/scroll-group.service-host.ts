@@ -1,5 +1,5 @@
-import logger from '@shared/services/logger.service';
-import networkObjectService from '@shared/services/network-object.service';
+import { logger } from '@shared/services/logger.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,

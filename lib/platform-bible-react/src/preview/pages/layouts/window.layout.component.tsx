@@ -1,4 +1,4 @@
-import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   DropdownMenu,
@@ -20,7 +20,7 @@ export type HasIsFocused = {
   isFocused?: boolean;
 };
 
-export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
+export function WindowOrTabExample({ isFocused }: HasIsFocused) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
   // Example hardcoded active book IDs
 
@@ -189,3 +189,5 @@ export default function WindowOrTabExample({ isFocused }: HasIsFocused) {
     </div>
   );
 }
+
+export default WindowOrTabExample;

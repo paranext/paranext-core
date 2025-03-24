@@ -25,7 +25,7 @@ import deepEqual from './equality-checking';
  * @returns True if `objectWithAllProperties` contains all the properties of
  *   `objectWithPartialProperties` and all values of those properties are deeply equal
  */
-export default function isSubset(
+export function isSubset(
   objectWithAllProperties: unknown,
   objectWithPartialProperties: unknown,
 ): boolean {
@@ -65,3 +65,5 @@ export default function isSubset(
   });
   return retVal;
 }
+
+export default isSubset;

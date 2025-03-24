@@ -4,7 +4,7 @@ import {
   ProjectDataProviderInterfaces,
 } from 'papi-shared-types';
 import { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { getByType, registerEngineByType } from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
 import {
@@ -13,11 +13,12 @@ import {
   UnionToIntersection,
   UnsubscriberAsyncList,
 } from 'platform-bible-utils';
-import IProjectDataProviderFactory, {
+import {
+  IProjectDataProviderFactory,
   PDP_FACTORY_OBJECT_TYPE,
   ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
-import projectLookupService from '@shared/services/project-lookup.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { getPDPFactoryNetworkObjectNameFromId } from '@shared/models/project-lookup.service-model';

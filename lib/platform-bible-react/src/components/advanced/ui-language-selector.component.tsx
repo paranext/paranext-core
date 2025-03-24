@@ -80,7 +80,7 @@ export type UiLanguageSelectorProps = {
   className?: string;
 };
 
-export default function UiLanguageSelector({
+export function UiLanguageSelector({
   knownUiLanguages,
   primaryLanguage = 'en',
   fallbackLanguages = [],
@@ -177,3 +177,5 @@ export default function UiLanguageSelector({
     </div>
   );
 }
+
+export default UiLanguageSelector;

@@ -7,7 +7,7 @@ import {
   CardTitle,
 } from '@/components/shadcn-ui/card';
 
-export default function DialogExamples() {
+export function DialogExamples() {
   return (
     <>
       <Card className="tw-w-[350px]">
@@ -33,3 +33,5 @@ export default function DialogExamples() {
     </>
   );
 }
+
+export default DialogExamples;

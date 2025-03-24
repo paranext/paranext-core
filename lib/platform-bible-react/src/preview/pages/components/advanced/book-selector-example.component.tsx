@@ -1,4 +1,4 @@
-import BookSelector, { BookSelectionMode } from '@/components/advanced/book-selector.component';
+import { BookSelector, BookSelectionMode } from '@/components/advanced/book-selector.component';
 import { Canon } from '@sillsdev/scripture';
 import { useState } from 'react';
 
@@ -8,7 +8,7 @@ const localizedStrings = {
   '%webView_bookSelector_chooseBooks%': 'Choose Books',
 };
 
-function BookSelectorExample() {
+export function BookSelectorExample() {
   const [startChapter, setStartChapter] = useState<number>(0);
   const [endChapter, setEndChapter] = useState<number>(0);
   const selectedBooksIds = [

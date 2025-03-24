@@ -51,7 +51,7 @@ type ChapterVerseNode = {
 };
 
 /** Represents USJ formatted scripture with helpful utilities for working with it */
-export default class UsjReaderWriter implements IUsjReaderWriter {
+export class UsjReaderWriter implements IUsjReaderWriter {
   private readonly usj: Usj;
   private parentMapInternal: UsjParentMap | undefined;
 
@@ -730,3 +730,5 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
 
   // #endregion
 }
+
+export default UsjReaderWriter;

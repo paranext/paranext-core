@@ -1,9 +1,8 @@
-import { Typography } from '@mui/material';
 import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
 import type { Meta, StoryObj } from '@storybook/react';
-import { Toolbar, Command } from 'platform-bible-react';
+import { Command, Label, Toolbar } from 'platform-bible-react';
 
-const meta: Meta<typeof Toolbar> = {
+export const meta: Meta<typeof Toolbar> = {
   title: 'Basics/Toolbar',
   component: Toolbar,
   tags: ['autodocs'],
@@ -73,14 +72,14 @@ export const Default: Story = {
 export const Paratext: Story = {
   args: {
     className: 'paratext',
-    children: <Typography>Paratext</Typography>,
+    children: <Label>Paratext</Label>,
   },
 };
 
 export const ParatextBright: Story = {
   args: {
     className: 'paratext bright',
-    children: <Typography>Paratext Bright</Typography>,
+    children: <Label>Paratext Bright</Label>,
   },
 };
 

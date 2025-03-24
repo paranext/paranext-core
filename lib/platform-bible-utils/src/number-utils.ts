@@ -12,7 +12,7 @@ import NumberFormat from './intl-number-format';
  * @returns String representing the given number formatted according to the locale and formatting
  *   options of this NumberFormat object
  */
-export default function formatBytes(fileSize: number, decimals: number = 2): string {
+export function formatBytes(fileSize: number, decimals: number = 2): string {
   if (fileSize === 0) return '0 Bytes';
   const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
   const i = Math.floor(Math.log(fileSize) / Math.log(1024));
@@ -24,3 +24,5 @@ export default function formatBytes(fileSize: number, decimals: number = 2): str
   }).format(fileSize / 1024 ** i);
   return `${formattingFileSize} ${sizeToUse}`;
 }
+
+export default formatBytes;

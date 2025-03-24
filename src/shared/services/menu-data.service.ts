@@ -1,4 +1,4 @@
-import dataProviderService from '@shared/services/data-provider.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import {
   IMenuDataService,
@@ -27,7 +27,7 @@ async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
+export const menuDataService = createSyncProxyForAsyncObject<IMenuDataService>(async () => {
   await initialize();
   return dataProvider;
 }, menuDataServiceObjectToProxy);

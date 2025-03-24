@@ -1,6 +1,6 @@
 import * as networkService from '@shared/services/network.service';
 import { coreProjectSettingsValidators } from '@extension-host/data/core-project-settings-info.data';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR,
   IProjectSettingsService,
@@ -124,9 +124,6 @@ export const testingProjectSettingsService = {
 };
 
 /** Register the network object that backs the PAPI localization service */
-// This doesn't really represent this service module, so we're not making it default. To use this
-// service, you should use `localization.service.ts`
-// eslint-disable-next-line import/prefer-default-export
 export async function startProjectSettingsService(): Promise<void> {
   await initialize();
   await networkObjectService.set<IProjectSettingsService>(

@@ -1,7 +1,7 @@
 import { ScriptureItemDetail } from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 import { Canon } from '@sillsdev/scripture';
 
-export default function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
+export function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
   const getRandomNumber = (min: number, max: number) =>
     Math.floor(Math.random() * (max - min + 1)) + min;
 
@@ -29,3 +29,5 @@ export default function generateRandomCheckingData(details: string[]): Scripture
 
   return results;
 }
+
+export default generateRandomCheckingData;

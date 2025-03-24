@@ -67,7 +67,7 @@ interface RepeatedWordsInventoryProps {
   onScopeChange: (scope: Scope) => void;
 }
 
-function RepeatedWordsInventory({
+export function RepeatedWordsInventory({
   verseRef,
   setVerseRef,
   localizedStrings,

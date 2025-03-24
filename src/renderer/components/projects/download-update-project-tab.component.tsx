@@ -7,14 +7,13 @@ import {
   ListItemText,
   ListSubheader,
 } from '@mui/material';
-import DownloadIcon from '@mui/icons-material/Download';
-import UpdateIcon from '@mui/icons-material/Update';
-import DeleteIcon from '@mui/icons-material/Delete';
-import logger from '@shared/services/logger.service';
+import { Download, ArrowDownFromLine, Delete } from 'lucide-react';
+import { logger } from '@shared/services/logger.service';
 import { useMemo } from 'react';
-import ProjectList, {
+import {
   fetchProjects,
   Project,
+  ProjectList,
 } from '@renderer/components/projects/project-list.component';
 import './download-update-project-tab.component.scss';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
@@ -33,7 +32,7 @@ function deleteProject(project: Project) {
   logger.info(`Deleting Project ${project.name}`);
 }
 
-export default function DownloadUpdateProjectTab() {
+export function DownloadUpdateProjectTab() {
   const downloadableProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloadable%';
   const downloadableProjectsHeaderKey = '%downloadUpdateProjectTab_listHeader_downloadable%';
   const downloadedProjectsAriaKey = '%downloadUpdateProjectTab_aria_downloaded%';
@@ -74,7 +73,7 @@ export default function DownloadUpdateProjectTab() {
           handleSelectProject={downloadProject}
         >
           <ListItemIcon>
-            <DownloadIcon />
+            <Download />
           </ListItemIcon>
         </ProjectList>
       </nav>
@@ -86,13 +85,13 @@ export default function DownloadUpdateProjectTab() {
             <ListItem key={project.id}>
               <ListItemButton onClick={() => updateProject(project)}>
                 <ListItemIcon>
-                  <UpdateIcon />
+                  <ArrowDownFromLine />
                 </ListItemIcon>
                 <ListItemText primary={project.name} />
               </ListItemButton>
               <ListItemButton onClick={() => deleteProject(project)}>
                 <ListItemIcon>
-                  <DeleteIcon />
+                  <Delete />
                 </ListItemIcon>
                 <ListItemText primary={localizedDeleteListItem} />
               </ListItemButton>
@@ -111,3 +110,5 @@ export const loadDownloadUpdateProjectTab = (savedTabInfo: SavedTabInfo): TabInf
     content: <DownloadUpdateProjectTab />,
   };
 };
+
+export default DownloadUpdateProjectTab;

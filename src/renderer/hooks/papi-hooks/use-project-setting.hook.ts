@@ -53,7 +53,7 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
  * @throws When subscription callback function is called with an update that has an unexpected
  *   message type
  */
-const useProjectSetting = <ProjectSettingName extends ProjectSettingNames>(
+export const useProjectSetting = <ProjectSettingName extends ProjectSettingNames>(
   // Any Base PDP type works. Without `any`, the DataProviderUpdateInstructions types are incompatible
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,

@@ -129,6 +129,7 @@ export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
 
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
+export { Avatar, AvatarFallback, AvatarImage } from './components/shadcn-ui/avatar';
 export { Badge, type BadgeProps, badgeVariants } from './components/shadcn-ui/badge';
 export { Button, type ButtonProps, buttonVariants } from './components/shadcn-ui/button';
 export {

@@ -8,7 +8,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from '@/components/shadcn-ui/dropdown-menu';
-import FilterButton from './buttons/filter-button.component';
+import { FilterButton } from './buttons/filter-button.component';
 
 export enum DropdownMenuItemType {
   Check,
@@ -48,7 +48,7 @@ export type FilterDropdownProps = {
  * @param FilterDropdownProps
  * @returns A filter dropdown.
  */
-export default function FilterDropdown({ id, groups }: FilterDropdownProps) {
+export function FilterDropdown({ id, groups }: FilterDropdownProps) {
   return (
     <div id={id}>
       {/* TODO: remove this once the DropDown Menu shadcn has an id prop */}
@@ -83,3 +83,5 @@ export default function FilterDropdown({ id, groups }: FilterDropdownProps) {
     </div>
   );
 }
+
+export default FilterDropdown;

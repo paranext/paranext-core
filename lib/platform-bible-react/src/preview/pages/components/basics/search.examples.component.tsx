@@ -1,11 +1,11 @@
-import SearchBar from '@/components/basics/search-bar.component';
+import { SearchBar } from '@/components/basics/search-bar.component';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { useState } from 'react';
 
 // eslint-disable-next-line no-undef
 let timer: NodeJS.Timeout;
 
-export default function SearchBarExamples() {
+export function SearchBarExamples() {
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   const onSearchDebounced = (search: string) => {
@@ -22,3 +22,5 @@ export default function SearchBarExamples() {
     </div>
   );
 }
+
+export default SearchBarExamples;

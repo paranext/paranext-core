@@ -1,11 +1,17 @@
-import { Tooltip } from '@mui/material';
-import { CommandHandler, HamburgerMenuButton } from 'platform-bible-react';
-import './platform-tab-title.component.scss';
-import menuDataService from '@shared/services/menu-data.service';
 import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { useCallback, useMemo, useRef } from 'react';
+import { menuDataService } from '@shared/services/menu-data.service';
+import {
+  CommandHandler,
+  HamburgerMenuButton,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
 import { isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import { useCallback, useMemo, useRef } from 'react';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
+import './platform-tab-title.component.scss';
 
 type PlatformTabTitleProps = {
   /** What type of WebView this is. Unique to all other WebView definitions */
@@ -27,7 +33,7 @@ type PlatformTabTitleProps = {
  * @param text The text to show on the tab title
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  */
-export default function PlatformTabTitle({
+export function PlatformTabTitle({
   webViewType,
   tabId,
   iconUrl,
@@ -54,8 +60,6 @@ export default function PlatformTabTitle({
 
   const [webViewMenu, , isLoading] = menuInfo;
 
-  const tooltipDiv = tooltip ? <div className="tooltip">{tooltip}</div> : '';
-
   const icon = (
     <div
       className="tab-menu-icon"
@@ -81,23 +85,34 @@ export default function PlatformTabTitle({
   );
 
   return (
-    <Tooltip title={tooltipDiv}>
-      <div ref={containerRef} className="title">
-        {isLoading || isPlatformError(webViewMenu) || !webViewMenu?.topMenu ? (
-          icon
-        ) : (
-          <HamburgerMenuButton
-            commandHandler={commandHandler}
-            normalMenu={isPlatformError(webViewMenu) ? undefined : webViewMenu?.topMenu}
-            className="tab-menu-button"
-            aria-label={tabLabel}
-            containerRef={containerRef}
-          >
-            {icon}
-          </HamburgerMenuButton>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div ref={containerRef} className="title">
+            {isLoading || isPlatformError(webViewMenu) || !webViewMenu?.topMenu ? (
+              icon
+            ) : (
+              <HamburgerMenuButton
+                commandHandler={commandHandler}
+                normalMenu={isPlatformError(webViewMenu) ? undefined : webViewMenu?.topMenu}
+                className="tab-menu-button"
+                aria-label={tabLabel}
+                containerRef={containerRef}
+              >
+                {icon}
+              </HamburgerMenuButton>
+            )}
+            <span>{title}</span>
+          </div>
+        </TooltipTrigger>
+        {tooltip && (
+          <TooltipContent className="tooltip" side="right">
+            <p>{tooltip}</p>
+          </TooltipContent>
         )}
-        <span>{title}</span>
-      </div>
-    </Tooltip>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
+
+export default PlatformTabTitle;
