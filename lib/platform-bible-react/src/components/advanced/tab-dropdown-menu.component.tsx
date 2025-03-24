@@ -25,7 +25,7 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { PropsWithChildren } from 'react';
+import { ReactNode } from 'react';
 import { CommandHandler } from './platform-menubar.component';
 
 const getSubMenuKeyForId = (
@@ -97,7 +97,7 @@ const getGroupContent = (
   });
 };
 
-export type TabDropdownMenuProps = PropsWithChildren & {
+export type TabDropdownMenuProps = {
   /** The handler to use for menu commands */
   commandHandler: CommandHandler;
 
@@ -106,6 +106,9 @@ export type TabDropdownMenuProps = PropsWithChildren & {
 
   /** Defines a string value that labels the current element */
   tabLabel: string;
+
+  /** Optional icon for the dropdown menu trigger. Defaults to hamburger icon. */
+  icon?: ReactNode;
 
   /** Additional css class(es) to help with unique styling of the tab dropdown menu */
   className?: string;
@@ -125,8 +128,8 @@ export default function TabDropdownMenu({
   commandHandler,
   menuData,
   tabLabel,
+  icon,
   className,
-  children,
   id,
 }: TabDropdownMenuProps) {
   return (
@@ -137,7 +140,7 @@ export default function TabDropdownMenu({
         asChild
         id={id}
       >
-        {children ?? <MenuIcon />}
+        {icon ?? <MenuIcon />}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="tw-z-[250]">
         {Object.entries(menuData.columns)

@@ -165,9 +165,8 @@ export default function TabDropdownMenuExample() {
     <TabDropdownMenu
       commandHandler={(command) => console.log('Run command: ', command)}
       menuData={menuData}
+      icon={<BookIcon />}
       tabLabel="Tab Label"
-    >
-      <BookIcon />
-    </TabDropdownMenu>
+    />
   );
 }

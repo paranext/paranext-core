@@ -834,13 +834,15 @@ type SettingsListHeaderProps = {
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
-type TabDropdownMenuProps = React$1.PropsWithChildren & {
+type TabDropdownMenuProps = {
 	/** The handler to use for menu commands */
 	commandHandler: CommandHandler;
 	/** The menu data to show on the dropdown menu */
 	menuData: Localized<MultiColumnMenu>;
 	/** Defines a string value that labels the current element */
 	tabLabel: string;
+	/** Optional icon for the dropdown menu trigger. Defaults to hamburger icon. */
+	icon?: React$1.ReactNode;
 	/** Additional css class(es) to help with unique styling of the tab dropdown menu */
 	className?: string;
 	/** Optional unique identifier */
@@ -853,7 +855,7 @@ type TabDropdownMenuProps = React$1.PropsWithChildren & {
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ commandHandler, menuData, tabLabel, className, children, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
