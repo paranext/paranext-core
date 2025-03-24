@@ -6,7 +6,7 @@ import {
   type MarkerObject,
   type Usj,
 } from '@biblionexus-foundation/scripture-utilities';
-import { SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { JSONPath } from 'jsonpath-plus';
 import {
   CHAPTER_TYPE,
@@ -328,7 +328,7 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
 
   // #endregion
 
-  // #region USJ + node -> VerseRef + offset
+  // #region USJ + node -> SerializedVerseRef + offset
 
   /** Find the chapter and verse that apply to a given USJ node */
   private findVerseRefForNode(
@@ -413,7 +413,7 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
     bookId: string,
     node: MarkerContent,
     nodeParent: MarkerObject | MarkerContent[] | undefined,
-  ): { verseRef: VerseRef; offset: number } | undefined {
+  ): { verseRef: SerializedVerseRef; offset: number } | undefined {
     if (typeof node === 'string' && nodeParent === undefined)
       throw new Error(`If "node" is a string, then "nodeParent" cannot be undefined`);
 
@@ -431,11 +431,11 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
     if (!chapterVerseContent.chapterNum)
       throw new Error(`Could not determine chapter number for ${JSON.stringify(node)}`);
 
-    const verseRef = new VerseRef(
-      bookId,
-      chapterVerseContent.chapterNum.toString(),
-      chapterVerseContent.verseNum ? chapterVerseContent.verseNum.toString() : '0',
-    );
+    const verseRef: SerializedVerseRef = {
+      book: bookId,
+      chapterNum: chapterVerseContent.chapterNum,
+      verseNum: chapterVerseContent.verseNum ?? 0,
+    };
 
     let offset = 0;
     // Walk forward through the USJ nodes until `node` is found, incrementing `offset` along the way
@@ -464,7 +464,7 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
 
   // #endregion
 
-  // #region JSONPath -> VerseRef + offset
+  // #region JSONPath -> SerializedVerseRef + offset
 
   jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset {
     const effectiveBookId = bookId ?? this.findBookId();
@@ -485,7 +485,7 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
 
   // #endregion
 
-  // #region VerseRef + offset -> Node + JSONPath + offset
+  // #region SerializedVerseRef + offset -> Node + JSONPath + offset
 
   verseRefToUsjContentLocation(
     verseRef: SerializedVerseRef,
@@ -505,7 +505,7 @@ export default class UsjReaderWriter implements IUsjReaderWriter {
 
     let foundAnotherChapter = false;
     let jsonPath: ContentJsonPath = '';
-    const expectedVerse = verseRef.verse;
+    const expectedVerse = verseRef.verse ?? verseRef.verseNum.toString();
     const verseNode: MarkerContent | undefined = this.findNextMatchingNode(
       chapterNode,
       NODE_TYPES_NOT_CONTAINING_VERSE_TEXT,

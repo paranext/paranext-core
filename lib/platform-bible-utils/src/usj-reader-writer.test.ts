@@ -1,5 +1,4 @@
 import { Usj, USJ_TYPE, USJ_VERSION } from '@biblionexus-foundation/scripture-utilities';
-import { VerseRef } from '@sillsdev/scripture';
 import UsjReaderWriter from './usj-reader-writer';
 
 const usj: Usj = JSON.parse(`{
@@ -859,7 +858,10 @@ test('Correct VerseRefs and offsets are found using findVerseRefAndOffset', () =
 test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
   const usjDoc = new UsjReaderWriter(usj);
 
-  const result0 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:0'), 0);
+  const result0 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 1, verseNum: 0 },
+    0,
+  );
   expect(typeof result0.node).toBe('object');
   if (typeof result0.node !== 'object') return;
   expect(result0.node.type).toBe('chapter');
@@ -867,7 +869,10 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
   expect(result0.jsonPath).toBe('$.content[8]');
   expect(result0.offset).toBe(0);
 
-  const result1 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:2'), 0);
+  const result1 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 1, verseNum: 2 },
+    0,
+  );
   expect(typeof result1.node).toBe('object');
   if (typeof result1.node !== 'object') return;
   expect(result1.node.type).toBe('verse');
@@ -875,14 +880,20 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
   expect(result1.jsonPath).toBe('$.content[10].content[0]');
   expect(result1.offset).toBe(0);
 
-  const result2 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:6'), 3);
+  const result2 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 1, verseNum: 6 },
+    3,
+  );
   expect(typeof result2.node).toBe('string');
   if (typeof result2.node !== 'string') return;
   expect(result2.node === 'Jesse became the father of King David. David the king').toBe(true);
   expect(result2.jsonPath).toBe('$.content[10].content[9]');
   expect(result2.offset).toBe(3);
 
-  const result3 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:6'), 60);
+  const result3 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 1, verseNum: 6 },
+    60,
+  );
   expect(typeof result3.node).toBe('string');
   if (typeof result3.node !== 'string') return;
   expect(result3.node === 'became the father of Solomon by her who had been Uriah’s wife.').toBe(
@@ -891,14 +902,20 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
   expect(result3.jsonPath).toBe('$.content[10].content[11]');
   expect(result3.offset).toBe(7);
 
-  const result4 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 2:6'), 130);
+  const result4 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 2, verseNum: 6 },
+    130,
+  );
   expect(typeof result4.node).toBe('string');
   if (typeof result4.node !== 'string') return;
   expect(result4.node === 'who shall shepherd my people, Israel.’”').toBe(true);
   expect(result4.jsonPath).toBe('$.content[25].content[0]');
   expect(result4.offset).toBe(17);
 
-  const result5 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 2:6'), 9999999);
+  const result5 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 2, verseNum: 6 },
+    9999999,
+  );
   expect(typeof result5.node).toBe('object');
   if (typeof result5.node !== 'object') return;
   expect(result5.node.type).toBe('verse');
@@ -906,7 +923,10 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
   expect(result5.jsonPath).toBe('$.content[22].content[0]');
   expect(result5.offset).toBe(0);
 
-  const result6 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 2:21-22'), 0);
+  const result6 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 2, verseNum: 21, verse: '21-22' },
+    0,
+  );
   expect(typeof result6.node).toBe('object');
   if (typeof result6.node !== 'object') return;
   expect(result6.node.type).toBe('verse');
@@ -915,15 +935,15 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
   expect(result6.offset).toBe(0);
 
   expect(() => {
-    usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 99:1'), 0);
+    usjDoc.verseRefToUsjContentLocation({ book: 'MAT', chapterNum: 99, verseNum: 1 }, 0);
   }).toThrow('Could not find MAT chapter 99');
 
   expect(() => {
-    usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:99'), 0);
+    usjDoc.verseRefToUsjContentLocation({ book: 'MAT', chapterNum: 1, verseNum: 99 }, 0);
   }).toThrow('Verse 99 not found in MAT 1');
 
   expect(() => {
-    usjDoc.verseRefToUsjContentLocation(new VerseRef('JHN 1:1'), 0);
+    usjDoc.verseRefToUsjContentLocation({ book: 'JHN', chapterNum: 1, verseNum: 1 }, 0);
   }).toThrow(`Book IDs don't match: USJ=MAT, VerseRef=JHN`);
 
   expect(() => {
@@ -931,7 +951,7 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
       type: USJ_TYPE,
       version: USJ_VERSION,
       content: [],
-    }).verseRefToUsjContentLocation(new VerseRef('JHN 1:1'), 0);
+    }).verseRefToUsjContentLocation({ book: 'JHN', chapterNum: 1, verseNum: 1 }, 0);
   }).toThrow('Could not find JHN chapter 1');
 });
 
@@ -939,7 +959,10 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
   const usjDoc = new UsjReaderWriter(usj);
 
   // Start from a verse node
-  const startingPoint1 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:2'), 0);
+  const startingPoint1 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 1, verseNum: 2 },
+    0,
+  );
   expect(typeof startingPoint1.node).toBe('object');
   if (typeof startingPoint1.node !== 'object') return;
   expect(startingPoint1.jsonPath).toBe('$.content[10].content[0]');
@@ -956,7 +979,10 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
   expect(result1.offset).toBe(16);
 
   // Start from a string
-  const startingPoint2 = usjDoc.verseRefToUsjContentLocation(new VerseRef('MAT 1:6'), 3);
+  const startingPoint2 = usjDoc.verseRefToUsjContentLocation(
+    { book: 'MAT', chapterNum: 1, verseNum: 6 },
+    3,
+  );
   expect(typeof startingPoint2.node).toBe('string');
   if (typeof startingPoint2.node !== 'string') return;
   expect(startingPoint2.jsonPath).toBe('$.content[10].content[9]');
