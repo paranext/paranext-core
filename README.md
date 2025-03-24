@@ -6,7 +6,9 @@ Template for creating multiple Platform.Bible extensions in one repo
 
 ## Template Info
 
-This is a webpack project template pre-configured to build an arbitrary number of Platform.Bible extensions. It contains the bare minimum of what a multi-extension repo needs. Note that many of the files mentioned in [Summary](#summary) are not present in this template because they describe extension code which must be added to this template. For inspiration on what extensions in a multi-extension repo could look like, refer to any repo forked from this template. An example would be the [platform-bible-sample-extensions](https://github.com/paranext/platform-bible-sample-extensions).
+This Webpack project template is pre-configured to build an arbitrary number of Platform.Bible extensions. It contains only the essential components needed for a multi-extension repository. Note that many of the files mentioned in [Summary](#summary) are not present in this template because they describe extension code which must be added to this template. For inspiration on what extensions in a multi-extension repo could look like, refer to any repo forked from this template. A good example is [platform-bible-sample-extensions](https://github.com/paranext/platform-bible-sample-extensions).
+
+There is also a simple [template pre-configured to build a single Platform.Bible extension](https://github.com/paranext/paranext-extension-template).
 
 ### Customize repo details
 
@@ -21,14 +23,16 @@ To make the process of customizing from the template as smooth as possible, we r
 
 #### Replace placeholders
 
+For your extension name, we recommend that you use [lowerCamelCase](https://developer.mozilla.org/en-US/docs/Glossary/Camel_case) in some contexts and [kebab-case](https://developer.mozilla.org/en-US/docs/Glossary/Kebab_case) in other contexts. We generally recommend lowerCamelCase when using the name in code (like making a new command on the PAPI, for example), and we recommend kebab-case when using the name in relation to the file system, the repository, `npm`, and the extension's `.d.ts` types module. The following instructions are written accordingly.
+
 - At the top of this `README.md`:
 
-  - Replace the first line `# paranext-multi-extension-template` with `# your-extension-repo-name`
+  - Replace the first line `# paranext-multi-extension-template` with `# your-extension-repo-name` (kebab-case)
   - Below the first line, replace the repo description with your own description
 
 - In `package.json`:
 
-  - Replace `"paranext-multi-extension-template"` with `"your-extension-repo-name"`
+  - Replace `paranext-multi-extension-template` with `your-extension-repo-name` (kebab-case)
   - Update ownership information and other relevant fields as desired
 
 - In `LICENSE`:
@@ -50,7 +54,7 @@ Note: if you [update this repo and extensions from the templates](#to-update-thi
 
 ## Summary
 
-This is a webpack project configured to build Platform.Bible extensions. The general file structure is as follows:
+This is a Webpack project configured to build Platform.Bible extensions. The general file structure is as follows:
 
 - `src/` contains the source code for all extensions
   - Each sub-folder in `src/` with a `manifest.json` in it is an extension
@@ -58,7 +62,7 @@ This is a webpack project configured to build Platform.Bible extensions. The gen
     - `manifest.json` is the manifest file that defines the extension and important properties for Platform.Bible. It is copied into the build folder
     - `src/` contains the source code for the extension
       - `src/main.ts` is the main entry file for the extension
-      - `src/types/<extension_name>.d.ts` is this extension's types file that defines how other extensions can use this extension through the `papi`
+      - `src/types/<extension-name>.d.ts` is this extension's types file that defines how other extensions can use this extension through the `papi`
       - `*.web-view.tsx` files will be treated as React WebViews
       - `*.web-view.html` files are a conventional way to provide HTML WebViews (no special functionality)
     - `assets/` contains asset files the extension and its WebViews can retrieve using the `papi-extension:` protocol, as well as textual descriptions in various languages. It is copied into the build folder
@@ -74,7 +78,7 @@ This is a webpack project configured to build Platform.Bible extensions. The gen
 
 ### Install dependencies:
 
-1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install).
+1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to [reconfigure paths](#configure-paths-to-paranext-core-repo) to `paranext-core`.
 2. In this repo, run `npm install` to install local and published dependencies
 
 Note: running `npm install` automatically adds remotes that help with [updating from the templates](#to-update-this-repo-and-extensions-from-the-templates).
@@ -96,10 +100,7 @@ git remote add paranext-extension-template https://github.com/paranext/paranext-
 
 ### Configure paths to `paranext-core` repo
 
-In order to interact with `paranext-core`, you must point `package.json` to your installed `paranext-core` repository:
-
-1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to reconfigure paths to `paranext-core`.
-2. If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
+If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
 
 ## To run
 
@@ -129,10 +130,10 @@ To package these extensions into a zip file for distribution:
 
 ## To create a new extension in this repo
 
-To create a new extension in this repo, make sure your repo has no working changes, then run the following command (replace `<extension_name>` with the preferred extension name. This will also be the extension's folder name in the `src` folder):
+To create a new extension in this repo, make sure your repo has no working changes, then run the following command (replace `<extension-name>` with the preferred extension name. This will also be the extension's folder name in the `src` folder. We strongly recommend using kebab-case for this name):
 
 ```bash
-npm run create-extension -- <extension_name>
+npm run create-extension -- <extension-name>
 ```
 
 Then follow [the instructions for customizing the new extension](https://github.com/paranext/paranext-extension-template#customize-extension-details).
@@ -149,7 +150,7 @@ Alternatively, you can create a new extension manually:
 ```bash
 git fetch paranext-extension-template main
 
-git subtree add --prefix src/<extension_name> paranext-extension-template main --squash
+git subtree add --prefix src/<extension-name> paranext-extension-template main --squash
 ```
 
 After running these commands, run a regex find and replace inside the new extension folder to fix
@@ -198,10 +199,10 @@ git merge paranext-multi-extension-template/main --allow-unrelated-histories
 git fetch paranext-extension-template main
 ```
 
-For each extension, run the following (replace `<extension_name>` with each extension's folder name):
+For each extension, run the following (replace `<extension-name>` with each extension's folder name):
 
 ```bash
-git subtree pull --prefix src/<extension_name> paranext-extension-template main --squash
+git subtree pull --prefix src/<extension-name> paranext-extension-template main --squash
 ```
 
 </details>
@@ -218,7 +219,7 @@ This project has special features and specific configuration to make building ex
 Platform.Bible WebViews must be treated differently than other code, so this project makes doing that simpler:
 
 - WebView code must be bundled and can only import specific packages provided by Platform.Bible (see `externals` in `webpack.config.base.ts`), so this project bundles React WebViews before bundling the main extension file to support this requirement. The project discovers and bundles files that end with `.web-view.tsx` in this way.
-  - Note: while watching for changes, if you add a new `.web-view.tsx` file, you must either restart webpack or make a nominal change and save in an existing `.web-view.tsx` file for webpack to discover and bundle this new file.
+  - Note: while watching for changes, if you add a new `.web-view.tsx` file, you must either restart Webpack or make a nominal change and save in an existing `.web-view.tsx` file for Webpack to discover and bundle this new file.
 - WebView code and styles must be provided to the `papi` as strings, so you can import WebView files with [`?inline`](#special-imports) after the file path to import the file as a string.
 
 ### Built-in Tailwind CSS support
@@ -232,25 +233,25 @@ This project is equipped with [Tailwind CSS](https://tailwindcss.com/) configure
 Adding this import to your WebView's styles enables Tailwind CSS in the WebView. Alternatively, you can directly use `./src/tailwind.css` as your WebView's style file if you do not need any additional CSS. Important Tailwind configuration notes:
 
 - This project's Tailwind's configuration is set up with the prefix `tw-`, so all Tailwind classes must have `tw-` at the beginning (e.g. `tw-bg-purple-500`).
-- [Tailwind's preflight](https://tailwindcss.com/docs/preflight) is enabled by default, meaning some default HTML tag styles are significantly modified. You can [disable it](https://tailwindcss.com/docs/preflight#disabling-preflight) or [restrict its scope](https://www.npmjs.com/package/tailwindcss-scoped-preflight) if desired. However, we generally recommend instead using [`@tailwindcss/typography`](https://github.com/tailwindlabs/tailwindcss-typography), included in this project's Tailwind configuration by default, when displaying flowing content.
+- [Tailwind's preflight](https://tailwindcss.com/docs/preflight) is enabled by default, meaning some default HTML tag styles are significantly modified. You can [disable it](https://tailwindcss.com/docs/preflight#disabling-preflight) or [restrict its scope](https://www.npmjs.com/package/tailwindcss-scoped-preflight) if desired. However, the preferred approach is generally to use [`@tailwindcss/typography`](https://github.com/tailwindlabs/tailwindcss-typography), included in this project's Tailwind configuration by default, when displaying flowing content.
 - You can apply theme colors using Tailwind classes corresponding to the CSS property and theme color variable name like `tw-bg-primary`.
 
 Please see the wiki's [Tailwind CSS in Web Views](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#web-view-component) page for more information about using Tailwind in your web view.
 
 ### Special imports
 
-- Adding `?inline` to the end of a file import causes that file to be imported as a string after being transformed by webpack loaders but before bundling dependencies (except if that file is a React WebView file, in which case dependencies will be bundled). The contents of the file will be on the file's default export.
+- Adding `?inline` to the end of a file import causes that file to be imported as a string after being transformed by Webpack loaders but before bundling dependencies (except if that file is a React WebView file, in which case dependencies will be bundled). The contents of the file will be on the file's default export.
   - Ex: `import myFile from './file-path?inline`
 - Adding `?raw` to the end of a file import treats a file the same way as `?inline` except that it will be imported directly without being transformed by webpack.
 
 ### Misc features
 
-- Platform.Bible extensions' code must be bundled all together in one file, so webpack bundles all the code together into one main file per extension.
+- Platform.Bible extensions' code must be bundled all together in one file, so Webpack bundles all the code together into one main file per extension.
 - Platform.Bible extensions can interact with other extensions, but they cannot import and export like in a normal Node environment. Instead, they interact through the `papi`. As such, each extension's `src/types` folder contains its declarations file that tells other extensions how to interact with it through the `papi`.
 
-### Two-step webpack build
+### Two-step Webpack build
 
-These extensions are built by webpack (`webpack.config.ts`) in two steps: a WebView bundling step and a main bundling step:
+These extensions are built by Webpack (`webpack.config.ts`) in two steps: a WebView bundling step and a main bundling step:
 
 #### Build 1: TypeScript WebView bundling
 
