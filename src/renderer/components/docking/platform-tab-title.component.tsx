@@ -96,9 +96,8 @@ export default function PlatformTabTitle({
                 commandHandler={commandHandler}
                 menuData={webViewMenu.topMenu}
                 tabLabel={tabLabel}
-              >
-                {icon}
-              </TabDropdownMenu>
+                icon={icon}
+              />
             )}
             <span>{title}</span>
           </div>
