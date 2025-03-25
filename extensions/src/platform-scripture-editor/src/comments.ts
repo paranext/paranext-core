@@ -97,7 +97,8 @@ function getCommentDetails(
     );
 
   const start = usjRW.nodeToVerseRefAndOffset(bookId, startNode, startParent);
-  if (!start) throw new Error(`Could not find VerseRef for start of comment ${commentId}`);
+  if (!start)
+    throw new Error(`Could not find SerializedVerseRef for start of comment ${commentId}`);
 
   const startPoint = { node: startNode, offset: 0, jsonPath: usjRW.nodeToJsonPath(startNode) };
   const endPoint = { node: endNode, offset: 0, jsonPath: usjRW.nodeToJsonPath(endNode) };
@@ -242,8 +243,7 @@ export function insertCommentAnchorsIntoUsj(usj: Usj, legacyComments: LegacyComm
   const threads = convertLegacyCommentsToEditorThreads(legacyComments);
   threads.forEach((thread) => {
     const lc = thread.legacyComment;
-    const verseRef: VerseRef = new VerseRef(lc.verseRef);
-    const serializedVerseRef = verseRef.toJSON();
+    const serializedVerseRef: SerializedVerseRef = new VerseRef(lc.verseRef).toJSON();
     // BUG: PT9 comments give offset in USFM space, not verse text space
     let start = usjRW.verseRefToUsjContentLocation(serializedVerseRef, lc.startPosition);
     const startAnchorInserted = insertAnchorIfNeeded(usjRW, 'start', thread.id, start);

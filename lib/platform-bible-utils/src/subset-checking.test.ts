@@ -1,4 +1,4 @@
-import isSubset from './subset-checking';
+import { isSubset } from './subset-checking';
 
 test('Subset checking works on simple types', () => {
   expect(isSubset('a', 'a')).toBeTruthy();

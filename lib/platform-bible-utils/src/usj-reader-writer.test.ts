@@ -1,5 +1,5 @@
 import { Usj, USJ_TYPE, USJ_VERSION } from '@biblionexus-foundation/scripture-utilities';
-import UsjReaderWriter from './usj-reader-writer';
+import { UsjReaderWriter } from './usj-reader-writer';
 
 const usj: Usj = JSON.parse(`{
   "content": [
@@ -944,7 +944,7 @@ test('Correct USJ details are found using findUsjContentAndJsonPath', () => {
 
   expect(() => {
     usjDoc.verseRefToUsjContentLocation({ book: 'JHN', chapterNum: 1, verseNum: 1 }, 0);
-  }).toThrow(`Book IDs don't match: USJ=MAT, VerseRef=JHN`);
+  }).toThrow(`Book IDs don't match: USJ=MAT, SerializedVerseRef=JHN`);
 
   expect(() => {
     new UsjReaderWriter({

@@ -478,7 +478,9 @@ export class UsjReaderWriter implements IUsjReaderWriter {
 
     const verseRefAndOffset = this.nodeToVerseRefAndOffset(effectiveBookId, target, parent);
     if (!verseRefAndOffset)
-      throw new Error(`Could not determine VerseRef that corresponds to ${jsonPathQuery}`);
+      throw new Error(
+        `Could not determine SerializedVerseRef that corresponds to ${jsonPathQuery}`,
+      );
 
     return verseRefAndOffset;
   }
@@ -497,7 +499,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
     const bookId = this.findBookId() ?? verseRef.book;
     if (!bookId) throw new Error('Not able to determine the book ID');
     if (bookId !== verseRef.book)
-      throw new Error(`Book IDs don't match: USJ=${bookId}, VerseRef=${verseRef.book}`);
+      throw new Error(`Book IDs don't match: USJ=${bookId}, SerializedVerseRef=${verseRef.book}`);
 
     const chapterNode = this.findChapterNode(verseRef.chapterNum);
     if (chapterNode === undefined)
