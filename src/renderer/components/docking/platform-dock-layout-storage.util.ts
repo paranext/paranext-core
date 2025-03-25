@@ -23,14 +23,6 @@ import {
 } from '@renderer/services/web-view.service-host';
 import { DIALOGS } from '@renderer/components/dialogs';
 import {
-  TAB_TYPE_EXTENSION_MANAGER,
-  loadExtensionManagerTab,
-} from '@renderer/components/extension-manager/extension-manager-tab.component';
-import {
-  TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
-  loadDownloadUpdateProjectTab,
-} from '@renderer/components/projects/download-update-project-tab.component';
-import {
   TAB_TYPE_SETTINGS_TAB,
   loadSettingsTab,
 } from '@renderer/components/settings-tabs/settings-tab.component';
@@ -63,8 +55,6 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
     [TAB_TYPE_TEST, loadTestTab],
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
-    [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
-    [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
     [TAB_TYPE_SETTINGS_TAB, loadSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
@@ -77,8 +67,6 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_ABOUT, loadAboutTab],
     [TAB_TYPE_BUTTONS, loadButtonsTab],
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
-    [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
-    [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
     [TAB_TYPE_SETTINGS_TAB, loadSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
