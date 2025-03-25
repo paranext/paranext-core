@@ -19,7 +19,7 @@ import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirectio
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode } from 'react';
+import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
 import { Toaster, toast as sonner } from 'sonner';
 
 export type BookChapterControlProps = {
@@ -100,10 +100,6 @@ type MenuItemContainingCommand = MenuItemBase & {
 	 */
 	iconPathBefore?: string;
 };
-type GroupsInSingleColumnMenu = {
-	/** Named menu group */
-	[property: ReferencedItem]: OrderedExtensibleContainer | MenuGroupDetailsInSubMenu;
-};
 type GroupsInMultiColumnMenu = {
 	/** Named menu group */
 	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
@@ -113,12 +109,6 @@ type ColumnsWithHeaders = {
 	[property: ReferencedItem]: MenuColumnWithHeader;
 	/** Defines whether columns can be added to this multi-column menu */
 	isExtensible?: boolean;
-};
-type SingleColumnMenu = {
-	/** Groups that belong in this menu */
-	groups: GroupsInSingleColumnMenu;
-	/** List of menu items that belong in this menu */
-	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
 type MultiColumnMenu = {
 	/** Columns that belong in this menu */
@@ -840,6 +830,28 @@ type SettingsListHeaderProps = {
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
+type TabDropdownMenuProps = {
+	/** The handler to use for menu commands */
+	commandHandler: CommandHandler;
+	/** The menu data to show on the dropdown menu */
+	menuData: Localized<MultiColumnMenu>;
+	/** Defines a string value that labels the current element */
+	tabLabel: string;
+	/** Optional icon for the dropdown menu trigger. Defaults to hamburger icon. */
+	icon?: React$1.ReactNode;
+	/** Additional css class(es) to help with unique styling of the tab dropdown menu */
+	className?: string;
+	/** Optional unique identifier */
+	id?: string;
+};
+/**
+ * Dropdown menu designed to be used with Platform.Bible menu data. Column headers are ignored.
+ * Column data is separated by a horizontal divider, so groups are not distinguishable. Tooltips are
+ * displayed on hovering over menu items, if a tooltip is defined for them.
+ *
+ * A child component can be passed in to show as an icon on the menu trigger button.
+ */
+export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1032,180 +1044,6 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-export type GridMenuInfo = {
-	/** The menu object containing information about the columns, groups, and items to display. */
-	multiColumnMenu: Localized<MultiColumnMenu>;
-};
-export type GridMenuProps = GridMenuInfo & {
-	/** Optional unique identifier */
-	id?: string;
-	commandHandler: CommandHandler;
-	/** Additional css classes to help with unique styling of the grid menu */
-	className?: string;
-};
-export declare function GridMenu({ commandHandler, className, multiColumnMenu, id }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
-export interface MultiColumnMenuProvider {
-	(isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;
-}
-type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
-	/** The handler to use for menu commands (and eventually toolbar commands). */
-	commandHandler: CommandHandler;
-	/**
-	 * Optional reference to the "div" container that determines the where the menu should appear. If
-	 * not defined, then (1,1) used.
-	 */
-	containerRef?: React$1.MutableRefObject<HTMLDivElement>;
-	/**
-	 * The delegate to use to get the menu data. If not specified or if it returns undefined, the data
-	 * in normalMenu or fullMenu property will be used.
-	 */
-	menuProvider?: MultiColumnMenuProvider;
-	/**
-	 * The menu data to show when the menu is opened if the menuProvider property is not defined.
-	 * (This allows for a default or test-only static menu to be used.)
-	 */
-	normalMenu?: Localized<MultiColumnMenu>;
-	/**
-	 * The menu data to show for "full" menu (when opened with the SHIFT key pressed) if the
-	 * menuProvider property is not defined. (This allows for a default or test-only static menu to be
-	 * used.)
-	 */
-	fullMenu?: Localized<MultiColumnMenu>;
-	/** Additional css class(es) to help with unique styling of the sub-components */
-	className?: string;
-	/** Value to use as prefix for ARIA labels on interactive sub-components */
-	ariaLabelPrefix?: string;
-};
-export declare function HamburgerMenuButton({ menuProvider, normalMenu, fullMenu, commandHandler, containerRef, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
-export type IconButtonProps = React$1.PropsWithChildren<{
-	/** Optional unique identifier */
-	id?: string;
-	/**
-	 * Required. Used as both the tooltip (aka, title) and the aria-label (used for accessibility,
-	 * testing, etc.), unless a distinct tooltip is supplied.
-	 */
-	label: string;
-	/**
-	 * Enabled status of button
-	 *
-	 * @default false
-	 */
-	isDisabled?: boolean;
-	/** Optional tooltip to display if different from the aria-label. */
-	tooltip?: string;
-	/** If true, no tooltip will be displayed. */
-	isTooltipSuppressed?: boolean;
-	/**
-	 * If given, uses a negative margin to counteract the padding on one side (this is often helpful
-	 * for aligning the left or right side of the icon with content above or below, without ruining
-	 * the border size and shape).
-	 *
-	 * @default false
-	 */
-	adjustMarginToAlignToEdge?: "end" | "start" | false;
-	/**
-	 * The size of the component. small is equivalent to the dense button styling.
-	 *
-	 * @default false
-	 */
-	size: "small" | "medium" | "large";
-	/** Additional css classes to help with unique styling of the button */
-	className?: string;
-	/** Optional click handler */
-	onClick?: React$1.MouseEventHandler<HTMLButtonElement>;
-}>;
-/**
- * Iconic button a user can click to do something
- *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
- */
-export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
-type SubMenu = MenuItemInfoBase & {
-	/** Command to execute (string.string) */
-	items: MenuItemInfo[];
-};
-type MenuPropsBase = {
-	menuDefinition: Localized<SingleColumnMenu>;
-	commandHandler: CommandHandler;
-	/**
-	 * Additional action to perform when any menu item is clicked. Allows the caller to handle event
-	 * (e.g., to close the menu).
-	 */
-	onClick?: (event: React$1.MouseEvent<HTMLElement>) => void;
-};
-export type MenuItemListProps = MenuPropsBase & {
-	/** Optional unique (column) identifier */
-	columnId?: ReferencedItem;
-};
-type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
-	/** Optional unique identifier */
-	id?: string;
-	onClick: (event: React$1.MouseEvent<HTMLElement>) => void;
-}>;
-type MenuItemInfo = (Command | SubMenu) & {
-	/**
-	 * If specified, menu item will be inset if it does not have a leading icon.
-	 *
-	 * @default true
-	 */
-	allowForLeadingIcons?: boolean;
-	/**
-	 * If specified, the path to the icon image to display on the leading side of the menu text.
-	 *
-	 * @default undefined (no leading icon will be shown)
-	 */
-	iconPathBefore?: string;
-	/**
-	 * If specified, the path to the icon image to display on the trailing side of the menu text.
-	 *
-	 * @default undefined (no trailing icon will be shown)
-	 */
-	iconPathAfter?: string;
-	/**
-	 * If true, list item is focused during the first mount
-	 *
-	 * @default false
-	 */
-	hasAutoFocus?: boolean;
-	/** Additional css classes to help with unique styling of the menu item */
-	className?: string;
-	/**
-	 * If true, the menu item will appear disabled and it will not respond to clicks or mouse hovers.
-	 *
-	 * @default false
-	 */
-	isDisabled?: boolean;
-	/**
-	 * If true, compact vertical padding designed for keyboard and mouse input is used.
-	 *
-	 * @default true
-	 */
-	isDense?: boolean;
-	/**
-	 * If true, a right-arrow icon will be displayed (iconPathAfter, if specified, will be ignored).
-	 *
-	 * @default false
-	 */
-	isSubMenuParent?: boolean;
-	/**
-	 * If true, the left and right padding is removed
-	 *
-	 * @default false
-	 */
-	hasDisabledGutters?: boolean;
-	/**
-	 * If true, a 1px light border is added to bottom of menu item
-	 *
-	 * @default false
-	 */
-	hasDivider?: boolean;
-	/** Help identify which element has keyboard focus */
-	focusVisibleClassName?: string;
-	/** If it's a submenu, it should have the items property */
-	items?: MenuItemInfo[];
-};
-export declare function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Seach query for the search bar */

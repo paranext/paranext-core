@@ -68,7 +68,7 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import { MUI_OVERRIDES, SCROLLBAR_STYLES, THEME } from '@renderer/theme';
+import { SCROLLBAR_STYLES, THEME } from '@renderer/theme';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -1062,7 +1062,7 @@ export const openWebView = async (
       // Add wrapping to turn a plain string into an iframe
       webViewContent = webView.content.includes('<html')
         ? webView.content
-        : `<html><head><style>${SCROLLBAR_STYLES}</style><style>${MUI_OVERRIDES}</style></head><body>${webView.content}</body></html>`;
+        : `<html><head><style>${SCROLLBAR_STYLES}</style></head><body>${webView.content}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
@@ -1092,9 +1092,6 @@ export const openWebView = async (
             }
             <style>
               ${SCROLLBAR_STYLES}
-            </style>
-            <style>
-              ${MUI_OVERRIDES}
             </style>
           </head>
           <body class="${THEME}">

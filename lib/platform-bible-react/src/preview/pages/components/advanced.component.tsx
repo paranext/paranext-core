@@ -21,6 +21,7 @@ import { ScriptureResultsViewerExample } from './advanced/scripture-results-view
 import { SettingsListExamples } from './advanced/settings-list.examples.component';
 import { UiLanguageSelectorExample } from './advanced/ui-language-selector-example.component';
 import { columns, data } from './data-sources/data-table-content';
+import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.component';
 import { SettingSidebarContentSearchExamples } from './advanced/settings-sidebar-content-search.example.component';
 import { PlatformMenubarExample } from './advanced/platform-menubar-example.component';
 
@@ -77,6 +78,7 @@ export function Compositions() {
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Multi-select Combo Box">
             Multi-select Combo Box
@@ -93,7 +95,7 @@ export function Compositions() {
           <VerticalTabsTrigger value="Settings Sidebar Content Search">
             Settings Sidebar Content Search
           </VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Tab Dropdown Menu">Tab Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="UI Language Selector">
             UI Language Selector
           </VerticalTabsTrigger>
@@ -114,6 +116,10 @@ export function Compositions() {
 
         <VerticalTabsContent value="Filter">
           <FilterExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Markdown Renderer">
+          <MarkdownRendererExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
@@ -181,8 +187,8 @@ export function Compositions() {
           <SettingSidebarContentSearchExamples />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Markdown Renderer">
-          <MarkdownRendererExample />
+        <VerticalTabsContent value="Tab Dropdown Menu">
+          <TabDropdownMenuExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="UI Language Selector">

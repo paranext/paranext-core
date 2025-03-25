@@ -98,6 +98,10 @@ git remote add paranext-extension-template https://github.com/paranext/paranext-
 
 </details>
 
+### Configure paths to `paranext-core` repo
+
+If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
+
 ## To run
 
 ### Running Platform.Bible with these extensions

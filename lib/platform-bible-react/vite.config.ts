@@ -26,8 +26,6 @@ const config = defineConfig({
         ...Object.keys(peerDependencies ?? {}),
         ...Object.keys(dependencies ?? {}),
         'react/jsx-runtime',
-        '@mui/styled-engine-sc',
-        '@mui/styled-engine',
       ],
       output: {
         globals: {
