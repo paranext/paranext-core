@@ -1,4 +1,4 @@
-import PlatformEventEmitter from './platform-event-emitter.model';
+import { PlatformEventEmitter } from './platform-event-emitter.model';
 import { deepClone } from './util';
 
 type JsonObjectLike = { [key: string]: unknown };
