@@ -1,7 +1,7 @@
 /* eslint-disable max-classes-per-file */
 
 import { vi } from 'vitest';
-import DocumentCombiner, { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
+import { DocumentCombiner, DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 
 // #region Combiner implementations
 

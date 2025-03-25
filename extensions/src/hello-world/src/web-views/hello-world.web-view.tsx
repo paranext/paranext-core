@@ -325,6 +325,11 @@ globalThis.webViewComponent = function HelloWorld({
     [localizedOption1, localizedOption2],
   );
 
+  const scrRefString = useMemo(
+    () => (scrRef ? `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}` : ''),
+    [scrRef],
+  );
+
   return (
     <div>
       <div className="title">
@@ -426,7 +431,7 @@ globalThis.webViewComponent = function HelloWorld({
           />
         </div>
       </div>
-      <h3 style={headerStyle}>{scrRef.toString()}</h3>
+      <h3 style={headerStyle}>{scrRefString}</h3>
       <div>{currentProjectVerse}</div>
       <ProjectSettingsEditor {...helloWorldProjectSettings} />
       <h3>{localizedListOfSelectedIds}:</h3>
