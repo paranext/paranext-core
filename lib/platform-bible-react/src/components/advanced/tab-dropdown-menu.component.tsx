@@ -58,38 +58,36 @@ const getGroupContent = (
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
         return (
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {'command' in item ? (
-                  <DropdownMenuItem
-                    key={item.command}
-                    onClick={() => {
-                      commandHandler(item);
-                    }}
-                  >
-                    {item.label}
-                  </DropdownMenuItem>
-                ) : (
-                  <DropdownMenuSub key={item.id}>
-                    <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
+          <Tooltip key={`tooltip-${item.label}`}>
+            <TooltipTrigger asChild>
+              {'command' in item ? (
+                <DropdownMenuItem
+                  key={item.command}
+                  onClick={() => {
+                    commandHandler(item);
+                  }}
+                >
+                  {item.label}
+                </DropdownMenuItem>
+              ) : (
+                <DropdownMenuSub key={`dropdown-menu-sub-${item.label}`}>
+                  <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
 
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent>
-                        {getGroupContent(
-                          groups,
-                          items,
-                          getSubMenuKeyForId(groups, item.id),
-                          commandHandler,
-                        )}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
-                )}
-              </TooltipTrigger>
-              {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
-            </Tooltip>
-          </TooltipProvider>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                      {getGroupContent(
+                        groups,
+                        items,
+                        getSubMenuKeyForId(groups, item.id),
+                        commandHandler,
+                      )}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+              )}
+            </TooltipTrigger>
+            {item.tooltip && <TooltipContent>{item.tooltip}</TooltipContent>}
+          </Tooltip>
         );
       });
 
@@ -152,7 +150,9 @@ export default function TabDropdownMenu({
           .map(([columnKey], index, array) => (
             <>
               <DropdownMenuGroup key={columnKey}>
-                {getGroupContent(menuData.groups, menuData.items, columnKey, commandHandler)}
+                <TooltipProvider>
+                  {getGroupContent(menuData.groups, menuData.items, columnKey, commandHandler)}
+                </TooltipProvider>
               </DropdownMenuGroup>
 
               {index < array.length - 1 && <DropdownMenuSeparator />}
