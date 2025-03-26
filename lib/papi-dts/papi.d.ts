@@ -7304,8 +7304,8 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import IDataProvider from 'shared/models/data-provider.interface';
-  import ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   /**
    * The final function called as part of the `useData` hook that is the actual React hook
    *

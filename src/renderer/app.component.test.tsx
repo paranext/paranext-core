@@ -3,7 +3,7 @@ import { render } from '@testing-library/react';
 import { vi } from 'vitest';
 import { ProcessType } from '@shared/global-this.model';
 import { PlatformEventEmitter } from 'platform-bible-utils';
-import App from '@renderer/app.component';
+import { App } from '@renderer/app.component';
 
 // #region globalThis setup
 

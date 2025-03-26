@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { getCurrentLocale } from './intl-util';
 
 vi.mock('./intl-date-time-format', () => ({
-  DateTimeFormat: vi.fn(() => ({
+  DateTimeFormat: vi.fn().mockImplementation(() => ({
     resolvedOptions: vi.fn(() => ({ locale: 'he' })),
   })),
 }));
