@@ -377,6 +377,7 @@ export function Inventory({
       );
     });
     if (occurrence.length > 1) throw new Error('Selected item is not unique');
+    if (occurrence.length === 0) return [];
     return occurrence[0].occurrences;
   }, [selectedItem, showAdditionalItems, reducedTableData]);
 
