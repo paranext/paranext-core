@@ -25,17 +25,18 @@ import { executionTokenService } from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
   debounce,
-  UnsubscriberAsync,
-  UnsubscriberAsyncList,
   deserialize,
   endsWith,
+  formatReplacementString,
   includes,
   stringLength,
   startsWith,
   slice,
   toKebabCase,
+  UnsubscriberAsync,
+  UnsubscriberAsyncList,
 } from 'platform-bible-utils';
-import LogError from '@shared/log-error.model';
+import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import { APP_URI_SCHEME, PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import {
@@ -63,6 +64,8 @@ import {
   registerRequestHandler,
 } from '@shared/services/network.service';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+import { notificationService } from '@shared/services/notification.service';
+import { localizationService } from '@shared/services/localization.service';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -1006,10 +1009,8 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   };
   Object.freeze(context);
 
-  // Activate the extension
-  logger.info(`extension.service: activating ${extension.name}`);
-  await extensionModule.activate(context);
-  logger.info(`extension.service: finished activating ${extension.name}`);
+  // Call activate() on the extension
+  await callActivateOnExtension(extensionModule, context);
 
   // Add registrations that the extension didn't explicitly make itself
   if (extensionModule.deactivate) context.registrations.add(extensionModule.deactivate);
@@ -1023,6 +1024,65 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   };
   activeExtensions.set(extension.name, activeExtension);
   return activeExtension;
+}
+
+/**
+ * Calls the activate function on an extension and handles problems that arise
+ *
+ * @param extension - The extension to activate
+ * @param context - Context object to pass into the extension's activate function
+ * @returns A promise that resolves when the extension has been activated
+ * @throws An error if the extension had a problem during activation or takes too long to activate
+ */
+async function callActivateOnExtension(
+  extension: IExtension,
+  context: ExecutionActivationContext,
+): Promise<void> {
+  logger.info(`extension.service: activating ${context.name}`);
+
+  let timeoutOccurred = false;
+  let errorDuringActivation: unknown;
+  await Promise.race([
+    (async () => {
+      try {
+        await extension.activate(context);
+        if (timeoutOccurred) {
+          await context.registrations.runAllUnsubscribers();
+          await extension.deactivate?.();
+          executionTokenService.unregisterExtension(
+            context.executionToken.name,
+            context.executionToken.getHash(),
+          );
+        }
+      } catch (e) {
+        errorDuringActivation = e;
+      }
+    })(),
+    new Promise<void>((resolve) => {
+      setTimeout(() => {
+        timeoutOccurred = true;
+        resolve();
+      }, 5000); // 5 seconds - tries to balance flexibility with exceeding other timeouts
+    }),
+  ]);
+  if (timeoutOccurred || errorDuringActivation) {
+    // TODO: Disable extensions that didn't activate once we have a way for users to re-enable them
+    notificationService.send({
+      severity: 'error',
+      message: formatReplacementString(
+        await localizationService.getLocalizedString({
+          localizeKey: '%extension_failed_to_start%',
+        }),
+        {
+          extensionName: context.name,
+        },
+      ),
+    });
+  }
+  if (timeoutOccurred) throw new Error(`Activation of ${context.name} timed out`);
+  if (errorDuringActivation) throw errorDuringActivation;
+
+  logger.info(`extension.service: finished activating ${context.name}`);
 }
 
 /**
