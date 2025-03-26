@@ -14,6 +14,7 @@ export function BadgeExamples() {
       </Badge>
       <Badge variant="outline">outline</Badge>
       <Badge variant="secondary">secondary</Badge>
+      <Badge variant="muted">muted</Badge>
     </div>
   );
 }
