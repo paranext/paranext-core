@@ -1,4 +1,4 @@
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import localizationService from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
 import { isString, SettingsContribution } from 'platform-bible-utils';
@@ -45,7 +45,7 @@ export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = 
     typeof newValue.book === 'string' &&
     typeof newValue.chapterNum === 'number' &&
     typeof newValue.verseNum === 'number' &&
-    newValue.book !== '' && // TODO: This might need more thought, even though the >= 0 wasn't very good either
+    Canon.isBookIdValid(newValue.book) &&
     newValue.chapterNum >= 0 &&
     newValue.verseNum >= 0
   );

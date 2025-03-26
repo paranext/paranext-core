@@ -236,8 +236,8 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             if (
               'scrRef' in range.start &&
               'scrRef' in range.end &&
-              (range.start.scrRef.book !== range.end.scrRef.book ||
-                range.start.scrRef.chapterNum !== range.end.scrRef.chapterNum)
+              (range.start.verseRef.book !== range.end.verseRef.book ||
+                range.start.verseRef.chapterNum !== range.end.verseRef.chapterNum)
             ) {
               throw new Error(
                 'Could not get targetScrRef from scrRefs! Selection range cannot (yet) span chapters or books',
@@ -246,9 +246,9 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
             // Establish the book and chapter we're working with by what the range says
             if ('scrRef' in range.start) {
-              targetScrRef = range.start.scrRef;
+              targetScrRef = range.start.verseRef;
             } else if ('scrRef' in range.end) {
-              targetScrRef = range.end.scrRef;
+              targetScrRef = range.end.verseRef;
             } else
               throw new Error('Could not determine target scrRef to convert scrRef to jsonPath');
           }
@@ -282,9 +282,9 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           if ('scrRef' in range.start) {
             const startContentLocation = usjRW.verseRefToUsjContentLocation(
               {
-                book: range.start.scrRef.book,
-                chapterNum: range.start.scrRef.chapterNum,
-                verseNum: range.start.scrRef.verseNum,
+                book: range.start.verseRef.book,
+                chapterNum: range.start.verseRef.chapterNum,
+                verseNum: range.start.verseRef.verseNum,
               },
               range.start.offset,
             );
@@ -298,9 +298,9 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           if ('scrRef' in range.end) {
             const endContentLocation = usjRW.verseRefToUsjContentLocation(
               {
-                book: range.end.scrRef.book,
-                chapterNum: range.end.scrRef.chapterNum,
-                verseNum: range.end.scrRef.verseNum,
+                book: range.end.verseRef.book,
+                chapterNum: range.end.verseRef.chapterNum,
+                verseNum: range.end.verseRef.verseNum,
               },
               range.end.offset,
             );

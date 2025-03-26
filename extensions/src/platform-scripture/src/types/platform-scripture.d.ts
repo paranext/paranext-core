@@ -561,8 +561,6 @@ declare module 'platform-scripture' {
    * `JSONPath`-style locations since it already has the data in USJ form. If a check is processing
    * USFM or USX data (or some other data type), then it probably doesn't have access to the USJ and
    * can just return a `VerseRef`-style location.
-   *
-   * TODO: This comment is probably not accurate anymore
    */
   export type CheckLocation =
     | {

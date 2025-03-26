@@ -46,9 +46,7 @@ declare module 'platform-scripture-editor' {
 
   /**
    * Position in Scripture. See {@link CheckLocation} for more information as this is mostly a
-   * {@link CheckLocation} but using a `SerializedVerseRef` instead of a `VerseRef` since `VerseRef`
-   * doesn't travel across processes well TODO: This might need some more thought? // TODO: This
-   * comment might need to be updated?
+   * {@link CheckLocation}.
    *
    * Also added `bookNum` and `chapterNum` to the `jsonPath` result
    */
@@ -74,7 +72,7 @@ declare module 'platform-scripture-editor' {
       }
     | {
         /** Verse reference to a location with the document */
-        scrRef: SerializedVerseRef;
+        verseRef: SerializedVerseRef;
         /** Offset to apply to start of the verse indicated by `verseRef` */
         offset?: number;
       };
