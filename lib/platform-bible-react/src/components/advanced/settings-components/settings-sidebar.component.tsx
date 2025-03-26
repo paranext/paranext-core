@@ -85,11 +85,11 @@ export function SettingsSidebar({
       id={id}
       collapsible="none"
       variant="inset"
-      className={cn('tw-w-96 tw-gap-2 tw-overflow-y-auto tw-bg-muted/50', className)}
+      className={cn('tw-w-96 tw-gap-2 tw-overflow-y-auto', className)}
     >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="tw-text-sm tw-text-gray-400">
+          <SidebarGroupLabel className="tw-text-sm tw-text-muted-foreground">
             {extensionsSidebarGroupLabel}
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -97,10 +97,7 @@ export function SettingsSidebar({
               {Object.entries(extensionLabels).map(([key, label]) => (
                 <SidebarMenuItem key={key}>
                   <SidebarMenuButton
-                    className={cn(
-                      'tw-rounded tw-py-2 tw-text-sm tw-text-gray-500 hover:tw-bg-white hover:tw-text-gray-900 hover:tw-shadow-sm active:tw-bg-white',
-                      { 'tw-bg-white tw-text-gray-900 tw-shadow-sm': getIsActive(key) },
-                    )}
+                    variant="muted"
                     onClick={() => handleSelectItem(key)}
                     isActive={getIsActive(key)}
                   >
@@ -112,13 +109,15 @@ export function SettingsSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel className="tw-text-sm tw-text-gray-400">
+          <SidebarGroupLabel className="tw-text-sm tw-text-muted-foreground">
             {projectsSidebarGroupLabel}
           </SidebarGroupLabel>
           <SidebarGroupContent className="tw-pl-3">
             <ComboBox
-              buttonVariant={selectedSidebarItem?.projectId ? 'outline' : 'ghost'}
-              buttonClassName="tw-w-full"
+              buttonVariant="ghost"
+              buttonClassName={cn('tw-w-full', {
+                'tw-bg-muted': selectedSidebarItem?.projectId,
+              })}
               popoverContentClassName="tw-z-[1000]"
               options={projectInfo.flatMap((info) => info.projectId)}
               getOptionLabel={(projectId: ComboBoxOption) => {

@@ -99,21 +99,17 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           className={cn(
             'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
             buttonClassName ?? className,
+            // Placeholder text should be muted-foreground
+            // This condition was added as requested by UX
+            {
+              'tw-text-muted-foreground': !value,
+            },
           )}
           disabled={isDisabled}
         >
           <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
             {icon && <div className="tw-pe-2">{icon}</div>}
-            <span
-              className={cn(
-                'tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap',
-                // Placeholder text should be muted-foreground
-                // This condition was added as requested by UX
-                {
-                  'tw-text-muted-foreground': !value,
-                },
-              )}
-            >
+            <span className={cn('tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap')}>
               {value ? getOptionLabel(value) : buttonPlaceholder}
             </span>
           </div>
