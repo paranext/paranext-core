@@ -51,6 +51,7 @@ import { WebViewFactory as PapiWebViewFactory } from '@shared/models/web-view-fa
 import { dataProtectionService } from '@shared/services/data-protection.service';
 import { INotificationService } from '@shared/models/notification.service-model';
 import { notificationService } from '@shared/services/notification.service';
+import { appService } from '@shared/services/app.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -78,6 +79,8 @@ const papi = {
   fetch: internetService.fetch,
 
   // Services/modules
+  /** JSDOC DESTINATION appService */
+  app: appService,
   /** JSDOC DESTINATION commandService */
   commands: commandService,
   /** JSDOC DESTINATION dataProtectionService */
@@ -147,6 +150,9 @@ Object.freeze(papi.WebViewFactory);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);
+/** JSDOC DESTINATION appService */
+export const { app } = papi;
+Object.freeze(papi.app);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);
