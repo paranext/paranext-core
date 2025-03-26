@@ -1,5 +1,3 @@
-import { ScrVers, VerseRef } from '@sillsdev/scripture';
-
 /**
  * Converts a JavaScript value to a JSON string, changing `undefined` properties in the JavaScript
  * object to `null` properties in the JSON string.
@@ -71,44 +69,7 @@ export function deserialize(
     return obj;
   }
 
-  // Helper function to create a VerseRef from a SerializedVerseRef object
-  function verseRefReviver(_vrefKey: string, vrefValue: unknown): unknown {
-    if (
-      vrefValue &&
-      typeof vrefValue === 'object' &&
-      'book' in vrefValue &&
-      typeof vrefValue.book === 'string' &&
-      'chapterNum' in vrefValue &&
-      typeof vrefValue.chapterNum === 'number' &&
-      'verseNum' in vrefValue &&
-      typeof vrefValue.verseNum === 'number' &&
-      Object.keys(vrefValue).every((key) =>
-        ['book', 'chapterNum', 'verseNum', 'verse', 'versificationStr'].includes(key),
-      )
-    ) {
-      const chapter = vrefValue.chapterNum.toString(10);
-      const verse =
-        'verse' in vrefValue && typeof vrefValue.verse === 'string'
-          ? vrefValue.verse
-          : vrefValue.verseNum.toString(10);
-      const versification =
-        'versificationStr' in vrefValue && typeof vrefValue.versificationStr === 'string'
-          ? new ScrVers(vrefValue.versificationStr)
-          : undefined;
-      return new VerseRef(vrefValue.book, chapter, verse, versification);
-    }
-    return vrefValue;
-  }
-
-  // Helper function to call the provided reviver and the VerseRef reviver
-  function combinedReviver(this: unknown, reviverKey: string, reviverVal: unknown) {
-    return verseRefReviver(
-      reviverKey,
-      reviver ? reviver.call(this, reviverKey, reviverVal) : reviverVal,
-    );
-  }
-
-  const parsedObject = JSON.parse(value, combinedReviver);
+  const parsedObject = JSON.parse(value, reviver);
   // Explicitly convert the value 'null' that isn't stored as a property on an object to 'undefined'
   // eslint-disable-next-line no-null/no-null
   if (parsedObject === null) return undefined;

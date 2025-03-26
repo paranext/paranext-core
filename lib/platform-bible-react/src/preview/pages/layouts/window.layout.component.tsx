@@ -42,7 +42,11 @@ export function WindowOrTabExample({ isFocused }: HasIsFocused) {
     // Add ES3 to demonstrate that an obsolete book in use will display (easier than trying to
     // figure out which 0 to make a 1 in the above string.)
     const activeBookNums = Array.from(
-      new Set([...initialActiveBookNums, scrRef.bookNum, Canon.bookIdToNumber('3ES')]),
+      new Set([
+        ...initialActiveBookNums,
+        Canon.bookIdToNumber(scrRef.book),
+        Canon.bookIdToNumber('3ES'),
+      ]),
     );
     activeBookNums.sort((a, b) => a - b);
     return activeBookNums.map((bookNum) => Canon.bookNumberToId(bookNum));

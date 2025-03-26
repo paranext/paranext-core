@@ -6,8 +6,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/shadcn-ui/table';
-import { Canon } from '@sillsdev/scripture';
-import { deepEqual, LanguageStrings, ScriptureReference } from 'platform-bible-utils';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { deepEqual, LanguageStrings } from 'platform-bible-utils';
 import { useMemo } from 'react';
 import { InventoryItemOccurrence } from './inventory-utils';
 
@@ -16,7 +16,7 @@ type OccurrencesTableProps = {
   /** Data that contains scriptures references and snippets of scripture */
   occurrenceData: InventoryItemOccurrence[];
   /** Callback function that is executed when the scripture reference is changed */
-  setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  setScriptureReference: (scriptureReference: SerializedVerseRef) => void;
   /**
    * Object with all localized strings that the OccurrencesTable needs to work well across multiple
    * languages
@@ -63,14 +63,14 @@ export function OccurrencesTable({
         {occurrences.length > 0 &&
           occurrences.map((occurrence) => (
             <TableRow
-              key={`${occurrence.reference.bookNum} ${occurrence.reference.chapterNum}:${
+              key={`${occurrence.reference.book} ${occurrence.reference.chapterNum}:${
                 occurrence.reference.verseNum
               }-${occurrence.text}`}
               onClick={() => {
                 setScriptureReference(occurrence.reference);
               }}
             >
-              <TableCell>{`${Canon.bookNumberToEnglishName(occurrence.reference.bookNum)} ${occurrence.reference.chapterNum}:${occurrence.reference.verseNum}`}</TableCell>
+              <TableCell>{`${Canon.bookIdToEnglishName(occurrence.reference.book)} ${occurrence.reference.chapterNum}:${occurrence.reference.verseNum}`}</TableCell>
               <TableCell>{occurrence.text}</TableCell>
             </TableRow>
           ))}

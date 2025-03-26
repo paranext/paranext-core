@@ -1,4 +1,4 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import {
   ColumnDef,
   Inventory,
@@ -10,6 +10,7 @@ import {
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { useMemo } from 'react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_repeated_words%',
@@ -54,8 +55,8 @@ const createColumns = (
 ];
 
 interface RepeatedWordsInventoryProps {
-  scriptureReference: ScriptureReference;
-  setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  verseRef: SerializedVerseRef;
+  setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
@@ -67,8 +68,8 @@ interface RepeatedWordsInventoryProps {
 }
 
 export function RepeatedWordsInventory({
-  scriptureReference,
-  setScriptureReference,
+  verseRef,
+  setVerseRef,
   localizedStrings,
   approvedItems,
   onApprovedItemsChange,
@@ -116,8 +117,8 @@ export function RepeatedWordsInventory({
 
   return (
     <Inventory
-      scriptureReference={scriptureReference}
-      setScriptureReference={setScriptureReference}
+      verseRef={verseRef}
+      setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
       extractItems={repeatedWordsRegex}
       approvedItems={approvedItems}

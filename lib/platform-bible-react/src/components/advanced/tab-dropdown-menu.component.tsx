@@ -58,11 +58,11 @@ const getGroupContent = (
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
         return (
-          <Tooltip key={`tooltip-${item.label}`}>
+          <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
             <TooltipTrigger asChild>
               {'command' in item ? (
                 <DropdownMenuItem
-                  key={item.command}
+                  key={`dropdown-menu-item-${item.label}-${item.command}`}
                   onClick={() => {
                     commandHandler(item);
                   }}
@@ -70,7 +70,7 @@ const getGroupContent = (
                   {item.label}
                 </DropdownMenuItem>
               ) : (
-                <DropdownMenuSub key={`dropdown-menu-sub-${item.label}`}>
+                <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
                   <DropdownMenuSubTrigger>{item.label}</DropdownMenuSubTrigger>
 
                   <DropdownMenuPortal>

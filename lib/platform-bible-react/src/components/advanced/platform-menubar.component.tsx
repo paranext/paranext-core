@@ -79,11 +79,11 @@ const getMenubarContent = (
       .sort((a, b) => a.order - b.order)
       .map((item: Localized<MenuItemContainingCommand | MenuItemContainingSubmenu>) => {
         return (
-          <Tooltip key={`tooltip-${item.label}`}>
+          <Tooltip key={`tooltip-${item.label}-${'command' in item ? item.command : item.id}`}>
             <TooltipTrigger asChild>
               {'command' in item ? (
                 <MenubarItem
-                  key={`menubar-item-${item.command}`}
+                  key={`menubar-item-${item.label}-${item.command}`}
                   onClick={() => {
                     commandHandler(item);
                   }}
@@ -91,7 +91,7 @@ const getMenubarContent = (
                   {item.label}
                 </MenubarItem>
               ) : (
-                <MenubarSub key={`menubar-sub-${item.label}`}>
+                <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
                   <MenubarSubTrigger>{item.label}</MenubarSubTrigger>
                   <MenubarSubContent>
                     {getMenubarContent(

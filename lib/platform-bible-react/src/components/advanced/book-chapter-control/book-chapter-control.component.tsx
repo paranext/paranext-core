@@ -12,8 +12,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
-import { Canon } from '@sillsdev/scripture';
-import { type ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { getChaptersForBook } from 'platform-bible-utils';
 import {
   KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -28,8 +28,8 @@ type BookTypeLabels = {
 };
 
 export type BookChapterControlProps = {
-  scrRef: ScriptureReference;
-  handleSubmit: (scrRef: ScriptureReference) => void;
+  scrRef: SerializedVerseRef;
+  handleSubmit: (scrRef: SerializedVerseRef) => void;
   className?: string;
   getActiveBookIds?: () => string[];
 };
@@ -106,13 +106,9 @@ export function BookChapterControl({
 }: BookChapterControlProps) {
   const dir: Direction = readDirection();
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedBookId, setSelectedBookId] = useState<string>(
-    Canon.bookNumberToId(scrRef.bookNum),
-  );
+  const [selectedBookId, setSelectedBookId] = useState<string>(scrRef.book);
   const [highlightedChapter, setHighlightedChapter] = useState<number>(scrRef.chapterNum ?? 0);
-  const [highlightedBookId, setHighlightedBookId] = useState<string>(
-    Canon.bookNumberToId(scrRef.bookNum),
-  );
+  const [highlightedBookId, setHighlightedBookId] = useState<string>(scrRef.book);
   const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
   const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
 
@@ -166,13 +162,11 @@ export function BookChapterControl({
 
   const updateReference = useCallback(
     (bookId: string, shouldClose: boolean, chapter?: number, verse?: number) => {
-      setHighlightedChapter(
-        Canon.bookNumberToId(scrRef.bookNum) !== bookId ? 1 : scrRef.chapterNum,
-      );
+      setHighlightedChapter(scrRef.book !== bookId ? 1 : scrRef.chapterNum);
 
       if (shouldClose || fetchEndChapter(bookId) === -1) {
         handleSubmit({
-          bookNum: Canon.bookIdToNumber(bookId),
+          book: bookId,
           chapterNum: chapter || 1,
           verseNum: verse || 1,
         });
@@ -185,7 +179,7 @@ export function BookChapterControl({
       setSelectedBookId(selectedBookId !== bookId ? bookId : '');
       setIsContentOpen(!shouldClose);
     },
-    [handleSubmit, scrRef.bookNum, scrRef.chapterNum, selectedBookId],
+    [handleSubmit, scrRef.book, scrRef.chapterNum, selectedBookId],
   );
 
   const handleSelectChapter = (chapterNumber: number) => {
@@ -310,7 +304,7 @@ export function BookChapterControl({
 
   useEffect(() => {
     if (selectedBookId === highlightedBookId) {
-      if (selectedBookId === Canon.bookNumberToId(scrRef.bookNum)) {
+      if (selectedBookId === scrRef.book) {
         setHighlightedChapter(scrRef.chapterNum);
       } else {
         setHighlightedChapter(1);
@@ -318,7 +312,7 @@ export function BookChapterControl({
     } else {
       setHighlightedChapter(0);
     }
-  }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
+  }, [highlightedBookId, scrRef.book, scrRef.chapterNum, selectedBookId]);
 
   // The purpose of these useLayoutEffects and timeout is to delay the scroll just
   // enough so that the refs are defined and available when they are used after the timeout
@@ -349,8 +343,8 @@ export function BookChapterControl({
             handleSearch={handleSearchInput}
             handleKeyDown={handleKeyDownInput}
             handleOnClick={() => {
-              setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
-              setHighlightedBookId(Canon.bookNumberToId(scrRef.bookNum));
+              setSelectedBookId(scrRef.book);
+              setHighlightedBookId(scrRef.book);
               setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
               setIsContentOpen(true);
               inputRef.current.focus();
@@ -360,7 +354,7 @@ export function BookChapterControl({
               shouldPreventAutoClosing.current = true;
             }}
             handleSubmit={handleInputSubmit}
-            placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
+            placeholder={`${Canon.bookIdToEnglishName(scrRef.book)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
             className={className}
           />
         </DropdownMenuTrigger>
@@ -400,11 +394,7 @@ export function BookChapterControl({
                             handleSelectChapter={handleSelectChapter}
                             endChapter={fetchEndChapter(bookId)}
                             // Without this condition- will highlight that chapterNum in every book- not just the selected book
-                            activeChapter={
-                              scrRef.bookNum === Canon.bookIdToNumber(bookId)
-                                ? scrRef.chapterNum
-                                : 0
-                            }
+                            activeChapter={scrRef.book === bookId ? scrRef.chapterNum : 0}
                             highlightedChapter={highlightedChapter}
                             handleHighlightedChapter={(chapterNumber: number): void => {
                               setHighlightedChapter(chapterNumber);
