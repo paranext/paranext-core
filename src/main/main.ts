@@ -32,6 +32,7 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import { startAppService } from '@main/services/app.service-host';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -64,7 +65,8 @@ let willRestart = false;
  * https://benjamin-altpeter.de/shell-openexternal-dangers/
  */
 async function openExternal(url: string) {
-  if (!url.startsWith('https://')) throw new Error(`URL must start with 'https://': ${url}`);
+  if (!url.startsWith('https://') && !url.startsWith(`${APP_URI_SCHEME}://`))
+    throw new Error(`External URL must start with 'https://' or '${APP_URI_SCHEME}://: ${url}`);
   try {
     await shell.openExternal(url);
   } catch (e) {
@@ -90,9 +92,12 @@ async function main() {
 
   // TODO (maybe): Wait for signal from the .NET data provider process that it is ready
 
-  // Need to start the data protection service before starting the extension host because the extension
-  // host uses it
+  // Need to start the data protection service before starting the extension host because extensions
+  // use it
   await startDataProtectionService();
+
+  // Need to start the app service before starting the extension host because extensions use it
+  await startAppService();
 
   // The extension host service relies on the network service.
   // Extensions inside the extension host might rely on the .NET data provider and each other
