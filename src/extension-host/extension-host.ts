@@ -35,6 +35,15 @@ process.on('exit', () => {
   killChildProcessesFromExtensions();
 });
 
+// Add unhandled exception and rejection handlers
+process.on('uncaughtException', (error) => {
+  logger.error(`Unhandled exception in extension host: ${getErrorMessage(error)}`);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error(`Unhandled promise rejection in extension host, reason: ${getErrorMessage(reason)}`);
+});
+
 // #region Services setup
 
 (async () => {
