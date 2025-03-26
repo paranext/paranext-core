@@ -28,7 +28,7 @@ async function send(notification: PlatformNotification): Promise<string | number
   const { message, severity, clickCommand, clickCommandLabel, notificationId } = notification;
   const localizedMessage = await localize(message);
   let toastId = notificationId ? mapOfNotificationIdsToToastIds.get(notificationId) : undefined;
-  const clickHandler = {
+  const toastOptions = {
     action:
       clickCommandLabel && clickCommand
         ? {
@@ -37,19 +37,21 @@ async function send(notification: PlatformNotification): Promise<string | number
             id: toastId,
           }
         : undefined,
+    // Duration calc from https://paratextstudio.atlassian.net/browse/PT-2196?focusedCommentId=13075
+    duration: Math.min(Math.max(localizedMessage.length * 265, 10000), 35000),
   };
   switch (severity) {
     case 'info':
-      toastId = toast.info(localizedMessage, clickHandler);
+      toastId = toast.info(localizedMessage, toastOptions);
       break;
     case 'warning':
-      toastId = toast.warning(localizedMessage, clickHandler);
+      toastId = toast.warning(localizedMessage, toastOptions);
       break;
     case 'error':
-      toastId = toast.error(localizedMessage, clickHandler);
+      toastId = toast.error(localizedMessage, toastOptions);
       break;
     default:
-      toastId = toast(localizedMessage, clickHandler);
+      toastId = toast(localizedMessage, toastOptions);
       break;
   }
   const effectiveNotificationId = notificationId ?? toastId;
