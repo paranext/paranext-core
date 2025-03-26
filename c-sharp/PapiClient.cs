@@ -141,7 +141,7 @@ internal class PapiClient : IDisposable
     /// <returns>The request response's resulting value</returns>
     public virtual async Task<T?> SendRequestAsync<T>(
         string requestType,
-        IReadOnlyList<object?>? requestContents
+        IReadOnlyList<object?>? requestContents = null
     )
     {
         ObjectDisposedException.ThrowIf(_isDisposed, this);

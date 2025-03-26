@@ -33,6 +33,14 @@ public static class Program
                 return;
             }
 
+            // Log the ParatextData.dll assembly version then change it to 10.<our semver>
+            var appInfo = AppService.GetAppInfo(papi);
+            var appVersion = SemVerUtils.ConvertSemVerToVersion(appInfo.Version);
+            Console.WriteLine(
+                $"ParatextData.dll assembly version: {ParatextInfo.ParatextVersion}. Changing to {appVersion}"
+            );
+            ParatextInfo.ParatextVersion = appVersion;
+
             var paratextProjects = new LocalParatextProjects();
 
             // Adapted from Paratext's `Program.StaticInitialization`

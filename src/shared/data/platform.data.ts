@@ -22,10 +22,11 @@ export const APP_NAME: string = packageInfo.name;
 export const APP_VERSION: string = packageInfo.version;
 
 /**
+ * JSDOC SOURCE appUriScheme
+ *
  * URI scheme that this application handles. Navigating to a URI with this scheme will open this
  * application. This application will handle the URI as it sees fit. For example, the URI may be
- * handled by an extension - see {@link ElevatedPrivileges.registerUriHandler } for more
- * information.
+ * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
  *
  * This is the same as {@link APP_NAME}.
  */

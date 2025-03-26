@@ -24,13 +24,6 @@ public sealed class CheckInputRange
     private VerseRef _start;
     private VerseRef? _end;
 
-    // For deserialization only
-    private CheckInputRange()
-    {
-        _projectId = string.Empty;
-        _start = new VerseRef();
-    }
-
     public CheckInputRange(string projectId, VerseRef start, VerseRef? end)
     {
         ArgumentException.ThrowIfNullOrEmpty(projectId);
