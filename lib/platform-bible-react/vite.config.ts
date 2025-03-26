@@ -11,7 +11,9 @@ const config = defineConfig({
     tsconfigPaths(),
     react(),
     styleInject({
-      insertAt: 'top',
+      // Insert the platform-bible-react styles after all other style tags so the color variables and
+      // tailwind classes from platform-bible-react override those from extensions for consistency
+      insertAt: 'after-all',
     }),
   ],
   build: {

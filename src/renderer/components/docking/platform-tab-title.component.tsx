@@ -10,6 +10,7 @@ import {
 } from 'platform-bible-react';
 import { isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { handleMenuCommand } from '../platform-bible-menu.commands';
 import './platform-tab-title.component.scss';
 
@@ -102,11 +103,13 @@ export function PlatformTabTitle({
             <span>{title}</span>
           </div>
         </TooltipTrigger>
-        {tooltip && (
-          <TooltipContent className="tooltip" side="right">
-            <p>{tooltip}</p>
-          </TooltipContent>
-        )}
+        {tooltip &&
+          createPortal(
+            <TooltipContent className="tooltip" side="bottom">
+              <p>{tooltip}</p>
+            </TooltipContent>,
+            document.body,
+          )}
       </Tooltip>
     </TooltipProvider>
   );

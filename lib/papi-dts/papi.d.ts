@@ -5579,7 +5579,8 @@ declare module 'shared/models/handle-uri-privilege.model' {
      *
      *     `<app-uri-scheme>://<extension-publisher>.<extension-name>`;
      *
-     * - `<app-uri-scheme>` is the URI scheme this application supports. TODO: link name here
+     * - `<app-uri-scheme>` is the URI scheme this application supports. You can retrieve this value
+     *   using `papi.app.getAppInfo()`
      * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
      *   manifest
      * - `<extension-name>` is the name of this extension as specified in the extension manifest
@@ -5923,6 +5924,48 @@ declare module 'shared/services/localization.service-model' {
       getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
     } & IDataProvider<LocalizationDataDataTypes>;
 }
+declare module 'shared/services/app.service-model' {
+  /**
+   * Information about the app that is currently running.
+   *
+   * All of the information in this object is static and is determined at build time. It will not
+   * change throughout the lifetime of the app or across runs of the same build.
+   */
+  export type AppInfo = Readonly<{
+    /**
+     * Programmatic name of the application
+     *
+     * @example `platform-bible`.
+     */
+    name: string;
+    /**
+     * Version of the app. This is in [semver](https://semver.org/) format.
+     *
+     * @example `0.3.0`
+     *
+     * @example `1.2.3-ordered.info.here+additional.unordered.info.here123`
+     */
+    version: string;
+    /**
+     *
+     * URI scheme that this application handles. Navigating to a URI with this scheme will open this
+     * application. This application will handle the URI as it sees fit. For example, the URI may be
+     * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
+     *
+     * This is the same as {@link APP_NAME}.
+     */
+    uriScheme: string;
+  }>;
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export interface IAppService {
+    /** Retrieve information about the application that is currently running like name and version. */
+    getAppInfo(): Promise<AppInfo>;
+  }
+  export const appServiceNetworkObjectName = 'AppService';
+}
 declare module 'shared/data/platform.data' {
   /**
    * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
@@ -5938,10 +5981,10 @@ declare module 'shared/data/platform.data' {
   /** Version of this application in [semver](https://semver.org/) format. */
   export const APP_VERSION: string;
   /**
+   *
    * URI scheme that this application handles. Navigating to a URI with this scheme will open this
    * application. This application will handle the URI as it sees fit. For example, the URI may be
-   * handled by an extension - see {@link ElevatedPrivileges.registerUriHandler } for more
-   * information.
+   * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
    *
    * This is the same as {@link APP_NAME}.
    */
@@ -6427,6 +6470,7 @@ declare module '@papi/core' {
     LocalizationSelectors,
   } from 'shared/services/localization.service-model';
   export type { NetworkObjectDetails } from 'shared/models/network-object.model';
+  export type { AppInfo } from 'shared/services/app.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
   export type {
@@ -6708,6 +6752,14 @@ declare module 'shared/services/data-protection.service' {
   export const dataProtectionService: IDataProtectionService;
   export default dataProtectionService;
 }
+declare module 'shared/services/app.service' {
+  import { IAppService } from 'shared/services/app.service-model';
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export const appService: IAppService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -6815,6 +6867,11 @@ declare module '@papi/backend' {
     WebViewFactory: typeof PapiWebViewFactory;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
+    /**
+     *
+     * Provides information about this app like name and version.
+     */
+    app: import('shared/services/app.service-model').IAppService;
     /**
      *
      * The command service allows you to exchange messages with other components in the platform. You
@@ -7039,6 +7096,11 @@ declare module '@papi/backend' {
   export const WebViewFactory: typeof PapiWebViewFactory;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export const app: import('shared/services/app.service-model').IAppService;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You
@@ -8008,6 +8070,11 @@ declare module '@papi/frontend' {
     XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
     /**
      *
+     * Provides information about this app like name and version.
+     */
+    app: import('shared/services/app.service-model').IAppService;
+    /**
+     *
      * The command service allows you to exchange messages with other components in the platform. You
      * can register a command that other services and extensions can send you. You can send commands to
      * other services and extensions that have registered commands.
@@ -8107,6 +8174,11 @@ declare module '@papi/frontend' {
    * Note that Node doesn't have a native implementation, so this is only for the renderer.
    */
   export const XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export const app: import('shared/services/app.service-model').IAppService;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You

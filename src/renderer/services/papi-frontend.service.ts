@@ -53,6 +53,8 @@ const papi = {
   XMLHttpRequest: PapiRendererXMLHttpRequest,
 
   // Services/modules
+  /** JSDOC DESTINATION appService */
+  app: appService,
   /** JSDOC DESTINATION commandService */
   commands: commandService,
   /** JSDOC DESTINATION papiWebViewService */
@@ -107,6 +109,9 @@ Object.freeze(papi.WebSocket);
 /** JSDOC DESTINATION PapiRendererXMLHttpRequest */
 export const { XMLHttpRequest } = papi;
 Object.freeze(papi.XMLHttpRequest);
+/** JSDOC DESTINATION appService */
+export const { app } = papi;
+Object.freeze(papi.app);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);

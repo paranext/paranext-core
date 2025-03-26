@@ -16,7 +16,6 @@ internal static class SerializationOptions
         JsonSerializerOptions options =
             new()
             {
-                TypeInfoResolver = new PrivateConstructorResolver(), // Deserialize objects with private default constructors
                 Encoder = JavaScriptEncoder.Create(UnicodeRanges.All), // Don't escape non-ASCII characters
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase, // Allow properties to be upper-case while JSON contains lower-case
                 WriteIndented = false, // No need to waste bytes with nice formatting

@@ -21,7 +21,7 @@ import { resolveHtmlPath } from '@node/utils/util';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
-import { wait, serialize } from 'platform-bible-utils';
+import { wait, serialize, getErrorMessage } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
 import { get } from '@shared/services/project-data-provider.service';
@@ -32,6 +32,7 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import { startAppService } from '@main/services/app.service-host';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -64,7 +65,8 @@ let willRestart = false;
  * https://benjamin-altpeter.de/shell-openexternal-dangers/
  */
 async function openExternal(url: string) {
-  if (!url.startsWith('https://')) throw new Error(`URL must start with 'https://': ${url}`);
+  if (!url.startsWith('https://') && !url.startsWith(`${APP_URI_SCHEME}://`))
+    throw new Error(`External URL must start with 'https://' or '${APP_URI_SCHEME}://: ${url}`);
   try {
     await shell.openExternal(url);
   } catch (e) {
@@ -90,9 +92,12 @@ async function main() {
 
   // TODO (maybe): Wait for signal from the .NET data provider process that it is ready
 
-  // Need to start the data protection service before starting the extension host because the extension
-  // host uses it
+  // Need to start the data protection service before starting the extension host because extensions
+  // use it
   await startDataProtectionService();
+
+  // Need to start the app service before starting the extension host because extensions use it
+  await startAppService();
 
   // The extension host service relies on the network service.
   // Extensions inside the extension host might rely on the .NET data provider and each other
@@ -247,14 +252,19 @@ async function main() {
     // and restore the maximized or full screen state
     mainWindowState.manage(mainWindow);
 
-    mainWindow.loadURL(
-      `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`,
-    );
+    mainWindow
+      .loadURL(
+        `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`,
+      )
+      .catch((e) => {
+        logger.error(
+          `mainWindow could not load URL "${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}". ${getErrorMessage(e)}`,
+        );
+      });
 
     mainWindow.on('ready-to-show', () => {
-      if (!mainWindow) {
-        throw new Error('"mainWindow" is not defined');
-      }
+      logger.info('mainWindow is ready to show');
+      if (!mainWindow) throw new Error('"mainWindow" is not defined');
       if (process.env.START_MINIMIZED) {
         mainWindow.minimize();
       } else {
