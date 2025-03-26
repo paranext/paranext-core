@@ -25,7 +25,7 @@ import {
   MenuItemContainingSubmenu,
   MultiColumnMenu,
 } from 'platform-bible-utils';
-import { ReactNode } from 'react';
+import { Fragment, ReactNode } from 'react';
 import { CommandHandler } from './platform-menubar.component';
 
 const getSubMenuKeyForId = (
@@ -148,15 +148,15 @@ export default function TabDropdownMenu({
             return a.order - b.order;
           })
           .map(([columnKey], index, array) => (
-            <>
-              <DropdownMenuGroup key={columnKey}>
+            <Fragment key={columnKey}>
+              <DropdownMenuGroup>
                 <TooltipProvider>
                   {getGroupContent(menuData.groups, menuData.items, columnKey, commandHandler)}
                 </TooltipProvider>
               </DropdownMenuGroup>
 
               {index < array.length - 1 && <DropdownMenuSeparator />}
-            </>
+            </Fragment>
           ))}
       </DropdownMenuContent>
     </DropdownMenu>
