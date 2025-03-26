@@ -1,5 +1,6 @@
-import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
 
 export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
 
@@ -13,40 +14,40 @@ export const EVENT_NAME_ON_DID_UPDATE_SCR_REF = serializeRequestType(
 );
 
 /**
- * Combination of a {@link ScrollGroupId} and a {@link ScriptureReference}. If this value is a number,
- * that means this should be synced with the scroll group sharing that number. If this value is an
+ * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
+ * means this should be synced with the scroll group sharing that number. If this value is an
  * object, that means it is an independent Scripture reference and should not be synced with any
  * scroll group.
  */
-export type ScrollGroupScrRef = ScrollGroupId | ScriptureReference;
+export type ScrollGroupScrRef = ScrollGroupId | SerializedVerseRef;
 
 /**
- * Information about an update to a scroll group. Informs about the new {@link ScriptureReference} at
- * a {@link ScrollGroupId}
+ * Information about an update to a scroll group. Informs about the new SerializedVerseRef at a
+ * {@link ScrollGroupId}
  */
 export type ScrollGroupUpdateInfo = {
-  scrRef: ScriptureReference;
+  scrRef: SerializedVerseRef;
   scrollGroupId: ScrollGroupId;
 };
 
 /** Parts of the Scroll Group Service that are exposed through the network object */
 export interface IScrollGroupRemoteService {
   /**
-   * Get the {@link ScriptureReference} associated with the provided scroll group
+   * Get the SerializedVerseRef associated with the provided scroll group
    *
    * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
    * @returns Scripture reference associated with the provided scroll group
    */
-  getScrRef(scrollGroupId?: ScrollGroupId): Promise<ScriptureReference>;
+  getScrRef(scrollGroupId?: ScrollGroupId): Promise<SerializedVerseRef>;
   /**
-   * Sets the {@link ScriptureReference} associated with the provided scroll group
+   * Sets the SerializedVerseRef associated with the provided scroll group
    *
    * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
    *   0
    * @param scrRef Scripture reference to which to set the scroll group
    * @returns `true` if the Scripture reference changed. `false` otherwise
    */
-  setScrRef(scrollGroupId: ScrollGroupId | undefined, scrRef: ScriptureReference): Promise<boolean>;
+  setScrRef(scrollGroupId: ScrollGroupId | undefined, scrRef: SerializedVerseRef): Promise<boolean>;
 }
 
 // Parts of the Scroll Group Service that are added in the service client on top of what is provided by the network object

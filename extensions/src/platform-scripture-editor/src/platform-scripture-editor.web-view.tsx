@@ -12,7 +12,7 @@ import {
   USJ_VERSION,
   Usj,
 } from '@biblionexus-foundation/scripture-utilities';
-import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
@@ -26,7 +26,6 @@ import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   deepClone,
-  ScriptureReference,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -132,7 +131,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
   const verseLocation = useMemo<SerializedVerseRef>(
     () => ({
-      book: Canon.bookNumberToId(scrRef.bookNum),
+      book: scrRef.book,
       chapterNum: scrRef.chapterNum,
       verseNum: scrRef.verseNum,
     }),
@@ -244,13 +243,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      const newScrRef: ScriptureReference = {
-        bookNum: Canon.bookIdToNumber(newVerseLocation.book),
-        chapterNum: newVerseLocation.chapterNum,
-        verseNum: newVerseLocation.verseNum,
-      };
       internalVerseLocationRef.current = newVerseLocation;
-      setScrRefWithScroll(newScrRef);
+      setScrRefWithScroll(newVerseLocation);
     },
     [setScrRefWithScroll],
   );
@@ -265,16 +259,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
-    useMemo(
-      () =>
-        VerseRef.fromJSON({
-          book: verseLocation.book,
-          chapterNum: verseLocation.chapterNum,
-          verseNum: 1,
-          versificationStr: verseLocation.versificationStr,
-        }),
-      [verseLocation.book, verseLocation.chapterNum, verseLocation.versificationStr],
-    ),
+    useMemo(() => {
+      return {
+        book: verseLocation.book,
+        chapterNum: verseLocation.chapterNum,
+        verseNum: 1,
+        versificationStr: verseLocation.versificationStr,
+      };
+    }, [verseLocation.book, verseLocation.chapterNum, verseLocation.versificationStr]),
     defaultUsj,
     // `whichUpdates` set to `*` because we need to receive all updates instead of just ones that
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent

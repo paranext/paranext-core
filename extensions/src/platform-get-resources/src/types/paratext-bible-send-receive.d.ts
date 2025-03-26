@@ -187,7 +187,7 @@ declare module 'paratext-bible-send-receive' {
 declare module 'papi-shared-types' {
   import type { ResultsData, RevisionInfo } from 'paratext-bible-send-receive';
   import type { SharedProjectsInfo } from 'platform-scripture';
-  import { VerseRef } from '@sillsdev/scripture';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   export interface SettingTypes {
     /** Selected project ids in the send receive dialog */
@@ -265,7 +265,7 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.getUSFMForRevision': (
       projectId: string,
       revisionId: string,
-      verseRef: VerseRef,
+      verseRef: SerializedVerseRef,
     ) => Promise<string>;
     /**
      * Accepts a project id and the id of the other currently selected revision and returns the
@@ -279,7 +279,7 @@ declare module 'papi-shared-types' {
     'paratextBibleSendReceive.getUSFMForBaseVersion': (
       projectId: string,
       otherRevisionId: string,
-      verseRef: VerseRef,
+      verseRef: SerializedVerseRef,
     ) => Promise<string>;
   }
 }

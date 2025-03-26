@@ -1,4 +1,4 @@
-import { VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import type {
   DataProviderDataType,
   DataProviderSubscriberOptions,
@@ -83,9 +83,9 @@ declare module 'project-notes-data-provider' {
      */
     selectedText: string;
     /** The verse where the selection ends. */
-    verseRefEnd: VerseRef;
+    verseRefEnd: SerializedVerseRef;
     /** The verse where the selection starts. */
-    verseRefStart: VerseRef;
+    verseRefStart: SerializedVerseRef;
   };
 
   /** An object representing information about a user */

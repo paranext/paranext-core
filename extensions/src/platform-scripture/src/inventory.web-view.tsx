@@ -1,10 +1,9 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
-import { ScriptureReference } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
-import { VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import papi from '@papi/frontend';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
 import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inventory.component';
@@ -22,26 +21,20 @@ import { PunctuationInventory } from './checks/inventories/punctuation-inventory
  */
 const getText = async (
   scope: Scope,
-  scriptureRef: ScriptureReference,
+  scriptureRef: SerializedVerseRef,
   projectId: string,
 ): Promise<string | undefined> => {
-  const verseRef = new VerseRef(
-    scriptureRef.bookNum,
-    scriptureRef.chapterNum,
-    scriptureRef.verseNum,
-  );
-
   if (scope === 'book') {
     const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Book', projectId);
-    return PDP.getBookUSFM(verseRef);
+    return PDP.getBookUSFM(scriptureRef);
   }
   if (scope === 'chapter') {
     const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Chapter', projectId);
-    return PDP.getChapterUSFM(verseRef);
+    return PDP.getChapterUSFM(scriptureRef);
   }
   if (scope === 'verse') {
     const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Verse', projectId);
-    return PDP.getVerseUSFM(verseRef);
+    return PDP.getVerseUSFM(scriptureRef);
   }
 
   throw new Error('Cannot get scripture for unknown scope');
@@ -58,7 +51,7 @@ global.webViewComponent = function InventoryWebView({
     }, []),
   );
   const [webViewType] = useWebViewState('webViewType', '');
-  const [scriptureRef, setScriptureRef] = useWebViewScrollGroupScrRef();
+  const [verseRef, setVerseRef] = useWebViewScrollGroupScrRef();
 
   let InventoryVariant;
   let validItemsSetting: keyof ProjectSettingTypes;
@@ -91,8 +84,8 @@ global.webViewComponent = function InventoryWebView({
   const [scope, setScope] = useState<Scope>('book');
   const [text] = usePromise(
     useCallback(
-      async () => (projectId ? getText(scope, scriptureRef, projectId) : ''),
-      [scope, scriptureRef, projectId],
+      async () => (projectId ? getText(scope, verseRef, projectId) : ''),
+      [scope, verseRef, projectId],
     ),
     useMemo(() => '', []),
   );
@@ -105,8 +98,8 @@ global.webViewComponent = function InventoryWebView({
 
   return (
     <InventoryVariant
-      scriptureReference={scriptureRef}
-      setScriptureReference={setScriptureRef}
+      verseRef={verseRef}
+      setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
       approvedItems={validItemsArray}
       onApprovedItemsChange={(items: string[]) => setValidItems?.(items.join(' '))}

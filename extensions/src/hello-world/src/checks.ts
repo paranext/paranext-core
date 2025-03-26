@@ -1,5 +1,5 @@
 import { logger, projectDataProviders } from '@papi/backend';
-import { VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Check,
   CheckCreatorFunction,
@@ -41,7 +41,7 @@ class HelloCheck implements Check {
   }
 
   async getCheckResults(range: ScriptureRange): Promise<CheckRunResult[]> {
-    if (range.end && range.end.bookNum !== range.start.bookNum)
+    if (range.end && range.end.book !== range.start.book)
       throw new Error('This only supports checks within a single book right now');
 
     const usfm = await this.pdp?.getBookUSFM(range.start);
@@ -76,7 +76,11 @@ class HelloCheck implements Check {
       const verseIndex = usfm.lastIndexOf('\\v ', cursor) + 3;
       const inVerse = parseInt(usfm.slice(verseIndex, verseIndex + 4), 10);
       const offset = cursor - verseIndex - inVerse.toString().length - 1;
-      const verseRef = new VerseRef(range.start.book, inChapter.toString(), inVerse.toString());
+      const verseRef: SerializedVerseRef = {
+        book: range.start.book,
+        chapterNum: inChapter,
+        verseNum: inVerse,
+      };
       const newResult: CheckRunResult = {
         checkId: 'sheep',
         checkResultType: 'sheep',

@@ -68,36 +68,37 @@ declare module 'shared/utils/util' {
   export function bindClassMethods<T extends object>(this: T): void;
 }
 declare module 'shared/services/scroll-group.service-model' {
-  import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
   /** Name to use when creating a network event that is fired when webViews are updated */
   export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: `${string}:${string}`;
   /**
-   * Combination of a {@link ScrollGroupId} and a {@link ScriptureReference}. If this value is a number,
-   * that means this should be synced with the scroll group sharing that number. If this value is an
+   * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
+   * means this should be synced with the scroll group sharing that number. If this value is an
    * object, that means it is an independent Scripture reference and should not be synced with any
    * scroll group.
    */
-  export type ScrollGroupScrRef = ScrollGroupId | ScriptureReference;
+  export type ScrollGroupScrRef = ScrollGroupId | SerializedVerseRef;
   /**
-   * Information about an update to a scroll group. Informs about the new {@link ScriptureReference} at
-   * a {@link ScrollGroupId}
+   * Information about an update to a scroll group. Informs about the new SerializedVerseRef at a
+   * {@link ScrollGroupId}
    */
   export type ScrollGroupUpdateInfo = {
-    scrRef: ScriptureReference;
+    scrRef: SerializedVerseRef;
     scrollGroupId: ScrollGroupId;
   };
   /** Parts of the Scroll Group Service that are exposed through the network object */
   export interface IScrollGroupRemoteService {
     /**
-     * Get the {@link ScriptureReference} associated with the provided scroll group
+     * Get the SerializedVerseRef associated with the provided scroll group
      *
      * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
      * @returns Scripture reference associated with the provided scroll group
      */
-    getScrRef(scrollGroupId?: ScrollGroupId): Promise<ScriptureReference>;
+    getScrRef(scrollGroupId?: ScrollGroupId): Promise<SerializedVerseRef>;
     /**
-     * Sets the {@link ScriptureReference} associated with the provided scroll group
+     * Sets the SerializedVerseRef associated with the provided scroll group
      *
      * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
      *   0
@@ -106,7 +107,7 @@ declare module 'shared/services/scroll-group.service-model' {
      */
     setScrRef(
       scrollGroupId: ScrollGroupId | undefined,
-      scrRef: ScriptureReference,
+      scrRef: SerializedVerseRef,
     ): Promise<boolean>;
   }
   /**
@@ -120,7 +121,8 @@ declare module 'shared/services/scroll-group.service-model' {
 }
 declare module 'shared/models/web-view.model' {
   import type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference, ScrollGroupId, LocalizeKey } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -224,8 +226,8 @@ declare module 'shared/models/web-view.model' {
      */
     projectId?: string;
     /**
-     * With which scroll group this web view is synced or the {@link ScriptureReference} this web view
-     * is focusing independently of a scroll group
+     * With which scroll group this web view is synced or the SerializedVerseRef this web view is
+     * focusing independently of a scroll group
      */
     scrollGroupScrRef?: ScrollGroupScrRef;
     /**
@@ -447,7 +449,7 @@ declare module 'shared/models/web-view.model' {
   /**
    *
    * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
-   * value and a function to set the value for both the {@link ScriptureReference} and the
+   * value and a function to set the value for both the SerializedVerseRef and the
    * {@link ScrollGroupId} with which this web view is synced (using this web view's
    * `scrollGroupScrRef` property). Use similarly to `useState`.
    *
@@ -469,8 +471,8 @@ declare module 'shared/models/web-view.model' {
    * ```
    */
   export type UseWebViewScrollGroupScrRefHook = () => [
-    scrRef: ScriptureReference,
-    setScrRef: (newScrRef: ScriptureReference) => void,
+    scrRef: SerializedVerseRef,
+    setScrRef: (newScrRef: SerializedVerseRef) => void,
     scrollGroupId: ScrollGroupId | undefined,
     setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
   ];
@@ -542,7 +544,7 @@ declare module 'shared/models/web-view.model' {
     /**
      *
      * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
-     * value and a function to set the value for both the {@link ScriptureReference} and the
+     * value and a function to set the value for both the SerializedVerseRef and the
      * {@link ScrollGroupId} with which this web view is synced (using this web view's
      * `scrollGroupScrRef` property). Use similarly to `useState`.
      *
@@ -684,7 +686,7 @@ declare module 'shared/global-this.model' {
     /**
      *
      * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
-     * value and a function to set the value for both the {@link ScriptureReference} and the
+     * value and a function to set the value for both the SerializedVerseRef and the
      * {@link ScrollGroupId} with which this web view is synced (using this web view's
      * `scrollGroupScrRef` property). Use similarly to `useState`.
      *
@@ -3054,7 +3056,7 @@ declare module 'shared/models/web-view-factory.model' {
   }
 }
 declare module 'papi-shared-types' {
-  import type { ScriptureReference, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -3073,6 +3075,7 @@ declare module 'papi-shared-types' {
   import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -3157,7 +3160,7 @@ declare module 'papi-shared-types' {
      * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
      * `useWebViewScrollGroupScrRef`
      */
-    'platform.verseRef': ScriptureReference;
+    'platform.verseRef': SerializedVerseRef;
     /**
      * List of locales to use when localizing the interface. First in the list receives highest
      * priority. Please always add 'en' (English) at the end when using this setting so everything
@@ -4750,7 +4753,7 @@ declare module 'shared/services/project-data-provider.service' {
    *
    * ```typescript
    * const pdp = await get('platformScripture.USFM_Verse', 'ProjectID12345');
-   * pdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
+   * pdp.getVerseUSFM({ book: 'JHN', chapterNum: 1, verseNum: 1 });
    * ```
    *
    * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
@@ -7471,7 +7474,8 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
 }
 declare module 'renderer/services/scroll-group.service-host' {
   import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ScrollGroupId } from 'platform-bible-utils';
   /**
    * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
    * placeholder and will be refactored significantly in
@@ -7481,7 +7485,7 @@ declare module 'renderer/services/scroll-group.service-host' {
   /** Event that emits with information about a changed Scripture Reference for a scroll group */
   export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
-  export function getScrRefSync(scrollGroupId?: ScrollGroupId): ScriptureReference;
+  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**
    * See {@link IScrollGroupRemoteService.setScrRef}
    *
@@ -7491,7 +7495,7 @@ declare module 'renderer/services/scroll-group.service-host' {
    */
   export function setScrRefSync(
     scrollGroupId: ScrollGroupId | undefined,
-    scrRef: ScriptureReference,
+    scrRef: SerializedVerseRef,
     shouldSetVerseRefSetting?: boolean,
   ): boolean;
   /** Register the network object that backs the scroll group service */
@@ -7499,10 +7503,11 @@ declare module 'renderer/services/scroll-group.service-host' {
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ScrollGroupId } from 'platform-bible-utils';
   /**
    * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
-   * value for both the {@link ScriptureReference} and the {@link ScrollGroupId} for the provided
+   * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
    * `scrollGroupScrRef`. Use similarly to `useState`.
    *
    * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
@@ -7532,8 +7537,8 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
     scrollGroupScrRef: ScrollGroupScrRef | undefined,
     setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
   ): [
-    scrRef: ScriptureReference,
-    setScrRef: (newScrRef: ScriptureReference) => void,
+    scrRef: SerializedVerseRef,
+    setScrRef: (newScrRef: SerializedVerseRef) => void,
     scrollGroupId: ScrollGroupId | undefined,
     setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
   ];
@@ -7695,7 +7700,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *   'platformScripture.USFM_Verse',
    *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
    * ).VerseUSFM(
-   *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
+   *   useMemo(() =>
+   *    { book: 'JHN', chapterNum: 11, verseNum: 35, versificationStr: ScrVers.English }, []),
    *   'Loading verse ',
    * );
    * ```

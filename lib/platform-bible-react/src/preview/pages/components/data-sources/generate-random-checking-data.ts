@@ -1,4 +1,5 @@
 import { ScriptureItemDetail } from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
+import { Canon } from '@sillsdev/scripture';
 
 export function generateRandomCheckingData(details: string[]): ScriptureItemDetail[] {
   const getRandomNumber = (min: number, max: number) =>
@@ -18,7 +19,7 @@ export function generateRandomCheckingData(details: string[]): ScriptureItemDeta
       start: {
         jsonPath: '',
         offset: randomOffset,
-        bookNum: randomBookNum,
+        book: Canon.bookNumberToId(randomBookNum),
         chapterNum: randomChapterNum,
         verseNum: randomVerseNum,
       },

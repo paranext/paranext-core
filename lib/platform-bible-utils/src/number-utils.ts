@@ -1,4 +1,4 @@
-import NumberFormat from './intl-number-format';
+import { NumberFormat } from './intl-number-format';
 
 /**
  * Formats a number according to the locale and formatting options of this NumberFormat object
