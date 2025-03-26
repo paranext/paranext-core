@@ -1,6 +1,6 @@
 # paranext-core/extensions
 
-Extensions included as part of Platform.Bible. Any products derived from Platform.Bible will most likely also include these extensions, although this is not strictly required.
+Extensions included as part of Platform.Bible. Some of these are for testing or serve as examples. The others are "core extensions," which are most likely to be included in any products derived from Platform.Bible—though this is not strictly required.
 
 <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 
