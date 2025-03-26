@@ -48,7 +48,7 @@ export type {
 export {
   getLinesFromUSFM,
   getNumberFromUSFM,
-  getBookNumFromId,
+  getBookIdFromUSFM,
   getStatusForItem,
 } from './components/advanced/inventory/inventory-utils';
 export type {

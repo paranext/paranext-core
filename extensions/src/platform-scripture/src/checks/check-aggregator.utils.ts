@@ -1,5 +1,6 @@
-import { VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { CheckInputRange, CheckSubscriptionId, ScriptureRange } from 'platform-scripture';
+import { scrRefToBBBCCC } from 'platform-bible-utils';
 
 /* All these types and functions could live in `check-aggregator.service.ts`, but to get jest tests
  * to run properly, it was much easier to pull these standalone functions into a different file and
@@ -25,7 +26,7 @@ export function aggregateRanges(
   allRanges.sort((a, b) => {
     if (a.projectId < b.projectId) return -1;
     if (a.projectId > b.projectId) return 1;
-    return a.start.BBBCCC - b.start.BBBCCC;
+    return scrRefToBBBCCC(a.start) - scrRefToBBBCCC(b.start);
   });
 
   // Merge overlapping ranges
@@ -41,10 +42,11 @@ export function aggregateRanges(
   return retVal;
 }
 
-export function isWithinRange(range: ScriptureRange, verseRef: VerseRef): boolean {
-  const startBookNum = range.start.bookNum;
-  const endBookNum = range.end?.bookNum ?? startBookNum;
-  if (verseRef.bookNum < startBookNum || verseRef.bookNum > endBookNum) return false;
+export function isWithinRange(range: ScriptureRange, verseRef: SerializedVerseRef): boolean {
+  const startBookNum = Canon.bookIdToNumber(range.start.book);
+  const endBookNum = range.end?.book ? Canon.bookIdToNumber(range.end.book) : startBookNum;
+  const bookNum = Canon.bookIdToNumber(verseRef.book);
+  if (bookNum < startBookNum || bookNum > endBookNum) return false;
 
   const startChapterNum = range.start.chapterNum;
   const endChapterNum = range.end?.chapterNum ?? 999;
@@ -70,10 +72,14 @@ export function aggregateProjectIdsByCheckId(
 
 function rangesAreOverlapping(existingRange: CheckInputRange, newRange: CheckInputRange) {
   // Don't worry about verse numbers for now since the UI only works at the chapter level
-  const existingStart = existingRange.start.BBBCCC;
-  const existingEnd = existingRange.end?.BBBCCC ?? existingRange.start.bookNum * 1000 + 999;
-  const newStart = newRange.start.BBBCCC;
-  const newEnd = newRange.end?.BBBCCC ?? newRange.start.bookNum * 1000 + 999;
+  const existingStart = scrRefToBBBCCC(existingRange.start);
+  const existingEnd = existingRange.end
+    ? scrRefToBBBCCC(existingRange.end)
+    : Canon.bookIdToNumber(existingRange.start.book) * 1000 + 999;
+  const newStart = scrRefToBBBCCC(newRange.start);
+  const newEnd = newRange.end
+    ? scrRefToBBBCCC(newRange.end)
+    : Canon.bookIdToNumber(newRange.start.book) * 1000 + 999;
   return (
     newRange.projectId === existingRange.projectId &&
     ((newStart >= existingStart && newStart <= existingEnd) ||
@@ -84,13 +90,18 @@ function rangesAreOverlapping(existingRange: CheckInputRange, newRange: CheckInp
 
 function mergeRanges(existingRange: CheckInputRange, newRange: CheckInputRange): CheckInputRange {
   const start =
-    newRange.start.BBBCCC < existingRange.start.BBBCCC ? newRange.start : existingRange.start;
-  let end: VerseRef | undefined;
+    scrRefToBBBCCC(newRange.start) < scrRefToBBBCCC(existingRange.start)
+      ? newRange.start
+      : existingRange.start;
+  let end: SerializedVerseRef | undefined;
   if (existingRange.end && newRange.end)
-    end = newRange.end.BBBCCC > existingRange.end.BBBCCC ? newRange.end : existingRange.end;
+    end =
+      scrRefToBBBCCC(newRange.end) > scrRefToBBBCCC(existingRange.end)
+        ? newRange.end
+        : existingRange.end;
   return {
-    start: new VerseRef(start),
-    end: end ? new VerseRef(end) : undefined,
+    start,
+    end: end ?? undefined,
     projectId: existingRange.projectId,
   };
 }

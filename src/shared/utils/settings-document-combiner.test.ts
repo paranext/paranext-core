@@ -26,7 +26,7 @@ const platformSettings: SettingsContribution = {
   properties: {
     'platform.verseRef': {
       label: '%settings_platform_verseRef_label%',
-      default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+      default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
       label: '%settings_platform_interfaceLanguage_label%',
@@ -40,7 +40,7 @@ const platformSettingsLocalized: Localized<SettingsContribution> = {
   properties: {
     'platform.verseRef': {
       label: 'settings_platform_verseRef_label',
-      default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+      default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
     },
     'platform.interfaceLanguage': {
       label: 'settings_platform_interfaceLanguage_label',

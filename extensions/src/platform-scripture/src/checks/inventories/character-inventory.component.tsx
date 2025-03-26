@@ -1,4 +1,4 @@
-import { LanguageStrings, LocalizeKey, ScriptureReference } from 'platform-bible-utils';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import {
   Button,
   ColumnDef,
@@ -11,6 +11,7 @@ import {
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { useMemo } from 'react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_character%',
@@ -65,8 +66,8 @@ const createColumns = (
 ];
 
 type CharacterInventoryProps = {
-  scriptureReference: ScriptureReference;
-  setScriptureReference: (scriptureReference: ScriptureReference) => void;
+  verseRef: SerializedVerseRef;
+  setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
@@ -78,8 +79,8 @@ type CharacterInventoryProps = {
 };
 
 export function CharacterInventory({
-  scriptureReference,
-  setScriptureReference,
+  verseRef,
+  setVerseRef,
   localizedStrings,
   approvedItems,
   onApprovedItemsChange,
@@ -133,8 +134,8 @@ export function CharacterInventory({
 
   return (
     <Inventory
-      scriptureReference={scriptureReference}
-      setScriptureReference={setScriptureReference}
+      verseRef={verseRef}
+      setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
       extractItems={charactersRegex}
       approvedItems={approvedItems}

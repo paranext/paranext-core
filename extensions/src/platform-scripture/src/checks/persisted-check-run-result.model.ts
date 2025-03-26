@@ -1,4 +1,4 @@
-import { VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { deserialize, serialize } from 'platform-bible-utils';
 import { CheckRunResult } from 'platform-scripture';
 
@@ -6,7 +6,7 @@ export type PersistedCheckRunResult = {
   /** Type of check result */
   checkResultType: string;
   /** Single verse reference identifying where the check result occurred */
-  verseRef: VerseRef;
+  verseRef: SerializedVerseRef;
   /** Project text that was selected in the check result */
   selectedText: string;
   /** Distinct ID for this check result if it might occur more than once in a single verse */
@@ -43,7 +43,8 @@ export class PersistedCheckRunResults {
    */
   addResult(result: PersistedCheckRunResult): boolean {
     if (this.containsResult(result)) return false;
-    const { bookNum, chapterNum } = result.verseRef;
+    const { book, chapterNum } = result.verseRef;
+    const bookNum = Canon.bookIdToNumber(book);
     if (!this.results[bookNum]) this.results[bookNum] = {};
     if (!this.results[bookNum][chapterNum]) this.results[bookNum][chapterNum] = [];
     this.results[bookNum][chapterNum].push(result);
@@ -57,7 +58,8 @@ export class PersistedCheckRunResults {
    * @returns `true` if the item was removed from the set, `false` otherwise
    */
   removeResult(result: PersistedCheckRunResult): boolean {
-    const { bookNum, chapterNum } = result.verseRef;
+    const { book, chapterNum } = result.verseRef;
+    const bookNum = Canon.bookIdToNumber(book);
     const chapterResults = this.results[bookNum]?.[chapterNum];
     if (!chapterResults) return false;
 
@@ -86,7 +88,7 @@ export class PersistedCheckRunResults {
    */
   containsResult(result: CheckRunResult | PersistedCheckRunResult): boolean {
     const possibleMatches = this.getPersistedCheckRunResults(
-      result.verseRef.bookNum,
+      result.verseRef.book,
       result.verseRef.chapterNum,
     );
 
@@ -115,10 +117,8 @@ export class PersistedCheckRunResults {
     return allResults;
   }
 
-  private getPersistedCheckRunResults(
-    bookNum: number,
-    chapterNum: number,
-  ): PersistedCheckRunResult[] {
+  private getPersistedCheckRunResults(book: string, chapterNum: number): PersistedCheckRunResult[] {
+    const bookNum = Canon.bookIdToNumber(book);
     return this.results[bookNum]?.[chapterNum] || [];
   }
 }

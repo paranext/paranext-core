@@ -1,5 +1,5 @@
 import { type MarkerContent, type MarkerObject } from '@biblionexus-foundation/scripture-utilities';
-import { VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 
 /** USJ content node type for a chapter */
 export const CHAPTER_TYPE = 'chapter';
@@ -9,7 +9,7 @@ export const VERSE_TYPE = 'verse';
 
 /** Represents a book, chapter, verse, and offset */
 export type VerseRefOffset = {
-  verseRef: VerseRef;
+  verseRef: SerializedVerseRef;
   offset: number;
 };
 
@@ -73,34 +73,35 @@ export interface IUsjReaderWriter {
   /** Find the parent of the first value matching the given JSONPath query within this USJ data */
   findParent<T>(jsonPathQuery: string): T | undefined;
   /**
-   * Convert a JSONPath query into a VerseRef and offset
+   * Convert a JSONPath query into a SerializedVerseRef and offset
    *
    * @param jsonPathQuery JSONPath search expression that indicates a node within this USJ data. If
    *   the expression matches more than one node, then only the first node found is considered.
    * @param bookId 3 letter ID of the book being searched (must be defined in this USJ data if not
    *   provided here)
-   * @returns VerseRef and offset that represents the location within this USJ data indicated by
-   *   `jsonPathQuery`
+   * @returns SerializedVerseRef and offset that represents the location within this USJ data
+   *   indicated by `jsonPathQuery`
    */
   jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset;
   /** Build a JSONPath query that uniquely identifies the given node with this USJ data. */
   nodeToJsonPath(node: MarkerObject): ContentJsonPath;
   /**
-   * Determine the VerseRef and offset that correspond to the location of a node somewhere within
-   * this USJ data
+   * Determine the SerializedVerseRef and offset that correspond to the location of a node somewhere
+   * within this USJ data
    *
    * @param bookId ID of the book represented by this USJ data
-   * @param node JSON object representing the location of the VerseRef and offset
+   * @param node JSON object representing the location of the SerializedVerseRef and offset
    * @param nodeParent JSON object that owns the `content` array that includes `node`. If
    *   'undefined' is provided then the `UsjReaderWriter` will attempt to lookup the parent of
    *   `node`. The lookup will always fail and throw an error if `node` is a string.
-   * @returns VerseRef and offset representing the location of `node`, if one could be found
+   * @returns SerializedVerseRef and offset representing the location of `node`, if one could be
+   *   found
    */
   nodeToVerseRefAndOffset(
     bookId: string,
     node: MarkerContent,
     nodeParent: MarkerObject | MarkerContent[] | undefined,
-  ): { verseRef: VerseRef; offset: number } | undefined;
+  ): { verseRef: SerializedVerseRef; offset: number } | undefined;
   /**
    * Remove all nodes from this USJ data that match a given search function.
    *
@@ -124,5 +125,8 @@ export interface IUsjReaderWriter {
    *   object, it is the same object that is within this USJ data. So if you change it, you are
    *   changing this USJ data.
    */
-  verseRefToUsjContentLocation(verseRef: VerseRef, verseRefOffset: number): UsjContentLocation;
+  verseRefToUsjContentLocation(
+    verseRef: SerializedVerseRef,
+    verseRefOffset: number,
+  ): UsjContentLocation;
 }

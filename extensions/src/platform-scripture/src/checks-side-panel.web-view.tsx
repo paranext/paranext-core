@@ -9,13 +9,12 @@ import {
   SettableCheckDetails,
 } from 'platform-scripture';
 import { useData, useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
-import { VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   getChaptersForBook,
   isPlatformError,
   LAST_SCR_BOOK_NUM,
   LocalizeKey,
-  ScriptureReference,
 } from 'platform-bible-utils';
 import { Spinner } from 'platform-bible-react';
 import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
@@ -95,7 +94,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   const defaultScriptureRange: CheckInputRange = useMemo(() => {
     return {
       projectId: projectId ?? '',
-      start: new VerseRef(1, 1, 1),
+      start: { book: 'GEN', chapterNum: 1, verseNum: 1 },
     };
   }, [projectId]);
 
@@ -112,12 +111,17 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const checkInputRange: CheckInputRange = useMemo(() => {
     // Default is chapter
-    let start = new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1);
-    let end = new VerseRef(scrRef.bookNum, scrRef.chapterNum, 1);
+    const defaultScrRef: SerializedVerseRef = {
+      book: scrRef.book,
+      chapterNum: scrRef.chapterNum,
+      verseNum: 1,
+    };
+    const start = defaultScrRef;
+    const end = defaultScrRef;
 
     if (scope === CheckScopes.Book) {
-      start = new VerseRef(scrRef.bookNum, 1, 1);
-      end = new VerseRef(scrRef.bookNum, getChaptersForBook(scrRef.bookNum), 1);
+      start.chapterNum = 1;
+      end.chapterNum = getChaptersForBook(Canon.bookIdToNumber(scrRef.book));
     }
 
     return {
@@ -129,8 +133,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   const getActiveRangesForScopeAll = useCallback((): CheckInputRange[] => {
     return Array.from({ length: LAST_SCR_BOOK_NUM }, (_, bookIndex) => {
-      const start = new VerseRef(bookIndex + 1, 1, 1);
-      const end = new VerseRef(bookIndex + 1, getChaptersForBook(bookIndex + 1), 1);
+      const start = { book: Canon.bookNumberToId(bookIndex + 1), chapterNum: 1, verseNum: 1 };
+      const end = {
+        book: Canon.bookNumberToId(bookIndex + 1),
+        chapterNum: getChaptersForBook(bookIndex + 1),
+        verseNum: 1,
+      };
       return {
         projectId: projectId ?? '',
         start,
@@ -184,7 +192,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     if (!result || !result.messageFormatString) return '';
     const [, extractedWord] = result.messageFormatString.match(/\|\|(.*?)\|\|/) || [];
 
-    return `${result.verseRef.book} ${result.verseRef.chapter}:${result.verseRef.verse} ${extractedWord} ${extractedWord}`;
+    return `${result.verseRef.book} ${result.verseRef.chapterNum}:${result.verseRef.verseNum} ${extractedWord} ${extractedWord}`;
   }, []);
 
   /**
@@ -193,7 +201,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
    */
   const writeCheckId = useMemo(
     () => (result: CheckRunResult, index: number) =>
-      `${result.checkResultUniqueId || ''}__${result.verseRef.book}_${result.verseRef.chapter}_${result.verseRef.verse}__${result.checkResultType}__${index}`,
+      `${result.checkResultUniqueId || ''}__${result.verseRef.book}_${result.verseRef.chapterNum}_${result.verseRef.verseNum}__${result.checkResultType}__${index}`,
     [],
   );
 
@@ -221,13 +229,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
       );
       if (!selectedResult) return;
 
-      const selectedCheckScrRef: ScriptureReference = {
-        bookNum: selectedResult.verseRef.bookNum,
-        chapterNum: selectedResult.verseRef.chapterNum,
-        verseNum: selectedResult.verseRef.verseNum,
-      };
-
-      setScrRef(selectedCheckScrRef);
+      setScrRef(selectedResult.verseRef);
     },
     [checkResults, setScrRef, writeCheckId],
   );

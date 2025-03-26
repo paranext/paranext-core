@@ -147,18 +147,17 @@ function getColumns(
   const showSrcCol = showSourceColumn ?? false;
   return [
     {
-      accessorFn: (row) =>
-        `${Canon.bookNumberToId(row.start.bookNum)} ${row.start.chapterNum}:${row.start.verseNum}`,
+      accessorFn: (row) => `${row.start.book} ${row.start.chapterNum}:${row.start.verseNum}`,
       id: scrBookColId,
       header: colInfo?.scriptureReferenceColumnName ?? defaultScrRefColumnName,
       cell: (info) => {
         const row = info.row.original;
         if (info.row.getIsGrouped()) {
-          return Canon.bookNumberToEnglishName(row.start.bookNum);
+          return Canon.bookIdToEnglishName(row.start.book);
         }
         return info.row.groupingColumnId === scrBookColId ? formatScrRef(row.start) : undefined;
       },
-      getGroupingValue: (row) => row.start.bookNum,
+      getGroupingValue: (row) => Canon.bookIdToNumber(row.start.book),
       sortingFn: (a, b) => {
         return compareScrRefs(a.original.start, b.original.start);
       },

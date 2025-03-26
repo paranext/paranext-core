@@ -50,8 +50,8 @@ export function InventoryExample() {
   return (
     <div>
       <Inventory
-        scriptureReference={scrRef}
-        setScriptureReference={setScrRef}
+        verseRef={scrRef}
+        setVerseRef={setScrRef}
         localizedStrings={localizedStrings}
         approvedItems={approvedItems}
         unapprovedItems={unapprovedItems}

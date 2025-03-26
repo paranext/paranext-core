@@ -51,6 +51,7 @@ export {
   formatScrRef,
   getLocalizedIdFromBookNumber,
   normalizeScriptureSpaces,
+  scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
 } from './scripture-util';
 export {
@@ -101,7 +102,6 @@ export type { PlatformError } from './platform-error';
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
 export type {
   BookInfo,
-  ScriptureReference,
   ScrollGroupId,
   ScriptureNode,
   ScriptureSelection,

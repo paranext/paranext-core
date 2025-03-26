@@ -2,23 +2,23 @@ import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
-  ScrollGroupUpdateInfo,
   EVENT_NAME_ON_DID_UPDATE_SCR_REF,
   IScrollGroupRemoteService,
   NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE,
+  ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
-import { settingsService } from '@shared/services/settings.service';
+import settingsService from '@shared/services/settings.service';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
-  ScriptureReference,
-  deepClone,
   compareScrRefs,
+  deepClone,
   deserialize,
-  serialize,
   ScrollGroupId,
+  serialize,
 } from 'platform-bible-utils';
 
-const DEFAULT_SCR_REF: ScriptureReference = Object.freeze({
-  bookNum: 1,
+const DEFAULT_SCR_REF: SerializedVerseRef = Object.freeze({
+  book: 'GEN',
   chapterNum: 1,
   verseNum: 1,
 });
@@ -28,7 +28,7 @@ const SCR_REFS_STORAGE_KEY = 'scroll-group.service-host.scrRefs';
 /** FOR LOADING ONLY! DO NOT USE */
 const scrRefsSerialized = localStorage.getItem(SCR_REFS_STORAGE_KEY);
 /** Object that maps scroll group ids to the scripture reference at each of those scroll group ids */
-const scrRefs: { [scrollGroupId: ScrollGroupId]: ScriptureReference | undefined } =
+const scrRefs: { [scrollGroupId: ScrollGroupId]: SerializedVerseRef | undefined } =
   scrRefsSerialized ? (deserialize(scrRefsSerialized) ?? {}) : {};
 
 function saveScrRefs() {
@@ -51,11 +51,11 @@ export const availableScrollGroupIds = [undefined, ...Array(5).keys()];
 export const onDidUpdateScrRef = onDidUpdateScrRefEmitter.event;
 
 /** See {@link IScrollGroupRemoteService.getScrRef} */
-export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): ScriptureReference {
+export function getScrRefSync(scrollGroupId: ScrollGroupId = 0): SerializedVerseRef {
   return scrRefs[scrollGroupId] ?? DEFAULT_SCR_REF;
 }
 
-async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<ScriptureReference> {
+async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<SerializedVerseRef> {
   return getScrRefSync(scrollGroupScrRef);
 }
 
@@ -68,12 +68,12 @@ async function getScrRef(scrollGroupScrRef: ScrollGroupId = 0): Promise<Scriptur
  */
 export function setScrRefSync(
   scrollGroupId: ScrollGroupId | undefined,
-  scrRef: ScriptureReference,
+  scrRef: SerializedVerseRef,
   shouldSetVerseRefSetting = true,
 ): boolean {
   if (
     !scrRef ||
-    !(typeof scrRef.bookNum === 'number') ||
+    !(typeof scrRef.book === 'string') ||
     !(typeof scrRef.chapterNum === 'number') ||
     !(typeof scrRef.verseNum === 'number')
   )
@@ -107,7 +107,7 @@ export function setScrRefSync(
 
 async function setScrRef(
   scrollGroupId: ScrollGroupId | undefined,
-  scrRef: ScriptureReference,
+  scrRef: SerializedVerseRef,
 ): Promise<boolean> {
   return setScrRefSync(scrollGroupId, scrRef);
 }
