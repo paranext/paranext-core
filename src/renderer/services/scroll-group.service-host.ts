@@ -8,7 +8,7 @@ import {
   ScrollGroupUpdateInfo,
 } from '@shared/services/scroll-group.service-model';
 import settingsService from '@shared/services/settings.service';
-import { SerializedVerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   compareScrRefs,
   deepClone,
@@ -30,6 +30,25 @@ const scrRefsSerialized = localStorage.getItem(SCR_REFS_STORAGE_KEY);
 /** Object that maps scroll group ids to the scripture reference at each of those scroll group ids */
 const scrRefs: { [scrollGroupId: ScrollGroupId]: SerializedVerseRef | undefined } =
   scrRefsSerialized ? (deserialize(scrRefsSerialized) ?? {}) : {};
+
+// The scrRefs object might contain old values that are of older types that are no longer supported.
+// We need to check if this is the case, and convert them to `SerializedVerseRef`.
+Object.entries(scrRefs).forEach(([key, value]) => {
+  if (!value) return;
+  if (value.book) return;
+  // We are likely dealing with a scripture reference type that has a bookNum instead of a book id
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const valuePossibleScrRef = value as unknown as {
+    bookNum?: number;
+    chapterNum: number;
+    verseNum: number;
+  };
+  if (valuePossibleScrRef.bookNum) {
+    value.book = Canon.bookNumberToId(valuePossibleScrRef.bookNum);
+    delete valuePossibleScrRef.bookNum;
+    setScrRefSync(parseInt(key, 10), value);
+  }
+});
 
 function saveScrRefs() {
   localStorage.setItem(SCR_REFS_STORAGE_KEY, serialize(scrRefs));
