@@ -72,8 +72,8 @@ declare module 'platform-scripture-editor' {
       }
     | {
         /** Verse reference to a location with the document */
-        verseRef: SerializedVerseRef;
-        /** Offset to apply to start of the verse indicated by `verseRef` */
+        scrRef: SerializedVerseRef;
+        /** Offset to apply to start of the verse indicated by `scrRef` */
         offset?: number;
       };
 
