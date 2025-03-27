@@ -258,11 +258,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             'platformScripture.USJ_Chapter',
             currentWebViewDefinition.projectId,
           );
-          const usjChapter = await pdp.getChapterUSJ({
-            book: targetScrRef.book,
-            chapterNum: targetScrRef.chapterNum,
-            verseNum: targetScrRef.verseNum,
-          });
+          const usjChapter = await pdp.getChapterUSJ(targetScrRef);
 
           if (!usjChapter)
             throw new Error(
@@ -281,11 +277,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
           if ('scrRef' in range.start) {
             const startContentLocation = usjRW.verseRefToUsjContentLocation(
-              {
-                book: range.start.scrRef.book,
-                chapterNum: range.start.scrRef.chapterNum,
-                verseNum: range.start.scrRef.verseNum,
-              },
+              range.start.scrRef,
               range.start.offset,
             );
             startJsonPath = startContentLocation.jsonPath;
@@ -297,11 +289,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
           if ('scrRef' in range.end) {
             const endContentLocation = usjRW.verseRefToUsjContentLocation(
-              {
-                book: range.end.scrRef.book,
-                chapterNum: range.end.scrRef.chapterNum,
-                verseNum: range.end.scrRef.verseNum,
-              },
+              range.end.scrRef,
               range.end.offset,
             );
             endJsonPath = endContentLocation.jsonPath;

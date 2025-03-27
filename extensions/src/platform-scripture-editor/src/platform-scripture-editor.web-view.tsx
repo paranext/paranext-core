@@ -129,14 +129,6 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   // eslint-disable-next-line no-null/no-null
   const editorRef = useRef<EditorRef | MarginalRef | null>(null);
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
-  const verseLocation = useMemo<SerializedVerseRef>(
-    () => ({
-      book: scrRef.book,
-      chapterNum: scrRef.chapterNum,
-      verseNum: scrRef.verseNum,
-    }),
-    [scrRef],
-  );
   /**
    * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
    * it without the editor unmounting and remounting. We need to re-parent the editor when container
@@ -261,12 +253,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   ).ChapterUSJ(
     useMemo(() => {
       return {
-        book: verseLocation.book,
-        chapterNum: verseLocation.chapterNum,
+        book: scrRef.book,
+        chapterNum: scrRef.chapterNum,
         verseNum: 1,
-        versificationStr: verseLocation.versificationStr,
+        versificationStr: scrRef.versificationStr,
       };
-    }, [verseLocation.book, verseLocation.chapterNum, verseLocation.versificationStr]),
+    }, [scrRef.book, scrRef.chapterNum, scrRef.versificationStr]),
     defaultUsj,
     // `whichUpdates` set to `*` because we need to receive all updates instead of just ones that
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
@@ -341,8 +333,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     commentsEnabled ? projectId : undefined,
   ).Comments(
     useMemo(() => {
-      return { bookId: verseLocation.book, chapterNum: verseLocation.chapterNum };
-    }, [verseLocation.book, verseLocation.chapterNum]),
+      return { bookId: scrRef.book, chapterNum: scrRef.chapterNum };
+    }, [scrRef.book, scrRef.chapterNum]),
     [],
   );
 
@@ -377,11 +369,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
       // Determine which "new" comments are actually new
       const usjRW = new UsjReaderWriter(usjWithAnchors);
-      const newLegacyComments = convertEditorCommentsToLegacyComments(
-        newComments,
-        usjRW,
-        verseLocation,
-      );
+      const newLegacyComments = convertEditorCommentsToLegacyComments(newComments, usjRW, scrRef);
       const legacyCommentsToAdd: LegacyComment[] = [];
       newLegacyComments.forEach((newComment) => {
         if (!legacyCommentIds.has(newComment.id)) legacyCommentsToAdd.push(newComment);
@@ -394,7 +382,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       const newCommentArray = [...legacyCommentsFromPdp, ...legacyCommentsToAdd];
       saveLegacyCommentsToPdp(newCommentArray);
     },
-    [legacyCommentsFromPdp, verseLocation, saveLegacyCommentsToPdp],
+    [legacyCommentsFromPdp, scrRef, saveLegacyCommentsToPdp],
   );
 
   /**
@@ -471,18 +459,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       hasFirstRetrievedScripture.current = true;
       // Wait before scrolling to make sure there is time for the editor to load
       // TODO: hook into the editor and detect when it has loaded somehow
-      setTimeout(() => scrollToVerse(verseLocation), EDITOR_LOAD_DELAY_TIME);
+      setTimeout(() => scrollToVerse(scrRef), EDITOR_LOAD_DELAY_TIME);
     }
-  }, [usjFromPdp, verseLocation]);
+  }, [usjFromPdp, scrRef]);
 
   // Scroll the selected verse and selection range into view
   useEffect(() => {
     // If we made this latest scrRef change, don't scroll
     if (
       internalVerseLocationRef.current &&
-      internalVerseLocationRef.current.book === verseLocation.book &&
-      internalVerseLocationRef.current.chapterNum === verseLocation.chapterNum &&
-      internalVerseLocationRef.current.verseNum === verseLocation.verseNum
+      internalVerseLocationRef.current.book === scrRef.book &&
+      internalVerseLocationRef.current.chapterNum === scrRef.chapterNum &&
+      internalVerseLocationRef.current.verseNum === scrRef.verseNum
     ) {
       internalVerseLocationRef.current = undefined;
       return () => {};
@@ -499,7 +487,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // TODO: hook into the editor and detect when it has loaded somehow
     const scrollTimeout = setTimeout(() => {
       // Scroll to and add a highlight to the current verse element
-      highlightedVerseElement = scrollToVerse(verseLocation);
+      highlightedVerseElement = scrollToVerse(scrRef);
       highlightedVerseElement?.classList.add('highlighted');
 
       internalVerseLocationRef.current = undefined;
@@ -516,7 +504,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       // Remove highlight from the current verse element
       highlightedVerseElement?.classList.remove('highlighted');
     };
-  }, [verseLocation]);
+  }, [scrRef]);
 
   const [projectName] = useProjectSetting(projectId, 'platform.name', '');
 
@@ -524,10 +512,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection:
-        projectName === 'OHEBGRK' && Canon.isBookOT(verseLocation.book) ? 'rtl' : 'ltr',
+      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.book) ? 'rtl' : 'ltr',
     }),
-    [isReadOnly, projectName, verseLocation],
+    [isReadOnly, projectName, scrRef],
   );
 
   function renderEditor() {
@@ -538,7 +525,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <Button className="tw-hidden" />
           <Editorial
             ref={editorRef}
-            scrRef={verseLocation}
+            scrRef={scrRef}
             onScrRefChange={setScrRefNoScroll}
             options={options}
             logger={logger}
@@ -553,7 +540,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
           <Button className="tw-hidden" />
           <Marginal
             ref={editorRef}
-            scrRef={verseLocation}
+            scrRef={scrRef}
             onScrRefChange={setScrRefNoScroll}
             onUsjChange={onUsjAndCommentsChange}
             onCommentChange={saveCommentsToPdp}
@@ -569,7 +556,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
         <Button className="tw-hidden" />
         <Editorial
           ref={editorRef}
-          scrRef={verseLocation}
+          scrRef={scrRef}
           onScrRefChange={setScrRefNoScroll}
           onUsjChange={saveUsjToPdpIfUpdated}
           options={options}
