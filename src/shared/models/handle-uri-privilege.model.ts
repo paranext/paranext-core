@@ -42,7 +42,8 @@ export type HandleUri = {
    *
    *     `<app-uri-scheme>://<extension-publisher>.<extension-name>`;
    *
-   * - `<app-uri-scheme>` is the URI scheme this application supports. TODO: link name here
+   * - `<app-uri-scheme>` is the URI scheme this application supports. You can retrieve this value
+   *   using `papi.app.getAppInfo()`
    * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
    *   manifest
    * - `<extension-name>` is the name of this extension as specified in the extension manifest
