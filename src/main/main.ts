@@ -21,7 +21,7 @@ import { resolveHtmlPath } from '@node/utils/util';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
-import { wait, serialize } from 'platform-bible-utils';
+import { wait, serialize, UnsubscriberAsync } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
 import { get } from '@shared/services/project-data-provider.service';
@@ -75,6 +75,8 @@ async function openExternal(url: string) {
 
   return true;
 }
+
+let macosMenubarUnsubscriber: UnsubscriberAsync | undefined;
 
 async function main() {
   // The network service relies on nothing else, and other things rely on it, so start it first
@@ -267,7 +269,7 @@ async function main() {
       mainWindow = undefined;
     });
 
-    buildCurrentMacosMenubar();
+    macosMenubarUnsubscriber = await buildCurrentMacosMenubar();
 
     // This sets the menu on Windows and Linux
     // 'null' to interact with external API
@@ -318,6 +320,7 @@ async function main() {
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT),
         extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT),
+        macosMenubarUnsubscriber && macosMenubarUnsubscriber(),
       ]);
 
       // In development, the dotnet watcher was killed so we have to wait here.
@@ -327,6 +330,7 @@ async function main() {
     } else {
       dotnetDataProvider.kill();
       extensionHostService.kill();
+      if (macosMenubarUnsubscriber) await macosMenubarUnsubscriber();
     }
   });
 

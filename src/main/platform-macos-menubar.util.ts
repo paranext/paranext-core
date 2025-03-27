@@ -5,6 +5,7 @@ import {
   MenuItemContainingSubmenu,
   Localized,
   GroupsInMultiColumnMenu,
+  UnsubscriberAsync,
 } from 'platform-bible-utils';
 import macosMenubarObject, {
   LocalizedMacosMenubar,
@@ -16,8 +17,8 @@ import { Menu, MenuItemConstructorOptions } from 'electron';
 import { logger } from '@shared/services/logger.service';
 import handleMenuCommand from '@shared/data/platform-bible-menu.commands';
 
-export default async function buildCurrentMacosMenubar() {
-  await menuDataService.subscribeMainMenu(
+export default async function buildCurrentMacosMenubar(): Promise<UnsubscriberAsync> {
+  return menuDataService.subscribeMainMenu(
     undefined,
     async (menuContent: Localized<MultiColumnMenu>) => {
       let currentMacosMenubarTemplate;
@@ -74,12 +75,12 @@ async function localizeMacosMenubar(
 
   return macosMenubar.map((menu) => ({
     ...menu,
-    label: menu.label ? newStrings[menu.label] : undefined,
-    toolTip: menu.toolTip ? newStrings[menu.toolTip] : undefined,
+    label: menu.label ? newStrings[menu.label] : '',
+    toolTip: menu.toolTip ? newStrings[menu.toolTip] : '',
     submenu: menu.submenu?.map((item) => ({
       ...item,
-      label: item.label ? newStrings[item.label] : undefined,
-      toolTip: item.toolTip ? newStrings[item.toolTip] : undefined,
+      label: item.label ? newStrings[item.label] : '',
+      toolTip: item.toolTip ? newStrings[item.toolTip] : '',
     })),
   }));
 }
