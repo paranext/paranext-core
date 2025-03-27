@@ -21,7 +21,7 @@ import { resolveHtmlPath } from '@node/utils/util';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
-import { wait, serialize } from 'platform-bible-utils';
+import { wait, serialize, getErrorMessage } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
 import { get } from '@shared/services/project-data-provider.service';
@@ -252,14 +252,19 @@ async function main() {
     // and restore the maximized or full screen state
     mainWindowState.manage(mainWindow);
 
-    mainWindow.loadURL(
-      `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`,
-    );
+    mainWindow
+      .loadURL(
+        `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`,
+      )
+      .catch((e) => {
+        logger.error(
+          `mainWindow could not load URL "${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}". ${getErrorMessage(e)}`,
+        );
+      });
 
     mainWindow.on('ready-to-show', () => {
-      if (!mainWindow) {
-        throw new Error('"mainWindow" is not defined');
-      }
+      logger.info('mainWindow is ready to show');
+      if (!mainWindow) throw new Error('"mainWindow" is not defined');
       if (process.env.START_MINIMIZED) {
         mainWindow.minimize();
       } else {

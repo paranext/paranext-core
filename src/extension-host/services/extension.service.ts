@@ -35,6 +35,7 @@ import {
   toKebabCase,
   UnsubscriberAsync,
   UnsubscriberAsyncList,
+  getErrorMessage,
 } from 'platform-bible-utils';
 import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -1009,13 +1010,11 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   };
   Object.freeze(context);
 
-  // Call activate() on the extension
-  await callActivateOnExtension(extensionModule, context);
-
-  // Add registrations that the extension didn't explicitly make itself
-  if (extensionModule.deactivate) context.registrations.add(extensionModule.deactivate);
+  // Automatically unregister the execution token when the extension is deactivated
   context.registrations.add(() => executionTokenService.unregisterExtension(tokenName, tokenHash));
-  context.registrations.add(() => activeExtensions.delete(extension.name));
+
+  // Call activate() on the extension
+  await callActivateOnExtension(extensionModule, context, extension);
 
   // Store information about our newly activated extension
   const activeExtension: ActiveExtension = {
@@ -1023,7 +1022,18 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
     registrations: context.registrations,
   };
   activeExtensions.set(extension.name, activeExtension);
+  context.registrations.add(() => activeExtensions.delete(context.name));
   return activeExtension;
+}
+
+/** Get the length of time in milliseconds to wait for an extension to activate before timing out */
+function getExtensionActivationTimeoutMs(): number {
+  // 5 seconds tries to balance flexibility with exceeding other timeouts
+  const timeoutDefaultMs = 5000;
+  if (!process.env.EXTENSION_ACTIVATION_TIMEOUT) return timeoutDefaultMs;
+  const parsedTimeout = parseInt(process.env.EXTENSION_ACTIVATION_TIMEOUT, 10);
+  if (Number.isNaN(parsedTimeout) || parsedTimeout < 1000) return timeoutDefaultMs;
+  return parsedTimeout;
 }
 
 /**
@@ -1031,38 +1041,44 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
  *
  * @param extension - The extension to activate
  * @param context - Context object to pass into the extension's activate function
+ * @param info - Information about the extension
  * @returns A promise that resolves when the extension has been activated
  * @throws An error if the extension had a problem during activation or takes too long to activate
  */
 async function callActivateOnExtension(
   extension: IExtension,
   context: ExecutionActivationContext,
+  info: ExtensionInfo,
 ): Promise<void> {
   logger.info(`extension.service: activating ${context.name}`);
 
   let timeoutOccurred = false;
   let errorDuringActivation: unknown;
+  const deactivationObject = {
+    info,
+    registrations: context.registrations,
+  };
   await Promise.race([
     (async () => {
       try {
         await extension.activate(context);
-        if (timeoutOccurred) {
-          await context.registrations.runAllUnsubscribers();
-          await extension.deactivate?.();
-          executionTokenService.unregisterExtension(
-            context.executionToken.name,
-            context.executionToken.getHash(),
-          );
-        }
+        if (extension.deactivate) context.registrations.add(extension.deactivate);
+        if (timeoutOccurred) await deactivateExtension(deactivationObject);
       } catch (e) {
         errorDuringActivation = e;
+        if (timeoutOccurred)
+          logger.error(
+            `Extension '${context.name}' threw after timed out activation: ${getErrorMessage(e)}`,
+          );
+        // Not adding `extension.deactivate` to registrations since `extension.activate` threw
+        else await deactivateExtension(deactivationObject);
       }
     })(),
     new Promise<void>((resolve) => {
       setTimeout(() => {
         timeoutOccurred = true;
         resolve();
-      }, 5000); // 5 seconds - tries to balance flexibility with exceeding other timeouts
+      }, getExtensionActivationTimeoutMs());
     }),
   ]);
   if (timeoutOccurred || errorDuringActivation) {
@@ -1079,8 +1095,8 @@ async function callActivateOnExtension(
       ),
     });
   }
-  if (timeoutOccurred) throw new Error(`Activation of ${context.name} timed out`);
   if (errorDuringActivation) throw errorDuringActivation;
+  if (timeoutOccurred) throw new Error(`Activation of ${context.name} timed out`);
 
   logger.info(`extension.service: finished activating ${context.name}`);
 }
@@ -1192,33 +1208,31 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
  * @returns `true` if the extension deactivates, `false` if at least one deactivation fails,
  *   `undefined` otherwise, e.g. not active, not registered.
  */
-async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | undefined> {
-  const activeExtension = activeExtensions.get(extension.name);
-
-  if (!activeExtension) logger.error(`Extension '${extension.name}' has no active extension data.`);
-  else if (!activeExtension.registrations)
+async function deactivateExtension(extension: ActiveExtension): Promise<boolean | undefined> {
+  if (!extension.registrations)
     logger.error(
-      `Extension '${extension.name}' does not have a registrations object to unregister.`,
+      `Extension '${extension.info.name}' does not have a registrations object to unregister.`,
     );
 
-  const isUnsubscribed = await activeExtension?.registrations?.runAllUnsubscribers();
+  const isUnsubscribed = await extension?.registrations?.runAllUnsubscribers();
   if (!isUnsubscribed)
-    logger.error(`Extension '${extension.name}' was not successfully unsubscribed!`);
+    logger.error(`Extension '${extension.info.name}' was not successfully unsubscribed!`);
 
   let extensionKey: ExtensionKey | undefined;
   try {
-    extensionKey = getExtensionKey(extension);
+    extensionKey = getExtensionKey(extension.info);
   } catch (e) {
     logger.debug(
-      `Could not get extension key for extension '${extension.name}'. Skipping attempting to delete uri handler.`,
+      `Could not get extension key for extension '${extension.info.name}'. Skipping attempting to delete uri handler.`,
     );
   }
   if (extensionKey) uriHandlersByExtensionKey.delete(extensionKey);
 
   // Delete the extension module from Node's module cache if we previously loaded it.
-  const moduleKey = systemRequire.resolve(getPathFromUri(extension.dirUri));
+  const moduleKey = systemRequire.resolve(getPathFromUri(extension.info.dirUri));
   if (moduleKey in systemRequire.cache) delete systemRequire.cache[moduleKey];
-  else logger.warn(`Extension '${extension.name}' not found in the module cache to be removed!`);
+  else
+    logger.warn(`Extension '${extension.info.name}' not found in the module cache to be removed!`);
 
   return isUnsubscribed;
 }
@@ -1234,9 +1248,14 @@ async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> 
   // eslint-disable-next-line no-restricted-syntax
   for (const extension of [...extensions].reverse()) {
     try {
-      // eslint-disable-next-line no-await-in-loop
-      const isDeactivated = await deactivateExtension(extension);
-      if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+      const activeExtension = activeExtensions.get(extension.name);
+      if (!activeExtension) {
+        logger.error(`Cannot deactivate '${extension.name}' due to missing active extension data`);
+      } else {
+        // eslint-disable-next-line no-await-in-loop
+        const isDeactivated = await deactivateExtension(activeExtension);
+        if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+      }
     } catch (e) {
       logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
     }
