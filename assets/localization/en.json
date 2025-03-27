@@ -12,6 +12,7 @@
   "%downloadUpdateProjectTab_listHeader_downloadable%": "Downloadable Projects",
   "%downloadUpdateProjectTab_listHeader_downloaded%": "Downloaded Projects",
   "%downloadUpdateProjectTab_title_downloadUpdate%": "Download/Update Project",
+  "%extension_failed_to_start%": "Extension failed to start: {extensionName}",
   "%general_button_submit%": "Submit",
   "%general_cancel%": "Cancel",
   "%general_error_title%": "Error",
