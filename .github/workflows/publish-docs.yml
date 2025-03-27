@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - pt-3025-storybook-pbr
 
 jobs:
   publish-docs:
