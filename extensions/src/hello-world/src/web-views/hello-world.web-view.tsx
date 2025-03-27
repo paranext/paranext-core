@@ -1,3 +1,4 @@
+import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,

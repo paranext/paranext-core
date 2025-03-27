@@ -1,6 +1,6 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useArgs } from '@storybook/preview-api';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { BookChapterControl, BookChapterControlProps } from 'platform-bible-react';
 import { ReactElement } from 'react';
 

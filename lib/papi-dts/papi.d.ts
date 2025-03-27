@@ -8037,10 +8037,19 @@ declare module '@papi/frontend' {
    */
   import * as papiReact from '@papi/frontend/react';
   import { PapiRendererWebSocket } from 'renderer/services/renderer-web-socket.service';
-  import { IMenuDataService } from 'shared/services/menu-data.service-model';
-  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
-  import { ILocalizationService } from 'shared/services/localization.service-model';
   import { INotificationService } from 'shared/models/notification.service-model';
+  import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
+  import * as commandService from 'shared/services/command.service';
+  import { DataProviderService } from 'shared/services/data-provider.service';
+  import { DialogService } from 'shared/services/dialog.service-model';
+  import { InternetService } from 'shared/services/internet.service';
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { PapiNetworkService } from 'shared/services/network.service';
+  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
+  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
+  import { ISettingsService } from 'shared/services/settings.service-model';
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
