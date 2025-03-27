@@ -26,6 +26,8 @@ import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   deepClone,
+  getErrorMessage,
+  isPlatformError,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -255,7 +257,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    */
   const hasFirstRetrievedScripture = useRef(false);
 
-  const [usjFromPdp, saveUsjToPdpRaw] = useProjectData(
+  const [usjFromPdpPossiblyError, saveUsjToPdpRaw] = useProjectData(
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
@@ -272,6 +274,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
     useMemo(() => ({ whichUpdates: '*' }), []),
   );
+  // Handle a PlatformError if one comes in instead of project text
+  const usjFromPdp = useMemo(() => {
+    if (isPlatformError(usjFromPdpPossiblyError)) {
+      logger.error(`Error getting USJ from PDP: ${getErrorMessage(usjFromPdpPossiblyError)}`);
+      return defaultUsj;
+    }
+    return usjFromPdpPossiblyError;
+  }, [usjFromPdpPossiblyError]);
   const usjFromPdpPrev = useRef<Usj | undefined>(undefined);
   useEffect(() => {
     return () => {
