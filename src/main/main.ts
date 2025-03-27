@@ -32,6 +32,7 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import buildCurrentMacosMenubar from '@main/platform-macos-menubar.util';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -266,6 +267,9 @@ async function main() {
       mainWindow = undefined;
     });
 
+    buildCurrentMacosMenubar();
+
+    // This sets the menu on Windows and Linux
     // 'null' to interact with external API
     // eslint-disable-next-line no-null/no-null
     mainWindow.setMenu(null);
