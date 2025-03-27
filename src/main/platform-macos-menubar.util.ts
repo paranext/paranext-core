@@ -10,10 +10,10 @@ import macosMenubarObject, {
   LocalizedMacosMenubar,
   MenuItemConstructorOptionsWithOrder,
 } from '@main/platform-macos-menubar.data';
-import menuDataService from '@shared/services/menu-data.service';
-import localizationService from '@shared/services/localization.service';
+import { menuDataService } from '@shared/services/menu-data.service';
+import { localizationService } from '@shared/services/localization.service';
 import { Menu, MenuItemConstructorOptions } from 'electron';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import handleMenuCommand from '@shared/data/platform-bible-menu.commands';
 
 export default async function buildCurrentMacosMenubar() {
