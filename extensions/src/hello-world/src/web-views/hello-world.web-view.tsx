@@ -9,7 +9,6 @@ import {
   useSetting,
   useWebViewController,
 } from '@papi/frontend/react';
-import { VerseRef } from '@sillsdev/scripture';
 import type { HelloWorldEvent } from 'hello-world';
 import {
   BookChapterControl,

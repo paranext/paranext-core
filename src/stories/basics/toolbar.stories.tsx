@@ -2,7 +2,7 @@ import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
 import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { Command, Label, Toolbar } from 'platform-bible-react';
 
-const Meta: MetaBase<typeof Toolbar> = {
+export const Meta: MetaBase<typeof Toolbar> = {
   title: 'Basics/Toolbar',
   component: Toolbar,
   tags: ['autodocs'],
