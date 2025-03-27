@@ -1,4 +1,4 @@
-import ComboBox, { ComboBoxOption } from '@/components/basics/combo-box.component';
+import { ComboBox, ComboBoxOption } from '@/components/basics/combo-box.component';
 import {
   Sidebar,
   SidebarContent,
@@ -49,7 +49,7 @@ export type SettingsSidebarProps = {
   className?: string;
 };
 
-export default function SettingsSidebar({
+export function SettingsSidebar({
   id,
   extensionLabels,
   projectInfo,
@@ -140,3 +140,5 @@ export default function SettingsSidebar({
     </Sidebar>
   );
 }
+
+export default SettingsSidebar;

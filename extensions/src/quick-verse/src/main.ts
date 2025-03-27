@@ -188,7 +188,7 @@ class QuickVerseDataProviderEngine
       try {
         const usfmDataProvider = await this.usfmDataProviderPromise;
         if (!usfmDataProvider) throw Error('Unable to get USFM data provider');
-        const verseData = usfmDataProvider.getVerseUSFM(new VerseRef(selector));
+        const verseData = usfmDataProvider.getVerseUSFM(new VerseRef(selector).toJSON());
         responseVerse = { text: (await verseData) ?? `${selector} not found` };
         // Cache the verse text, track the latest cached verse, and send an update
         this.verses[selector] = responseVerse;

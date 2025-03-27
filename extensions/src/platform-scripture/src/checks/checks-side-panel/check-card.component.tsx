@@ -217,7 +217,7 @@ export type CheckCardProps = {
  * The CheckCard component displays a singe check with options to select, deny, or view settings.
  * The card styling changes based on the current check and selection status.
  */
-export default function CheckCard({
+export function CheckCard({
   checkResult,
   checkId,
   isSelected,
@@ -275,3 +275,5 @@ export default function CheckCard({
     </Card>
   );
 }
+
+export default CheckCard;

@@ -11,8 +11,8 @@
   asar: true,
   asarUnpack: '**\\*.{node,dll}',
   files: ['dist', 'node_modules', 'package.json'],
+  afterSign: '.erb/scripts/notarize.js',
   mac: {
-    sign: '.erb/scripts/notarize.js',
     notarize: false,
     target: {
       target: 'default',
@@ -31,6 +31,7 @@
     gatekeeperAssess: false,
   },
   dmg: {
+    sign: false,
     contents: [
       {
         x: 130,
@@ -54,7 +55,7 @@
     ],
   },
   linux: {
-    target: ['AppImage', 'snap'],
+    target: ['snap'],
     category: 'Development',
     extraResources: [
       {

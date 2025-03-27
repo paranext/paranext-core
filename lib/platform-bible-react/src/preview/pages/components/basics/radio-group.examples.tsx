@@ -1,7 +1,7 @@
 import { Label } from '@/components/shadcn-ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/shadcn-ui/radio-group';
 
-export default function RadioGroupExamples() {
+export function RadioGroupExamples() {
   return (
     <RadioGroup defaultValue="comfortable">
       <div className="tw-flex tw-items-center tw-gap-x-2">
@@ -19,3 +19,5 @@ export default function RadioGroupExamples() {
     </RadioGroup>
   );
 }
+
+export default RadioGroupExamples;

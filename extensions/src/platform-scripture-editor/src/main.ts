@@ -20,7 +20,6 @@ import {
   OpenEditorOptions,
   PlatformScriptureEditorWebViewController,
 } from 'platform-scripture-editor';
-import { Canon, VerseRef } from '@sillsdev/scripture';
 import platformScriptureEditorWebView from './platform-scripture-editor.web-view?inline';
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import { mergeDecorations } from './decorations.util';
@@ -216,13 +215,13 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           if (!currentWebViewDefinition.projectId)
             throw new Error(`webViewDefinition.projectId is empty!`);
 
-          let targetScrRef = { bookNum: 0, chapterNum: 0, verseNum: 0 };
+          let targetScrRef = { book: '', chapterNum: 0, verseNum: 0 };
 
           // Figure out the book and chapter
           if ('jsonPath' in range.start && 'jsonPath' in range.end) {
             // Use the chapter and verse number from the range
             if (
-              range.start.bookNum !== range.end.bookNum ||
+              range.start.book !== range.end.book ||
               range.start.chapterNum !== range.end.chapterNum
             ) {
               throw new Error(
@@ -230,14 +229,14 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
               );
             }
 
-            targetScrRef.bookNum = range.start.bookNum;
+            targetScrRef.book = range.start.book;
             targetScrRef.chapterNum = range.start.chapterNum;
           } else {
             // At least one range location is USFM specification. Will convert to USJ for jsonPath
             if (
               'scrRef' in range.start &&
               'scrRef' in range.end &&
-              (range.start.scrRef.bookNum !== range.end.scrRef.bookNum ||
+              (range.start.scrRef.book !== range.end.scrRef.book ||
                 range.start.scrRef.chapterNum !== range.end.scrRef.chapterNum)
             ) {
               throw new Error(
@@ -259,9 +258,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
             'platformScripture.USJ_Chapter',
             currentWebViewDefinition.projectId,
           );
-          const usjChapter = await pdp.getChapterUSJ(
-            new VerseRef(targetScrRef.bookNum, targetScrRef.chapterNum, targetScrRef.verseNum),
-          );
+          const usjChapter = await pdp.getChapterUSJ({
+            book: targetScrRef.book,
+            chapterNum: targetScrRef.chapterNum,
+            verseNum: targetScrRef.verseNum,
+          });
 
           if (!usjChapter)
             throw new Error(
@@ -280,11 +281,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
           if ('scrRef' in range.start) {
             const startContentLocation = usjRW.verseRefToUsjContentLocation(
-              new VerseRef(
-                range.start.scrRef.bookNum,
-                range.start.scrRef.chapterNum,
-                range.start.scrRef.verseNum,
-              ),
+              {
+                book: range.start.scrRef.book,
+                chapterNum: range.start.scrRef.chapterNum,
+                verseNum: range.start.scrRef.verseNum,
+              },
               range.start.offset,
             );
             startJsonPath = startContentLocation.jsonPath;
@@ -296,11 +297,11 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 
           if ('scrRef' in range.end) {
             const endContentLocation = usjRW.verseRefToUsjContentLocation(
-              new VerseRef(
-                range.end.scrRef.bookNum,
-                range.end.scrRef.chapterNum,
-                range.end.scrRef.verseNum,
-              ),
+              {
+                book: range.end.scrRef.book,
+                chapterNum: range.end.scrRef.chapterNum,
+                verseNum: range.end.scrRef.verseNum,
+              },
               range.end.offset,
             );
             endJsonPath = endContentLocation.jsonPath;
@@ -330,7 +331,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
           // use whatever verse it ends up on
           const targetScrRefFromJsonPath = usjRW.jsonPathToVerseRefAndOffset(
             convertedRange.start.jsonPath,
-            Canon.bookNumberToId(targetScrRef.bookNum),
+            targetScrRef.book,
           );
           targetScrRef.verseNum = targetScrRefFromJsonPath.verseRef.verseNum;
 

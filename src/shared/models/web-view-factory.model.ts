@@ -1,4 +1,3 @@
-/* eslint-disable import/prefer-default-export */
 import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
 import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
 import {
@@ -8,8 +7,8 @@ import {
 } from '@shared/models/web-view.model';
 import { MutexMap, UnsubscriberAsyncList } from 'platform-bible-utils';
 import { DisposableNetworkObject } from '@shared/models/network-object.model';
-import webViewProviderService from '@shared/services/web-view-provider.service';
-import logger from '@shared/services/logger.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import { logger } from '@shared/services/logger.service';
 import { overrideDispose } from '@shared/services/network-object.service';
 
 /**
@@ -89,7 +88,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
 
       if (webViewDefinition.id !== webViewId)
         throw new Error(
-          `${this.webViewType} WebViewFactory changed web view id from ${webViewId} to ${webViewDefinition.id} while in getWebViewDefinition. This is not expected and could cause problems. Attempting to continue with new id.`,
+          `${this.webViewType} WebViewFactory changed web view id from ${webViewId} to ${webViewDefinition.id} while in getWebViewDefinition. This is not expected and will cause problems.`,
         );
 
       // If there is already a web view controller for this web view (so the web view is reloading),

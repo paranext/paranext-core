@@ -1,8 +1,8 @@
-import ComboBox from '@/components/basics/combo-box.component';
+import { ComboBox } from '@/components/basics/combo-box.component';
 import { BookOpen } from 'lucide-react';
 import { useState } from 'react';
 
-export default function ComboBoxExamples() {
+export function ComboBoxExamples() {
   const [comboBox1Value, setComboBox1Value] = useState<string | undefined>(undefined);
   const [comboBox2Value, setComboBox2Value] = useState<string | undefined>(undefined);
   const [comboBox3Value, setComboBox3Value] = useState<string | undefined>(undefined);
@@ -22,7 +22,7 @@ export default function ComboBoxExamples() {
         />
       </div>
       <div>
-        <p>Combobox with long text for options will truncate</p>
+        <p>Combobox with long text for options will truncate - using ghost variant here</p>
         <ComboBox
           options={[
             '08/24/24 05:50PM - Revision author',
@@ -34,6 +34,7 @@ export default function ComboBoxExamples() {
           commandEmptyMessage="Empty Message"
           value={comboBox2Value}
           onChange={setComboBox2Value}
+          buttonVariant="ghost"
         />
       </div>
       <div>
@@ -73,3 +74,5 @@ export default function ComboBoxExamples() {
     </div>
   );
 }
+
+export default ComboBoxExamples;

@@ -9,7 +9,7 @@ const MOCK_SETTINGS_DATA = {
   'settingsTest.valueIsUndefined': undefined,
 };
 
-const VERSE_REF_DEFAULT = { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } };
+const VERSE_REF_DEFAULT = { default: { book: 'GEN', chapterNum: 1, verseNum: 1 } };
 const NEW_INTERFACE_LANGUAGE = ['spa'];
 
 let settingsProviderEngine: ReturnType<
@@ -42,7 +42,7 @@ vi.mock('@extension-host/data/core-settings-info.data', async () => ({
       },
       'platform.verseRef': {
         label: '%settings_platform_verseRef_label%',
-        default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+        default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
       },
       'platform.interfaceLanguage': {
         label: '%settings_platform_interfaceLanguage_label%',
@@ -63,7 +63,7 @@ vi.mock('@extension-host/data/core-settings-info.data', async () => ({
 }));
 vi.mock('@shared/services/localization.service', () => ({
   __esModule: true,
-  default: {
+  localizationService: {
     async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
       [localizeKey: string]: string;
     }> {
@@ -129,7 +129,7 @@ test('Reset verseRef returns false', async () => {
 
 test('Set verseRef throws', async () => {
   const result = settingsProviderEngine.set('platform.verseRef', {
-    bookNum: 2,
+    book: 'EXO',
     chapterNum: 1,
     verseNum: 1,
   });

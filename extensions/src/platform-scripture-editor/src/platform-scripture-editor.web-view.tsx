@@ -12,7 +12,7 @@ import {
   USJ_VERSION,
   Usj,
 } from '@biblionexus-foundation/scripture-utilities';
-import { Canon, SerializedVerseRef, VerseRef } from '@sillsdev/scripture';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
@@ -26,7 +26,6 @@ import {
   areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   deepClone,
-  ScriptureReference,
   serialize,
   UsjReaderWriter,
 } from 'platform-bible-utils';
@@ -39,6 +38,7 @@ import {
 } from 'platform-bible-react';
 import { LegacyComment } from 'legacy-comment-manager';
 import { EditorDecorations, EditorWebViewMessage, SelectionRange } from 'platform-scripture-editor';
+import { createHtmlPortalNode, InPortal, OutPortal } from 'react-reverse-portal';
 import {
   convertEditorCommentsToLegacyComments,
   convertLegacyCommentsToEditorThreads,
@@ -131,11 +131,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [scrRef, setScrRefWithScroll] = useWebViewScrollGroupScrRef();
   const verseLocation = useMemo<SerializedVerseRef>(
     () => ({
-      book: Canon.bookNumberToId(scrRef.bookNum),
+      book: scrRef.book,
       chapterNum: scrRef.chapterNum,
       verseNum: scrRef.verseNum,
     }),
     [scrRef],
+  );
+  /**
+   * Reverse portal node for the editor. Using this allows us to mount the editor once and re-parent
+   * it without the editor unmounting and remounting. We need to re-parent the editor when container
+   * decorations are added and/or removed. We need to avoid remounting the editor because it needs
+   * to preserve its internal state like current selection.
+   */
+  const editorPortalNode = useMemo(
+    () =>
+      createHtmlPortalNode({
+        // The reverse portal is a `div` containing the contents of `InPortal`. These attributes are
+        // attached to the reverse portal's `div` element.
+        attributes: {
+          class:
+            // We don't want this `div` in our document flow, so we functionally get rid of it with
+            // `display: contents`
+            'tw-contents',
+        },
+      }),
+    [],
   );
 
   const nextSelectionRange = useRef<SelectionRange | undefined>(undefined);
@@ -223,13 +243,8 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   const setScrRefNoScroll = useCallback(
     (newVerseLocation: SerializedVerseRef) => {
-      const newScrRef: ScriptureReference = {
-        bookNum: Canon.bookIdToNumber(newVerseLocation.book),
-        chapterNum: newVerseLocation.chapterNum,
-        verseNum: newVerseLocation.verseNum,
-      };
       internalVerseLocationRef.current = newVerseLocation;
-      setScrRefWithScroll(newScrRef);
+      setScrRefWithScroll(newVerseLocation);
     },
     [setScrRefWithScroll],
   );
@@ -244,16 +259,14 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     'platformScripture.USJ_Chapter',
     projectId,
   ).ChapterUSJ(
-    useMemo(
-      () =>
-        VerseRef.fromJSON({
-          book: verseLocation.book,
-          chapterNum: verseLocation.chapterNum,
-          verseNum: 1,
-          versificationStr: verseLocation.versificationStr,
-        }),
-      [verseLocation.book, verseLocation.chapterNum, verseLocation.versificationStr],
-    ),
+    useMemo(() => {
+      return {
+        book: verseLocation.book,
+        chapterNum: verseLocation.chapterNum,
+        verseNum: 1,
+        versificationStr: verseLocation.versificationStr,
+      };
+    }, [verseLocation.book, verseLocation.chapterNum, verseLocation.versificationStr]),
     defaultUsj,
     // `whichUpdates` set to `*` because we need to receive all updates instead of just ones that
     // are not deeply equal so we can tell when the PDP finished processing our latest changes sent
@@ -567,62 +580,66 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   }
 
   return (
-    <div className="tw-h-screen tw-w-screen">
-      {/** Containers */}
-      {Object.entries(decorations.containers ?? {}).reduce(
-        (children, [id, decoration]) => (
-          <div
-            className="tw-h-full"
-            data-container-id={id}
-            key={`container-${id}`}
-            style={decoration.style}
-          >
-            {children}
-          </div>
-        ),
-        <div className="tw-flex tw-flex-col tw-h-full">
-          {/** Headers */}
-          <div className="tw-flex-grow-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
-            {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
-              // Headers
-              <Alert
-                data-header-id={id}
-                key={`header-${id}`}
-                // Must use `any` here because Alert doesn't expose its variant type which is very
-                // specific strings. We are passing in a variant string. If it is not accepted, it uses `default` variant
-                // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
-                variant={header.variant as any}
-              >
-                {header.iconUrl && (
-                  <img
-                    className="tw-h-4 tw-w-4"
-                    src={header.iconUrl}
-                    alt={
-                      header.iconAltText
-                        ? decorationsLocalizedStrings[header.iconAltText]
-                        : undefined
-                    }
-                  />
-                )}
-                {header.title && (
-                  <AlertTitle>{decorationsLocalizedStrings[header.title]}</AlertTitle>
-                )}
-                {header.descriptionMd && (
-                  <AlertDescription>
-                    <MarkdownRenderer
-                      anchorTarget="_blank"
-                      className="tw-max-w-none tw-text-sm"
-                      markdown={decorationsLocalizedStrings[header.descriptionMd]}
+    <>
+      {/** Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
+      <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
+      <div className="tw-h-screen tw-w-screen">
+        {/** Containers */}
+        {Object.entries(decorations.containers ?? {}).reduce(
+          (children, [id, decoration]) => (
+            <div
+              className="tw-h-full"
+              data-container-id={id}
+              key={`container-${id}`}
+              style={decoration.style}
+            >
+              {children}
+            </div>
+          ),
+          <div className="tw-flex tw-flex-col tw-h-full">
+            {/** Headers */}
+            <div className="tw-flex-grow-0 tw-m-1 tw-flex tw-flex-col tw-gap-1">
+              {Object.entries(decorations.headers ?? {}).map(([id, header]) => (
+                // Headers
+                <Alert
+                  data-header-id={id}
+                  key={`header-${id}`}
+                  // Must use `any` here because Alert doesn't expose its variant type which is very
+                  // specific strings. We are passing in a variant string. If it is not accepted, it uses `default` variant
+                  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-explicit-any
+                  variant={header.variant as any}
+                >
+                  {header.iconUrl && (
+                    <img
+                      className="tw-h-4 tw-w-4"
+                      src={header.iconUrl}
+                      alt={
+                        header.iconAltText
+                          ? decorationsLocalizedStrings[header.iconAltText]
+                          : undefined
+                      }
                     />
-                  </AlertDescription>
-                )}
-              </Alert>
-            ))}
-          </div>
-          {/** Editor */}
-          {renderEditor()}
-        </div>,
-      )}
-    </div>
+                  )}
+                  {header.title && (
+                    <AlertTitle>{decorationsLocalizedStrings[header.title]}</AlertTitle>
+                  )}
+                  {header.descriptionMd && (
+                    <AlertDescription>
+                      <MarkdownRenderer
+                        anchorTarget="_blank"
+                        className="tw-max-w-none tw-text-sm"
+                        markdown={decorationsLocalizedStrings[header.descriptionMd]}
+                      />
+                    </AlertDescription>
+                  )}
+                </Alert>
+              ))}
+            </div>
+            {/** Render the editor inside the container decorations without re-mounting on re-parent */}
+            <OutPortal node={editorPortalNode} />
+          </div>,
+        )}
+      </div>
+    </>
   );
 };

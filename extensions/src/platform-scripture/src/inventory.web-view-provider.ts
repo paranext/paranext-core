@@ -13,7 +13,7 @@ export interface InventoryWebViewOptions extends GetWebViewOptions {
   projectId: string | undefined;
 }
 
-export default class InventoryWebViewProvider implements IWebViewProvider {
+export class InventoryWebViewProvider implements IWebViewProvider {
   constructor(
     public titleKey: LocalizeKey,
     public webViewType: string,
@@ -60,3 +60,5 @@ export default class InventoryWebViewProvider implements IWebViewProvider {
     };
   }
 }
+
+export default InventoryWebViewProvider;

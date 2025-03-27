@@ -131,12 +131,6 @@ jobs:
 
       - name: Publish releases - macOS
         if: ${{ matrix.os == env.OS_MACOS }}
-        # env:
-        #   # These values are used for auto updates signing
-        #   APPLE_ID: ${{ secrets.APPLE_ID }}
-        #   APPLE_ID_PASS: ${{ secrets.APPLE_ID_PASS }}
-        #   CSC_LINK: ${{ secrets.CSC_LINK }}
-        #   CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
         run: |
           npm exec electron-builder -- build --publish never --mac
 
@@ -171,7 +165,7 @@ jobs:
         with:
           name: app-linux
           path: |
-            ./release/build/*.AppImage
+            ./release/build/*.snap
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

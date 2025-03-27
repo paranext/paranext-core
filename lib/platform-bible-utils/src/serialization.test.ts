@@ -1,6 +1,5 @@
 // Many tests must use null
 /* eslint-disable no-null/no-null */
-import { VerseRef, ScrVers } from '@sillsdev/scripture';
 import { serialize, deserialize } from './serialization';
 
 describe('serialize', () => {
@@ -42,23 +41,5 @@ describe('deserialize', () => {
     const json = '{"a":1,"b":{"c":null}}';
     const result = deserialize(json);
     expect(result).toEqual({ a: 1, b: { c: undefined } });
-  });
-
-  it('should convert SerializedVerseRef to VerseRef', () => {
-    const json = '{"book":"GEN","chapterNum":1,"verseNum":1}';
-    const result = deserialize(json);
-    expect(result).toEqual(new VerseRef('GEN', '1', '1'));
-  });
-
-  it('should handle SerializedVerseRef with versification', () => {
-    const json = '{"book":"GEN","chapterNum":1,"verseNum":1,"versificationStr":"English"}';
-    const result = deserialize(json);
-    expect(result).toEqual(new VerseRef('GEN', '1', '1', new ScrVers('English')));
-  });
-
-  it('should handle nested SerializedVerseRef objects', () => {
-    const json = '{"a":1,"b":{"book":"GEN","chapterNum":1,"verseNum":1}}';
-    const result = deserialize(json);
-    expect(result).toEqual({ a: 1, b: new VerseRef('GEN', '1', '1') });
   });
 });

@@ -18,7 +18,7 @@ Extensible Bible translation software
 
 Platform.Bible is extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
 
-This repository contains the core Platform.Bible software (Electron client, extension host including "PAPI", and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional extensions.
+This repository contains the core Platform.Bible software (Electron client, extension host including the Platform API (PAPI), and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional extensions.
 
 ## Users
 
@@ -28,13 +28,15 @@ If you would still like to try it, you can [download early releases here on GitH
 
 ### Linux Users
 
-To use `.AppImage` files in Linux, [install FUSE](https://github.com/AppImage/AppImageKit/wiki/FUSE) (you only need to do this once), for example, on Ubuntu (>= 22.04):
+We produce [`snap` packages](<https://en.wikipedia.org/wiki/Snap_(software)>) available [on the snap store](https://snapcraft.io/platform-bible) for users to run our
+software on Linux. Once you have all the `snap` tools installed for your flavor of Linux, run `sudo snap install platform-bible` for our most recent stable build (none yet) or `sudo snap install platform-bible --channel=edge` for our most recent, pre-release build that has passed our limited, automated testing suite.
 
-```bash
-sudo apt install libfuse2
+To install a locally created `snap` package, run the following commands:
+
+```sh
+sudo snap install <path to snap file> --dangerous
+sudo snap connect platform-bible:dot-platform-bible
 ```
-
-Then simply [execute/run](https://github.com/AppImage/AppImageKit/wiki) the `.AppImage` file, which you can download from [Releases](https://github.com/paranext/paranext-core/releases).
 
 Some users may find that not everything works properly in Linux without some additional setup. Please see [How to set up Platform.Bible on Linux](https://github.com/paranext/paranext/wiki/How-to-set-up-Platform.Bible-on-Linux) for more information.
 
@@ -121,14 +123,14 @@ Start the app in the `dev` environment:
 npm start
 ```
 
-After you run `npm start` (or, in VSCode, launch `Debug Paranext Core`), you can edit the code, and the relevant processes will hot reload.
+After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit the code, and the relevant processes will hot reload.
 
 ### Developing Extensions
 
-Paranext Core extensions are found in the `extensions` folder. Please follow the instructions in
-`extensions/README.md` to develop extensions.
+Platfrom.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
+[extensions/README.md](extensions/README.md) to develop core extensions.
 
-Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing extensions.
+Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core. Once you have packaged an extension, it can be distributed for Platform.Bible users to install. See [Running your extension in an app](https://github.com/paranext/paranext-extension-template/wiki/Debugging-Your-Extension-in-the-Production-Application#running-your-extension-in-an-app) for installation information.
 
 ## GitHub Pages
 
@@ -143,6 +145,10 @@ Please see the [Extension Template wiki](https://github.com/paranext/paranext-ex
 **[Platform.Bible Utilities Documentation](https://paranext.github.io/paranext-core/platform-bible-utils)**
 
 - Check out the utility functions, types, and classes available to use.
+
+**[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
+
+- Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
 
 ## JavaScript Tool Manager
 

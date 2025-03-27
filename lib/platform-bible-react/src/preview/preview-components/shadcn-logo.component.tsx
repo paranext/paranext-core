@@ -1,4 +1,4 @@
-export default function ShadCnLogo() {
+export function ShadCnLogo() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" className="h-6 w-6">
       <rect width="256" height="256" fill="none" />
@@ -27,3 +27,5 @@ export default function ShadCnLogo() {
     </svg>
   );
 }
+
+export default ShadCnLogo;

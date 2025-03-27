@@ -68,36 +68,37 @@ declare module 'shared/utils/util' {
   export function bindClassMethods<T extends object>(this: T): void;
 }
 declare module 'shared/services/scroll-group.service-model' {
-  import { PlatformEvent, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
   /** Name to use when creating a network event that is fired when webViews are updated */
   export const EVENT_NAME_ON_DID_UPDATE_SCR_REF: `${string}:${string}`;
   /**
-   * Combination of a {@link ScrollGroupId} and a {@link ScriptureReference}. If this value is a number,
-   * that means this should be synced with the scroll group sharing that number. If this value is an
+   * Combination of a {@link ScrollGroupId} and a SerializedVerseRef. If this value is a number, that
+   * means this should be synced with the scroll group sharing that number. If this value is an
    * object, that means it is an independent Scripture reference and should not be synced with any
    * scroll group.
    */
-  export type ScrollGroupScrRef = ScrollGroupId | ScriptureReference;
+  export type ScrollGroupScrRef = ScrollGroupId | SerializedVerseRef;
   /**
-   * Information about an update to a scroll group. Informs about the new {@link ScriptureReference} at
-   * a {@link ScrollGroupId}
+   * Information about an update to a scroll group. Informs about the new SerializedVerseRef at a
+   * {@link ScrollGroupId}
    */
   export type ScrollGroupUpdateInfo = {
-    scrRef: ScriptureReference;
+    scrRef: SerializedVerseRef;
     scrollGroupId: ScrollGroupId;
   };
   /** Parts of the Scroll Group Service that are exposed through the network object */
   export interface IScrollGroupRemoteService {
     /**
-     * Get the {@link ScriptureReference} associated with the provided scroll group
+     * Get the SerializedVerseRef associated with the provided scroll group
      *
      * @param scrollGroupId Scroll group whose Scripture reference to get. Defaults to 0
      * @returns Scripture reference associated with the provided scroll group
      */
-    getScrRef(scrollGroupId?: ScrollGroupId): Promise<ScriptureReference>;
+    getScrRef(scrollGroupId?: ScrollGroupId): Promise<SerializedVerseRef>;
     /**
-     * Sets the {@link ScriptureReference} associated with the provided scroll group
+     * Sets the SerializedVerseRef associated with the provided scroll group
      *
      * @param scrollGroupId Scroll group whose Scripture reference to get. If `undefined`, defaults to
      *   0
@@ -106,7 +107,7 @@ declare module 'shared/services/scroll-group.service-model' {
      */
     setScrRef(
       scrollGroupId: ScrollGroupId | undefined,
-      scrRef: ScriptureReference,
+      scrRef: SerializedVerseRef,
     ): Promise<boolean>;
   }
   /**
@@ -120,7 +121,8 @@ declare module 'shared/services/scroll-group.service-model' {
 }
 declare module 'shared/models/web-view.model' {
   import type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference, ScrollGroupId, LocalizeKey } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
   /** The type of code that defines a webview's content */
   export enum WebViewContentType {
     /**
@@ -224,8 +226,8 @@ declare module 'shared/models/web-view.model' {
      */
     projectId?: string;
     /**
-     * With which scroll group this web view is synced or the {@link ScriptureReference} this web view
-     * is focusing independently of a scroll group
+     * With which scroll group this web view is synced or the SerializedVerseRef this web view is
+     * focusing independently of a scroll group
      */
     scrollGroupScrRef?: ScrollGroupScrRef;
     /**
@@ -447,7 +449,7 @@ declare module 'shared/models/web-view.model' {
   /**
    *
    * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
-   * value and a function to set the value for both the {@link ScriptureReference} and the
+   * value and a function to set the value for both the SerializedVerseRef and the
    * {@link ScrollGroupId} with which this web view is synced (using this web view's
    * `scrollGroupScrRef` property). Use similarly to `useState`.
    *
@@ -469,8 +471,8 @@ declare module 'shared/models/web-view.model' {
    * ```
    */
   export type UseWebViewScrollGroupScrRefHook = () => [
-    scrRef: ScriptureReference,
-    setScrRef: (newScrRef: ScriptureReference) => void,
+    scrRef: SerializedVerseRef,
+    setScrRef: (newScrRef: SerializedVerseRef) => void,
     scrollGroupId: ScrollGroupId | undefined,
     setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
   ];
@@ -542,7 +544,7 @@ declare module 'shared/models/web-view.model' {
     /**
      *
      * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
-     * value and a function to set the value for both the {@link ScriptureReference} and the
+     * value and a function to set the value for both the SerializedVerseRef and the
      * {@link ScrollGroupId} with which this web view is synced (using this web view's
      * `scrollGroupScrRef` property). Use similarly to `useState`.
      *
@@ -684,7 +686,7 @@ declare module 'shared/global-this.model' {
     /**
      *
      * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
-     * value and a function to set the value for both the {@link ScriptureReference} and the
+     * value and a function to set the value for both the SerializedVerseRef and the
      * {@link ScrollGroupId} with which this web view is synced (using this web view's
      * `scrollGroupScrRef` property). Use similarly to `useState`.
      *
@@ -805,7 +807,7 @@ declare module 'shared/services/logger.service' {
    *
    * All extensions and services should use this logger to provide a unified output of logs
    */
-  const logger: log.MainLogger & {
+  export const logger: log.MainLogger & {
     default: log.MainLogger;
   };
   export default logger;
@@ -956,7 +958,7 @@ declare module 'shared/models/papi-network-event-emitter.model' {
    *
    * WARNING: You cannot emit events with complex types on the network.
    */
-  export default class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
+  export class PapiNetworkEventEmitter<T> extends PlatformEventEmitter<T> {
     /** Callback that sends the event to other processes on the network when it is emitted */
     private networkSubscriber;
     /** Callback that runs when the emitter is disposed - should handle unlinking from the network */
@@ -982,6 +984,7 @@ declare module 'shared/models/papi-network-event-emitter.model' {
     emitLocal(event: T): void;
     dispose: () => Promise<boolean>;
   }
+  export default PapiNetworkEventEmitter;
 }
 declare module 'shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
@@ -1258,7 +1261,7 @@ declare module 'renderer/services/renderer-web-socket.service' {
    *
    * Note that the Node WebSocket implementation is different and not wrapped here.
    */
-  export default class PapiRendererWebSocket implements WebSocket {
+  export class PapiRendererWebSocket implements WebSocket {
     readonly CONNECTING: 0;
     readonly OPEN: 1;
     readonly CLOSING: 2;
@@ -1288,6 +1291,7 @@ declare module 'renderer/services/renderer-web-socket.service' {
     url: string;
     constructor(url: string | URL, protocols?: string | string[]);
   }
+  export default PapiRendererWebSocket;
 }
 declare module 'extension-host/services/extension-host-web-socket.model' {
   import ws from 'ws';
@@ -1322,7 +1326,7 @@ declare module 'client/services/rpc-client' {
    *
    * Created by any process that connects to the websocket server owned by main
    */
-  export default class RpcClient implements IRpcMethodRegistrar {
+  export class RpcClient implements IRpcMethodRegistrar {
     connectionStatus: ConnectionStatus;
     private ws;
     private requestId;
@@ -1357,6 +1361,7 @@ declare module 'client/services/rpc-client' {
     private onWebSocketClose;
     private onMessageReceivedByWebSocket;
   }
+  export default RpcClient;
 }
 declare module 'main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
@@ -1372,7 +1377,7 @@ declare module 'main/services/rpc-server' {
    * Created by RpcWebSocketListener when a client connects to the web socket server. There is one
    * RpcServer object per client that connects to the web socket server.
    */
-  export default class RpcServer implements IRpcHandler {
+  export class RpcServer implements IRpcHandler {
     connectionStatus: ConnectionStatus;
     private ws;
     private requestId;
@@ -1410,6 +1415,7 @@ declare module 'main/services/rpc-server' {
     private onMessageReceivedByWebSocket;
     private processMessage;
   }
+  export default RpcServer;
 }
 declare module 'main/services/rpc-websocket-listener' {
   import {
@@ -1433,7 +1439,7 @@ declare module 'main/services/rpc-websocket-listener' {
    *
    * Created by the main process on start up when the network service initializes
    */
-  export default class RpcWebSocketListener implements IRpcMethodRegistrar {
+  export class RpcWebSocketListener implements IRpcMethodRegistrar {
     connectionStatus: ConnectionStatus;
     private localEventHandler;
     private webSocketServer;
@@ -1462,6 +1468,7 @@ declare module 'main/services/rpc-websocket-listener' {
     private onClientConnect;
     private onClientDisconnect;
   }
+  export default RpcWebSocketListener;
 }
 declare module 'shared/services/rpc-handler.factory' {
   import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
@@ -1657,7 +1664,7 @@ declare module 'shared/services/network-object.service' {
    * event handler will be called. After an object is disposed, calls to its functions will no longer
    * be proxied to the original object.
    */
-  const networkObjectService: NetworkObjectService;
+  export const networkObjectService: NetworkObjectService;
   export default networkObjectService;
   /**
    *
@@ -1974,12 +1981,13 @@ declare module 'shared/models/data-provider.model' {
    *
    * @see {@link IDataProvider}
    */
-  type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-    NetworkableObject<
-      DataProviderSetters<TDataTypes> &
-        DataProviderGetters<TDataTypes> &
-        DataProviderSubscribers<TDataTypes>
-    >;
+  export type DataProviderInternal<
+    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
+  > = NetworkableObject<
+    DataProviderSetters<TDataTypes> &
+      DataProviderGetters<TDataTypes> &
+      DataProviderSubscribers<TDataTypes>
+  >;
   /**
    * Get the data type for a data provider function based on its name
    *
@@ -2137,7 +2145,7 @@ declare module 'shared/models/data-provider.interface' {
    * Note: each `set<data_type>` method has a corresponding `get<data_type>` and
    * `subscribe<data_type>` method.
    */
-  type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+  export type IDataProvider<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
     DataProviderSetters<TDataTypes> &
       DataProviderGetters<TDataTypes> &
       DataProviderSubscribers<TDataTypes> &
@@ -2295,36 +2303,37 @@ declare module 'shared/models/data-provider-engine.model' {
    *   defined, the engine must have corresponding `get<data_type>` and `set<data_type> function`
    *   functions.
    */
-  type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
-    NetworkableObject &
-      /**
-       * Set of all `set<data_type>` methods that a data provider engine must provide according to its
-       * data types. papi overwrites this function on the DataProviderEngine itself to emit an update
-       * after running the defined `set<data_type>` method in the DataProviderEngine.
-       *
-       * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
-       * method.
-       *
-       * Note: to make a data type read-only, you can always return false or throw from
-       * `set<data_type>`.
-       *
-       * WARNING: Do not run this recursively in its own `set<data_type>` method! It will create as
-       * many updates as you run `set<data_type>` methods.
-       *
-       * @see {@link DataProviderSetter} for more information
-       */
-      DataProviderSetters<TDataTypes> &
-      /**
-       * Set of all `get<data_type>` methods that a data provider engine must provide according to its
-       * data types. Run by the data provider on `get<data_type>`
-       *
-       * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
-       * method.
-       *
-       * @see {@link DataProviderGetter} for more information
-       */
-      DataProviderGetters<TDataTypes> &
-      Partial<WithNotifyUpdate<TDataTypes>>;
+  export type IDataProviderEngine<
+    TDataTypes extends DataProviderDataTypes = DataProviderDataTypes,
+  > = NetworkableObject &
+    /**
+     * Set of all `set<data_type>` methods that a data provider engine must provide according to its
+     * data types. papi overwrites this function on the DataProviderEngine itself to emit an update
+     * after running the defined `set<data_type>` method in the DataProviderEngine.
+     *
+     * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
+     * method.
+     *
+     * Note: to make a data type read-only, you can always return false or throw from
+     * `set<data_type>`.
+     *
+     * WARNING: Do not run this recursively in its own `set<data_type>` method! It will create as
+     * many updates as you run `set<data_type>` methods.
+     *
+     * @see {@link DataProviderSetter} for more information
+     */
+    DataProviderSetters<TDataTypes> &
+    /**
+     * Set of all `get<data_type>` methods that a data provider engine must provide according to its
+     * data types. Run by the data provider on `get<data_type>`
+     *
+     * Note: papi requires that each `set<data_type>` method has a corresponding `get<data_type>`
+     * method.
+     *
+     * @see {@link DataProviderGetter} for more information
+     */
+    DataProviderGetters<TDataTypes> &
+    Partial<WithNotifyUpdate<TDataTypes>>;
   export default IDataProviderEngine;
   /**
    *
@@ -2352,7 +2361,7 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
    * `IDataProviderEngine` along with the `papi-shared-types` extensible interfaces `DataProviders`
    * and `DisposableDataProviders`
    */
-  type ExtractDataProviderDataTypes<TDataProvider> =
+  export type ExtractDataProviderDataTypes<TDataProvider> =
     TDataProvider extends IDataProvider<infer TDataProviderDataTypes>
       ? TDataProviderDataTypes
       : TDataProvider extends DataProviderInternal<infer TDataProviderDataTypes>
@@ -2483,7 +2492,7 @@ declare module 'shared/services/network-object-status.service' {
    *
    * Provides functions related to the set of available network objects
    */
-  const networkObjectStatusService: NetworkObjectStatusServiceType;
+  export const networkObjectStatusService: NetworkObjectStatusServiceType;
   export default networkObjectStatusService;
 }
 declare module 'shared/models/docking-framework.model' {
@@ -2810,7 +2819,7 @@ declare module 'shared/services/web-view.service-model' {
 }
 declare module 'shared/services/web-view.service' {
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
-  const webViewService: WebViewServiceType;
+  export const webViewService: WebViewServiceType;
   export default webViewService;
 }
 declare module 'shared/services/web-view-provider.service' {
@@ -2917,7 +2926,7 @@ declare module 'shared/services/web-view-provider.service' {
     registerWebViewController: typeof registerWebViewController;
     postMessageToWebView: typeof postMessageToWebView;
   }
-  const webViewProviderService: WebViewProviderService;
+  export const webViewProviderService: WebViewProviderService;
   /**
    *
    * Interface for registering webView providers, registering webView controllers, and performing
@@ -3047,7 +3056,7 @@ declare module 'shared/models/web-view-factory.model' {
   }
 }
 declare module 'papi-shared-types' {
-  import type { ScriptureReference, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -3059,11 +3068,14 @@ declare module 'papi-shared-types' {
     PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from 'shared/models/project-data-provider.model';
-  import type { IDisposableDataProvider } from 'shared/models/data-provider.interface';
-  import type IDataProvider from 'shared/models/data-provider.interface';
-  import type ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
+  import type {
+    IDataProvider,
+    IDisposableDataProvider,
+  } from 'shared/models/data-provider.interface';
+  import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   import type { NetworkableObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
    * to add commands that it registers on the papi with `papi.commands.registerCommand`.
@@ -3094,6 +3106,10 @@ declare module 'papi-shared-types' {
     'platform.quit': () => Promise<void>;
     /** Restart the application */
     'platform.restart': () => Promise<void>;
+    /** Get the operating system platform */
+    'platform.getOSPlatform': () => Promise<string | undefined>;
+    /** If the browser window is in full screen */
+    'platform.isFullScreen': () => Promise<boolean>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -3144,7 +3160,7 @@ declare module 'papi-shared-types' {
      * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
      * `useWebViewScrollGroupScrRef`
      */
-    'platform.verseRef': ScriptureReference;
+    'platform.verseRef': SerializedVerseRef;
     /**
      * List of locales to use when localizing the interface. First in the list receives highest
      * priority. Please always add 'en' (English) at the end when using this setting so everything
@@ -3669,7 +3685,7 @@ declare module 'shared/services/internet.service' {
    *
    * Service that provides a way to call `fetch` since the original function is not available
    */
-  const internetService: InternetService;
+  export const internetService: InternetService;
   export default internetService;
 }
 declare module 'shared/models/notification.service-model' {
@@ -3719,14 +3735,15 @@ declare module 'shared/services/notification.service' {
    *
    * Service that sends notifications to users in the UI
    */
-  const notificationService: INotificationService;
+  export const notificationService: INotificationService;
   export default notificationService;
 }
 declare module 'shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
   import { DataProviderDataTypes } from 'shared/models/data-provider.model';
-  import IDataProviderEngine, {
+  import {
     DataProviderEngine,
+    IDataProviderEngine,
   } from 'shared/models/data-provider-engine.model';
   import {
     DataProviderNames,
@@ -3734,7 +3751,7 @@ declare module 'shared/services/data-provider.service' {
     DataProviders,
     DisposableDataProviders,
   } from 'papi-shared-types';
-  import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
   /**
    *
    * Indicate if we are aware of an existing data provider with the given name. If a data provider
@@ -4077,7 +4094,7 @@ declare module 'shared/services/data-provider.service' {
    *
    * Service that allows extensions to send and receive data to/from other extensions
    */
-  const dataProviderService: DataProviderService;
+  export const dataProviderService: DataProviderService;
   export default dataProviderService;
 }
 declare module 'shared/models/project-metadata.model' {
@@ -4154,7 +4171,7 @@ declare module 'shared/models/project-data-provider-factory.interface' {
    * Factories must create PDPs that support the `platform.base` `projectInterface`. See
    * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
    */
-  interface IProjectDataProviderFactory extends Dispose {
+  export interface IProjectDataProviderFactory extends Dispose {
     /**
      *
      * Get metadata about all projects that can be served by PDPs created by this PDP factory.
@@ -4375,7 +4392,7 @@ declare module 'shared/models/project-lookup.service-model' {
   };
 }
 declare module 'shared/services/project-lookup.service' {
-  const projectLookupService: import('shared/models/project-lookup.service-model').ProjectLookupServiceType;
+  export const projectLookupService: import('shared/models/project-lookup.service-model').ProjectLookupServiceType;
   export default projectLookupService;
 }
 declare module 'shared/models/project-data-provider-engine-factory.model' {
@@ -4735,7 +4752,7 @@ declare module 'shared/services/project-data-provider.service' {
    *
    * ```typescript
    * const pdp = await get('platformScripture.USFM_Verse', 'ProjectID12345');
-   * pdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
+   * pdp.getVerseUSFM({ book: 'JHN', chapterNum: 1, verseNum: 1 });
    * ```
    *
    * @param projectInterface `projectInterface` that the project to load must support. The TypeScript
@@ -5016,7 +5033,7 @@ declare module 'node/services/execution-token.service' {
    * @returns `true` if the token matches a token that was previous registered, `false` otherwise.
    */
   function tokenIsValid(executionToken: ExecutionToken): boolean;
-  const executionTokenService: {
+  export const executionTokenService: {
     registerExtension: typeof registerExtension;
     unregisterExtension: typeof unregisterExtension;
     tokenIsValid: typeof tokenIsValid;
@@ -5096,7 +5113,7 @@ declare module 'extension-host/services/extension-storage.service' {
    * the extension identity and current user (as identified by the OS). This service will not work
    * within the renderer.
    */
-  const extensionStorageService: ExtensionStorageService;
+  export const extensionStorageService: ExtensionStorageService;
   export default extensionStorageService;
 }
 declare module 'shared/models/dialog-options.model' {
@@ -5213,7 +5230,7 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
    * to a nonexistent `Component`. Instead of inheriting this as a class, any dialog definition can
    * spread this `{ ...DIALOG_BASE }`
    */
-  const DIALOG_BASE: DialogDefinitionBase;
+  export const DIALOG_BASE: DialogDefinitionBase;
   export default DIALOG_BASE;
 }
 declare module 'renderer/components/dialogs/dialog-definition.model' {
@@ -5330,7 +5347,7 @@ declare module 'shared/services/dialog.service-model' {
 }
 declare module 'shared/services/dialog.service' {
   import { DialogService } from 'shared/services/dialog.service-model';
-  const dialogService: DialogService;
+  export const dialogService: DialogService;
   export default dialogService;
 }
 declare module 'shared/models/create-process-privilege.model' {
@@ -5698,7 +5715,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    *       specify as many or as few properties here as you want to overwrite the properties in the
    *       `options` you provide to the hook
    */
-  function useDialogCallback<
+  export function useDialogCallback<
     DialogTabType extends DialogTabTypes,
     DialogOptions extends DialogTypes[DialogTabType]['options'],
   >(
@@ -5779,7 +5796,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
    *       specify as many or as few properties here as you want to overwrite the properties in the
    *       `options` you provide to the hook
    */
-  function useDialogCallback<
+  export function useDialogCallback<
     DialogTabType extends DialogTabTypes,
     DialogOptions extends DialogTypes[DialogTabType]['options'],
   >(
@@ -5794,13 +5811,18 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   export default useDialogCallback;
 }
 declare module 'shared/services/localization.service-model' {
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
   import {
     DataProviderDataType,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { LanguageInfo } from 'platform-bible-react';
-  import { LanguageStrings, LocalizeKey, OnDidDispose } from 'platform-bible-utils';
+  import {
+    LanguageStrings,
+    LocalizedStringDataContribution,
+    LocalizeKey,
+    OnDidDispose,
+  } from 'platform-bible-utils';
   export type LocalizationData = LanguageStrings;
   export type LocalizationSelector = {
     localizeKey: LocalizeKey;
@@ -5866,6 +5888,12 @@ declare module 'shared/services/localization.service-model' {
      */
     getAvailableInterfaceLanguages: () => Promise<Record<string, LanguageInfo>>;
     /**
+     * Get all localized string data currently loaded by the platform
+     *
+     * @returns All localized string data from all sources formatted a single, combined contribution
+     */
+    retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
+    /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
      * @returns Unsubscriber function
@@ -5922,13 +5950,14 @@ declare module 'shared/data/platform.data' {
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
-  export default class LogError extends Error {
+  export class LogError extends Error {
     constructor(message?: string);
   }
+  export default LogError;
 }
 declare module 'shared/services/localization.service' {
   import { ILocalizationService } from 'shared/services/localization.service-model';
-  const localizationService: ILocalizationService;
+  export const localizationService: ILocalizationService;
   export default localizationService;
 }
 declare module 'shared/utils/settings-document-combiner-base' {
@@ -5963,7 +5992,7 @@ declare module 'shared/utils/settings-document-combiner-base' {
     settings: Partial<AllSettingsInfo>;
   };
   export type LocalizedSettingsContributionInfo = Localized<SettingsContributionInfo>;
-  export default abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
+  export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
     /** Name for type of setting to use in error messages */
     protected readonly settingTypeName: string;
     /** Cached promise for getting the localized output */
@@ -5997,11 +6026,12 @@ declare module 'shared/utils/settings-document-combiner-base' {
     /** Validate the base and contribution documents against the JSON schema */
     protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
   }
+  export default SettingsDocumentCombinerBase;
 }
 declare module 'shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
   import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
-  import IDataProvider from 'shared/models/data-provider.interface';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
@@ -6161,7 +6191,7 @@ declare module 'shared/utils/project-settings-document-combiner' {
     ProjectSetting,
     ProjectSettingsGroup,
   } from 'platform-bible-utils';
-  import SettingsDocumentCombinerBase from 'shared/utils/settings-document-combiner-base';
+  import { SettingsDocumentCombinerBase } from 'shared/utils/settings-document-combiner-base';
   /**
    * Information about one specific setting. Basically just {@link Setting} but with specific default
    * type info
@@ -6185,7 +6215,7 @@ declare module 'shared/utils/project-settings-document-combiner' {
     settings: Partial<AllProjectSettingsInfo>;
   };
   export type LocalizedProjectSettingsContributionInfo = Localized<ProjectSettingsContributionInfo>;
-  export default class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
+  export class ProjectSettingsDocumentCombiner extends SettingsDocumentCombinerBase {
     protected readonly settingTypeName = 'Project Setting';
     /**
      * Get the current set of project settings contribution info given all the input documents.
@@ -6216,6 +6246,7 @@ declare module 'shared/utils/project-settings-document-combiner' {
     >;
     protected performSchemaValidation(document: JsonDocumentLike, docType: string): void;
   }
+  export default ProjectSettingsDocumentCombiner;
 }
 declare module 'shared/services/project-settings.service-model' {
   import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
@@ -6537,7 +6568,7 @@ declare module 'shared/services/menu-data.service-model' {
 }
 declare module 'shared/services/menu-data.service' {
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
-  const menuDataService: IMenuDataService;
+  export const menuDataService: IMenuDataService;
   export default menuDataService;
 }
 declare module 'shared/services/scroll-group.service' {
@@ -6546,12 +6577,12 @@ declare module 'shared/services/scroll-group.service' {
    *
    * Provides functions related to scroll groups and Scripture references at those scroll groups
    */
-  const scrollGroupService: IScrollGroupService;
+  export const scrollGroupService: IScrollGroupService;
   export default scrollGroupService;
 }
 declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
-  const settingsService: ISettingsService;
+  export const settingsService: ISettingsService;
   export default settingsService;
 }
 declare module 'shared/services/project-settings.service' {
@@ -6576,7 +6607,7 @@ declare module 'shared/services/project-settings.service' {
     contributions: Localized<ProjectSettingsContributionInfo['contributions']> | undefined,
     projectInterfaces: (keyof ProjectDataProviderInterfaces)[],
   ): Localized<ProjectSettingsContributionInfo['contributions']> | undefined;
-  const projectSettingsService: IProjectSettingsService;
+  export const projectSettingsService: IProjectSettingsService;
   export default projectSettingsService;
 }
 declare module 'shared/models/data-protection.service-model' {
@@ -6673,7 +6704,7 @@ declare module 'shared/services/data-protection.service' {
    * connection. Please note that using this service passes the unencrypted string between local
    * processes using the PAPI WebSocket.
    */
-  const dataProtectionService: IDataProtectionService;
+  export const dataProtectionService: IDataProtectionService;
   export default dataProtectionService;
 }
 declare module '@papi/backend' {
@@ -7243,7 +7274,7 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
    *
    * @returns A function that takes in a networkObjectSource and returns a NetworkObject
    */
-  function createUseNetworkObjectHook<THookParams extends unknown[]>(
+  export function createUseNetworkObjectHook<THookParams extends unknown[]>(
     getNetworkObject: (...args: THookParams) => Promise<NetworkObject<object> | undefined>,
     mapParametersToNetworkObjectSource?: (
       ...args: THookParams
@@ -7263,7 +7294,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @returns Undefined if the data provider has not been retrieved, data provider if it has been
    *   retrieved and is not disposed, and undefined again if the data provider is disposed
    */
-  const useDataProvider: <DataProviderName extends keyof DataProviders>(
+  export const useDataProvider: <DataProviderName extends keyof DataProviders>(
     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
   ) => DataProviders[DataProviderName] | undefined;
   export default useDataProvider;
@@ -7273,8 +7304,8 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import IDataProvider from 'shared/models/data-provider.interface';
-  import ExtractDataProviderDataTypes from 'shared/models/extract-data-provider-data-types.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   /**
    * The final function called as part of the `useData` hook that is the actual React hook
    *
@@ -7331,7 +7362,7 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
    *   providers
    * @returns `useData` hook for getting data from a data provider
    */
-  function createUseDataHook<TUseDataProviderParams extends unknown[]>(
+  export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
     useDataProviderHook: (...args: TUseDataProviderParams) => IDataProvider | undefined,
   ): UseDataHookGeneric<TUseDataProviderParams>;
   export default createUseDataHook;
@@ -7437,12 +7468,13 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
    *   provider
    */
-  const useData: UseDataHook;
+  export const useData: UseDataHook;
   export default useData;
 }
 declare module 'renderer/services/scroll-group.service-host' {
   import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ScrollGroupId } from 'platform-bible-utils';
   /**
    * All Scroll Group IDs that are intended to be shown in scroll group selectors. This is a
    * placeholder and will be refactored significantly in
@@ -7452,7 +7484,7 @@ declare module 'renderer/services/scroll-group.service-host' {
   /** Event that emits with information about a changed Scripture Reference for a scroll group */
   export const onDidUpdateScrRef: import('platform-bible-utils').PlatformEvent<ScrollGroupUpdateInfo>;
   /** See {@link IScrollGroupRemoteService.getScrRef} */
-  export function getScrRefSync(scrollGroupId?: ScrollGroupId): ScriptureReference;
+  export function getScrRefSync(scrollGroupId?: ScrollGroupId): SerializedVerseRef;
   /**
    * See {@link IScrollGroupRemoteService.setScrRef}
    *
@@ -7462,7 +7494,7 @@ declare module 'renderer/services/scroll-group.service-host' {
    */
   export function setScrRefSync(
     scrollGroupId: ScrollGroupId | undefined,
-    scrRef: ScriptureReference,
+    scrRef: SerializedVerseRef,
     shouldSetVerseRefSetting?: boolean,
   ): boolean;
   /** Register the network object that backs the scroll group service */
@@ -7470,10 +7502,11 @@ declare module 'renderer/services/scroll-group.service-host' {
 }
 declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
-  import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
+  import { ScrollGroupId } from 'platform-bible-utils';
   /**
    * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
-   * value for both the {@link ScriptureReference} and the {@link ScrollGroupId} for the provided
+   * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
    * `scrollGroupScrRef`. Use similarly to `useState`.
    *
    * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
@@ -7499,15 +7532,16 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
    *   - `setScrollGroupId`: Function to use to update the scroll group with which this
    *       `scrollGroupScrRef` is synced
    */
-  export default function useScrollGroupScrRef(
+  export function useScrollGroupScrRef(
     scrollGroupScrRef: ScrollGroupScrRef | undefined,
     setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
   ): [
-    scrRef: ScriptureReference,
-    setScrRef: (newScrRef: ScriptureReference) => void,
+    scrRef: SerializedVerseRef,
+    setScrRef: (newScrRef: SerializedVerseRef) => void,
     scrollGroupId: ScrollGroupId | undefined,
     setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
   ];
+  export default useScrollGroupScrRef;
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { SettingTypes } from 'papi-shared-types';
@@ -7541,7 +7575,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  const useSetting: <SettingName extends keyof SettingTypes>(
+  export const useSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
     defaultState: SettingTypes[SettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
@@ -7574,7 +7608,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
    *   Data Provider is disposed
    */
-  const useProjectDataProvider: <ProjectInterface extends keyof ProjectDataProviderInterfaces>(
+  export const useProjectDataProvider: <
+    ProjectInterface extends keyof ProjectDataProviderInterfaces,
+  >(
     projectInterface: ProjectInterface,
     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
     pdpFactoryId?: string,
@@ -7663,7 +7699,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *   'platformScripture.USFM_Verse',
    *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
    * ).VerseUSFM(
-   *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
+   *   useMemo(() =>
+   *    { book: 'JHN', chapterNum: 11, verseNum: 35, versificationStr: ScrVers.English }, []),
    *   'Loading verse ',
    * );
    * ```
@@ -7702,7 +7739,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * - `isLoading`: whether the data with the data type and selector is awaiting retrieval from the data
    *   provider
    */
-  const useProjectData: UseProjectDataHook;
+  export const useProjectData: UseProjectDataHook;
   export default useProjectData;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
@@ -7746,7 +7783,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  const useProjectSetting: <ProjectSettingName extends keyof ProjectSettingTypes>(
+  export const useProjectSetting: <ProjectSettingName extends keyof ProjectSettingTypes>(
     projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
     key: ProjectSettingName,
     defaultValue: ProjectSettingTypes[ProjectSettingName],
@@ -7784,7 +7821,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
    *   not been retrieved or has been disposed, or (b) a data provider if it has been retrieved and is
    *   not disposed.
    */
-  function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
+  export function useDataProviderMulti<EachDataProviderName extends DataProviderNames[]>(
     dataProviderSources: (
       | EachDataProviderName[number]
       | DataProviders[EachDataProviderName[number]]
@@ -7819,7 +7856,7 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
    *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
    *       state on the papi, if any
    */
-  const useLocalizedStrings: (
+  export const useLocalizedStrings: (
     localizationKeys: LocalizeKey[],
     localizationLocales?: string[],
     subscriberOptions?: DataProviderSubscriberOptions,
@@ -7847,7 +7884,7 @@ declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
    *   Controller if it has been retrieved and is not disposed, and undefined again if the Web View
    *   Controller is disposed
    */
-  const useWebViewController: <WebViewType extends keyof WebViewControllers>(
+  export const useWebViewController: <WebViewType extends keyof WebViewControllers>(
     webViewType: WebViewType,
     webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
   ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
@@ -7876,7 +7913,7 @@ declare module 'renderer/services/renderer-xml-http-request.service' {
    *
    * Note that Node doesn't have a native implementation, so this is only for the renderer.
    */
-  export default class PapiRendererXMLHttpRequest implements XMLHttpRequest {
+  export class PapiRendererXMLHttpRequest implements XMLHttpRequest {
     readonly DONE: 4;
     readonly HEADERS_RECEIVED: 2;
     readonly LOADING: 3;
@@ -7927,6 +7964,7 @@ declare module 'renderer/services/renderer-xml-http-request.service' {
     withCredentials: boolean;
     constructor();
   }
+  export default PapiRendererXMLHttpRequest;
 }
 declare module '@papi/frontend' {
   /**

@@ -1,5 +1,5 @@
 import { Mock, vi } from 'vitest';
-import PromiseChainingMap from './promise-chaining-map';
+import { PromiseChainingMap } from './promise-chaining-map';
 
 describe('PromiseChainingMap', () => {
   let logger: { warn: Mock };

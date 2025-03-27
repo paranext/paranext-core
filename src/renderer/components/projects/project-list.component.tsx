@@ -1,8 +1,8 @@
-import { List, ListItem, ListItemButton, ListItemText, ListSubheader } from '@mui/material';
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
-import { Checkbox } from 'platform-bible-react';
+import { Button, Checkbox, Label } from 'platform-bible-react';
 import { ProjectInterfaces } from 'papi-shared-types';
 import { PropsWithChildren, useCallback, JSX } from 'react';
+import './project-list.component.scss';
 
 /** Project metadata and some display information */
 export type ProjectMetadataDisplay = ProjectMetadata & {
@@ -136,7 +136,7 @@ export type ProjectListProps = PropsWithChildren<{
  * @param ProjectListProps And any children elements
  * @returns <ProjectList />
  */
-export default function ProjectList({
+export function ProjectList({
   projects,
   handleSelectProject,
   isMultiselect,
@@ -157,25 +157,26 @@ export default function ProjectList({
 
   const createListItemContents = (project: ProjectMetadataDisplay): JSX.Element => {
     return (
-      <ListItemButton
-        selected={isSelected(project)}
-        onClick={() => handleSelectProject(project.id)}
-      >
+      <Button variant="ghost" onClick={() => handleSelectProject(project.id)}>
+        {isCheckable && (
+          <Checkbox style={{ marginInlineEnd: '8px' }} checked={isSelected(project)} />
+        )}
         {children}
-        <ListItemText primary={project.name} />
-        {isCheckable && <Checkbox checked={isSelected(project)} />}
-      </ListItemButton>
+        <Label>{project.name}</Label>
+      </Button>
     );
   };
 
   return (
     <div className="project-list">
-      <List>
-        <ListSubheader>{subheader}</ListSubheader>
+      <Label>{subheader}</Label>
+      <ul className="list">
         {projects.map((project) => (
-          <ListItem key={project.id}>{createListItemContents(project)}</ListItem>
+          <li key={project.id}>{createListItemContents(project)}</li>
         ))}
-      </List>
+      </ul>
     </div>
   );
 }
+
+export default ProjectList;

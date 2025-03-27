@@ -13,7 +13,7 @@ export const FIRST_TAB_ID = 'About';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
-const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
+export const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
   ? {
       dockbox: {
         mode: 'horizontal',

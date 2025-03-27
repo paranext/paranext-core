@@ -1,6 +1,6 @@
-import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
-import createUseDataHook from '@renderer/hooks/hook-generators/create-use-data-hook.util';
-import IDataProvider from '@shared/models/data-provider.interface';
+import { useDataProvider } from '@renderer/hooks/papi-hooks/use-data-provider.hook';
+import { createUseDataHook } from '@renderer/hooks/hook-generators/create-use-data-hook.util';
+import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
@@ -110,7 +110,7 @@ type UseDataHook = {
  */
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */
-const useData = createUseDataHook(
+export const useData = createUseDataHook(
   useDataProvider as (
     dataProviderSource: string | IDataProvider | undefined,
   ) => IDataProvider | undefined,

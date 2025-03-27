@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
+import { cn } from '@/utils/shadcn-ui.util';
 
 const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
   [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',
@@ -92,14 +93,18 @@ export type ScrollGroupSelectorProps = {
    * ```
    */
   localizedStrings?: LanguageStrings;
+
+  /** Additional css classes to help with unique styling */
+  className?: string;
 };
 
 /** Selector component for choosing a scroll group */
-export default function ScrollGroupSelector({
+export function ScrollGroupSelector({
   availableScrollGroupIds,
   scrollGroupId,
   onChangeScrollGroupId,
   localizedStrings = {},
+  className,
 }: ScrollGroupSelectorProps) {
   const localizedStringsDefaulted = {
     ...DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS,
@@ -127,7 +132,7 @@ export default function ScrollGroupSelector({
         )
       }
     >
-      <SelectTrigger className="pr-twp tw-w-auto">
+      <SelectTrigger className={cn('pr-twp tw-w-auto', className)}>
         <SelectValue
           placeholder={
             localizedStringsDefaulted[getLocalizeKeyForScrollGroupId(scrollGroupId)] ??
@@ -149,3 +154,5 @@ export default function ScrollGroupSelector({
     </Select>
   );
 }
+
+export default ScrollGroupSelector;

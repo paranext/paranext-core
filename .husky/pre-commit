@@ -2,5 +2,5 @@ echo "Format and stylelint fixes..."
 npm run lint:staged
 echo "Format and stylelint fixes finished"
 
-echo "If the following fails run: npm run editor:unlink"
+echo "If the following fails run: npm run editor:unlink && npm run utils:unlink"
 npx yalc check

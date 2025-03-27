@@ -5,20 +5,20 @@ import {
   VerticalTabsTrigger,
 } from '@/components/basics/tabs-vertical';
 
-import WindowOrTabExample from './layouts/window.layout.component';
-import Dashboard5Examples from './layouts/dashboard5.layout.component';
-import ToolbarExamples from './layouts/toolbar.layout.component';
-import DialogExamples from './layouts/dialog.layout.component';
-import GetResourcesExamples from './layouts/get-resources.layout.component';
+import { WindowOrTabExample } from './layouts/window.layout.component';
+import { Dashboard5Examples } from './layouts/dashboard5.layout.component';
+import { ToolbarExamples } from './layouts/toolbar.layout.component';
+import { DialogExamples } from './layouts/dialog.layout.component';
+import { GetResourcesExamples } from './layouts/get-resources.layout.component';
 
-function Layouts() {
+export function Layouts() {
   return (
     <div>
       <p className="tw-mb-2 tw-text-muted-foreground">A place to add examples for layouts</p>
       <VerticalTabs defaultValue="Window">
         <VerticalTabsList>
           <VerticalTabsTrigger value="Window">Window or Tab</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Toolbar">MUI Toolbar</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Toolbar">Toolbar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Settings">Settings (n/a)</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Get Resources">Get Resources</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Shadcn Dashboard 5">Shadcn Dashboard 5</VerticalTabsTrigger>

@@ -5,25 +5,26 @@
  * When running `npm run build` or `npm run build:main`, this file is compiled to `./src/main.js`
  * using webpack. This gives us some performance wins.
  */
+
+import os from 'os';
 import path from 'path';
 import { app, BrowserWindow, shell, ipcMain } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
 import '@main/global-this.model';
-import dotnetDataProvider from '@main/services/dotnet-data-provider.service';
-import logger from '@shared/services/logger.service';
+import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
+import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { resolveHtmlPath } from '@node/utils/util';
-import extensionHostService from '@main/services/extension-host.service';
-import networkObjectService from '@shared/services/network-object.service';
-import extensionAssetProtocolService from '@main/services/extension-asset-protocol.service';
+import { extensionHostService } from '@main/services/extension-host.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
 import { wait, serialize } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
 import { get } from '@shared/services/project-data-provider.service';
-import { VerseRef } from '@sillsdev/scripture';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
 import { APP_URI_SCHEME, DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
@@ -218,7 +219,20 @@ async function main() {
       y: mainWindowState.y,
       width: mainWindowState.width,
       height: mainWindowState.height,
+      minWidth: 800, // TODO: Remove this temporary enforcement when https://paratextstudio.atlassian.net/browse/PT-2333 is implemented
       icon: getAssetPath('icon.png'),
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      ...(process.platform !== 'linux' ? { titleBarStyle: 'hidden' } : {}),
+      // re-add window controls
+      // TODO: Re-check linux support with Electron 34, see https://discord.com/channels/1064938364597436416/1344329166786527232
+      ...(process.platform !== 'darwin' && process.platform !== 'linux'
+        ? {
+            titleBarOverlay: {
+              height: 47,
+              color: 'hsla(0, 0%, 100%, 0)', // transparent button background until hovered
+            },
+          }
+        : {}),
       webPreferences: {
         preload: app.isPackaged
           ? path.join(__dirname, 'preload.js')
@@ -400,6 +414,40 @@ async function main() {
     },
   );
 
+  commandService.registerCommand(
+    'platform.getOSPlatform',
+    async () => {
+      return os.platform();
+    },
+    {
+      method: {
+        summary: 'Get the os platform ("win32", "darwin", "linux")',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.isFullScreen',
+    async () => {
+      return false; // TODO implement;
+    },
+    {
+      method: {
+        summary: 'If platform runs in full screen mode',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
   const liveDocsUrl =
     'https://playground.open-rpc.org/?transport=websocket&schemaUrl=ws%3A%2F%2Flocalhost%3A8876%0A&uiSchema[appBar][ui:splitView]=false&uiSchema[appBar][ui:input]=false&uiSchema[appBar][ui:examplesDropdown]=false&uiSchema[appBar][ui:transports]=false&uiSchema[appBar][ui:darkMode]=true&uiSchema[appBar][ui:title]=PAPI';
   commandService.registerCommand(
@@ -531,10 +579,11 @@ async function main() {
         'platformScripture.USX_Chapter',
         '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
       );
-      const verse = await usxPdp.getChapterUSX(new VerseRef('JHN', '1', '1'));
+      const verse = await usxPdp.getChapterUSX({ book: 'JHN', chapterNum: 1, verseNum: 1 });
       logger.info(`Got PDP data: ${verse}`);
 
-      if (verse !== undefined) await usxPdp.setChapterUSX(new VerseRef('JHN', '1', '1'), verse);
+      if (verse !== undefined)
+        await usxPdp.setChapterUSX({ book: 'JHN', chapterNum: 1, verseNum: 1 }, verse);
 
       const basePdp = await get(
         PROJECT_INTERFACE_PLATFORM_BASE,

@@ -160,24 +160,42 @@ jobs:
         if: ${{ matrix.os == env.OS_MACOS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:
           # The APPLE_* values are used for auto updates signing
-          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_ID_PASS }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # CSC_LINK: ${{ secrets.CSC_LINK }}
-          # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm exec electron-builder -- --publish always --mac
 
-      - name: Publish releases - Linux
+      - name: Publish releases to the snap store - Linux
         # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
         if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
-          # This is used for uploading release assets to github
+          # This is used by electron-builder to prepare the release
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm exec electron-builder -- --publish always --linux
+          # This is required to upload automatically to the snap store
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.LINUX_SNAP_STORE_CREDENTIALS }}
+        run: |
+          npm exec electron-builder -- --publish never --linux
+          snapcraft upload --release=edge ./release/build/*.snap
+          mkdir release/staged
+          mv release/build/*.snap release/staged
+
+      - name: Upload Linux artifacts to GitHub
+        # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
+        if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: 'Linux-PlatformBible-${{ steps.release_package_json.outputs.version }}'
+          path: release/staged
+          if-no-files-found: error
+          compression-level: 0
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

@@ -1,4 +1,3 @@
-import { VerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
 import {
   useData,
@@ -45,10 +44,6 @@ globalThis.webViewComponent = function HelloWorld({
 }: WebViewProps) {
   const [clicks, setClicks] = useWebViewState<number>('clicks', 0);
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
-  const verseRef = useMemo(
-    () => new VerseRef(scrRef.bookNum, scrRef.chapterNum, scrRef.verseNum),
-    [scrRef],
-  );
 
   const deleteKey = '%helloWorld_delete%';
   const frenchLocalizationSubmit = '%helloWorld_frenchLocalizationSubmit%';
@@ -267,7 +262,7 @@ globalThis.webViewComponent = function HelloWorld({
   const [currentProjectVerse] = useProjectData(
     'platformScripture.USFM_Verse',
     projectId ?? undefined,
-  ).VerseUSFM(verseRef, localizedScriptureLoadingVerse);
+  ).VerseUSFM(scrRef, localizedScriptureLoadingVerse);
 
   const helloWorldProjectSettings = useHelloWorldProjectSettings(projectId);
   const { headerStyle } = helloWorldProjectSettings;
@@ -313,18 +308,26 @@ globalThis.webViewComponent = function HelloWorld({
   );
 
   useEffect(() => {
+    const decorationsToRemove: string[] = [];
+    if (!editorHeaderText) decorationsToRemove.push('hello-world-header');
+    if (!editorBorderColor) decorationsToRemove.push('hello-world-container');
     editorWebViewController?.updateDecorations(
       editorDecorations,
       // Delete the header if there isn't any text
-      editorHeaderText ? undefined : ['hello-world-header'],
+      decorationsToRemove,
     );
-  }, [editorWebViewController, editorDecorations, editorHeaderText]);
+  }, [editorWebViewController, editorDecorations, editorHeaderText, editorBorderColor]);
 
   // #endregion
 
   const genericComboBoxOptions = useMemo(
     () => [localizedOption1, localizedOption2],
     [localizedOption1, localizedOption2],
+  );
+
+  const scrRefString = useMemo(
+    () => (scrRef ? `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}` : ''),
+    [scrRef],
   );
 
   return (
@@ -428,7 +431,7 @@ globalThis.webViewComponent = function HelloWorld({
           />
         </div>
       </div>
-      <h3 style={headerStyle}>{verseRef.toString()}</h3>
+      <h3 style={headerStyle}>{scrRefString}</h3>
       <div>{currentProjectVerse}</div>
       <ProjectSettingsEditor {...helloWorldProjectSettings} />
       <h3>{localizedListOfSelectedIds}:</h3>

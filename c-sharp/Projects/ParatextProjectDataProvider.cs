@@ -88,19 +88,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
 
     protected override Task StartDataProviderAsync()
     {
-        bool? shouldIncludePT9ProjectsOnWindows = false;
-        if (OperatingSystem.IsWindows())
-        {
-            shouldIncludePT9ProjectsOnWindows = SettingsService.GetSetting<bool>(
-                PapiClient,
-                Settings.INCLUDE_MY_PARATEXT_9_PROJECTS
-            );
-            if (!shouldIncludePT9ProjectsOnWindows.HasValue)
-                throw new InvalidDataException(
-                    $"Setting {Settings.INCLUDE_MY_PARATEXT_9_PROJECTS} was null!"
-                );
-        }
-        _paratextProjects.Initialize(shouldIncludePT9ProjectsOnWindows.Value);
+        _paratextProjects.Initialize();
         return Task.CompletedTask;
     }
 
