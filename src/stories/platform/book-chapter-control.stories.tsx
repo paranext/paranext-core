@@ -23,7 +23,7 @@ function BookChapterControlDecorator(
   );
 }
 
-const Meta: MetaBase<typeof BookChapterControl> = {
+export const Meta: MetaBase<typeof BookChapterControl> = {
   title: 'Platform/BookChapterControl',
   component: BookChapterControl,
   tags: ['autodocs'],

@@ -1,5 +1,5 @@
 import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
-import localizationDataService from '@shared/services/localization.service';
+import { localizationService } from '@shared/services/localization.service';
 import {
   LocalizationData,
   LocalizationSelectors,
@@ -48,7 +48,7 @@ export const useLocalizedStrings = (
     defaultState[key] = key;
   }
   const [localizedStrings, , isLoading] = useData(
-    localizationDataService.dataProviderName,
+    localizationService.dataProviderName,
   ).LocalizedStrings(localizationSelectors, defaultState, subscriberOptions);
 
   return [isPlatformError(localizedStrings) ? defaultState : localizedStrings, isLoading];

@@ -1,7 +1,7 @@
 ﻿import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { Button } from 'platform-bible-react';
 
-const Meta: MetaBase<typeof Button> = {
+export const Meta: MetaBase<typeof Button> = {
   title: 'Basics/Button',
   component: Button,
   tags: ['autodocs'],
