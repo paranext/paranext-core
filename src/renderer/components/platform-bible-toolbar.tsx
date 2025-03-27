@@ -10,7 +10,7 @@ import { availableScrollGroupIds } from '@renderer/services/scroll-group.service
 import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
 import { useCallback, useState } from 'react';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { handleMenuCommand } from './platform-bible-menu.commands';
+import handleMenuCommand from '@shared/data/platform-bible-menu.commands';
 import provideMenuData from './platform-bible-menu.data';
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';

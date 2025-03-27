@@ -6,7 +6,7 @@
  * using webpack. This gives us some performance wins.
  */
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, Menu } from 'electron';
+import { app, BrowserWindow, shell, ipcMain } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -31,7 +31,7 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
-import getCurrentMacosMenubar from '@shared/utils/platform-macos-menubar.util';
+import buildCurrentMacosMenubar from '@main/platform-macos-menubar.util';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -253,18 +253,12 @@ async function main() {
       mainWindow = undefined;
     });
 
-    // #region MacOS Menubar
-
-    const menu = Menu.buildFromTemplate(await getCurrentMacosMenubar());
-    // This sets only the application menu on MacOS
-    Menu.setApplicationMenu(menu);
+    buildCurrentMacosMenubar();
 
     // This sets the menu on Windows and Linux
     // 'null' to interact with external API
     // eslint-disable-next-line no-null/no-null
     mainWindow.setMenu(null);
-
-    // #endregion
 
     // Open urls in the user's browser
     // Note that webviews can get to this handler with window.open and anchor tags with

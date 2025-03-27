@@ -1,5 +1,20 @@
 import { MenuItemConstructorOptions } from 'electron';
-import { Localized, LocalizeKey, MacosMenuKey } from 'platform-bible-utils';
+import { Localized, LocalizeKey } from 'platform-bible-utils';
+
+/**
+ * A group of ReferencedItems specific to the predefined menus in the MacOS menu bar. If they set
+ * their macosMenuKey to 'macosMenubar.ignore', the item will not be added to the MacOS menubar.
+ */
+export type MacosMenuKey =
+  | 'macosMenubar.appMenu'
+  | 'macosMenubar.fileMenu'
+  | 'macosMenubar.editMenu'
+  | 'macosMenubar.viewMenu'
+  | 'macosMenubar.tabMenu'
+  | 'macosMenubar.textMenu'
+  | 'macosMenubar.layoutMenu'
+  | 'macosMenubar.windowMenu'
+  | 'macosMenubar.helpMenu';
 
 /**
  * This type extends the MenuItemConstructorOptions type from Electron to include an optional order
@@ -23,7 +38,6 @@ export type LocalizedMacosMenubar = Localized<MenuItemConstructorOptionsWithOrde
 // Cannot contribute this as is in main.ts, need to convert labels and tooltips to localized strings and remove order property
 const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
   {
-    label: '%macosMenubar_app%',
     role: 'appMenu',
     id: 'macosMenubar.appMenu',
     submenu: [
@@ -33,40 +47,32 @@ const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
     ],
   },
   {
-    label: '%macosMenubar_file%',
     role: 'fileMenu',
     id: 'macosMenubar.fileMenu',
     submenu: [{ role: 'close', id: 'close', order: 8 }],
   },
   {
-    label: '%macosMenubar_edit%',
     role: 'editMenu',
     id: 'macosMenubar.editMenu',
   },
   {
-    label: '%macosMenubar_view%',
     role: 'viewMenu',
     id: 'macosMenubar.viewMenu',
   },
   {
-    label: '%macosMenubar_tab%',
     id: 'macosMenubar.tabMenu',
   },
   {
-    label: '%macosMenubar_text%',
     id: 'macosMenubar.textMenu',
   },
   {
-    label: '%macosMenubar_layout%',
     id: 'macosMenubar.layoutMenu',
   },
   {
-    label: '%macosMenubar_window%',
     role: 'windowMenu',
     id: 'macosMenubar.windowMenu',
   },
   {
-    label: '%macosMenubar_help%',
     role: 'help',
     id: 'macosMenubar.helpMenu',
     submenu: [],

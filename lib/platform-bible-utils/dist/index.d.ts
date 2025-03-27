@@ -740,11 +740,6 @@ export type UnionToIntersection<U> = (U extends any ? (x: U) => void : never) ex
 export type LocalizeKey = `%${string}%`;
 /** Name of some UI element (i.e., tab, column, group, menu item) or some PAPI object (i.e., command) */
 export type ReferencedItem = `${string}.${string}`;
-/**
- * A group of ReferencedItems specific to the predefined menus in the MacOS menu bar. If they set
- * their macosMenuKey to 'macosMenubar.ignore', the item will not be added to the MacOS menubar.
- */
-export type MacosMenuKey = "macosMenubar.appMenu" | "macosMenubar.fileMenu" | "macosMenubar.editMenu" | "macosMenubar.viewMenu" | "macosMenubar.tabMenu" | "macosMenubar.textMenu" | "macosMenubar.layoutMenu" | "macosMenubar.windowMenu" | "macosMenubar.helpMenu" | "macosMenubar.ignore";
 export type OrderedItem = {
 	/** Relative order of this item compared to other items in the same parent/scope (sorted ascending) */
 	order: number;
@@ -779,8 +774,6 @@ export type MenuItemBase = OrderedItem & {
 	tooltip?: LocalizeKey;
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
-	/** Key of the menu in the MacOS menu bar to add this item to */
-	macosMenuKey?: MacosMenuKey;
 };
 /** Menu item that hosts a submenu */
 export type MenuItemContainingSubmenu = MenuItemBase & {
@@ -908,11 +901,6 @@ export declare const menuDocumentSchema: {
 			pattern: string;
 		};
 		referencedItem: {
-			description: string;
-			type: string;
-			pattern: string;
-		};
-		macosMenuKey: {
 			description: string;
 			type: string;
 			pattern: string;
@@ -1057,10 +1045,6 @@ export declare const menuDocumentSchema: {
 				order: {
 					description: string;
 					type: string;
-				};
-				macosMenuKey: {
-					description: string;
-					$ref: string;
 				};
 			};
 			required: string[];
