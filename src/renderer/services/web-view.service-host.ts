@@ -22,7 +22,6 @@ import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   GetWebViewOptions,
   SavedWebViewDefinition,
-  WebViewContentType,
   WebViewDefinition,
   WebViewDefinitionReact,
   WebViewDefinitionUpdateInfo,
@@ -31,6 +30,7 @@ import {
   WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
   SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
   SavedWebViewDefinitionOmittedKeys,
+  WEB_VIEW_CONTENT_TYPE,
 } from '@shared/models/web-view.model';
 import {
   Layout,
@@ -971,10 +971,10 @@ export const openWebView = async (
 
   // Set up WebViewDefinition default values
   /** WebView.contentType is assumed to be React by default. Extensions can specify otherwise */
-  const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
-  /** Default allowScripts to false for WebViewContentType.URL and true otherwise */
+  const contentType = webView.contentType ? webView.contentType : WEB_VIEW_CONTENT_TYPE.REACT;
+  /** Default allowScripts to false for WEB_VIEW_CONTENT_TYPE.URL and true otherwise */
   let { allowScripts } = webView;
-  if (contentType !== WebViewContentType.URL) allowScripts = webView.allowScripts ?? true;
+  if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) allowScripts = webView.allowScripts ?? true;
   /** Default allowSameOrigin to true */
   const allowSameOrigin = webView.allowSameOrigin ?? true;
   /**
@@ -983,7 +983,7 @@ export const openWebView = async (
    * WebView. For URL WebViews, this controls what urls the WebView can be.
    */
   let { allowedFrameSources } = webView;
-  if (contentType !== WebViewContentType.URL && allowedFrameSources)
+  if (contentType !== WEB_VIEW_CONTENT_TYPE.URL && allowedFrameSources)
     allowedFrameSources = allowedFrameSources.filter(
       (hostValue) => startsWith(hostValue, 'https:') || startsWith(hostValue, 'papi-extension:'),
     );
@@ -992,7 +992,7 @@ export const openWebView = async (
   // If this is a URL WebView, it must match at least one of its `allowedFrameSources` Regex strings
   // if any are supplied
   if (
-    contentType === WebViewContentType.URL &&
+    contentType === WEB_VIEW_CONTENT_TYPE.URL &&
     allowedFrameSources &&
     !allowedFrameSources.some((regexString) => new RegExp(regexString).test(webView.content))
   )
@@ -1058,7 +1058,7 @@ export const openWebView = async (
   /** CSP for allowing only certain scripts and styles */
   let specificSrcPolicy: string;
   switch (contentType) {
-    case WebViewContentType.HTML:
+    case WEB_VIEW_CONTENT_TYPE.HTML:
       // Add wrapping to turn a plain string into an iframe
       webViewContent = webView.content.includes('<html')
         ? webView.content
@@ -1066,7 +1066,7 @@ export const openWebView = async (
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
-    case WebViewContentType.URL:
+    case WEB_VIEW_CONTENT_TYPE.URL:
       webViewContent = webView.content;
       // CSP does not apply to these webViews. If we ever add a `csp` attribute to WebView iframes,
       // we might need to add this URL's schema to the CSP
@@ -1235,7 +1235,7 @@ export const openWebView = async (
   const headEnd = indexOf(webViewContent, '>', headStart);
 
   // Inject the CSP and import scripts into the html if it is not a URL iframe
-  if (contentType !== WebViewContentType.URL)
+  if (contentType !== WEB_VIEW_CONTENT_TYPE.URL)
     webViewContent = `${substring(webViewContent, 0, headEnd + 1)}
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
