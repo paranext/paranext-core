@@ -8,7 +8,14 @@
 
 import os from 'os';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, RenderProcessGoneDetails } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  shell,
+  ipcMain,
+  RenderProcessGoneDetails,
+  DidCreateWindowDetails,
+} from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -253,11 +260,61 @@ async function main() {
     mainWindowState.manage(mainWindow);
 
     // Add several listeners to the main window to log events
-    mainWindow.webContents.on('unresponsive', () => logger.warn('mainWindow unresponsive'));
-    mainWindow.webContents.on('responsive', () => logger.warn('mainWindow responsive'));
+    mainWindow.webContents.on('destroyed', () => logger.warn('mainWindow destroyed webContents'));
+    mainWindow.webContents.on('did-finish-load', () => logger.warn('mainWindow finished loading'));
+    mainWindow.webContents.on('dom-ready', () => logger.warn('mainWindow DOM ready'));
     mainWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) =>
       logger.warn(`mainWindow render process gone: ${JSON.stringify(details)}`),
     );
+    mainWindow.webContents.on('responsive', () => logger.warn('mainWindow responsive'));
+    mainWindow.webContents.on('unresponsive', () => logger.warn('mainWindow unresponsive'));
+
+    mainWindow.webContents.on(
+      // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
+      'console-message',
+      (_event: Event, level: number, message: string, line: number, sourceId: string) =>
+        logger.warn(`mainWindow console message: ${message} (${level}) from ${sourceId}:${line}`),
+    );
+
+    mainWindow.webContents.on(
+      'did-create-window',
+      (window: BrowserWindow, details: DidCreateWindowDetails) => {
+        logger.warn(`mainWindow created new window: ${window.id}, ${JSON.stringify(details)}`);
+      },
+    );
+
+    function createErrorEventLogger(eventName: string) {
+      return (
+        _event: Event,
+        errorCode: number,
+        errorDescription: string,
+        validatedUrl: string,
+        isMainFrame: boolean,
+      ) => {
+        logger.warn(
+          `mainWindow event "${eventName}", URL="${validatedUrl}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
+        );
+      };
+    }
+
+    mainWindow.webContents.on(
+      // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
+      'did-fail-load',
+      createErrorEventLogger('did-fail-load'),
+    );
+
+    mainWindow.webContents.on(
+      // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
+      'did-fail-provisional-load',
+      createErrorEventLogger('did-fail-provisional-load'),
+    );
+
+    mainWindow.webContents.on(
+      // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
+      'did-fail-provisional-load',
+      createErrorEventLogger('did-fail-provisional-load'),
+    );
+
     mainWindow.webContents.on(
       // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
       'did-fail-load',
