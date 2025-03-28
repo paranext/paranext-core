@@ -40,10 +40,10 @@ export function SettingsSidebarContentSearch({
       </div>
       <SidebarProvider
         id={id}
-        className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto tw-border-t-2 tw-border-muted"
+        className="tw-h-full tw-flex-1 tw-gap-4 tw-overflow-auto tw-border-t"
       >
         <SettingsSidebar
-          className="tw-w-1/2 tw-min-w-[140px] tw-max-w-[220px] tw-border-e-2 tw-border-muted"
+          className="tw-w-1/2 tw-min-w-[140px] tw-max-w-[220px] tw-border-e"
           extensionLabels={extensionLabels}
           projectInfo={projectInfo}
           handleSelectSidebarItem={handleSelectSidebarItem}

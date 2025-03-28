@@ -88,10 +88,10 @@ export function Compositions() {
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Platform Menubar">Platform Menubar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Settings List">Settings Components</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Scroll Group Selector">
             Scroll Group Selector
           </VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Settings List">Settings List</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Settings Sidebar Content Search">
             Settings Sidebar Content Search
           </VerticalTabsTrigger>
@@ -170,10 +170,6 @@ export function Compositions() {
           <ScriptureResultsViewerExample />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Settings List">
-          <SettingsListExamples />
-        </VerticalTabsContent>
-
         <VerticalTabsContent value="Scroll Group Selector">
           <ScrollGroupSelector
             availableScrollGroupIds={[undefined, ...Array(5).keys()]}
@@ -181,6 +177,10 @@ export function Compositions() {
             onChangeScrollGroupId={setScrollGroupId}
           />
           <div>Scroll Group Id: {`${scrollGroupId}`}</div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Settings List">
+          <SettingsListExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Settings Sidebar Content Search">
