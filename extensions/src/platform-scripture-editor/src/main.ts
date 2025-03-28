@@ -195,6 +195,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       },
       projectId,
       allowPopups: true,
+      shouldShowToolbar: true,
     };
   }
 
