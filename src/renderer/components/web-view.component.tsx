@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { WebViewContentType, WebViewDefinition } from '@shared/models/web-view.model';
+import { WEB_VIEW_CONTENT_TYPE, WebViewDefinition } from '@shared/models/web-view.model';
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
@@ -196,7 +196,7 @@ export function WebView({
   const localizedTitle = title && isLocalizeKey(title) ? localizedStrings[title] : defaultTitle;
 
   /** Whether this webview's iframe will be populated by `src` as opposed to `srcdoc` */
-  const shouldUseSrc = contentType === WebViewContentType.URL;
+  const shouldUseSrc = contentType === WEB_VIEW_CONTENT_TYPE.URL;
 
   // TODO: We may be catching iframe exceptions moving forward by posting messages from the child
   // iframe to the parent, so it might be good to figure out how it works to add and remove a
@@ -321,7 +321,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
       webViewType: 'Unknown',
       title: '%tab_title_unknown%',
       content: '',
-      contentType: WebViewContentType.HTML,
+      contentType: WEB_VIEW_CONTENT_TYPE.HTML,
     };
   }
 

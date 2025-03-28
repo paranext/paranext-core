@@ -56,12 +56,13 @@ describe('newPlatformError JSON.stringify', () => {
     expect(json).toContain('"message":"An error occurred"');
   });
 
-  it('should include platformErrorVersion and message when an object with a message is provided', () => {
+  it('should include platformErrorVersion, message, and stack when an object with message and stack is provided', () => {
     const errorObj = { message: 'An error occurred', stack: 'stack trace' };
     const error = newPlatformError(errorObj);
     const json = JSON.stringify(error);
     expect(json).toContain('"platformErrorVersion":1');
     expect(json).toContain('"message":"An error occurred"');
+    expect(json).toContain('"stack":"stack trace"');
   });
 
   it('should include platformErrorVersion and message when an object without a message is provided', () => {
@@ -69,6 +70,7 @@ describe('newPlatformError JSON.stringify', () => {
     const error = newPlatformError(errorObj);
     const json = JSON.stringify(error);
     expect(json).toContain('"platformErrorVersion":1');
+    expect(json).toContain('"cause":{"code":500}');
     expect(json).toContain('"message":""');
   });
 

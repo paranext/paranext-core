@@ -39,23 +39,23 @@
         'self' so frame contents can be loaded from us - sort-of includes `srcdoc` iframes with
         extension webview code... `srcdoc` iframes are actually executed in the parent and then put
         in the iframe, so `frame-src` doesn't actually count for them. But the rest of the CSP does
-        papi-extension: so extensions can load their bundled asset iframes as WebViewContentType.URL
-        on different origin
-        https: so extensions can load remote iframes as WebViewContentType.URL on different origin
-          Note: WebViewContentType.HTML and WebViewContentType.React load in as `srcdoc` iframes
+        papi-extension: so extensions can load their bundled asset iframes as
+        WEB_VIEW_CONTENT_TYPE.URL on different origin
+        https: so extensions can load remote iframes as WEB_VIEW_CONTENT_TYPE.URL on different origin
+          Note: WEB_VIEW_CONTENT_TYPE.HTML and WEB_VIEW_CONTENT_TYPE.React load in as `srcdoc` iframes
           with same origin and our CSP (these `srcdoc` iframes inherit this CSP as well in addition
           to using the CSP defined in `web-view.service.ts`) and iframe sandbox to prevent them from
-          executing arbitrary code on our origin as best we can. However, WebViewContentType.URL
+          executing arbitrary code on our origin as best we can. However, WEB_VIEW_CONTENT_TYPE.URL
           loads in as `src` iframes, so we cannot control their CSP. As such, we must not allow them
           to be on the same origin. See the MutationObserver in `web-view.service.ts` and
           `web-view.component.tsx` for the allowed iframe `sandbox` attribute options on these
-          WebViewContentTypes. Also note `blob:` urls are considered same origin as parent, so NEVER
+          WEB_VIEW_CONTENT_TYPEs. Also note `blob:` urls are considered same origin as parent, so NEVER
           list blob: here in `frame-src` CSP
           Note: it is ok for WebViews with same origin in our CSP and sandbox to be able to create
           child iframes without our CSP and sandbox protection because those child iframes would be
           on different origin and would only be able to do what the extension developer allows them
           via message passing and would have the same sandbox restrictions as the WebView.
-          TODO: wrap WebViewContentType.URL webviews in an iframe that's hosting their url and
+          TODO: wrap WEB_VIEW_CONTENT_TYPE.URL webviews in an iframe that's hosting their url and
           remove `papi-extension:` and `https:` here when we fix webview code to be retrieved from the backend? paranext-core#89
       object-src 'none' to prevent insecure object and embed until we have a reason to use them
       worker-src 'self' so web workers can be loaded from us

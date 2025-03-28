@@ -4,22 +4,30 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
 
-/** The type of code that defines a webview's content */
-export enum WebViewContentType {
-  /**
-   * This webview is a React webview. It must specify its component by setting it to
-   * `globalThis.webViewComponent`
-   */
-  React = 'react',
-  /** This webview is a raw HTML/JS/CSS webview. */
-  HTML = 'html',
-  /**
-   * This webview's content is fetched from the url specified (iframe `src` attribute). Note that
-   * webViews of this type cannot access the `papi` because they cannot be on the same origin as the
-   * parent window.
-   */
-  URL = 'url',
-}
+/**
+ * The type of code that defines a webview's content.
+ *
+ * If `react`: This webview is a React webview. It must specify its component by setting it to
+ * `globalThis.webViewComponent`. See {@link WebViewDefinitionReact} for more information.
+ *
+ * If `html`: This webview is a raw HTML/JS/CSS webview. See {@link WebViewDefinitionHtml} for more
+ * information.
+ *
+ * If `url`: This webview's content is fetched from the url specified (iframe `src` attribute). Note
+ * that webViews of this type cannot access the `papi` because they cannot be on the same origin as
+ * the parent window. See {@link WebViewDefinitionURL} for more information.
+ */
+export type WebViewContentType = 'react' | 'html' | 'url';
+
+/**
+ * String values for each {@link WebViewContentType}. As opposed to {@link WebViewContentType}, these
+ * can only be used in core
+ */
+export const WEB_VIEW_CONTENT_TYPE = Object.freeze({
+  REACT: 'react',
+  HTML: 'html',
+  URL: 'url',
+});
 
 /** What type a WebView is. Each WebView definition must have a unique type. */
 export type WebViewType = string;
@@ -123,9 +131,9 @@ type WebViewDefinitionBase = {
   state?: Record<string, unknown>;
   /**
    * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
-   * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox attribute]
-   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to
-   * `true`.
+   * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox
+   * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+   * to `true`.
    *
    * Setting this to false on an HTML or React WebView prevents the iframe from importing the `papi`
    * and such and also prevents others from accessing its document. This could be useful when you
@@ -149,9 +157,9 @@ type WebViewDefinitionBase = {
   allowSameOrigin?: boolean;
   /**
    * Whether to allow scripts to run in this iframe. Setting this to true adds `allow-scripts` to
-   * the WebView iframe's [sandbox attribute]
-   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`
-   * for HTML and React WebViews and `false` for URL WebViews
+   * the WebView iframe's [sandbox
+   * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+   * to `true` for HTML and React WebViews and `false` for URL WebViews
    *
    * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If it
    * is not necessary to run scripts in your WebView, you should set this to `false` to reduce
@@ -160,7 +168,7 @@ type WebViewDefinitionBase = {
   allowScripts?: boolean;
   /**
    * **For HTML and React WebViews:** List of [Host or scheme
-   * values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy#hosts_values)
+   * values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy#host-source)
    * to include in the [`frame-src`
    * directive](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-src)
    * for this WebView's iframe content-security-policy. This allows iframes with `src` attributes
@@ -217,16 +225,16 @@ type WebViewDefinitionBase = {
 
 /** WebView representation using React */
 export type WebViewDefinitionReact = WebViewDefinitionBase & {
-  /** Indicates this WebView uses React */
-  contentType?: WebViewContentType.React;
+  /** Indicates this WebView uses React. See {@link WebViewContentType} for more information. */
+  contentType?: 'react';
   /** String of styles to be loaded into the iframe for this WebView */
   styles?: string;
 };
 
 /** WebView representation using HTML */
 export type WebViewDefinitionHtml = WebViewDefinitionBase & {
-  /** Indicates this WebView uses HTML */
-  contentType: WebViewContentType.HTML;
+  /** Indicates this WebView uses HTML. See {@link WebViewContentType} for more information. */
+  contentType: 'html';
 };
 
 /**
@@ -235,8 +243,8 @@ export type WebViewDefinitionHtml = WebViewDefinitionBase & {
  * Note: you can only use `papi-extension:` and `https:` urls
  */
 export type WebViewDefinitionURL = WebViewDefinitionBase & {
-  /** Indicates this WebView uses a URL */
-  contentType: WebViewContentType.URL;
+  /** Indicates this WebView uses a URL. See {@link WebViewContentType} for more information. */
+  contentType: 'url';
 };
 
 /** Properties defining a type of WebView created by extensions to show web content */
