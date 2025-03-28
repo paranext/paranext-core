@@ -99,11 +99,11 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
           className={cn(
             'tw-flex tw-w-[200px] tw-items-center tw-justify-between tw-overflow-hidden',
             buttonClassName ?? className,
-            // Placeholder text should be muted-foreground
+            /* // Placeholder text should be muted-foreground
             // This condition was added as requested by UX
             {
               'tw-text-muted-foreground': !value,
-            },
+            }, */
           )}
           disabled={isDisabled}
         >
