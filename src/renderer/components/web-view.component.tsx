@@ -69,6 +69,7 @@ export function WebView({
   allowPopups,
   scrollGroupScrRef,
   projectId,
+  shouldShowToolbar,
 }: WebViewTabProps) {
   // React starts refs as null
   // eslint-disable-next-line no-null/no-null
@@ -228,19 +229,21 @@ export function WebView({
 
   return (
     <div className="web-view-parent">
-      <div className="web-view-tab-nav">
-        <BookChapterControl
-          scrRef={scrRef}
-          handleSubmit={setScrRef}
-          getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-        />
-        <ScrollGroupSelector
-          availableScrollGroupIds={availableScrollGroupIds}
-          scrollGroupId={scrollGroupId}
-          onChangeScrollGroupId={setScrollGroupId}
-          localizedStrings={scrollGroupLocalizedStrings}
-        />
-      </div>
+      {shouldShowToolbar && (
+        <div className="web-view-tab-nav">
+          <BookChapterControl
+            scrRef={scrRef}
+            handleSubmit={setScrRef}
+            getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+          />
+          <ScrollGroupSelector
+            availableScrollGroupIds={availableScrollGroupIds}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            localizedStrings={scrollGroupLocalizedStrings}
+          />
+        </div>
+      )}
       <iframe
         className="web-view"
         ref={iframeRef}

@@ -324,6 +324,11 @@ declare module 'shared/models/web-view.model' {
      * to `false`
      */
     allowPopups?: boolean;
+    /**
+     * Whether a toolbar should be displayed at the top of the toolbar. Currently this toolbar cannot
+     * be modified and is provided as is. It displays a BookChapterControl and a ScrollGroupSelector.
+     */
+    shouldShowToolbar?: boolean;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
