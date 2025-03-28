@@ -89,7 +89,7 @@ export function SettingsSidebar({
     >
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel className="tw-text-sm tw-text-muted-foreground">
+          <SidebarGroupLabel className="tw-text-sm">
             {extensionsSidebarGroupLabel}
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -97,7 +97,6 @@ export function SettingsSidebar({
               {Object.entries(extensionLabels).map(([key, label]) => (
                 <SidebarMenuItem key={key}>
                   <SidebarMenuButton
-                    variant="muted"
                     onClick={() => handleSelectItem(key)}
                     isActive={getIsActive(key)}
                   >
@@ -109,14 +108,13 @@ export function SettingsSidebar({
           </SidebarGroupContent>
         </SidebarGroup>
         <SidebarGroup>
-          <SidebarGroupLabel className="tw-text-sm tw-text-muted-foreground">
-            {projectsSidebarGroupLabel}
-          </SidebarGroupLabel>
+          <SidebarGroupLabel className="tw-text-sm">{projectsSidebarGroupLabel}</SidebarGroupLabel>
           <SidebarGroupContent className="tw-pl-3">
             <ComboBox
               buttonVariant="ghost"
               buttonClassName={cn('tw-w-full', {
-                'tw-bg-muted': selectedSidebarItem?.projectId,
+                'tw-bg-sidebar-accent tw-text-sidebar-accent-foreground':
+                  selectedSidebarItem?.projectId,
               })}
               popoverContentClassName="tw-z-[1000]"
               options={projectInfo.flatMap((info) => info.projectId)}
