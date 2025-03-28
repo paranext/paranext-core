@@ -1,6 +1,6 @@
+import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
 import { papiFrontendProjectDataProviderService } from '@shared/services/project-data-provider.service';
-import { ProjectInterfaces, ProjectDataProviderInterfaces } from 'papi-shared-types';
-import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
 
 /**
  * Takes the parameters passed into the hook and returns the `projectDataProviderSource` associated

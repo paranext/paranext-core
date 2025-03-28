@@ -1,11 +1,11 @@
 // This is used in @see comments in the JSDoc
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type networkObjectService from '@shared/services/network-object.service';
+import type { networkObjectService } from '@shared/services/network-object.service';
 import {
+  CanHaveOnDidDispose,
+  CannotHaveOnDidDispose,
   Dispose,
   OnDidDispose,
-  CannotHaveOnDidDispose,
-  CanHaveOnDidDispose,
 } from 'platform-bible-utils';
 
 /**

@@ -1,7 +1,7 @@
-import dataProviderService from '@shared/services/data-provider.service';
-import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import { IDataProvider } from '@shared/models/data-provider.interface';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderNames, DataProviders } from 'papi-shared-types';
-import IDataProvider from '@shared/models/data-provider.interface';
 
 /**
  * Gets a data provider with specified provider name

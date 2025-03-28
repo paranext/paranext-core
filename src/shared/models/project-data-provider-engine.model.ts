@@ -1,6 +1,6 @@
-import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
-import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderDataTypes } from '@shared/models/data-provider.model';
+import { ProjectInterfaceDataTypes, ProjectInterfaces } from 'papi-shared-types';
 import { UnionToIntersection } from 'platform-bible-utils';
 // Referenced in JSDoc below
 // eslint-disable-next-line @typescript-eslint/no-unused-vars

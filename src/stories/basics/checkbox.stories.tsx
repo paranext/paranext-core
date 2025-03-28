@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { Checkbox } from 'platform-bible-react';
 
-export const meta: Meta<typeof Checkbox> = {
+export const Meta: MetaBase<typeof Checkbox> = {
   title: 'Basics/Checkbox',
   component: Checkbox,
   tags: ['autodocs'],
@@ -11,7 +11,7 @@ export const meta: Meta<typeof Checkbox> = {
     disabled: { control: 'boolean' },
   },
 };
-export default meta;
+export default Meta;
 
 type Story = StoryObj<typeof Checkbox>;
 

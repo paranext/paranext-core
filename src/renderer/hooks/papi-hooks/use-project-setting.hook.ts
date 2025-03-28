@@ -1,4 +1,11 @@
-import { useMemo } from 'react';
+import { useProjectDataProvider } from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
+import { useProjectData } from '@renderer/hooks/papi-hooks/use-project-data.hook';
+import {
+  DataProviderSubscriberOptions,
+  DataProviderUpdateInstructions,
+} from '@shared/models/data-provider.model';
+import { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import {
   IBaseProjectDataProvider,
   ProjectDataProviderInterfaces,
@@ -6,14 +13,7 @@ import {
   ProjectSettingNames,
   ProjectSettingTypes,
 } from 'papi-shared-types';
-import useProjectData from '@renderer/hooks/papi-hooks/use-project-data.hook';
-import {
-  DataProviderSubscriberOptions,
-  DataProviderUpdateInstructions,
-} from '@shared/models/data-provider.model';
-import ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
-import useProjectDataProvider from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
-import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import { useMemo } from 'react';
 
 /**
  * Gets, sets and resets a project setting on the papi for a specified project. Also notifies

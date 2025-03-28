@@ -1,12 +1,12 @@
-import localizationDataService from '@shared/services/localization.service';
+import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
+import { localizationService } from '@shared/services/localization.service';
 import {
   LocalizationData,
   LocalizationSelectors,
 } from '@shared/services/localization.service-model';
-import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
-import { useMemo } from 'react';
 import { isPlatformError, LocalizeKey } from 'platform-bible-utils';
-import useData from './use-data.hook';
+import { useMemo } from 'react';
+import { useData } from './use-data.hook';
 
 /**
  * Gets localizations on the papi.
@@ -48,7 +48,7 @@ export const useLocalizedStrings = (
     defaultState[key] = key;
   }
   const [localizedStrings, , isLoading] = useData(
-    localizationDataService.dataProviderName,
+    localizationService.dataProviderName,
   ).LocalizedStrings(localizationSelectors, defaultState, subscriberOptions);
 
   return [isPlatformError(localizedStrings) ? defaultState : localizedStrings, isLoading];
