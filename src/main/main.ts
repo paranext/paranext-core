@@ -311,12 +311,6 @@ async function main() {
 
     mainWindow.webContents.on(
       // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
-      'did-fail-provisional-load',
-      createErrorEventLogger('did-fail-provisional-load'),
-    );
-
-    mainWindow.webContents.on(
-      // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
       'did-fail-load',
       (
         _event: Event,
