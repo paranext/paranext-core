@@ -14,24 +14,27 @@ import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FocusEventHandler, MouseEvent as MouseEvent$1, MouseEventHandler, MutableRefObject, PropsWithChildren, ReactNode } from 'react';
+import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
 import { Toaster, toast as sonner } from 'sonner';
 
+export type BookChapterControlProps = {
+	scrRef: SerializedVerseRef;
+	handleSubmit: (scrRef: SerializedVerseRef) => void;
+	className?: string;
+	getActiveBookIds?: () => string[];
+};
+export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 type Unsubscriber = () => boolean;
 type UnsubscriberAsync = () => Promise<boolean>;
 type PlatformEventHandler<T> = (event: T) => void;
 type PlatformEvent<T> = (callback: PlatformEventHandler<T>) => Unsubscriber;
 type PlatformEventAsync<T> = (callback: PlatformEventHandler<T>) => Promise<UnsubscriberAsync>;
-interface ScriptureReference {
-	bookNum: number;
-	chapterNum: number;
-	verseNum: number;
-}
-type ScriptureNode = ScriptureReference & {
+type ScriptureNode = SerializedVerseRef & {
 	jsonPath: string;
 };
 type ScriptureTextAnchor = ScriptureNode & {
@@ -97,10 +100,6 @@ type MenuItemContainingCommand = MenuItemBase & {
 	 */
 	iconPathBefore?: string;
 };
-type GroupsInSingleColumnMenu = {
-	/** Named menu group */
-	[property: ReferencedItem]: OrderedExtensibleContainer | MenuGroupDetailsInSubMenu;
-};
 type GroupsInMultiColumnMenu = {
 	/** Named menu group */
 	[property: ReferencedItem]: MenuGroupDetailsInColumn | MenuGroupDetailsInSubMenu;
@@ -110,12 +109,6 @@ type ColumnsWithHeaders = {
 	[property: ReferencedItem]: MenuColumnWithHeader;
 	/** Defines whether columns can be added to this multi-column menu */
 	isExtensible?: boolean;
-};
-type SingleColumnMenu = {
-	/** Groups that belong in this menu */
-	groups: GroupsInSingleColumnMenu;
-	/** List of menu items that belong in this menu */
-	items: (MenuItemContainingCommand | MenuItemContainingSubmenu)[];
 };
 type MultiColumnMenu = {
 	/** Columns that belong in this menu */
@@ -130,13 +123,6 @@ type LocalizedStringValue = string;
 interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
-export type BookChapterControlProps = {
-	scrRef: ScriptureReference;
-	handleSubmit: (scrRef: ScriptureReference) => void;
-	className?: string;
-	getActiveBookIds?: () => string[];
-};
-export declare function BookChapterControl({ scrRef, handleSubmit, className, getActiveBookIds, }: BookChapterControlProps): import("react/jsx-runtime").JSX.Element;
 export type ChapterRangeSelectorProps = {
 	startChapter: number;
 	endChapter: number;
@@ -145,7 +131,7 @@ export type ChapterRangeSelectorProps = {
 	isDisabled?: boolean;
 	chapterCount: number;
 };
-export function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export declare enum BookSelectionMode {
 	CURRENT_BOOK = "current book",
 	CHOOSE_BOOKS = "choose books"
@@ -170,7 +156,7 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
 	selectedBookIds: string[];
 	localizedStrings: BookSelectorLocalizedStrings;
 };
-export function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function BookSelector({ handleBookSelectionModeChange, currentBookName, onSelectBooks, selectedBookIds, chapterCount, endChapter, handleSelectEndChapter, startChapter, handleSelectStartChapter, localizedStrings, }: BookSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
@@ -242,7 +228,7 @@ type InstallButtonProps = {
  * @param InstallButtonProps
  * @returns A install button.
  */
-export function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
 type EnableButtonProps = {
 	/** The enabling boolean value determines the state of the button. */
 	isEnabling: boolean;
@@ -256,7 +242,7 @@ type EnableButtonProps = {
  * @param EnableButtonProps
  * @returns A button that can be used to enable.
  */
-export function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
 type DisableButtonProps = {
 	/** The disabling boolean value determines the state of the button. */
 	isDisabling: boolean;
@@ -270,7 +256,7 @@ type DisableButtonProps = {
  * @param DisableButtonProps
  * @returns A button that can be used to disable.
  */
-export function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
 type UpdateButtonProps = {
 	/** The updating boolean value determines the state of the button. */
 	isUpdating: boolean;
@@ -284,7 +270,7 @@ type UpdateButtonProps = {
  * @param UpdateButtonProps
  * @returns A button that can be used to update.
  */
-export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
+export declare function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -305,7 +291,7 @@ interface MarkdownRendererProps {
  * @param MarkdownRendererProps
  * @returns A div containing the rendered markdown content.
  */
-export function MarkdownRenderer({ id, markdown, className, anchorTarget, }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
+export declare function MarkdownRenderer({ id, markdown, className, anchorTarget }: MarkdownRendererProps): import("react/jsx-runtime").JSX.Element;
 export declare enum DropdownMenuItemType {
 	Check = 0,
 	Radio = 1
@@ -340,7 +326,7 @@ type FilterDropdownProps = {
  * @param FilterDropdownProps
  * @returns A filter dropdown.
  */
-export function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
+export declare function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The FilterButton component is a button designed for initiating filtering of data. It is designed
  * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
@@ -361,7 +347,7 @@ interface NoExtensionsFoundProps {
  * @param NoExtensionsFoundProps
  * @returns {JSX.Element} - Returns the message component that displays the message to the user.
  */
-export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
+export declare function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
 interface MoreInfoProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -382,7 +368,7 @@ interface MoreInfoProps {
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */
-export function MoreInfo({ id, category, downloads, languages, moreInfoUrl, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
+export declare function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
 export type VersionInformation = {
 	/** Date the version was published */
 	date: string;
@@ -404,7 +390,7 @@ interface VersionHistoryProps {
  * @param VersionHistoryProps
  * @returns Rendered version history for the Footer component
  */
-export function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
 interface FooterProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -424,7 +410,7 @@ interface FooterProps {
  * @param FooterProps
  * @returns The rendered Footer component
  */
-export function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
+export declare function Footer({ id, publisherDisplayName, fileSize, locales, versionHistory, }: FooterProps): import("react/jsx-runtime").JSX.Element;
 export type MultiSelectComboBoxEntry = {
 	value: string;
 	label: string;
@@ -461,7 +447,7 @@ type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
 	/** Reference to scripture where the item appears */
-	reference: ScriptureReference;
+	reference: SerializedVerseRef;
 	/** Snippet of scripture that contains the occurrence */
 	text: string;
 };
@@ -503,7 +489,7 @@ export declare const getNumberFromUSFM: (text: string) => number | undefined;
  * @returns Book number corresponding to the \id marker in the input text. Returns 0 if no marker is
  *   found or the marker is not valid
  */
-export declare const getBookNumFromId: (text: string) => number;
+export declare const getBookIdFromUSFM: (text: string) => string;
 /**
  * Gets the status for an item, typically used in the Inventory component
  *
@@ -542,9 +528,9 @@ type AdditionalItemsLabels = {
 };
 type InventoryProps = {
 	/** The scripture reference that the application is currently set to */
-	scriptureReference: ScriptureReference;
+	verseRef: SerializedVerseRef;
 	/** Callback function that is executed when the scripture reference is changed */
-	setScriptureReference: (scriptureReference: ScriptureReference) => void;
+	setVerseRef: (scriptureReference: SerializedVerseRef) => void;
 	/**
 	 * Object with all localized strings that the Inventory needs to work well across multiple
 	 * languages. When using this component with Platform.Bible, you can import
@@ -560,7 +546,7 @@ type InventoryProps = {
 	 * for the related columns and control elements to show by setting the `additionalItemsLabels`
 	 * prop
 	 */
-	extractItems: RegExp | ((text: string | undefined, scriptureRef: ScriptureReference, approvedItems: string[], unapprovedItems: string[]) => InventoryTableData[]);
+	extractItems: RegExp | ((text: string | undefined, scriptureRef: SerializedVerseRef, approvedItems: string[], unapprovedItems: string[]) => InventoryTableData[]);
 	/**
 	 * Text labels for control elements and additional column headers in case your Inventory has more
 	 * than one item to show (e.g. The 'Preceding Marker' in the Markers Inventory)
@@ -585,7 +571,7 @@ type InventoryProps = {
 	columns: ColumnDef<InventoryTableData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export function Inventory({ scriptureReference, setScriptureReference, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ verseRef, setVerseRef, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *
@@ -655,7 +641,7 @@ export type SettingsSidebarProps = {
 	/** Additional css classes to help with unique styling of the sidebar */
 	className?: string;
 };
-export function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebar({ id, extensionLabels, projectInfo, handleSelectSidebarItem, selectedSidebarItem, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, className, }: SettingsSidebarProps): import("react/jsx-runtime").JSX.Element;
 type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWithChildren & {
 	/** Optional id for testing */
 	id?: string;
@@ -664,7 +650,7 @@ type SettingsSidebarContentSearchProps = SettingsSidebarProps & React$1.PropsWit
 	/** Handler to run when the value of the search bar changes */
 	onSearch: (searchQuery: string) => void;
 };
-export function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
+export declare function SettingsSidebarContentSearch({ id, extensionLabels, projectInfo, children, handleSelectSidebarItem, selectedSidebarItem, searchValue, onSearch, extensionsSidebarGroupLabel, projectsSidebarGroupLabel, buttonPlaceholderText, }: SettingsSidebarContentSearchProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
  * noteworthy at a specific place in an instance of the Scriptures.
@@ -748,7 +734,7 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a {@link ScrollGroupId} or `undefined` for
@@ -803,7 +789,7 @@ export type ScrollGroupSelectorProps = {
 	className?: string;
 };
 /** Selector component for choosing a scroll group */
-export function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
 type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
@@ -844,6 +830,28 @@ type SettingsListHeaderProps = {
  * @returns Formatted div with list header content
  */
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
+type TabDropdownMenuProps = {
+	/** The handler to use for menu commands */
+	commandHandler: CommandHandler;
+	/** The menu data to show on the dropdown menu */
+	menuData: Localized<MultiColumnMenu>;
+	/** Defines a string value that labels the current element */
+	tabLabel: string;
+	/** Optional icon for the dropdown menu trigger. Defaults to hamburger icon. */
+	icon?: React$1.ReactNode;
+	/** Additional css class(es) to help with unique styling of the tab dropdown menu */
+	className?: string;
+	/** Optional unique identifier */
+	id?: string;
+};
+/**
+ * Dropdown menu designed to be used with Platform.Bible menu data. Column headers are ignored.
+ * Column data is separated by a horizontal divider, so groups are not distinguishable. Tooltips are
+ * displayed on hovering over menu items, if a tooltip is defined for them.
+ *
+ * A child component can be passed in to show as an icon on the menu trigger button.
+ */
+export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -909,7 +917,7 @@ export type ToolbarProps = React$1.PropsWithChildren<{
  * @returns The class name to apply to the toolbar if os specific space should be reserved
  */
 export declare function getToolbarOSReservedSpaceClassName(operatingSystem: string | undefined): string | undefined;
-export function Toolbar({ menuData, onOpenChange, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];
@@ -962,7 +970,7 @@ export type UiLanguageSelectorProps = {
 	/** Additional css classes to help with unique styling of the control */
 	className?: string;
 };
-export function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
@@ -997,7 +1005,7 @@ export type ChecklistProps = {
 	createComplexLabel?: (item: string) => React$1.ReactNode;
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
-export function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
 export type ComboBoxLabelOption = {
 	label: string;
 };
@@ -1045,180 +1053,6 @@ export type ComboBoxProps<T> = {
  * https://ui.shadcn.com/docs/components/combobox
  */
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
-export type GridMenuInfo = {
-	/** The menu object containing information about the columns, groups, and items to display. */
-	multiColumnMenu: Localized<MultiColumnMenu>;
-};
-export type GridMenuProps = GridMenuInfo & {
-	/** Optional unique identifier */
-	id?: string;
-	commandHandler: CommandHandler;
-	/** Additional css classes to help with unique styling of the grid menu */
-	className?: string;
-};
-export function GridMenu({ commandHandler, className, multiColumnMenu, id, }: GridMenuProps): import("react/jsx-runtime").JSX.Element;
-export interface MultiColumnMenuProvider {
-	(isSupportAndDevelopment: boolean): Promise<Localized<MultiColumnMenu>>;
-}
-type HamburgerMenuButtonProps = React$1.PropsWithChildren & {
-	/** The handler to use for menu commands (and eventually toolbar commands). */
-	commandHandler: CommandHandler;
-	/**
-	 * Optional reference to the "div" container that determines the where the menu should appear. If
-	 * not defined, then (1,1) used.
-	 */
-	containerRef?: React$1.MutableRefObject<HTMLDivElement>;
-	/**
-	 * The delegate to use to get the menu data. If not specified or if it returns undefined, the data
-	 * in normalMenu or fullMenu property will be used.
-	 */
-	menuProvider?: MultiColumnMenuProvider;
-	/**
-	 * The menu data to show when the menu is opened if the menuProvider property is not defined.
-	 * (This allows for a default or test-only static menu to be used.)
-	 */
-	normalMenu?: Localized<MultiColumnMenu>;
-	/**
-	 * The menu data to show for "full" menu (when opened with the SHIFT key pressed) if the
-	 * menuProvider property is not defined. (This allows for a default or test-only static menu to be
-	 * used.)
-	 */
-	fullMenu?: Localized<MultiColumnMenu>;
-	/** Additional css class(es) to help with unique styling of the sub-components */
-	className?: string;
-	/** Value to use as prefix for ARIA labels on interactive sub-components */
-	ariaLabelPrefix?: string;
-};
-export function HamburgerMenuButton({ menuProvider, normalMenu, fullMenu, commandHandler, containerRef, className, ariaLabelPrefix, children, }: HamburgerMenuButtonProps): import("react/jsx-runtime").JSX.Element;
-export type IconButtonProps = React$1.PropsWithChildren<{
-	/** Optional unique identifier */
-	id?: string;
-	/**
-	 * Required. Used as both the tooltip (aka, title) and the aria-label (used for accessibility,
-	 * testing, etc.), unless a distinct tooltip is supplied.
-	 */
-	label: string;
-	/**
-	 * Enabled status of button
-	 *
-	 * @default false
-	 */
-	isDisabled?: boolean;
-	/** Optional tooltip to display if different from the aria-label. */
-	tooltip?: string;
-	/** If true, no tooltip will be displayed. */
-	isTooltipSuppressed?: boolean;
-	/**
-	 * If given, uses a negative margin to counteract the padding on one side (this is often helpful
-	 * for aligning the left or right side of the icon with content above or below, without ruining
-	 * the border size and shape).
-	 *
-	 * @default false
-	 */
-	adjustMarginToAlignToEdge?: "end" | "start" | false;
-	/**
-	 * The size of the component. small is equivalent to the dense button styling.
-	 *
-	 * @default false
-	 */
-	size: "small" | "medium" | "large";
-	/** Additional css classes to help with unique styling of the button */
-	className?: string;
-	/** Optional click handler */
-	onClick?: React$1.MouseEventHandler<HTMLButtonElement>;
-}>;
-/**
- * Iconic button a user can click to do something
- *
- * Thanks to MUI for heavy inspiration and documentation
- * https://mui.com/material-ui/getting-started/overview/
- */
-export declare function IconButton({ id, label, isDisabled, tooltip, isTooltipSuppressed, adjustMarginToAlignToEdge, size, className, onClick, children, }: IconButtonProps): import("react/jsx-runtime").JSX.Element;
-type SubMenu = MenuItemInfoBase & {
-	/** Command to execute (string.string) */
-	items: MenuItemInfo[];
-};
-type MenuPropsBase = {
-	menuDefinition: Localized<SingleColumnMenu>;
-	commandHandler: CommandHandler;
-	/**
-	 * Additional action to perform when any menu item is clicked. Allows the caller to handle event
-	 * (e.g., to close the menu).
-	 */
-	onClick?: (event: React$1.MouseEvent<HTMLElement>) => void;
-};
-export type MenuItemListProps = MenuPropsBase & {
-	/** Optional unique (column) identifier */
-	columnId?: ReferencedItem;
-};
-type MenuItemProps = Omit<MenuItemInfo, "command"> & React$1.PropsWithChildren<{
-	/** Optional unique identifier */
-	id?: string;
-	onClick: (event: React$1.MouseEvent<HTMLElement>) => void;
-}>;
-type MenuItemInfo = (Command | SubMenu) & {
-	/**
-	 * If specified, menu item will be inset if it does not have a leading icon.
-	 *
-	 * @default true
-	 */
-	allowForLeadingIcons?: boolean;
-	/**
-	 * If specified, the path to the icon image to display on the leading side of the menu text.
-	 *
-	 * @default undefined (no leading icon will be shown)
-	 */
-	iconPathBefore?: string;
-	/**
-	 * If specified, the path to the icon image to display on the trailing side of the menu text.
-	 *
-	 * @default undefined (no trailing icon will be shown)
-	 */
-	iconPathAfter?: string;
-	/**
-	 * If true, list item is focused during the first mount
-	 *
-	 * @default false
-	 */
-	hasAutoFocus?: boolean;
-	/** Additional css classes to help with unique styling of the menu item */
-	className?: string;
-	/**
-	 * If true, the menu item will appear disabled and it will not respond to clicks or mouse hovers.
-	 *
-	 * @default false
-	 */
-	isDisabled?: boolean;
-	/**
-	 * If true, compact vertical padding designed for keyboard and mouse input is used.
-	 *
-	 * @default true
-	 */
-	isDense?: boolean;
-	/**
-	 * If true, a right-arrow icon will be displayed (iconPathAfter, if specified, will be ignored).
-	 *
-	 * @default false
-	 */
-	isSubMenuParent?: boolean;
-	/**
-	 * If true, the left and right padding is removed
-	 *
-	 * @default false
-	 */
-	hasDisabledGutters?: boolean;
-	/**
-	 * If true, a 1px light border is added to bottom of menu item
-	 *
-	 * @default false
-	 */
-	hasDivider?: boolean;
-	/** Help identify which element has keyboard focus */
-	focusVisibleClassName?: string;
-	/** If it's a submenu, it should have the items property */
-	items?: MenuItemInfo[];
-};
-export function MenuItem(props: MenuItemProps): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
 	/** Seach query for the search bar */
@@ -1236,7 +1070,7 @@ export type SearchBarProps = {
 	/** Additional css classes to help with unique styling of the search bar */
 	className?: string;
 };
-export function SearchBar({ value, onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SearchBar({ value, onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 export declare const Spinner: import("react").ForwardRefExoticComponent<Omit<LucideProps, "ref"> & import("react").RefAttributes<SVGSVGElement>>;
 export type TextFieldProps = {

@@ -136,7 +136,7 @@ export type ProjectListProps = PropsWithChildren<{
  * @param ProjectListProps And any children elements
  * @returns <ProjectList />
  */
-export default function ProjectList({
+export function ProjectList({
   projects,
   handleSelectProject,
   isMultiselect,
@@ -178,3 +178,5 @@ export default function ProjectList({
     </div>
   );
 }
+
+export default ProjectList;

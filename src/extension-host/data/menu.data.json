@@ -73,13 +73,6 @@
     },
     "items": [
       {
-        "label": "%webView_projectAssignmentsAndProgress%",
-        "localizeNotes": "Web view main menu > Project > Assignments and progress...",
-        "group": "platform.projectTop",
-        "order": 2,
-        "command": "platform.assignments"
-      },
-      {
         "label": "%webView_openProjectSettings%",
         "localizeNotes": "Web view main menu > Project > Open Project Settings...",
         "group": "platform.projectTop",

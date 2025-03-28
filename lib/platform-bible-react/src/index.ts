@@ -48,7 +48,7 @@ export type {
 export {
   getLinesFromUSFM,
   getNumberFromUSFM,
-  getBookNumFromId,
+  getBookIdFromUSFM,
   getStatusForItem,
 } from './components/advanced/inventory/inventory-utils';
 export type {
@@ -90,6 +90,7 @@ export {
   SettingsListHeader,
   SettingsListItem,
 } from './components/advanced/settings-components/settings-list.component';
+export { default as TabDropdownMenu } from './components/advanced/tab-dropdown-menu.component';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,
@@ -113,14 +114,6 @@ export type {
   ComboBoxOption,
 } from './components/basics/combo-box.component';
 
-export { default as GridMenu } from './components/mui/grid-menu.component';
-export type { GridMenuProps, GridMenuInfo } from './components/mui/grid-menu.component';
-export { default as HamburgerMenuButton } from './components/mui/hamburger-menu-button.component';
-export type { MultiColumnMenuProvider } from './components/mui/hamburger-menu-button.component';
-export { default as IconButton } from './components/mui/icon-button.component';
-export type { IconButtonProps } from './components/mui/icon-button.component';
-export { default as MenuItem } from './components/mui/menu-item.component';
-export type { MenuItemListProps } from './components/mui/menu-item.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';

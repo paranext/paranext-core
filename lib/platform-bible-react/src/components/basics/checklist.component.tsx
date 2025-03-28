@@ -1,4 +1,4 @@
-import Checkbox from '@/components/shadcn-ui/checkbox';
+import { Checkbox } from '@/components/shadcn-ui/checkbox';
 import { ReactNode } from 'react';
 import SmartLabel from './smart-label.component';
 
@@ -39,7 +39,7 @@ export type ChecklistProps = {
 };
 
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
-export default function Checklist({
+export function Checklist({
   id,
   className,
   listItems,
@@ -67,3 +67,5 @@ export default function Checklist({
     </div>
   );
 }
+
+export default Checklist;

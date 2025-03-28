@@ -4,8 +4,8 @@ import {
   menuDataServiceObjectToProxy,
   menuDataServiceProviderName,
 } from '@shared/services/menu-data.service-model';
-import dataProviderService from '@shared/services/data-provider.service';
-import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { dataProviderService } from '@shared/services/data-provider.service';
+import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
   createSyncProxyForAsyncObject,
@@ -16,7 +16,7 @@ import {
   Localized,
   Unsubscriber,
 } from 'platform-bible-utils';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { menuDocumentCombiner, onDidResyncContributions } from './contribution.service';
 
 class MenuDataDataProviderEngine

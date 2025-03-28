@@ -13,7 +13,7 @@ import {
   updateWebViewDefinitionSync,
   isWebViewNonceCorrect,
 } from '@renderer/services/web-view.service-host';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import {
   PromiseChainingMap,
   UnsubscriberAsync,
@@ -58,7 +58,7 @@ async function retrieveWebViewContent(webViewType: string, id: string): Promise<
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
 }
 
-export default function WebView({
+export function WebView({
   id,
   webViewType,
   content,
@@ -69,6 +69,7 @@ export default function WebView({
   allowPopups,
   scrollGroupScrRef,
   projectId,
+  shouldShowToolbar,
 }: WebViewTabProps) {
   // React starts refs as null
   // eslint-disable-next-line no-null/no-null
@@ -228,19 +229,21 @@ export default function WebView({
 
   return (
     <div className="web-view-parent">
-      <div className="web-view-tab-nav">
-        <BookChapterControl
-          scrRef={scrRef}
-          handleSubmit={setScrRef}
-          getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-        />
-        <ScrollGroupSelector
-          availableScrollGroupIds={availableScrollGroupIds}
-          scrollGroupId={scrollGroupId}
-          onChangeScrollGroupId={setScrollGroupId}
-          localizedStrings={scrollGroupLocalizedStrings}
-        />
-      </div>
+      {shouldShowToolbar && (
+        <div className="web-view-tab-nav">
+          <BookChapterControl
+            scrRef={scrRef}
+            handleSubmit={setScrRef}
+            getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+          />
+          <ScrollGroupSelector
+            availableScrollGroupIds={availableScrollGroupIds}
+            scrollGroupId={scrollGroupId}
+            onChangeScrollGroupId={setScrollGroupId}
+            localizedStrings={scrollGroupLocalizedStrings}
+          />
+        </div>
+      )}
       <iframe
         className="web-view"
         ref={iframeRef}
@@ -333,3 +336,5 @@ export function saveWebViewTab(tabInfo: TabInfo): SavedTabInfo {
     data: convertWebViewDefinitionToSaved(tabInfo.data as WebViewDefinition),
   };
 }
+
+export default WebView;

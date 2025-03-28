@@ -82,7 +82,8 @@ type UseProjectDataHook = {
  *   'platformScripture.USFM_Verse',
  *   '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
  * ).VerseUSFM(
- *   useMemo(() => new VerseRef('JHN', '11', '35', ScrVers.English), []),
+ *   useMemo(() =>
+ *    { book: 'JHN', chapterNum: 11, verseNum: 35, versificationStr: ScrVers.English }, []),
  *   'Loading verse ',
  * );
  * ```
@@ -123,7 +124,7 @@ type UseProjectDataHook = {
  */
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */
-const useProjectData = createUseDataHook(
+export const useProjectData = createUseDataHook(
   useProjectDataProvider as (
     projectInterface: ProjectInterfaces,
     dataProviderSource: string | IDataProvider | undefined,

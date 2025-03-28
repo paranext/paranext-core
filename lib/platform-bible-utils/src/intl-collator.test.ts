@@ -1,4 +1,4 @@
-import Collator from './intl-collator';
+import { Collator } from './intl-collator';
 
 const testCollator: Collator = new Collator('en');
 const STRING_Z = 'z';

@@ -25,7 +25,7 @@ export type SearchBarProps = {
   className?: string;
 };
 
-export default function SearchBar({
+export function SearchBar({
   value,
   onSearch,
   placeholder,
@@ -69,3 +69,5 @@ export default function SearchBar({
     </div>
   );
 }
+
+export default SearchBar;

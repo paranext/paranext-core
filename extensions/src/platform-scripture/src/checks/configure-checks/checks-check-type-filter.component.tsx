@@ -3,7 +3,7 @@ import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { Checklist, DropdownMenuGroup, Separator } from 'platform-bible-react';
 import { logger } from '@papi/frontend';
-import ChecksFilterDropdown from './checks-filter-dropdown.component';
+import { ChecksFilterDropdown } from './checks-filter-dropdown.component';
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_checkTypeFilter_countLabel%',

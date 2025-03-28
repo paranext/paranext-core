@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { Checkbox } from 'platform-bible-react';
 
-const meta: Meta<typeof Checkbox> = {
+export const meta: Meta<typeof Checkbox> = {
   title: 'Basics/Checkbox',
   component: Checkbox,
   tags: ['autodocs'],

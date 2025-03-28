@@ -4,14 +4,15 @@ import {
   setScrRefSync,
 } from '@renderer/services/scroll-group.service-host';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent } from 'platform-bible-react';
-import { compareScrRefs, ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+import { compareScrRefs, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 function extractScrollGroupId(scrollGroupScrRef: ScrollGroupScrRef): ScrollGroupId | undefined {
   return typeof scrollGroupScrRef === 'number' ? scrollGroupScrRef : undefined;
 }
-function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): ScriptureReference {
+function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): SerializedVerseRef {
   return typeof scrollGroupScrRef === 'number'
     ? getScrRefSync(scrollGroupScrRef)
     : scrollGroupScrRef;
@@ -19,7 +20,7 @@ function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): ScriptureReference
 
 /**
  * React hook for working with a {@link ScrollGroupScrRef}. Returns a value and a function to set the
- * value for both the {@link ScriptureReference} and the {@link ScrollGroupId} for the provided
+ * value for both the SerializedVerseRef and the {@link ScrollGroupId} for the provided
  * `scrollGroupScrRef`. Use similarly to `useState`.
  *
  * @param scrollGroupScrRef {@link ScrollGroupScrRef} representing a scroll group and/or Scripture
@@ -45,12 +46,12 @@ function extractScrRef(scrollGroupScrRef: ScrollGroupScrRef): ScriptureReference
  *   - `setScrollGroupId`: Function to use to update the scroll group with which this
  *       `scrollGroupScrRef` is synced
  */
-export default function useScrollGroupScrRef(
+export function useScrollGroupScrRef(
   scrollGroupScrRef: ScrollGroupScrRef | undefined,
   setScrollGroupScrRef: (scrollGroupScrRef: ScrollGroupScrRef) => boolean,
 ): [
-  scrRef: ScriptureReference,
-  setScrRef: (newScrRef: ScriptureReference) => void,
+  scrRef: SerializedVerseRef,
+  setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,
   setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
 ] {
@@ -64,7 +65,7 @@ export default function useScrollGroupScrRef(
   const scrollGroupIdLocalRef = useRef(extractScrollGroupId(scrollGroupScrRefDefaulted));
   const [scrollGroupIdLocal, setScrollGroupIdLocal] = useState(scrollGroupIdLocalRef.current);
   const [scrRefLocal, setScrRefLocal] = useState(() => extractScrRef(scrollGroupScrRefDefaulted));
-  const setScrRefLocalIfDifferent = useCallback((updatedScrRef: ScriptureReference) => {
+  const setScrRefLocalIfDifferent = useCallback((updatedScrRef: SerializedVerseRef) => {
     setScrRefLocal((currentScrRef) => {
       if (compareScrRefs(currentScrRef, updatedScrRef) !== 0) return updatedScrRef;
       return currentScrRef;
@@ -96,7 +97,7 @@ export default function useScrollGroupScrRef(
 
   // Change the scrRef and update ours if successful
   const setScrRef = useCallback(
-    (newScrRef: ScriptureReference) => {
+    (newScrRef: SerializedVerseRef) => {
       // If we are synced to a scroll group, set it. If it didn't change, return
       if (
         scrollGroupIdLocalRef.current !== undefined &&
@@ -129,3 +130,5 @@ export default function useScrollGroupScrRef(
 
   return [scrRefLocal, setScrRef, scrollGroupIdLocal, setScrollGroupId];
 }
+
+export default useScrollGroupScrRef;

@@ -4,10 +4,10 @@ import { useCallback, useMemo, useState } from 'react';
 import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { debounce, getErrorMessage, isString, serialize } from 'platform-bible-utils';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import useData from '@renderer/hooks/papi-hooks/use-data.hook';
-import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
+import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
+import { useDataProvider } from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 
@@ -74,7 +74,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
   }
 };
 
-export default function TestButtonsPanel() {
+export function TestButtonsPanel() {
   const [promiseReturn, setPromiseReturn] = useState('Click a button.');
   const updatePromiseReturn = useCallback(
     (state: unknown) => setPromiseReturn(isString(state) ? state : serialize(state)),
@@ -299,3 +299,5 @@ export function loadButtonsTab(savedTabInfo: SavedTabInfo): TabInfo {
     content: <TestButtonsPanel />,
   };
 }
+
+export default TestButtonsPanel;

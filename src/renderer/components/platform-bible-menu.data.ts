@@ -1,4 +1,4 @@
-import menuDataService from '@shared/services/menu-data.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { Localized, MultiColumnMenu, PlatformMenus } from 'platform-bible-utils';
 
 type LocalizedMainMenu = Localized<PlatformMenus['mainMenu']>;
@@ -114,8 +114,10 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
   ],
 };
 
-export default async function provideMenuData(
+export async function provideMenuData(
   isSupportAndDevelopment: boolean,
 ): Promise<Localized<MultiColumnMenu>> {
   return isSupportAndDevelopment ? supportAndDevelopmentMenuLayout : menuDataService.getMainMenu();
 }
+
+export default provideMenuData;

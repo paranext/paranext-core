@@ -1,5 +1,5 @@
 /** Enables language-sensitive string comparison. Wraps Intl.Collator */
-export default class Collator {
+export class Collator {
   private collator: Intl.Collator;
 
   constructor(locales?: string | string[], options?: Intl.CollatorOptions) {
@@ -29,3 +29,5 @@ export default class Collator {
     return this.collator.resolvedOptions();
   }
 }
+
+export default Collator;

@@ -41,6 +41,46 @@ describe('newPlatformError', () => {
   });
 });
 
+describe('newPlatformError JSON.stringify', () => {
+  it('should include platformErrorVersion and message when no argument is provided', () => {
+    const error = newPlatformError();
+    const json = JSON.stringify(error);
+    expect(json).toContain('"platformErrorVersion":1');
+    expect(json).toContain('"message":""');
+  });
+
+  it('should include platformErrorVersion and message when a string is provided', () => {
+    const error = newPlatformError('An error occurred');
+    const json = JSON.stringify(error);
+    expect(json).toContain('"platformErrorVersion":1');
+    expect(json).toContain('"message":"An error occurred"');
+  });
+
+  it('should include platformErrorVersion and message when an object with a message is provided', () => {
+    const errorObj = { message: 'An error occurred', stack: 'stack trace' };
+    const error = newPlatformError(errorObj);
+    const json = JSON.stringify(error);
+    expect(json).toContain('"platformErrorVersion":1');
+    expect(json).toContain('"message":"An error occurred"');
+  });
+
+  it('should include platformErrorVersion and message when an object without a message is provided', () => {
+    const errorObj = { code: 500 };
+    const error = newPlatformError(errorObj);
+    const json = JSON.stringify(error);
+    expect(json).toContain('"platformErrorVersion":1');
+    expect(json).toContain('"message":""');
+  });
+
+  it('should include platformErrorVersion and message when an Error object is provided', () => {
+    const errorObj = new Error('An error occurred');
+    const error = newPlatformError(errorObj);
+    const json = JSON.stringify(error);
+    expect(json).toContain('"platformErrorVersion":1');
+    expect(json).toContain('"message":"An error occurred"');
+  });
+});
+
 describe('isPlatformError', () => {
   it('should return true for a valid PlatformError', () => {
     const error = { message: 'An error occurred', platformErrorVersion: PLATFORM_ERROR_VERSION };

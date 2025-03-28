@@ -1,4 +1,4 @@
-export default function HowToGuide() {
+export function HowToGuide() {
   return (
     <>
       <p>
@@ -22,3 +22,5 @@ export default function HowToGuide() {
     </>
   );
 }
+
+export default HowToGuide;

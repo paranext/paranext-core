@@ -25,7 +25,7 @@ interface VersionHistoryProps {
  * @param VersionHistoryProps
  * @returns Rendered version history for the Footer component
  */
-export default function VersionHistory({ id, versionHistory }: VersionHistoryProps) {
+export function VersionHistory({ id, versionHistory }: VersionHistoryProps) {
   const [showAllVersions, setShowAllVersions] = useState(false);
   const currentDate = new Date();
 
@@ -90,3 +90,5 @@ export default function VersionHistory({ id, versionHistory }: VersionHistoryPro
     </div>
   );
 }
+
+export default VersionHistory;

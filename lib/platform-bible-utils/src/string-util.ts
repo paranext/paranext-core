@@ -1,13 +1,13 @@
 import { LocalizeKey } from 'menus.model';
 import {
   indexOf as stringzIndexOf,
-  substring as stringzSubstring,
   length as stringzLength,
-  toArray as stringzToArray,
   limit as stringzLimit,
   substr as stringzSubstr,
+  substring as stringzSubstring,
+  toArray as stringzToArray,
 } from 'stringz';
-import ensureArray from './array-util';
+import { ensureArray } from './array-util';
 import { isString } from './util';
 
 /**

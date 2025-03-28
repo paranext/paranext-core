@@ -15,21 +15,13 @@ import {
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
-import LogError from '@shared/log-error.model';
+import { LogError } from '@shared/log-error.model';
 
 import {
   mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
 } from '@renderer/services/web-view.service-host';
-import DIALOGS from '@renderer/components/dialogs';
-import {
-  TAB_TYPE_EXTENSION_MANAGER,
-  loadExtensionManagerTab,
-} from '@renderer/components/extension-manager/extension-manager-tab.component';
-import {
-  TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
-  loadDownloadUpdateProjectTab,
-} from '@renderer/components/projects/download-update-project-tab.component';
+import { DIALOGS } from '@renderer/components/dialogs';
 import {
   TAB_TYPE_SETTINGS_TAB,
   loadSettingsTab,
@@ -51,7 +43,7 @@ import {
 
 import { layoutDefaults, getFloatPosition } from './platform-dock-layout-positioning.util';
 import { TabType, RCDockTabInfo, isTab } from './docking-framework-internal.model';
-import createRCDockTabFromTabInfo from './platform-dock-tab.component';
+import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
 
 /** Tab loader functions for each Platform tab type */
@@ -63,8 +55,6 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
     [TAB_TYPE_TEST, loadTestTab],
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
-    [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
-    [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
     [TAB_TYPE_SETTINGS_TAB, loadSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
@@ -77,8 +67,6 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_ABOUT, loadAboutTab],
     [TAB_TYPE_BUTTONS, loadButtonsTab],
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
-    [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
-    [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
     [TAB_TYPE_SETTINGS_TAB, loadSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
