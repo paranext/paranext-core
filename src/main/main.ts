@@ -225,7 +225,7 @@ async function main() {
     });
 
     mainWindow = new BrowserWindow({
-      show: false,
+      show: true,
       x: mainWindowState.x,
       y: mainWindowState.y,
       width: mainWindowState.width,
