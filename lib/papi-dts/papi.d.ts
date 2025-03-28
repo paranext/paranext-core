@@ -110,10 +110,7 @@ declare module 'shared/services/scroll-group.service-model' {
       scrRef: SerializedVerseRef,
     ): Promise<boolean>;
   }
-  /**
-   *
-   * Provides functions related to scroll groups and Scripture references at those scroll groups
-   */
+  /** JSDOC DESTINATION scrollGroupService */
   export interface IScrollGroupService extends IScrollGroupRemoteService {
     /** Event that emits with information about a changed Scripture Reference for a scroll group */
     onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
@@ -402,6 +399,7 @@ declare module 'shared/models/web-view.model' {
    */
   export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
   /**
+   * JSDOC SOURCE UseWebViewStateHook
    *
    * A React hook for working with a state object tied to a webview. Returns a WebView state value and
    * a function to set it. Use similarly to `useState`.
@@ -447,6 +445,7 @@ declare module 'shared/models/web-view.model' {
     resetWebViewState: () => void,
   ];
   /**
+   * JSDOC SOURCE UseWebViewScrollGroupScrRefHook
    *
    * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
    * value and a function to set the value for both the SerializedVerseRef and the
@@ -477,6 +476,7 @@ declare module 'shared/models/web-view.model' {
     setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
   ];
   /**
+   * JSDOC SOURCE GetSavedWebViewDefinition
    *
    * Gets the saved properties on this WebView's WebView definition
    *
@@ -485,6 +485,7 @@ declare module 'shared/models/web-view.model' {
    */
   export type GetSavedWebViewDefinition = () => SavedWebViewDefinition | undefined;
   /**
+   * JSDOC SOURCE UpdateWebViewDefinition
    *
    * Updates this WebView with the specified properties
    *
@@ -503,85 +504,11 @@ declare module 'shared/models/web-view.model' {
   export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
   /** Props that are passed into the web view itself inside the iframe in the web view tab component */
   export type WebViewProps = SavedWebViewDefinition & {
-    /**
-     *
-     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
-     * a function to set it. Use similarly to `useState`.
-     *
-     * Only used in WebView iframes.
-     *
-     * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
-     * key.
-     *
-     * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-     * updated every render
-     *
-     * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for the
-     * given 'stateKey'
-     *
-     * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-     * to re-run with its new value. Running `resetWebViewState()` will always update the state value
-     * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
-     * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
-     * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
-     * updated to the new `defaultStateValue`.
-     *
-     * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
-     *
-     * - `webViewStateValue`: The current value for the web view state at the key specified or
-     *   `defaultStateValue` if a state was not found
-     * - `setWebViewState`: Function to use to update the web view state value at the key specified
-     * - `resetWebViewState`: Function that removes the web view state and resets the value to
-     *   `defaultStateValue`
-     *
-     * _＠example_
-     *
-     * ```typescript
-     * const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen', 'No one');
-     * ```
-     */
+    /** JSDOC DESTINATION UseWebViewStateHook */
     useWebViewState: UseWebViewStateHook;
-    /**
-     *
-     * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
-     * value and a function to set the value for both the SerializedVerseRef and the
-     * {@link ScrollGroupId} with which this web view is synced (using this web view's
-     * `scrollGroupScrRef` property). Use similarly to `useState`.
-     *
-     * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
-     *
-     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
-     *
-     * - `scrRef`: The current value for the Scripture reference this web view is on
-     * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
-     *   synced to a scroll group, sets the scroll group's Scripture reference
-     * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
-     *   synced to a scroll group, this is `undefined`
-     * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
-     *
-     * _＠example_
-     *
-     * ```typescript
-     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
-     * ```
-     */
+    /** JSDOC DESTINATION UseWebViewScrollGroupScrRefHook */
     useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
-    /**
-     *
-     * Updates this WebView with the specified properties
-     *
-     * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
-     * the same
-     *
-     * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
-     * false otherwise
-     *
-     * _＠example_
-     *
-     * ```typescript
-     * updateWebViewDefinition({ title: `Hello ${name}` });
-     * ```
-     */
+    /** JSDOC DESTINATION UpdateWebViewDefinition */
     updateWebViewDefinition: UpdateWebViewDefinition;
   };
   /** Options that affect what `webViews.getWebView` does */
@@ -645,68 +572,9 @@ declare module 'shared/global-this.model' {
     var webViewComponent: FunctionComponent<WebViewProps>;
     /** The id of the current web view. Only used in WebView iframes. */
     var webViewId: WebViewId;
-    /**
-     *
-     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
-     * a function to set it. Use similarly to `useState`.
-     *
-     * Only used in WebView iframes.
-     *
-     * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
-     * key.
-     *
-     * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
-     * updated every render
-     *
-     * _＠param_ `defaultStateValue` Value to use if the web view state didn't contain a value for the
-     * given 'stateKey'
-     *
-     * Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-     * to re-run with its new value. Running `resetWebViewState()` will always update the state value
-     * returned to the latest `defaultStateValue`, and changing the `stateKey` will use the latest
-     * `defaultStateValue`. However, if `defaultStateValue` is changed while a state is
-     * `defaultStateValue` (meaning it is reset and has no value), the returned state value will not be
-     * updated to the new `defaultStateValue`.
-     *
-     * _＠returns_ `[stateValue, setStateValue, resetWebViewState]`
-     *
-     * - `webViewStateValue`: The current value for the web view state at the key specified or
-     *   `defaultStateValue` if a state was not found
-     * - `setWebViewState`: Function to use to update the web view state value at the key specified
-     * - `resetWebViewState`: Function that removes the web view state and resets the value to
-     *   `defaultStateValue`
-     *
-     * _＠example_
-     *
-     * ```typescript
-     * const [lastPersonSeen, setLastPersonSeen] = useWebViewState('lastSeen', 'No one');
-     * ```
-     */
+    /** JSDOC DESTINATION UseWebViewStateHook */
     var useWebViewState: UseWebViewStateHook;
-    /**
-     *
-     * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
-     * value and a function to set the value for both the SerializedVerseRef and the
-     * {@link ScrollGroupId} with which this web view is synced (using this web view's
-     * `scrollGroupScrRef` property). Use similarly to `useState`.
-     *
-     * Only used in WebView iframes. Please use `useScrollGroupScrRef` outside of WebViews.
-     *
-     * _＠returns_ `[scrRef, setScrRef, scrollGroupId, setScrollGroupId]`
-     *
-     * - `scrRef`: The current value for the Scripture reference this web view is on
-     * - `setScrRef`: Function to use to update the Scripture reference this web view is on. If it is
-     *   synced to a scroll group, sets the scroll group's Scripture reference
-     * - `scrollGroupId`: The current value for the scroll group this web view is synced with. If not
-     *   synced to a scroll group, this is `undefined`
-     * - `setScrollGroupId`: Function to use to update the scroll group with which this web view is synced
-     *
-     * _＠example_
-     *
-     * ```typescript
-     * const [scrRef, setScrRef, scrollGroupId, setScrollGroupId] = useWebViewScrollGroupScrRef();
-     * ```
-     */
+    /** JSDOC DESTINATION UseWebViewScrollGroupScrRefHook */
     var useWebViewScrollGroupScrRef: UseWebViewScrollGroupScrRefHook;
     /**
      * Retrieve the value from web view state with the given 'stateKey', if it exists. Otherwise
@@ -722,30 +590,9 @@ declare module 'shared/global-this.model' {
       webViewId: string,
       webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
     ) => boolean;
-    /**
-     *
-     * Gets the saved properties on this WebView's WebView definition
-     *
-     * _＠returns_ saved properties this WebView's WebView definition or undefined if not found for some
-     * reason
-     */
+    /** JSDOC DESTINATION GetSavedWebViewDefinition */
     var getSavedWebViewDefinition: GetSavedWebViewDefinition;
-    /**
-     *
-     * Updates this WebView with the specified properties
-     *
-     * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
-     * the same
-     *
-     * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
-     * false otherwise
-     *
-     * _＠example_
-     *
-     * ```typescript
-     * updateWebViewDefinition({ title: `Hello ${name}` });
-     * ```
-     */
+    /** JSDOC DESTINATION UpdateWebViewDefinition */
     var updateWebViewDefinition: UpdateWebViewDefinition;
     /** Indicates whether test code meant just for developers to see should be run */
     var isNoisyDevModeEnabled: boolean;
@@ -804,6 +651,7 @@ declare module 'shared/services/logger.service' {
    */
   export function formatLog(message: string, serviceName: string, tag?: string): string;
   /**
+   * JSDOC SOURCE logger
    *
    * All extensions and services should use this logger to provide a unified output of logs
    */
@@ -1255,7 +1103,8 @@ declare module 'client/services/web-socket.interface' {
 declare module 'renderer/services/renderer-web-socket.service' {
   /** Once our network is running, run this to stop extensions from connecting to it directly */
   export const blockWebSocketsToPapiNetwork: () => void;
-  /** This wraps the browser's WebSocket implementation to provide
+  /**
+   * JSDOC SOURCE PapiRendererWebSocket This wraps the browser's WebSocket implementation to provide
    * better control over internet access. It is isomorphic with the standard WebSocket, so it should
    * act as a drop-in replacement.
    *
@@ -1546,6 +1395,7 @@ declare module 'shared/services/network.service' {
     getNetworkEvent: typeof getNetworkEvent;
   }
   /**
+   * JSDOC SOURCE papiNetworkService
    *
    * Service that provides a way to send and receive network events
    */
@@ -1637,6 +1487,7 @@ declare module 'shared/services/network-object.service' {
     hasKnown: typeof hasKnown;
   }
   /**
+   * JSDOC SOURCE networkObjectService
    *
    * Network objects are distributed objects within PAPI for TS/JS objects. @see
    * https://en.wikipedia.org/wiki/Distributed_object
@@ -1666,34 +1517,7 @@ declare module 'shared/services/network-object.service' {
    */
   export const networkObjectService: NetworkObjectService;
   export default networkObjectService;
-  /**
-   *
-   * Network objects are distributed objects within PAPI for TS/JS objects. @see
-   * https://en.wikipedia.org/wiki/Distributed_object
-   *
-   * Objects registered via {@link networkObjectService.set} are retrievable using
-   * {@link networkObjectService.get}.
-   *
-   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
-   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
-   * the registered object are proxied except for constructors, `dispose`, and functions starting with
-   * `on` since those should be events (which are not intended to be proxied) based on our naming
-   * convention. If you don't want a function to be proxied, don't make it a property of the
-   * registered object.
-   *
-   * Functions on a network object will be called asynchronously by other processes regardless of
-   * whether the functions are synchronous or asynchronous, so it is best to make them all
-   * asynchronous. All shared functions' arguments and return values must be serializable to be called
-   * across processes.
-   *
-   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
-   * of that service, and only that service, to call `dispose` on that object when it is no longer
-   * intended to be shared with other services.
-   *
-   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
-   * event handler will be called. After an object is disposed, calls to its functions will no longer
-   * be proxied to the original object.
-   */
+  /** JSDOC DESTINATION networkObjectService */
   export const minimalNetworkObjectService: MinimalNetworkObjectService;
 }
 declare module 'shared/models/network-object.model' {
@@ -2170,6 +1994,7 @@ declare module 'shared/models/data-provider-engine.model' {
   } from 'shared/models/data-provider.model';
   import { NetworkableObject } from 'shared/models/network-object.model';
   /**
+   * JSDOC SOURCE DataProviderEngineNotifyUpdate
    *
    * Method to run to send clients updates for a specific data type outside of the `set<data_type>`
    * method. papi overwrites this function on the DataProviderEngine itself to emit an update based on
@@ -2218,43 +2043,7 @@ declare module 'shared/models/data-provider-engine.model' {
    * @see {@link IDataProviderEngine} for more information on using this type.
    */
   export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
-    /**
-     *
-     * Method to run to send clients updates for a specific data type outside of the `set<data_type>`
-     * method. papi overwrites this function on the DataProviderEngine itself to emit an update based on
-     * the `updateInstructions` and then run the original `notifyUpdateMethod` from the
-     * `DataProviderEngine`.
-     *
-     * _＠example_ To run `notifyUpdate` function so it updates the Verse and Heresy data types (in a
-     * data provider engine):
-     *
-     * ```typescript
-     * this.notifyUpdate(['Verse', 'Heresy']);
-     * ```
-     *
-     * _＠example_ You can log the manual updates in your data provider engine by specifying the
-     * following `notifyUpdate` function in the data provider engine:
-     *
-     * ```typescript
-     * notifyUpdate(updateInstructions) {
-     *   papi.logger.info(updateInstructions);
-     * }
-     * ```
-     *
-     * Note: This function's return is treated the same as the return from `set<data_type>`
-     *
-     * _＠param_ `updateInstructions` Information that papi uses to interpret whether to send out
-     * updates. Defaults to `'*'` (meaning send updates for all data types) if parameter
-     * `updateInstructions` is not provided or is undefined. Otherwise returns `updateInstructions`.
-     * papi passes the interpreted update value into this `notifyUpdate` function. For example, running
-     * `this.notifyUpdate()` will call the data provider engine's `notifyUpdate` with
-     * `updateInstructions` of `'*'`.
-     *
-     * _＠see_ {@link DataProviderUpdateInstructions} for more info on the `updateInstructions` parameter
-     *
-     * WARNING: Do not update a data type in its `get<data_type>` method (unless you make a base case)!
-     * It will create a destructive infinite loop.
-     */
+    /** JSDOC DESTINATION DataProviderEngineNotifyUpdate */
     notifyUpdate: DataProviderEngineNotifyUpdate<TDataTypes>;
   };
   /**
@@ -2336,6 +2125,7 @@ declare module 'shared/models/data-provider-engine.model' {
     Partial<WithNotifyUpdate<TDataTypes>>;
   export default IDataProviderEngine;
   /**
+   * JSDOC SOURCE DataProviderEngine
    *
    * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
    * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
@@ -2463,10 +2253,7 @@ declare module 'shared/models/network-object-status.service-model' {
      */
     getAllNetworkObjectDetails: () => Promise<Record<string, NetworkObjectDetails>>;
   }
-  /**
-   *
-   * Provides functions related to the set of available network objects
-   */
+  /** JSDOC DESTINATION networkObjectStatusService */
   export interface NetworkObjectStatusServiceType extends NetworkObjectStatusRemoteServiceType {
     /**
      * Get a promise that resolves when a network object is registered or rejects if a timeout is hit
@@ -2489,6 +2276,7 @@ declare module 'shared/models/network-object-status.service-model' {
 declare module 'shared/services/network-object-status.service' {
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   /**
+   * JSDOC SOURCE networkObjectStatusService
    *
    * Provides functions related to the set of available network objects
    */
@@ -2699,6 +2487,7 @@ declare module 'shared/services/web-view.service-model' {
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
   import { NetworkObject } from 'shared/models/network-object.model';
   /**
+   * JSDOC SOURCE papiWebViewService
    *
    * Service exposing various functions related to using webViews
    *
@@ -2928,6 +2717,7 @@ declare module 'shared/services/web-view-provider.service' {
   }
   export const webViewProviderService: WebViewProviderService;
   /**
+   * JSDOC SOURCE papiWebViewProviderService
    *
    * Interface for registering webView providers, registering webView controllers, and performing
    * privileged interactions with web views
@@ -2944,6 +2734,7 @@ declare module 'shared/models/web-view-factory.model' {
     WebViewDefinition,
   } from 'shared/models/web-view.model';
   /**
+   * JSDOC SOURCE WebViewFactory
    *
    * A partial implementation of {@link IWebViewProvider} that includes creating
    * {@link WebViewControllers} for each web view served by the web view provider. This class handles
@@ -3668,6 +3459,7 @@ declare module 'shared/services/command.service' {
     ...args: Parameters<CommandHandlers[CommandName]>
   ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
   /**
+   * JSDOC SOURCE commandService
    *
    * The command service allows you to exchange messages with other components in the platform. You
    * can register a command that other services and extensions can send you. You can send commands to
@@ -3682,6 +3474,7 @@ declare module 'shared/services/internet.service' {
     fetch: typeof papiFetch;
   }
   /**
+   * JSDOC SOURCE internetService
    *
    * Service that provides a way to call `fetch` since the original function is not available
    */
@@ -3713,10 +3506,7 @@ declare module 'shared/models/notification.service-model' {
     /** Optional ID of a previous notification to update instead of showing a new notification */
     notificationId?: string | number;
   }
-  /**
-   *
-   * Service that sends notifications to users in the UI
-   */
+  /** JSDOC DESTINATION notificationService */
   export interface INotificationService {
     /**
      * Send a notification to the user. If a notification with the same ID is already showing, it will
@@ -3732,6 +3522,7 @@ declare module 'shared/models/notification.service-model' {
 declare module 'shared/services/notification.service' {
   import { type INotificationService } from 'shared/models/notification.service-model';
   /**
+   * JSDOC SOURCE notificationService
    *
    * Service that sends notifications to users in the UI
    */
@@ -3753,6 +3544,7 @@ declare module 'shared/services/data-provider.service' {
   } from 'papi-shared-types';
   import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
   /**
+   * JSDOC SOURCE DataProviderServiceHasKnown
    *
    * Indicate if we are aware of an existing data provider with the given name. If a data provider
    * with the given name is somewhere else on the network, this function won't tell you about it
@@ -3760,6 +3552,7 @@ declare module 'shared/services/data-provider.service' {
    */
   function hasKnown(providerName: string): boolean;
   /**
+   * JSDOC SOURCE DataProviderServiceDecoratorsIgnore
    *
    * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
    * papi will not layer over these methods or consider them to be data type methods
@@ -3807,6 +3600,7 @@ declare module 'shared/services/data-provider.service' {
    */
   function ignore(target: object, member: string): void;
   /**
+   * JSDOC SOURCE DataProviderServiceDecoratorsDoNotNotify
    *
    * Decorator function that marks a data provider engine `set<data_type>` method not to automatically
    * emit an update and notify subscribers of a change to the data. papi will still consider the
@@ -3856,6 +3650,7 @@ declare module 'shared/services/data-provider.service' {
    */
   function doNotNotify(target: object, member: string): void;
   /**
+   * JSDOC SOURCE DataProviderServiceDecorators
    *
    * A collection of decorators to be used with the data provider service
    *
@@ -3873,73 +3668,13 @@ declare module 'shared/services/data-provider.service' {
    * decorator.
    */
   const decorators: {
-    /**
-     *
-     * Decorator function that marks a data provider engine `set___` or `get___` method to be ignored.
-     * papi will not layer over these methods or consider them to be data type methods
-     *
-     * @example Use this as a decorator on a class's method:
-     *
-     * ```typescript
-     * class MyDataProviderEngine {
-     * ＠papi.dataProviders.decorators.ignore
-     * async getInternal() {}
-     * }
-     * ```
-     *
-     * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
-     * code blocks, so a different unicode character was used. Please use a normal `@` when using a
-     * decorator.
-     *
-     * OR
-     *
-     * @example Call this function signature on an object's method:
-     *
-     * ```typescript
-     * const myDataProviderEngine = {
-     *   async getInternal() {},
-     * };
-     * papi.dataProviders.decorators.ignore(dataProviderEngine.getInternal);
-     * ```
-     *
-     * @param method The method to ignore
-     */
+    /** JSDOC DESTINATION DataProviderServiceDecoratorsIgnore */
     ignore: typeof ignore;
-    /**
-     *
-     * Decorator function that marks a data provider engine `set<data_type>` method not to automatically
-     * emit an update and notify subscribers of a change to the data. papi will still consider the
-     * `set<data_type>` method to be a data type method, but it will not layer over it to emit updates.
-     *
-     * @example Use this as a decorator on a class's method:
-     *
-     * ```typescript
-     * class MyDataProviderEngine {
-     * ＠papi.dataProviders.decorators.doNotNotify
-     * async setVerse() {}
-     * }
-     * ```
-     *
-     * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
-     * code blocks, so a different unicode character was used. Please use a normal `@` when using a
-     * decorator.
-     *
-     * OR
-     *
-     * @example Call this function signature on an object's method:
-     *
-     * ```typescript
-     * const myDataProviderEngine = {
-     *   async setVerse() {},
-     * };
-     * papi.dataProviders.decorators.ignore(dataProviderEngine.setVerse);
-     * ```
-     *
-     * @param method The method not to layer over to send an automatic update
-     */
+    /** JSDOC DESTINATION DataProviderServiceDecoratorsDoNotNotify */
     doNotNotify: typeof doNotNotify;
   };
   /**
+   * JSDOC SOURCE DataProviderServiceRegisterEngine
    *
    * Creates a data provider to be shared on the network layering over the provided data provider
    * engine.
@@ -4002,6 +3737,7 @@ declare module 'shared/services/data-provider.service' {
       | undefined,
   ): Promise<IDisposableDataProvider<IDataProvider<TDataTypes>>>;
   /**
+   * JSDOC SOURCE DataProviderServiceGet
    *
    * Get a data provider that has previously been set up
    *
@@ -4027,70 +3763,19 @@ declare module 'shared/services/data-provider.service' {
     providerName: string,
   ): Promise<T | undefined>;
   export interface DataProviderService {
-    /**
-     *
-     * Indicate if we are aware of an existing data provider with the given name. If a data provider
-     * with the given name is somewhere else on the network, this function won't tell you about it
-     * unless something else in the existing process is subscribed to it.
-     */
+    /** JSDOC DESTINATION DataProviderServiceHasKnown */
     hasKnown: typeof hasKnown;
-    /**
-     *
-     * Creates a data provider to be shared on the network layering over the provided data provider
-     * engine.
-     *
-     * @param providerName Name this data provider should be called on the network
-     * @param dataProviderEngine The object to layer over with a new data provider object
-     * @param dataProviderType String to send in a network event to clarify what type of data provider
-     *   is represented by this engine. For generic data providers, the default value of `dataProvider`
-     *   can be used. For data provider types that have multiple instances (e.g., project data
-     *   providers), a unique type name should be used to distinguish from generic data providers.
-     * @param dataProviderAttributes Optional object that will be sent in a network event to provide
-     *   additional metadata about the data provider represented by this engine.
-     *
-     *   WARNING: registering a dataProviderEngine mutates the provided object. Its `notifyUpdate` and
-     *   `set` methods are layered over to facilitate data provider subscriptions.
-     * @returns The data provider including control over disposing of it. Note that this data provider
-     *   is a new object distinct from the data provider engine passed in.
-     */
+    /** JSDOC DESTINATION DataProviderServiceRegisterEngine */
     registerEngine: typeof registerEngine;
-    /**
-     *
-     * Get a data provider that has previously been set up
-     *
-     * @param providerName Name of the desired data provider
-     * @returns The data provider with the given name if one exists, undefined otherwise
-     */
+    /** JSDOC DESTINATION DataProviderServiceGet */
     get: typeof get;
-    /**
-     *
-     * A collection of decorators to be used with the data provider service
-     *
-     * @example To use the `ignore` a decorator on a class's method:
-     *
-     * ```typescript
-     * class MyDataProviderEngine {
-     * ＠papi.dataProviders.decorators.ignore
-     * async getInternal() {}
-     * }
-     * ```
-     *
-     * WARNING: Do not copy and paste this example. The `@` symbol does not render correctly in JSDoc
-     * code blocks, so a different unicode character was used. Please use a normal `@` when using a
-     * decorator.
-     */
+    /** JSDOC DESTINATION DataProviderServiceDecorators */
     decorators: typeof decorators;
-    /**
-     *
-     * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
-     * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
-     * function in order to use `notifyUpdate`.
-     *
-     * @see {@link IDataProviderEngine} for more information on extending this class.
-     */
+    /** JSDOC DESTINATION DataProviderEngine */
     DataProviderEngine: typeof DataProviderEngine;
   }
   /**
+   * JSDOC SOURCE dataProviderService
    *
    * Service that allows extensions to send and receive data to/from other extensions
    */
@@ -4173,6 +3858,7 @@ declare module 'shared/models/project-data-provider-factory.interface' {
    */
   export interface IProjectDataProviderFactory extends Dispose {
     /**
+     * JSDOC SOURCE IProjectDataProviderFactoryGetAvailableProjects
      *
      * Get metadata about all projects that can be served by PDPs created by this PDP factory.
      *
@@ -4237,6 +3923,7 @@ declare module 'shared/models/project-lookup.service-model' {
    */
   export function getPDPFactoryIdFromNetworkObjectName(pdpFactoryNetworkObjectName: string): string;
   /**
+   * JSDOC SOURCE projectLookupService
    *
    * Provides metadata for projects known by the platform
    *
@@ -4392,7 +4079,7 @@ declare module 'shared/models/project-lookup.service-model' {
   };
 }
 declare module 'shared/services/project-lookup.service' {
-  export const projectLookupService: import('shared/models/project-lookup.service-model').ProjectLookupServiceType;
+  export const projectLookupService: import('@shared/models/project-lookup.service-model').ProjectLookupServiceType;
   export default projectLookupService;
 }
 declare module 'shared/models/project-data-provider-engine-factory.model' {
@@ -4431,31 +4118,7 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
   export interface IProjectDataProviderEngineFactory<
     SupportedProjectInterfaces extends ProjectInterfaces[],
   > {
-    /**
-     *
-     * Get metadata about all projects that can be served by PDPs created by this PDP factory.
-     *
-     * If this is a Base PDP Factory, this method should return this PDP Factory's own unique project
-     * IDs.
-     *
-     * If this is a Layering PDP Factory, this method should call
-     * `papi.projectLookup.getMetadataForAllProjects` with some set of metadata filters in order to
-     * determine which projects it can layer over. The set of metadata filters relevant to this PDP
-     * Factory **absolutely must** be merged with the `layeringFilters` provided using
-     * `papi.projectLookup.mergeMetadataFilters`, or it will get into an infinite loop of calling
-     * other layering PDPs.
-     *
-     * WARNING: If this is a Layering PDP Factory, it **absolutely must** merge its metadata filters
-     * with `layeringFilters` provided using `papi.projectLookup.mergeMetadataFilters`! Otherwise you
-     * will cause an infinite loop that will break things.
-     *
-     * @param layeringFilters If applicable, filters used to prevent this Layering PDP Factory from
-     *   entering an infinite loop with another Layering PDP Factory. You **absolutely must** merge
-     *   these filters with your own filters using `papi.projectLookup.mergeMetadataFilters` when
-     *   calling `papi.projectLookup.getMetadataForAllProjects` inside this method. If you are not
-     *   calling `getMetadataForAllProjects` inside this method (likely if this is a Base PDPF), you
-     *   can safely ignore this parameter.
-     */
+    /** JSDOC DESTINATION IProjectDataProviderFactoryGetAvailableProjects */
     getAvailableProjects(
       layeringFilters?: ProjectMetadataFilterOptions,
     ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
@@ -4473,6 +4136,7 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
     ): Promise<IProjectDataProviderEngine<SupportedProjectInterfaces>>;
   }
   /**
+   * JSDOC SOURCE LayeringProjectDataProviderEngineFactory
    *
    * Abstract class with partial implementation of {@link IProjectDataProviderEngineFactory}
    * specifically for Layering PDPFs. You can extend this class to make creating a Layering PDPF
@@ -4600,6 +4264,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
       UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
     >;
   /**
+   * JSDOC SOURCE ProjectDataProviderEngine
    *
    * Abstract class that provides a placeholder `notifyUpdate` for Project Data Provider Engine
    * classes. If a Project Data Provider Engine class extends this class, it doesn't have to specify
@@ -4698,6 +4363,7 @@ declare module 'shared/models/base-project-data-provider-engine.model' {
       UnionToIntersection<ProjectInterfaceDataTypes[SupportedProjectInterfaces[number]]> & {}
     >;
   /**
+   * JSDOC SOURCE BaseProjectDataProviderEngine
    *
    * Abstract class that provides a placeholder `notifyUpdate` for Base Project Data Provider Engine
    * classes. If a Base Project Data Provider Engine class extends this class, it doesn't have to
@@ -4778,6 +4444,7 @@ declare module 'shared/services/project-data-provider.service' {
     get: typeof get;
   }
   /**
+   * JSDOC SOURCE papiBackendProjectDataProviderService
    *
    * Service that registers and gets project data providers
    */
@@ -4786,6 +4453,7 @@ declare module 'shared/services/project-data-provider.service' {
     get: typeof get;
   }
   /**
+   * JSDOC SOURCE papiFrontendProjectDataProviderService
    *
    * Service that gets project data providers
    */
@@ -5109,6 +4777,7 @@ declare module 'extension-host/services/extension-storage.service' {
     deleteUserData: typeof deleteUserData;
   }
   /**
+   * JSDOC SOURCE extensionStorageService
    *
    * This service provides extensions in the extension host the ability to read/write data based on
    * the extension identity and current user (as identified by the OS). This service will not work
@@ -5319,6 +4988,7 @@ declare module 'shared/services/dialog.service-model' {
     SelectProjectDialogOptions,
   } from 'renderer/components/dialogs/dialog-definition.model';
   /**
+   * JSDOC SOURCE dialogService
    *
    * Prompt the user for responses with dialogs
    */
@@ -5650,6 +5320,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
     maximumOpenDialogs?: number;
   };
   /**
+   * JSDOC SOURCE useDialogCallback
    *
    * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
    * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
@@ -5730,74 +5401,7 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
     ) => void,
     rejectCallback: (error: unknown, dialogType: DialogTabType, options: DialogOptions) => void,
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
-  /**
-   *
-   * Enables using `papi.dialogs.showDialog` in React more easily. Returns a callback to run that will
-   * open a dialog with the provided `dialogType` and `options` then run the `resolveCallback` with
-   * the dialog response or `rejectCallback` if there is an error. By default, only one dialog can be
-   * open at a time.
-   *
-   * If you need to open multiple dialogs and track which dialog is which, you can set
-   * `options.shouldOpenMultipleDialogs` to `true` and add a counter to the `options` when calling the
-   * callback. Then `resolveCallback` will be resolved with that options object including your
-   * counter.
-   *
-   * @type `DialogTabType` The dialog type you are using. Should be inferred by parameters
-   * @param dialogType Dialog type you want to show on the screen
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. Calling the callback will always use the latest
-   *   `dialogType`.
-   * @param options Various options for configuring the dialog that shows and this hook. If an
-   *   `options` parameter is also provided to the returned `showDialog` callback, those
-   *   callback-provided `options` merge over these hook-provided `options`
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. Calling the callback will always use the latest
-   *   `options`.
-   * @param resolveCallback `(response, dialogType, options)` The function that will be called if the
-   *   dialog request resolves properly
-   *
-   *   - `response` - the resolved value of the dialog call. Either the user's response or `undefined` if
-   *       the user cancels
-   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
-   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
-   *       consists of the `options` provided to the returned `showDialog` callback merged over the
-   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
-   *       properties
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. When the dialog resolves, it will always call the
-   *   latest `resolveCallback`.
-   * @param rejectCallback `(error, dialogType, options)` The function that will be called if the
-   *   dialog request throws an error
-   *
-   *   - `error` - the error thrown while calling the dialog
-   *   - `dialogType` - the value of `dialogType` at the time that this dialog was called
-   *   - `options` the `options` provided to the dialog at the time that this dialog was called. This
-   *       consists of the `options` provided to the returned `showDialog` callback merged over the
-   *       `options` provided to the hook and additionally contains {@link UseDialogCallbackOptions}
-   *       properties
-   *
-   *   Note: this parameter is internally assigned to a `ref`, so changing it will not cause any hooks
-   *   to re-run with its new value. This means that updating this parameter will not cause a new
-   *   callback to be returned. However, because of the nature of calling dialogs, this has no adverse
-   *   effect on the functionality of this hook. If the dialog throws an error, it will always call
-   *   the latest `rejectCallback`.
-   * @returns `showDialog(options?)` - callback to run to show the dialog to prompt the user for a
-   *   response
-   *
-   *   - `optionsOverrides?` - `options` object you may specify that will merge over the `options` you
-   *       provide to the hook before passing to the dialog. All properties are optional, so you may
-   *       specify as many or as few properties here as you want to overwrite the properties in the
-   *       `options` you provide to the hook
-   */
+  /** JSDOC DESTINATION useDialogCallback */
   export function useDialogCallback<
     DialogTabType extends DialogTabTypes,
     DialogOptions extends DialogTypes[DialogTabType]['options'],
@@ -5834,14 +5438,11 @@ declare module 'shared/services/localization.service-model' {
     localizeKeys: LocalizeKey[];
     locales?: string[];
   };
-  /**
-   *
-   * This name is used to register the localization data provider on the papi. You can use this name
-   * to find the data provider when accessing it using the useData hook
-   */
+  /** JSDOC DESTINATION localizationServiceProviderName */
   export const localizationServiceProviderName = 'platform.localizationDataServiceDataProvider';
   export const localizationServiceObjectToProxy: Readonly<{
     /**
+     * JSDOC SOURCE localizationServiceProviderName
      *
      * This name is used to register the localization data provider on the papi. You can use this name
      * to find the data provider when accessing it using the useData hook
@@ -5863,6 +5464,7 @@ declare module 'shared/services/localization.service-model' {
     }
   }
   /**
+   * JSDOC SOURCE localizationDataService
    *
    * Service that allows to get and store localizations
    */
@@ -5946,20 +5548,10 @@ declare module 'shared/services/app.service-model' {
      * @example `1.2.3-ordered.info.here+additional.unordered.info.here123`
      */
     version: string;
-    /**
-     *
-     * URI scheme that this application handles. Navigating to a URI with this scheme will open this
-     * application. This application will handle the URI as it sees fit. For example, the URI may be
-     * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
-     *
-     * This is the same as {@link APP_NAME}.
-     */
+    /** JSDOC DESTINATION appUriScheme */
     uriScheme: string;
   }>;
-  /**
-   *
-   * Provides information about this app like name and version.
-   */
+  /** JSDOC DESTINATION appService */
   export interface IAppService {
     /** Retrieve information about the application that is currently running like name and version. */
     getAppInfo(): Promise<AppInfo>;
@@ -5981,6 +5573,7 @@ declare module 'shared/data/platform.data' {
   /** Version of this application in [semver](https://semver.org/) format. */
   export const APP_VERSION: string;
   /**
+   * JSDOC SOURCE appUriScheme
    *
    * URI scheme that this application handles. Navigating to a URI with this scheme will open this
    * application. This application will handle the URI as it sees fit. For example, the URI may be
@@ -6083,20 +5676,18 @@ declare module 'shared/services/settings.service-model' {
   import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
   /** Name prefix for registered commands that call settings validators */
   export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
-  /**
-   *
-   * This name is used to register the settings service data provider on the papi. You can use this
-   * name to find the data provider when accessing it using the useData hook
-   */
+  /** JSDOC DESTINATION settingsServiceDataProviderName */
   export const settingsServiceDataProviderName = 'platform.settingsServiceDataProvider';
   export const settingsServiceObjectToProxy: Readonly<{
     /**
+     * JSDOC SOURCE settingsServiceDataProviderName
      *
      * This name is used to register the settings service data provider on the papi. You can use this
      * name to find the data provider when accessing it using the useData hook
      */
     dataProviderName: 'platform.settingsServiceDataProvider';
     /**
+     * JSDOC SOURCE settingsServiceRegisterValidator
      *
      * Registers a function that validates whether a new setting value is allowed to be set.
      *
@@ -6145,7 +5736,7 @@ declare module 'shared/services/settings.service-model' {
       [settingsServiceDataProviderName]: ISettingsService;
     }
   }
-  /** */
+  /** JSDOC SOURCE settingsService */
   export type ISettingsService = {
     /**
      * Retrieves the value of the specified setting
@@ -6204,14 +5795,7 @@ declare module 'shared/services/settings.service-model' {
       callback: (newSetting: SettingTypes[SettingName]) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
-    /**
-     *
-     * Registers a function that validates whether a new setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
+    /** JSDOC DESTINATION settingsServiceRegisterValidator */
     registerValidator<SettingName extends SettingNames>(
       key: SettingName,
       validator: SettingValidator<SettingName>,
@@ -6300,20 +5884,14 @@ declare module 'shared/services/project-settings.service-model' {
   export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
   export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
   export const projectSettingsServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * Registers a function that validates whether a new project setting value is allowed to be set.
-     *
-     * @param key The string id of the setting to validate
-     * @param validator Function to call to validate the new setting value
-     * @returns Unsubscriber that should be called whenever the providing extension is deactivated
-     */
+    /** JSDOC DESTINATION projectSettingsServiceRegisterValidator */
     registerValidator: <ProjectSettingName extends keyof ProjectSettingTypes>(
       key: ProjectSettingName,
       validator: ProjectSettingValidator<ProjectSettingName>,
     ) => Promise<UnsubscriberAsync>;
   }>;
   /**
+   * JSDOC SOURCE projectSettingsService
    *
    * Provides utility functions that project data providers should call when handling project settings
    */
@@ -6355,6 +5933,7 @@ declare module 'shared/services/project-settings.service-model' {
       key: ProjectSettingName,
     ): Promise<ProjectSettingTypes[ProjectSettingName]>;
     /**
+     * JSDOC SOURCE projectSettingsServiceRegisterValidator
      *
      * Registers a function that validates whether a new project setting value is allowed to be set.
      *
@@ -6408,7 +5987,7 @@ declare module 'shared/services/project-settings.service-model' {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
 }
-declare module '@papi/core' {
+declare module 'shared/services/papi-core.service' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */
   const core: {};
   export default core;
@@ -6505,15 +6084,12 @@ declare module 'shared/services/menu-data.service-model' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import { IDataProvider } from '@papi/core';
-  /**
-   *
-   * This name is used to register the menu data data provider on the papi. You can use this name to
-   * find the data provider when accessing it using the useData hook
-   */
+  import { IDataProvider } from 'shared/services/papi-core.service';
+  /** JSDOC DESTINATION menuDataServiceProviderName */
   export const menuDataServiceProviderName = 'platform.menuDataServiceDataProvider';
   export const menuDataServiceObjectToProxy: Readonly<{
     /**
+     * JSDOC SOURCE menuDataServiceProviderName
      *
      * This name is used to register the menu data data provider on the papi. You can use this name to
      * find the data provider when accessing it using the useData hook
@@ -6530,6 +6106,7 @@ declare module 'shared/services/menu-data.service-model' {
     }
   }
   /**
+   * JSDOC SOURCE menuDataService
    *
    * Service that allows to get and store menu data
    */
@@ -6537,6 +6114,7 @@ declare module 'shared/services/menu-data.service-model' {
     /** Rebuild the menus with the latest inputs from all extensions. */
     rebuildMenus(): Promise<void>;
     /**
+     * JSDOC SOURCE getMainMenu
      *
      * Get menu content for the main menu
      *
@@ -6544,13 +6122,7 @@ declare module 'shared/services/menu-data.service-model' {
      * @returns MultiColumnMenu object of main menu content
      */
     getMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
-    /**
-     *
-     * Get menu content for the main menu
-     *
-     * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of main menu content
-     */
+    /** JSDOC DESTINATION getMainMenu */
     getMainMenu(): Promise<MultiColumnMenu>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
@@ -6619,6 +6191,7 @@ declare module 'shared/services/menu-data.service' {
 declare module 'shared/services/scroll-group.service' {
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   /**
+   * JSDOC SOURCE scrollGroupService
    *
    * Provides functions related to scroll groups and Scripture references at those scroll groups
    */
@@ -6656,20 +6229,7 @@ declare module 'shared/services/project-settings.service' {
   export default projectSettingsService;
 }
 declare module 'shared/models/data-protection.service-model' {
-  /**
-   *
-   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
-   *
-   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
-   *
-   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
-   * them with `papi.storage` methods to store data safely.
-   *
-   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
-   * to be stored securely in local files. It is not intended to protect data passed over a network
-   * connection. Please note that using this service passes the unencrypted string between local
-   * processes using the PAPI WebSocket.
-   */
+  /** JSDOC DESTINATION dataProtectionService */
   export interface IDataProtectionService {
     /**
      * Encrypts a string using Electron's
@@ -6736,6 +6296,7 @@ declare module 'shared/models/data-protection.service-model' {
 declare module 'shared/services/data-protection.service' {
   import { IDataProtectionService } from 'shared/models/data-protection.service-model';
   /**
+   * JSDOC SOURCE dataProtectionService
    *
    * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
    *
@@ -6755,12 +6316,13 @@ declare module 'shared/services/data-protection.service' {
 declare module 'shared/services/app.service' {
   import { IAppService } from 'shared/services/app.service-model';
   /**
+   * JSDOC SOURCE appService
    *
    * Provides information about this app like name and version.
    */
   export const appService: IAppService;
 }
-declare module '@papi/backend' {
+declare module 'extension-host/services/papi-backend.service' {
   /**
    * Unified module for accessing API features in the extension host.
    *
@@ -6790,461 +6352,119 @@ declare module '@papi/backend' {
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
   import { INotificationService } from 'shared/models/notification.service-model';
   const papi: {
-    /**
-     *
-     * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
-     * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
-     * function in order to use `notifyUpdate`.
-     *
-     * @see {@link IDataProviderEngine} for more information on extending this class.
-     */
+    /** JSDOC DESTINATION DataProviderEngine */
     DataProviderEngine: typeof PapiDataProviderEngine;
-    /**
-     *
-     * Abstract class that provides a placeholder `notifyUpdate` for Project Data Provider Engine
-     * classes. If a Project Data Provider Engine class extends this class, it doesn't have to specify
-     * its own `notifyUpdate` function in order to use `notifyUpdate`.
-     *
-     * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
-     * `Setting` data type if needed like so:
-     *
-     * ```typescript
-     * this.notifyUpdate('Setting');
-     * ```
-     *
-     * @see {@link IProjectDataProviderEngine} for more information on extending this class.
-     */
+    /** JSDOC DESTINATION ProjectDataProviderEngine */
     ProjectDataProviderEngine: typeof PapiProjectDataProviderEngine;
-    /**
-     *
-     * Abstract class that provides a placeholder `notifyUpdate` for Base Project Data Provider Engine
-     * classes. If a Base Project Data Provider Engine class extends this class, it doesn't have to
-     * specify its own `notifyUpdate` function in order to use `notifyUpdate`.
-     *
-     * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
-     * `Setting` data type if needed like so:
-     *
-     * ```typescript
-     * this.notifyUpdate('Setting');
-     * ```
-     *
-     * @see {@link IBaseProjectDataProviderEngine} for more information on extending this class.
-     */
+    /** JSDOC DESTINATION BaseProjectDataProviderEngine */
     BaseProjectDataProviderEngine: typeof PapiBaseProjectDataProviderEngine;
-    /**
-     *
-     * Abstract class with partial implementation of {@link IProjectDataProviderEngineFactory}
-     * specifically for Layering PDPFs. You can extend this class to make creating a Layering PDPF
-     * easier.
-     *
-     * Extending this class automatically fulfills the special requirements for Layering PDPfs, so we
-     * highly recommend extending this class. Please see
-     * {@link IProjectDataProviderEngineFactory.getAvailableProjects} for more information on the
-     * requirements.
-     */
+    /** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
     LayeringProjectDataProviderEngineFactory: typeof PapiLayeringProjectDataProviderEngineFactory;
-    /**
-     *
-     * A partial implementation of {@link IWebViewProvider} that includes creating
-     * {@link WebViewControllers} for each web view served by the web view provider. This class handles
-     * registering, disposing, and making sure there is only one web view controller for each web view
-     * for you.
-     *
-     * You can create a new class extending this abstract class to create a web view provider that
-     * serves web views and web view controllers of a specific `webViewType` to facilitate interaction
-     * between those web views and other extensions. You can register it with the PAPI using
-     * `papi.webViewProviders.register`.
-     *
-     * If you want to change your existing `IWebViewProvider` from a plain object to extending this
-     * class, you will need to change your object's existing method named `getWebView`
-     * ({@link IWebViewProvider.getWebView}) to be named `getWebViewDefinition`
-     * ({@link WebViewFactory.getWebViewDefinition}), which is a drop-in replacement. You likely do NOT
-     * want to overwrite this class's `getWebView` because that will eliminate most of the benefits
-     * associated with using this class.
-     *
-     * @see {@link IWebViewProvider} for more information on extending this class.
-     */
+    /** JSDOC DESTINATION WebViewFactory */
     WebViewFactory: typeof PapiWebViewFactory;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
-    /**
-     *
-     * Provides information about this app like name and version.
-     */
-    app: import('shared/services/app.service-model').IAppService;
-    /**
-     *
-     * The command service allows you to exchange messages with other components in the platform. You
-     * can register a command that other services and extensions can send you. You can send commands to
-     * other services and extensions that have registered commands.
-     */
+    /** JSDOC DESTINATION appService */
+    app: import('@shared/services/app.service-model').IAppService;
+    /** JSDOC DESTINATION commandService */
     commands: typeof commandService;
-    /**
-     *
-     * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
-     *
-     * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
-     *
-     * Note that these encryption mechanisms are not transferrable between computers. We recommend using
-     * them with `papi.storage` methods to store data safely.
-     *
-     * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
-     * to be stored securely in local files. It is not intended to protect data passed over a network
-     * connection. Please note that using this service passes the unencrypted string between local
-     * processes using the PAPI WebSocket.
-     */
-    dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
-    /**
-     *
-     * Service exposing various functions related to using webViews
-     *
-     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-     * HTML or React components.
-     */
+    /** JSDOC DESTINATION dataProtectionService */
+    dataProtection: import('@shared/models/data-protection.service-model').IDataProtectionService;
+    /** JSDOC DESTINATION papiWebViewService */
     webViews: WebViewServiceType;
-    /**
-     *
-     * Interface for registering webView providers, registering webView controllers, and performing
-     * privileged interactions with web views
-     */
+    /** JSDOC DESTINATION papiWebViewProviderService */
     webViewProviders: PapiWebViewProviderService;
-    /**
-     *
-     * Prompt the user for responses with dialogs
-     */
+    /** JSDOC DESTINATION dialogService */
     dialogs: DialogService;
-    /**
-     *
-     * Service that provides a way to send and receive network events
-     */
+    /** JSDOC DESTINATION papiNetworkService */
     network: PapiNetworkService;
-    /**
-     *
-     * Network objects are distributed objects within PAPI for TS/JS objects. @see
-     * https://en.wikipedia.org/wiki/Distributed_object
-     *
-     * Objects registered via {@link networkObjectService.set} are retrievable using
-     * {@link networkObjectService.get}.
-     *
-     * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
-     * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
-     * the registered object are proxied except for constructors, `dispose`, and functions starting with
-     * `on` since those should be events (which are not intended to be proxied) based on our naming
-     * convention. If you don't want a function to be proxied, don't make it a property of the
-     * registered object.
-     *
-     * Functions on a network object will be called asynchronously by other processes regardless of
-     * whether the functions are synchronous or asynchronous, so it is best to make them all
-     * asynchronous. All shared functions' arguments and return values must be serializable to be called
-     * across processes.
-     *
-     * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
-     * of that service, and only that service, to call `dispose` on that object when it is no longer
-     * intended to be shared with other services.
-     *
-     * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
-     * event handler will be called. After an object is disposed, calls to its functions will no longer
-     * be proxied to the original object.
-     */
+    /** JSDOC DESTINATION networkObjectService */
     networkObjects: MinimalNetworkObjectService;
-    /**
-     *
-     * Provides functions related to the set of available network objects
-     */
+    /** JSDOC DESTINATION networkObjectStatusService */
     networkObjectStatus: NetworkObjectStatusServiceType;
-    /**
-     *
-     * All extensions and services should use this logger to provide a unified output of logs
-     */
+    /** JSDOC DESTINATION logger */
     logger: import('electron-log').MainLogger & {
       default: import('electron-log').MainLogger;
     };
-    /**
-     *
-     * Service that provides a way to call `fetch` since the original function is not available
-     */
+    /** JSDOC DESTINATION internetService */
     internet: InternetService;
-    /**
-     *
-     * Service that allows extensions to send and receive data to/from other extensions
-     */
+    /** JSDOC DESTINATION dataProviderService */
     dataProviders: DataProviderService;
-    /**
-     *
-     * Service that registers and gets project data providers
-     */
+    /** JSDOC DESTINATION papiBackendProjectDataProviderService */
     projectDataProviders: PapiBackendProjectDataProviderService;
-    /**
-     *
-     * Provides metadata for projects known by the platform
-     *
-     * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
-     * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
-     * their types are synchronous locally.
-     */
+    /** JSDOC DESTINATION projectLookupService */
     projectLookup: ProjectLookupServiceType;
-    /**
-     *
-     * Provides utility functions that project data providers should call when handling project settings
-     */
+    /** JSDOC DESTINATION projectSettingsService */
     projectSettings: IProjectSettingsService;
-    /**
-     *
-     * This service provides extensions in the extension host the ability to read/write data based on
-     * the extension identity and current user (as identified by the OS). This service will not work
-     * within the renderer.
-     */
+    /** JSDOC DESTINATION extensionStorageService */
     storage: ExtensionStorageService;
-    /** */
+    /** JSDOC DESTINATION settingsService */
     settings: ISettingsService;
-    /**
-     *
-     * Service that allows to get and store menu data
-     */
+    /** JSDOC DESTINATION menuDataService */
     menuData: IMenuDataService;
-    /**
-     *
-     * Provides functions related to scroll groups and Scripture references at those scroll groups
-     */
+    /** JSDOC DESTINATION scrollGroupService */
     scrollGroups: IScrollGroupService;
-    /**
-     *
-     * Service that allows to get and store localizations
-     */
+    /** JSDOC DESTINATION localizationDataService */
     localization: ILocalizationService;
-    /**
-     *
-     * Service that sends notifications to users in the UI
-     */
+    /** JSDOC DESTINATION notificationService */
     notifications: INotificationService;
   };
   export default papi;
-  /**
-   *
-   * Abstract class that provides a placeholder `notifyUpdate` for data provider engine classes. If a
-   * data provider engine class extends this class, it doesn't have to specify its own `notifyUpdate`
-   * function in order to use `notifyUpdate`.
-   *
-   * @see {@link IDataProviderEngine} for more information on extending this class.
-   */
+  /** JSDOC DESTINATION DataProviderEngine */
   export const DataProviderEngine: typeof PapiDataProviderEngine;
-  /**
-   *
-   * Abstract class that provides a placeholder `notifyUpdate` for Project Data Provider Engine
-   * classes. If a Project Data Provider Engine class extends this class, it doesn't have to specify
-   * its own `notifyUpdate` function in order to use `notifyUpdate`.
-   *
-   * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
-   * `Setting` data type if needed like so:
-   *
-   * ```typescript
-   * this.notifyUpdate('Setting');
-   * ```
-   *
-   * @see {@link IProjectDataProviderEngine} for more information on extending this class.
-   */
+  /** JSDOC DESTINATION ProjectDataProviderEngine */
   export const ProjectDataProviderEngine: typeof PapiProjectDataProviderEngine;
-  /**
-   *
-   * Abstract class that provides a placeholder `notifyUpdate` for Base Project Data Provider Engine
-   * classes. If a Base Project Data Provider Engine class extends this class, it doesn't have to
-   * specify its own `notifyUpdate` function in order to use `notifyUpdate`.
-   *
-   * Additionally, extending this class informs Intellisense that you can run `notifyUpdate` with the
-   * `Setting` data type if needed like so:
-   *
-   * ```typescript
-   * this.notifyUpdate('Setting');
-   * ```
-   *
-   * @see {@link IBaseProjectDataProviderEngine} for more information on extending this class.
-   */
+  /** JSDOC DESTINATION BaseProjectDataProviderEngine */
   export const BaseProjectDataProviderEngine: typeof PapiBaseProjectDataProviderEngine;
-  /**
-   *
-   * Abstract class with partial implementation of {@link IProjectDataProviderEngineFactory}
-   * specifically for Layering PDPFs. You can extend this class to make creating a Layering PDPF
-   * easier.
-   *
-   * Extending this class automatically fulfills the special requirements for Layering PDPfs, so we
-   * highly recommend extending this class. Please see
-   * {@link IProjectDataProviderEngineFactory.getAvailableProjects} for more information on the
-   * requirements.
-   */
+  /** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
   export const LayeringProjectDataProviderEngineFactory: typeof PapiLayeringProjectDataProviderEngineFactory;
-  /**
-   *
-   * A partial implementation of {@link IWebViewProvider} that includes creating
-   * {@link WebViewControllers} for each web view served by the web view provider. This class handles
-   * registering, disposing, and making sure there is only one web view controller for each web view
-   * for you.
-   *
-   * You can create a new class extending this abstract class to create a web view provider that
-   * serves web views and web view controllers of a specific `webViewType` to facilitate interaction
-   * between those web views and other extensions. You can register it with the PAPI using
-   * `papi.webViewProviders.register`.
-   *
-   * If you want to change your existing `IWebViewProvider` from a plain object to extending this
-   * class, you will need to change your object's existing method named `getWebView`
-   * ({@link IWebViewProvider.getWebView}) to be named `getWebViewDefinition`
-   * ({@link WebViewFactory.getWebViewDefinition}), which is a drop-in replacement. You likely do NOT
-   * want to overwrite this class's `getWebView` because that will eliminate most of the benefits
-   * associated with using this class.
-   *
-   * @see {@link IWebViewProvider} for more information on extending this class.
-   */
+  /** JSDOC DESTINATION WebViewFactory */
   export const WebViewFactory: typeof PapiWebViewFactory;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
-  /**
-   *
-   * Provides information about this app like name and version.
-   */
-  export const app: import('shared/services/app.service-model').IAppService;
-  /**
-   *
-   * The command service allows you to exchange messages with other components in the platform. You
-   * can register a command that other services and extensions can send you. You can send commands to
-   * other services and extensions that have registered commands.
-   */
+  /** JSDOC DESTINATION appService */
+  export const app: import('@shared/services/app.service-model').IAppService;
+  /** JSDOC DESTINATION commandService */
   export const commands: typeof commandService;
-  /**
-   *
-   * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
-   *
-   * Uses Electron's [`safeStorage`](https://www.electronjs.org/docs/latest/api/safe-storage) API.
-   *
-   * Note that these encryption mechanisms are not transferrable between computers. We recommend using
-   * them with `papi.storage` methods to store data safely.
-   *
-   * WARNING: The primary purpose of this service is to enable extensions to encrypt and decrypt data
-   * to be stored securely in local files. It is not intended to protect data passed over a network
-   * connection. Please note that using this service passes the unencrypted string between local
-   * processes using the PAPI WebSocket.
-   */
-  export const dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
-  /**
-   *
-   * Service exposing various functions related to using webViews
-   *
-   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-   * HTML or React components.
-   */
+  /** JSDOC DESTINATION dataProtectionService */
+  export const dataProtection: import('@shared/models/data-protection.service-model').IDataProtectionService;
+  /** JSDOC DESTINATION papiWebViewService */
   export const webViews: WebViewServiceType;
-  /**
-   *
-   * Interface for registering webView providers, registering webView controllers, and performing
-   * privileged interactions with web views
-   */
+  /** JSDOC DESTINATION papiWebViewProviderService */
   export const webViewProviders: PapiWebViewProviderService;
-  /**
-   *
-   * Prompt the user for responses with dialogs
-   */
+  /** JSDOC DESTINATION dialogService */
   export const dialogs: DialogService;
-  /**
-   *
-   * Service that provides a way to send and receive network events
-   */
+  /** JSDOC DESTINATION papiNetworkService */
   export const network: PapiNetworkService;
-  /**
-   *
-   * Network objects are distributed objects within PAPI for TS/JS objects. @see
-   * https://en.wikipedia.org/wiki/Distributed_object
-   *
-   * Objects registered via {@link networkObjectService.set} are retrievable using
-   * {@link networkObjectService.get}.
-   *
-   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
-   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
-   * the registered object are proxied except for constructors, `dispose`, and functions starting with
-   * `on` since those should be events (which are not intended to be proxied) based on our naming
-   * convention. If you don't want a function to be proxied, don't make it a property of the
-   * registered object.
-   *
-   * Functions on a network object will be called asynchronously by other processes regardless of
-   * whether the functions are synchronous or asynchronous, so it is best to make them all
-   * asynchronous. All shared functions' arguments and return values must be serializable to be called
-   * across processes.
-   *
-   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
-   * of that service, and only that service, to call `dispose` on that object when it is no longer
-   * intended to be shared with other services.
-   *
-   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
-   * event handler will be called. After an object is disposed, calls to its functions will no longer
-   * be proxied to the original object.
-   */
+  /** JSDOC DESTINATION networkObjectService */
   export const networkObjects: MinimalNetworkObjectService;
-  /**
-   *
-   * Provides functions related to the set of available network objects
-   */
+  /** JSDOC DESTINATION networkObjectStatusService */
   export const networkObjectStatus: NetworkObjectStatusServiceType;
-  /**
-   *
-   * All extensions and services should use this logger to provide a unified output of logs
-   */
+  /** JSDOC DESTINATION logger */
   export const logger: import('electron-log').MainLogger & {
     default: import('electron-log').MainLogger;
   };
-  /**
-   *
-   * Service that provides a way to call `fetch` since the original function is not available
-   */
+  /** JSDOC DESTINATION internetService */
   export const internet: InternetService;
-  /**
-   *
-   * Service that allows extensions to send and receive data to/from other extensions
-   */
+  /** JSDOC DESTINATION dataProviderService */
   export const dataProviders: DataProviderService;
-  /**
-   *
-   * Service that registers and gets project data providers
-   */
+  /** JSDOC DESTINATION papiBackendProjectDataProviderService */
   export const projectDataProviders: PapiBackendProjectDataProviderService;
-  /**
-   *
-   * Provides metadata for projects known by the platform
-   *
-   * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
-   * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
-   * their types are synchronous locally.
-   */
+  /** JSDOC DESTINATION projectLookupService */
   export const projectLookup: ProjectLookupServiceType;
-  /**
-   *
-   * Provides utility functions that project data providers should call when handling project settings
-   */
+  /** JSDOC DESTINATION projectSettingsService */
   export const projectSettings: IProjectSettingsService;
-  /**
-   *
-   * This service provides extensions in the extension host the ability to read/write data based on
-   * the extension identity and current user (as identified by the OS). This service will not work
-   * within the renderer.
-   */
+  /** JSDOC DESTINATION extensionStorageService */
   export const storage: ExtensionStorageService;
-  /** */
+  /** JSDOC DESTINATION settingsService */
   export const settings: ISettingsService;
-  /**
-   *
-   * Service that allows to get and store menu data
-   */
+  /** JSDOC DESTINATION menuDataService */
   export const menuData: IMenuDataService;
-  /**
-   *
-   * Provides functions related to scroll groups and Scripture references at those scroll groups
-   */
+  /** JSDOC DESTINATION scrollGroupService */
   export const scrollGroups: IScrollGroupService;
-  /**
-   *
-   * Service that allows to get and store localizations
-   */
+  /** JSDOC DESTINATION localizationDataService */
   export const localization: ILocalizationService;
-  /**
-   *
-   * Service that sends notifications to users in the UI
-   */
+  /** JSDOC DESTINATION notificationService */
   export const notifications: INotificationService;
 }
 declare module 'extension-host/extension-types/extension.interface' {
@@ -7447,17 +6667,13 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
       dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
     ): {
       [TDataType in keyof DataProviderTypes[DataProviderName]]: (
-        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
         selector: DataProviderTypes[DataProviderName][TDataType]['selector'],
-        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
         defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
-        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
         DataProviderTypes[DataProviderName][TDataType]['getData'] | PlatformError,
         (
           | ((
-              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
               newData: DataProviderTypes[DataProviderName][TDataType]['setData'],
             ) => Promise<DataProviderUpdateInstructions<DataProviderTypes[DataProviderName]>>)
           | undefined
@@ -7704,17 +6920,13 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
         | undefined,
     ): {
       [TDataType in keyof ProjectInterfaceDataTypes[ProjectInterface]]: (
-        // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
         selector: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['selector'],
-        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
         defaultValue: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
-        // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
         ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
         (
           | ((
-              // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
               newData: ProjectInterfaceDataTypes[ProjectInterface][TDataType]['setData'],
             ) => Promise<
               DataProviderUpdateInstructions<ProjectInterfaceDataTypes[ProjectInterface]>
@@ -7966,11 +7178,12 @@ declare module 'renderer/hooks/papi-hooks/index' {
   export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
   export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
 }
-declare module '@papi/frontend/react' {
+declare module 'renderer/services/papi-frontend-react.service' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
 declare module 'renderer/services/renderer-xml-http-request.service' {
-  /** This wraps the browser's XMLHttpRequest implementation to
+  /**
+   * JSDOC SOURCE PapiRendererXMLHttpRequest This wraps the browser's XMLHttpRequest implementation to
    * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
    * so it should act as a drop-in replacement.
    *
@@ -8029,13 +7242,13 @@ declare module 'renderer/services/renderer-xml-http-request.service' {
   }
   export default PapiRendererXMLHttpRequest;
 }
-declare module '@papi/frontend' {
+declare module 'renderer/services/papi-frontend.service' {
   /**
    * Unified module for accessing API features in the renderer.
    *
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  import * as papiReact from '@papi/frontend/react';
+  import * as papiReact from 'renderer/services/papi-frontend-react.service';
   import { PapiRendererWebSocket } from 'renderer/services/renderer-web-socket.service';
   import { INotificationService } from 'shared/models/notification.service-model';
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
@@ -8054,213 +7267,89 @@ declare module '@papi/frontend' {
   const papi: {
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
-    /** This wraps the browser's WebSocket implementation to provide
-     * better control over internet access. It is isomorphic with the standard WebSocket, so it should
-     * act as a drop-in replacement.
-     *
-     * Note that the Node WebSocket implementation is different and not wrapped here.
-     */
+    /** JSDOC DESTINATION PapiRendererWebSocket */
     WebSocket: typeof PapiRendererWebSocket;
-    /** This wraps the browser's XMLHttpRequest implementation to
-     * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
-     * so it should act as a drop-in replacement.
-     *
-     * Note that Node doesn't have a native implementation, so this is only for the renderer.
-     */
+    /** JSDOC DESTINATION PapiRendererXMLHttpRequest */
     XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
-    /**
-     *
-     * Provides information about this app like name and version.
-     */
-    app: import('shared/services/app.service-model').IAppService;
-    /**
-     *
-     * The command service allows you to exchange messages with other components in the platform. You
-     * can register a command that other services and extensions can send you. You can send commands to
-     * other services and extensions that have registered commands.
-     */
+    /** JSDOC DESTINATION appService */
+    app: any;
+    /** JSDOC DESTINATION commandService */
     commands: typeof commandService;
-    /**
-     *
-     * Service exposing various functions related to using webViews
-     *
-     * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-     * HTML or React components.
-     */
+    /** JSDOC DESTINATION papiWebViewService */
     webViews: WebViewServiceType;
-    /**
-     *
-     * Prompt the user for responses with dialogs
-     */
+    /** JSDOC DESTINATION dialogService */
     dialogs: DialogService;
-    /**
-     *
-     * Service that provides a way to send and receive network events
-     */
+    /** JSDOC DESTINATION papiNetworkService */
     network: PapiNetworkService;
-    /**
-     *
-     * All extensions and services should use this logger to provide a unified output of logs
-     */
+    /** JSDOC DESTINATION logger */
     logger: import('electron-log').MainLogger & {
       default: import('electron-log').MainLogger;
     };
-    /**
-     *
-     * Service that provides a way to call `fetch` since the original function is not available
-     */
+    /** JSDOC DESTINATION internetService */
     internet: InternetService;
-    /**
-     *
-     * Service that allows extensions to send and receive data to/from other extensions
-     */
+    /** JSDOC DESTINATION dataProviderService */
     dataProviders: DataProviderService;
-    /**
-     *
-     * Service that gets project data providers
-     */
+    /** JSDOC DESTINATION papiFrontendProjectDataProviderService */
     projectDataProviders: PapiFrontendProjectDataProviderService;
-    /**
-     *
-     * Provides metadata for projects known by the platform
-     *
-     * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
-     * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
-     * their types are synchronous locally.
-     */
+    /** JSDOC DESTINATION projectLookupService */
     projectLookup: ProjectLookupServiceType;
     /**
+     * JSDOC SOURCE papiReact
      *
      * React hooks that enable interacting with the `papi` in React components more easily.
      */
     react: typeof papiReact;
-    /** */
+    /** JSDOC DESTINATION settingsService */
     settings: ISettingsService;
-    /**
-     *
-     * Service that allows to get and store menu data
-     */
+    /** JSDOC DESTINATION menuDataService */
     menuData: IMenuDataService;
-    /**
-     *
-     * Provides functions related to scroll groups and Scripture references at those scroll groups
-     */
+    /** JSDOC DESTINATION scrollGroupService */
     scrollGroups: IScrollGroupService;
-    /**
-     *
-     * Service that allows to get and store localizations
-     */
+    /** JSDOC DESTINATION localizationDataService */
     localization: ILocalizationService;
-    /**
-     *
-     * Service that sends notifications to users in the UI
-     */
+    /** JSDOC DESTINATION notificationService */
     notifications: INotificationService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
-  /** This wraps the browser's WebSocket implementation to provide
-   * better control over internet access. It is isomorphic with the standard WebSocket, so it should
-   * act as a drop-in replacement.
-   *
-   * Note that the Node WebSocket implementation is different and not wrapped here.
-   */
+  /** JSDOC DESTINATION PapiRendererWebSocket */
   export const WebSocket: typeof PapiRendererWebSocket;
-  /** This wraps the browser's XMLHttpRequest implementation to
-   * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
-   * so it should act as a drop-in replacement.
-   *
-   * Note that Node doesn't have a native implementation, so this is only for the renderer.
-   */
+  /** JSDOC DESTINATION PapiRendererXMLHttpRequest */
   export const XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
-  /**
-   *
-   * Provides information about this app like name and version.
-   */
-  export const app: import('shared/services/app.service-model').IAppService;
-  /**
-   *
-   * The command service allows you to exchange messages with other components in the platform. You
-   * can register a command that other services and extensions can send you. You can send commands to
-   * other services and extensions that have registered commands.
-   */
+  /** JSDOC DESTINATION appService */
+  export const app: any;
+  /** JSDOC DESTINATION commandService */
   export const commands: typeof commandService;
-  /**
-   *
-   * Service exposing various functions related to using webViews
-   *
-   * WebViews are iframes in the Platform.Bible UI into which extensions load frontend code, either
-   * HTML or React components.
-   */
+  /** JSDOC DESTINATION papiWebViewService */
   export const webViews: WebViewServiceType;
-  /**
-   *
-   * Prompt the user for responses with dialogs
-   */
+  /** JSDOC DESTINATION dialogService */
   export const dialogs: DialogService;
-  /**
-   *
-   * Service that provides a way to send and receive network events
-   */
+  /** JSDOC DESTINATION papiNetworkService */
   export const network: PapiNetworkService;
-  /**
-   *
-   * All extensions and services should use this logger to provide a unified output of logs
-   */
+  /** JSDOC DESTINATION logger */
   export const logger: import('electron-log').MainLogger & {
     default: import('electron-log').MainLogger;
   };
-  /**
-   *
-   * Service that provides a way to call `fetch` since the original function is not available
-   */
+  /** JSDOC DESTINATION internetService */
   export const internet: InternetService;
-  /**
-   *
-   * Service that allows extensions to send and receive data to/from other extensions
-   */
+  /** JSDOC DESTINATION dataProviderService */
   export const dataProviders: DataProviderService;
-  /**
-   *
-   * Service that registers and gets project data providers
-   */
+  /** JSDOC DESTINATION papiBackendProjectDataProviderService */
   export const projectDataProviders: PapiFrontendProjectDataProviderService;
-  /**
-   *
-   * Provides metadata for projects known by the platform
-   *
-   * Note: this service runs locally everywhere in the TypeScript processes. It is also exposed on the
-   * PAPI websocket. Note these functions are all asynchronous on the PAPI websocket regardless of if
-   * their types are synchronous locally.
-   */
+  /** JSDOC DESTINATION projectLookupService */
   export const projectLookup: ProjectLookupServiceType;
-  /**
-   *
-   * React hooks that enable interacting with the `papi` in React components more easily.
-   */
+  /** JSDOC DESTINATION papiReact */
   export const react: typeof papiReact;
-  /** */
+  /** JSDOC DESTINATION settingsService */
   export const settings: ISettingsService;
-  /**
-   *
-   * Service that allows to get and store menu data
-   */
+  /** JSDOC DESTINATION menuDataService */
   export const menuData: IMenuDataService;
-  /**
-   *
-   * Provides functions related to scroll groups and Scripture references at those scroll groups
-   */
+  /** JSDOC DESTINATION scrollGroupService */
   export const scrollGroups: IScrollGroupService;
-  /**
-   *
-   * Service that allows to get and store localizations
-   */
+  /** JSDOC DESTINATION localizationDataService */
   export const localization: ILocalizationService;
-  /**
-   *
-   * Service that sends notifications to users in the UI
-   */
+  /** JSDOC DESTINATION notificationService */
   export const notifications: INotificationService;
   export type Papi = typeof papi;
 }
