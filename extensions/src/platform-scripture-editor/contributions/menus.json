@@ -61,18 +61,6 @@
         },
         "items": [
           {
-            "label": "%webView_platformScriptureEditor_backgroundColor%",
-            "group": "platformScriptureEditor.colors",
-            "order": 2,
-            "command": "platformScriptureEditor.changeBackgroundColor"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_textColor%",
-            "group": "platformScriptureEditor.colors",
-            "order": 1,
-            "command": "platformScriptureEditor.changeTextColor"
-          },
-          {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 1,
@@ -101,24 +89,6 @@
             "group": "platformScriptureEditor.checks",
             "order": 3,
             "command": "platformScripture.openChecksSidePanel"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_thickBorders%",
-            "group": "platformScriptureEditor.layout",
-            "order": 1,
-            "command": "platformScriptureEditor.showThickBorders"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_publisherInfo%",
-            "group": "platformScriptureEditor.general",
-            "order": 1,
-            "command": "platformScriptureEditor.showPublisherInfo"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_copyrightInfo%",
-            "group": "platformScriptureEditor.general",
-            "order": 2,
-            "command": "platformScriptureEditor.showCopyrightInfo"
           }
         ]
       },
