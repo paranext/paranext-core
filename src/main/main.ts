@@ -8,7 +8,7 @@
 
 import os from 'os';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, RenderProcessGoneDetails } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -70,7 +70,7 @@ async function openExternal(url: string) {
   try {
     await shell.openExternal(url);
   } catch (e) {
-    logger.warn(e);
+    logger.warn(getErrorMessage(e));
     throw e;
   }
 
@@ -252,15 +252,33 @@ async function main() {
     // and restore the maximized or full screen state
     mainWindowState.manage(mainWindow);
 
-    mainWindow
-      .loadURL(
-        `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`,
-      )
-      .catch((e) => {
-        logger.error(
-          `mainWindow could not load URL "${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}". ${getErrorMessage(e)}`,
+    // Add several listeners to the main window to log events
+    mainWindow.webContents.on('unresponsive', () => logger.warn('mainWindow unresponsive'));
+    mainWindow.webContents.on('responsive', () => logger.warn('mainWindow responsive'));
+    mainWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) =>
+      logger.warn(`mainWindow render process gone: ${JSON.stringify(details)}`),
+    );
+    mainWindow.webContents.on(
+      // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
+      'did-fail-load',
+      (
+        _event: Event,
+        errorCode: number,
+        errorDescription: string,
+        validatedURL: string,
+        isMainFrame: boolean,
+      ) => {
+        logger.warn(
+          `mainWindow failed to load "${validatedURL}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
         );
-      });
+      },
+    );
+
+    // If the URL doesn't load, we might need to show something to the user
+    const urlToLoad = `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`;
+    mainWindow.loadURL(urlToLoad).catch((e) => {
+      logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
+    });
 
     mainWindow.on('ready-to-show', () => {
       logger.info('mainWindow is ready to show');
@@ -290,7 +308,7 @@ async function main() {
           openExternal(handlerDetails.url);
         } catch (e) {
           logger.warn(
-            `Main could not open external url ${handlerDetails.url} from windowOpenHandler. ${e}`,
+            `mainWindow could not open external url "${handlerDetails.url}" from windowOpenHandler. ${e}`,
           );
         }
       })();
