@@ -218,7 +218,7 @@ async function main() {
     });
 
     mainWindow = new BrowserWindow({
-      show: false,
+      show: true,
       x: mainWindowState.x,
       y: mainWindowState.y,
       width: mainWindowState.width,
@@ -274,12 +274,6 @@ async function main() {
       },
     );
 
-    // If the URL doesn't load, we might need to show something to the user
-    const urlToLoad = `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`;
-    mainWindow.loadURL(urlToLoad).catch((e) => {
-      logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
-    });
-
     mainWindow.on('ready-to-show', () => {
       logger.info('mainWindow is ready to show');
       if (!mainWindow) throw new Error('"mainWindow" is not defined');
@@ -314,6 +308,12 @@ async function main() {
       })();
 
       return { action: 'deny' };
+    });
+
+    // If the URL doesn't load, we might need to show something to the user
+    const urlToLoad = `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`;
+    mainWindow.loadURL(urlToLoad).catch((e) => {
+      logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
     // Remove this if your app does not use auto updates
