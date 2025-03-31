@@ -41,7 +41,7 @@
   font-style: italic;
 }
 .formatted-font .usfm {
-  font-family: 'Charis SIL';
+  font-family: 'Charis SIL', serif;
   font-size: 12pt;
 }
 
@@ -86,9 +86,8 @@
 /* VerseNode, ImmutableVerseNode */
 
 .formatted-font .usfm_v {
-  font-size: 100%;
-  vertical-align: text-top;
   font-size: 66%;
+  vertical-align: text-top;
 }
 .text-spacing .usfm_v {
   white-space: nowrap;
@@ -97,16 +96,14 @@
 
 .formatted-font .usfm_va {
   color: #007306;
-  font-size: 100%;
-  vertical-align: text-top;
   font-size: 66%;
+  vertical-align: text-top;
 }
 
 .formatted-font .usfm_vp {
   color: #003380;
-  font-size: 100%;
-  vertical-align: text-top;
   font-size: 66%;
+  vertical-align: text-top;
 }
 
 /* ParaNode */
@@ -2102,7 +2099,26 @@ body {
   background-color: inherit;
 }
 
-.immutable-note-caller[data-caller='-'] {
+@counter-style note-callers {
+  system: alphabetic;
+  /* These symbols are updated in TS by the `NoteNodePlugin`. */
+  symbols: 'a' 'b' 'c' 'd' 'e' 'f' 'g' 'h' 'i' 'j' 'k' 'l' 'm' 'n' 'o' 'p' 'q' 'r' 's' 't' 'u' 'v'
+    'w' 'x' 'y' 'z';
+}
+
+.editor-input {
+  counter-reset: caller 0;
+}
+
+.immutable-note-caller[data-caller='+'] {
+  counter-increment: caller 1;
+}
+
+.immutable-note-caller[data-caller='+'] > button::before {
+  content: counter(caller, note-callers);
+}
+
+.formatted-font.text-spacing .immutable-note-caller[data-caller='-'] {
   display: none;
 }
 
@@ -2118,7 +2134,7 @@ body {
 .caller_small {
   unicode-bidi: normal;
   color: rgba(18, 82, 179, 1);
-  font-family: Times New Roman;
+  font-family: 'Times New Roman', serif;
   vertical-align: text-top;
   text-indent: 0pt;
   font-size: 0.66em;
@@ -2194,12 +2210,6 @@ rt {
   white-space: nowrap;
 }
 
-.annot_comment_todo {
-  border-bottom: 1px dashed #888888;
-}
-.annot_comment_todo {
-  border-bottom: 1px dashed #888888;
-}
 span.unread img {
   background-color: #ffff99;
   position: relative;
