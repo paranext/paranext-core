@@ -23,6 +23,7 @@ import {
   CheckScopes,
 } from './checks/configure-checks/checks-scope-filter.component';
 import { ChecksProjectFilter } from './checks/configure-checks/checks-project-filter.component';
+import ChecksCheckTypeFilter from './checks/configure-checks/checks-check-type-filter.component';
 
 const defaultCheckRunnerCheckDetails: CheckRunnerCheckDetails = {
   checkDescription: '',
@@ -49,6 +50,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
 }: WebViewProps) {
   const [scrRef, setScrRef, ,] = useWebViewScrollGroupScrRef();
   const [selectedCheckId, setSelectedCheckId] = useState<string>('');
+  const [selectedCheckTypeIds, setSelectedCheckTypeIds] = useWebViewState<string[]>(
+    'selectedCheckTypes',
+    [],
+  );
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
   const [subscriptionId, setSubscriptionId] = useWebViewState<CheckSubscriptionId>(
     'subscriptionId',
@@ -147,17 +152,18 @@ global.webViewComponent = function ChecksSidePanelWebView({
     });
   }, [projectId]);
 
-  const settableCheckDetails: SettableCheckDetails = useMemo(() => {
-    return {
-      checkId: 'RepeatedWord',
-      enabledProjectIds: [projectId ?? ''],
-    };
-  }, [projectId]);
+  const settableCheckDetails: SettableCheckDetails[] = useMemo(() => {
+    return selectedCheckTypeIds.length > 0
+      ? selectedCheckTypeIds.map((checkId) => ({
+          checkId,
+          enabledProjectIds: [projectId ?? ''],
+        }))
+      : [];
+  }, [selectedCheckTypeIds, projectId]);
 
-  // Force the web view to show Repeated Words check results for the current scripture range since filters are not currently applied
   useEffect(() => {
     async function updateChecksAndRanges() {
-      if (setAvailableChecks) await setAvailableChecks([settableCheckDetails]);
+      if (setAvailableChecks) await setAvailableChecks(settableCheckDetails);
       if (setActiveRanges && (scope === CheckScopes.Book || scope === CheckScopes.Chapter))
         await setActiveRanges([checkInputRange]);
       if (setActiveRanges && scope === CheckScopes.All)
@@ -174,6 +180,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     settableCheckDetails,
     scope,
     getActiveRangesForScopeAll,
+    availableChecks,
   ]);
 
   const [checkResults, , isLoadingCheckResults] = useData(
@@ -212,6 +219,16 @@ global.webViewComponent = function ChecksSidePanelWebView({
     },
     [availableChecks],
   );
+
+  const checkNamesAndIds = useMemo(() => {
+    if (!Array.isArray(availableChecks)) {
+      // This means availableChecks has type PlatformError
+      return [];
+    }
+    return availableChecks.map(
+      (check) => `${getLocalizedCheckDescription(check.checkId)},${check.checkId}`,
+    );
+  }, [availableChecks, getLocalizedCheckDescription]);
 
   // TODO: Should scroll to and highlight the characters or marker identified by the check result, or the verse(s) if not any. Waiting on https://github.com/paranext/paranext-core/issues/1215
   /**
@@ -292,6 +309,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
     [setScope],
   );
 
+  const handleSelectCheckType = (updatedCheckIds: string[]) => {
+    setSelectedCheckTypeIds(updatedCheckIds);
+  };
+
   if (
     isLoadingCheckResults ||
     isLoadingAvailableChecks ||
@@ -312,14 +333,21 @@ global.webViewComponent = function ChecksSidePanelWebView({
   return (
     <div className="pr-twp tw-box-border tw-p-3 tw-h-screen tw-bg-muted/50">
       <div className="tw-flex tw-gap-1 tw-items-center tw-pb-2 tw-w-full tw-min-w-0">
-        <div className="tw-w-1/2 tw-min-w-0">
+        <div className="tw-w-1/3 tw-min-w-0">
           <ChecksProjectFilter
             handleSelectProject={handleSelectProject}
             selectedProjectId={projectId ?? ''}
           />
         </div>
-        <div className="tw-w-1/2 tw-min-w-0">
+        <div className="tw-w-1/3 tw-min-w-0">
           <ChecksScopeFilter selectedScope={scope} handleSelectScope={handleSelectScope} />
+        </div>
+        <div className="tw-w-1/3 tw-min-w-0">
+          <ChecksCheckTypeFilter
+            filterItems={checkNamesAndIds}
+            selectedCheckTypeIds={selectedCheckTypeIds}
+            handleSelectCheckTypeToggle={handleSelectCheckType}
+          />
         </div>
       </div>
       <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3">

@@ -8,7 +8,7 @@
 
 import os from 'os';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain } from 'electron';
+import { app, BrowserWindow, shell, ipcMain, RenderProcessGoneDetails } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -21,7 +21,7 @@ import { resolveHtmlPath } from '@node/utils/util';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
-import { wait, serialize } from 'platform-bible-utils';
+import { wait, serialize, getErrorMessage } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
 import { get } from '@shared/services/project-data-provider.service';
@@ -33,6 +33,7 @@ import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
+import { startAppService } from '@main/services/app.service-host';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -65,11 +66,12 @@ let willRestart = false;
  * https://benjamin-altpeter.de/shell-openexternal-dangers/
  */
 async function openExternal(url: string) {
-  if (!url.startsWith('https://')) throw new Error(`URL must start with 'https://': ${url}`);
+  if (!url.startsWith('https://') && !url.startsWith(`${APP_URI_SCHEME}://`))
+    throw new Error(`External URL must start with 'https://' or '${APP_URI_SCHEME}://: ${url}`);
   try {
     await shell.openExternal(url);
   } catch (e) {
-    logger.warn(e);
+    logger.warn(getErrorMessage(e));
     throw e;
   }
 
@@ -91,9 +93,12 @@ async function main() {
 
   // TODO (maybe): Wait for signal from the .NET data provider process that it is ready
 
-  // Need to start the data protection service before starting the extension host because the extension
-  // host uses it
+  // Need to start the data protection service before starting the extension host because extensions
+  // use it
   await startDataProtectionService();
+
+  // Need to start the app service before starting the extension host because extensions use it
+  await startAppService();
 
   // The extension host service relies on the network service.
   // Extensions inside the extension host might rely on the .NET data provider and each other
@@ -214,7 +219,7 @@ async function main() {
     });
 
     mainWindow = new BrowserWindow({
-      show: false,
+      show: true,
       x: mainWindowState.x,
       y: mainWindowState.y,
       width: mainWindowState.width,
@@ -248,14 +253,31 @@ async function main() {
     // and restore the maximized or full screen state
     mainWindowState.manage(mainWindow);
 
-    mainWindow.loadURL(
-      `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`,
+    // Add several listeners to the main window to log events
+    mainWindow.webContents.on('unresponsive', () => logger.warn('mainWindow unresponsive'));
+    mainWindow.webContents.on('responsive', () => logger.warn('mainWindow responsive'));
+    mainWindow.webContents.on('render-process-gone', (_, details: RenderProcessGoneDetails) =>
+      logger.warn(`mainWindow render process gone: ${JSON.stringify(details)}`),
+    );
+    mainWindow.webContents.on(
+      // @ts-expect-error - TS seems confused, as this matches the d.ts file and the docs
+      'did-fail-load',
+      (
+        _event: Event,
+        errorCode: number,
+        errorDescription: string,
+        validatedURL: string,
+        isMainFrame: boolean,
+      ) => {
+        logger.warn(
+          `mainWindow failed to load "${validatedURL}" with error "${errorDescription}" (${errorCode}). isMainFrame: ${isMainFrame}`,
+        );
+      },
     );
 
     mainWindow.on('ready-to-show', () => {
-      if (!mainWindow) {
-        throw new Error('"mainWindow" is not defined');
-      }
+      logger.info('mainWindow is ready to show');
+      if (!mainWindow) throw new Error('"mainWindow" is not defined');
       if (process.env.START_MINIMIZED) {
         mainWindow.minimize();
       } else {
@@ -288,12 +310,18 @@ async function main() {
           openExternal(handlerDetails.url);
         } catch (e) {
           logger.warn(
-            `Main could not open external url ${handlerDetails.url} from windowOpenHandler. ${e}`,
+            `mainWindow could not open external url "${handlerDetails.url}" from windowOpenHandler. ${e}`,
           );
         }
       })();
 
       return { action: 'deny' };
+    });
+
+    // If the URL doesn't load, we might need to show something to the user
+    const urlToLoad = `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`;
+    mainWindow.loadURL(urlToLoad).catch((e) => {
+      logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
     // Remove this if your app does not use auto updates

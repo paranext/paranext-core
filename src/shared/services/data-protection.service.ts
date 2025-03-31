@@ -2,7 +2,7 @@ import {
   dataProtectionServiceNetworkObjectName,
   IDataProtectionService,
 } from '@shared/models/data-protection.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 
 let networkObject: IDataProtectionService;

@@ -123,22 +123,29 @@ declare module 'shared/models/web-view.model' {
   import type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
-  /** The type of code that defines a webview's content */
-  export enum WebViewContentType {
-    /**
-     * This webview is a React webview. It must specify its component by setting it to
-     * `globalThis.webViewComponent`
-     */
-    React = 'react',
-    /** This webview is a raw HTML/JS/CSS webview. */
-    HTML = 'html',
-    /**
-     * This webview's content is fetched from the url specified (iframe `src` attribute). Note that
-     * webViews of this type cannot access the `papi` because they cannot be on the same origin as the
-     * parent window.
-     */
-    URL = 'url',
-  }
+  /**
+   * The type of code that defines a webview's content.
+   *
+   * If `react`: This webview is a React webview. It must specify its component by setting it to
+   * `globalThis.webViewComponent`. See {@link WebViewDefinitionReact} for more information.
+   *
+   * If `html`: This webview is a raw HTML/JS/CSS webview. See {@link WebViewDefinitionHtml} for more
+   * information.
+   *
+   * If `url`: This webview's content is fetched from the url specified (iframe `src` attribute). Note
+   * that webViews of this type cannot access the `papi` because they cannot be on the same origin as
+   * the parent window. See {@link WebViewDefinitionURL} for more information.
+   */
+  export type WebViewContentType = 'react' | 'html' | 'url';
+  /**
+   * String values for each {@link WebViewContentType}. As opposed to {@link WebViewContentType}, these
+   * can only be used in core
+   */
+  export const WEB_VIEW_CONTENT_TYPE: Readonly<{
+    REACT: 'react';
+    HTML: 'html';
+    URL: 'url';
+  }>;
   /** What type a WebView is. Each WebView definition must have a unique type. */
   export type WebViewType = string;
   /** ID for a specific WebView. Each WebView has a unique ID */
@@ -239,9 +246,9 @@ declare module 'shared/models/web-view.model' {
     state?: Record<string, unknown>;
     /**
      * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
-     * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox attribute]
-     * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to
-     * `true`.
+     * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox
+     * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+     * to `true`.
      *
      * Setting this to false on an HTML or React WebView prevents the iframe from importing the `papi`
      * and such and also prevents others from accessing its document. This could be useful when you
@@ -265,9 +272,9 @@ declare module 'shared/models/web-view.model' {
     allowSameOrigin?: boolean;
     /**
      * Whether to allow scripts to run in this iframe. Setting this to true adds `allow-scripts` to
-     * the WebView iframe's [sandbox attribute]
-     * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`
-     * for HTML and React WebViews and `false` for URL WebViews
+     * the WebView iframe's [sandbox
+     * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+     * to `true` for HTML and React WebViews and `false` for URL WebViews
      *
      * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If it
      * is not necessary to run scripts in your WebView, you should set this to `false` to reduce
@@ -276,7 +283,7 @@ declare module 'shared/models/web-view.model' {
     allowScripts?: boolean;
     /**
      * **For HTML and React WebViews:** List of [Host or scheme
-     * values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy#hosts_values)
+     * values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy#host-source)
      * to include in the [`frame-src`
      * directive](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-src)
      * for this WebView's iframe content-security-policy. This allows iframes with `src` attributes
@@ -324,18 +331,23 @@ declare module 'shared/models/web-view.model' {
      * to `false`
      */
     allowPopups?: boolean;
+    /**
+     * Whether a toolbar should be displayed at the top of the web view. Currently this toolbar cannot
+     * be modified and is provided as is. It displays a BookChapterControl and a ScrollGroupSelector.
+     */
+    shouldShowToolbar?: boolean;
   };
   /** WebView representation using React */
   export type WebViewDefinitionReact = WebViewDefinitionBase & {
-    /** Indicates this WebView uses React */
-    contentType?: WebViewContentType.React;
+    /** Indicates this WebView uses React. See {@link WebViewContentType} for more information. */
+    contentType?: 'react';
     /** String of styles to be loaded into the iframe for this WebView */
     styles?: string;
   };
   /** WebView representation using HTML */
   export type WebViewDefinitionHtml = WebViewDefinitionBase & {
-    /** Indicates this WebView uses HTML */
-    contentType: WebViewContentType.HTML;
+    /** Indicates this WebView uses HTML. See {@link WebViewContentType} for more information. */
+    contentType: 'html';
   };
   /**
    * WebView representation using a URL.
@@ -343,8 +355,8 @@ declare module 'shared/models/web-view.model' {
    * Note: you can only use `papi-extension:` and `https:` urls
    */
   export type WebViewDefinitionURL = WebViewDefinitionBase & {
-    /** Indicates this WebView uses a URL */
-    contentType: WebViewContentType.URL;
+    /** Indicates this WebView uses a URL. See {@link WebViewContentType} for more information. */
+    contentType: 'url';
   };
   /** Properties defining a type of WebView created by extensions to show web content */
   export type WebViewDefinition =
@@ -1698,10 +1710,10 @@ declare module 'shared/services/network-object.service' {
 }
 declare module 'shared/models/network-object.model' {
   import {
+    CanHaveOnDidDispose,
+    CannotHaveOnDidDispose,
     Dispose,
     OnDidDispose,
-    CannotHaveOnDidDispose,
-    CanHaveOnDidDispose,
   } from 'platform-bible-utils';
   /**
    * An object of this type is returned from {@link networkObjectService.get}.
@@ -2350,9 +2362,9 @@ declare module 'shared/models/data-provider-engine.model' {
   }
 }
 declare module 'shared/models/extract-data-provider-data-types.model' {
-  import IDataProviderEngine from 'shared/models/data-provider-engine.model';
-  import IDataProvider, { IDisposableDataProvider } from 'shared/models/data-provider.interface';
-  import DataProviderInternal from 'shared/models/data-provider.model';
+  import { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import { DataProviderInternal } from 'shared/models/data-provider.model';
   /**
    * Get the `DataProviderDataTypes` associated with the `IDataProvider` - essentially, returns
    * `TDataTypes` from `IDataProvider<TDataTypes>`.
@@ -4396,10 +4408,10 @@ declare module 'shared/services/project-lookup.service' {
   export default projectLookupService;
 }
 declare module 'shared/models/project-data-provider-engine-factory.model' {
-  import { ProjectInterfaces } from 'papi-shared-types';
+  import { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
   import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
   import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
-  import { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
+  import { ProjectInterfaces } from 'papi-shared-types';
   /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
    * project with the factory's specified `projectInterface`s when the papi requests. Used by the papi
@@ -4543,11 +4555,12 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
   }
 }
 declare module 'shared/models/project-data-provider-engine.model' {
-  import { ProjectInterfaces, ProjectInterfaceDataTypes } from 'papi-shared-types';
-  import IDataProviderEngine, {
+  import {
     DataProviderEngine,
+    IDataProviderEngine,
   } from 'shared/models/data-provider-engine.model';
   import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import { ProjectInterfaceDataTypes, ProjectInterfaces } from 'papi-shared-types';
   import { UnionToIntersection } from 'platform-bible-utils';
   /**
    * The object to return from
@@ -5578,7 +5591,8 @@ declare module 'shared/models/handle-uri-privilege.model' {
      *
      *     `<app-uri-scheme>://<extension-publisher>.<extension-name>`;
      *
-     * - `<app-uri-scheme>` is the URI scheme this application supports. TODO: link name here
+     * - `<app-uri-scheme>` is the URI scheme this application supports. You can retrieve this value
+     *   using `papi.app.getAppInfo()`
      * - `<extension-publisher>` is the publisher id of this extension as specified in the extension
      *   manifest
      * - `<extension-name>` is the name of this extension as specified in the extension manifest
@@ -5922,6 +5936,48 @@ declare module 'shared/services/localization.service-model' {
       getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
     } & IDataProvider<LocalizationDataDataTypes>;
 }
+declare module 'shared/services/app.service-model' {
+  /**
+   * Information about the app that is currently running.
+   *
+   * All of the information in this object is static and is determined at build time. It will not
+   * change throughout the lifetime of the app or across runs of the same build.
+   */
+  export type AppInfo = Readonly<{
+    /**
+     * Programmatic name of the application
+     *
+     * @example `platform-bible`.
+     */
+    name: string;
+    /**
+     * Version of the app. This is in [semver](https://semver.org/) format.
+     *
+     * @example `0.3.0`
+     *
+     * @example `1.2.3-ordered.info.here+additional.unordered.info.here123`
+     */
+    version: string;
+    /**
+     *
+     * URI scheme that this application handles. Navigating to a URI with this scheme will open this
+     * application. This application will handle the URI as it sees fit. For example, the URI may be
+     * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
+     *
+     * This is the same as {@link APP_NAME}.
+     */
+    uriScheme: string;
+  }>;
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export interface IAppService {
+    /** Retrieve information about the application that is currently running like name and version. */
+    getAppInfo(): Promise<AppInfo>;
+  }
+  export const appServiceNetworkObjectName = 'AppService';
+}
 declare module 'shared/data/platform.data' {
   /**
    * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
@@ -5937,10 +5993,10 @@ declare module 'shared/data/platform.data' {
   /** Version of this application in [semver](https://semver.org/) format. */
   export const APP_VERSION: string;
   /**
+   *
    * URI scheme that this application handles. Navigating to a URI with this scheme will open this
    * application. This application will handle the URI as it sees fit. For example, the URI may be
-   * handled by an extension - see {@link ElevatedPrivileges.registerUriHandler } for more
-   * information.
+   * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
    *
    * This is the same as {@link APP_NAME}.
    */
@@ -6426,6 +6482,7 @@ declare module '@papi/core' {
     LocalizationSelectors,
   } from 'shared/services/localization.service-model';
   export type { NetworkObjectDetails } from 'shared/models/network-object.model';
+  export type { AppInfo } from 'shared/services/app.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
   export type {
@@ -6477,6 +6534,7 @@ declare module 'shared/services/menu-data.service-model' {
   }>;
   export type MenuDataDataTypes = {
     MainMenu: DataProviderDataType<undefined, Localized<MultiColumnMenu>, never>;
+    UnlocalizedMainMenu: DataProviderDataType<undefined, MultiColumnMenu, never>;
     WebViewMenu: DataProviderDataType<ReferencedItem, Localized<WebViewMenu>, never>;
   };
   module 'papi-shared-types' {
@@ -6493,25 +6551,25 @@ declare module 'shared/services/menu-data.service-model' {
     rebuildMenus(): Promise<void>;
     /**
      *
-     * Get menu content for the main menu
+     * Get localized menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of main menu content
+     * @returns MultiColumnMenu object of localized main menu content
      */
-    getMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
+    getMainMenu(mainMenuType: undefined): Promise<Localized<MultiColumnMenu>>;
     /**
      *
-     * Get menu content for the main menu
+     * Get localized menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of main menu content
+     * @returns MultiColumnMenu object of localized main menu content
      */
-    getMainMenu(): Promise<MultiColumnMenu>;
+    getMainMenu(): Promise<Localized<MultiColumnMenu>>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
      * @param mainMenuType Does not have to be defined
-     * @param value MultiColumnMenu object to set as the main menu
+     * @param value MultiColumnMenu object to set as the localized main menu
      * @returns Unsubscriber function
      */
     setMainMenu(
@@ -6519,10 +6577,10 @@ declare module 'shared/services/menu-data.service-model' {
       value: never,
     ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
     /**
-     * Subscribe to run a callback function when the main menu data is changed
+     * Subscribe to run a callback function when the localized main menu data is changed
      *
      * @param mainMenuType Does not have to be defined
-     * @param callback Function to run with the updated menuContent for this selector
+     * @param callback Function to run with the updated localized menuContent for this selector
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
@@ -6532,12 +6590,52 @@ declare module 'shared/services/menu-data.service-model' {
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
-     * Get menu content for a web view
+     *
+     * Get unlocalized menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of unlocalized main menu content
+     */
+    getUnlocalizedMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
+    /**
+     *
+     * Get unlocalized menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of unlocalized main menu content
+     */
+    getUnlocalizedMainMenu(): Promise<MultiColumnMenu>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @param mainMenuType Does not have to be defined
+     * @param value MultiColumnMenu object to set as the unlocalized main menu
+     * @returns Unsubscriber function
+     */
+    setUnlocalizedMainMenu(
+      mainMenuType: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the unlocalized main menu data is changed
+     *
+     * @param mainMenuType Does not have to be defined
+     * @param callback Function to run with the updated unlocalized menuContent for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeUnlocalizedMainMenu(
+      mainMenuType: undefined,
+      callback: (menuContent: MultiColumnMenu) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get localized menu content for a web view
      *
      * @param webViewType The type of webview for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content
      */
-    getWebViewMenu(webViewType: ReferencedItem): Promise<WebViewMenu>;
+    getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
@@ -6550,7 +6648,7 @@ declare module 'shared/services/menu-data.service-model' {
       value: never,
     ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
     /**
-     * Subscribe to run a callback function when the web view menu data is changed
+     * Subscribe to run a callback function when the localized web view menu data is changed
      *
      * @param webViewType The type of webview for which a menu should be subscribed
      * @param callback Function to run with the updated menuContent for this selector
@@ -6707,6 +6805,14 @@ declare module 'shared/services/data-protection.service' {
   export const dataProtectionService: IDataProtectionService;
   export default dataProtectionService;
 }
+declare module 'shared/services/app.service' {
+  import { IAppService } from 'shared/services/app.service-model';
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export const appService: IAppService;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -6814,6 +6920,11 @@ declare module '@papi/backend' {
     WebViewFactory: typeof PapiWebViewFactory;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
+    /**
+     *
+     * Provides information about this app like name and version.
+     */
+    app: import('shared/services/app.service-model').IAppService;
     /**
      *
      * The command service allows you to exchange messages with other components in the platform. You
@@ -7038,6 +7149,11 @@ declare module '@papi/backend' {
   export const WebViewFactory: typeof PapiWebViewFactory;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export const app: import('shared/services/app.service-model').IAppService;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You
@@ -7544,12 +7660,12 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   export default useScrollGroupScrRef;
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
-  import { SettingTypes } from 'papi-shared-types';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { SettingDataTypes } from 'shared/services/settings.service-model';
+  import { SettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
    * and gets updated when the setting is changed by others.
@@ -7743,8 +7859,8 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   export default useProjectData;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
-  import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
    * subscribers when the project setting changes and gets updated when the project setting is changed
@@ -7831,8 +7947,8 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   export default useDataProviderMulti;
 }
 declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
-  import { LocalizationData } from 'shared/services/localization.service-model';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { LocalizationData } from 'shared/services/localization.service-model';
   import { LocalizeKey } from 'platform-bible-utils';
   /**
    * Gets localizations on the papi.
@@ -7864,9 +7980,9 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   export default useLocalizedStrings;
 }
 declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
-  import { WebViewControllers } from 'papi-shared-types';
   import { NetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
+  import { WebViewControllers } from 'papi-shared-types';
   /**
    * Gets a Web View Controller with specified provider name
    *
@@ -7972,22 +8088,22 @@ declare module '@papi/frontend' {
    *
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  import * as commandService from 'shared/services/command.service';
-  import { PapiNetworkService } from 'shared/services/network.service';
-  import { WebViewServiceType } from 'shared/services/web-view.service-model';
-  import { InternetService } from 'shared/services/internet.service';
-  import { DataProviderService } from 'shared/services/data-provider.service';
-  import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
-  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
-  import { ISettingsService } from 'shared/services/settings.service-model';
-  import { DialogService } from 'shared/services/dialog.service-model';
   import * as papiReact from '@papi/frontend/react';
-  import PapiRendererWebSocket from 'renderer/services/renderer-web-socket.service';
-  import { IMenuDataService } from 'shared/services/menu-data.service-model';
-  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
-  import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { PapiRendererWebSocket } from 'renderer/services/renderer-web-socket.service';
   import { INotificationService } from 'shared/models/notification.service-model';
-  import PapiRendererXMLHttpRequest from 'renderer/services/renderer-xml-http-request.service';
+  import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
+  import * as commandService from 'shared/services/command.service';
+  import { DataProviderService } from 'shared/services/data-provider.service';
+  import { DialogService } from 'shared/services/dialog.service-model';
+  import { InternetService } from 'shared/services/internet.service';
+  import { ILocalizationService } from 'shared/services/localization.service-model';
+  import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { PapiNetworkService } from 'shared/services/network.service';
+  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
+  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
+  import { ISettingsService } from 'shared/services/settings.service-model';
+  import { WebViewServiceType } from 'shared/services/web-view.service-model';
+  import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
@@ -8005,6 +8121,11 @@ declare module '@papi/frontend' {
      * Note that Node doesn't have a native implementation, so this is only for the renderer.
      */
     XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
+    /**
+     *
+     * Provides information about this app like name and version.
+     */
+    app: import('shared/services/app.service-model').IAppService;
     /**
      *
      * The command service allows you to exchange messages with other components in the platform. You
@@ -8106,6 +8227,11 @@ declare module '@papi/frontend' {
    * Note that Node doesn't have a native implementation, so this is only for the renderer.
    */
   export const XMLHttpRequest: typeof PapiRendererXMLHttpRequest;
+  /**
+   *
+   * Provides information about this app like name and version.
+   */
+  export const app: import('shared/services/app.service-model').IAppService;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You

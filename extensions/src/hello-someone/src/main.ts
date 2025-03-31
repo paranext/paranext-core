@@ -4,7 +4,6 @@ import {
   ExecutionActivationContext,
   IWebViewProvider,
   SavedWebViewDefinition,
-  WebViewContentType,
   WebViewDefinition,
   WithNotifyUpdate,
   IDataProviderEngine,
@@ -252,9 +251,7 @@ const peopleWebViewProvider: IWebViewProvider = {
     return {
       ...savedWebView,
       title: 'People',
-      // Can't use the enum value from a definition file so assert the type from the string literal.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      contentType: 'html' as WebViewContentType.HTML,
+      contentType: 'html',
       content: helloSomeoneHtmlWebView,
     };
   },

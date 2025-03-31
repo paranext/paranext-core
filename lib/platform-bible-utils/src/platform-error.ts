@@ -47,7 +47,13 @@ export function newPlatformError(error?: unknown): PlatformError {
       message: error.message,
       platformErrorVersion: PLATFORM_ERROR_VERSION,
     };
-    return Object.defineProperties(platformError, Object.getOwnPropertyDescriptors(error));
+    Object.defineProperties(platformError, Object.getOwnPropertyDescriptors(error));
+    Object.defineProperty(platformError, 'message', { enumerable: true });
+    if ('stack' in platformError)
+      Object.defineProperty(platformError, 'stack', { enumerable: true });
+    if ('cause' in platformError)
+      Object.defineProperty(platformError, 'cause', { enumerable: true });
+    return platformError;
   }
   return { cause: error, message: '', platformErrorVersion: PLATFORM_ERROR_VERSION };
 }

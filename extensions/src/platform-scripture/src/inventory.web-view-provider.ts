@@ -57,6 +57,7 @@ export class InventoryWebViewProvider implements IWebViewProvider {
         ...savedWebView.state,
         webViewType: this.webViewType,
       },
+      shouldShowToolbar: true,
     };
   }
 }

@@ -1,8 +1,8 @@
-import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
-import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
 import { NetworkObject } from '@shared/models/network-object.model';
-import webViewService from '@shared/services/web-view.service';
 import { WebViewId } from '@shared/models/web-view.model';
+import { webViewService } from '@shared/services/web-view.service';
+import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
 
 /**
  * Takes the parameters passed into the hook and returns the `webViewId` associated with those
