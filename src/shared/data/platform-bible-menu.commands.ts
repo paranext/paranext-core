@@ -10,7 +10,7 @@ import { CommandNames } from 'papi-shared-types';
  * @param tabId The id of the dock layout tab on which the menu command is being run (if the tab is
  *   a web view, this is the same as the web view id) or `undefined` if run from the top menu
  */
-export default function handleMenuCommand(command: Command, tabId?: string) {
+export function handleMenuCommand(command: Command, tabId?: string) {
   switch (command.command) {
     case 'platform.openProjectDialog':
       logger.info(`Open Project Dialog. tabId: ${tabId}`);

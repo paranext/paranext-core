@@ -1,5 +1,6 @@
 {
   "name": "platform-bible",
+  "productName": "Platform.Bible",
   "version": "0.3.0",
   "description": "Extensible Bible translation software",
   "license": "MIT",

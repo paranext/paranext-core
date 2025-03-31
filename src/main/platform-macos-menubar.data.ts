@@ -25,6 +25,7 @@ export type MenuItemConstructorOptionsWithOrder = MenuItemConstructorOptions & {
   label?: LocalizeKey;
   toolTip?: LocalizeKey;
   id?: MacosMenuKey;
+  order?: number;
   submenu?: Omit<MenuItemConstructorOptions, 'label'> &
     {
       label?: LocalizeKey;
@@ -36,7 +37,7 @@ export type MenuItemConstructorOptionsWithOrder = MenuItemConstructorOptions & {
 export type LocalizedMacosMenubar = Localized<MenuItemConstructorOptionsWithOrder>[];
 
 // Cannot contribute this as is in main.ts, need to convert labels and tooltips to localized strings and remove order property
-const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
+export const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
   {
     role: 'appMenu',
     id: 'macosMenubar.appMenu',
@@ -78,5 +79,3 @@ const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
     submenu: [],
   },
 ];
-
-export default macosMenubarObject;

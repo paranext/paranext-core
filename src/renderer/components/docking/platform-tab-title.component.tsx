@@ -11,7 +11,7 @@ import {
 import { isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import handleMenuCommand from '@shared/data/platform-bible-menu.commands';
+import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import './platform-tab-title.component.scss';
 
 type PlatformTabTitleProps = {

@@ -21,7 +21,7 @@ import { resolveHtmlPath } from '@node/utils/util';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
-import { wait, serialize, UnsubscriberAsync } from 'platform-bible-utils';
+import { wait, serialize } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
 import { get } from '@shared/services/project-data-provider.service';
@@ -32,7 +32,7 @@ import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-pro
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
-import buildCurrentMacosMenubar from '@main/platform-macos-menubar.util';
+import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -75,8 +75,6 @@ async function openExternal(url: string) {
 
   return true;
 }
-
-let macosMenubarUnsubscriber: UnsubscriberAsync | undefined;
 
 async function main() {
   // The network service relies on nothing else, and other things rely on it, so start it first
@@ -269,7 +267,11 @@ async function main() {
       mainWindow = undefined;
     });
 
-    macosMenubarUnsubscriber = await buildCurrentMacosMenubar();
+    try {
+      subscribeCurrentMacosMenubar();
+    } catch {
+      logger.info('Failed to build the macOS menubar');
+    }
 
     // This sets the menu on Windows and Linux
     // 'null' to interact with external API
@@ -320,7 +322,6 @@ async function main() {
       await Promise.all([
         dotnetDataProvider.waitForClose(PROCESS_CLOSE_TIME_OUT),
         extensionHostService.waitForClose(PROCESS_CLOSE_TIME_OUT),
-        macosMenubarUnsubscriber && macosMenubarUnsubscriber(),
       ]);
 
       // In development, the dotnet watcher was killed so we have to wait here.
@@ -330,7 +331,6 @@ async function main() {
     } else {
       dotnetDataProvider.kill();
       extensionHostService.kill();
-      if (macosMenubarUnsubscriber) await macosMenubarUnsubscriber();
     }
   });
 

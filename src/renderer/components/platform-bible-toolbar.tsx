@@ -15,7 +15,7 @@ import {
 } from 'platform-bible-react';
 import { getLocalizeKeysForScrollGroupIds, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
-import handleMenuCommand from '@shared/data/platform-bible-menu.commands';
+import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { provideMenuData } from './platform-bible-menu.data';
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
