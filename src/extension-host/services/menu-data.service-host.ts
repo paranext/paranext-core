@@ -24,19 +24,26 @@ class MenuDataDataProviderEngine
   implements IDataProviderEngine<MenuDataDataTypes>
 {
   private mainMenu: Localized<MultiColumnMenu> = { groups: {}, items: [], columns: {} };
+  private unlocalizedMainMenu: MultiColumnMenu = { groups: {}, items: [], columns: {} };
   private webViewMenusMap = new Map<ReferencedItem, Localized<WebViewMenu>>();
   private unsubscribeOnDidResyncContributions: Unsubscriber | undefined;
 
-  constructor(menuData: Localized<PlatformMenus>) {
+  constructor(unlocalizedMenuData: PlatformMenus) {
     super();
-    this.#loadAllMenuData(menuData);
+    this.#loadAllMenuData(unlocalizedMenuData, unlocalizedMenuData);
     onDidResyncContributions(() => this.rebuildMenus());
   }
 
   async rebuildMenus(): Promise<void> {
     const currentMenus = await menuDocumentCombiner.getCurrentMenus();
-    if (!currentMenus || currentMenus.mainMenu === this.mainMenu) return;
-    this.#loadAllMenuData(currentMenus);
+    const rawMenus = menuDocumentCombiner.rawOutput;
+    if (
+      !currentMenus ||
+      !rawMenus ||
+      (currentMenus.mainMenu === this.mainMenu && rawMenus.mainMenu === this.unlocalizedMainMenu)
+    )
+      return;
+    this.#loadAllMenuData(rawMenus, currentMenus);
     this.notifyUpdate('*');
   }
 
@@ -49,6 +56,17 @@ class MenuDataDataProviderEngine
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setMainMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
     throw new Error('setMainMenu disabled');
+  }
+
+  async getUnlocalizedMainMenu(): Promise<MultiColumnMenu> {
+    if (!this.unlocalizedMainMenu) throw new Error('Missing/invalid unlocalized main menu data');
+    return this.unlocalizedMainMenu;
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async setUnlocalizedMainMenu(): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>> {
+    throw new Error('setUnlocalizedMainMenu disabled');
   }
 
   async getWebViewMenu(webViewName: ReferencedItem): Promise<Localized<WebViewMenu>> {
@@ -75,12 +93,14 @@ class MenuDataDataProviderEngine
     return true;
   }
 
-  #loadAllMenuData(menuData: Localized<PlatformMenus>): void {
+  #loadAllMenuData(unlocalizedMainMenu: PlatformMenus, menuData: Localized<PlatformMenus>): void {
     this.mainMenu = { groups: {}, items: [], columns: {} };
+    this.unlocalizedMainMenu = { groups: {}, items: [], columns: {} };
     this.webViewMenusMap.clear();
 
     try {
       this.mainMenu = menuData.mainMenu;
+      this.unlocalizedMainMenu = unlocalizedMainMenu.mainMenu;
       const { webViewMenus } = menuData;
 
       Object.entries(webViewMenus).forEach(([webViewType, value]) => {
@@ -123,7 +143,7 @@ export async function initialize(): Promise<void> {
 
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingMenuDataService = {
-  implementMenuDataDataProviderEngine: (dataObj: Localized<PlatformMenus>) => {
+  implementMenuDataDataProviderEngine: (dataObj: PlatformMenus) => {
     return new MenuDataDataProviderEngine(dataObj);
   },
 };

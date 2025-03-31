@@ -203,3 +203,15 @@ test('Get web view menu data for videoExtension', async () => {
 test('Setting web view menu data throws', async () => {
   await expect(menuDataProviderEngine.setWebViewMenu()).rejects.toThrow('setWebViewMenu disabled');
 });
+
+// Add tests for unlocalized main menu data
+test('Get unlocalized main menu data', async () => {
+  const result = await menuDataProviderEngine.getUnlocalizedMainMenu();
+  expect(result).toEqual(MOCK_MENU_DATA.mainMenu);
+});
+
+test('Setting unlocalized main menu data throws', async () => {
+  await expect(menuDataProviderEngine.setUnlocalizedMainMenu()).rejects.toThrow(
+    'setUnlocalizedMainMenu disabled',
+  );
+});

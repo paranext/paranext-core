@@ -6534,6 +6534,7 @@ declare module 'shared/services/menu-data.service-model' {
   }>;
   export type MenuDataDataTypes = {
     MainMenu: DataProviderDataType<undefined, Localized<MultiColumnMenu>, never>;
+    UnlocalizedMainMenu: DataProviderDataType<undefined, MultiColumnMenu, never>;
     WebViewMenu: DataProviderDataType<ReferencedItem, Localized<WebViewMenu>, never>;
   };
   module 'papi-shared-types' {
@@ -6550,25 +6551,25 @@ declare module 'shared/services/menu-data.service-model' {
     rebuildMenus(): Promise<void>;
     /**
      *
-     * Get menu content for the main menu
+     * Get localized menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of main menu content
+     * @returns MultiColumnMenu object of localized main menu content
      */
-    getMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
+    getMainMenu(mainMenuType: undefined): Promise<Localized<MultiColumnMenu>>;
     /**
      *
-     * Get menu content for the main menu
+     * Get localized menu content for the main menu
      *
      * @param mainMenuType Does not have to be defined
-     * @returns MultiColumnMenu object of main menu content
+     * @returns MultiColumnMenu object of localized main menu content
      */
-    getMainMenu(): Promise<MultiColumnMenu>;
+    getMainMenu(): Promise<Localized<MultiColumnMenu>>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
      * @param mainMenuType Does not have to be defined
-     * @param value MultiColumnMenu object to set as the main menu
+     * @param value MultiColumnMenu object to set as the localized main menu
      * @returns Unsubscriber function
      */
     setMainMenu(
@@ -6576,10 +6577,10 @@ declare module 'shared/services/menu-data.service-model' {
       value: never,
     ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
     /**
-     * Subscribe to run a callback function when the main menu data is changed
+     * Subscribe to run a callback function when the localized main menu data is changed
      *
      * @param mainMenuType Does not have to be defined
-     * @param callback Function to run with the updated menuContent for this selector
+     * @param callback Function to run with the updated localized menuContent for this selector
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
@@ -6589,12 +6590,52 @@ declare module 'shared/services/menu-data.service-model' {
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
-     * Get menu content for a web view
+     *
+     * Get unlocalized menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of unlocalized main menu content
+     */
+    getUnlocalizedMainMenu(mainMenuType: undefined): Promise<MultiColumnMenu>;
+    /**
+     *
+     * Get unlocalized menu content for the main menu
+     *
+     * @param mainMenuType Does not have to be defined
+     * @returns MultiColumnMenu object of unlocalized main menu content
+     */
+    getUnlocalizedMainMenu(): Promise<MultiColumnMenu>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw
+     *
+     * @param mainMenuType Does not have to be defined
+     * @param value MultiColumnMenu object to set as the unlocalized main menu
+     * @returns Unsubscriber function
+     */
+    setUnlocalizedMainMenu(
+      mainMenuType: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the unlocalized main menu data is changed
+     *
+     * @param mainMenuType Does not have to be defined
+     * @param callback Function to run with the updated unlocalized menuContent for this selector
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeUnlocalizedMainMenu(
+      mainMenuType: undefined,
+      callback: (menuContent: MultiColumnMenu) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     * Get localized menu content for a web view
      *
      * @param webViewType The type of webview for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content
      */
-    getWebViewMenu(webViewType: ReferencedItem): Promise<WebViewMenu>;
+    getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw
      *
@@ -6607,7 +6648,7 @@ declare module 'shared/services/menu-data.service-model' {
       value: never,
     ): Promise<DataProviderUpdateInstructions<MenuDataDataTypes>>;
     /**
-     * Subscribe to run a callback function when the web view menu data is changed
+     * Subscribe to run a callback function when the localized web view menu data is changed
      *
      * @param webViewType The type of webview for which a menu should be subscribed
      * @param callback Function to run with the updated menuContent for this selector
