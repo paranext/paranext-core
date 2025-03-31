@@ -87,7 +87,7 @@ async function fallbackToDefaultMacosMenubar(): Promise<MenuItemConstructorOptio
   return sortMenuAndRemoveOrder(await localizeMacosMenubar(macosMenubarObject));
 }
 
-async function localizeCombinedMenu(
+async function localizeMacosMenubar(
   macosMenubar: MenuItemConstructorOptionsWithOrder[],
 ): Promise<LocalizedMacosMenubar> {
   const localizeKeys: LocalizeKey[] = [];
@@ -216,6 +216,6 @@ async function translatePlatformMenuItemsAndCombine(
     }
   });
 
-  const localizedMenu = localizeCombinedMenu(combinedMenubar);
+  const localizedMenu = await localizeMacosMenubar(combinedMenubar);
   return sortMenuAndRemoveOrder(localizedMenu);
 }

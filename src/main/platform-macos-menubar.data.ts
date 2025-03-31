@@ -48,32 +48,40 @@ export const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
     ],
   },
   {
+    label: '%mainMenu_file%',
     role: 'fileMenu',
     id: 'macosMenubar.fileMenu',
     submenu: [{ role: 'close', id: 'close', order: 8 }],
   },
   {
+    label: '%mainMenu_edit%',
     role: 'editMenu',
     id: 'macosMenubar.editMenu',
   },
   {
+    label: '%mainMenu_view%',
     role: 'viewMenu',
     id: 'macosMenubar.viewMenu',
   },
   {
+    label: '%mainMenu_tab%',
     id: 'macosMenubar.tabMenu',
   },
   {
+    label: '%mainMenu_text%',
     id: 'macosMenubar.textMenu',
   },
   {
+    label: '%mainMenu_layout%',
     id: 'macosMenubar.layoutMenu',
   },
   {
+    label: '%mainMenu_window%',
     role: 'windowMenu',
     id: 'macosMenubar.windowMenu',
   },
   {
+    label: '%mainMenu_help%',
     role: 'help',
     id: 'macosMenubar.helpMenu',
     submenu: [],

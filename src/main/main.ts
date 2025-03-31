@@ -290,9 +290,9 @@ async function main() {
     });
 
     try {
-      subscribeCurrentMacosMenubar();
-    } catch {
-      logger.info('Failed to build the macOS menubar');
+      await subscribeCurrentMacosMenubar();
+    } catch (error) {
+      logger.info(`Failed to build the macOS menubar ${error}`);
     }
 
     // This sets the menu on Windows and Linux
