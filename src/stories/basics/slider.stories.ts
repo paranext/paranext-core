@@ -1,7 +1,7 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { Slider } from 'platform-bible-react';
 
-export const meta: Meta<typeof Slider> = {
+export const Meta: MetaBase<typeof Slider> = {
   title: 'Basics/Slider',
   component: Slider,
   tags: ['autodocs'],
@@ -20,7 +20,7 @@ export const meta: Meta<typeof Slider> = {
     className: { control: 'text' },
   },
 };
-export default meta;
+export default Meta;
 
 type Story = StoryObj<typeof Slider>;
 

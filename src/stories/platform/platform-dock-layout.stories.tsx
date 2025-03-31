@@ -1,13 +1,13 @@
-import { CSSProperties } from 'react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { DockMode, LayoutBase } from 'rc-dock';
-import type { Meta, StoryObj } from '@storybook/react';
+import { CSSProperties } from 'react';
 
-import DockLayoutWrapper from '@renderer/components/docking/dock-layout-wrapper.component';
+import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrapper.component';
 
-import 'rc-dock/dist/rc-dock.css';
 import '@renderer/components/docking/dock-layout-wrapper.component.scss';
-import createRCDockTabFromTabInfo from '@renderer/components/docking/platform-dock-tab.component';
+import { createRCDockTabFromTabInfo } from '@renderer/components/docking/platform-dock-tab.component';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
+import 'rc-dock/dist/rc-dock.css';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
@@ -81,10 +81,9 @@ export const Default: Story = {
   args: { defaultLayout, style, loadTab },
 };
 
-export const meta: Meta<typeof DockLayoutWrapper> = {
+export const Meta: MetaBase<typeof DockLayoutWrapper> = {
   title: 'platform/DockLayout',
   component: DockLayoutWrapper,
   tags: ['autodocs'],
 };
-
-export default meta;
+export default Meta;

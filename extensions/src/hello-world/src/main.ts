@@ -1,26 +1,26 @@
 import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
-  WebViewDefinition,
-  SavedWebViewDefinition,
-  IWebViewProvider,
   GetWebViewOptions,
+  IWebViewProvider,
+  SavedWebViewDefinition,
+  WebViewDefinition,
 } from '@papi/core';
-import { PlatformEventEmitter } from 'platform-bible-utils';
 import type { HelloWorldEvent, HelloWorldProjectWebViewController } from 'hello-world';
-import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
-import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
-import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
-import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
-import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
-import HelloWorldProjectDataProviderEngineFactory from './models/hello-world-project-data-provider-engine-factory.model';
-import helloWorldProjectWebView from './web-views/hello-world-project/hello-world-project.web-view?inline';
-import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hello-world-project.web-view.scss?inline';
-import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
+import { PlatformEventEmitter } from 'platform-bible-utils';
+import { checkDetails, createHelloCheck } from './checks';
+import { HelloWorldProjectDataProviderEngineFactory } from './models/hello-world-project-data-provider-engine-factory.model';
+import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
 import tailwindStyles from './tailwind.css?inline';
 import { HTML_COLOR_NAMES } from './util';
-import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
-import { checkDetails, createHelloCheck } from './checks';
+import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
+import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
+import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
+import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hello-world-project.web-view.scss?inline';
+import helloWorldProjectWebView from './web-views/hello-world-project/hello-world-project.web-view?inline';
+import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
+import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
+import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
 
 /** User data storage key for all hello world project data */
 const allProjectDataStorageKey = 'allHelloWorldProjectData';

@@ -2,8 +2,8 @@ import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectDataProvider } from '@papi/frontend/react';
 import { useCallback, useEffect } from 'react';
-import useHelloWorldProjectSettings from './use-hello-world-project-settings.hook';
-import ProjectSettingsEditor from './project-settings-editor.component';
+import { ProjectSettingsEditor } from './project-settings-editor.component';
+import { useHelloWorldProjectSettings } from './use-hello-world-project-settings.hook';
 
 const namesDefault: string[] = [];
 
