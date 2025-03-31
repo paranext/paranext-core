@@ -32,8 +32,8 @@
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.1" />
     <PackageReference Include="Microsoft.Extensions.Configuration.UserSecrets" Version="9.0.1" />
     <PackageReference Include="Microsoft.ICU.ICU4C.Runtime" Version="72.1.0.3" Condition="$([MSBuild]::IsOsPlatform('Windows'))" />
-    <PackageReference Include="ParatextChecks" Version="9.5.0.9" />
-    <PackageReference Include="ParatextData" Version="9.5.0.9" />
+    <PackageReference Include="ParatextChecks" Version="9.5.0.11" />
+    <PackageReference Include="ParatextData" Version="9.5.0.11" />
     <PackageReference Include="SIL.Core" Version="16.0.0-beta0031" />
     <PackageReference Include="SIL.Scripture" Version="16.0.0-beta0031" />
     <PackageReference Include="SIL.WritingSystems" Version="16.0.0-beta0031" />
@@ -56,7 +56,7 @@
   <PropertyGroup>
     <!-- Check if MacPorts ICU exists -->
     <UseMacPortsICU Condition="Exists('/opt/local/lib/libicuuc.dylib')">true</UseMacPortsICU>
-    
+
     <!-- Check if Apple Silicon Homebrew ICU exists (only if MacPorts is unavailable) -->
     <UseHomebrewAppleSiliconICU Condition="Exists('/opt/homebrew/opt/icu4c/lib/libicuuc.dylib') AND '$(UseMacPortsICU)' != 'true'">true</UseHomebrewAppleSiliconICU>
 
