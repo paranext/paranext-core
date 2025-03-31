@@ -1086,6 +1086,7 @@ export const openWebView = async (
             ${
               reactWebView.styles
                 ? `<style nonce="${srcNonce}">
+              /* extension styles */
               ${reactWebView.styles}
             </style>`
                 : ''
