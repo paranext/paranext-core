@@ -432,6 +432,25 @@ globalThis.webViewComponent = function HomeDialog() {
     return project.isLocallyAvailable ? syncText : getText;
   };
 
+  const sendReceiveButton = (project: MergedProjectInfo) => {
+    return (
+      <Button
+        disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
+        onClick={() => sendReceiveProject(project.projectId)}
+      >
+        {getSendReceiveButtonContent(project)}
+      </Button>
+    );
+  };
+
+  const openButton = (project: MergedProjectInfo) => {
+    return (
+      <Button onClick={() => openResource(project.projectId, project.isEditable)}>
+        {openText}
+      </Button>
+    );
+  };
+
   return (
     <div>
       <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
@@ -555,25 +574,9 @@ globalThis.webViewComponent = function HomeDialog() {
                             </TableCell>
                           )}
                           <TableCell>
-                            {project.isSendReceivable ? (
-                              <div>
-                                <Button
-                                  disabled={
-                                    isSendReceiveInProgress &&
-                                    activeSendReceiveProjects.includes(project.projectId)
-                                  }
-                                  onClick={() => sendReceiveProject(project.projectId)}
-                                >
-                                  {getSendReceiveButtonContent(project)}
-                                </Button>
-                              </div>
-                            ) : (
-                              <Button
-                                onClick={() => openResource(project.projectId, project.isEditable)}
-                              >
-                                {openText}
-                              </Button>
-                            )}
+                            {!project.isSendReceivable || project.editedStatus !== 'edited'
+                              ? openButton(project)
+                              : sendReceiveButton(project)}
                           </TableCell>
                           <TableCell>
                             {project.isSendReceivable && project.isLocallyAvailable && (
@@ -584,12 +587,10 @@ globalThis.webViewComponent = function HomeDialog() {
                                   </Button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="start">
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      openResource(project.projectId, project.isEditable)
-                                    }
-                                  >
-                                    <span>{openText}</span>
+                                  <DropdownMenuItem asChild>
+                                    {project.editedStatus === 'edited'
+                                      ? openButton(project)
+                                      : sendReceiveButton(project)}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
