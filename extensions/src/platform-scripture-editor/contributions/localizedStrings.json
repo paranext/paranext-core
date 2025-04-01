@@ -1,5 +1,9 @@
 {
-  "metadata": {},
+  "metadata": {
+    "%webView_platformScriptureEditor_openChecks%": {
+      "fallbackKey": "%webView_platformScriptureEditor_openChecksSidePanel%"
+    }
+  },
   "localizedStrings": {
     "en": {
       "%mainMenu_openPlatformScriptureEditor%": "Open Scripture Editor",
@@ -18,6 +22,7 @@
       "%webView_platformScriptureEditor_showCheckResults%": "Show Check Results...",
       "%webView_platformScriptureEditor_publisherInfo%": "Publisher Info",
       "%webView_platformScriptureEditor_copyrightInfo%": "Copyright Info",
+      "%webView_platformScriptureEditor_openChecks%": "Open Checks...",
       "%webView_platformScriptureEditor_openChecksSidePanel%": "Open Checks Side Panel",
       "%webView_platformScriptureEditor_title_editable_indicator%": "(Editable)",
       "%webView_platformScriptureEditor_title_readonly_no_project%": "Resource Viewer",

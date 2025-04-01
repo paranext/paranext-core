@@ -1,23 +1,23 @@
 {
   "mainMenu": {
     "columns": {
-      "platform.project": { "label": "%mainMenu_project%", "order": 1 },
+      "platform.app": { "label": "%product_shortName%", "order": 1 },
       "platform.help": { "label": "%mainMenu_help%", "order": 4 },
       "isExtensible": true
     },
     "groups": {
       "platform.projectProjects": {
-        "column": "platform.project",
+        "column": "platform.app",
         "order": 1,
         "isExtensible": true
       },
       "platform.projectResources": {
-        "column": "platform.project",
+        "column": "platform.app",
         "order": 2,
         "isExtensible": true
       },
-      "platform.projectSettings": { "column": "platform.project", "order": 3 },
-      "platform.projectMisc": { "column": "platform.project", "order": 4 },
+      "platform.projectSettings": { "column": "platform.app", "order": 3 },
+      "platform.projectMisc": { "column": "platform.app", "order": 4 },
       "platform.windowGroup": { "column": "platform.window", "order": 1 },
       "platform.layoutGroup": { "column": "platform.layout", "order": 1 },
       "platform.helpRegistration": { "column": "platform.help", "order": 1, "isExtensible": true },
@@ -63,13 +63,13 @@
   },
   "defaultWebViewTopMenu": {
     "columns": {
-      "platform.project": { "label": "%webView_project%", "order": 1 }
+      "platform.app": { "label": "%webView_project%", "order": 1 }
     },
     "groups": {
-      "platform.projectTop": { "column": "platform.project", "order": 1, "isExtensible": true },
-      "platform.manageBooks": { "column": "platform.project", "order": 2 },
-      "platform.deleteProject": { "column": "platform.project", "order": 3 },
-      "platform.projectDetails": { "column": "platform.project", "order": 4, "isExtensible": true }
+      "platform.projectTop": { "column": "platform.app", "order": 1, "isExtensible": true },
+      "platform.manageBooks": { "column": "platform.app", "order": 2 },
+      "platform.deleteProject": { "column": "platform.app", "order": 3 },
+      "platform.projectDetails": { "column": "platform.app", "order": 4, "isExtensible": true }
     },
     "items": [
       {

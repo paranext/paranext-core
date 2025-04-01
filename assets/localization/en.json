@@ -47,6 +47,7 @@
   "%mainMenu_window%": "Window",
   "%menuItemName_wordList%": "Word List",
   "%product_name%": "Platform.Bible",
+  "%product_shortName%": "Platform",
   "%project_full_name_missing%": "*Name Missing*",
   "%project_language_missing%": "*Language Missing*",
   "%project_name_missing%": "_NoName_",

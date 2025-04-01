@@ -6,7 +6,7 @@ const menuData = {
     'platformScriptureEditor.options': { label: 'Options', order: 3 },
     'platformScriptureEditor.tools': { label: 'Tools', order: 4 },
     'platformScriptureEditor.info': { label: 'Info', order: 5 },
-    'platform.project': { label: 'Project', order: 1 },
+    'platform.app': { label: 'Project', order: 1 },
   },
   groups: {
     'platformScriptureEditor.colors': {
@@ -30,14 +30,14 @@ const menuData = {
       order: 3,
     },
     'platform.projectTop': {
-      column: 'platform.project',
+      column: 'platform.app',
       order: 1,
       isExtensible: true,
     },
-    'platform.manageBooks': { column: 'platform.project', order: 2 },
-    'platform.deleteProject': { column: 'platform.project', order: 3 },
+    'platform.manageBooks': { column: 'platform.app', order: 2 },
+    'platform.deleteProject': { column: 'platform.app', order: 3 },
     'platform.projectDetails': {
-      column: 'platform.project',
+      column: 'platform.app',
       order: 4,
       isExtensible: true,
     },
