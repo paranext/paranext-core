@@ -104,16 +104,7 @@ export function ComboBox<T extends ComboBoxOption = ComboBoxOption>({
         >
           <div className="tw-flex tw-flex-1 tw-items-center tw-overflow-hidden">
             {icon && <div className="tw-pe-2">{icon}</div>}
-            <span
-              className={cn(
-                'tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap',
-                // Placeholder text should be muted-foreground
-                // This condition was added as requested by UX
-                {
-                  'tw-text-muted-foreground': !value,
-                },
-              )}
-            >
+            <span className={cn('tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap')}>
               {value ? getOptionLabel(value) : buttonPlaceholder}
             </span>
           </div>
