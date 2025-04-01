@@ -42,7 +42,8 @@
       "%settings_get_resources_group1_label%": "Get Resources Project Settings",
       "%settings_get_resources_excludePdpFactoryIdsInHome_label%": "PDP Factory IDs to exclude in Home",
       "%settings_get_resources_excludePdpFactoryIdsInHome_description%": "List of PDP Factory IDs to exclude when searching for projects to display in the Home projects list",
-      "%mainMenu_openHome%": "Home..."
+      "%mainMenu_openHome%": "Home...",
+      "%mainMenu_open%": "Open..."
     }
   }
 }

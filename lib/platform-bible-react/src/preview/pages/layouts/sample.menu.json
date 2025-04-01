@@ -1,14 +1,14 @@
 {
   "columns": {
-    "platform.project": { "label": "Paratext", "order": 0 },
+    "platform.app": { "label": "Paratext", "order": 0 },
     "platform.help": { "label": "Help", "order": 3, "isExtensible": true },
     "isExtensible": true
   },
   "groups": {
-    "paratext.sendReceive": { "column": "platform.project", "order": 1 },
-    "paratext.openCreate": { "column": "platform.project", "order": 2 },
-    "paratext.saveDelete": { "column": "platform.project", "order": 3 },
-    "paratext.misc": { "column": "platform.project", "order": 9999999, "isExtensible": true },
+    "paratext.sendReceive": { "column": "platform.app", "order": 1 },
+    "paratext.openCreate": { "column": "platform.app", "order": 2 },
+    "paratext.saveDelete": { "column": "platform.app", "order": 3 },
+    "paratext.misc": { "column": "platform.app", "order": 9999999, "isExtensible": true },
     "platform.windowGroup1": { "column": "platform.window", "order": 1 },
     "platform.windowGroup2": { "column": "platform.window", "order": 2 },
     "platform.layoutSaveDelete": { "column": "platform.layout", "order": 1 },
