@@ -130,5 +130,7 @@
   "%settings_platform_paratextDataLastRegistryDataCachedTimes_label%": "ParatextData Last Registry Data Cached Times",
   "%settings_platform_comments_enabled_label%": "Comments enabled (experimental)",
   "%settings_platform_comments_enabled_description%": "Enabled reading and writing comments in projects. This is an experimental feature.",
+  "%settings_platform_requestTimeout_label%": "Request Timeout",
+  "%settings_platform_requestTimeout_description%": "Number of seconds to allow internal requests to resolve. Requests that take longer than this will be aborted. Set to 0 to never abort requests.",
   "%webView_title_type_formatString%": "{type} {defaultTitle}"
 }

@@ -1494,12 +1494,14 @@ declare module 'shared/services/network.service' {
    * papiNetworkService
    */
   import { InternalRequestHandler } from 'shared/data/rpc.model';
-  import { UnsubscriberAsync, PlatformEventEmitter, PlatformEvent } from 'platform-bible-utils';
+  import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
   import { SerializedRequestType } from 'shared/utils/util';
   import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
+  /** Set the number of seconds that network requests in this process should wait before timing out */
+  export function setRequestTimeout(timeoutSeconds: number): void;
   /**
    * Send a request on the network and resolve the response contents.
    *
@@ -3195,6 +3197,12 @@ declare module 'papi-shared-types' {
     };
     /** Enable reading and writing comments in projects. This is an experimental feature. */
     'platform.commentsEnabled': boolean;
+    /**
+     * Timeout in seconds for requests to be resolved before they are considered to have failed.
+     *
+     * If the timeout is set to 0, then requests will never timeout.
+     */
+    'platform.requestTimeout': number;
   }
   /**
    * Names for each user setting available on the papi.

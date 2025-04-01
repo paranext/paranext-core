@@ -20,6 +20,7 @@ internal class PapiClient : IDisposable
     private readonly CancellationTokenSource _cancellationTokenSource = new();
     private readonly CancellationToken _cancellationToken;
     private TaskCompletionSource _disconnectTaskCompletionSource = new();
+    private TimeSpan _requestTimeout = TimeSpan.FromSeconds(30);
 
     private bool _isDisposed = false;
 
@@ -134,6 +135,22 @@ internal class PapiClient : IDisposable
     }
 
     /// <summary>
+    /// Set the timeout for requests sent to the server.
+    /// </summary>
+    /// <param name="timeout">Timeout to set</param>
+    /// <remarks>
+    /// The default timeout is 30 seconds. This should be updated from app settings.
+    /// If the timeout is set to 0, then the request will wait indefinitely for a response.
+    /// </remarks>
+    public void SetRequestTimeout(TimeSpan timeout)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+
+        Console.WriteLine($"Request timeout set to {timeout.TotalMilliseconds}ms");
+        _requestTimeout = timeout;
+    }
+
+    /// <summary>
     /// Send a request to the server expecting a returned value
     /// </summary>
     /// <param name="requestType">Type of request intended for the server</param>
@@ -158,10 +175,17 @@ internal class PapiClient : IDisposable
             return (T)result;
         }
 
+        using var timeoutCancellationTokenSource = new CancellationTokenSource();
+        timeoutCancellationTokenSource.CancelAfter(_requestTimeout);
+        using var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
+            _cancellationToken,
+            timeoutCancellationTokenSource.Token
+        );
+
         return await _jsonRpc.InvokeWithCancellationAsync<T?>(
             requestType,
             requestContents,
-            _cancellationToken
+            _requestTimeout.TotalMilliseconds > 0 ? linkedTokenSource.Token : _cancellationToken
         );
     }
 
@@ -180,11 +204,20 @@ internal class PapiClient : IDisposable
         if (_localMethods.TryGetValue(requestType, out Delegate? handler) && handler != null)
             handler.DynamicInvoke(requestContents?.ToArray());
         else
+        {
+            using var timeoutCancellationTokenSource = new CancellationTokenSource();
+            timeoutCancellationTokenSource.CancelAfter(_requestTimeout);
+            using var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
+                _cancellationToken,
+                timeoutCancellationTokenSource.Token
+            );
+
             await _jsonRpc.InvokeWithCancellationAsync(
                 requestType,
                 requestContents,
-                _cancellationToken
+                _requestTimeout.TotalMilliseconds > 0 ? linkedTokenSource.Token : _cancellationToken
             );
+        }
     }
 
     /// <summary>

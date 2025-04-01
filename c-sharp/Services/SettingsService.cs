@@ -5,9 +5,45 @@ namespace Paranext.DataProvider.Services;
 internal static class SettingsService
 {
     public const string SETTINGS_SERVICE_NAME = "platform.settingsServiceDataProvider";
+    private const string SERVICE_UPDATE_EVENT = $"{SETTINGS_SERVICE_NAME}-data:onDidUpdate";
     private const string SERVICE_OBJECT = $"object:{SETTINGS_SERVICE_NAME}-data";
     private const string SERVICE_GET = $"{SERVICE_OBJECT}.get";
     private const string SERVICE_SET = $"{SERVICE_OBJECT}.set";
+
+    public static void Initialize(PapiClient papiClient)
+    {
+        papiClient.RegisterEventHandler(
+            SERVICE_UPDATE_EVENT,
+            (JsonElement _eventParams) =>
+            {
+                try
+                {
+                    int requestTimeoutSeconds = GetSetting<int>(
+                        papiClient,
+                        Settings.REQUEST_TIMEOUT
+                    );
+                    papiClient.SetRequestTimeout(new TimeSpan(0, 0, requestTimeoutSeconds));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error updating request timeout: {ex}");
+                }
+            }
+        );
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                int requestTimeoutSeconds = GetSetting<int>(papiClient, Settings.REQUEST_TIMEOUT);
+                papiClient.SetRequestTimeout(new TimeSpan(0, 0, requestTimeoutSeconds));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error setting request timeout: {ex}");
+            }
+        });
+    }
 
     public static T? GetSetting<T>(PapiClient papiClient, string key)
     {
