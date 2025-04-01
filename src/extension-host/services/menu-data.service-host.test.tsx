@@ -95,14 +95,14 @@ const MOCK_MENU_DATA: PlatformMenus = {
   },
   defaultWebViewTopMenu: {
     columns: {
-      'platform.project': { label: '%webView_project%', order: 1 },
+      'platform.app': { label: '%webView_project%', order: 1 },
       'platform.edit': { label: '%webView_edit%', order: 2, isExtensible: true },
     },
     groups: {
-      'platform.projectTop': { column: 'platform.project', order: 1 },
-      'platform.manageBooks': { column: 'platform.project', order: 2 },
-      'platform.deleteProject': { column: 'platform.project', order: 3 },
-      'platform.projectDetails': { column: 'platform.project', order: 4, isExtensible: true },
+      'platform.projectTop': { column: 'platform.app', order: 1 },
+      'platform.manageBooks': { column: 'platform.app', order: 2 },
+      'platform.deleteProject': { column: 'platform.app', order: 3 },
+      'platform.projectDetails': { column: 'platform.app', order: 4, isExtensible: true },
       'platform.undoRedo': { column: 'platform.edit', order: 1 },
       'platform.cutCopyPaste': { column: 'platform.edit', order: 2 },
     },

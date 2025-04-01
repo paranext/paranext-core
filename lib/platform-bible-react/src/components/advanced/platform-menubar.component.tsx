@@ -157,7 +157,7 @@ export function PlatformMenubar({
 
   const getRefForColumn = (columnKey: string) => {
     switch (columnKey) {
-      case 'platform.project':
+      case 'platform.app':
         return projectMenuRef;
       case 'platform.window':
         return windowMenuRef;

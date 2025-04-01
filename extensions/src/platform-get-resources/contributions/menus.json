@@ -4,10 +4,10 @@
     "groups": {},
     "items": [
       {
-        "label": "%mainMenu_openHome%",
-        "localizeNotes": "Application main menu > Project > Open Home...",
+        "label": "%mainMenu_open%",
+        "localizeNotes": "Application main menu > Project > Open...",
         "group": "platform.projectResources",
-        "order": 1001,
+        "order": -100,
         "command": "platformGetResources.openHome"
       }
     ]
