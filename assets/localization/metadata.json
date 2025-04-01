@@ -18,5 +18,8 @@
   },
   "%settings_platform_group1_label_alternative%": {
     "fallbackKey": "%settings_platform_group1_label%"
+  },
+  "%product_shortName%": {
+    "fallbackKey": "%product_name%"
   }
 }

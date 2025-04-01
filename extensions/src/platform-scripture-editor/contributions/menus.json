@@ -2,22 +2,7 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": [
-      {
-        "label": "%mainMenu_openPlatformScriptureEditor%",
-        "localizeNotes": "Application main menu > Project > Open Scripture Editor",
-        "group": "platform.projectResources",
-        "order": -100,
-        "command": "platformScriptureEditor.openScriptureEditor"
-      },
-      {
-        "label": "%mainMenu_openPlatformResourceViewer%",
-        "localizeNotes": "Application main menu > Project > Open Resource Viewer",
-        "group": "platform.projectResources",
-        "order": -99,
-        "command": "platformScriptureEditor.openResourceViewer"
-      }
-    ]
+    "items": []
   },
   "webViewMenus": {
     "platformScriptureEditor.react": {
@@ -85,7 +70,7 @@
             "command": "platformScripture.openPunctuationInventory"
           },
           {
-            "label": "%webView_platformScriptureEditor_openChecksSidePanel%",
+            "label": "%webView_platformScriptureEditor_openChecks%",
             "group": "platformScriptureEditor.checks",
             "order": 3,
             "command": "platformScripture.openChecksSidePanel"
