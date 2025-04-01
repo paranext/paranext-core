@@ -289,10 +289,12 @@ async function main() {
       mainWindow = undefined;
     });
 
-    try {
-      await subscribeCurrentMacosMenubar();
-    } catch (error) {
-      logger.info(`Failed to build the macOS menubar ${error}`);
+    if (process.platform === 'darwin') {
+      try {
+        await subscribeCurrentMacosMenubar();
+      } catch (error) {
+        logger.info(`Failed to build the macOS menubar ${error}`);
+      }
     }
 
     // This sets the menu on Windows and Linux

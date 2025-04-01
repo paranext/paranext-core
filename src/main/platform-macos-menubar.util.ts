@@ -43,8 +43,12 @@ export async function subscribeCurrentMacosMenubar() {
         currentMacosMenubarTemplate = await fallbackToDefaultMacosMenubar();
       }
 
-      const coreMacosMenubar = Menu.buildFromTemplate(currentMacosMenubarTemplate);
-      Menu.setApplicationMenu(coreMacosMenubar);
+      try {
+        const coreMacosMenubar = Menu.buildFromTemplate(currentMacosMenubarTemplate);
+        Menu.setApplicationMenu(coreMacosMenubar);
+      } catch (error) {
+        logger.error('Failed to build current macOS menubar', error);
+      }
     },
   );
 }
