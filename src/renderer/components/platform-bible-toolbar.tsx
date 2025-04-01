@@ -11,9 +11,13 @@ import {
   getToolbarOSReservedSpaceClassName,
   ScrollGroupSelector,
   Toolbar,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
   usePromise,
 } from 'platform-bible-react';
-import { getLocalizeKeysForScrollGroupIds, ScrollGroupId } from 'platform-bible-utils';
+import { getLocalizeKeysForScrollGroupIds, LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
 import { handleMenuCommand } from './platform-bible-menu.commands';
 import { provideMenuData } from './platform-bible-menu.data';
@@ -26,6 +30,11 @@ const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
 );
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIdsTop);
+
+const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
+  '%mainMenu_openParatextRegistration%',
+  '%mainMenu_openHome%',
+];
 
 export function PlatformBibleToolbar() {
   // Internal state tracker for scroll group in local storage
@@ -49,6 +58,8 @@ export function PlatformBibleToolbar() {
   );
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
+
+  const [localizedStrings] = useLocalizedStrings(LOCALIZED_STRING_KEYS);
 
   const [osPlatformToReserveSpaceFor] = usePromise(
     useCallback(async () => {
@@ -93,14 +104,49 @@ export function PlatformBibleToolbar() {
       appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         // This is a placeholder for the actual user menu
-        <div className="tw-h-8 tw-w-8 tw-flex tw-items-center tw-justify-center tw-rounded-full tw-border-input tw-border tw-border-solid tw-cursor-not-allowed">
-          <User className="tw-h-4" />
-        </div>
+
+        <TooltipProvider delayDuration={300}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="pr-twp tw-h-8"
+                onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
+              >
+                <User />
+              </Button>
+            </TooltipTrigger>
+            {localizedStrings['%mainMenu_openParatextRegistration%'] && (
+              <TooltipContent>
+                <p className="tw-font-light">
+                  {localizedStrings['%mainMenu_openParatextRegistration%']}
+                </p>
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
       }
     >
-      <Button variant="ghost" onClick={() => sendCommand('platformGetResources.openHome')}>
-        <HomeIcon />
-      </Button>
+      <TooltipProvider delayDuration={300}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="tw-h-8"
+              onClick={() => sendCommand('platformGetResources.openHome')}
+            >
+              <HomeIcon />
+            </Button>
+          </TooltipTrigger>
+          {localizedStrings['%mainMenu_openHome%'] && (
+            <TooltipContent>
+              <p className="tw-font-light">{localizedStrings['%mainMenu_openHome%']}</p>
+            </TooltipContent>
+          )}
+        </Tooltip>
+      </TooltipProvider>
       <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} className="tw-h-8" />
       <ScrollGroupSelector
         availableScrollGroupIds={availableScrollGroupIdsTop}
