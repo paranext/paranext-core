@@ -129,7 +129,7 @@ export function Toolbar({
         {/* Configure area */}
         <div className="tw-flex tw-grow tw-basis-0 tw-justify-end">
           <div
-            className="tw-flex tw-items-center tw-gap-2 tw-pe-[4px]"
+            className="tw-flex tw-items-center tw-gap-2 tw-pe-1"
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
