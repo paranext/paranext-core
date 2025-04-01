@@ -5,19 +5,21 @@
  */
 
 import {
-  EventHandler,
   CATEGORY_COMMAND,
-  InternalRequestHandler,
+  EventHandler,
   fixupResponse,
   GET_METHODS,
+  InternalRequestHandler,
 } from '@shared/data/rpc.model';
 import {
+  indexOf,
+  isPlatformError,
+  Mutex,
+  newPlatformError,
+  PlatformEvent,
+  PlatformEventEmitter,
   stringLength,
   UnsubscriberAsync,
-  PlatformEventEmitter,
-  PlatformEvent,
-  indexOf,
-  Mutex,
 } from 'platform-bible-utils';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
@@ -25,6 +27,7 @@ import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import { JSONRPCResponse } from '@node_modules/json-rpc-2.0/dist';
 
 // #region Local event handling
 
@@ -95,6 +98,22 @@ export const shutdown = async () => {
 
 // #region Request handling
 
+// This is a hard coded default that will be replaced with a settings value after it loads
+let requestTimeoutMs = 30000;
+
+/** Network request timeouts must be injected to avoid dependency loops with the settings service */
+export function setRequestTimeout(timeoutSeconds: number) {
+  if (timeoutSeconds < 0)
+    throw new Error(`Invalid request timeout ${timeoutSeconds}: must be a non-negative number`);
+  requestTimeoutMs = timeoutSeconds * 1000; // convert to milliseconds
+  logger.info(`[${globalThis.processType}] Request timeout set to ${requestTimeoutMs}ms`);
+}
+
+/** Inspect a value to see if we should process it as a JSONRPCResponse of some sort */
+function isJsonRpcResponse(response: unknown): response is JSONRPCResponse {
+  return !!response && typeof response === 'object' && 'jsonrpc' in response;
+}
+
 /** Ensure the command name consists of two strings separated by at least one period */
 function validateCommandFormatting(commandName: string) {
   if (!commandName)
@@ -136,14 +155,48 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   validateRequestTypeFormatting(requestType);
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
-  const response = fixupResponse(await jsonRpc.request(requestType, args));
-  if (response.error) {
-    logger.debug(`JSON-RPC Request error (${response.error.code}): ${response.error.message}`);
-    throw new Error(response.error.message, {
-      cause: `JSON-RPC Request error ${response.error.code}`,
-    });
+  let timeoutOccurred = false;
+  let response: unknown;
+  // If the request takes longer than the configured timeout, throw an error
+  if (requestTimeoutMs > 0) {
+    await Promise.race([
+      (async () => {
+        try {
+          response = fixupResponse(await jsonRpc.request(requestType, args));
+        } catch (e) {
+          response = newPlatformError(e);
+        }
+      })(),
+      new Promise<void>((resolve) => {
+        setTimeout(() => {
+          timeoutOccurred = true;
+          resolve();
+        }, requestTimeoutMs);
+      }),
+    ]);
   }
-  return response.result;
+  // There is no timeout so we can run the request normally
+  else {
+    try {
+      response = fixupResponse(await jsonRpc.request(requestType, args));
+    } catch (e) {
+      response = newPlatformError(e);
+    }
+  }
+
+  if (isJsonRpcResponse(response)) {
+    if (!response.error) return response.result;
+    response = `JSON-RPC Request error (${response.error.code}): ${response.error.message}`;
+  } else if (isPlatformError(response)) {
+    logger.debug(response.message);
+    throw response;
+  } else {
+    response = timeoutOccurred
+      ? `JSON-RPC Request timed out: ${requestType} ${JSON.stringify(args)}`
+      : `Invalid JSON-RPC Response: ${JSON.stringify(response)}`;
+  }
+  logger.debug(response);
+  throw newPlatformError(response);
 };
 
 /**

@@ -31,6 +31,11 @@ export const platformSettings: SettingsContribution = {
       description: '%settings_platform_comments_enabled_description%',
       default: false,
     },
+    'platform.requestTimeout': {
+      label: '%settings_platform_requestTimeout_label%',
+      description: '%settings_platform_requestTimeout_description%',
+      default: 10,
+    },
   },
 };
 
@@ -79,6 +84,12 @@ const booleanValidator: SettingValidator<'platform.commentsEnabled'> = async (
   return typeof newValue === 'boolean';
 };
 
+const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  return typeof newValue === 'number' && newValue >= 0;
+};
+
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
@@ -86,4 +97,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
   'platform.commentsEnabled': booleanValidator,
+  'platform.requestTimeout': requestTimeoutValidator,
 };

@@ -47,6 +47,7 @@ public static class Program
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
             PtxUtilsDataSettings.Initialize(new PersistedPtxUtilsSettings(papi));
 
+            SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi);
             var dblResources = new DblResourcesDataProvider(papi);

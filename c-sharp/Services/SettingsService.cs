@@ -9,6 +9,28 @@ internal static class SettingsService
     private const string SERVICE_GET = $"{SERVICE_OBJECT}.get";
     private const string SERVICE_SET = $"{SERVICE_OBJECT}.set";
 
+    public static void Initialize(PapiClient papiClient)
+    {
+        papiClient.RegisterEventHandler(
+            "platform.settingsServiceDataProvider-data:onDidUpdate",
+            (JsonElement _eventParams) =>
+            {
+                try
+                {
+                    int requestTimeoutSeconds = GetSetting<int>(
+                        papiClient,
+                        Settings.REQUEST_TIMEOUT
+                    );
+                    papiClient.SetRequestTimeout(new TimeSpan(0, 0, requestTimeoutSeconds));
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error in SettingsService.Initialize: {ex}");
+                }
+            }
+        );
+    }
+
     public static T? GetSetting<T>(PapiClient papiClient, string key)
     {
         return ThreadingUtils.GetTaskResult(

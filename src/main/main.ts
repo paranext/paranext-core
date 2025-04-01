@@ -33,6 +33,7 @@ import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { startAppService } from '@main/services/app.service-host';
+import { settingsService } from '@shared/services/settings.service';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -57,6 +58,15 @@ const PROCESS_CLOSE_TIME_OUT = 2000;
  * we only run `relaunch` once which has a slightly different use case than `isClosing`
  */
 let willRestart = false;
+
+// Add unhandled exception and rejection handlers
+process.on('uncaughtException', (error) => {
+  logger.error(`Unhandled exception in main process: ${getErrorMessage(error)}`);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error(`Unhandled promise rejection in main process, reason: ${getErrorMessage(reason)}`);
+});
 
 /**
  * Open a link in the browser following the restrictions we put in place in Platform.Bible
@@ -374,6 +384,14 @@ async function main() {
       return undefined;
     })
     .catch(logger.info);
+
+  // #endregion
+
+  // #region Ensure the request timeout has been set
+
+  // settingsService updates the request timeout during initialization, so using the service in any
+  // way ensures the timeout is set
+  logger.debug(`Request timeout is ${await settingsService.get('platform.requestTimeout')} sec`);
 
   // #endregion
 
