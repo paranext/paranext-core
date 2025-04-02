@@ -49,7 +49,7 @@
     --ring: 222.2 84% 4.9%; /* black */
 
     --sidebar-background: 210 20% 98%; /* popover platform */
-    --sidebar-foreground: 222.2 84% 4.9%; /* foreground */
+    --sidebar-foreground: 222.2 84% 4.9%; /* black */
     --sidebar-primary: 222.2 47.4% 11.2%;
     --sidebar-primary-foreground: 210 40% 98%;
     --sidebar-accent: 210 50% 95%;
@@ -114,7 +114,7 @@
     --ring: 15.5 13.2% 53.9%; /*paratext brown */
 
     --sidebar-background: 40 20% 98%; /* popover paratext */
-    --sidebar-foreground: 15.5 13.2% 53.9%; /*paratext brown */
+    --sidebar-foreground: 12 10.95% 26.86%; /* dark brown */
     --sidebar-primary: 173.4 82.1% 15.3%; /* paratext dark green */
     --sidebar-primary-foreground: 40 85.7% 97.3%; /* paratext sand */
     --sidebar-accent: 33.9 32.4% 86.1%; /* paratext light brown */
@@ -156,11 +156,11 @@
 }
 
 @layer base {
-  * {
+  .pr-twp {
     @apply tw-border-border;
   }
 
-  body {
+  .pr-twp body {
     @apply tw-bg-background tw-text-foreground;
   }
 }
