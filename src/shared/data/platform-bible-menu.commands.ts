@@ -2,11 +2,6 @@ import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { Command } from 'platform-bible-react';
 import { CommandNames } from 'papi-shared-types';
-import { openWindow } from '@renderer/services/web-view.service-host';
-
-export function visitPage(url: string) {
-  openWindow(url);
-}
 
 /**
  * Run a command from a menu
@@ -30,7 +25,17 @@ export function handleMenuCommand(command: Command, tabId?: string) {
       logger.info(`TODO: display text collection modal. tabId: ${tabId}`);
       break;
     case 'platform.visitSupportPage':
-      visitPage('https://support.bible');
+      (async () => {
+        try {
+          // Assert the more specific type.
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          await commandService.sendCommand('platform.openWindow', 'https://support.bible');
+        } catch (e) {
+          throw new Error(
+            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${e}`,
+          );
+        }
+      })();
       break;
     case 'platform.about':
       logger.info(`TODO: display about. tabId: ${tabId}`);
