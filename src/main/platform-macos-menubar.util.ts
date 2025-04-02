@@ -188,8 +188,8 @@ async function translatePlatformMenuItemsAndCombine(
       (menu) => menu.id === 'macosMenubar.appMenu',
     );
     // Move 'Platform' menu items to macOS generated app menu and remove duplicate app menu
-    if (column.label === '%product_shortName%') {
-      appMenu?.submenu?.push(...column.submenu);
+    if (column.label === '%product_shortName%' && appMenu) {
+      appMenu.submenu?.push(...column.submenu);
       column.submenu = [];
       column.label = '%%'; // If there is no label, this menu item won't show up
       return;
