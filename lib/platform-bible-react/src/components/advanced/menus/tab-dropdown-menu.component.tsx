@@ -26,16 +26,9 @@ import {
   MultiColumnMenu,
 } from 'platform-bible-utils';
 import { Fragment, ReactNode } from 'react';
+import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import { CommandHandler } from './platform-menubar.component';
-
-const getSubMenuKeyForId = (
-  groups: Localized<GroupsInMultiColumnMenu>,
-  id: string,
-): string | undefined => {
-  return Object.entries(groups).find(
-    ([, value]) => 'menuItem' in value && value.menuItem === id,
-  )?.[0];
-};
+import MenuItemIcon from './menu-icon.component';
 
 const getGroupContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
@@ -67,7 +60,13 @@ const getGroupContent = (
                     commandHandler(item);
                   }}
                 >
+                  {item.iconPathBefore && (
+                    <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
+                  )}
                   {item.label}
+                  {item.iconPathAfter && (
+                    <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
+                  )}
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
@@ -78,7 +77,7 @@ const getGroupContent = (
                       {getGroupContent(
                         groups,
                         items,
-                        getSubMenuKeyForId(groups, item.id),
+                        getSubMenuGroupKeyForMenuItemId(groups, item.id),
                         commandHandler,
                       )}
                     </DropdownMenuSubContent>

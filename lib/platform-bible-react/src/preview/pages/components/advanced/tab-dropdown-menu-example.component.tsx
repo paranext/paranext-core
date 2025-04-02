@@ -1,4 +1,4 @@
-import TabDropdownMenu from '@/components/advanced/tab-dropdown-menu.component';
+import TabDropdownMenu from '@/components/advanced/menus/tab-dropdown-menu.component';
 import { BookIcon } from 'lucide-react';
 
 const menuData = {
@@ -51,6 +51,8 @@ const menuData = {
       group: 'platformScriptureEditor.colors',
       order: 2,
       command: 'platformScriptureEditor.changeBackgroundColor',
+      iconPathBefore:
+        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
     },
     {
       label: 'Text Color',
@@ -58,6 +60,8 @@ const menuData = {
       group: 'platformScriptureEditor.colors',
       order: 1,
       command: 'platformScriptureEditor.changeTextColor',
+      iconPathAfter:
+        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
     },
     {
       label: 'Inventory: Characters...',
@@ -107,6 +111,10 @@ const menuData = {
       group: 'platformScriptureEditor.general',
       order: 1,
       command: 'platformScriptureEditor.showPublisherInfo',
+      iconPathAfter:
+        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
+      iconPathBefore:
+        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
     },
     {
       label: 'Copyright Info',
