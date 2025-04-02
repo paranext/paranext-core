@@ -42,17 +42,17 @@ Some users may find that not everything works properly in Linux without some add
 
 ### Mac Users
 
-If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is damaged and can't be opened. You should move it to the Trash." or something very similar:
+If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is an app downloaded from the Internet. Are you sure you want to open it?":
 
-![mac-arm-damaged-warning](doc-meta/mac-arm-damaged-warning.png)
+![mac-arm-downloaded-internet-warning](doc-meta/mac-arm-downloaded-internet-warning.png)
 
-Unfortunately, this is the message Apple chose to display for ARM applications that are not signed (including Platform.Bible, since we have not yet set up application code signing on Mac).
+Don't be alarmed! This is a typical warning, seen when downloading most apps from the Internet. It also says "Apple checked it for malicious software and none was detected." If you trust Platform.Bible and would like to run it select "Open."
 
-If you trust Platform.Bible and would like to run it even though it is not code signed, you will need to run the following terminal command every time you install a new version of it:
+Once the app is opened, you may see a dialog that says "Platform.Bible wants to use your confidential information stored in 'Platform.Bible Safe Storage' in your keychain."
 
-`xattr -c /Applications/Platform.Bible.app`
+![mac-arm-keychain-access-warning](doc-meta/mac-arm-keychain-access-warning.png)
 
-[`xattr -c` clears all attributes on the provided file](https://ss64.com/mac/xattr.html). Running this command removes all attributes on the currently-installed Platform.Bible application file including the quarantine flag Gatekeeper puts on unsigned ARM applications downloaded from the internet.
+We use encryption to keep your data safe, allowing access to keychain provides encryption services with `papi.dataProtection` so extensions can store user data securely. If you approve of this, please allow keychain access.
 
 ## Developer Install
 
