@@ -4,35 +4,42 @@ import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
-export const platformSettings: SettingsContribution = {
-  label: '%settings_platform_group1_label_alternative%',
-  description: '%settings_platform_group1_description%',
-  properties: {
-    'platform.verseRef': {
-      label: '%settings_platform_verseRef_label%',
-      description: '%settings_platform_verseRef_description%',
-      default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
-    },
-    'platform.interfaceLanguage': {
-      label: '%settings_platform_interfaceLanguage_label%',
-      description: '%settings_platform_interfaceLanguage_description%',
-      default: ['en'],
-    },
-    'platform.ptxUtilsMementoData': {
-      label: '%settings_platform_ptxUtilsMementoData_label%',
-      default: {},
-    },
-    'platform.paratextDataLastRegistryDataCachedTimes': {
-      label: '%settings_platform_paratextDataLastRegistryDataCachedTimes_label%',
-      default: {},
-    },
-    'platform.commentsEnabled': {
-      label: '%settings_platform_comments_enabled_label%',
-      description: '%settings_platform_comments_enabled_description%',
-      default: false,
+export const platformSettings: SettingsContribution = [
+  {
+    label: '%settings_platform_group1_label_alternative%',
+    description: '%settings_platform_group1_description%',
+    properties: {
+      'platform.verseRef': {
+        label: '%settings_platform_verseRef_label%',
+        description: '%settings_platform_verseRef_description%',
+        default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+      },
+      'platform.interfaceLanguage': {
+        label: '%settings_platform_interfaceLanguage_label%',
+        description: '%settings_platform_interfaceLanguage_description%',
+        default: ['en'],
+      },
+      'platform.ptxUtilsMementoData': {
+        label: '%settings_platform_ptxUtilsMementoData_label%',
+        default: {},
+      },
+      'platform.paratextDataLastRegistryDataCachedTimes': {
+        label: '%settings_platform_paratextDataLastRegistryDataCachedTimes_label%',
+        default: {},
+      },
+      'platform.commentsEnabled': {
+        label: '%settings_platform_comments_enabled_label%',
+        description: '%settings_platform_comments_enabled_description%',
+        default: false,
+      },
+      'platform.requestTimeout': {
+        label: '%settings_platform_requestTimeout_label%',
+        description: '%settings_platform_requestTimeout_description%',
+        default: 10,
+      },
     },
   },
-};
+];
 
 // TODO: Add range checking of BCV numbers given the current versification
 export const verseRefSettingsValidator: SettingValidator<'platform.verseRef'> = async (
@@ -79,6 +86,12 @@ const booleanValidator: SettingValidator<'platform.commentsEnabled'> = async (
   return typeof newValue === 'boolean';
 };
 
+const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  return typeof newValue === 'number' && newValue >= 0;
+};
+
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
@@ -86,4 +99,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.ptxUtilsMementoData': serializableStringDictionarySettingValidator,
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
   'platform.commentsEnabled': booleanValidator,
+  'platform.requestTimeout': requestTimeoutValidator,
 };

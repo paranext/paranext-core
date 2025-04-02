@@ -1,5 +1,6 @@
 import '@renderer/global-this.model';
 import { createRoot } from 'react-dom/client';
+import { getErrorMessage } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { startWebViewService } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
@@ -15,6 +16,10 @@ import { startNotificationService } from './services/notification.service-host';
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
   logger.error(`Unhandled error in renderer from ${filename}:${lineno}:${colno}, '${error}'`);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  logger.error(`Unhandled rejection in renderer, '${getErrorMessage(event.reason)}'`);
 });
 
 logger.info(`Starting renderer${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`);
