@@ -100,7 +100,7 @@ export function Toolbar({
         {/* App Menu area */}
         <div className="tw-flex tw-grow tw-basis-0">
           <div
-            className="tw-flex tw-items-center"
+            className="tw-flex tw-items-center tw-gap-2"
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
@@ -129,7 +129,7 @@ export function Toolbar({
         {/* Configure area */}
         <div className="tw-flex tw-grow tw-basis-0 tw-justify-end">
           <div
-            className="tw-flex tw-items-center tw-gap-2"
+            className="tw-flex tw-items-center tw-gap-2 tw-pe-1"
             /* @ts-ignore Electron-only property */
             style={shouldUseAsAppDragArea ? { WebkitAppRegion: 'no-drag' } : undefined}
           >
