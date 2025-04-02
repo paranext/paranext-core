@@ -182,30 +182,18 @@ async function translatePlatformMenuItemsAndCombine(
 
   const combinedMenubar = [...macosMenubarObject];
 
-  // Manually move the 'About Platform.Bible', 'Settings', and 'Open Paratext Registration' items to the app menu
   platformMainMenuContent.forEach((column) => {
     if (!column.submenu || !Array.isArray(column.submenu)) return;
-    ['%mainMenu_about%', '%mainMenu_settings%', '%mainMenu_openParatextRegistration%'].forEach(
-      (localizeKey) => {
-        const index = Array.isArray(column.submenu)
-          ? column.submenu.findIndex((item) => item.label === localizeKey)
-          : -1;
-        if (index !== -1) {
-          const [menuItem] = Array.isArray(column.submenu) ? column.submenu.splice(index, 1) : [];
-          const appMenu: MenuItemConstructorOptionsWithOrder | undefined = combinedMenubar.find(
-            (menu) => menu.id === 'macosMenubar.appMenu',
-          );
-          if (appMenu) {
-            const newSubmenu: MenuItemConstructorOptionsWithOrder[] = [
-              ...(Array.isArray(appMenu.submenu) ? appMenu.submenu : []),
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              menuItem as MenuItemConstructorOptionsWithOrder,
-            ];
-            appMenu.submenu = newSubmenu;
-          }
-        }
-      },
+    const appMenu: MenuItemConstructorOptionsWithOrder | undefined = combinedMenubar.find(
+      (menu) => menu.id === 'macosMenubar.appMenu',
     );
+    // Move 'Platform' menu items to macOS generated app menu and remove duplicate app menu
+    if (column.label === '%product_shortName%') {
+      appMenu?.submenu?.push(...column.submenu);
+      column.submenu = [];
+      column.label = '%%'; // If there is no label, this menu item won't show up
+      return;
+    }
 
     const existingMenu = combinedMenubar.find(
       (menu) =>
