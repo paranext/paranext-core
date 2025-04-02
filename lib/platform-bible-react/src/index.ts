@@ -64,7 +64,10 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
-export type { Command, CommandHandler } from './components/advanced/platform-menubar.component';
+export type {
+  Command,
+  CommandHandler,
+} from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
@@ -90,7 +93,7 @@ export {
   SettingsListHeader,
   SettingsListItem,
 } from './components/advanced/settings-components/settings-list.component';
-export { default as TabDropdownMenu } from './components/advanced/tab-dropdown-menu.component';
+export { default as TabDropdownMenu } from './components/advanced/menus/tab-dropdown-menu.component';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,

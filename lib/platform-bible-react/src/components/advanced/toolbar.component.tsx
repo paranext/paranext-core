@@ -1,4 +1,7 @@
-import { CommandHandler, PlatformMenubar } from '@/components/advanced/platform-menubar.component';
+import {
+  CommandHandler,
+  PlatformMenubar,
+} from '@/components/advanced/menus/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { PropsWithChildren, ReactNode, useRef } from 'react';

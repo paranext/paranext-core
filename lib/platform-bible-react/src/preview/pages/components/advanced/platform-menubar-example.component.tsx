@@ -1,4 +1,4 @@
-import { PlatformMenubar } from '@/components/advanced/platform-menubar.component';
+import { PlatformMenubar } from '@/components/advanced/menus/platform-menubar.component';
 
 const menuData = {
   columns: {
@@ -25,6 +25,8 @@ const menuData = {
       group: 'platform.projectSettings',
       order: 1,
       command: 'platform.openSettings',
+      iconPathBefore:
+        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
     },
     {
       label: 'Exit',
@@ -32,6 +34,8 @@ const menuData = {
       group: 'platform.projectMisc',
       order: 999999999,
       command: 'platform.quit',
+      iconPathAfter:
+        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
     },
     {
       label: 'Visit Support.Bible',
@@ -39,6 +43,10 @@ const menuData = {
       group: 'platform.helpMisc',
       order: 1,
       command: 'platform.visitSupportPage',
+      iconPathAfter:
+        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
+      iconPathBefore:
+        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
     },
     {
       label: 'About Platform.Bible',
