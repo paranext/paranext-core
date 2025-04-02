@@ -192,7 +192,7 @@
   "%tab_title_unknown%": "Desconocido",
   "%webView_defaultTitle_webView%": "Vista Web",
   "%webView_edit%": "Editar",
-  "%webView_openProjectSettings%": "Abrir configuraciones del proyecto",
+  "%webView_openProjectSettings%": "Abrir configuraciones del proyecto...",
   "%webView_project%": "Proyecto",
   "%webView_projectAssignmentsAndProgress%": "Asignaciones y progreso",
   "%webView_title_type_formatString%": "{type} {defaultTitle}",
