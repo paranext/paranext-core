@@ -2,38 +2,13 @@ import React from 'react';
 import * as MenubarPrimitive from '@radix-ui/react-menubar';
 import { Check, ChevronRight, Circle } from 'lucide-react';
 
-import { cn } from '@/utils/shadcn-ui.util';
-import { cva } from 'class-variance-authority';
-
-/* #region CUSTOM add a different variant that can be used in all children from context */
-type MenubarContextProps = {
-  variant?: 'default' | 'muted';
-};
-
-const MenubarContext = React.createContext<MenubarContextProps | undefined>(undefined);
-
-function useContext() {
-  const context = React.useContext(MenubarContext);
-  if (!context) {
-    throw new Error('useContext must be used within a MenubarProvider.');
-  }
-
-  return context;
-}
-
-export const menubarVariants = cva('', {
-  variants: {
-    variant: {
-      default: '',
-      muted:
-        'hover:tw-bg-muted hover:tw-text-foreground focus:tw-bg-muted focus:tw-text-foreground data-[state=open]:tw-bg-muted data-[state=open]:tw-text-foreground',
-    },
-  },
-  defaultVariants: {
-    variant: 'default',
-  },
-});
-/* #endregion CUSTOM */
+import {
+  cn,
+  ComponentContext,
+  ComponentContextProps,
+  menuVariants,
+  useComponentContext,
+} from '@/utils/shadcn-ui.util';
 
 function MenubarMenu({ ...props }: React.ComponentProps<typeof MenubarPrimitive.Menu>) {
   return <MenubarPrimitive.Menu {...props} />;
@@ -58,18 +33,18 @@ function MenubarSub({ ...props }: React.ComponentProps<typeof MenubarPrimitive.S
 const Menubar = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Root> & {
-    variant?: MenubarContextProps['variant'];
+    variant?: ComponentContextProps['variant'];
   }
 >(({ className, variant = 'default', ...props }, ref) => {
   /* #region CUSTOM provide context to add variants */
-  const contextValue = React.useMemo<MenubarContextProps>(
+  const contextValue = React.useMemo<ComponentContextProps>(
     () => ({
       variant,
     }),
     [variant],
   );
   return (
-    <MenubarContext.Provider value={contextValue}>
+    <ComponentContext.Provider value={contextValue}>
       {/* #endregion CUSTOM */}
       <MenubarPrimitive.Root
         ref={ref}
@@ -79,7 +54,7 @@ const Menubar = React.forwardRef<
         )}
         {...props}
       />
-    </MenubarContext.Provider>
+    </ComponentContext.Provider>
   );
 });
 Menubar.displayName = MenubarPrimitive.Root.displayName;
@@ -88,14 +63,14 @@ const MenubarTrigger = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Trigger>
 >(({ className, ...props }, ref) => {
-  const context = useContext(); // CUSTOM use context to add variants
+  const context = useComponentContext(); // CUSTOM use context to add variants
   return (
     <MenubarPrimitive.Trigger
       ref={ref}
       className={cn(
         'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
         // CUSTOM
-        menubarVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
+        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
       )}
       {...props}
     />
@@ -109,14 +84,14 @@ const MenubarSubTrigger = React.forwardRef<
     inset?: boolean;
   }
 >(({ className, inset, children, ...props }, ref) => {
-  const context = useContext(); // CUSTOM use context to add variants
+  const context = useComponentContext(); // CUSTOM use context to add variants
   return (
     <MenubarPrimitive.SubTrigger
       ref={ref}
       className={cn(
         'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[state=open]:tw-bg-accent data-[state=open]:tw-text-accent-foreground',
         inset && 'tw-pl-8',
-        menubarVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
+        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
         className,
       )}
       {...props}
@@ -132,7 +107,7 @@ const MenubarSubContent = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.SubContent>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.SubContent>
 >(({ className, ...props }, ref) => {
-  const context = useContext(); // CUSTOM use context to add variants
+  const context = useComponentContext(); // CUSTOM use context to add variants
   return (
     <MenubarPrimitive.SubContent
       ref={ref}
@@ -154,7 +129,7 @@ const MenubarContent = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.Content>
 >(({ className, align = 'start', alignOffset = -4, sideOffset = 8, ...props }, ref) => {
-  const context = useContext(); // CUSTOM use context to add variants
+  const context = useComponentContext(); // CUSTOM use context to add variants
   return (
     <MenubarPrimitive.Portal>
       <MenubarPrimitive.Content
@@ -185,14 +160,14 @@ const MenubarItem = React.forwardRef<
     inset?: boolean;
   }
 >(({ className, inset, ...props }, ref) => {
-  const context = useContext(); // CUSTOM use context to add variants
+  const context = useComponentContext(); // CUSTOM use context to add variants
   return (
     <MenubarPrimitive.Item
       ref={ref}
       className={cn(
         'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
         inset && 'tw-pl-8',
-        menubarVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
+        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
         className,
       )}
       {...props}
@@ -205,13 +180,13 @@ const MenubarCheckboxItem = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.CheckboxItem>
 >(({ className, children, checked, ...props }, ref) => {
-  const context = useContext(); // CUSTOM use context to add variants
+  const context = useComponentContext(); // CUSTOM use context to add variants
   return (
     <MenubarPrimitive.CheckboxItem
       ref={ref}
       className={cn(
         'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pl-8 tw-pr-2 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-        menubarVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
+        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
         className,
       )}
       checked={checked}
@@ -232,13 +207,13 @@ const MenubarRadioItem = React.forwardRef<
   React.ElementRef<typeof MenubarPrimitive.RadioItem>,
   React.ComponentPropsWithoutRef<typeof MenubarPrimitive.RadioItem>
 >(({ className, children, ...props }, ref) => {
-  const context = useContext(); // CUSTOM use context to add variants
+  const context = useComponentContext(); // CUSTOM use context to add variants
   return (
     <MenubarPrimitive.RadioItem
       ref={ref}
       className={cn(
         'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pl-8 tw-pr-2 tw-text-sm tw-outline-none focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-        menubarVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
+        menuVariants({ variant: context.variant, className }), // CUSTOM use context to add variants
         className,
       )}
       {...props}

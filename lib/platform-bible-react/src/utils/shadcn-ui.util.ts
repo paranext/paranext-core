@@ -1,4 +1,6 @@
+import { cva } from 'class-variance-authority';
 import { type ClassValue, clsx } from 'clsx';
+import { createContext, useContext } from 'react';
 import { extendTailwindMerge } from 'tailwind-merge';
 
 const twMergeCustom = extendTailwindMerge({ prefix: 'tw-' });
@@ -59,3 +61,31 @@ const twMergeCustom = extendTailwindMerge({ prefix: 'tw-' });
 export function cn(...inputs: ClassValue[]) {
   return twMergeCustom(clsx(inputs));
 }
+
+export type ComponentContextProps = {
+  variant?: 'default' | 'muted';
+};
+
+export const ComponentContext = createContext<ComponentContextProps | undefined>(undefined);
+
+export function useComponentContext() {
+  const context = useContext(ComponentContext);
+  if (!context) {
+    throw new Error('useContext must be used within a MenubarProvider.');
+  }
+
+  return context;
+}
+
+export const menuVariants = cva('', {
+  variants: {
+    variant: {
+      default: '',
+      muted:
+        'hover:tw-bg-muted hover:tw-text-foreground focus:tw-bg-muted focus:tw-text-foreground data-[state=open]:tw-bg-muted data-[state=open]:tw-text-foreground',
+    },
+  },
+  defaultVariants: {
+    variant: 'default',
+  },
+});

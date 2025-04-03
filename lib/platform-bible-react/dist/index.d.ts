@@ -841,6 +841,8 @@ type TabDropdownMenuProps = {
 	icon?: React$1.ReactNode;
 	/** Additional css class(es) to help with unique styling of the tab dropdown menu */
 	className?: string;
+	/** Style variant for the app menubar component. */
+	variant?: "default" | "muted";
 	/** Optional unique identifier */
 	id?: string;
 };
@@ -851,7 +853,7 @@ type TabDropdownMenuProps = {
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1211,45 +1213,104 @@ export declare const CardFooter: React$1.ForwardRefExoticComponent<React$1.HTMLA
  */
 export declare const Checkbox: React$1.ForwardRefExoticComponent<Omit<CheckboxPrimitive.CheckboxProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 /**
+ * Tailwind and CSS class application helper function. Uses
+ * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using
+ * object syntax, and uses [`tailwind-merge`](https://www.npmjs.com/package/tailwind-merge) to make
+ * it easy to merge/overwrite Tailwind classes in a programmer-logic-friendly way.
+ *
+ * Note: `tailwind-merge` is configured to use the prefix `tw-`, so you must use the same prefix
+ * with any Tailwind classes you use with this function to successfully overwrite other Tailwind
+ * classes. `platform-bible-react` is configured to use `tw-` as its Tailwind prefix, so any
+ * Tailwind classes you pass into `platform-bible-react` components will be compared using the `tw-`
+ * prefix.
+ *
+ * This function was popularized by
+ * [shadcn/ui](https://ui.shadcn.com/docs/installation/manual#add-a-cn-helper). See [ByteGrad's
+ * explanation video](https://www.youtube.com/watch?v=re2JFITR7TI) for more information.
+ *
+ * @example
+ *
+ * ```typescript
+ * const borderShouldBeBlue = true;
+ * const textShouldBeRed = true;
+ * const heightShouldBe20 = false;
+ * const classString = cn(
+ *   'tw-bg-primary tw-h-10 tw-text-primary-foreground',
+ *   'tw-bg-secondary',
+ *   {
+ *     'tw-border-blue-500': borderShouldBeBlue,
+ *     'tw-text-red-500': textShouldBeRed,
+ *     'tw-h-20': heightShouldBe20,
+ *   },
+ *   'some-class',
+ * );
+ * ```
+ *
+ * The resulting `classString` is `'tw-h-10 tw-bg-secondary tw-border-blue-500 tw-text-red-500
+ * some-class'`
+ *
+ * - Notice that `'tw-bg-secondary'`, specified later, overwrote `'tw-bg-primary'`, specified earlier,
+ *   because they are Tailwind classes that affect the same css property
+ * - Notice that `'tw-text-red-500'`, specified later, overwrote `'tw-text-primary-foreground'`,
+ *   specified earlier, because they are Tailwind classes that affect the same css property
+ * - Notice that `'tw-h-20'`, specified later, did not overwrite `'tw-h-10'`, specified earlier,
+ *   because `'tw-h-20'` is part of a conditional class object and its value evaluated to `false`;
+ *   therefore it was not applied
+ * - Notice that `'some-class'` was applied. This function is not limited only to Tailwind classes.
+ *
+ *
+ * @param inputs Class strings or `clsx` conditional class objects to merge. Tailwind classes
+ *   specified later in the arguments overwrite similar Tailwind classes specified earlier in the
+ *   arguments
+ * @returns Class string containing all applicable classes from the arguments based on the rules
+ *   described above
+ */
+export declare function cn(...inputs: ClassValue[]): string;
+type ComponentContextProps = {
+	variant?: "default" | "muted";
+};
+/**
  * Dropdown Menu components providing accessible dropdown menus and submenus. These components are
  * built on Radix UI primitives and styled with Shadcn UI.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
-export declare const DropdownMenu: React$1.FC<DropdownMenuPrimitive.DropdownMenuProps>;
+export type DropdownMenuProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Root> & {
+	variant?: ComponentContextProps["variant"];
+};
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export declare const DropdownMenuTrigger: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export declare const DropdownMenuGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuGroupProps & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export declare const DropdownMenuPortal: React$1.FC<DropdownMenuPrimitive.DropdownMenuPortalProps>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export declare const DropdownMenuSub: React$1.FC<DropdownMenuPrimitive.DropdownMenuSubProps>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export declare const DropdownMenuRadioGroup: React$1.ForwardRefExoticComponent<DropdownMenuPrimitive.DropdownMenuRadioGroupProps & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1258,7 +1319,7 @@ export type DropdownMenuSubTriggerProps = React$1.ComponentPropsWithoutRef<typeo
 	inset?: boolean;
 };
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1266,7 +1327,7 @@ export type DropdownMenuSubContentProps = React$1.ComponentPropsWithoutRef<typeo
 	className?: string;
 };
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1275,7 +1336,7 @@ export type DropdownMenuContentProps = React$1.ComponentPropsWithoutRef<typeof D
 	sideOffset?: number;
 };
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1283,13 +1344,13 @@ export type DropdownMenuItemProps = React$1.ComponentPropsWithoutRef<typeof Drop
 	className?: string;
 	inset?: boolean;
 };
-/** @inheritDoc DropdownMenu @group DropdownMenu */
+/** @inheritDoc DropdownMenuProps @group DropdownMenu */
 export type DropdownMenuCheckboxItemProps = React$1.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> & {
 	className?: string;
 	checked?: boolean;
 };
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1297,7 +1358,7 @@ export type DropdownMenuRadioItemProps = React$1.ComponentPropsWithoutRef<typeof
 	className?: string;
 };
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1306,7 +1367,7 @@ export type DropdownMenuLabelProps = React$1.ComponentPropsWithoutRef<typeof Dro
 	inset?: boolean;
 };
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1314,7 +1375,7 @@ export type DropdownMenuSeparatorProps = React$1.ComponentPropsWithoutRef<typeof
 	className?: string;
 };
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1322,7 +1383,13 @@ export type DropdownMenuShortcutProps = React$1.HTMLAttributes<HTMLSpanElement> 
 	className?: string;
 };
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
+export declare function DropdownMenu({ variant, ...props }: DropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1331,7 +1398,7 @@ export declare const DropdownMenuSubTrigger: React$1.ForwardRefExoticComponent<O
 	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1339,7 +1406,7 @@ export declare const DropdownMenuSubContent: React$1.ForwardRefExoticComponent<O
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1348,7 +1415,7 @@ export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit
 	sideOffset?: number | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1357,7 +1424,7 @@ export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<Dr
 	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1366,7 +1433,7 @@ export declare const DropdownMenuCheckboxItem: React$1.ForwardRefExoticComponent
 	checked?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1374,7 +1441,7 @@ export declare const DropdownMenuRadioItem: React$1.ForwardRefExoticComponent<Om
 	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1383,7 +1450,7 @@ export declare const DropdownMenuLabel: React$1.ForwardRefExoticComponent<Omit<D
 	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -1739,60 +1806,6 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
-/**
- * Tailwind and CSS class application helper function. Uses
- * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using
- * object syntax, and uses [`tailwind-merge`](https://www.npmjs.com/package/tailwind-merge) to make
- * it easy to merge/overwrite Tailwind classes in a programmer-logic-friendly way.
- *
- * Note: `tailwind-merge` is configured to use the prefix `tw-`, so you must use the same prefix
- * with any Tailwind classes you use with this function to successfully overwrite other Tailwind
- * classes. `platform-bible-react` is configured to use `tw-` as its Tailwind prefix, so any
- * Tailwind classes you pass into `platform-bible-react` components will be compared using the `tw-`
- * prefix.
- *
- * This function was popularized by
- * [shadcn/ui](https://ui.shadcn.com/docs/installation/manual#add-a-cn-helper). See [ByteGrad's
- * explanation video](https://www.youtube.com/watch?v=re2JFITR7TI) for more information.
- *
- * @example
- *
- * ```typescript
- * const borderShouldBeBlue = true;
- * const textShouldBeRed = true;
- * const heightShouldBe20 = false;
- * const classString = cn(
- *   'tw-bg-primary tw-h-10 tw-text-primary-foreground',
- *   'tw-bg-secondary',
- *   {
- *     'tw-border-blue-500': borderShouldBeBlue,
- *     'tw-text-red-500': textShouldBeRed,
- *     'tw-h-20': heightShouldBe20,
- *   },
- *   'some-class',
- * );
- * ```
- *
- * The resulting `classString` is `'tw-h-10 tw-bg-secondary tw-border-blue-500 tw-text-red-500
- * some-class'`
- *
- * - Notice that `'tw-bg-secondary'`, specified later, overwrote `'tw-bg-primary'`, specified earlier,
- *   because they are Tailwind classes that affect the same css property
- * - Notice that `'tw-text-red-500'`, specified later, overwrote `'tw-text-primary-foreground'`,
- *   specified earlier, because they are Tailwind classes that affect the same css property
- * - Notice that `'tw-h-20'`, specified later, did not overwrite `'tw-h-10'`, specified earlier,
- *   because `'tw-h-20'` is part of a conditional class object and its value evaluated to `false`;
- *   therefore it was not applied
- * - Notice that `'some-class'` was applied. This function is not limited only to Tailwind classes.
- *
- *
- * @param inputs Class strings or `clsx` conditional class objects to merge. Tailwind classes
- *   specified later in the arguments overwrite similar Tailwind classes specified earlier in the
- *   arguments
- * @returns Class string containing all applicable classes from the arguments based on the rules
- *   described above
- */
-export declare function cn(...inputs: ClassValue[]): string;
 
 export {
 	TabNavigationContentSearch as NavigationContentSearch,
