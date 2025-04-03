@@ -89,7 +89,7 @@ function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefin
     document.querySelector<HTMLElement>('.editor-container') ?? undefined;
 
   // Scroll if we find the verse or we're at the start of the chapter
-  if (scrollContainerElement && (verseElement || verseLocation.verseNum === 1)) {
+  if (scrollContainerElement && (verseElement || verseLocation.verseNum <= 1)) {
     // Get the scroll position all the way up to the scroll container
     let offsetElement = verseElement;
     // If we're at the first verse, scroll to the top so we can see intro material
