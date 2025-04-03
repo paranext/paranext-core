@@ -73,3 +73,4 @@ e2e-tests/playwright-report
 
 # format only
 .prettierignorerun
+.github/CODEOWNERS

@@ -4,7 +4,7 @@
     {
       "folder": "scripture-editors",
       "cloneUrl": "https://github.com/eten-tech-foundation/scripture-editors.git",
-      "revision": "platform-yalc",
+      "revision": "release-prep",
       "devPackages": [
         { "devpubTarget": "platform-editor", "repoLinkScript": "editor" },
         { "devpubTarget": "utilities", "repoLinkScript": "utils" }
