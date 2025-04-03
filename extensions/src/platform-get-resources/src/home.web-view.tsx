@@ -432,9 +432,13 @@ globalThis.webViewComponent = function HomeDialog() {
     return project.isLocallyAvailable ? syncText : getText;
   };
 
-  const sendReceiveButton = (project: MergedProjectInfo) => {
+  const sendReceiveButton = (
+    project: MergedProjectInfo,
+    variant: 'default' | 'ghost' = 'default',
+  ) => {
     return (
       <Button
+        variant={variant}
         disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
         onClick={() => sendReceiveProject(project.projectId)}
       >
@@ -443,9 +447,9 @@ globalThis.webViewComponent = function HomeDialog() {
     );
   };
 
-  const openButton = (project: MergedProjectInfo) => {
+  const openButton = (project: MergedProjectInfo, variant: 'default' | 'ghost' = 'default') => {
     return (
-      <Button onClick={() => openResource(project.projectId, project.isEditable)}>
+      <Button variant={variant} onClick={() => openResource(project.projectId, project.isEditable)}>
         {openText}
       </Button>
     );
@@ -574,7 +578,8 @@ globalThis.webViewComponent = function HomeDialog() {
                             </TableCell>
                           )}
                           <TableCell>
-                            {!project.isSendReceivable || project.editedStatus !== 'edited'
+                            {!project.isSendReceivable ||
+                            (project.isLocallyAvailable && project.editedStatus !== 'edited')
                               ? openButton(project)
                               : sendReceiveButton(project)}
                           </TableCell>
@@ -589,8 +594,8 @@ globalThis.webViewComponent = function HomeDialog() {
                                 <DropdownMenuContent align="start">
                                   <DropdownMenuItem asChild>
                                     {project.editedStatus === 'edited'
-                                      ? openButton(project)
-                                      : sendReceiveButton(project)}
+                                      ? openButton(project, 'ghost')
+                                      : sendReceiveButton(project, 'ghost')}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
