@@ -1,9 +1,14 @@
-import React from 'react';
+import {
+  MenuContext,
+  MenuContextProps,
+  menuVariants,
+  useMenuContext,
+} from '@/context/menu.context';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
+import { cn } from '@/utils/shadcn-ui.util';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { Check, ChevronRight, Circle } from 'lucide-react';
-
-import { cn } from '@/utils/shadcn-ui.util';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
+import React from 'react';
 
 /**
  * Dropdown Menu components providing accessible dropdown menus and submenus. These components are
@@ -12,45 +17,51 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
-export const DropdownMenu = DropdownMenuPrimitive.Root;
+/* #region CUSTOM Add variant prop to support different styles */
+export type DropdownMenuProps = React.ComponentPropsWithoutRef<
+  typeof DropdownMenuPrimitive.Root
+> & {
+  variant?: MenuContextProps['variant'];
+};
+/* #endregion CUSTOM */
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export const DropdownMenuGroup = DropdownMenuPrimitive.Group;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -62,7 +73,7 @@ export type DropdownMenuSubTriggerProps = React.ComponentPropsWithoutRef<
 };
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -73,7 +84,7 @@ export type DropdownMenuSubContentProps = React.ComponentPropsWithoutRef<
 };
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -85,7 +96,7 @@ export type DropdownMenuContentProps = React.ComponentPropsWithoutRef<
 };
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -96,7 +107,7 @@ export type DropdownMenuItemProps = React.ComponentPropsWithoutRef<
   inset?: boolean;
 };
 
-/** @inheritDoc DropdownMenu @group DropdownMenu */
+/** @inheritDoc DropdownMenuProps @group DropdownMenu */
 export type DropdownMenuCheckboxItemProps = React.ComponentPropsWithoutRef<
   typeof DropdownMenuPrimitive.CheckboxItem
 > & {
@@ -105,7 +116,7 @@ export type DropdownMenuCheckboxItemProps = React.ComponentPropsWithoutRef<
 };
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -116,7 +127,7 @@ export type DropdownMenuRadioItemProps = React.ComponentPropsWithoutRef<
 };
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -128,7 +139,7 @@ export type DropdownMenuLabelProps = React.ComponentPropsWithoutRef<
 };
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -139,7 +150,7 @@ export type DropdownMenuSeparatorProps = React.ComponentPropsWithoutRef<
 };
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -147,32 +158,57 @@ export type DropdownMenuShortcutProps = React.HTMLAttributes<HTMLSpanElement> & 
   className?: string;
 };
 
+/* #region CUSTOM Provide context to add variants */
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
+ * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
+ */
+export function DropdownMenu({ variant = 'default', ...props }: DropdownMenuProps) {
+  const contextValue = React.useMemo<MenuContextProps>(
+    () => ({
+      variant,
+    }),
+    [variant],
+  );
+  return (
+    <MenuContext.Provider value={contextValue}>
+      <DropdownMenuPrimitive.Root {...props} />
+    </MenuContext.Provider>
+  );
+}
+/* #endregion CUSTOM */
+
+/**
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export const DropdownMenuSubTrigger = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.SubTrigger>,
   DropdownMenuSubTriggerProps
->(({ className, inset, children, ...props }, ref) => (
-  <DropdownMenuPrimitive.SubTrigger
-    ref={ref}
-    className={cn(
-      'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent data-[state=open]:tw-bg-accent',
-      inset && 'tw-pl-8',
-      className,
-    )}
-    {...props}
-  >
-    {children}
-    <ChevronRight className="tw-ml-auto tw-h-4 tw-w-4" />
-  </DropdownMenuPrimitive.SubTrigger>
-));
+>(({ className, inset, children, ...props }, ref) => {
+  const context = useMenuContext(); // CUSTOM use context to add variants
+  return (
+    <DropdownMenuPrimitive.SubTrigger
+      ref={ref}
+      className={cn(
+        'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none focus:tw-bg-accent data-[state=open]:tw-bg-accent',
+        inset && 'tw-pl-8',
+        className,
+        menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
+      )}
+      {...props}
+    >
+      {children}
+      <ChevronRight className="tw-ml-auto tw-h-4 tw-w-4" />
+    </DropdownMenuPrimitive.SubTrigger>
+  );
+});
 DropdownMenuSubTrigger.displayName = DropdownMenuPrimitive.SubTrigger.displayName;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -195,7 +231,7 @@ DropdownMenuSubContent.displayName = DropdownMenuPrimitive.SubContent.displayNam
 For the content we can work around this by adding a div with dir, but that would not cause
 the scrollbar to appear left in an rtl layout (e.g. see book-chapter-control.component) */
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -224,7 +260,7 @@ export const DropdownMenuContent = React.forwardRef<
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -233,6 +269,7 @@ export const DropdownMenuItem = React.forwardRef<
   DropdownMenuItemProps
 >(({ className, inset, ...props }, ref) => {
   const dir: Direction = readDirection();
+  const context = useMenuContext(); // CUSTOM use context to add variants
   return (
     <DropdownMenuPrimitive.Item
       ref={ref}
@@ -241,6 +278,7 @@ export const DropdownMenuItem = React.forwardRef<
         'tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-px-2 tw-py-1.5 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
         inset && 'tw-pl-8',
         className,
+        menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
       )}
       {...props}
       dir={dir}
@@ -250,62 +288,70 @@ export const DropdownMenuItem = React.forwardRef<
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   DropdownMenuCheckboxItemProps
->(({ className, children, checked, ...props }, ref) => (
-  <DropdownMenuPrimitive.CheckboxItem
-    ref={ref}
-    className={cn(
-      'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pe-2 tw-ps-8 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-      className,
-    )}
-    checked={checked}
-    {...props}
-  >
-    <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <Check className="tw-h-4 tw-w-4" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
-    {children}
-  </DropdownMenuPrimitive.CheckboxItem>
-));
+>(({ className, children, checked, ...props }, ref) => {
+  const context = useMenuContext(); // CUSTOM use context to add variants
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      ref={ref}
+      className={cn(
+        'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pe-2 tw-ps-8 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
+        className,
+        menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
+      )}
+      checked={checked}
+      {...props}
+    >
+      <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <Check className="tw-h-4 tw-w-4" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+});
 DropdownMenuCheckboxItem.displayName = DropdownMenuPrimitive.CheckboxItem.displayName;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
 export const DropdownMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
   DropdownMenuRadioItemProps
->(({ className, children, ...props }, ref) => (
-  <DropdownMenuPrimitive.RadioItem
-    ref={ref}
-    className={cn(
-      'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pe-2 tw-ps-8 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
-      className,
-    )}
-    {...props}
-  >
-    <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
-      <DropdownMenuPrimitive.ItemIndicator>
-        <Circle className="tw-h-2 tw-w-2 tw-fill-current" />
-      </DropdownMenuPrimitive.ItemIndicator>
-    </span>
-    {children}
-  </DropdownMenuPrimitive.RadioItem>
-));
+>(({ className, children, ...props }, ref) => {
+  const context = useMenuContext(); // CUSTOM use context to add variants
+  return (
+    <DropdownMenuPrimitive.RadioItem
+      ref={ref}
+      className={cn(
+        'tw-relative tw-flex tw-cursor-default tw-select-none tw-items-center tw-rounded-sm tw-py-1.5 tw-pe-2 tw-ps-8 tw-text-sm tw-outline-none tw-transition-colors focus:tw-bg-accent focus:tw-text-accent-foreground data-[disabled]:tw-pointer-events-none data-[disabled]:tw-opacity-50',
+        className,
+        menuVariants({ variant: context.variant }), // CUSTOM use context to add variants
+      )}
+      {...props}
+    >
+      <span className="tw-absolute tw-flex tw-h-3.5 tw-w-3.5 tw-items-center tw-justify-center ltr:tw-left-2 rtl:tw-right-2">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <Circle className="tw-h-2 tw-w-2 tw-fill-current" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.RadioItem>
+  );
+});
 DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
@@ -322,7 +368,7 @@ export const DropdownMenuLabel = React.forwardRef<
 DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName;
 
 /**
- * @inheritDoc DropdownMenu
+ * @inheritDoc DropdownMenuProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/dropdown-menu}
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/dropdown-menu}
  */
