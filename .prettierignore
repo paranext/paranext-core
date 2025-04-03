@@ -80,3 +80,5 @@ e2e-tests/playwright-report
 .review
 .superpowers
 CLAUDE.md
+
+.github/CODEOWNERS
