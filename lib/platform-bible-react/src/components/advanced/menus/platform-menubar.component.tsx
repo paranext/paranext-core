@@ -24,6 +24,8 @@ import {
 } from 'platform-bible-utils';
 import { RefObject, useEffect, useRef } from 'react';
 import { useHotkeys } from 'react-hotkeys-hook';
+import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
+import MenuItemIcon from './menu-icon.component';
 
 export type MenuItemInfoBase = {
   /** Text (displayable in the UI) as the name of the menu item */
@@ -47,15 +49,6 @@ const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEvent
       ref.current?.dispatchEvent(new KeyboardEvent('keydown', key));
     });
   }, 0);
-};
-
-const getSubMenuKeyForId = (
-  groups: Localized<GroupsInMultiColumnMenu>,
-  id: string,
-): string | undefined => {
-  return Object.entries(groups).find(
-    ([, value]) => 'menuItem' in value && value.menuItem === id,
-  )?.[0];
 };
 
 const getMenubarContent = (
@@ -88,7 +81,13 @@ const getMenubarContent = (
                     commandHandler(item);
                   }}
                 >
+                  {item.iconPathBefore && (
+                    <MenuItemIcon icon={item.iconPathBefore} menuLabel={item.label} leading />
+                  )}
                   {item.label}
+                  {item.iconPathAfter && (
+                    <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
+                  )}
                 </MenubarItem>
               ) : (
                 <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>
@@ -97,7 +96,7 @@ const getMenubarContent = (
                     {getMenubarContent(
                       groups,
                       items,
-                      getSubMenuKeyForId(groups, item.id),
+                      getSubMenuGroupKeyForMenuItemId(groups, item.id),
                       commandHandler,
                     )}
                   </MenubarSubContent>
