@@ -101,11 +101,22 @@ dotnet --list-sdks
 
 ### Cloning and installing dependencies (all platforms)
 
-Clone the repo and install dependencies:
+Clone the repo:
 
 ```bash
 git clone https://github.com/paranext/paranext-core.git
 cd paranext-core
+```
+
+If you want to develop an extension for Platform.Bible, check out the Git reference (usually a [tag](https://github.com/paranext/paranext-core/tags)) corresponding to the version for which you want to develop your extension. We recommend you develop for the latest released version, _not_ `main`. Consult [the version table](https://github.com/paranext/paranext/wiki/Software-Version-Info) for more information. For example, if you want to develop your extension for version 0.3.0, run the following:
+
+```bash
+git checkout v0.3.0
+```
+
+Install dependencies:
+
+```bash
 npm install
 ```
 
