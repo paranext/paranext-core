@@ -170,10 +170,11 @@
       // Snap confinement prevents writing to `/var/lock` which GlobalMutex normally requires
       SIL_CORE_MAKE_GLOBAL_MUTEX_LOCAL_ONLY: 'true',
     },
-    // Stays "devel". This repository does not publish to the snap store - `publish.yml` builds the
-    // snap so the Linux leg is exercised and so it can be shared internally, and Paratext 10 is
-    // released from `paranext/paratext-10-studio` (see LICENSING.md, "The distributed application").
-    grade: 'devel',
+    // "stable" on `release-prep` only; `main` keeps "devel". This repository does not publish to the
+    // snap store, but `paranext/paratext-10-studio` packages this config as-is and uploads the snap
+    // to the store's `candidate` channel and promotes it from there - and the store refuses a
+    // "devel" snap on `candidate` or `stable`.
+    grade: 'stable',
     stagePackages: [
       'libappindicator3-1',
       'libasound2',

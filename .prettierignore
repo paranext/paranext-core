@@ -114,3 +114,5 @@ TERMS-OF-SERVICE.html
 # reproduced byte for byte into THIRD-PARTY-NOTICES.md, so reformatting one would change a legal
 # claim and fail the pin.
 .erb/scripts/third-party-notices/vendored-texts/
+
+.github/CODEOWNERS
