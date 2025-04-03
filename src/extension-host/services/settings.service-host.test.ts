@@ -134,6 +134,6 @@ test('Set verseRef throws', async () => {
     verseNum: 1,
   });
   await expect(result).rejects.toThrow(
-    "Error setting value for key 'platform.verseRef': Error: validation failed",
+    "Error setting value for key 'platform.verseRef': validation failed",
   );
 });

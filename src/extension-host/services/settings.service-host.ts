@@ -20,6 +20,7 @@ import {
   createSyncProxyForAsyncObject,
   debounce,
   deserialize,
+  getErrorMessage,
   includes,
   isLocalizeKey,
   isString,
@@ -161,7 +162,7 @@ class SettingDataProviderEngine
       this.settingsData[key] = newSetting;
       await writeSettingsDataToFile(this.settingsData);
     } catch (error) {
-      throw new Error(`Error setting value for key '${key}': ${error}`);
+      throw new Error(`Error setting value for key '${key}': ${getErrorMessage(error)}`);
     }
     return true;
   }
@@ -185,7 +186,7 @@ class SettingDataProviderEngine
     } catch (error) {
       // If there is no validator just let the change go through
       const missingValidatorMsg = `'${requestType}' not found`;
-      if (includes(`${error}`, missingValidatorMsg)) return true;
+      if (includes(getErrorMessage(error), missingValidatorMsg)) return true;
       throw error;
     }
   }
@@ -200,7 +201,7 @@ class SettingDataProviderEngine
       this.notifyUpdate('');
       return true;
     } catch (error) {
-      throw new Error(`Error resetting key ${key}: ${error}`);
+      throw new Error(`Error resetting key ${key}: ${getErrorMessage(error)}`);
     }
   }
 
