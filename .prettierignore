@@ -66,3 +66,4 @@ yalc.lock
 
 # format only
 .prettierignorerun
+.github/CODEOWNERS
