@@ -93,7 +93,7 @@
       SIL_CORE_MAKE_GLOBAL_MUTEX_LOCAL_ONLY: 'true',
     },
     // Change from "devel" to "stable" when it's ready to be published on the snap store
-    grade: 'devel',
+    grade: 'stable',
     stagePackages: [
       'libappindicator3-1',
       'libasound2',

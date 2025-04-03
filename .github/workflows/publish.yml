@@ -181,7 +181,7 @@ jobs:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.LINUX_SNAP_STORE_CREDENTIALS }}
         run: |
           npm exec electron-builder -- --publish never --linux
-          snapcraft upload --release=edge ./release/build/*.snap
+          snapcraft upload --release=candidate ./release/build/*.snap
           mkdir release/staged
           mv release/build/*.snap release/staged
 
