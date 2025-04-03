@@ -242,8 +242,8 @@ export function CheckCard({
       onClick={() => handleSelectCheck(checkId)}
       className={cn(
         'pr-twp tw-w-full tw-flex tw-cursor-pointer tw-flex-col tw-items-flex-start tw-gap-3 tw-p-4 tw-rounded-lg hover:tw-shadow-md tw-border-0',
-        { 'tw-shadow-sm': isSelected },
-        { 'tw-bg-slate-100 tw-border-slate-100': !isSelected },
+        { 'tw-shadow-sm tw-border-muted tw-border': isSelected },
+        { 'tw-bg-muted/50 ': !isSelected },
       )}
     >
       <div className="tw-flex tw-justify-between">
