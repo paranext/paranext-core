@@ -43,21 +43,23 @@
         "localizeNotes": "Application main menu > Help > Visit Support.Bible",
         "group": "platform.helpMisc",
         "order": 1,
-        "command": "platform.visitSupportPage"
-      },
-      {
-        "label": "%mainMenu_about%",
-        "localizeNotes": "Application main menu > Help > About Platform.Bible",
-        "group": "platform.helpMisc",
-        "order": 2,
-        "command": "platform.about"
+        "command": "platform.visitSupportPage",
+        "iconPathAfter": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWV4dGVybmFsLWxpbmstaWNvbiBsdWNpZGUtZXh0ZXJuYWwtbGluayI+PHBhdGggZD0iTTE1IDNoNnY2Ii8+PHBhdGggZD0iTTEwIDE0IDIxIDMiLz48cGF0aCBkPSJNMTggMTN2NmEyIDIgMCAwIDEtMiAySDVhMiAyIDAgMCAxLTItMlY4YTIgMiAwIDAgMSAyLTJoNiIvPjwvc3ZnPg=="
       },
       {
         "label": "%mainMenu_openDeveloperDocumentation%",
         "localizeNotes": "Application main menu > Help > Open Developer Documentation",
         "group": "platform.helpMisc",
+        "order": 2,
+        "command": "platform.openDeveloperDocumentationUrl",
+        "iconPathAfter": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLWV4dGVybmFsLWxpbmstaWNvbiBsdWNpZGUtZXh0ZXJuYWwtbGluayI+PHBhdGggZD0iTTE1IDNoNnY2Ii8+PHBhdGggZD0iTTEwIDE0IDIxIDMiLz48cGF0aCBkPSJNMTggMTN2NmEyIDIgMCAwIDEtMiAySDVhMiAyIDAgMCAxLTItMlY4YTIgMiAwIDAgMSAyLTJoNiIvPjwvc3ZnPg=="
+      },
+      {
+        "label": "%mainMenu_about%",
+        "localizeNotes": "Application main menu > Help > About Platform.Bible",
+        "group": "platform.helpMisc",
         "order": 3,
-        "command": "platform.openDeveloperDocumentationUrl"
+        "command": "platform.about"
       }
     ]
   },
