@@ -228,12 +228,10 @@ internal class LocalParatextProjects
 
         CreateDirectory(Path.Join(projectFolder));
 
-        foreach (string filePath in Directory.GetFiles("assets/" + projectName, "*.*"))
+        var projectInAssets = Path.Join(AppContext.BaseDirectory, "assets", projectName);
+        foreach (string filePath in Directory.GetFiles(projectInAssets, "*.*"))
         {
-            File.Copy(
-                filePath,
-                filePath.Replace("assets/" + projectName, Path.Join(projectFolder))
-            );
+            File.Copy(filePath, filePath.Replace(projectInAssets, Path.Join(projectFolder)));
         }
     }
 
