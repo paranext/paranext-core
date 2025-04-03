@@ -69,7 +69,14 @@ declare module 'papi-shared-types' {
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
      * Open a link in a new browser window. Like `window.open` in the frontend with
-     * `target='_blank'`
+     * `target='_blank'` Consider using a visual indication along with this. E.g. for a menu add
+     *
+     * - `"iconPathAfter": "papi-extension://platformScripture/assets/icons/external-link.svg"`
+     *
+     * And for a button add
+     *
+     * - `aria-label="Opens in external browser window"`
+     * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
 
