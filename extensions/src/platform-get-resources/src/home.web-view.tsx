@@ -432,7 +432,13 @@ globalThis.webViewComponent = function HomeDialog() {
     return project.isLocallyAvailable ? syncText : getText;
   };
 
-  const sendReceiveButton = (project: MergedProjectInfo) => {
+  const sendReceiveButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    if (isMenuItem)
+      return (
+        <DropdownMenuItem onClick={() => sendReceiveProject(project.projectId)}>
+          <span>{getSendReceiveButtonContent(project)}</span>
+        </DropdownMenuItem>
+      );
     return (
       <Button
         disabled={isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)}
@@ -443,7 +449,13 @@ globalThis.webViewComponent = function HomeDialog() {
     );
   };
 
-  const openButton = (project: MergedProjectInfo) => {
+  const openButton = (project: MergedProjectInfo, isMenuItem?: boolean) => {
+    if (isMenuItem)
+      return (
+        <DropdownMenuItem onClick={() => openResource(project.projectId, project.isEditable)}>
+          <span>{openText}</span>
+        </DropdownMenuItem>
+      );
     return (
       <Button onClick={() => openResource(project.projectId, project.isEditable)}>
         {openText}
@@ -574,9 +586,10 @@ globalThis.webViewComponent = function HomeDialog() {
                             </TableCell>
                           )}
                           <TableCell>
-                            {!project.isSendReceivable || project.editedStatus !== 'edited'
-                              ? openButton(project)
-                              : sendReceiveButton(project)}
+                            {project.isSendReceivable &&
+                            (!project.isLocallyAvailable || project.editedStatus === 'edited')
+                              ? sendReceiveButton(project)
+                              : openButton(project)}
                           </TableCell>
                           <TableCell>
                             {project.isSendReceivable && project.isLocallyAvailable && (
@@ -589,8 +602,8 @@ globalThis.webViewComponent = function HomeDialog() {
                                 <DropdownMenuContent align="start">
                                   <DropdownMenuItem asChild>
                                     {project.editedStatus === 'edited'
-                                      ? openButton(project)
-                                      : sendReceiveButton(project)}
+                                      ? openButton(project, true)
+                                      : sendReceiveButton(project, true)}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
