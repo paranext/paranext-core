@@ -58,7 +58,7 @@
         "label": "%mainMenu_about%",
         "localizeNotes": "Application main menu > Help > About Platform.Bible",
         "group": "platform.helpMisc",
-        "order": 3,
+        "order": 999999999,
         "command": "platform.about"
       }
     ]
