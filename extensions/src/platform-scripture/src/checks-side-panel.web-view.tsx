@@ -321,7 +321,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     !checkAggregator
   ) {
     return (
-      <div className="pr-twp tw-bg-muted/50 tw-h-screen tw-box-border tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+      <div className="pr-twp tw-h-screen tw-box-border tw-bg-sidebar tw-w-full tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-2">
         <Spinner />
         <span className="tw-text-sm">
           {localizedStrings['%webView_checksSidePanel_loadingCheckResults%']}
@@ -331,7 +331,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }
 
   return (
-    <div className="pr-twp tw-box-border tw-p-3 tw-h-screen tw-bg-muted/50">
+    <div className="pr-twp tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen">
       <div className="tw-flex tw-gap-1 tw-items-center tw-pb-2 tw-w-full tw-min-w-0">
         <div className="tw-w-1/3 tw-min-w-0">
           <ChecksProjectFilter
