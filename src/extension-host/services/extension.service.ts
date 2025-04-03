@@ -512,6 +512,11 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
     if (extB.name === 'platformScripture') return 1;
     if (extA.name === 'platformScriptureEditor') return -1;
     if (extB.name === 'platformScriptureEditor') return 1;
+    const extAIsPlatform = extA.name.startsWith('platform');
+    const extBIsPlatform = extB.name.startsWith('platform');
+    if (extAIsPlatform && !extBIsPlatform) return -1;
+    if (extBIsPlatform && !extAIsPlatform) return 1;
+    if (extAIsPlatform && extBIsPlatform) return extA.name < extB.name ? -1 : 1;
     const extAIsPT = extA.name.startsWith('paratext');
     const extBIsPT = extB.name.startsWith('paratext');
     if (extAIsPT && !extBIsPT) return -1;
