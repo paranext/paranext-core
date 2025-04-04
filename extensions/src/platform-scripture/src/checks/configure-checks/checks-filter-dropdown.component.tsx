@@ -19,6 +19,10 @@ type ChecksFilterDropdownProps = PropsWithChildren & {
   getSelectedValueLabel: (value: string) => string;
   /** Whether or not the popover trigger should be disabled. Default is false */
   shouldDisableButton?: boolean;
+  /** Whether or not the filter menu should be open */
+  open: boolean;
+  /** Change the open state of the filter menu */
+  onOpenChange: (open: boolean) => void;
 };
 
 /**
@@ -33,10 +37,12 @@ export function ChecksFilterDropdown({
   radioGroupLabel,
   getSelectedValueLabel,
   shouldDisableButton,
+  open,
+  onOpenChange,
   children,
 }: ChecksFilterDropdownProps) {
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"

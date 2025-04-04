@@ -16,7 +16,7 @@ import {
   LAST_SCR_BOOK_NUM,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { Spinner } from 'platform-bible-react';
+import { Button, Spinner } from 'platform-bible-react';
 import { CheckCard, CheckStates } from './checks/checks-side-panel/check-card.component';
 import {
   ChecksScopeFilter,
@@ -39,7 +39,8 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
   '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
   '%webView_checksSidePanel_loadingCheckResults%',
-  '%webView_checksSidePanel_noCheckResults%',
+  '%webView_checksSidePanel_noChecksSelected%',
+  '%webView_checksSidePanel_selectChecks%',
 ];
 
 global.webViewComponent = function ChecksSidePanelWebView({
@@ -54,6 +55,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
     'selectedCheckTypes',
     [],
   );
+  const [isCheckTypesOpen, setIsCheckTypesOpen] = useState(false);
   const [scope, setScope] = useWebViewState<CheckScopes>('checkScope', CheckScopes.Chapter);
   const [subscriptionId, setSubscriptionId] = useWebViewState<CheckSubscriptionId>(
     'subscriptionId',
@@ -342,6 +344,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
           filterItems={checkNamesAndIds}
           selectedCheckTypeIds={selectedCheckTypeIds}
           handleSelectCheckTypeToggle={handleSelectCheckType}
+          open={isCheckTypesOpen}
+          onOpenChange={(open) => setIsCheckTypesOpen(open)}
         />
       </div>
       <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3">
@@ -349,9 +353,12 @@ global.webViewComponent = function ChecksSidePanelWebView({
           // TODO: Display something else if there is an error getting check results
           isPlatformError(checkResults) || checkResults.length === 0 ? (
             <div className="tw-flex tw-flex-col tw-box-border tw-items-center tw-justify-center tw-h-screen tw-w-full">
-              <span className="tw-text-sm">
-                {localizedStrings['%webView_checksSidePanel_noCheckResults%']}
-              </span>
+              <div className="tw-font-bold tw-text-xl tw-p-2">
+                {localizedStrings['%webView_checksSidePanel_noChecksSelected%']}
+              </div>
+              <Button onClick={() => setIsCheckTypesOpen(!isCheckTypesOpen)}>
+                {localizedStrings['%webView_checksSidePanel_selectChecks%']}
+              </Button>
             </div>
           ) : (
             checkResults?.map((result, index) => (
