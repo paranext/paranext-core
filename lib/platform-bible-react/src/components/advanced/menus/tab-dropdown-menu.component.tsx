@@ -110,6 +110,9 @@ export type TabDropdownMenuProps = {
   /** Additional css class(es) to help with unique styling of the tab dropdown menu */
   className?: string;
 
+  /** Style variant for the app menubar component. */
+  variant?: 'default' | 'muted';
+
   /** Optional unique identifier */
   id?: string;
 };
@@ -127,10 +130,11 @@ export default function TabDropdownMenu({
   tabLabel,
   icon,
   className,
+  variant,
   id,
 }: TabDropdownMenuProps) {
   return (
-    <DropdownMenu>
+    <DropdownMenu variant={variant}>
       <DropdownMenuTrigger
         aria-label={tabLabel}
         className={cn('tw-cursor-pointer', className)}

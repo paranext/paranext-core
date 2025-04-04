@@ -170,12 +170,27 @@ const menuData = {
 
 export function TabDropdownMenuExample() {
   return (
-    <TabDropdownMenu
-      commandHandler={(command) => console.log('Run command: ', command)}
-      menuData={menuData}
-      icon={<BookIcon />}
-      tabLabel="Tab Label"
-    />
+    <>
+      <TabDropdownMenu
+        commandHandler={(command) => console.log('Run command: ', command)}
+        menuData={menuData}
+        icon={<BookIcon />}
+        tabLabel="Tab Label"
+      />
+
+      <TabDropdownMenu
+        commandHandler={(command) => console.log('Run command: ', command)}
+        menuData={menuData}
+        icon={
+          <div className="tw-flex">
+            <BookIcon />
+            Muted variant
+          </div>
+        }
+        tabLabel="Tab Label"
+        variant="muted"
+      />
+    </>
   );
 }
 
