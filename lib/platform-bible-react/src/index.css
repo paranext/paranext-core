@@ -174,7 +174,7 @@
     @apply tw-border-border;
   }
 
-   body .pr-twp {
+  body .pr-twp {
     @apply tw-bg-background tw-text-foreground;
   }
 }
