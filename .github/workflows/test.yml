@@ -115,8 +115,11 @@ jobs:
       - name: Install packages
         run: npm ci
 
+      # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
       - name: type checking
-        run: npm run typecheck
+        run: |
+          npm run build:main
+          npm run typecheck
 
       - name: Build
         run: npm run build
