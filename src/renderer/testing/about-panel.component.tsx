@@ -1,3 +1,5 @@
+import { useCallback } from 'react';
+import { usePromise } from 'platform-bible-react';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
@@ -6,7 +8,9 @@ import {
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import PackageInfo from '../../../release/app/package.json';
+import { appService } from '@shared/services/app.service';
+import { AppInfo } from '@shared/services/app.service-model';
+import packageInfo from '../../../release/app/package.json';
 
 export const TAB_TYPE_ABOUT = 'about';
 
@@ -24,6 +28,12 @@ const STRING_KEYS: LocalizeKey[] = [
   '%about_db_ip_attribution_terms%',
 ];
 
+const defaultAppInfo: AppInfo = {
+  name: 'ignore',
+  version: '',
+  uriScheme: 'ignore',
+};
+
 export function AboutPanel() {
   const [
     {
@@ -36,15 +46,23 @@ export function AboutPanel() {
     },
   ] = useLocalizedStrings(STRING_KEYS);
 
+  // Ideally we would load everything from appService, but it doesn't provide information about the
+  // license or description, so we have to load it from package.json at least for now.
+  const [appInfo] = usePromise<AppInfo>(
+    useCallback(async () => appService.getAppInfo(), []),
+    defaultAppInfo,
+  );
+  if (appInfo.version) packageInfo.version = appInfo.version;
+
   return (
     <div className="about-panel dark">
       <div className="about">
         <InlineLogoAndName width="80%" />
         <h1>{productName}</h1>
         <p>Copyright ©2017-2025 SIL Global and United Bible Societies.</p>
-        <p>{formatReplacementString(versionLabelFormat, PackageInfo)}</p>
-        <p>{formatReplacementString(licenseLabelFormat, PackageInfo)}</p>
-        <p>{PackageInfo.description}</p>
+        <p>{formatReplacementString(versionLabelFormat, packageInfo)}</p>
+        <p>{formatReplacementString(licenseLabelFormat, packageInfo)}</p>
+        <p>{packageInfo.description}</p>
         <p>
           {formatReplacementStringToArray(dbIpAttributionFormat, {
             intro: dbIpAttributionIntro,
