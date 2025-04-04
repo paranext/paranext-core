@@ -20,9 +20,9 @@ type ChecksFilterDropdownProps = PropsWithChildren & {
   /** Whether or not the popover trigger should be disabled. Default is false */
   shouldDisableButton?: boolean;
   /** Whether or not the filter menu should be open */
-  open: boolean;
+  open?: boolean;
   /** Change the open state of the filter menu */
-  onOpenChange: (open: boolean) => void;
+  onOpenChange?: (open: boolean) => void;
 };
 
 /**
@@ -41,8 +41,10 @@ export function ChecksFilterDropdown({
   onOpenChange,
   children,
 }: ChecksFilterDropdownProps) {
+  const dropdownMenuProps = open !== undefined || onOpenChange ? { open, onOpenChange } : {};
+
   return (
-    <DropdownMenu open={open} onOpenChange={onOpenChange}>
+    <DropdownMenu {...dropdownMenuProps}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
