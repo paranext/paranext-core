@@ -1,4 +1,6 @@
-// Functions that are exposed through the network object
+// Used in JSDoc
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
 
 /**
  * Information about the app that is currently running.
@@ -12,6 +14,8 @@ export type AppInfo = Readonly<{
    * Programmatic name of the application
    *
    * @example `platform-bible`.
+   *
+   * Note: this is an identifier for the application, not this application's executable file name
    */
   name: string;
   /**
@@ -22,7 +26,13 @@ export type AppInfo = Readonly<{
    * @example `1.2.3-ordered.info.here+additional.unordered.info.here123`
    */
   version: string;
-  /** JSDOC DESTINATION appUriScheme */
+  /**
+   * URI scheme that this application handles. Navigating to a URI with this scheme will open this
+   * application. This application will handle the URI as it sees fit. For example, the URI may be
+   * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
+   *
+   * This is the same as {@link AppInfo.name}.
+   */
   uriScheme: string;
 }>;
 
