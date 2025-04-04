@@ -69,7 +69,17 @@ declare module 'papi-shared-types' {
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
      * Open a link in a new browser window. Like `window.open` in the frontend with
-     * `target='_blank'`
+     * `target='_blank'` Consider using a visual indication along with this. E.g. for a menu
+     * download the https://lucide.dev/icons/external-link icon, add it to your extension's assets
+     * folder and use it like
+     *
+     * - `"iconPathAfter": "papi-extension://<yourExtension>/assets/icons/external-link.svg"`. We plan
+     *   to provide a common set of icons via an API in the future.
+     *
+     * For a button that opens external urls add
+     *
+     * - `aria-label="{localizedStrings['%ariaLabel_opensInBrowser%']}"`
+     * - Lucide icon `<ExternalLink />`
      */
     'platform.openWindow': (url: string) => Promise<void>;
 
