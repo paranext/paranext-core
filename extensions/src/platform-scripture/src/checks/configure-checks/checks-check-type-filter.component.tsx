@@ -35,6 +35,10 @@ type ChecksCheckTypeFilterProps = {
   handleSelectCheckTypeToggle: (selectedCheckIds: string[]) => void;
   /** The most recently selected checkTypes */
   selectedCheckTypeIds: string[];
+  /** Whether or not the filter menu should be open */
+  open: boolean;
+  /** Change the open state of the filter menu */
+  onOpenChange: (open: boolean) => void;
 };
 
 /**
@@ -57,6 +61,8 @@ export default function ChecksCheckTypeFilter({
   handleSelectCheckTypeToggle,
   filterItems,
   selectedCheckTypeIds: selectedCheckTypesFromWebview,
+  open,
+  onOpenChange,
 }: ChecksCheckTypeFilterProps) {
   const [selectedCheckTypeIds, setSelectedCheckTypeIds] = useState<string[]>(
     selectedCheckTypesFromWebview || [],
@@ -149,6 +155,8 @@ export default function ChecksCheckTypeFilter({
       selectedValue=""
       radioGroupLabel={localizedStrings['%webView_checksSidePanel_checkTypeFilter_label%']}
       getSelectedValueLabel={() => selectedChecksCountLabel}
+      open={open}
+      onOpenChange={onOpenChange}
     >
       <DropdownMenuGroup>
         <Checklist

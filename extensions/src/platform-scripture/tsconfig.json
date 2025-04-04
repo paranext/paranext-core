@@ -44,6 +44,7 @@
     "noFallthroughCasesInSwitch": true
   },
   "exclude": ["node_modules"],
+  "include": ["src"],
   "ts-node": {
     // This allows us to use path aliases in ts-node
     "require": ["tsconfig-paths/register"],
