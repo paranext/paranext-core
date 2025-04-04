@@ -332,17 +332,17 @@ global.webViewComponent = function ChecksSidePanelWebView({
 
   return (
     <div className="pr-twp tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen">
-      <div className="tw-flex tw-gap-1 tw-items-center tw-pb-2 tw-w-full tw-min-w-0">
-        <div className="tw-w-1/3 tw-min-w-0">
+      <div className="tw-flex tw-gap-1 tw-items-center tw-pb-2 tw-w-full tw-min-w-0 tw-flex-wrap">
+        <div className="tw-min-w-32 tw-grow tw-basis-0">
           <ChecksProjectFilter
             handleSelectProject={handleSelectProject}
             selectedProjectId={projectId ?? ''}
           />
         </div>
-        <div className="tw-w-1/3 tw-min-w-0">
+        <div className="tw-min-w-32 tw-grow tw-basis-0">
           <ChecksScopeFilter selectedScope={scope} handleSelectScope={handleSelectScope} />
         </div>
-        <div className="tw-w-1/3 tw-min-w-0">
+        <div className="tw-min-w-32 tw-grow tw-basis-0">
           <ChecksCheckTypeFilter
             filterItems={checkNamesAndIds}
             selectedCheckTypeIds={selectedCheckTypeIds}
