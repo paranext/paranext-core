@@ -10,7 +10,7 @@ import {
 } from '@shared/services/project-settings.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-import { includes, isLocalizeKey, isString } from 'platform-bible-utils';
+import { getErrorMessage, includes, isLocalizeKey, isString } from 'platform-bible-utils';
 import { LocalizedProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
 import {
   projectSettingsDocumentCombiner,
@@ -54,7 +54,7 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
   } catch (error) {
     // If there is no validator just let the change go through
     const missingValidatorMsg = `'${requestType}' not found`;
-    if (includes(`${error}`, missingValidatorMsg)) return true;
+    if (includes(`${getErrorMessage(error)}`, missingValidatorMsg)) return true;
     throw error;
   }
 }
