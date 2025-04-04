@@ -31,6 +31,7 @@ export type MenuItemConstructorOptionsWithOrder = MenuItemConstructorOptions & {
       label?: LocalizeKey;
       order?: number;
       toolTip?: LocalizeKey;
+      isLabelFormatString?: boolean;
     }[];
 };
 
@@ -42,9 +43,21 @@ export const macosMenubarObject: MenuItemConstructorOptionsWithOrder[] = [
     role: 'appMenu',
     id: 'macosMenubar.appMenu',
     submenu: [
-      { role: 'hide', id: 'hide', order: 3 },
+      {
+        label: '%mainMenu_hideProductName%',
+        role: 'hide',
+        id: 'hide',
+        order: 3,
+        isLabelFormatString: true,
+      },
       { role: 'hideOthers', id: 'hideOthers', order: 4 },
-      { role: 'quit', id: 'quit', order: 5 },
+      {
+        label: '%mainMenu_quitProductName%',
+        role: 'quit',
+        id: 'quit',
+        order: 5,
+        isLabelFormatString: true,
+      },
     ],
   },
   {

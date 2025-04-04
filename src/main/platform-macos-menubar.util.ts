@@ -5,6 +5,7 @@ import {
   MenuItemContainingSubmenu,
   Localized,
   GroupsInMultiColumnMenu,
+  formatReplacementString,
 } from 'platform-bible-utils';
 import {
   macosMenubarObject,
@@ -53,7 +54,7 @@ export async function subscribeCurrentMacosMenubar() {
   );
 }
 
-function sortMenuAndRemoveOrder(localizedMacosMenubar: LocalizedMacosMenubar) {
+function sortMenuAndRemoveAddedProps(localizedMacosMenubar: LocalizedMacosMenubar) {
   localizedMacosMenubar.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   localizedMacosMenubar.forEach((menu) => {
@@ -63,6 +64,7 @@ function sortMenuAndRemoveOrder(localizedMacosMenubar: LocalizedMacosMenubar) {
       // Remove the `order` property from submenu items
       menu.submenu.forEach((item) => {
         delete item.order;
+        delete item.isLabelFormatString;
 
         // If the submenu item has its own submenu, sort it recursively
         if (Array.isArray(item.submenu)) {
@@ -88,13 +90,13 @@ function sortMenuAndRemoveOrder(localizedMacosMenubar: LocalizedMacosMenubar) {
 
 /** Returns the default macOS menubar after localizing and formatting it correctly. */
 async function fallbackToDefaultMacosMenubar(): Promise<MenuItemConstructorOptions[]> {
-  return sortMenuAndRemoveOrder(await localizeMacosMenubar(macosMenubarObject));
+  return sortMenuAndRemoveAddedProps(await localizeMacosMenubar(macosMenubarObject));
 }
 
 async function localizeMacosMenubar(
   macosMenubar: MenuItemConstructorOptionsWithOrder[],
 ): Promise<LocalizedMacosMenubar> {
-  const localizeKeys: LocalizeKey[] = [];
+  const localizeKeys: LocalizeKey[] = ['%product_name%'];
   macosMenubar.forEach((menu) => {
     if (menu.label) localizeKeys.push(menu.label);
     if (menu.toolTip) localizeKeys.push(menu.toolTip);
@@ -112,7 +114,13 @@ async function localizeMacosMenubar(
     toolTip: menu.toolTip ? newStrings[menu.toolTip] : menu.toolTip,
     submenu: menu.submenu?.map((item) => ({
       ...item,
-      label: item.label ? newStrings[item.label] : item.label,
+      label: (() => {
+        if (!item.label) return item.label;
+        if (item.isLabelFormatString) {
+          return formatReplacementString(newStrings[item.label], newStrings);
+        }
+        return newStrings[item.label];
+      })(),
       toolTip: item.toolTip ? newStrings[item.toolTip] : item.toolTip,
     })),
   }));
@@ -209,5 +217,5 @@ async function translatePlatformMenuItemsAndCombine(
   });
 
   const localizedMenu = await localizeMacosMenubar(combinedMenubar);
-  return sortMenuAndRemoveOrder(localizedMenu);
+  return sortMenuAndRemoveAddedProps(localizedMenu);
 }
