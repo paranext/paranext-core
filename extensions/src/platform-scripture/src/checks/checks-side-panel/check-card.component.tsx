@@ -116,33 +116,29 @@ function FocusedCheckDropdown({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start">
-        {checkResult.isDenied ? (
-          <DropdownMenuItem
-            className="tw-flex tw-flex-row"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleAllowCheck(checkResult);
-            }}
-          >
+        <DropdownMenuItem
+          className="tw-flex tw-flex-row"
+          onClick={(e) => {
+            e.stopPropagation();
+            if (checkResult.isDenied) handleAllowCheck(checkResult);
+            else handleDenyCheck(checkResult);
+          }}
+        >
+          {checkResult.isDenied ? (
+            <Check className="tw-mr-2 tw-h-4 tw-w-4" />
+          ) : (
             <X className="tw-mr-2 tw-h-4 tw-w-4" />
-            <span>
-              {localizedStrings['%webView_checksSidePanel_focusedCheckDropdown_allowItem%']}
-            </span>
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            className="tw-flex tw-flex-row"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleDenyCheck(checkResult);
-            }}
-          >
-            <X className="tw-mr-2 tw-h-4 tw-w-4" />
-            <span>
-              {localizedStrings['%webView_checksSidePanel_focusedCheckDropdown_denyItem%']}
-            </span>
-          </DropdownMenuItem>
-        )}
+          )}
+          <span>
+            {
+              localizedStrings[
+                checkResult.isDenied
+                  ? '%webView_checksSidePanel_focusedCheckDropdown_allowItem%'
+                  : '%webView_checksSidePanel_focusedCheckDropdown_denyItem%'
+              ]
+            }
+          </span>
+        </DropdownMenuItem>
         <DropdownMenuItem
           className="tw-flex tw-flex-row"
           onClick={(e) => {
@@ -176,7 +172,7 @@ function CheckTypeIndicator({ isMuted, checkType }: CheckTypeIndicatorProps) {
   return (
     <div className="pr-twp tw-flex tw-flex-row tw-items-center tw-gap-2">
       <Badge variant={isMuted ? 'mutedIndicator' : 'blueIndicator'} />
-      <span className="tw-text-xs tw-text-gray-500">{checkType}</span>
+      <span className="tw-text-xs tw-text-muted-foreground">{checkType}</span>
     </div>
   );
 }

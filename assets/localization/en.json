@@ -19,6 +19,7 @@
   "%general_loading%": "Loading",
   "%general_open%": "Open",
   "%general_run%": "Run",
+  "%ariaLabel_opensInBrowser%": "Opens externally in a browser window",
   "%getResources_errorRegistrationInvalid%": "User registration is not valid. Cannot retrieve resources from DBL.",
   "%getResources_errorInstallResource_resourceNotFound%": "Resource not available from DBL",
   "%getResources_errorInstallResource_resourceAlreadyInstalled%": "Resource is already installed and up to date. Installation skipped.",
@@ -126,6 +127,7 @@
   "%webView_openProjectSettings%": "Open Project Settings...",
   "%webView_project%": "Project",
   "%webView_projectAssignmentsAndProgress%": "Assignments and Progress",
+  "%webView_title_type_formatString%": "{type} {defaultTitle}",
   "%wordList%": "Word List",
   "%settings_platform_group1_label_alternative%": "General",
   "%settings_platform_group1_label%": "Platform Settings",
@@ -139,6 +141,5 @@
   "%settings_platform_comments_enabled_label%": "Comments enabled (experimental)",
   "%settings_platform_comments_enabled_description%": "Enabled reading and writing comments in projects. This is an experimental feature.",
   "%settings_platform_requestTimeout_label%": "Request Timeout",
-  "%settings_platform_requestTimeout_description%": "Number of seconds to allow internal requests to resolve. Requests that take longer than this will be aborted. Set to 0 to never abort requests.",
-  "%webView_title_type_formatString%": "{type} {defaultTitle}"
+  "%settings_platform_requestTimeout_description%": "Number of seconds to allow internal requests to resolve. Requests that take longer than this will be aborted. Set to 0 to never abort requests."
 }
