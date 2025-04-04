@@ -315,7 +315,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // Don't block on the web view to keep going
   setTimeout(async () => {
     // Get the existing web view if one exists or create a new one
-    const peopleWebViewId = await papi.webViews.getWebView(
+    const peopleWebViewId = await papi.webViews.openWebView(
       peopleWebViewType,
       { type: 'panel', direction: 'top' },
       { existingId: existingPeopleWebViewId },
