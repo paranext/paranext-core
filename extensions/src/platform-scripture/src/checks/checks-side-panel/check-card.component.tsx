@@ -120,7 +120,8 @@ function FocusedCheckDropdown({
           className="tw-flex tw-flex-row"
           onClick={(e) => {
             e.stopPropagation();
-            checkResult.isDenied ? handleAllowCheck(checkResult) : handleDenyCheck(checkResult);
+            if (checkResult.isDenied) handleAllowCheck(checkResult);
+            else handleDenyCheck(checkResult);
           }}
         >
           {checkResult.isDenied ? (
