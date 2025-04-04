@@ -156,13 +156,25 @@
 }
 
 @layer base {
-  .pr-twp {
+  * {
     @apply tw-border-border;
   }
 
-  .pr-twp body {
+  body {
     @apply tw-bg-background tw-text-foreground;
   }
 }
 
 /* #endregion */
+
+/* overwriting for core only */
+
+@layer base {
+  .pr-twp {
+    @apply tw-border-border;
+  }
+
+   body .pr-twp {
+    @apply tw-bg-background tw-text-foreground;
+  }
+}
