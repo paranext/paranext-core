@@ -40,7 +40,7 @@ export function ChecksFilterDropdown({
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"
-          className="tw-w-full tw-shadow-sm tw-inline-flex tw-items-center tw-justify-between"
+          className="tw-shadow-sm tw-inline-flex tw-items-center tw-justify-between tw-grow tw-min-w-32"
           disabled={shouldDisableButton}
         >
           <div className="tw-text-start tw-overflow-hidden tw-text-ellipsis tw-text-sm tw-font-normal">

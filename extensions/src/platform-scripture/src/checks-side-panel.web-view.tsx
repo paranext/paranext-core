@@ -331,24 +331,18 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }
 
   return (
-    <div className="pr-twp tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen">
-      <div className="tw-flex tw-gap-1 tw-items-center tw-pb-2 tw-w-full tw-min-w-0">
-        <div className="tw-w-1/3 tw-min-w-0">
-          <ChecksProjectFilter
-            handleSelectProject={handleSelectProject}
-            selectedProjectId={projectId ?? ''}
-          />
-        </div>
-        <div className="tw-w-1/3 tw-min-w-0">
-          <ChecksScopeFilter selectedScope={scope} handleSelectScope={handleSelectScope} />
-        </div>
-        <div className="tw-w-1/3 tw-min-w-0">
-          <ChecksCheckTypeFilter
-            filterItems={checkNamesAndIds}
-            selectedCheckTypeIds={selectedCheckTypeIds}
-            handleSelectCheckTypeToggle={handleSelectCheckType}
-          />
-        </div>
+    <div className="pr-twp tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen tw-min-w-400">
+      <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full tw-min-w-400">
+        <ChecksProjectFilter
+          handleSelectProject={handleSelectProject}
+          selectedProjectId={projectId ?? ''}
+        />
+        <ChecksScopeFilter selectedScope={scope} handleSelectScope={handleSelectScope} />
+        <ChecksCheckTypeFilter
+          filterItems={checkNamesAndIds}
+          selectedCheckTypeIds={selectedCheckTypeIds}
+          handleSelectCheckTypeToggle={handleSelectCheckType}
+        />
       </div>
       <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3">
         {
