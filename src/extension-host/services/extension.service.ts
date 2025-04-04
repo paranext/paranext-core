@@ -39,7 +39,7 @@ import {
 } from 'platform-bible-utils';
 import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
-import { APP_URI_SCHEME, PLATFORM_NAMESPACE } from '@shared/data/platform.data';
+import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import {
   ElevatedPrivilegeNames,
   ElevatedPrivileges,
@@ -67,6 +67,10 @@ import {
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { notificationService } from '@shared/services/notification.service';
 import { localizationService } from '@shared/services/localization.service';
+import { appService } from '@shared/services/app.service';
+// Used in JSDoc
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { AppInfo } from '@shared/services/app.service-model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -256,8 +260,8 @@ const extensionRootDirectories: Uri[] = [
  *
  * We do not want to watch the bundled extension directory if we are in the portable application
  * because it deletes and unzips all app files every time it is launched including when the user
- * navigates to a url containing our {@link APP_URI_SCHEME}. See {@link handleExtensionUri} for more
- * information about navigating to our uri scheme.
+ * navigates to a url containing our {@link AppInfo.uriScheme}. See {@link handleExtensionUri} for
+ * more information about navigating to our uri scheme.
  */
 const extensionRootDirectoriesToWatch: Uri[] = [...extensionRootDirectories];
 if (getCommandLineSwitch(COMMAND_LINE_ARGS.Portable)) {
@@ -862,6 +866,8 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
 
 // #region Extension URI handling privileges
 
+let appUriScheme: string | undefined;
+
 function getExtensionKey(manifest: ExtensionManifest): ExtensionKey {
   if (!manifest.publisher || spaceRegex.test(manifest.publisher))
     throw new Error('Extension publisher must not be empty string, undefined, or contain spaces');
@@ -872,7 +878,7 @@ function getExtensionKey(manifest: ExtensionManifest): ExtensionKey {
 }
 
 function getRedirectUri(manifest: ExtensionManifest) {
-  return `${APP_URI_SCHEME}://${getExtensionKey(manifest)}`;
+  return `${appUriScheme}://${getExtensionKey(manifest)}`;
 }
 
 function createRegisterUriHandlerFunction(manifest: ExtensionManifest): RegisterUriHandler {
@@ -899,9 +905,9 @@ function handleExtensionUri(uri: string) {
     logger.warn(`Extension service received uri ${uri} but could not parse it. ${e}`);
     return;
   }
-  if (url.protocol !== `${APP_URI_SCHEME}:`) {
+  if (url.protocol !== `${appUriScheme}:`) {
     logger.warn(
-      `Extension service received uri ${uri} but protocol does not match ${APP_URI_SCHEME}`,
+      `Extension service received uri ${uri} but protocol does not match ${appUriScheme}`,
     );
     return;
   }
@@ -1356,6 +1362,8 @@ export const initialize = () => {
 
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
+
+    appUriScheme = (await appService.getAppInfo()).uriScheme;
 
     reloadFinishedEventEmitter = createNetworkEventEmitter<boolean>(
       'platform.onDidReloadExtensions',

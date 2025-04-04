@@ -1,10 +1,22 @@
-import { APP_NAME, APP_URI_SCHEME, APP_VERSION } from '@shared/data/platform.data';
 import {
   AppInfo,
   appServiceNetworkObjectName,
   IAppService,
 } from '@shared/services/app.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
+import packageInfo from '../../../release/app/package.json';
+import buildInfo from '../../../release/app/buildInfo.json';
+
+/** Same as {@link AppInfo.name} */
+export const APP_NAME: string = packageInfo.name;
+
+// Construct the app version string according to the SemVer specification
+const { prereleaseId, build } = buildInfo;
+/** Same as {@link AppInfo.version} */
+export const APP_VERSION: string = `${packageInfo.version}${prereleaseId ? `-${prereleaseId}` : ''}${build ? `+${build}` : ''}`;
+
+/** Same as {@link AppInfo.uriScheme} */
+export const APP_URI_SCHEME = APP_NAME;
 
 const APP_INFO = Object.freeze({
   name: APP_NAME,

@@ -5956,6 +5956,8 @@ declare module 'shared/services/app.service-model' {
      * Programmatic name of the application
      *
      * @example `platform-bible`.
+     *
+     * Note: this is an identifier for the application, not this application's executable file name
      */
     name: string;
     /**
@@ -5967,12 +5969,11 @@ declare module 'shared/services/app.service-model' {
      */
     version: string;
     /**
-     *
      * URI scheme that this application handles. Navigating to a URI with this scheme will open this
      * application. This application will handle the URI as it sees fit. For example, the URI may be
      * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
      *
-     * This is the same as {@link APP_NAME}.
+     * This is the same as {@link AppInfo.name}.
      */
     uriScheme: string;
   }>;
@@ -5992,23 +5993,6 @@ declare module 'shared/data/platform.data' {
    * Platform.Bible core
    */
   export const PLATFORM_NAMESPACE = 'platform';
-  /**
-   * Name of this application like `platform-bible`.
-   *
-   * Note: this is an identifier for the application, not this application's executable file name
-   */
-  export const APP_NAME: string;
-  /** Version of this application in [semver](https://semver.org/) format. */
-  export const APP_VERSION: string;
-  /**
-   *
-   * URI scheme that this application handles. Navigating to a URI with this scheme will open this
-   * application. This application will handle the URI as it sees fit. For example, the URI may be
-   * handled by an extension - see {@link ElevatedPrivileges.handleUri } for more information.
-   *
-   * This is the same as {@link APP_NAME}.
-   */
-  export const APP_URI_SCHEME: string;
   /** Query string passed to the renderer when starting if it should enable noisy dev mode */
   export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
 }
