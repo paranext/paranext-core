@@ -1,10 +1,18 @@
-import { APP_NAME, APP_URI_SCHEME, APP_VERSION } from '@shared/data/platform.data';
 import {
   AppInfo,
   appServiceNetworkObjectName,
   IAppService,
 } from '@shared/services/app.service-model';
 import { networkObjectService } from '@shared/services/network-object.service';
+import packageInfo from '../../../release/app/package.json';
+import buildInfo from '../../../release/app/buildInfo.json';
+
+export const APP_NAME: string = packageInfo.name;
+
+const { id, label } = buildInfo;
+export const APP_VERSION: string = `${packageInfo.version}${label ? `-${label}` : ''}${id ? `+${id}` : ''}`;
+
+export const APP_URI_SCHEME = APP_NAME;
 
 const APP_INFO = Object.freeze({
   name: APP_NAME,

@@ -26,14 +26,19 @@ import { CommandNames } from 'papi-shared-types';
 import { SerializedRequestType } from '@shared/utils/util';
 import { get } from '@shared/services/project-data-provider.service';
 import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
-import { APP_URI_SCHEME, DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
+import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
 import { startProjectLookupService } from '@main/services/project-lookup.service-host';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { GET_METHODS } from '@shared/data/rpc.model';
 import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
 import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
-import { startAppService } from '@main/services/app.service-host';
+import {
+  APP_NAME,
+  APP_URI_SCHEME,
+  APP_VERSION,
+  startAppService,
+} from '@main/services/app.service-host';
 import { settingsService } from '@shared/services/settings.service';
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
@@ -355,6 +360,8 @@ async function main() {
   let isClosing = false;
   app.on('will-quit', async (e) => {
     if (!isClosing) {
+      logger.info('Main process is quitting');
+
       // Prevent closing before graceful shutdown is complete.
       // Also, in the future, this should allow a "are you sure?" dialog to display.
       e.preventDefault();
@@ -395,7 +402,7 @@ async function main() {
 
       return undefined;
     })
-    .catch(logger.info);
+    .catch((e) => logger.error(`Error in app.whenReady: ${getErrorMessage(e)}`));
 
   // #endregion
 
@@ -659,7 +666,6 @@ async function restartExtensionHost() {
 }
 
 (async () => {
-  logger.info('Starting main');
+  logger.info(`Starting ${APP_NAME} version ${APP_VERSION}`);
   await main();
-  logger.info('Main is complete');
 })().catch(logger.error);

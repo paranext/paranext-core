@@ -21,6 +21,7 @@ node_modules
 # OSX
 .DS_Store
 
+release/app/buildInfo.json
 release/app/dist
 release/build
 .erb/dll

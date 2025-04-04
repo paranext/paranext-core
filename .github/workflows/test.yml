@@ -116,7 +116,9 @@ jobs:
         run: npm ci
 
       - name: type checking
-        run: npm run typecheck
+        run: |
+          npm run build:main
+          npm run typecheck
 
       - name: Build
         run: npm run build
