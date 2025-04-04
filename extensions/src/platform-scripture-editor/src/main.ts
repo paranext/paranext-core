@@ -152,9 +152,9 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
       );
 
     // We know that the projectId (if present in the state) will be a string.
-    const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
+    const projectId = getWebViewOptions.projectId ?? savedWebView.projectId ?? undefined;
     const isReadOnly = getWebViewOptions.isReadOnly || savedWebView.state?.isReadOnly;
-    let title = getWebViewOptions.options?.title || savedWebView.title;
+    let title = getWebViewOptions.options?.title ?? savedWebView.title;
     if (!title) {
       if (projectId) title = PROJECT_ID_TITLE_FORMAT_STRING_KEY;
       else title = isReadOnly ? RESOURCE_VIEWER_KEY : SCRIPTURE_EDITOR_KEY;
@@ -421,7 +421,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  const scriptureEditorWebViewProviderPromise = papi.webViewProviders.register(
+  const scriptureEditorWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     scriptureEditorWebViewType,
     scriptureEditorWebViewProvider,
   );

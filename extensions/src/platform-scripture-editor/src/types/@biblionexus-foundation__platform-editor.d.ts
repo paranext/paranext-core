@@ -45,7 +45,7 @@ declare module 'shared-react/nodes/scripture/usj/usj-node-options.model' {
   type OnClick = (event: SyntheticEvent) => void;
   const immutableNoteCallerNodeName = 'ImmutableNoteCallerNode';
 
-  export const MarkNodeName = 'MarkNode';
+  export const typedMarkNodeName = 'TypedMarkNode';
 
   export type AddMissingComments = (usjCommentIds: string[]) => void;
 
@@ -57,7 +57,7 @@ declare module 'shared-react/nodes/scripture/usj/usj-node-options.model' {
       /** Click handler method. */
       onClick?: OnClick;
     };
-    [MarkNodeName]?: {
+    [typedMarkNodeName]?: {
       /** Method to add missing comments. */
       addMissingComments?: AddMissingComments;
     };
