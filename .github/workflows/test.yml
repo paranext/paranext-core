@@ -168,6 +168,17 @@ jobs:
         run: |
           (gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-windows-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id') -split "`n" | ForEach-Object { gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/$_ }
 
+      - name: Rename Windows exe to include GitHub Action Run ID
+        if: ${{ matrix.os == env.OS_WINDOWS }}
+        run: |
+          Get-ChildItem -Path ./release/build/*.exe | ForEach-Object {
+            if (-not ($_.Name -like "*Setup*.exe")) {
+              $newName = "$($_.BaseName)-${{ github.run_id }}.exe"
+              Rename-Item -Path $_.FullName -NewName $newName
+              Write-Host "Renamed $($_.Name) to $newName"
+            }
+          }
+
       - name: Upload Windows artifacts
         if: ${{ matrix.os == env.OS_WINDOWS }}
         uses: actions/upload-artifact@v4
@@ -185,6 +196,15 @@ jobs:
         run: |
           gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-macos-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
 
+      - name: Rename macOS dmg to include GitHub Action Run ID
+        if: ${{ matrix.os == env.OS_MACOS }}
+        run: |
+          for file in ./release/build/*.dmg; do
+            newName="${file%.dmg}-${{ github.run_id }}.dmg"
+            mv "$file" "$newName"
+            echo "Renamed $file to $newName"
+          done
+
       - name: Upload macOS artifacts
         if: ${{ matrix.os == env.OS_MACOS }}
         uses: actions/upload-artifact@v4
@@ -200,6 +220,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-linux-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
+
+      - name: Rename Linux snap to include GitHub Action Run ID
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: |
+          for file in ./release/build/*.snap; do
+            newName="${file%.snap}-${{ github.run_id }}.snap"
+            mv "$file" "$newName"
+            echo "Renamed $file to $newName"
+          done
 
       - name: Upload Linux artifacts
         if: ${{ matrix.os == env.OS_LINUX }}
