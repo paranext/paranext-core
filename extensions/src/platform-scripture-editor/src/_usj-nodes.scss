@@ -2107,11 +2107,15 @@ body {
 }
 
 .editor-input {
-  counter-reset: caller 0;
+  counter-reset: caller;
+}
+
+.editor-input.reset-counters {
+  counter-reset: none;
 }
 
 .immutable-note-caller[data-caller='+'] {
-  counter-increment: caller 1;
+  counter-increment: caller;
 }
 
 .immutable-note-caller[data-caller='+'] > button::before {

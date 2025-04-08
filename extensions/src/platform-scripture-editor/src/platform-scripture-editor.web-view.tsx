@@ -81,9 +81,11 @@ function deepEqualAcrossIframes(a: unknown, b: unknown) {
 
 function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefined {
   const verseElement =
-    document.querySelector<HTMLElement>(
-      `.editor-container span[data-marker="v"][data-number="${verseLocation.verseNum}"]`,
-    ) ?? undefined;
+    verseLocation.verseNum < 1
+      ? undefined
+      : (document.querySelector<HTMLElement>(
+          `.editor-container span[data-marker="v"][data-number*="${verseLocation.verseNum}"]`,
+        ) ?? undefined);
 
   const scrollContainerElement =
     document.querySelector<HTMLElement>('.editor-container') ?? undefined;
