@@ -1,8 +1,9 @@
 import fs from 'fs';
-import { getExtensions } from '../webpack/webpack.util';
+import path from 'path';
+import { getExtensions, sourceFolder } from '../webpack/webpack.util';
 import { checkForWorkingChanges, execCommand } from './git.util';
 
-// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/bump-version.ts#L53
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/bump-version.ts
 
 // This script checks out a new branch, bumps the versions of all extensions in the repo,
 // and then commits the changes. It is generally expected that you will be on `main` when you run
@@ -33,7 +34,7 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
 
   // Bump the version at top level
   try {
-    await execCommand(bumpVersionCommand);
+    await execCommand(bumpVersionCommand, { cwd: path.resolve(__dirname, '..') });
   } catch (e) {
     console.error(`Error on bumping version: ${e}`);
     return 1;
@@ -49,14 +50,26 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
   // We intend to run these one at a time, so for/of works well here
   /* eslint-disable no-restricted-syntax, no-await-in-loop */
   for (const ext of extensions) {
-    // Bump the package version in the extension
+    // Bump the package version in the extension if the package.json exists
+    let packageJsonExists = true;
     try {
-      await execCommand(bumpVersionCommand, {
-        cwd: ext.dirPath,
-      });
+      await fs.promises.access(path.resolve(sourceFolder, ext.dirName, 'package.json'));
     } catch (e) {
-      console.error(`Error on bumping package version for extension ${ext.name}: ${e}`);
-      return 1;
+      console.log(
+        `Error while accessing ${ext.name}'s package.json: ${e}. If the extension does not have a package.json, this is not a problem.`,
+      );
+      packageJsonExists = false;
+    }
+
+    if (packageJsonExists) {
+      try {
+        await execCommand(bumpVersionCommand, {
+          cwd: path.resolve(__dirname, '..', sourceFolder, ext.dirName),
+        });
+      } catch (e) {
+        console.error(`Error on bumping package version for extension ${ext.name}: ${e}`);
+        return 1;
+      }
     }
 
     // Bump the manifest version in the extension
@@ -75,7 +88,7 @@ const shouldAllowWorkingChanges = process.argv.includes('--allow-working-changes
   }
   /* eslint-enable no-restricted-syntax, no-await-in-loop */
 
-  // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/bump-version.ts#L53
+  // #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/bump-version.ts
 
   // Commit the changes
   try {

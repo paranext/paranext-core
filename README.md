@@ -177,22 +177,26 @@ npm run package
 
 ## Publishing
 
-1. Create a branch of the form `release/*`, e.g. `release/v1.2.3`, or `release/v1.2.3-rc1`.
-2. Update the _version_ in your project's `release/app/package.json`, e.g.:
+These steps will walk you through releasing a version on GitHub and bumping the version to a new version so future changes apply to the new in-progress version.
+
+1. Make sure the versions in this repo are on the version number you want to release. If they are not, run the `bump-versions` npm script to set the versions to what you want to release. This script will create a branch named `bump-versions-<version>` from your current head with the needed changes. Open a PR and merge that new branch into the branch you plan to release from. For example, to bump branch `my-branch` to version 0.2.0, run the following:
+
    ```bash
-   cd ./release/app
-   npm version 1.2.3
+   git checkout my-branch
+   npm run bump-versions 0.2.0
    ```
-3. Create a new draft [GitHub **Release**](https://docs.github.com/en/repositories/releasing-projects-on-github/managing-releases-in-a-repository). Ensure the following are included:
-   - a _Tag version_, e.g. `v1.2.3`, choose _Create new tag on publish_.
-   - set the **Target** to the release branch.
-   - a copy of the change log. Click **Generate release notes** as a starting point.
-   - Click **Save draft**.
-4. Update `CHANGELOG.md` with changes in this release from the GitHub draft **Release**.
-5. Commit these changes to your release branch and push the commit to GitHub.
-6. Once the GitHub build **Action** has finished, it will add build artifact files to the draft release. Remove the `.blockmap` files and leave the `.yml` files and the installers and executable, e.g. `.exe` on Windows.
-7. Publish the release on GitHub.
-8. Merge the release branch back into **main** with a merge commit.
+
+   Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
+
+2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
+
+   - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
+   - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
+   - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
+
+3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
+4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
+5. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
 
 ## Testing
 

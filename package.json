@@ -56,6 +56,7 @@
     "build:types": "cd lib/papi-dts && npm run build",
     "build:platform-bible-react": "cd lib/platform-bible-react && npm run build",
     "build:platform-bible-utils": "cd lib/platform-bible-utils && npm run build",
+    "bump-versions": "ts-node ./.erb/scripts/bump-versions.ts",
     "csharp:tool:restore": "cd c-sharp && dotnet tool restore",
     "editor:link": "yalc link @biblionexus-foundation/platform-editor --no-pure",
     "editor:update": "yalc update @biblionexus-foundation/platform-editor",
