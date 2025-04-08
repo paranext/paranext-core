@@ -158,6 +158,17 @@ globalThis.webViewComponent = function HelloWorld({
     useMemo(() => [], []),
   );
 
+  let excludePdpFactoryIds: string[];
+  if (isPlatformError(excludePdpFactoryIdsInHome)) {
+    logger.warn(
+      'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
+      excludePdpFactoryIdsInHome,
+    );
+    excludePdpFactoryIds = [];
+  } else {
+    excludePdpFactoryIds = excludePdpFactoryIdsInHome;
+  }
+
   const showProjectDialog = useDialogCallback(
     'platform.selectProject',
     // This is intentionally not a stable reference like `useMemo` or something because we are
@@ -171,7 +182,7 @@ globalThis.webViewComponent = function HelloWorld({
       currentRender: currentRender.current,
       optionsSource: 'hook',
       includeProjectInterfaces: ['platformScripture.USFM_Verse'],
-      excludePdpFactoryIds: excludePdpFactoryIdsInHome,
+      excludePdpFactoryIds: excludePdpFactoryIds,
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
