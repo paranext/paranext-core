@@ -39,6 +39,7 @@ const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_focusedCheckDropdown_denyItem%',
   '%webView_checksSidePanel_focusedCheckDropdown_settingsItem%',
   '%webView_checksSidePanel_loadingCheckResults%',
+  '%webView_checksSidePanel_noCheckResults%',
   '%webView_checksSidePanel_noChecksSelected%',
   '%webView_checksSidePanel_selectChecks%',
 ];
@@ -333,8 +334,8 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }
 
   return (
-    <div className="pr-twp tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen tw-min-w-400">
-      <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full tw-min-w-400">
+    <div className="pr-twp tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen">
+      <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         <ChecksProjectFilter
           handleSelectProject={handleSelectProject}
           selectedProjectId={projectId ?? ''}
@@ -353,9 +354,9 @@ global.webViewComponent = function ChecksSidePanelWebView({
           // TODO: Display something else if there is an error getting check results
           isPlatformError(checkResults) || checkResults.length === 0 ? (
             <div className="tw-flex tw-flex-col tw-box-border tw-items-center tw-justify-center tw-h-screen tw-w-full">
-              <div className="tw-font-bold tw-text-xl tw-p-2">
-                {localizedStrings['%webView_checksSidePanel_noChecksSelected%']}
-              </div>
+              {selectedCheckTypeIds.length === 0
+                ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
+                : localizedStrings['%webView_checksSidePanel_noCheckResults%']}
               <Button onClick={() => setIsCheckTypesOpen(!isCheckTypesOpen)}>
                 {localizedStrings['%webView_checksSidePanel_selectChecks%']}
               </Button>

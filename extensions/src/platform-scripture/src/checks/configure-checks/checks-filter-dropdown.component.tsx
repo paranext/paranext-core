@@ -21,7 +21,7 @@ type ChecksFilterDropdownProps = PropsWithChildren & {
   shouldDisableButton?: boolean;
   /** Whether or not the filter menu should be open */
   open?: boolean;
-  /** Change the open state of the filter menu */
+  /** Handler that is called when the filter dropdown's open state changes. */
   onOpenChange?: (open: boolean) => void;
 };
 
@@ -41,10 +41,8 @@ export function ChecksFilterDropdown({
   onOpenChange,
   children,
 }: ChecksFilterDropdownProps) {
-  const dropdownMenuProps = open !== undefined || onOpenChange ? { open, onOpenChange } : {};
-
   return (
-    <DropdownMenu {...dropdownMenuProps}>
+    <DropdownMenu open={open} onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="outline"

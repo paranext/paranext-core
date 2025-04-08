@@ -37,7 +37,7 @@ type ChecksCheckTypeFilterProps = {
   selectedCheckTypeIds: string[];
   /** Whether or not the filter menu should be open */
   open: boolean;
-  /** Change the open state of the filter menu */
+  /** Handler that is called when the filter dropdown's open state changes. */
   onOpenChange: (open: boolean) => void;
 };
 
