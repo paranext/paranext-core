@@ -6,7 +6,7 @@ import {
   SINGLE_TEMPLATE_BRANCH,
   SINGLE_TEMPLATE_NAME,
   checkForWorkingChanges,
-  execGitCommand,
+  execCommand,
   fetchFromSingleTemplate,
   formatExtensionFolder,
 } from './git.util';
@@ -18,7 +18,7 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
 
   // Fetch latest MULTI_TEMPLATE_REMOTE_NAME branch
   try {
-    await execGitCommand(`git fetch ${MULTI_TEMPLATE_NAME} ${MULTI_TEMPLATE_BRANCH}`);
+    await execCommand(`git fetch ${MULTI_TEMPLATE_NAME} ${MULTI_TEMPLATE_BRANCH}`);
   } catch (e) {
     console.error(`Error on git fetch on ${MULTI_TEMPLATE_NAME}: ${e}`);
     return 1;
@@ -26,7 +26,7 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
 
   // Merge changes from MULTI_TEMPLATE_REMOTE_NAME into this repo
   try {
-    await execGitCommand(
+    await execCommand(
       `git subtree pull --prefix ${subtreeRootFolder} ${MULTI_TEMPLATE_NAME} ${MULTI_TEMPLATE_BRANCH} --squash`,
     );
   } catch (e) {
@@ -55,7 +55,7 @@ import { ExtensionInfo, getExtensions, subtreeRootFolder } from '../webpack/webp
     try {
       // We intend to run these one at a time, so awaiting inside the loop works well here
       // eslint-disable-next-line no-await-in-loop
-      await execGitCommand(
+      await execCommand(
         `git subtree pull --prefix ${ext.dirPathOSIndependent} ${SINGLE_TEMPLATE_NAME} ${SINGLE_TEMPLATE_BRANCH} --squash`,
       );
 

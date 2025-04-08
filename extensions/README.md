@@ -40,6 +40,8 @@ For your extension name, we recommend that you use [lowerCamelCase](https://deve
   - Adjust as desired (feel free to choose a different license)
   - If you choose to stay with the current license, update the copyright statement
 
+- In `.github/assets/release-body.md`, make adjustments as desired
+
 #### Create your first extension in this repo
 
 Follow the steps in [To create a new extension in this repo](#to-create-a-new-extension-in-this-repo) to create your first extension in this repo! You can follow the same steps to create new extensions as desired.
@@ -71,6 +73,9 @@ This is a Webpack project configured to build extensions included as part of Pla
         - `assets/descriptions/description-<locale>.md` contains a brief description of the extension in the language specified by `<locale>`
     - `contributions/` contains JSON files the platform uses to extend data structures for things like menus and settings. The JSON files are referenced from the manifest
     - `public/` contains other static files that are copied into the build folder
+- `.github/` contains files to facilitate integration with GitHub
+  - `.github/workflows` contains [GitHub Actions](https://github.com/features/actions) workflows for automating various processes in this repo
+  - `.github/assets/release-body.md` combined with a generated changelog becomes the body of [releases published using GitHub Actions](#publishing)
 - `dist/` is a generated folder containing the built extension files
 - `release/` is a generated folder containing zips of the built extension files
 
@@ -128,6 +133,77 @@ To package these extensions into a zip file for distribution:
 
 `npm run package`
 
+## Publishing
+
+These steps will walk you through releasing a version on GitHub and bumping the version to a new version so future changes apply to the new in-progress version. These release workflows and scripts expect that all extensions in this repo are on the same version.
+
+1. Make sure the versions in this repo are on the version number you want to release. If they are not, run the `bump-versions` npm script to set the versions to what you want to release. This script will create a branch named `bump-versions-<version>` from your current head with the needed changes. Open a PR and merge that new branch into the branch you plan to release from. For example, to bump branch `my-branch` to version 0.2.0, run the following:
+
+   ```bash
+   git checkout my-branch
+   npm run bump-versions 0.2.0
+   ```
+
+   Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
+
+2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
+
+   - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
+   - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
+   - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `main` onto `release-prep` when you are ready to start preparing the next stable release.
+
+    <details>
+        <summary>[Optional] Create a new pre-release and bump versions branch manually </summary>
+
+   #### Manually create a new pre-release and bump versions branch
+
+   Alternatively, you can create a new pre-release manually:
+
+   ```bash
+   npm run package
+   # Create a new pre-release in GitHub on tag `v<version>`
+   # Copy `.github/assets/release-body.md` into the GitHub branch
+   # Generate changelog
+   # Attach contents of `release` folder
+   ```
+
+   Then bump versions by running the following:
+
+   ```bash
+   npm run bump-versions <next_version>
+   ```
+
+   Or bump versions manually:
+
+   ```bash
+   git checkout -b bump-versions-<next_version>
+   npm version <next_version> --git-tag-version false
+   # cd to each extension folder
+   npm version <next_version> --git-tag-version false
+   # Change version in each extension's `manifest.json`
+   git commit -a -m "Bumped versions to <next_version>"; git push -u origin HEAD
+   ```
+
+    </details>
+
+3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
+4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
+
+### Publishing problems
+
+Following are some problems you may encounter while publishing and steps to solve them.
+
+#### `@swc/core` Failed to load native binding
+
+If you see the following error in the GitHub Actions workflow logs while packaging:
+
+```
+Module build failed (from ./node_modules/swc-loader/src/index.js):
+Error: Failed to load native binding
+```
+
+You may have a different effective version of `@swc/core` than `paranext-core` does. Please make sure the version of `@swc/core` in your `package-lock.json` is the same as its version in [`paranext-core/package-lock.json`](https://github.com/paranext/paranext-core/blob/main/package-lock.json). If they are not the same, please fix them to be the same by running `npm i -D @swc/core <version>` where the version is the version of `@swc/core` installed in `paranext-core/package-lock.json` (if you would like to set the version of `@swc/core` back to what it was before in `package.json` to stay synced with the extension template, change it back manually in `package.json` and then run `npm i`). If they are already the same, you may need to try regenerating your `package-lock.json` file by deleting it and running `npm i`.
+
 ## To create a new extension in this repo
 
 To create a new extension in this repo, make sure your repo has no working changes, then run the following command (replace `<extension-name>` with the preferred extension name. This will also be the extension's folder name in the `src` folder. We strongly recommend using kebab-case for this name):
@@ -136,7 +212,10 @@ To create a new extension in this repo, make sure your repo has no working chang
 npm run create-extension -- <extension-name>
 ```
 
-Then follow [the instructions for customizing the new extension](https://github.com/paranext/paranext-extension-template#customize-extension-details).
+Then follow [the instructions for customizing the new extension](https://github.com/paranext/paranext-extension-template#customize-extension-details) with a few modifications:
+
+- Follow the instructions for replacing placeholders inside the `src/<extension-name>` folder, not at this repo root, except in specific situations:
+  - Instead of editing the `.github/assets/release-body.md` inside the extension, add information about the new extension in `.github/assets/release-body.md` at this repo root.
 
 **Note:** The merge/squash commits created when creating a new extension are important; Git uses them to compare the files for future updates. If you edit this repo's Git history, please preserve these commits (do not squash them, for example) to avoid duplicated merge conflicts in the future.
 
