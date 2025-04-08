@@ -22,7 +22,8 @@ import {
   LocalObjectToProxyCreator,
   NetworkObjectDetails,
 } from '@shared/models/network-object.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
+import { getEmptyMethodDocs, NetworkObjectDocumentation } from '@shared/models/openrpc.model';
 
 // #endregion
 
@@ -57,17 +58,12 @@ const initialize = (): Promise<void> => {
 /** Prefix on requests that indicates that the request is related to a network object */
 const CATEGORY_NETWORK_OBJECT = 'object';
 
-/** Gets a request type for network requests for the specified network object ID and request subtype */
-const getNetworkObjectRequestType = (id: string, subtype: NetworkObjectRequestSubtype) =>
-  serializeRequestType(CATEGORY_NETWORK_OBJECT, `${id}.${subtype}`);
-
-/** Each type of request that can be executed for each network object */
-enum NetworkObjectRequestSubtype {
-  /** `get(): string[]` of functions that are eligible to be run over the network */
-  Get = 'get',
-  /** `function(functionName: string, ...args: unknown[]): unknown` - runs a function */
-  Function = 'function',
-}
+/**
+ * Gets a request type for network requests for the specified network object ID and function name
+ * (if provided)
+ */
+const getNetworkObjectRequestType = (id: string, functionName?: string) =>
+  serializeRequestType(CATEGORY_NETWORK_OBJECT, `${id}${functionName ? `.${functionName}` : ''}`);
 
 /**
  * Determine if a network object with the specified ID exists remotely (does not check locally)
@@ -78,11 +74,9 @@ enum NetworkObjectRequestSubtype {
  * @returns Empty array if there is a remote network object with this ID, undefined otherwise. TODO:
  *   return array of all eligible functions
  */
-const getRemoteNetworkObjectFunctions = async (id: string): Promise<string[] | undefined> => {
+const getRemoteNetworkObjectFunctions = async (id: string): Promise<boolean | undefined> => {
   try {
-    return await networkService.request<[], string[]>(
-      getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
-    );
+    return await networkService.request<[], boolean>(getNetworkObjectRequestType(id));
   } catch (e) {
     // No processes are registered to handle this get request, meaning a network object with this ID does not exist
     // TODO: check the message and throw the error if it is not the right message?
@@ -203,11 +197,7 @@ const createRemoteProxy = (
 
       // If the local network object doesn't have the property, build a request for it
       const requestFunction = (...args: unknown[]) =>
-        networkService.request(
-          getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
-          key,
-          ...args,
-        );
+        networkService.request(getNetworkObjectRequestType(id, key), ...args);
 
       // Save the new request function as the actual function on the object so we don't have to
       // create this function multiple times.
@@ -430,6 +420,7 @@ const set = async <T extends NetworkableObject>(
   objectToShare: T,
   objectType: string = 'object',
   objectAttributes: { [property: string]: unknown } | undefined = undefined,
+  objectDocumentation: NetworkObjectDocumentation = {},
 ): Promise<DisposableNetworkObject<T>> => {
   await initialize();
 
@@ -442,20 +433,51 @@ const set = async <T extends NetworkableObject>(
     // Check if there is a network object with this ID remotely by trying to register it
     const unsubPromises = [
       networkService.registerRequestHandler(
-        getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Get),
-        () =>
-          Promise.resolve([
-            // TODO: send the eligible functions over so we can reject function calls locally
-            // instead of asking the owning process if the function exists
-          ]),
-      ),
-      networkService.registerRequestHandler(
-        getNetworkObjectRequestType(id, NetworkObjectRequestSubtype.Function),
-        (functionName: string, ...args: unknown[]) =>
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
-          Promise.resolve((objectToShare as any)[functionName](...args)),
+        getNetworkObjectRequestType(id),
+        () => Promise.resolve(true),
+        {
+          method: {
+            summary: objectDocumentation.summary ?? '',
+            description: objectDocumentation.description ?? '',
+            params: [],
+            result: {
+              name: 'return value',
+              summary: 'Does the network object exist?',
+              required: true,
+              schema: {
+                type: 'boolean',
+              },
+            },
+          },
+          components: objectDocumentation.components,
+        },
       ),
     ];
+
+    // Also check if we can register all of the network object's functions
+    const netObjDetails = createNetworkObjectDetails(
+      id,
+      objectType,
+      // NetworkableObject isn't specific enough and changing it is painful
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      objectToShare as Record<string, unknown>,
+      objectAttributes,
+    );
+
+    netObjDetails.functionNames.forEach((functionName) => {
+      const requestType = getNetworkObjectRequestType(id, functionName);
+      const methodDocs =
+        objectDocumentation.methods?.find((method) => method.name === functionName) ??
+        getEmptyMethodDocs();
+      const unsub = networkService.registerRequestHandler(
+        requestType,
+        // Assert as any to allow indexing on the function name
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any, no-type-assertion/no-type-assertion
+        (...args: unknown[]) => Promise.resolve((objectToShare as any)[functionName](...args)),
+        { method: methodDocs },
+      );
+      unsubPromises.push(unsub);
+    });
 
     // Await all of the registrations finishing, successful or not
     const registrationResponses = await Promise.allSettled(unsubPromises);
@@ -517,14 +539,6 @@ const set = async <T extends NetworkableObject>(
     });
 
     // Notify that the network object was successfully registered
-    const netObjDetails = createNetworkObjectDetails(
-      id,
-      objectType,
-      // NetworkableObject isn't specific enough and changing it is painful
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      objectToShare as Record<string, unknown>,
-      objectAttributes,
-    );
     logger.debug(`Network object registered: ${serialize(netObjDetails)}`);
     onDidCreateNetworkObjectEmitter.emit(netObjDetails);
 
@@ -580,7 +594,7 @@ export interface NetworkObjectService extends MinimalNetworkObjectService {
  * event handler will be called. After an object is disposed, calls to its functions will no longer
  * be proxied to the original object.
  */
-const networkObjectService: NetworkObjectService = {
+export const networkObjectService: NetworkObjectService = {
   initialize,
   hasKnown,
   get,

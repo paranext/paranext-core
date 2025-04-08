@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { testingSettingService } from '@extension-host/services/settings.service-host';
 import { LocalizationSelectors } from '@shared/services/localization.service-model';
 import { SettingNames } from 'papi-shared-types';
@@ -8,7 +9,7 @@ const MOCK_SETTINGS_DATA = {
   'settingsTest.valueIsUndefined': undefined,
 };
 
-const VERSE_REF_DEFAULT = { default: { bookNum: 1, chapterNum: 1, verseNum: 1 } };
+const VERSE_REF_DEFAULT = { default: { book: 'GEN', chapterNum: 1, verseNum: 1 } };
 const NEW_INTERFACE_LANGUAGE = ['spa'];
 
 let settingsProviderEngine: ReturnType<
@@ -20,7 +21,7 @@ beforeEach(() => {
     testingSettingService.implementSettingDataProviderEngine(MOCK_SETTINGS_DATA);
 });
 
-jest.mock('@node/services/node-file-system.service', () => ({
+vi.mock('@node/services/node-file-system.service', () => ({
   readFileText: () => {
     return JSON.stringify(VERSE_REF_DEFAULT);
   },
@@ -28,8 +29,8 @@ jest.mock('@node/services/node-file-system.service', () => ({
     return Promise.resolve();
   },
 }));
-jest.mock('@extension-host/data/core-settings-info.data', () => ({
-  ...jest.requireActual('@extension-host/data/core-settings-info.data'),
+vi.mock('@extension-host/data/core-settings-info.data', async () => ({
+  ...(await vi.importActual('@extension-host/data/core-settings-info.data')),
   __esModule: true,
   platformSettings: {
     label: '%platform_group1%',
@@ -41,7 +42,7 @@ jest.mock('@extension-host/data/core-settings-info.data', () => ({
       },
       'platform.verseRef': {
         label: '%settings_platform_verseRef_label%',
-        default: { bookNum: 1, chapterNum: 1, verseNum: 1 },
+        default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
       },
       'platform.interfaceLanguage': {
         label: '%settings_platform_interfaceLanguage_label%',
@@ -60,15 +61,20 @@ jest.mock('@extension-host/data/core-settings-info.data', () => ({
     },
   },
 }));
-jest.mock('@shared/services/localization.service', () => ({
+vi.mock('@shared/services/localization.service', () => ({
   __esModule: true,
-  default: {
+  localizationService: {
     async getLocalizedStrings({ localizeKeys: keys }: LocalizationSelectors): Promise<{
       [localizeKey: string]: string;
     }> {
       return Object.fromEntries(keys.map((key) => [key, slice(key, 1, -1)]));
     },
   },
+}));
+vi.mock('@extension-host/services/contribution.service', async () => ({
+  ...(await vi.importActual('@extension-host/services/contribution.service')),
+  // Don't actually wait because we're not syncing any contributions in these tests
+  waitForResyncContributions: async () => {},
 }));
 
 test('Get verseRef returns default value', async () => {
@@ -123,11 +129,11 @@ test('Reset verseRef returns false', async () => {
 
 test('Set verseRef throws', async () => {
   const result = settingsProviderEngine.set('platform.verseRef', {
-    bookNum: 2,
+    book: 'EXO',
     chapterNum: 1,
     verseNum: 1,
   });
   await expect(result).rejects.toThrow(
-    "Error setting value for key 'platform.verseRef': Error: validation failed",
+    "Error setting value for key 'platform.verseRef': validation failed",
   );
 });

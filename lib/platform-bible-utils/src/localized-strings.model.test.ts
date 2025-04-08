@@ -5,18 +5,18 @@ describe('fallbackKey regex', () => {
     localizedStringsDocumentSchema.$defs.stringMetadata.properties.fallbackKey.pattern,
   );
 
-  test('passes on normal LocalizeKeys', () => {
+  it('passes on normal LocalizeKeys', () => {
     expect(fallbackKeyRegExp.test('%test_underscore%')).toBeTruthy();
     expect(fallbackKeyRegExp.test('%test-hyphen%')).toBeTruthy();
   });
 
-  test('fails on not LocalizeKeys', () => {
+  it('fails on not LocalizeKeys', () => {
     expect(fallbackKeyRegExp.test('test_stuff%')).toBeFalsy();
     expect(fallbackKeyRegExp.test('%test_stuff')).toBeFalsy();
     expect(fallbackKeyRegExp.test('%%')).toBeFalsy();
   });
 
-  test('passes on even the weirdest Paratext 9 keys', () => {
+  it('passes on even the weirdest Paratext 9 keys', () => {
     // This key is pretty typical with .;& and normal space
     expect(
       fallbackKeyRegExp.test(

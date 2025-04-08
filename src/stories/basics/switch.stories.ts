@@ -1,17 +1,15 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { Switch } from 'platform-bible-react';
 
-const meta: Meta<typeof Switch> = {
+export const Meta: MetaBase<typeof Switch> = {
   title: 'Basics/Switch',
   component: Switch,
   tags: ['autodocs'],
   argTypes: {
-    isDisabled: { control: 'boolean' },
-    hasError: { control: 'boolean' },
     className: { control: 'text' },
   },
 };
-export default meta;
+export default Meta;
 
 type Story = StoryObj<typeof Switch>;
 
@@ -25,14 +23,6 @@ export const Primary: Story = {
 
 export const Secondary: Story = {
   args: { className: 'secondary' },
-};
-
-export const Disabled: Story = {
-  args: { isDisabled: true },
-};
-
-export const ErrorState: Story = {
-  args: { hasError: true },
 };
 
 export const Paratext: Story = {
@@ -50,8 +40,9 @@ export const ParatextBright: Story = {
 export const OnChange: Story = {
   args: {
     onChange(event) {
-      // eslint-disable-next-line no-console
-      console.log(event.target.checked);
+      // There is likely a better way to do this without using `as`.
+      // eslint-disable-next-line no-console, no-type-assertion/no-type-assertion
+      console.log((event.target as HTMLInputElement).checked);
     },
   },
 };

@@ -13,7 +13,7 @@ import { Readable, Writable } from 'stream';
 import { buildExtensionPathFromName } from '@extension-host/services/extension-storage.service';
 import { getPathFromUri } from '@node/utils/util';
 import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
-import executionTokenService from '@node/services/execution-token.service';
+import { executionTokenService } from '@node/services/execution-token.service';
 import { ExecutionToken } from '@node/models/execution-token.model';
 
 const childProcesses: ChildProcess[] = [];

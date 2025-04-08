@@ -1,4 +1,4 @@
-@import 'styles/vars';
+@use 'styles/vars';
 
 /*
  * @NOTE: Prepend a `~` to css file paths that are in your node_modules
@@ -8,8 +8,8 @@ body {
   position: relative;
   color: white;
   height: 100vh;
-  background: $color--background;
-  font-family: $font-family;
+  background: vars.$color--background;
+  font-family: vars.$font-family;
   overflow-y: hidden;
   display: flex;
   justify-content: center;
@@ -24,29 +24,20 @@ body {
   flex-direction: column;
 }
 
-/* hide default box shadow of AppBar */
-/* stylelint-disable-next-line selector-class-pattern */
-.MuiPaper-root.MuiAppBar-root {
-  box-shadow: none;
-}
-
 li {
   list-style: none;
 }
 
 a {
   text-decoration: none;
-  height: fit-content;
-  width: fit-content;
-  margin: 10px;
 }
 
 a:hover {
   opacity: 1;
-  text-decoration: none;
+  text-decoration: underline;
 }
 
-.hello {
+.about {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -57,20 +48,16 @@ a:hover {
 .about-panel {
   width: 100%;
   height: 100%;
-  background: linear-gradient(
-    200.96deg,
-    $color--pt9-lightgreen -10%,
-    $color--pt9-darkgreen 60%,
-    $color--pt9-darkgray 110%
-  );
+  background: #0a403a;
   overflow-y: auto;
+  color: hsl(var(--foreground));
 }
 
-.about-panel .hello {
+.about-panel .test-panel {
   color: white;
 }
 
-.hello > div {
+.test-panel > div {
   text-align: center;
 }
 

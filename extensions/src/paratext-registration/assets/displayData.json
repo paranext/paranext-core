@@ -1,0 +1,12 @@
+{
+  "icon": "",
+  "moreInfoUrl": "",
+  "supportUrl": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Paratext Registration",
+      "shortSummary": "Set up authentication with the Paratext Registry.",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}

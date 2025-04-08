@@ -1,4 +1,4 @@
-import DateTimeFormat from './intl-date-time-format';
+import { DateTimeFormat } from './intl-date-time-format';
 
 const testDateTimeFormatter: DateTimeFormat = new DateTimeFormat('en');
 const START_DATE = new Date(2024, 3, 25, 12, 30, 0);

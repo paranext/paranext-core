@@ -1,4 +1,5 @@
 declare module 'hello-someone' {
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import { IDataProvider, DataProviderDataType } from '@papi/core';
 
   export type Person = {

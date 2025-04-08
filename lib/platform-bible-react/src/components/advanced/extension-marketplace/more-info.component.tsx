@@ -18,21 +18,11 @@ interface MoreInfoProps {
  * This component displays the more info section of the extension which includes the category,
  * number of downloads, languages, and links to the website and support
  *
- * @param id Optional unique identifier
- * @param category The category of the extension
- * @param downloads The number of downloads for the extension
- * @param languages The languages supported by the extension
- * @param moreInfoUrl The URL to the more info page of the extension
+ * @param MoreInfoProps
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */
-export default function MoreInfo({
-  id,
-  category,
-  downloads,
-  languages,
-  moreInfoUrl,
-}: MoreInfoProps) {
+export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: MoreInfoProps) {
   /**
    * This constant formats the number of downloads into a more readable format.
    *
@@ -55,29 +45,29 @@ export default function MoreInfo({
   return (
     <div
       id={id}
-      className="pr-flex pr-flex-wrap pr-items-start pr-space-x-4 pr-border-b pr-border-t pr-bg-white pr-pb-4 pr-pt-4"
+      className="tw-flex tw-flex-wrap tw-items-start tw-space-x-4 tw-border-b tw-border-t tw-bg-white tw-pb-4 tw-pt-4"
     >
-      <div className="pr-flex pr-flex-col pr-items-center">
-        <div className="pr-flex pr-items-center pr-rounded-md pr-bg-gray-100 pr-px-2 pr-py-1">
-          <span className="pr-text-xs pr-font-semibold pr-text-gray-700">{category}</span>
+      <div className="tw-flex tw-flex-col tw-items-center">
+        <div className="tw-flex tw-items-center tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1">
+          <span className="tw-text-xs tw-font-semibold tw-text-gray-700">{category}</span>
         </div>
-        <span className="pr-text-xs pr-text-gray-500">CATEGORY</span>
+        <span className="tw-text-xs tw-text-gray-500">CATEGORY</span>
       </div>
-      <div className="pr-mx-2 pr-h-10 pr-border-l pr-border-gray-300" />
-      <div className="pr-flex pr-flex-col pr-items-center">
-        <div className="pr-flex pr-items-center pr-rounded-md pr-bg-gray-100 pr-px-2 pr-py-1">
-          <User className="pr-mr-1 pr-h-4 pr-w-4" />
-          <span className="pr-text-xs pr-font-semibold pr-text-gray-700">{numberFormatted}</span>
+      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
+      <div className="tw-flex tw-flex-col tw-items-center">
+        <div className="tw-flex tw-items-center tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1">
+          <User className="tw-mr-1 tw-h-4 tw-w-4" />
+          <span className="tw-text-xs tw-font-semibold tw-text-gray-700">{numberFormatted}</span>
         </div>
-        <span className="pr-text-xs pr-text-gray-500">USERS</span>
+        <span className="tw-text-xs tw-text-gray-500">USERS</span>
       </div>
-      <div className="pr-mx-2 pr-h-10 pr-border-l pr-border-gray-300" />
-      <div className="pr-flex pr-flex-col pr-items-center">
-        <div className="pr-flex pr-items-center">
+      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
+      <div className="tw-flex tw-flex-col tw-items-center">
+        <div className="tw-flex tw-items-center">
           {languages.slice(0, 3).map((locale) => (
             <span
               key={locale}
-              className="pr-ml-1 pr-rounded-md pr-bg-gray-100 pr-px-2 pr-py-1 pr-text-xs pr-font-semibold pr-text-gray-700"
+              className="tw-ml-1 tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1 tw-text-xs tw-font-semibold tw-text-gray-700"
             >
               {locale.toUpperCase()}
             </span>
@@ -87,33 +77,35 @@ export default function MoreInfo({
           <button
             type="button"
             onClick={() => handleScrollToBottom()}
-            className="pr-text-xs pr-text-gray-500 pr-underline"
+            className="tw-text-xs tw-text-gray-500 tw-underline"
           >
             +{languages.length - 3} more languages
           </button>
         )}
       </div>
-      <div className="pr-mx-2 pr-h-10 pr-border-l pr-border-gray-300" />
-      <div className="pr-ml-auto pr-flex pr-flex-col pr-space-y-2">
+      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
+      <div className="tw-ml-auto tw-flex tw-flex-col tw-space-y-2">
         <a
           href={moreInfoUrl}
           target="_blank"
           rel="noreferrer"
-          className="pr-flex pr-items-center pr-text-xs pr-font-semibold pr-text-gray-500 pr-underline"
+          className="tw-flex tw-items-center tw-text-xs tw-font-semibold tw-text-gray-500 tw-underline"
         >
           Website
-          <LucideLink className="pr-ml-1 pr-inline pr-h-4 pr-w-4" />
+          <LucideLink className="tw-ml-1 tw-inline tw-h-4 tw-w-4" />
         </a>
         <a
           href="https://example.com"
           target="_blank"
           rel="noreferrer"
-          className="pr-flex pr-items-center pr-text-xs pr-font-semibold pr-text-gray-500 pr-underline"
+          className="tw-flex tw-items-center tw-text-xs tw-font-semibold tw-text-gray-500 tw-underline"
         >
           Support
-          <CircleHelp className="pr-ml-1 pr-inline pr-h-4 pr-w-4" />
+          <CircleHelp className="tw-ml-1 tw-inline tw-h-4 tw-w-4" />
         </a>
       </div>
     </div>
   );
 }
+
+export default MoreInfo;

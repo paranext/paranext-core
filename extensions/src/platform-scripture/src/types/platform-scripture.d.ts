@@ -1,11 +1,12 @@
 declare module 'platform-scripture' {
-  import { VerseRef } from '@sillsdev/scripture';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
   import type {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
     ExtensionDataScope,
     IDataProvider,
+    // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
   import { Dispose, LocalizeKey, UnsubscriberAsync } from 'platform-bible-utils';
@@ -16,37 +17,37 @@ declare module 'platform-scripture' {
   /** Provides Scripture data in USFM format by book */
   export type USFMBookProjectInterfaceDataTypes = {
     /** Gets/sets the "raw" USFM data for the specified book */
-    BookUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
+    BookUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USFM format by chapter */
   export type USFMChapterProjectInterfaceDataTypes = {
     /** Gets/sets the "raw" USFM data for the specified chapter */
-    ChapterUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
+    ChapterUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USFM format by verse */
   export type USFMVerseProjectInterfaceDataTypes = {
     /** Gets the "raw" USFM data for the specified verse */
-    VerseUSFM: DataProviderDataType<VerseRef, string | undefined, string>;
+    VerseUSFM: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USX format by book */
   export type USXBookProjectInterfaceDataTypes = {
     /** Gets/sets the data in USX form for the specified book */
-    BookUSX: DataProviderDataType<VerseRef, string | undefined, string>;
+    BookUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USX format by chapter */
   export type USXChapterProjectInterfaceDataTypes = {
     /** Gets/sets the data in USX form for the specified chapter */
-    ChapterUSX: DataProviderDataType<VerseRef, string | undefined, string>;
+    ChapterUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USX format by verse */
   export type USXVerseProjectInterfaceDataTypes = {
     /** Gets the "raw" data in USX form for the specified verse */
-    VerseUSX: DataProviderDataType<VerseRef, string | undefined, string>;
+    VerseUSX: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
   };
 
   /** Provides Scripture data in USJ format by book */
@@ -56,7 +57,7 @@ declare module 'platform-scripture' {
      *
      * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
      */
-    BookUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
+    BookUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
   };
 
   /** Provides Scripture data in USJ format by chapter */
@@ -66,17 +67,35 @@ declare module 'platform-scripture' {
      *
      * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
      */
-    ChapterUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
+    ChapterUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
   };
 
-  /** Provides Scripture data in USJ format by chapter */
+  /** Provides Scripture data in USJ format by verse */
   export type USJVerseProjectInterfaceDataTypes = {
     /**
      * Gets the data in USJ form for the specified verse
      *
      * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
      */
-    VerseUSJ: DataProviderDataType<VerseRef, Usj | undefined, Usj>;
+    VerseUSJ: DataProviderDataType<SerializedVerseRef, Usj | undefined, Usj>;
+  };
+
+  /**
+   * Provides Scripture data in plain text format by verse. Plain text does not include notes,
+   * figures, and other things that are not considered "verse text"
+   */
+  export type PlainTextVerseProjectInterfaceDataTypes = {
+    /**
+     * Gets the data in plain text form for the specified verse. Plain text does not include notes,
+     * figures, and other things that are not considered "verse text".
+     */
+    VersePlainText: DataProviderDataType<SerializedVerseRef, string | undefined, string>;
+  };
+
+  /** Provides information about markers */
+  export type MarkerNamesProjectInterfaceDataTypes = {
+    /** Gets an array of string that contain information about markers */
+    MarkerNames: DataProviderDataType<number, string[], string[]>;
   };
 
   /**
@@ -148,10 +167,10 @@ declare module 'platform-scripture' {
   export type IUSFMBookProjectDataProvider =
     IProjectDataProvider<USFMBookProjectInterfaceDataTypes> & {
       /** Gets the "raw" USFM data for the specified book */
-      getBookUSFM(verseRef: VerseRef): Promise<string | undefined>;
+      getBookUSFM(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USFM data for the specified book */
       setBookUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usfm: string,
       ): Promise<DataProviderUpdateInstructions<USFMBookProjectInterfaceDataTypes>>;
       /**
@@ -163,7 +182,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usfm: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -173,10 +192,10 @@ declare module 'platform-scripture' {
   export type IUSFMChapterProjectDataProvider =
     IProjectDataProvider<USFMChapterProjectInterfaceDataTypes> & {
       /** Gets the "raw" USFM data for the specified chapter */
-      getChapterUSFM(verseRef: VerseRef): Promise<string | undefined>;
+      getChapterUSFM(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USFM data for the specified chapter */
       setChapterUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usfm: string,
       ): Promise<DataProviderUpdateInstructions<USFMChapterProjectInterfaceDataTypes>>;
       /**
@@ -188,7 +207,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usfm: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -198,10 +217,10 @@ declare module 'platform-scripture' {
   export type IUSFMVerseProjectDataProvider =
     IProjectDataProvider<USFMVerseProjectInterfaceDataTypes> & {
       /** Gets the "raw" USFM data for the specified verse */
-      getVerseUSFM(verseRef: VerseRef): Promise<string | undefined>;
+      getVerseUSFM(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USFM data for the specified verse */
       setVerseUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usfm: string,
       ): Promise<DataProviderUpdateInstructions<USFMVerseProjectInterfaceDataTypes>>;
       /**
@@ -213,7 +232,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSFM(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usfm: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -223,10 +242,10 @@ declare module 'platform-scripture' {
   export type IUSXBookProjectDataProvider =
     IProjectDataProvider<USXBookProjectInterfaceDataTypes> & {
       /** Gets the "raw" USX data for the specified book */
-      getBookUSX(verseRef: VerseRef): Promise<string | undefined>;
+      getBookUSX(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USX data for the specified book */
       setBookUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usx: string,
       ): Promise<DataProviderUpdateInstructions<USXBookProjectInterfaceDataTypes>>;
       /**
@@ -238,7 +257,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usx: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -248,10 +267,10 @@ declare module 'platform-scripture' {
   export type IUSXChapterProjectDataProvider =
     IProjectDataProvider<USXChapterProjectInterfaceDataTypes> & {
       /** Gets the Scripture text in USX format for the specified chapter */
-      getChapterUSX(verseRef: VerseRef): Promise<string | undefined>;
+      getChapterUSX(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the Scripture text in USX format for the specified chapter */
       setChapterUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usx: string,
       ): Promise<DataProviderUpdateInstructions<USXChapterProjectInterfaceDataTypes>>;
       /**
@@ -263,7 +282,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usx: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -273,10 +292,10 @@ declare module 'platform-scripture' {
   export type IUSXVerseProjectDataProvider =
     IProjectDataProvider<USXVerseProjectInterfaceDataTypes> & {
       /** Gets the "raw" USX data for the specified verse */
-      getVerseUSX(verseRef: VerseRef): Promise<string | undefined>;
+      getVerseUSX(verseRef: SerializedVerseRef): Promise<string | undefined>;
       /** Sets the "raw" USX data for the specified verse */
       setVerseUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usx: string,
       ): Promise<DataProviderUpdateInstructions<USXVerseProjectInterfaceDataTypes>>;
       /**
@@ -288,7 +307,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSX(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usx: string | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -304,7 +323,7 @@ declare module 'platform-scripture' {
        * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
        * change over time.
        */
-      getBookUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
+      getBookUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified book
        *
@@ -313,7 +332,7 @@ declare module 'platform-scripture' {
        * change over time.
        */
       setBookUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usj: Usj,
       ): Promise<DataProviderUpdateInstructions<USJBookProjectInterfaceDataTypes>>;
       /**
@@ -329,7 +348,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -343,14 +362,14 @@ declare module 'platform-scripture' {
        *
        * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
        */
-      getChapterUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
+      getChapterUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified chapter
        *
        * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
        */
       setChapterUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usj: Usj,
       ): Promise<DataProviderUpdateInstructions<USJChapterProjectInterfaceDataTypes>>;
       /**
@@ -364,7 +383,7 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usj: Usj | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
@@ -380,7 +399,7 @@ declare module 'platform-scripture' {
        * over time. Additionally, USJ is in very early stages of proposal, so it will likely also
        * change over time.
        */
-      getVerseUSJ(verseRef: VerseRef): Promise<Usj | undefined>;
+      getVerseUSJ(verseRef: SerializedVerseRef): Promise<Usj | undefined>;
       /**
        * Sets the tokenized USJ data for the specified verse
        *
@@ -389,7 +408,7 @@ declare module 'platform-scripture' {
        * change over time.
        */
       setVerseUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         usj: Usj,
       ): Promise<DataProviderUpdateInstructions<USJVerseProjectInterfaceDataTypes>>;
       /**
@@ -405,15 +424,78 @@ declare module 'platform-scripture' {
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSJ(
-        verseRef: VerseRef,
+        verseRef: SerializedVerseRef,
         callback: (usj: Usj | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  /**
+   * Provides Scripture data in plain text format by verse. Plain text does not include notes,
+   * figures, and other things that are not considered "verse text"
+   */
+  export type IPlainTextVerseProjectDataProvider =
+    IProjectDataProvider<PlainTextVerseProjectInterfaceDataTypes> & {
+      /**
+       * Gets the data in plain text form for the specified verse. Plain text does not include
+       * notes, figures, and other things that are not considered "verse text"
+       */
+      getVersePlainText(verseRef: SerializedVerseRef): Promise<Usj | undefined>;
+      /**
+       * Sets the data in plain text form for the specified verse. Plain text does not include
+       * notes, figures, and other things that are not considered "verse text"
+       */
+      setVersePlainText(
+        verseRef: SerializedVerseRef,
+        data: string,
+      ): Promise<DataProviderUpdateInstructions<PlainTextVerseProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when the plain text data is changed. Plain text does
+       * not include notes, figures, and other things that are not considered "verse text"
+       *
+       * @param verseRef Tells the provider what changes to listen for
+       * @param callback Function to run with the updated USJ for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscribeVersePlainText(
+        verseRef: SerializedVerseRef,
+        callback: (usj: Usj | undefined) => void,
+        options?: DataProviderSubscriberOptions,
+      ): Promise<UnsubscriberAsync>;
+    };
+
+  /** Provides a string array that contains information about the markers used in this project */
+  export type IMarkerNamesProjectDataProvider =
+    IProjectDataProvider<MarkerNamesProjectInterfaceDataTypes> & {
+      /**
+       * Gets marker info for the default stylesheet
+       *
+       * @todo Add support for getting marker info from custom stylesheets
+       */
+      getMarkerNames(bookNum: number): Promise<string[] | undefined>;
+      /** Setting is not supported for now */
+      setMarkerNames(
+        markerNames: string[],
+      ): Promise<DataProviderUpdateInstructions<MarkerNamesProjectInterfaceDataTypes>>;
+      /**
+       * Subscribe to run a callback function when marker info changed
+       *
+       * @param bookNum Tells the provider what changes to listen for
+       * @param callback Function to run with the updated marker info for this selector
+       * @param options Various options to adjust how the subscriber emits updates
+       * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+       */
+      subscriberMarkerNames(
+        bookNum: number,
+        callback: (markerNames: string[] | undefined) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
 
   // #endregion
 
-  // #region Check Data Types
+  // #region Check Types
 
   /** Details about a check provided by the check itself */
   export type CheckDetails = {
@@ -455,12 +537,12 @@ declare module 'platform-scripture' {
   /** Represents a selection of scripture text */
   export type ScriptureRange = {
     /** Location within a project that is the start of the range */
-    start: VerseRef;
+    start: SerializedVerseRef;
     /**
      * Location within a project that is the end of the range. If not provided, then the end of the
      * book mentioned in `start` should be assumed.
      */
-    end?: VerseRef;
+    end?: SerializedVerseRef;
   };
 
   /** Represents a selection of scripture text to feed into a check */
@@ -498,7 +580,7 @@ declare module 'platform-scripture' {
       }
     | {
         /** Verse reference to a location with the document */
-        verseRef: VerseRef;
+        verseRef: SerializedVerseRef;
         /** Offset to apply to start of the verse indicated by `verseRef` */
         offset?: number;
       };
@@ -507,8 +589,14 @@ declare module 'platform-scripture' {
   export type CheckRunResult = {
     /** ID of the check that produced this result */
     checkId?: string;
+    /** Identifies a distinct class of check results that a check produced */
+    checkResultType: string;
+    /** Distinct ID for this check result if it might occur more than once in a single verse */
+    checkResultUniqueId?: string;
     /** ID of the project evaluated by the check */
     projectId: string;
+    /** Project text that was selected in the check result */
+    selectedText: string;
     /**
      * Format string or {@link LocalizeKey} of the format string to display regarding the range of
      * text referenced in this result. A format string should be of the form "... {arg1} ... {arg2}
@@ -527,6 +615,10 @@ declare module 'platform-scripture' {
      * @example {name: Layla}
      */
     formatStringArguments?: { [key: string]: string };
+    /** Indicates if a user decided this check result should be considered incorrect going forward */
+    isDenied: boolean;
+    /** VerseRef that most closely identifies a single place where the check applies */
+    verseRef: SerializedVerseRef;
     /** Starting point where the check result applies in the document */
     start: CheckLocation;
     /** Ending point where the check result applies in the document */
@@ -535,13 +627,22 @@ declare module 'platform-scripture' {
 
   // #endregion
 
-  // #region Check Runner Data Types
+  // #region Check Runner Types
 
   /** Details about a check provided by a {@link ICheckRunner} */
   export type CheckRunnerCheckDetails = CheckDetailsWithCheckId & {
     /** List of project IDs that one particular check is enabled to evaluate */
     enabledProjectIds: string[];
   };
+
+  /**
+   * Details about a check (as identified by its checkId) that can be set on a subscription by the
+   * subscription owner
+   */
+  export type SettableCheckDetails = Omit<
+    CheckRunnerCheckDetails,
+    'checkName' | 'checkDescription'
+  >;
 
   /** Data types provided by a service that runs checks */
   export type CheckRunnerDataTypes = {
@@ -550,28 +651,49 @@ declare module 'platform-scripture' {
     CheckResults: DataProviderDataType<undefined, CheckRunResult[], never>;
   };
 
+  export type CheckEnablerDisabler = {
+    /** Enable the check with the given checkId to run on the given project */
+    enableCheck: (checkId: string, projectId: string) => Promise<void>;
+
+    /** Disable the check with the given checkId from producing results for the given project */
+    disableCheck: (checkId: string, projectId?: string) => Promise<void>;
+  };
+
+  export type CheckResultClassifier = {
+    /**
+     * Mark one particular check result as "denied", meaning the user has marked it as incorrect for
+     * the given text
+     */
+    denyCheckResult: (
+      checkId: string,
+      checkResultType: string,
+      projectId: string,
+      verseRef: SerializedVerseRef,
+      selectedText: string,
+      checkResultUniqueId?: string,
+    ) => Promise<boolean>;
+    /** Reverse the denial of one particular check result */
+    allowCheckResult: (
+      checkId: string,
+      checkResultType: string,
+      projectId: string,
+      verseRef: SerializedVerseRef,
+      selectedText: string,
+      checkResultUniqueId?: string,
+    ) => Promise<boolean>;
+  };
+
   /**
    * All processes that can run checks are expected to implement this type in a data provider
    * registered with object type 'checkRunner'
    */
-  export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> & {
-    /**
-     * Enable the check with the given checkId to run on the given project. Note that no results
-     * will be returned unless `getCheckResults` is run before or after the check has been enabled.
-     * `getCheckResults` is used to indicate what project content should be checked within each
-     * project. `enableCheck` is used to indicate which checks should be enabled on which projects.
-     *
-     * @returns Warnings from the check that indicate results might not be what the user desires
-     */
-    enableCheck: (checkId: string, projectId: string) => Promise<string[]>;
-
-    /** Disable the check with the given checkId from producing results for the given project. */
-    disableCheck: (checkId: string, projectId?: string) => Promise<void>;
-  };
+  export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> &
+    CheckEnablerDisabler &
+    CheckResultClassifier;
 
   // #endregion
 
-  // #region Check Hosting (in the Extension Host) Data Types
+  // #region Check Hosting (in the Extension Host) Types
 
   /**
    * Service for hosting TS/JS checks inside the extension host that are registered using the
@@ -595,7 +717,44 @@ declare module 'platform-scripture' {
 
   // #endregion
 
-  // #region Check Aggregator Data Types
+  // #region Check Aggregator Types
+
+  /** Uniquely identifies one subscriber to the check service */
+  export type CheckSubscriptionId = string;
+
+  export type CheckSubscriptionManager = {
+    /** Create a new subscription keyed by the returned subscription ID */
+    createSubscription: () => Promise<CheckSubscriptionId>;
+
+    /**
+     * Deactivate and throw away the subscription with the given ID
+     *
+     * @returns `true` if the subscription could be deleted, `false` otherwise
+     */
+    deleteSubscription: (subscriptionId: CheckSubscriptionId) => Promise<boolean>;
+    /**
+     * Validates the subscription with the given ID.
+     *
+     * @param subscriptionId - The ID of the subscription to validate.
+     * @returns `true` if the subscription is valid, `false` otherwise.
+     */
+    validateSubscription: (subscriptionId: CheckSubscriptionId) => Promise<boolean>;
+  };
+
+  /**
+   * Data types provided by a service that aggregates check results for multiple callers across
+   * multiple ICheckRunner instances
+   */
+  export type CheckAggregatorDataTypes = {
+    AvailableChecks: DataProviderDataType<
+      CheckSubscriptionId,
+      CheckRunnerCheckDetails[],
+      SettableCheckDetails[]
+    >;
+    ActiveRanges: DataProviderDataType<CheckSubscriptionId, CheckInputRange[], CheckInputRange[]>;
+    IncludeDeniedResults: DataProviderDataType<CheckSubscriptionId, boolean, boolean>;
+    CheckResults: DataProviderDataType<CheckSubscriptionId, CheckRunResult[], never>;
+  };
 
   /**
    * Service that multiplexes/demultiplexes calls across all {@link ICheckRunner} data providers so
@@ -604,10 +763,61 @@ declare module 'platform-scripture' {
    *
    * Use the "platformScripture.checkAggregator" data provider name to access the service.
    */
-  export type ICheckAggregatorService = ICheckRunner & {
-    dataProviderName: string;
+  export type ICheckAggregatorService = IDataProvider<CheckAggregatorDataTypes> &
+    CheckResultClassifier &
+    CheckSubscriptionManager & {
+      dataProviderName: string;
+    };
+
+  // #endregion
+  // #region Send/Receive Types
+
+  /**
+   * In what state the project to S/R is
+   *
+   * - `undefined` or `''` = project has not been edited
+   * - `edited` = project has been edited
+   * - `new` = project not present on the system and available for download
+   */
+  export type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
+
+  /** Information about a S/R-able project needed to display it in the S/R dialog */
+  export type SharedProjectInfo = {
+    id: string;
+    name: string;
+    fullName: string;
+    language: string;
+    editedStatus: EditedStatus;
+    lastSendReceiveDate: string;
+    /** Names of admins on this project. Only filled if project is new */
+    adminNames?: string[];
+    warnings?: string[];
   };
 
+  /**
+   * Map of projects that can be S/Red to display in the S/R dialog.
+   *
+   * Maps project id to {@link SharedProjectInfo} for that project id
+   */
+  export type SharedProjectsInfo = { [projectId: string]: SharedProjectInfo };
+
+  // #endregion
+  // #region ChecksSetup Types
+  export type ChecksSetUpProps = {
+    /** Optional string representing the id attribute of the Checks dropdown */
+    id?: string;
+    /** List of checks that can be selected and, if needed, configured */
+    availableChecks: CheckRunnerCheckDetails[];
+    /**
+     * Function that is called when a checkbox for a check is selected or deselected
+     *
+     * @param checkLabel Name of the check
+     * @param selected True if selected, false if not selected
+     */
+    handleSelectCheckType: (checkLabel: string, selected: boolean) => void;
+    /** List of checks that have been selected */
+    selectedChecks: string[];
+  };
   // #endregion
 }
 
@@ -624,6 +834,8 @@ declare module 'papi-shared-types' {
     IUSJBookProjectDataProvider,
     IUSJChapterProjectDataProvider,
     IUSJVerseProjectDataProvider,
+    IPlainTextVerseProjectDataProvider,
+    IMarkerNamesProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     CheckDetails,
@@ -640,28 +852,24 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Book': IUSJBookProjectDataProvider;
     'platformScripture.USJ_Chapter': IUSJChapterProjectDataProvider;
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
+    'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
+    'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
   }
 
   export interface DataProviders {
     /** Use this to work with checks that are running in any process */
     'platformScripture.checkAggregator': ICheckAggregatorService;
-    /** Use this to work with checks that are explicitly hosted in the extension host */
+    /**
+     * You should probably use 'platformScripture.checkAggregator' instead. This data provider only
+     * includes checks registered with this one particular {@link ICheckRunner}. The aggregator
+     * includes all checks registered with all {@link ICheckRunner} instances.
+     */
     'platformScripture.extensionHostCheckRunner': ICheckRunner;
   }
 
   export interface CommandHandlers {
     'platform.about': (projectId?: string | undefined) => Promise<string | undefined>;
 
-    /**
-     * Toggle the `platformScripture.includeMyParatext9Projects` setting on or off
-     *
-     * @param shouldIncludeMyParatext9Projects Provide this parameter to set it to `true` or `false`
-     *   instead of toggling
-     * @returns New value of the setting
-     */
-    'platformScripture.toggleIncludeMyParatext9Projects': (
-      shouldIncludeMyParatext9Projects?: boolean,
-    ) => Promise<boolean>;
     /**
      * Register a new check so it is runnable. It will not produce any check results until
      * {@link ICheckRunner.enableCheck} is run by something else.
@@ -686,24 +894,19 @@ declare module 'papi-shared-types' {
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openConfigureChecks': (
+    'platformScripture.openMarkersInventory': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
 
-    'platformScripture.showCheckResults': (
+    'platformScripture.openPunctuationInventory': (
+      projectId?: string | undefined,
+    ) => Promise<string | undefined>;
+
+    'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
   }
 
-  export interface SettingTypes {
-    /**
-     * Whether to look in the Paratext 9 project storage folder for Paratext projects to load
-     * (Windows only).
-     *
-     * Located at "C:\My Paratext 9 Projects"
-     */
-    'platformScripture.includeMyParatext9Projects': boolean;
-  }
   export interface ProjectSettingTypes {
     /**
      * Which versification scheme this Scripture project uses
@@ -732,5 +935,13 @@ declare module 'papi-shared-types' {
     'platformScripture.repeatableWords': string;
 
     'platformScripture.nonRepeatableWords': string;
+
+    'platformScripture.validMarkers': string;
+
+    'platformScripture.invalidMarkers': string;
+
+    'platformScripture.validPunctuation': string;
+
+    'platformScripture.invalidPunctuation': string;
   }
 }

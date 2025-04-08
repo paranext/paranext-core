@@ -1,22 +1,45 @@
-@import '../../styles/vars';
+@use '../../styles/vars';
+
+.dock {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+.dock-dropdown,
+.dock-dropdown-menu,
+.dock-dropdown-menu-item {
+  background-color: hsl(var(--popover));
+  color: hsl(var(--popover-foreground));
+}
+
+.dock-dropdown-menu-item:hover {
+  background-color: hsl(var(--accent));
+}
+
+.dock-tab-close-btn:hover,
+.dock-tab:hover .dock-tab-close-btn,
+.dock-tab-close-btn:focus {
+  color: hsl(var(--foreground));
+}
 
 // #region GENERAL //////////////////////////////////////////////
 /* space around app and in between windows */
 .dock-divider {
-  flex: 0 0 4px;
+  flex: 0 0 8px;
 }
 
 .dock-hbox > .dock-divider {
-  transform: scaleX(6);
+  transform: scaleX(1);
 }
 
 .dock-vbox > .dock-divider {
-  transform: scaleY(6);
+  transform: scaleY(1);
 }
 
 .dock-layout {
   flex-grow: 1;
-  margin: 4px;
+  margin: 8px;
+  margin-top: 0;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible {
@@ -50,7 +73,7 @@
 
 /* overriding default style for the shadow indicating that not all tabs are shown */
 .dock-nav-more::after {
-  box-shadow: inset -10px 0 8px -8px $color--text-dimmed;
+  box-shadow: inset -10px 0 8px -8px vars.$color--shadow;
 }
 
 /* expand the invisible dock-tab-hit-area a bit to cover the border area above it */
@@ -60,7 +83,7 @@
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar {
-  background: $color--inactive-tab;
+  background: vars.$color--inactive-tab;
   padding: 0;
   border: 0;
 }
@@ -83,16 +106,18 @@
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: 0;
   border: 0;
-  background: $color--inactive-tab;
-  color: $color--text;
+  background: vars.$color--inactive-tab;
+  color: vars.$color--text;
   flex: 1 0 auto;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  background: $color--active-tab;
-  color: $color--text;
+  background: vars.$color--active-tab;
+  color: vars.$color--text;
   border-bottom: 0;
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
+
+  box-shadow: 0 4px 20px 0 vars.$color--shadow; // Box shadow around active tab
 }
 // #endregion
 
@@ -101,34 +126,25 @@
   content: '';
   width: 0.5px; // fix that renderer would sometimes used 2px instead of 1 for whatever reason
   height: 20px;
-  background: $color--border;
+  background: vars.$color--border;
   position: absolute;
   bottom: 6px;
   left: -2px;
 }
 // #endregion
 
-// #region STRAIGHT CORNERS //////////////////////////////////////////////
-.dock-layout .dock-panel.dock-style-platform-bible,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
-  border-radius: 0;
-}
-// #endregion
-
 // #region ROUNDED CORNERS //////////////////////////////////////////////
-/*
-  Un-comment this section (instead of previous "STRAIGHT CORNER") for a rounded corner style.
-  It's currently not decided which one we will finally use
-*/
-/*
+
 // Curved top corners, including on floating window
 // .dock-fbox > .dock-panel - would be for floating windows only
-$tab-top-rounding: $space--xs;
+$tab-top-rounding: vars.$space--xs;
+
+.dock.dock-top,
 .dock-layout .dock-panel.dock-style-platform-bible {
   border-radius: $tab-top-rounding;
 }
+
+.dock-nav-wrap,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
@@ -136,56 +152,61 @@ $tab-top-rounding: $space--xs;
 }
 
 // Bottom outside corner rounding for active tab
-$tab-bottom-rounding: $space--s;
-.dock-tab.dock-tab-active:before,
-.dock-tab.dock-tab-active:after {
+$tab-bottom-rounding: vars.$space--s;
+
+.dock-tab.dock-tab-active::before,
+.dock-tab.dock-tab-active::after {
   content: ' ';
   height: $tab-bottom-rounding;
   width: $tab-bottom-rounding;
   position: absolute;
   bottom: 0;
-  border-width: 0 $border-width $border-width 0;
-}
-.dock-tab.dock-tab-active:before {
-  left: -$tab-bottom-rounding;
-  border-bottom-right-radius: $tab-bottom-rounding - 2;
-  box-shadow: 2px 2px 0 #fff;
-}
-.dock-tab.dock-tab-active:after {
-  right: -$tab-bottom-rounding;
-  border-bottom-left-radius: $tab-bottom-rounding - 2;
-  box-shadow: -2px 2px 0 #fff;
+  border-width: 0 vars.$border-width vars.$border-width 0;
 }
 
-// Box shadow around active tab
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
-  box-shadow: 0 4px 20px 0 $color--text-dimmed;
+.dock-tab.dock-tab-active::before {
+  left: -$tab-bottom-rounding;
+  border-bottom-right-radius: $tab-bottom-rounding - 2;
+  box-shadow: 2px 2px 0 vars.$color--active-tab;
 }
-//*/
+
+.dock-tab.dock-tab-active::after {
+  right: -$tab-bottom-rounding;
+  border-bottom-left-radius: $tab-bottom-rounding - 2;
+  box-shadow: -2px 2px 0 vars.$color--active-tab;
+}
+
 // #endregion
 
 // #region CONTROLS //////////////////////////////////////////////
 /* Close buttons */
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
-  padding-left: $space--s;
-  padding-right: $space--m + $space--xs + $space--xxs;
+  padding-left: vars.$space--s;
+  padding-right: vars.$space--m + vars.$space--xs + vars.$space--xxs;
 }
 
 .dock-panel.dock-style-card .dock-tab-close-btn {
-  right: $space--xs;
+  right: vars.$space--xs;
 }
 
 .dock-dropdown-menu-item .dock-tab-close-btn {
-  right: $space--xs;
-  top: $space--xs + $space--xxs;
+  right: vars.$space--xs;
+  top: vars.$space--xs + vars.$space--xxs;
 }
 
 .dock-dropdown-menu-item .title {
-  padding-right: $space--s + $space--xs;
+  padding-right: vars.$space--s + vars.$space--xs;
 }
 
 .dock-tab-close-btn {
-  font-family: $font-family;
+  font-family: vars.$font-family;
+  color: transparent;
+}
+
+.dock-tab.dock-tab-active {
+  .dock-tab-close-btn {
+    color: hsl(var(--foreground));
+  }
 }
 
 /* maximize - minimize control */
@@ -194,11 +215,11 @@ $tab-bottom-rounding: $space--s;
 }
 
 .dock-panel-max-btn::before {
-  border: 2px solid $color--border;
+  border: 2px solid vars.$color--border;
 }
 
 .dock-panel-min-btn::before {
-  color: $color--border;
+  color: vars.$color--border;
 }
 
 .dock-panel.dock-style-card .dock-panel-max-btn,

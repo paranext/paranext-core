@@ -1,9 +1,9 @@
-import './test-buttons-panel.component.css';
-import useData from '@renderer/hooks/papi-hooks/use-data.hook';
+import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import { debounce } from 'platform-bible-utils';
-import { useState, useMemo, useCallback } from 'react';
 import { TextField } from 'platform-bible-react';
+import { debounce } from 'platform-bible-utils';
+import { useCallback, useMemo, useState } from 'react';
+import './test-buttons-panel.component.css';
 
 export const TAB_TYPE_QUICK_VERSE_HERESY = 'quick-verse-heresy';
 
@@ -34,7 +34,7 @@ export function TestQuickVerseHeresyPanel() {
 
   return (
     <div className="buttons-panel">
-      <div className="hello">
+      <div className="test-panel">
         <img
           src="papi-extension://quickVerse/assets/letter-q.png"
           alt="Q icon"

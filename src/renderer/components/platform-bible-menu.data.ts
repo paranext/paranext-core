@@ -1,4 +1,4 @@
-import menuDataService from '@shared/services/menu-data.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { Localized, MultiColumnMenu, PlatformMenus } from 'platform-bible-utils';
 
 type LocalizedMainMenu = Localized<PlatformMenus['mainMenu']>;
@@ -25,13 +25,6 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
     'paratext.helpSubgroup': { menuItem: 'paratext.helpRoot', order: 1 },
   },
   items: [
-    {
-      label: 'Download/Install Resources',
-      localizeNotes: 'Main application menu > Paratext column > Download/Install Resources',
-      group: 'paratext.sendReceive',
-      order: 1,
-      command: 'platform.downloadAndInstallResources',
-    },
     {
       label: 'Open Project...',
       tooltip: 'Open project or resource text(s)',
@@ -88,7 +81,7 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
       localizeNotes: 'Main application menu > Paratext column > Settings',
       group: 'platform.misc',
       order: 1,
-      command: 'platform.openUserSettings',
+      command: 'platform.openSettings',
     },
     {
       label: 'Reload Extensions',
@@ -121,8 +114,10 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
   ],
 };
 
-export default async function provideMenuData(
+export async function provideMenuData(
   isSupportAndDevelopment: boolean,
 ): Promise<Localized<MultiColumnMenu>> {
   return isSupportAndDevelopment ? supportAndDevelopmentMenuLayout : menuDataService.getMainMenu();
 }
+
+export default provideMenuData;

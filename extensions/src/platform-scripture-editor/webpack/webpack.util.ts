@@ -25,6 +25,16 @@ export const webViewTempDir = 'temp-build';
 /** Folder containing the built extension files */
 export const outputFolder = 'dist';
 
+/**
+ * The module format of library we want webpack to use for externals and create for our extensions
+ *
+ * @see webpack.Configuration['externalsType'] for info about external import format
+ * @see webpack.LibraryOptions['type'] for info about library format
+ */
+// commonjs-static formats the code to export everything on module.exports.<export_name> so it works
+// well in cjs or esm https://webpack.js.org/configuration/output/#type-commonjs-static
+export const LIBRARY_TYPE: NonNullable<webpack.Configuration['externalsType']> = 'commonjs-static';
+
 /** Get a list of TypeScript WebView files to bundle. Path relative to project root */
 function getWebViewTsxPaths() {
   return glob(webViewTsxGlob, { ignore: 'node_modules/**' });

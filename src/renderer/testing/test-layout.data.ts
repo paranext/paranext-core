@@ -1,16 +1,16 @@
+import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';
-import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 // import { TAB_TYPE_QUICK_VERSE_HERESY } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 // import { TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG } from '@renderer/components/project-dialogs/download-update-project-tab.component';
 // import { TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG } from '@renderer/components/project-dialogs/open-multiple-projects-tab.component';
 // import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/extension-manager/extension-manager-tab.component';
-import LOREM_IPSUM from './lorem-ipsum';
+import { LOREM_IPSUM } from './lorem-ipsum';
 
 // Using `as` here simplifies type changes.
 /* eslint-disable no-type-assertion/no-type-assertion */
-const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
+export const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
   ? {
       dockbox: {
         mode: 'horizontal',

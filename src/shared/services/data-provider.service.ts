@@ -1,8 +1,9 @@
 /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
 
-import DataProviderInternal, {
+import {
   DataProviderDataTypes,
   DataProviderGetter,
+  DataProviderInternal,
   DataProviderUpdateInstructions,
   DataProviderSetter,
   DataProviderSubscriber,
@@ -11,31 +12,38 @@ import DataProviderInternal, {
   getDataProviderDataTypeFromFunctionName,
   DataProviderDataType,
 } from '@shared/models/data-provider.model';
-import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
+  AsyncVariable,
+  CannotHaveOnDidDispose,
   PlatformEvent,
   PlatformEventEmitter,
   deepEqual,
-  getAllObjectFunctionNames,
-  groupBy,
-  isString,
-  CannotHaveOnDidDispose,
-  AsyncVariable,
   endsWith,
+  getAllObjectFunctionNames,
+  getErrorMessage,
+  groupBy,
+  isErrorMessageAboutParatextBlockingInternetAccess,
+  isErrorMessageAboutRegistryAuthFailure,
+  isString,
+  newPlatformError,
   startsWith,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { serializeRequestType } from '@shared/utils/util';
 import { LocalObjectToProxyCreator } from '@shared/models/network-object.model';
-import networkObjectService, { overrideDispose } from '@shared/services/network-object.service';
-import logger from '@shared/services/logger.service';
+import { networkObjectService, overrideDispose } from '@shared/services/network-object.service';
+import { logger } from '@shared/services/logger.service';
 import {
+  CommandHandlers,
   DataProviderNames,
   DataProviderTypes,
   DataProviders,
   DisposableDataProviders,
 } from 'papi-shared-types';
-import IDataProvider, { IDisposableDataProvider } from '@shared/models/data-provider.interface';
+import { IDataProvider, IDisposableDataProvider } from '@shared/models/data-provider.interface';
+import { notificationService } from '@shared/services/notification.service';
+import { PlatformNotification } from '@shared/models/notification.service-model';
 
 /** Suffix on network objects that indicates that the network object is a data provider */
 const DATA_PROVIDER_LABEL = 'data';
@@ -72,10 +80,7 @@ const initialize = () => {
 
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
-
-    // TODO: Might be best to make a singleton or something
     await networkService.initialize();
-
     isInitialized = true;
   })();
 
@@ -91,6 +96,27 @@ const initialize = () => {
  */
 function hasKnown(providerName: string): boolean {
   return networkObjectService.hasKnown(getDataProviderObjectId(providerName));
+}
+
+function constructErrorNotification(exception: unknown): PlatformNotification | undefined {
+  const retVal: PlatformNotification = {
+    severity: 'error',
+    message: '',
+    clickCommandLabel: '%general_open%',
+    // TS doesn't realize this is a valid command handler key since it is defined in an extension
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    clickCommand: 'paratextRegistration.showParatextRegistration' as keyof CommandHandlers,
+  };
+
+  if (isErrorMessageAboutParatextBlockingInternetAccess(exception)) {
+    retVal.message = '%data_loading_error_paratextData_internet_disabled%';
+  } else if (isErrorMessageAboutRegistryAuthFailure(exception)) {
+    retVal.message = '%data_loading_error_paratextData_auth_failure%';
+  } else {
+    return undefined;
+  }
+
+  return retVal;
 }
 
 /**
@@ -195,9 +221,13 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
           callback(data);
         }
       } catch (e) {
+        const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
         logger.warn(
-          `Tried to retrieve data after an update event for ${dataType} with selector ${JSON.stringify(selector).substring(0, 120)}, but it threw. ${e}`,
+          `Tried to retrieve data after an update event for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(e)}`,
         );
+        callback(newPlatformError(e));
+        const notification = constructErrorNotification(e);
+        if (notification) notificationService.send(notification);
       }
     };
 
@@ -228,9 +258,13 @@ function createDataProviderSubscriber<DataProviderName extends DataProviderNames
             callback(data);
           }
         } catch (e) {
+          const selectorDetails = JSON.stringify(selector) ?? '<undefined>';
           logger.warn(
-            `Tried to retrieve data immediately for ${dataType} with selector ${JSON.stringify(selector).substring(0, 120)}, but it threw. ${e}`,
+            `Tried to retrieve data immediately for ${dataType} with selector ${selectorDetails.substring(0, 120)}, but it threw. ${getErrorMessage(e)}`,
           );
+          callback(newPlatformError(e));
+          const notification = constructErrorNotification(e);
+          if (notification) notificationService.send(notification);
         }
       })();
     }
@@ -895,7 +929,7 @@ export interface DataProviderService {
  *
  * Service that allows extensions to send and receive data to/from other extensions
  */
-const dataProviderService: DataProviderService = {
+export const dataProviderService: DataProviderService = {
   hasKnown,
   registerEngine,
   get,

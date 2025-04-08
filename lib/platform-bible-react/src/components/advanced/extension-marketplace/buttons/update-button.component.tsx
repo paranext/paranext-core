@@ -1,5 +1,5 @@
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
-import Spinner from '@/components/basics/spinner.component';
+import { Spinner } from '@/components/basics/spinner.component';
 import { cn } from '@/utils/shadcn-ui.util';
 
 type UpdateButtonProps = {
@@ -13,22 +13,16 @@ type UpdateButtonProps = {
  * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
  * It includes visuals for active updating and idle states.
  *
- * @param isUpdating The updating boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
+ * @param UpdateButtonProps
  * @returns A button that can be used to update.
  */
-export default function UpdateButton({
-  isUpdating,
-  handleClick,
-  className,
-  ...props
-}: UpdateButtonProps) {
+export function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps) {
   return (
     <Button
       className={cn(
-        'pr-h-8 pr-rounded-md pr-bg-blue-600 pr-px-4 pr-text-white pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-blue-700 hover:pr-text-white',
+        'tw-h-8 tw-rounded-md tw-bg-blue-600 tw-px-4 tw-text-white tw-transition tw-duration-300 tw-ease-in-out hover:tw-bg-blue-700 hover:tw-text-white',
         {
-          'pr-cursor-not-allowed pr-bg-blue-700': isUpdating,
+          'tw-cursor-not-allowed tw-bg-blue-700': isUpdating,
         },
         className,
       )}
@@ -37,7 +31,7 @@ export default function UpdateButton({
     >
       {isUpdating ? (
         <>
-          <Spinner size={15} className="pr-mr-1 pr-text-white" />
+          <Spinner size={15} className="tw-mr-1 tw-text-white" />
           Updating...
         </>
       ) : (
@@ -46,3 +40,5 @@ export default function UpdateButton({
     </Button>
   );
 }
+
+export default UpdateButton;

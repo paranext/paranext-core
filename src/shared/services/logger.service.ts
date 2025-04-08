@@ -90,8 +90,6 @@ function identifyCaller(): string | undefined {
  * @param tag Optional tag at the end of the service name
  * @returns Formatted string of a service message
  */
-// We can assume we will have more utility functions at some point. This is not the only thing this module will do
-// eslint-disable-next-line import/prefer-default-export
 export function formatLog(message: string, serviceName: string, tag = '') {
   // Remove the new line at the end of every message coming from stdout from other processes
   const messageTrimmed = message.trimEnd();
@@ -179,5 +177,5 @@ if (isClient()) {
  *
  * All extensions and services should use this logger to provide a unified output of logs
  */
-const logger = log;
+export const logger = log;
 export default logger;

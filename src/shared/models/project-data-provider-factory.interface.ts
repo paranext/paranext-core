@@ -21,7 +21,7 @@ export type ProjectMetadataFilterOptions = ModifierProject & {
  * Factories must create PDPs that support the `platform.base` `projectInterface`. See
  * {@link IBaseProjectDataProvider} and {@link ProjectDataProviderInterfaces} for more information.
  */
-interface IProjectDataProviderFactory extends Dispose {
+export interface IProjectDataProviderFactory extends Dispose {
   /**
    * JSDOC SOURCE IProjectDataProviderFactoryGetAvailableProjects
    *

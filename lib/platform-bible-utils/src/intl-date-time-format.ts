@@ -1,5 +1,5 @@
 /** Enables language-sensitive data and time formatting. Wraps Intl.DateTimeFormat */
-export default class DateTimeFormat {
+export class DateTimeFormat {
   private dateTimeFormatter: Intl.DateTimeFormat;
 
   constructor(locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
@@ -62,3 +62,5 @@ export default class DateTimeFormat {
     return this.dateTimeFormatter.resolvedOptions();
   }
 }
+
+export default DateTimeFormat;

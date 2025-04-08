@@ -4,11 +4,12 @@ import {
   ProjectMetadataWithoutFactoryInfo,
 } from '@papi/core';
 import { newGuid } from 'platform-bible-utils';
-import HelloWorldProjectDataProviderEngine, {
+import { ELIGIBLE_NEW_NAMES } from '../util';
+import {
   HELLO_WORLD_PROJECT_INTERFACES,
   HelloWorldProjectData,
+  HelloWorldProjectDataProviderEngine,
 } from './hello-world-project-data-provider-engine.model';
-import { ELIGIBLE_NEW_NAMES } from '../util';
 
 export type AllHelloWorldProjectData = { [projectId: string]: HelloWorldProjectData | undefined };
 
@@ -22,7 +23,7 @@ function createEmptyHelloWorldProjectData(projectName: string): HelloWorldProjec
   };
 }
 
-class HelloWorldProjectDataProviderEngineFactory
+export class HelloWorldProjectDataProviderEngineFactory
   implements IProjectDataProviderEngineFactory<typeof HELLO_WORLD_PROJECT_INTERFACES>
 {
   /** Do not use directly as it may not have a value. Use `getAllProjectData` */

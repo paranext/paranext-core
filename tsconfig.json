@@ -16,7 +16,8 @@
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
-      "@node_modules/*": ["../node_modules/*"]
+      "@node_modules/*": ["../node_modules/*"],
+      "vite": ["./@types/shims-vite.d.ts"]
     },
     "experimentalDecorators": true,
     "typeRoots": [
@@ -38,9 +39,10 @@
     "resolveJsonModule": true,
     "outDir": ".erb/dll"
   },
-  "include": ["src", "assets"],
+  "include": ["src", "assets", "!**/*.test.{ts,tsx}"],
   "exclude": [
     "node_modules",
+    "dist",
     "test",
     "release/build",
     "release/app/dist",

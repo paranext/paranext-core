@@ -16,6 +16,8 @@ type CommandLineArgumentAliases = {
  * - ResourcesPath - Command-line argument that specifies the path to the resources folder
  * - Packaged - Command-line switch that specifies if the application is packaged. Only on
  *   extension-host
+ * - Portable - Command-line switch that specifies if the application is a windows portable app. Only
+ *   on extension-host
  */
 export enum COMMAND_LINE_ARGS {
   Extensions = 'extensions',
@@ -23,6 +25,7 @@ export enum COMMAND_LINE_ARGS {
   LogLevel = 'log_level',
   ResourcesPath = 'resources_path',
   Packaged = 'packaged',
+  Portable = 'portable',
 }
 
 /**
@@ -35,6 +38,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [COMMAND_LINE_ARGS.LogLevel]: ['--logLevels', '--logLevel', '-l'],
   [COMMAND_LINE_ARGS.ResourcesPath]: ['--resourcesPath', '--resourcePath', '-r'],
   [COMMAND_LINE_ARGS.Packaged]: ['--packaged', '--isPackaged', '-p'],
+  [COMMAND_LINE_ARGS.Portable]: ['--portable'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */

@@ -1,12 +1,12 @@
-import localizationDataService from '@shared/services/localization.service';
+import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
+import { localizationService } from '@shared/services/localization.service';
 import {
   LocalizationData,
   LocalizationSelectors,
 } from '@shared/services/localization.service-model';
-import { DataProviderSubscriberOptions } from '@shared/models/data-provider.model';
+import { isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { useMemo } from 'react';
-import { LocalizeKey } from 'platform-bible-utils';
-import useData from './use-data.hook';
+import { useData } from './use-data.hook';
 
 /**
  * Gets localizations on the papi.
@@ -30,7 +30,7 @@ import useData from './use-data.hook';
  *   - `localizedStrings`: The current state of the localizations, either `defaultState` or the stored
  *       state on the papi, if any
  */
-const useLocalizedStrings = (
+export const useLocalizedStrings = (
   localizationKeys: LocalizeKey[],
   localizationLocales?: string[],
   subscriberOptions?: DataProviderSubscriberOptions,
@@ -48,9 +48,9 @@ const useLocalizedStrings = (
     defaultState[key] = key;
   }
   const [localizedStrings, , isLoading] = useData(
-    localizationDataService.dataProviderName,
+    localizationService.dataProviderName,
   ).LocalizedStrings(localizationSelectors, defaultState, subscriberOptions);
 
-  return [localizedStrings, isLoading];
+  return [isPlatformError(localizedStrings) ? defaultState : localizedStrings, isLoading];
 };
 export default useLocalizedStrings;

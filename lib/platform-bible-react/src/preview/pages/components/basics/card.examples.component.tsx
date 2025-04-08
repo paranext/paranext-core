@@ -10,24 +10,23 @@ import {
 import { Input } from '@/components/shadcn-ui/input';
 import { Label } from '@/components/shadcn-ui/label';
 import { Switch } from '@/components/shadcn-ui/switch';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
 import { BellRing, Check } from 'lucide-react';
-import SelectExamples from './select.examples.component';
+import { SelectExamples } from './select.examples.component';
 
-export default function CardExamples({ direction }: HasDirection) {
+export function CardExamples() {
   const cardContent = (
-    <div className="pr-flex pr-items-center pr-gap-x-4 pr-rounded-md pr-border pr-p-4">
+    <div className="tw-flex tw-items-center tw-gap-x-4 tw-rounded-md tw-border tw-p-4">
       <BellRing />
-      <div className="pr-flex-1 pr-space-y-1">
-        <p className="pr-text-sm pr-font-medium pr-leading-none">Push Notifications</p>
-        <p className="pr-text-sm pr-text-muted-foreground">Send notifications to device.</p>
+      <div className="tw-flex-1 tw-space-y-1">
+        <p className="tw-text-sm tw-font-medium tw-leading-none">Push Notifications</p>
+        <p className="tw-text-sm tw-text-muted-foreground">Send notifications to device.</p>
       </div>
       <Switch />
     </div>
   );
 
   return (
-    <div className="pr-flex pr-flex-col pr-gap-2">
+    <div className="tw-flex tw-flex-col tw-gap-2">
       <Card>Card only</Card>
 
       <Card>
@@ -51,9 +50,9 @@ export default function CardExamples({ direction }: HasDirection) {
       </Card>
 
       <Card>
-        <CardHeader className="pr-pb-3">
+        <CardHeader className="tw-pb-3">
           <CardTitle>Psalms Layer-by-Layer</CardTitle>
-          <CardDescription className="pr-flex pr-max-w-lg pr-text-balance pr-leading-relaxed">
+          <CardDescription className="tw-flex tw-max-w-lg tw-text-balance tw-leading-relaxed">
             Unpacking the meaning of the Psalms for translators
           </CardDescription>
         </CardHeader>
@@ -62,32 +61,32 @@ export default function CardExamples({ direction }: HasDirection) {
         </CardFooter>
       </Card>
 
-      <Card className="pr-w-[350px]">
+      <Card className="tw-w-[350px]">
         <CardHeader>
           <CardTitle>Create project</CardTitle>
           <CardDescription>Deploy your new project in one-click.</CardDescription>
         </CardHeader>
         <CardContent>
           <form>
-            <div className="pr-grid pr-w-full pr-items-center pr-gap-4">
-              <div className="pr-flex pr-flex-col pr-space-y-1.5">
+            <div className="tw-grid tw-w-full tw-items-center tw-gap-4">
+              <div className="tw-flex tw-flex-col tw-space-y-1.5">
                 <Label htmlFor="name">Name</Label>
                 <Input id="name" placeholder="Name of your project" />
               </div>
-              <div className="pr-flex pr-flex-col pr-space-y-1.5">
+              <div className="tw-flex tw-flex-col tw-space-y-1.5">
                 <Label htmlFor="framework">Framework</Label>
-                <SelectExamples direction={direction} />
+                <SelectExamples />
               </div>
             </div>
           </form>
         </CardContent>
-        <CardFooter className="pr-flex pr-justify-between">
+        <CardFooter className="tw-flex tw-justify-between">
           <Button variant="outline">Cancel</Button>
           <Button>Deploy</Button>
         </CardFooter>
       </Card>
 
-      <Card className="pr-w-[350px]">
+      <Card className="tw-w-[350px]">
         <CardHeader>
           <CardTitle>Notifications</CardTitle>
           <CardDescription>You have 3 unread messages.</CardDescription>
@@ -102,3 +101,5 @@ export default function CardExamples({ direction }: HasDirection) {
     </div>
   );
 }
+
+export default CardExamples;

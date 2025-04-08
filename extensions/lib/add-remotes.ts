@@ -10,29 +10,41 @@ import {
 
 (async () => {
   let exitCode = 0;
-  // Try adding MULTI_TEMPLATE_REMOTE_NAME
-  try {
-    await execGitCommand(`git remote add ${MULTI_TEMPLATE_NAME} ${MULTI_TEMPLATE_URL}`);
-  } catch (e) {
-    if (includes(e.toString().toLowerCase(), ERROR_STRINGS.multiRemoteExists.toLowerCase()))
-      console.log(`Remote ${MULTI_TEMPLATE_NAME} already exists. This is likely not a problem.`);
-    else {
-      console.error(`Error on adding remote ${MULTI_TEMPLATE_NAME}: ${e}`);
-      exitCode = 1;
+
+  // Helper function to handle remote addition
+  async function addRemote(name: string, url: string, errorString: string) {
+    try {
+      await execGitCommand(`git remote add ${name} ${url}`);
+    } catch (error: unknown) {
+      if (error instanceof Error) {
+        if (includes(error.message.toLowerCase(), errorString.toLowerCase())) {
+          console.log(`Remote ${name} already exists. This is likely not a problem.`);
+        } else {
+          console.error(`Error on adding remote ${name}: ${error.message}`);
+          return 1;
+        }
+      } else {
+        console.error(`An unknown error occurred while adding remote ${name}: ${error}`);
+        return 1;
+      }
     }
+    return 0;
   }
 
+  // Try adding MULTI_TEMPLATE_REMOTE_NAME
+  exitCode = await addRemote(
+    MULTI_TEMPLATE_NAME,
+    MULTI_TEMPLATE_URL,
+    ERROR_STRINGS.multiRemoteExists,
+  );
+  if (exitCode !== 0) return exitCode;
+
   // Try adding SINGLE_TEMPLATE_REMOTE_NAME
-  try {
-    await execGitCommand(`git remote add ${SINGLE_TEMPLATE_NAME} ${SINGLE_TEMPLATE_URL}`);
-  } catch (e) {
-    if (includes(e.toString().toLowerCase(), ERROR_STRINGS.singleRemoteExists.toLowerCase()))
-      console.log(`Remote ${SINGLE_TEMPLATE_NAME} already exists. This is likely not a problem.`);
-    else {
-      console.error(`Error on adding remote ${SINGLE_TEMPLATE_NAME}: ${e}`);
-      exitCode = 1;
-    }
-  }
+  exitCode = await addRemote(
+    SINGLE_TEMPLATE_NAME,
+    SINGLE_TEMPLATE_URL,
+    ERROR_STRINGS.singleRemoteExists,
+  );
 
   return exitCode;
 })();

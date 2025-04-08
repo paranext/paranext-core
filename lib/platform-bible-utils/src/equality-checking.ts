@@ -26,6 +26,8 @@ import { deepEqual as isEqualDeep } from 'fast-equals';
  *
  * @returns True if a and b are deeply equal; false otherwise
  */
-export default function deepEqual(a: unknown, b: unknown) {
+export function deepEqual(a: unknown, b: unknown) {
   return isEqualDeep(a, b);
 }
+
+export default deepEqual;

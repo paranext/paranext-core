@@ -1,4 +1,5 @@
 declare module 'c-sharp-provider-test' {
+  // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import { IDataProvider, DataProviderDataType } from '@papi/core';
 
   type TimeDataTypes = {

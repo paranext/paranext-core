@@ -2,6 +2,6 @@
   cursor: pointer;
 }
 
-.banded-row[data-state="selected"]:hover {
+.banded-row[data-state='selected']:hover {
   cursor: default;
 }

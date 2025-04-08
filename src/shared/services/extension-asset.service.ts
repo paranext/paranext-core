@@ -1,6 +1,6 @@
 import { isExtensionHost } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import type { GetAsset } from '@extension-host/services/asset-retrieval.service';
 import { serializeRequestType } from '@shared/utils/util';
 
@@ -48,10 +48,35 @@ const initialize = async () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
     getAsset = (await import('@extension-host/services/asset-retrieval.service')).default;
+    const requestType = serializeRequestType(CATEGORY_EXTENSION_ASSET, GET_EXTENSION_ASSET_REQUEST);
     await networkService.registerRequestHandler(
-      serializeRequestType(CATEGORY_EXTENSION_ASSET, GET_EXTENSION_ASSET_REQUEST),
+      requestType,
       async (extensionName: string, assetName: string) => {
         return getExtensionAsset(extensionName, assetName);
+      },
+      {
+        method: {
+          summary: 'Get an asset from an extension',
+          params: [
+            {
+              name: 'extensionName',
+              required: true,
+              summary: 'Name of the extension to get the asset from',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'assetName',
+              required: true,
+              summary: 'Name of the asset to get',
+              schema: { type: 'string' },
+            },
+          ],
+          result: {
+            name: 'return value',
+            summary: 'Base64 encoded asset if it exists',
+            schema: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+          },
+        },
       },
     );
 
@@ -67,7 +92,7 @@ export interface ExtensionAssetService {
   getExtensionAsset: typeof getExtensionAsset;
 }
 
-const extensionAssetService: ExtensionAssetService = {
+export const extensionAssetService: ExtensionAssetService = {
   initialize,
   getExtensionAsset,
 };

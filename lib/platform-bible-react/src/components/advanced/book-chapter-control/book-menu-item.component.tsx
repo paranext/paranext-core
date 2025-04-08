@@ -1,7 +1,7 @@
-import { Canon } from '@sillsdev/scripture';
-import { PropsWithChildren, KeyboardEvent, forwardRef } from 'react';
-import { DropdownMenuItem as ShadDropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
+import { DropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
 import { cn } from '@/utils/shadcn-ui.util';
+import { Canon } from '@sillsdev/scripture';
+import { KeyboardEvent, PropsWithChildren, forwardRef } from 'react';
 
 export type BookType = 'OT' | 'NT' | 'DC';
 
@@ -27,7 +27,7 @@ type BookMenuItemProps = PropsWithChildren<{
   bookType: BookType;
 }>;
 
-const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
+export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
   (
     {
       bookId,
@@ -41,14 +41,17 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
     ref,
   ) => {
     return (
-      <ShadDropdownMenuItem
+      <DropdownMenuItem
         ref={ref}
         key={bookId}
         textValue={bookId}
-        className={cn('pr-mx-1 pr-px-1 pr-font-normal pr-text-slate-700', {
-          // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
-          'pr-bg-amber-50 pr-text-yellow-900 data-[highlighted]:pr-bg-amber-100': isSelected,
-        })}
+        className={cn(
+          'tw-mx-1 tw-flex-col tw-items-start tw-px-1 tw-font-normal tw-text-foreground/80',
+          {
+            // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
+            'tw-bg-amber-50 tw-text-yellow-900 data-[highlighted]:tw-bg-amber-100': isSelected,
+          },
+        )}
         onSelect={(event: Event) => {
           // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
           event.preventDefault();
@@ -62,19 +65,19 @@ const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
       >
         <span
           className={cn(
-            'pr-border-b-0 pr-border-l-2 pr-border-r-0 pr-border-t-0 pr-border-solid pr-px-2',
+            'tw-border-b-0 tw-border-e-0 tw-border-s-2 tw-border-t-0 tw-border-solid tw-px-2',
             {
-              'pr-font-bold': isSelected,
-              'pr-border-l-red-200': bookType.toLowerCase() === 'ot',
-              'pr-border-l-purple-200': bookType.toLowerCase() === 'nt',
-              'pr-border-l-indigo-200': bookType.toLowerCase() === 'dc',
+              'tw-font-bold': isSelected,
+              'tw-border-s-red-200': bookType.toLowerCase() === 'ot',
+              'tw-border-s-purple-200': bookType.toLowerCase() === 'nt',
+              'tw-border-s-indigo-200': bookType.toLowerCase() === 'dc',
             },
           )}
         >
           {Canon.bookIdToEnglishName(bookId)}
         </span>
         {isSelected && <div>{children}</div>}
-      </ShadDropdownMenuItem>
+      </DropdownMenuItem>
     );
   },
 );

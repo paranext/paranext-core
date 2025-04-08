@@ -1,4 +1,6 @@
 /* eslint-disable no-type-assertion/no-type-assertion */
+
+import { vi } from 'vitest';
 import {
   ProjectDataProviderFactoryMetadataInfo,
   ProjectMetadata,
@@ -9,32 +11,42 @@ import {
   getPDPFactoryNetworkObjectNameFromId,
   testingProjectLookupService,
 } from '@shared/models/project-lookup.service-model';
-import networkObjectService from '@shared/services/network-object.service';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
-import IProjectDataProviderFactory, {
+import { networkObjectService } from '@shared/services/network-object.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
+import {
+  IProjectDataProviderFactory,
   PDP_FACTORY_OBJECT_TYPE,
   ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
 import { NetworkObjectDetails } from '@shared/models/network-object.model';
 import { ProjectInterfaces } from 'papi-shared-types';
-import projectLookupService from '@shared/services/project-lookup.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { LayeringProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model';
 
-jest.mock('@shared/services/network-object.service', () => ({
+vi.mock('@shared/services/network-object.service', () => ({
   __esModule: true,
-  default: {
-    get: jest.fn(),
+  networkObjectService: {
+    get: vi.fn(),
   },
 }));
 
-jest.mock('@shared/services/network-object-status.service', () => ({
+vi.mock('@shared/services/network-object-status.service', () => ({
   __esModule: true,
-  default: {
-    getAllNetworkObjectDetails: jest.fn(),
+  networkObjectStatusService: {
+    getAllNetworkObjectDetails: vi.fn(),
     // Not a full implementation - we just don't need whatever is returned here
-    waitForNetworkObject: jest.fn(async () => {}),
+    waitForNetworkObject: vi.fn(async () => {}),
   },
 }));
+
+beforeAll(() => {
+  vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['performance'] });
+  vi.advanceTimersByTime(testingProjectLookupService.LOAD_TIME_GRACE_PERIOD_MS);
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
@@ -142,7 +154,7 @@ describe('Getting project metadata with Layering PDPs', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
     networkObjectService.get.mockImplementation(
       (networkObjectId: string) => testPDPFs[networkObjectId],
@@ -436,7 +448,7 @@ describe('Metadata generation:', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(
     networkObjectStatusService.getAllNetworkObjectDetails.mockImplementation(() => testPDPFInfo);
     // @ts-expect-error ts(2339) TypeScript doesn't realize this is a jest function :(

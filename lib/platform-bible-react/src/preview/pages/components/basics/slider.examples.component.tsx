@@ -1,21 +1,24 @@
-import Slider from '@/components/mui/slider.component';
+import { Slider } from '@/components/shadcn-ui/slider';
+
 import { useState } from 'react';
 
-export default function SliderExamples() {
-  const [sliderValue, setSlider] = useState(3);
+export function SliderExamples() {
+  const [sliderValue, setSlider] = useState<number[]>([33]);
   return (
     <>
-      Wrongly using MUI slider right now 😬
-      <Slider />
-      <Slider isDisabled />
       <Slider
+        className="tw-h-10"
         min={0}
-        max={5}
+        max={100}
+        step={1}
         value={sliderValue}
-        onChange={(_e, value) => setSlider(Array.isArray(value) ? value?.[0] : value)}
+        onValueChange={setSlider}
       />
-      {/* Wondering in which case the slider would output a number[] as its value 🤷 */}
       {sliderValue}
+
+      <Slider className="tw-h-10" disabled min={0} max={100} step={1} defaultValue={[50]} />
     </>
   );
 }
+
+export default SliderExamples;

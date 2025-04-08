@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 
 // We don't add this to PAPI directly like other hooks because `this` has to be bound to a web view's iframe context
 /** See `web-view.model.ts` for normal hook documentation */
-export default function useWebViewState<T>(
+export function useWebViewState<T>(
   this: {
     getWebViewState: (stateKey: string, defaultValue: T) => T;
     setWebViewState: (stateKey: string, stateValue: T) => void;
@@ -43,3 +43,5 @@ export default function useWebViewState<T>(
 
   return [state, setState, resetState];
 }
+
+export default useWebViewState;

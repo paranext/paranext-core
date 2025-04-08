@@ -35,12 +35,12 @@ import '@/components/advanced/scripture-results-viewer/scripture-results-viewer.
 import {
   compareScrRefs,
   formatScrRef,
-  ScriptureReference,
   ScriptureSelection,
   scrRefToBBBCCCVVV,
 } from 'platform-bible-utils';
-import { MouseEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { MouseEvent, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 /**
  * Information (e.g., a checking error or some other type of "transient" annotation) about something
@@ -138,9 +138,6 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
 
   /** Callback function to notify when a row is selected */
   onRowSelected?: (selectedRow: ScriptureSrcItemDetail | undefined) => void;
-
-  /** Text direction ltr or rtl */
-  direction?: 'ltr' | 'rtl';
 };
 
 function getColumns(
@@ -150,18 +147,17 @@ function getColumns(
   const showSrcCol = showSourceColumn ?? false;
   return [
     {
-      accessorFn: (row) =>
-        `${Canon.bookNumberToId(row.start.bookNum)} ${row.start.chapterNum}:${row.start.verseNum}`,
+      accessorFn: (row) => `${row.start.book} ${row.start.chapterNum}:${row.start.verseNum}`,
       id: scrBookColId,
       header: colInfo?.scriptureReferenceColumnName ?? defaultScrRefColumnName,
       cell: (info) => {
         const row = info.row.original;
         if (info.row.getIsGrouped()) {
-          return Canon.bookNumberToEnglishName(row.start.bookNum);
+          return Canon.bookIdToEnglishName(row.start.book);
         }
         return info.row.groupingColumnId === scrBookColId ? formatScrRef(row.start) : undefined;
       },
-      getGroupingValue: (row) => row.start.bookNum,
+      getGroupingValue: (row) => Canon.bookIdToNumber(row.start.book),
       sortingFn: (a, b) => {
         return compareScrRefs(a.original.start, b.original.start);
       },
@@ -183,7 +179,7 @@ function getColumns(
     {
       accessorFn: (row) => row.source.displayName,
       id: typeColId,
-      header: showSrcCol ? colInfo?.typeColumnName ?? defaultTypeColumnName : undefined,
+      header: showSrcCol ? (colInfo?.typeColumnName ?? defaultTypeColumnName) : undefined,
       cell: (info) => (showSrcCol || info.row.getIsGrouped() ? info.getValue() : undefined),
       getGroupingValue: (row) => row.source.id,
       sortingFn: (a, b) =>
@@ -199,6 +195,26 @@ function getColumns(
     },
   ];
 }
+
+const toRefOrRange = (scriptureSelection: ScriptureSelection) => {
+  if (!('offset' in scriptureSelection.start))
+    throw new Error('No offset available in range start');
+  if (scriptureSelection.end && !('offset' in scriptureSelection.end))
+    throw new Error('No offset available in range end');
+  const { offset: offsetStart } = scriptureSelection.start;
+  let offsetEnd: number = 0;
+  if (scriptureSelection.end) ({ offset: offsetEnd } = scriptureSelection.end);
+  if (
+    !scriptureSelection.end ||
+    compareScrRefs(scriptureSelection.start, scriptureSelection.end) === 0
+  )
+    return `${scrRefToBBBCCCVVV(scriptureSelection.start)}+${offsetStart}`;
+  return `${scrRefToBBBCCCVVV(scriptureSelection.start)}+${offsetStart}-${scrRefToBBBCCCVVV(scriptureSelection.end)}+${offsetEnd}`;
+};
+
+const getRowKey = (row: ScriptureSrcItemDetail) =>
+  `${toRefOrRange({ start: row.start, end: row.end })} ${row.source.displayName} ${row.detail}`;
+
 /**
  * Component to display a combined list of detailed items from one or more sources, where the items
  * are keyed primarily by Scripture reference. This is particularly useful for displaying a list of
@@ -208,7 +224,7 @@ function getColumns(
  * it also has the option of displaying as a traditional table with column headings (with or without
  * the source column showing).
  */
-export default function ScriptureResultsViewer({
+export function ScriptureResultsViewer({
   sources,
   showColumnHeaders = false,
   showSourceColumn = false,
@@ -217,7 +233,6 @@ export default function ScriptureResultsViewer({
   typeColumnName,
   detailsColumnName,
   onRowSelected,
-  direction = 'ltr',
 }: ScriptureResultsViewerProps) {
   const [grouping, setGrouping] = useState<GroupingState>([]);
   const [sorting, setSorting] = useState<SortingState>([{ id: scrBookColId, desc: false }]);
@@ -259,20 +274,6 @@ export default function ScriptureResultsViewer({
     }
   }, [grouping]);
 
-  const toRefOrRange = useCallback(
-    (start: ScriptureReference, end: ScriptureReference | undefined) => {
-      if (!end || compareScrRefs(start, end) === 0) return `${scrRefToBBBCCCVVV(start)}`;
-      return `${scrRefToBBBCCCVVV(start)}-${scrRefToBBBCCCVVV(end)}`;
-    },
-    [],
-  );
-
-  const getRowKey = useCallback(
-    (row: ScriptureSrcItemDetail) =>
-      `${toRefOrRange(row.start, row.end)} ${row.source} ${row.detail}`,
-    [toRefOrRange],
-  );
-
   const table = useReactTable({
     data: scriptureResults,
     columns,
@@ -303,7 +304,7 @@ export default function ScriptureResultsViewer({
         if (selectedRow) onRowSelected(selectedRow);
       }
     }
-  }, [rowSelection, scriptureResults, getRowKey, onRowSelected, table]);
+  }, [rowSelection, scriptureResults, onRowSelected, table]);
 
   // Define possible grouping options
   const scrBookGroupName = scriptureBookGroupName ?? defaultScrBookGroupName;
@@ -337,7 +338,7 @@ export default function ScriptureResultsViewer({
     if (row.getIsGrouped()) return '';
     // UX has now said they don't think they want banding. I'm leaving in the code to
     // set even and odd styles, but there's nothing in the CSS to style them differently.
-    // The "even" style used to also have  pr-bg-neutral-300 (along with even) to create
+    // The "even" style used to also have  tw-bg-neutral-300 (along with even) to create
     // a visual banding effect. That could be added back in if UX changes the decision.
     return cn('banded-row', index % 2 === 0 ? 'even' : 'odd');
   };
@@ -351,23 +352,23 @@ export default function ScriptureResultsViewer({
     if (row.getIsGrouped()) {
       switch (row.depth) {
         case 1:
-          return 'pr-ps-4';
+          return 'tw-ps-4';
         default:
           return undefined;
       }
     }
     switch (row.depth) {
       case 1:
-        return 'pr-ps-8';
+        return 'tw-ps-8';
       case 2:
-        return 'pr-ps-12';
+        return 'tw-ps-12';
       default:
         return undefined;
     }
   };
 
   return (
-    <div className="pr-twp pr-flex pr-h-full pr-w-full pr-flex-col">
+    <div className="pr-twp tw-flex tw-h-full tw-w-full tw-flex-col">
       {!showColumnHeaders && (
         <Select
           value={JSON.stringify(grouping)}
@@ -375,7 +376,7 @@ export default function ScriptureResultsViewer({
             handleSelectChange(value);
           }}
         >
-          <SelectTrigger className="pr-mb-1 pr-mt-2">
+          <SelectTrigger className="tw-mb-1 tw-mt-2">
             <SelectValue />
           </SelectTrigger>
           <SelectContent position="item-aligned">
@@ -389,7 +390,7 @@ export default function ScriptureResultsViewer({
           </SelectContent>
         </Select>
       )}
-      <Table className="pr-relative pr-flex pr-flex-col pr-overflow-y-auto pr-p-0">
+      <Table className="tw-relative tw-flex tw-flex-col tw-overflow-y-auto tw-p-0">
         {showColumnHeaders && (
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
@@ -398,7 +399,7 @@ export default function ScriptureResultsViewer({
                   .filter((h) => h.column.columnDef.header)
                   .map((header) => (
                     /* For sticky column headers to work, we probably need to change the default definition of the shadcn Table component. See https://github.com/shadcn-ui/ui/issues/1151 */
-                    <TableHead key={header.id} colSpan={header.colSpan} className="top-0 pr-sticky">
+                    <TableHead key={header.id} colSpan={header.colSpan} className="top-0 tw-sticky">
                       {header.isPlaceholder ? undefined : (
                         <div>
                           {header.column.getCanGroup() ? (
@@ -422,6 +423,7 @@ export default function ScriptureResultsViewer({
         )}
         <TableBody>
           {table.getRowModel().rows.map((row, rowIndex) => {
+            const dir: Direction = readDirection();
             return (
               <TableRow
                 data-state={row.getIsSelected() ? 'selected' : ''}
@@ -440,14 +442,14 @@ export default function ScriptureResultsViewer({
                   return (
                     <TableCell
                       key={cell.id}
-                      // It seems like a hack to use pr-p-[1px] to override the "built in" pr-p-4
+                      // It seems like a hack to use tw-p-[1px] to override the "built in" tw-p-4
                       // that comes in with the shadcn TableCell class. I could just remove it from
                       // that class, but it's not clear that that is desirable. I'm not even 100%
                       // sure I know what padding value to use here, but the problem with 4 (the
                       // default) is that is prevents the nested indentation when grouping.
                       className={cn(
                         cell.column.columnDef.id,
-                        'pr-p-[1px]',
+                        'tw-p-[1px]',
                         getIndent(grouping, row, cell),
                       )}
                     >
@@ -461,7 +463,7 @@ export default function ScriptureResultsViewer({
                             >
                               {row.getIsExpanded() && <ChevronDown />}
                               {!row.getIsExpanded() &&
-                                (direction === 'ltr' ? <ChevronRight /> : <ChevronLeft />)}{' '}
+                                (dir === 'ltr' ? <ChevronRight /> : <ChevronLeft />)}{' '}
                               {flexRender(cell.column.columnDef.cell, cell.getContext())} (
                               {row.subRows.length})
                             </Button>
@@ -488,3 +490,5 @@ export default function ScriptureResultsViewer({
     </div>
   );
 }
+
+export default ScriptureResultsViewer;

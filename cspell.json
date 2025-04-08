@@ -10,6 +10,22 @@
     "package-lock.json",
     "vscode-extension"
   ],
+  "overrides": [
+    {
+      "filename": "**/fr.json",
+      "language": "fr",
+      "ignoreRegExpList": [
+        "\"%?[a-zA-Z0-9_]+%?\"\\s*:" // Do not spell-check JSON keys
+      ]
+    },
+    {
+      "filename": "**/es.json",
+      "language": "es",
+      "ignoreRegExpList": [
+        "\"%?[a-zA-Z0-9_]+%?\"\\s*:" // Do not spell-check JSON keys
+      ]
+    }
+  ],
   "dictionaryDefinitions": [],
   "dictionaries": [],
   "words": [
@@ -17,10 +33,12 @@
     "appdata",
     "asyncs",
     "autodocs",
-    "BBBCCCVVV",
+    "autonym",
+    "bbbcccvvv",
     "biblionexus",
     "camelcase",
     "consts",
+    "deleter",
     "deuterocanon",
     "dockbox",
     "electronmon",
@@ -35,6 +53,7 @@
     "iusfm",
     "iusj",
     "iusx",
+    "jsonrpcid",
     "localizable",
     "localstorage",
     "maximizable",
@@ -42,6 +61,7 @@
     "newtonsoft",
     "nodebuffer",
     "nums",
+    "openrpc",
     "papi",
     "papis",
     "paranext",
@@ -57,6 +77,9 @@
     "reserialized",
     "shadcn",
     "sillsdev",
+    "sldr",
+    "snapcraft",
+    "sonner",
     "steenwyk",
     "stringifiable",
     "stringz",
@@ -75,7 +98,8 @@
     "usfm",
     "verseref",
     "versification",
-    "vref"
+    "vref",
+    "vsthrd"
   ],
   "ignoreWords": [],
   "import": []

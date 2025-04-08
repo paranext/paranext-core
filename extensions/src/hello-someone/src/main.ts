@@ -4,14 +4,12 @@ import {
   ExecutionActivationContext,
   IWebViewProvider,
   SavedWebViewDefinition,
-  WebViewContentType,
   WebViewDefinition,
   WithNotifyUpdate,
   IDataProviderEngine,
 } from '@papi/core';
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
-import emotionTestWebView from './emotion-test.web-view?inline';
 
 logger.info('Hello Someone is importing!');
 
@@ -253,27 +251,8 @@ const peopleWebViewProvider: IWebViewProvider = {
     return {
       ...savedWebView,
       title: 'People',
-      // Can't use the enum value from a definition file so assert the type from the string literal.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      contentType: 'html' as WebViewContentType.HTML,
+      contentType: 'html',
       content: helloSomeoneHtmlWebView,
-    };
-  },
-};
-
-const emotionTestWebViewType = 'helloSomeone.emotionTest';
-
-/** Simple web view provider that provides `@emotion/react` test web views when papi requests them */
-const emotionTestWebViewProvider: IWebViewProvider = {
-  async getWebView(savedWebView: SavedWebViewDefinition): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== emotionTestWebViewType)
-      throw new Error(
-        `${emotionTestWebViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
-      );
-    return {
-      ...savedWebView,
-      title: 'Emotion Test',
-      content: emotionTestWebView,
     };
   },
 };
@@ -291,15 +270,27 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     peopleWebViewProvider,
   );
 
-  const emotionTestWebViewProviderPromise = papi.webViewProviders.register(
-    emotionTestWebViewType,
-    emotionTestWebViewProvider,
-  );
-
   const helloSomeoneCommandPromise = papi.commands.registerCommand(
     'helloSomeone.helloSomeone',
     (name: string) => {
       return `Hello ${name}!`;
+    },
+    {
+      method: {
+        summary: 'Say hello to someone',
+        params: [
+          {
+            name: 'name',
+            required: true,
+            summary: 'Name of the person to say hello to',
+            schema: { type: 'string' },
+          },
+        ],
+        result: {
+          name: 'greeting',
+          schema: { type: 'string' },
+        },
+      },
     },
   );
 
@@ -324,7 +315,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // Don't block on the web view to keep going
   setTimeout(async () => {
     // Get the existing web view if one exists or create a new one
-    const peopleWebViewId = await papi.webViews.getWebView(
+    const peopleWebViewId = await papi.webViews.openWebView(
       peopleWebViewType,
       { type: 'panel', direction: 'top' },
       { existingId: existingPeopleWebViewId },
@@ -338,13 +329,10 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     );
   }, 1000);
 
-  papi.webViews.getWebView(emotionTestWebViewType, undefined, { existingId: '?' });
-
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(
     await peopleDataProviderPromise,
     await peopleWebViewProviderPromise,
-    await emotionTestWebViewProviderPromise,
     await helloSomeoneCommandPromise,
     papi.webViews.onDidAddWebView((addWebViewEvent) => {
       if (addWebViewEvent.webView.webViewType === peopleWebViewType)

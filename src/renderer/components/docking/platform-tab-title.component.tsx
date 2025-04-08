@@ -1,20 +1,28 @@
-import { Tooltip } from '@mui/material';
-import { CommandHandler, HamburgerMenuButton } from 'platform-bible-react';
+import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { menuDataService } from '@shared/services/menu-data.service';
+import {
+  CommandHandler,
+  TabDropdownMenu,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from 'platform-bible-react';
+import { isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import { useCallback, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import './platform-tab-title.component.scss';
-import menuDataService from '@shared/services/menu-data.service';
-import { useData } from '@renderer/hooks/papi-hooks';
-import { useCallback, useRef } from 'react';
-import { handleMenuCommand } from '../platform-bible-menu.commands';
 
 type PlatformTabTitleProps = {
   /** What type of WebView this is. Unique to all other WebView definitions */
   webViewType?: `${string}.${string}`;
   /** Id of the tab this title is on */
   tabId: string;
-  /** Url to image to show on the tab. Defaults to Platform.Bible logo */
+  /** Url to image to show on the tab. Defaults to the software's standard logo. */
   iconUrl?: string;
   /** Text to show on the tab */
-  text: string;
+  text: string | LocalizeKey;
   /** Text to show when hovering over the tab. Defaults to empty string */
   tooltip?: string;
 };
@@ -22,11 +30,11 @@ type PlatformTabTitleProps = {
 /**
  * Custom tab title for all tabs in Platform
  *
- * @param iconUrl Url to image to show on the tab. Defaults to Platform.Bible logo
+ * @param iconUrl Url to image to show on the tab. Defaults to the software's standard logo.
  * @param text The text to show on the tab title
  * @param tooltip Text to show when hovering over the tab. Defaults to empty string
  */
-export default function PlatformTabTitle({
+export function PlatformTabTitle({
   webViewType,
   tabId,
   iconUrl,
@@ -34,6 +42,13 @@ export default function PlatformTabTitle({
   tooltip,
 }: PlatformTabTitleProps) {
   const menuSelector = webViewType ?? 'invalid.invalid';
+
+  const tabAria: LocalizeKey = '%tab_aria_tab%';
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => (isLocalizeKey(text) ? [text, tabAria] : [tabAria]), [text]),
+  );
+  const title = isLocalizeKey(text) ? localizedStrings[text] : text;
+  const tabLabel = localizedStrings[tabAria];
 
   const menuInfo = useData(webViewType ? menuDataService.dataProviderName : undefined).WebViewMenu(
     menuSelector,
@@ -45,8 +60,6 @@ export default function PlatformTabTitle({
   );
 
   const [webViewMenu, , isLoading] = menuInfo;
-
-  const tooltipDiv = tooltip ? <div className="tooltip">{tooltip}</div> : '';
 
   const icon = (
     <div
@@ -73,23 +86,33 @@ export default function PlatformTabTitle({
   );
 
   return (
-    <Tooltip title={tooltipDiv}>
-      <div ref={containerRef} className="title">
-        {isLoading || !webViewMenu?.topMenu ? (
-          icon
-        ) : (
-          <HamburgerMenuButton
-            commandHandler={commandHandler}
-            normalMenu={webViewMenu?.topMenu}
-            className="tab-menu-button"
-            aria-label="Tab"
-            containerRef={containerRef}
-          >
-            {icon}
-          </HamburgerMenuButton>
-        )}
-        <span>{text}</span>
-      </div>
-    </Tooltip>
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div ref={containerRef} className="title">
+            {isLoading || isPlatformError(webViewMenu) || !webViewMenu?.topMenu ? (
+              icon
+            ) : (
+              <TabDropdownMenu
+                commandHandler={commandHandler}
+                menuData={webViewMenu.topMenu}
+                tabLabel={tabLabel}
+                icon={icon}
+              />
+            )}
+            <span>{title}</span>
+          </div>
+        </TooltipTrigger>
+        {tooltip &&
+          createPortal(
+            <TooltipContent className="tooltip" side="bottom">
+              <p>{tooltip}</p>
+            </TooltipContent>,
+            document.body,
+          )}
+      </Tooltip>
+    </TooltipProvider>
   );
 }
+
+export default PlatformTabTitle;

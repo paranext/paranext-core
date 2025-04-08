@@ -1,19 +1,11 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { TextField } from 'platform-bible-react';
 
-const meta: Meta<typeof TextField> = {
+export const Meta: MetaBase<typeof TextField> = {
   title: 'Basics/TextField',
   component: TextField,
   tags: ['autodocs'],
   argTypes: {
-    variant: {
-      options: [0, 1],
-      mapping: ['outlined', 'filled'],
-      control: {
-        type: 'select',
-        labels: ['Outlined', 'Filled'],
-      },
-    },
     helperText: { control: 'text' },
     label: { control: 'text' },
     placeholder: { control: 'text' },
@@ -24,7 +16,7 @@ const meta: Meta<typeof TextField> = {
     className: { control: 'text' },
   },
 };
-export default meta;
+export default Meta;
 
 type Story = StoryObj<typeof TextField>;
 

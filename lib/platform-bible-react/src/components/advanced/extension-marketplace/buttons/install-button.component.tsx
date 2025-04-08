@@ -1,5 +1,5 @@
 import { Button, ButtonProps } from '@/components/shadcn-ui/button';
-import Spinner from '@/components/basics/spinner.component';
+import { Spinner } from '@/components/basics/spinner.component';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Download } from 'lucide-react';
 
@@ -16,12 +16,10 @@ type InstallButtonProps = {
  * The InstallButton component is a button designed for initiating installs. It includes visuals for
  * active installing and idle states.
  *
- * @param isInstalling The installing boolean value determines the state of the button.
- * @param handleClick The handleClick function is called when the button is clicked.
- * @param buttonText Optional text for the button.
+ * @param InstallButtonProps
  * @returns A install button.
  */
-export default function InstallButton({
+export function InstallButton({
   isInstalling,
   handleClick,
   buttonText,
@@ -31,12 +29,12 @@ export default function InstallButton({
   return (
     <Button
       className={cn(
-        'pr-h-8 pr-rounded-md pr-text-white pr-transition pr-duration-300 pr-ease-in-out hover:pr-bg-blue-700',
+        'tw-h-8 tw-rounded-md tw-text-white tw-transition tw-duration-300 tw-ease-in-out hover:tw-bg-blue-700',
         {
-          'pr-cursor-not-allowed pr-bg-blue-700': isInstalling,
-          'pr-bg-blue-600': !isInstalling,
-          'pr-bg-white pr-text-blue-600 hover:pr-text-white': !buttonText,
-          'pr-w-20': buttonText,
+          'tw-cursor-not-allowed tw-bg-blue-700': isInstalling,
+          'tw-bg-blue-600': !isInstalling,
+          'tw-bg-white tw-text-blue-600 hover:tw-text-white': !buttonText,
+          'tw-w-20': buttonText,
         },
         className,
       )}
@@ -47,10 +45,12 @@ export default function InstallButton({
         <Spinner size={15} />
       ) : (
         <>
-          <Download size={25} className={cn('pr-h-4 pr-w-4', { 'pr-mr-1': buttonText })} />
+          <Download size={25} className={cn('tw-h-4 tw-w-4', { 'tw-mr-1': buttonText })} />
           {buttonText}
         </>
       )}
     </Button>
   );
 }
+
+export default InstallButton;

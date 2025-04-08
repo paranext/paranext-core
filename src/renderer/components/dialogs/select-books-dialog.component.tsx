@@ -1,8 +1,9 @@
-import DoneIcon from '@mui/icons-material/Done';
-import { Button, Checklist } from 'platform-bible-react';
+import { Check } from 'lucide-react';
+import { Button, Checklist, Label } from 'platform-bible-react';
 import { useState } from 'react';
 import { Canon } from '@sillsdev/scripture';
-import DIALOG_BASE from './dialog-base.data';
+import { LocalizeKey } from 'platform-bible-utils';
+import { DIALOG_BASE } from './dialog-base.data';
 import { DialogDefinition, DialogTypes, SELECT_BOOKS_DIALOG_TYPE } from './dialog-definition.model';
 import './select-books-dialog.component.scss';
 
@@ -29,8 +30,7 @@ function SelectBooksDialog({
 
   return (
     <div className="select-books-dialog">
-      <div>{prompt}</div>
-      <br />
+      <Label>{prompt}</Label>
       <Checklist
         className="book-list"
         listItems={bookIds}
@@ -38,25 +38,29 @@ function SelectBooksDialog({
         handleSelectListItem={handleBookToggle}
         selectedListItems={selectedBookIds}
       />
-      <br />
-      <div className="select-books-dialog-submit-button">
-        <Button onClick={() => submitDialog(selectedBookIds)}>
-          <DoneIcon />
-        </Button>
-      </div>
+      <Button
+        className="select-books-dialog-submit-button"
+        onClick={() => submitDialog(selectedBookIds)}
+      >
+        <Check />
+      </Button>
     </div>
   );
 }
 
-const SELECT_BOOKS_DIALOG: DialogDefinition<typeof SELECT_BOOKS_DIALOG_TYPE> = Object.freeze({
-  ...DIALOG_BASE,
-  tabType: SELECT_BOOKS_DIALOG_TYPE,
-  defaultTitle: 'Select Books',
-  initialSize: {
-    width: 500,
-    height: 400,
+const localizeSelectBooksKey: LocalizeKey = `%selectBooks_title_selectBooks%`;
+
+export const SELECT_BOOKS_DIALOG: DialogDefinition<typeof SELECT_BOOKS_DIALOG_TYPE> = Object.freeze(
+  {
+    ...DIALOG_BASE,
+    tabType: SELECT_BOOKS_DIALOG_TYPE,
+    defaultTitle: localizeSelectBooksKey,
+    initialSize: {
+      width: 500,
+      height: 400,
+    },
+    Component: SelectBooksDialog,
   },
-  Component: SelectBooksDialog,
-});
+);
 
 export default SELECT_BOOKS_DIALOG;

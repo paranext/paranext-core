@@ -1,5 +1,7 @@
 /* eslint-disable max-classes-per-file */
-import DocumentCombiner, { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
+
+import { vi } from 'vitest';
+import { DocumentCombiner, DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 
 // #region Combiner implementations
 
@@ -10,9 +12,9 @@ class TestDocumentCombiner extends DocumentCombiner {
     return this.latestOutput;
   }
 
-  // Implementing an abstract base class method
-  // eslint-disable-next-line class-methods-use-this
-  protected transformFinalOutputBeforeValidation(finalOutput: JsonDocumentLike): JsonDocumentLike {
+  protected override transformFinalOutputBeforeValidation(
+    finalOutput: JsonDocumentLike,
+  ): JsonDocumentLike {
     return finalOutput;
   }
 }
@@ -25,33 +27,25 @@ class DocumentCombinerWithoutValidation extends TestDocumentCombiner {
     super(startingDocument, optionsWithDefault);
   }
 
-  // We have the implement this abstract function but don't want it to do anything
-  // eslint-disable-next-line class-methods-use-this
-  protected validateBaseDocument(): void {}
+  protected override validateBaseDocument(): void {}
 
-  // We have the implement this abstract function but don't want it to do anything
-  // eslint-disable-next-line class-methods-use-this
-  protected validateContribution(): void {}
+  protected override validateContribution(): void {}
 
-  // We have the implement this abstract function but don't want it to do anything
-  // eslint-disable-next-line class-methods-use-this
-  protected validateOutput(): void {}
+  protected override validateOutput(): void {}
 }
 
 /** Combine array and non-array contributions to make a final array of contributions */
 class ArrayDocumentCombiner extends DocumentCombinerWithoutValidation {
-  // We just don't need `this` here
-  // eslint-disable-next-line class-methods-use-this
-  protected transformContributionAfterValidation(
+  protected override transformContributionAfterValidation(
     _documentName: string,
     document: JsonDocumentLike,
   ): JsonDocumentLike {
     return Array.isArray(document) ? document : [document];
   }
 
-  // We just don't need `this` here
-  // eslint-disable-next-line class-methods-use-this
-  protected transformBaseDocumentAfterValidation(baseDocument: JsonDocumentLike): JsonDocumentLike {
+  protected override transformBaseDocumentAfterValidation(
+    baseDocument: JsonDocumentLike,
+  ): JsonDocumentLike {
     return Array.isArray(baseDocument) ? baseDocument : [baseDocument];
   }
 }
@@ -62,18 +56,15 @@ class AlwaysThrowingCombiner extends TestDocumentCombiner {
     super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateBaseDocument(): void {
+  protected override validateBaseDocument(): void {
     throw new Error();
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateContribution(): void {
+  protected override validateContribution(): void {
     throw new Error();
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateOutput(): void {
+  protected override validateOutput(): void {
     throw new Error();
   }
 }
@@ -106,14 +97,11 @@ class OutputThrowingCombiner extends TestDocumentCombiner {
     super(startingDocument, { copyDocuments: true, ignoreDuplicateProperties: false });
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateBaseDocument(): void {}
+  protected override validateBaseDocument(): void {}
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateContribution(): void {}
+  protected override validateContribution(): void {}
 
-  // eslint-disable-next-line class-methods-use-this
-  protected validateOutput(): void {
+  protected override validateOutput(): void {
     throw new Error();
   }
 }
@@ -128,9 +116,9 @@ describe('Simple object combining', () => {
   const arrayD1 = { d: ['red', 'yellow'] };
   const arrayD2 = { d: ['blue', 'green'] };
 
-  test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
+  it('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(hasA);
-    const rebuildCallbackMock = jest.fn(() => {});
+    const rebuildCallbackMock = vi.fn(() => {});
     const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
 
     expect(JSON.stringify(combiner.output)).toBe('{"a":1}');
@@ -155,9 +143,9 @@ describe('Simple object combining', () => {
     unsubscriber();
   });
 
-  test('deleteAllContributions, onDidRebuild works', () => {
+  it('deleteAllContributions, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(hasA);
-    const rebuildCallbackMock = jest.fn(() => {});
+    const rebuildCallbackMock = vi.fn(() => {});
     const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
 
     combiner.addOrUpdateContribution('B', hasB);
@@ -176,9 +164,9 @@ describe('Simple array combining', () => {
   const has5 = [5];
   const has6 = [6];
 
-  test('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
+  it('baseDocument, addOrUpdateContribution, deleteContribution, updateBaseDocument, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(base);
-    const rebuildCallbackMock = jest.fn(() => {});
+    const rebuildCallbackMock = vi.fn(() => {});
     const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
 
     expect(JSON.stringify(combiner.output)).toBe('[1,2,3]');
@@ -197,9 +185,9 @@ describe('Simple array combining', () => {
     unsubscriber();
   });
 
-  test('deleteAllContributions, onDidRebuild works', () => {
+  it('deleteAllContributions, onDidRebuild works', () => {
     const combiner = new DocumentCombinerWithoutValidation(base);
-    const rebuildCallbackMock = jest.fn(() => {});
+    const rebuildCallbackMock = vi.fn(() => {});
     const unsubscriber = combiner.onDidRebuild(rebuildCallbackMock);
 
     combiner.addOrUpdateContribution('4', has4);

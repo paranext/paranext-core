@@ -1,12 +1,11 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { Slider } from 'platform-bible-react';
 
-const meta: Meta<typeof Slider> = {
+export const Meta: MetaBase<typeof Slider> = {
   title: 'Basics/Slider',
   component: Slider,
   tags: ['autodocs'],
   argTypes: {
-    isDisabled: { control: 'boolean' },
     orientation: {
       options: [0, 1],
       mapping: ['horizontal', 'vertical'],
@@ -18,20 +17,10 @@ const meta: Meta<typeof Slider> = {
     min: { control: 'number' },
     max: { control: 'number' },
     step: { control: 'number' },
-    showMarks: { control: 'boolean' },
-    defaultValue: { control: 'number' },
-    valueLabelDisplay: {
-      options: [0, 1, 2],
-      mapping: ['on', 'auto', 'off'],
-      control: {
-        type: 'select',
-        labels: ['On', 'Auto', 'Off'],
-      },
-    },
     className: { control: 'text' },
   },
 };
-export default meta;
+export default Meta;
 
 type Story = StoryObj<typeof Slider>;
 
@@ -39,18 +28,12 @@ export const Default: Story = {
   args: {},
 };
 
-export const Disabled: Story = {
-  args: { isDisabled: true },
-};
-
 export const DiscreteValues: Story = {
   args: {
     min: -10,
     max: 10,
     step: 2,
-    showMarks: true,
-    defaultValue: 0,
-    valueLabelDisplay: 'on',
+    defaultValue: [0],
   },
 };
 

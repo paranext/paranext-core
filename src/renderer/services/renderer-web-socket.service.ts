@@ -1,4 +1,4 @@
-import { WEBSOCKET_PORT } from '@shared/data/network-connector.model';
+import { WEBSOCKET_PORT } from '@shared/data/rpc.model';
 
 // Allow system networking components to create web sockets that connect back to localhost at first
 let allowWebSocketsBackToPapiNetwork: boolean = true;
@@ -28,7 +28,7 @@ function isPotentialConnectionToPapiNetwork(url: string | URL): boolean {
  *
  * Note that the Node WebSocket implementation is different and not wrapped here.
  */
-export default class PapiRendererWebSocket implements WebSocket {
+export class PapiRendererWebSocket implements WebSocket {
   // Use "any" to match the WebSocket interface
   /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/lines-between-class-members */
   readonly CONNECTING!: 0;
@@ -73,3 +73,5 @@ export default class PapiRendererWebSocket implements WebSocket {
     return new WebSocket(url, protocols);
   }
 }
+
+export default PapiRendererWebSocket;

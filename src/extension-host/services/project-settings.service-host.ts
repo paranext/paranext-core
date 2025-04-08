@@ -1,9 +1,6 @@
 import * as networkService from '@shared/services/network.service';
-import {
-  coreProjectSettingsValidators,
-  platformProjectSettings,
-} from '@extension-host/data/core-project-settings-info.data';
-import networkObjectService from '@shared/services/network-object.service';
+import { coreProjectSettingsValidators } from '@extension-host/data/core-project-settings-info.data';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR,
   IProjectSettingsService,
@@ -13,22 +10,12 @@ import {
 } from '@shared/services/project-settings.service-model';
 import { serializeRequestType } from '@shared/utils/util';
 import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-import { includes, isLocalizeKey, isString } from 'platform-bible-utils';
-import ProjectSettingsDocumentCombiner, {
-  LocalizedProjectSettingsContributionInfo,
-} from '@shared/utils/project-settings-document-combiner';
-
-/**
- * Object that keeps track of all project settings contributions in the platform. To listen to
- * updates to the project settings contributions, subscribe to its `onDidRebuild` event (consider
- * debouncing as each contribution will trigger a rebuild).
- *
- * Keeping this object separate from the network object prevents random services from changing
- * system project settings contributions unexpectedly.
- */
-export const projectSettingsDocumentCombiner = new ProjectSettingsDocumentCombiner(
-  platformProjectSettings,
-);
+import { getErrorMessage, includes, isLocalizeKey, isString } from 'platform-bible-utils';
+import { LocalizedProjectSettingsContributionInfo } from '@shared/utils/project-settings-document-combiner';
+import {
+  projectSettingsDocumentCombiner,
+  waitForResyncContributions,
+} from '@extension-host/services/contribution.service';
 
 let initializationPromise: Promise<void>;
 /** Do the setup this service needs to function */
@@ -61,17 +48,13 @@ async function isValid<ProjectSettingName extends ProjectSettingNames>(
     // If key exists in coreProjectSettingsValidators but there is no validator, let the change go through
     return true;
   }
+  const requestType = serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key);
   try {
-    return await networkService.request(
-      serializeRequestType(CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR, key),
-      newValue,
-      currentValue,
-      allChanges ?? {},
-    );
+    return await networkService.request(requestType, newValue, currentValue, allChanges ?? {});
   } catch (error) {
     // If there is no validator just let the change go through
-    const missingValidatorMsg = `No handler was found to process the request of type`;
-    if (includes(`${error}`, missingValidatorMsg)) return true;
+    const missingValidatorMsg = `'${requestType}' not found`;
+    if (includes(`${getErrorMessage(error)}`, missingValidatorMsg)) return true;
     throw error;
   }
 }
@@ -80,6 +63,7 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
   key: ProjectSettingName,
 ): Promise<ProjectSettingTypes[ProjectSettingName]> {
   await initialize();
+  await waitForResyncContributions();
   const projectSettingInfo =
     projectSettingsDocumentCombiner.getProjectSettingsContributionInfo()?.settings[key];
 
@@ -122,6 +106,7 @@ async function getDefault<ProjectSettingName extends ProjectSettingNames>(
 async function getLocalizedContributionInfo(): Promise<
   LocalizedProjectSettingsContributionInfo | undefined
 > {
+  await waitForResyncContributions();
   return projectSettingsDocumentCombiner.getLocalizedProjectSettingsContributionInfo();
 }
 
@@ -139,9 +124,6 @@ export const testingProjectSettingsService = {
 };
 
 /** Register the network object that backs the PAPI localization service */
-// This doesn't really represent this service module, so we're not making it default. To use this
-// service, you should use `localization.service.ts`
-// eslint-disable-next-line import/prefer-default-export
 export async function startProjectSettingsService(): Promise<void> {
   await initialize();
   await networkObjectService.set<IProjectSettingsService>(

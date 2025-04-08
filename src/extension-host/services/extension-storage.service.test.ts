@@ -3,8 +3,8 @@ import path from 'path';
 import { createUuid } from '@node/utils/crypto-util';
 import { getAppDir } from '@node/utils/util';
 import { ExecutionToken } from '@node/models/execution-token.model';
-import executionTokenService from '@node/services/execution-token.service';
-import extensionStorageService, { setExtensionUris } from './extension-storage.service';
+import { executionTokenService } from '@node/services/execution-token.service';
+import { extensionStorageService, setExtensionUris } from './extension-storage.service';
 
 const extensionName = 'storageTestExtName';
 const extensionsBasePath = path.join(getAppDir(), 'test-extensions');

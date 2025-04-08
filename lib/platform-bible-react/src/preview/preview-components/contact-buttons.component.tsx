@@ -1,11 +1,11 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { Mail } from 'lucide-react';
-import DiscordLogo from './discord-logo.component';
+import { DiscordLogo } from './discord-logo.component';
 
-export default function ContactButtons() {
+export function ContactButtons() {
   return (
     <>
-      <span className="pr-leading-9">Get in contact with the UX Team</span>
+      <span className="tw-leading-9">Get in contact with the UX Team</span>
 
       <Button variant="outline" size="icon" title="Discord">
         <a
@@ -25,3 +25,5 @@ export default function ContactButtons() {
     </>
   );
 }
+
+export default ContactButtons;

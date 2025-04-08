@@ -3,10 +3,10 @@ import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
 import * as extensionService from '@extension-host/services/extension.service';
 import { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
-import logger from '@shared/services/logger.service';
-import networkObjectService from '@shared/services/network-object.service';
-import dataProviderService from '@shared/services/data-provider.service';
-import extensionAssetService from '@shared/services/extension-asset.service';
+import { logger } from '@shared/services/logger.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
+import { extensionAssetService } from '@shared/services/extension-asset.service';
 import { getErrorMessage, isString, substring } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { registerCommand } from '@shared/services/command.service';
@@ -33,6 +33,15 @@ process.on('message', (message) => {
 // Try to kill child processes that extensions created
 process.on('exit', () => {
   killChildProcessesFromExtensions();
+});
+
+// Add unhandled exception and rejection handlers
+process.on('uncaughtException', (error) => {
+  logger.error(`Unhandled exception in extension host: ${getErrorMessage(error)}`);
+});
+
+process.on('unhandledRejection', (reason) => {
+  logger.error(`Unhandled promise rejection in extension host, reason: ${getErrorMessage(reason)}`);
 });
 
 // #region Services setup

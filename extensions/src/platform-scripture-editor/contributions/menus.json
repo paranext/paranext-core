@@ -2,22 +2,7 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": [
-      {
-        "label": "%mainMenu_openPlatformScriptureEditor%",
-        "localizeNotes": "Application main menu > Project > Open Scripture Editor",
-        "group": "platform.projectResources",
-        "order": -100,
-        "command": "platformScriptureEditor.openScriptureEditor"
-      },
-      {
-        "label": "%mainMenu_openPlatformResourceViewer%",
-        "localizeNotes": "Application main menu > Project > Open Resource Viewer",
-        "group": "platform.projectResources",
-        "order": -99,
-        "command": "platformScriptureEditor.openResourceViewer"
-      }
-    ]
+    "items": []
   },
   "webViewMenus": {
     "platformScriptureEditor.react": {
@@ -61,18 +46,6 @@
         },
         "items": [
           {
-            "label": "%webView_platformScriptureEditor_backgroundColor%",
-            "group": "platformScriptureEditor.colors",
-            "order": 2,
-            "command": "platformScriptureEditor.changeBackgroundColor"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_textColor%",
-            "group": "platformScriptureEditor.colors",
-            "order": 1,
-            "command": "platformScriptureEditor.changeTextColor"
-          },
-          {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
             "group": "platformScriptureEditor.inventory",
             "order": 1,
@@ -85,34 +58,22 @@
             "command": "platformScripture.openRepeatedWordsInventory"
           },
           {
-            "label": "%webView_platformScriptureEditor_configureChecks%",
+            "label": "%webView_platformScriptureEditor_markersInventory%",
+            "group": "platformScriptureEditor.inventory",
+            "order": 3,
+            "command": "platformScripture.openMarkersInventory"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_punctuationInventory%",
+            "group": "platformScriptureEditor.inventory",
+            "order": 4,
+            "command": "platformScripture.openPunctuationInventory"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openChecks%",
             "group": "platformScriptureEditor.checks",
-            "order": 1,
-            "command": "platformScripture.openConfigureChecks"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_showCheckResults%",
-            "group": "platformScriptureEditor.checks",
-            "order": 2,
-            "command": "platformScripture.showCheckResults"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_thickBorders%",
-            "group": "platformScriptureEditor.layout",
-            "order": 1,
-            "command": "platformScriptureEditor.showThickBorders"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_publisherInfo%",
-            "group": "platformScriptureEditor.general",
-            "order": 1,
-            "command": "platformScriptureEditor.showPublisherInfo"
-          },
-          {
-            "label": "%webView_platformScriptureEditor_copyrightInfo%",
-            "group": "platformScriptureEditor.general",
-            "order": 2,
-            "command": "platformScriptureEditor.showCopyrightInfo"
+            "order": 3,
+            "command": "platformScripture.openChecksSidePanel"
           }
         ]
       },

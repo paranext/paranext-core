@@ -112,7 +112,7 @@ export type WithNotifyUpdate<TDataTypes extends DataProviderDataTypes> = {
  *   functions.
  */
 // Try using DataProviderName here instead of TDataTypes?
-type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+export type IDataProviderEngine<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
   NetworkableObject &
     /**
      * Set of all `set<data_type>` methods that a data provider engine must provide according to its
@@ -161,6 +161,6 @@ export abstract class DataProviderEngine<TDataTypes extends DataProviderDataType
   // @ts-expect-error ts(6133) `updateInstructions` is not used in this method, but we don't care
   // because we want inheriting classes to be able to get this method with Intellisense without
   // an underscore that indicates to TypeScript that we aren't using the parameter
-  // eslint-disable-next-line class-methods-use-this, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this, @typescript-eslint/no-unused-vars
   notifyUpdate(updateInstructions?: DataProviderUpdateInstructions<TDataTypes>): void {}
 }

@@ -1,13 +1,14 @@
 import { WebViewProps } from '@papi/core';
 import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
-import { ScriptureReference } from 'platform-bible-utils';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
-import { VerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import papi from '@papi/frontend';
-import CharacterInventory from './checks/inventories/character-inventory.component';
-import RepeatedWordsInventory from './checks/inventories/repeated-words-inventory.component';
+import { CharacterInventory } from './checks/inventories/character-inventory.component';
+import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inventory.component';
+import { MarkerInventory } from './checks/inventories/marker-inventory.component';
+import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
 
 /**
  * Get scripture text for the provided scope and reference for the specified projectId
@@ -20,26 +21,20 @@ import RepeatedWordsInventory from './checks/inventories/repeated-words-inventor
  */
 const getText = async (
   scope: Scope,
-  scriptureRef: ScriptureReference,
+  scriptureRef: SerializedVerseRef,
   projectId: string,
 ): Promise<string | undefined> => {
-  const verseRef = new VerseRef(
-    scriptureRef.bookNum,
-    scriptureRef.chapterNum,
-    scriptureRef.verseNum,
-  );
-
   if (scope === 'book') {
     const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Book', projectId);
-    return PDP.getBookUSFM(verseRef);
+    return PDP.getBookUSFM(scriptureRef);
   }
   if (scope === 'chapter') {
     const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Chapter', projectId);
-    return PDP.getChapterUSFM(verseRef);
+    return PDP.getChapterUSFM(scriptureRef);
   }
   if (scope === 'verse') {
     const PDP = await papi.projectDataProviders.get('platformScripture.USFM_Verse', projectId);
-    return PDP.getVerseUSFM(verseRef);
+    return PDP.getVerseUSFM(scriptureRef);
   }
 
   throw new Error('Cannot get scripture for unknown scope');
@@ -56,7 +51,7 @@ global.webViewComponent = function InventoryWebView({
     }, []),
   );
   const [webViewType] = useWebViewState('webViewType', '');
-  const [scriptureRef, setScriptureRef] = useWebViewScrollGroupScrRef();
+  const [verseRef, setVerseRef] = useWebViewScrollGroupScrRef();
 
   let InventoryVariant;
   let validItemsSetting: keyof ProjectSettingTypes;
@@ -72,28 +67,39 @@ global.webViewComponent = function InventoryWebView({
       validItemsSetting = 'platformScripture.repeatableWords';
       invalidItemsSetting = 'platformScripture.nonRepeatableWords';
       break;
+    case 'platformScripture.markersInventory':
+      InventoryVariant = MarkerInventory;
+      validItemsSetting = 'platformScripture.validMarkers';
+      invalidItemsSetting = 'platformScripture.invalidMarkers';
+      break;
+    case 'platformScripture.punctuationInventory':
+      InventoryVariant = PunctuationInventory;
+      validItemsSetting = 'platformScripture.validPunctuation';
+      invalidItemsSetting = 'platformScripture.invalidPunctuation';
+      break;
     default:
       throw new Error(`${webViewType} is not a valid inventory type`);
   }
 
-  const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
-  const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
   const [scope, setScope] = useState<Scope>('book');
   const [text] = usePromise(
     useCallback(
-      async () => (projectId ? getText(scope, scriptureRef, projectId) : ''),
-      [scope, scriptureRef, projectId],
+      async () => (projectId ? getText(scope, verseRef, projectId) : ''),
+      [scope, verseRef, projectId],
     ),
     useMemo(() => '', []),
   );
+
+  const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
+  const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
 
   const validItemsArray = useMemo(() => validItems.split(' '), [validItems]);
   const invalidItemsArray = useMemo(() => invalidItems.split(' '), [invalidItems]);
 
   return (
     <InventoryVariant
-      scriptureReference={scriptureRef}
-      setScriptureReference={setScriptureRef}
+      verseRef={verseRef}
+      setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
       approvedItems={validItemsArray}
       onApprovedItemsChange={(items: string[]) => setValidItems?.(items.join(' '))}
@@ -102,6 +108,7 @@ global.webViewComponent = function InventoryWebView({
       text={text}
       scope={scope}
       onScopeChange={(newScope: Scope) => setScope(newScope)}
+      projectId={projectId}
     />
   );
 };

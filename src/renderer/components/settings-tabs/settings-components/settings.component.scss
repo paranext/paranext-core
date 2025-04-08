@@ -1,0 +1,31 @@
+.setting-container {
+  display: flex;
+  flex-direction: column;
+  width: 50%;
+}
+
+.language-selector {
+  min-width: 100%;
+  flex-grow: 1;
+}
+
+.error-label {
+  color: #dc2626;
+  padding-top: 1rem;
+}
+
+.loading-label {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.setting-label-container {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.setting-label {
+  padding-right: 1rem;
+  width: 50%;
+}

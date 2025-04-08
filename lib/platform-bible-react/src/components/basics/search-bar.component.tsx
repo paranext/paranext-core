@@ -1,10 +1,15 @@
+import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
-import { useState } from 'react';
+import { Search, X } from 'lucide-react';
 
+/** Props for the SearchBar component. */
 export type SearchBarProps = {
+  /** Seach query for the search bar */
+  value: string;
   /**
-   * Callback fired to handle the search query when button pressed
+   * Callback fired to handle the search query is updated
    *
    * @param searchQuery
    */
@@ -15,25 +20,54 @@ export type SearchBarProps = {
 
   /** Optional boolean to set the input base to full width */
   isFullWidth?: boolean;
+
+  /** Additional css classes to help with unique styling of the search bar */
+  className?: string;
 };
 
-export default function SearchBar({ onSearch, placeholder, isFullWidth }: SearchBarProps) {
-  const [searchQuery, setSearchQuery] = useState<string>('');
-
-  const handleInputChange = (searchString: string) => {
-    setSearchQuery(searchString);
-    onSearch(searchString);
-  };
+export function SearchBar({
+  value,
+  onSearch,
+  placeholder,
+  isFullWidth,
+  className,
+}: SearchBarProps) {
+  const dir: Direction = readDirection();
 
   return (
-    <Input
-      className={cn(
-        'pr-flex pr-h-10 pr-rounded-md pr-border pr-border-input pr-bg-background pr-px-3 pr-py-2 pr-text-sm pr-ring-offset-background file:pr-border-0 file:pr-bg-transparent file:pr-text-sm file:pr-font-medium placeholder:pr-text-muted-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-[color:hsl(240,5%,64.9%)] focus-visible:pr-ring-offset-2 disabled:pr-cursor-not-allowed disabled:pr-opacity-50',
-        { 'pr-w-full': isFullWidth },
+    <div className={cn('tw-relative', { 'tw-w-full': isFullWidth }, className)}>
+      <Search
+        className={cn(
+          'tw-absolute tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2 tw-transform tw-opacity-50',
+          { 'tw-right-3': dir === 'rtl' },
+          { 'tw-left-3': dir === 'ltr' },
+        )}
+      />
+      <Input
+        className="tw-w-full tw-text-ellipsis tw-pe-9 tw-ps-9"
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onSearch(e.target.value)}
+      />
+      {value && (
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'tw-absolute tw-top-1/2 tw-h-7 tw--translate-y-1/2 tw-transform hover:tw-bg-transparent',
+            { 'tw-left-0': dir === 'rtl' },
+            { 'tw-right-0': dir === 'ltr' },
+          )}
+          onClick={() => {
+            onSearch('');
+          }}
+        >
+          <X className="tw-h-4 tw-w-4" />
+          <span className="tw-sr-only">Clear</span>
+        </Button>
       )}
-      placeholder={placeholder}
-      value={searchQuery}
-      onChange={(e) => handleInputChange(e.target.value)}
-    />
+    </div>
   );
 }
+
+export default SearchBar;

@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<list>
+<!-- The status of each country should be either "blocked" or "unblocked" -->
+	<country code="AD" name="Andorra" status="unblocked"/>
+	<country code="AE" name="United Arab Emirates" status="blocked"/>
+	<country code="AF" name="Afghanistan" status="blocked"/>
+	<country code="AG" name="Antigua and Barbuda" status="unblocked"/>
+	<country code="AI" name="Anguilla" status="unblocked"/>
+	<country code="AL" name="Albania" status="unblocked"/>
+	<country code="AM" name="Armenia" status="unblocked"/>
+	<country code="AO" name="Angola" status="unblocked"/>
+	<country code="AQ" name="Antarctica" status="unblocked"/>
+	<country code="AR" name="Argentina" status="unblocked"/>
+	<country code="AS" name="American Samoa" status="unblocked"/>
+	<country code="AT" name="Austria" status="unblocked"/>
+	<country code="AU" name="Australia" status="unblocked"/>
+	<country code="AW" name="Aruba" status="unblocked"/>
+	<country code="AX" name="Aland Islands" status="unblocked"/>
+	<country code="AZ" name="Azerbaijan" status="blocked"/>
+	<country code="BA" name="Bosnia and Herzegovina" status="unblocked"/>
+	<country code="BB" name="Barbados" status="unblocked"/>
+	<country code="BD" name="Bangladesh" status="unblocked"/>
+	<country code="BE" name="Belgium" status="unblocked"/>
+	<country code="BF" name="Burkina Faso" status="unblocked"/>
+	<country code="BG" name="Bulgaria" status="unblocked"/>
+	<country code="BH" name="Bahrain" status="blocked"/>
+	<country code="BI" name="Burundi" status="unblocked"/>
+	<country code="BJ" name="Benin" status="unblocked"/>
+	<country code="BL" name="Saint-Barthelemy" status="unblocked"/>
+	<country code="BM" name="Bermuda" status="unblocked"/>
+	<country code="BN" name="Brunei" status="unblocked"/>
+	<country code="BO" name="Bolivia" status="unblocked"/>
+	<country code="BQ" name="Bonaire, Sint Eustatius, and Saba" status="unblocked"/>
+	<country code="BR" name="Brazil" status="unblocked"/>
+	<country code="BS" name="Bahamas" status="unblocked"/>
+	<country code="BT" name="Bhutan" status="unblocked"/>
+	<country code="BW" name="Botswana" status="unblocked"/>
+	<country code="BY" name="Belarus" status="blocked"/>
+	<country code="BZ" name="Belize" status="unblocked"/>
+	<country code="CA" name="Canada" status="unblocked"/>
+	<country code="CC" name="Cocos [Keeling] Islands" status="unblocked"/>
+	<country code="CD" name="Congo" status="unblocked"/>
+	<country code="CF" name="Central African Republic" status="unblocked"/>
+	<country code="CG" name="Republic of the Congo" status="unblocked"/>
+	<country code="CH" name="Switzerland" status="unblocked"/>
+	<country code="CI" name="Ivory Coast" status="unblocked"/>
+	<country code="CK" name="Cook Islands" status="unblocked"/>
+	<country code="CL" name="Chile" status="unblocked"/>
+	<country code="CM" name="Cameroon" status="unblocked"/>
+	<country code="CN" name="China" status="blocked"/>
+	<country code="CO" name="Colombia" status="unblocked"/>
+	<country code="CR" name="Costa Rica" status="unblocked"/>
+	<country code="CU" name="Cuba" status="unblocked"/>
+	<country code="CV" name="Cape Verde" status="unblocked"/>
+	<country code="CW" name="Curacao" status="unblocked"/>
+	<country code="CX" name="Christmas Island" status="unblocked"/>
+	<country code="CY" name="Cyprus" status="unblocked"/>
+	<country code="CZ" name="Czechia" status="unblocked"/>
+	<country code="DE" name="Germany" status="unblocked"/>
+	<country code="DJ" name="Djibouti" status="unblocked"/>
+	<country code="DK" name="Denmark" status="unblocked"/>
+	<country code="DM" name="Dominica" status="unblocked"/>
+	<country code="DO" name="Dominican Republic" status="unblocked"/>
+	<country code="DZ" name="Algeria" status="blocked"/>
+	<country code="EC" name="Ecuador" status="unblocked"/>
+	<country code="EE" name="Estonia" status="blocked"/>
+	<country code="EG" name="Egypt" status="blocked"/>
+	<country code="EH" name="Western Sahara" status="unblocked"/>
+	<country code="ER" name="Eritrea" status="unblocked"/>
+	<country code="ES" name="Spain" status="unblocked"/>
+	<country code="ET" name="Ethiopia" status="unblocked"/>
+	<country code="FI" name="Finland" status="unblocked"/>
+	<country code="FJ" name="Fiji" status="unblocked"/>
+	<country code="FK" name="Falkland Islands" status="unblocked"/>
+	<country code="FM" name="Federated States of Micronesia" status="unblocked"/>
+	<country code="FO" name="Faroe Islands" status="unblocked"/>
+	<country code="FR" name="France" status="unblocked"/>
+	<country code="GA" name="Gabon" status="unblocked"/>
+	<country code="GB" name="United Kingdom" status="unblocked"/>
+	<country code="GD" name="Grenada" status="unblocked"/>
+	<country code="GE" name="Georgia" status="blocked"/>
+	<country code="GF" name="French Guiana" status="unblocked"/>
+	<country code="GG" name="Guernsey" status="unblocked"/>
+	<country code="GH" name="Ghana" status="unblocked"/>
+	<country code="GI" name="Gibraltar" status="unblocked"/>
+	<country code="GL" name="Greenland" status="unblocked"/>
+	<country code="GM" name="Gambia" status="unblocked"/>
+	<country code="GN" name="Guinea" status="unblocked"/>
+	<country code="GP" name="Guadeloupe" status="unblocked"/>
+	<country code="GQ" name="Equatorial Guinea" status="unblocked"/>
+	<country code="GR" name="Greece" status="unblocked"/>
+	<country code="GS" name="South Georgia and the South Sandwich Islands" status="unblocked"/>
+	<country code="GT" name="Guatemala" status="unblocked"/>
+	<country code="GU" name="Guam" status="unblocked"/>
+	<country code="GW" name="Guinea-Bissau" status="unblocked"/>
+	<country code="GY" name="Guyana" status="unblocked"/>
+	<country code="HK" name="Hong Kong" status="unblocked"/>
+	<country code="HM" name="Heard Island and McDonald Islands" status="unblocked"/>
+	<country code="HN" name="Honduras" status="unblocked"/>
+	<country code="HR" name="Croatia" status="unblocked"/>
+	<country code="HT" name="Haiti" status="unblocked"/>
+	<country code="HU" name="Hungary" status="unblocked"/>
+	<country code="ID" name="Indonesia" status="unblocked"/>
+	<country code="IE" name="Ireland" status="unblocked"/>
+	<country code="IL" name="Israel" status="unblocked"/>
+	<country code="IM" name="Isle of Man" status="unblocked"/>
+	<country code="IN" name="India" status="unblocked"/>
+	<country code="IO" name="British Indian Ocean Territory" status="unblocked"/>
+	<country code="IQ" name="Iraq" status="unblocked"/>
+	<country code="IR" name="Iran" status="unblocked"/>
+	<country code="IS" name="Iceland" status="unblocked"/>
+	<country code="IT" name="Italy" status="unblocked"/>
+	<country code="JE" name="Jersey" status="unblocked"/>
+	<country code="JM" name="Jamaica" status="unblocked"/>
+	<country code="JO" name="Hashemite Kingdom of Jordan" status="unblocked"/>
+	<country code="JP" name="Japan" status="unblocked"/>
+	<country code="KE" name="Kenya" status="unblocked"/>
+	<country code="KG" name="Kyrgyzstan" status="blocked"/>
+	<country code="KH" name="Cambodia" status="unblocked"/>
+	<country code="KI" name="Kiribati" status="unblocked"/>
+	<country code="KM" name="Comoros" status="unblocked"/>
+	<country code="KN" name="St Kitts and Nevis" status="unblocked"/>
+	<country code="KP" name="North Korea" status="unblocked"/>
+	<country code="KR" name="Republic of Korea" status="unblocked"/>
+	<country code="KW" name="Kuwait" status="unblocked"/>
+	<country code="KY" name="Cayman Islands" status="unblocked"/>
+	<country code="KZ" name="Kazakhstan" status="blocked"/>
+	<country code="LA" name="Laos" status="unblocked"/>
+	<country code="LB" name="Lebanon" status="unblocked"/>
+	<country code="LC" name="Saint Lucia" status="unblocked"/>
+	<country code="LI" name="Liechtenstein" status="unblocked"/>
+	<country code="LK" name="Sri Lanka" status="unblocked"/>
+	<country code="LR" name="Liberia" status="unblocked"/>
+	<country code="LS" name="Lesotho" status="unblocked"/>
+	<country code="LT" name="Republic of Lithuania" status="blocked"/>
+	<country code="LU" name="Luxembourg" status="unblocked"/>
+	<country code="LV" name="Latvia" status="blocked"/>
+	<country code="LY" name="Libya" status="blocked"/>
+	<country code="MA" name="Morocco" status="blocked"/>
+	<country code="MC" name="Monaco" status="unblocked"/>
+	<country code="MD" name="Republic of Moldova" status="blocked"/>
+	<country code="ME" name="Montenegro" status="unblocked"/>
+	<country code="MF" name="Saint Martin" status="unblocked"/>
+	<country code="MG" name="Madagascar" status="unblocked"/>
+	<country code="MH" name="Marshall Islands" status="unblocked"/>
+	<country code="MK" name="Macedonia" status="unblocked"/>
+	<country code="ML" name="Mali" status="unblocked"/>
+	<country code="MM" name="Myanmar [Burma]" status="unblocked"/>
+	<country code="MN" name="Mongolia" status="unblocked"/>
+	<country code="MO" name="Macao" status="unblocked"/>
+	<country code="MP" name="Northern Mariana Islands" status="unblocked"/>
+	<country code="MQ" name="Martinique" status="unblocked"/>
+	<country code="MR" name="Mauritania" status="unblocked"/>
+	<country code="MS" name="Montserrat" status="unblocked"/>
+	<country code="MT" name="Malta" status="unblocked"/>
+	<country code="MU" name="Mauritius" status="unblocked"/>
+	<country code="MV" name="Maldives" status="blocked"/>
+	<country code="MW" name="Malawi" status="unblocked"/>
+	<country code="MX" name="Mexico" status="unblocked"/>
+	<country code="MY" name="Malaysia" status="unblocked"/>
+	<country code="MZ" name="Mozambique" status="unblocked"/>
+	<country code="NA" name="Namibia" status="unblocked"/>
+	<country code="NC" name="New Caledonia" status="unblocked"/>
+	<country code="NE" name="Niger" status="unblocked"/>
+	<country code="NF" name="Norfolk Island" status="unblocked"/>
+	<country code="NG" name="Nigeria" status="unblocked"/>
+	<country code="NI" name="Nicaragua" status="unblocked"/>
+	<country code="NL" name="Netherlands" status="unblocked"/>
+	<country code="NO" name="Norway" status="unblocked"/>
+	<country code="NP" name="Nepal" status="unblocked"/>
+	<country code="NR" name="Nauru" status="unblocked"/>
+	<country code="NU" name="Niue" status="unblocked"/>
+	<country code="NZ" name="New Zealand" status="unblocked"/>
+	<country code="OM" name="Oman" status="blocked"/>
+	<country code="PA" name="Panama" status="unblocked"/>
+	<country code="PE" name="Peru" status="unblocked"/>
+	<country code="PF" name="French Polynesia" status="unblocked"/>
+	<country code="PG" name="Papua New Guinea" status="unblocked"/>
+	<country code="PH" name="Philippines" status="unblocked"/>
+	<country code="PK" name="Pakistan" status="blocked"/>
+	<country code="PL" name="Poland" status="unblocked"/>
+	<country code="PM" name="Saint Pierre and Miquelon" status="unblocked"/>
+	<country code="PN" name="Pitcairn Islands" status="unblocked"/>
+	<country code="PR" name="Puerto Rico" status="unblocked"/>
+	<country code="PS" name="Palestine" status="blocked"/>
+	<country code="PT" name="Portugal" status="unblocked"/>
+	<country code="PW" name="Palau" status="unblocked"/>
+	<country code="PY" name="Paraguay" status="unblocked"/>
+	<country code="QA" name="Qatar" status="blocked"/>
+	<country code="RE" name="Reunion" status="unblocked"/>
+	<country code="RO" name="Romania" status="unblocked"/>
+	<country code="RS" name="Serbia" status="unblocked"/>
+	<country code="RU" name="Russia" status="blocked"/>
+	<country code="RW" name="Rwanda" status="unblocked"/>
+	<country code="SA" name="Saudi Arabia" status="blocked"/>
+	<country code="SB" name="Solomon Islands" status="unblocked"/>
+	<country code="SC" name="Seychelles" status="unblocked"/>
+	<country code="SD" name="Sudan" status="blocked"/>
+	<country code="SE" name="Sweden" status="unblocked"/>
+	<country code="SG" name="Singapore" status="unblocked"/>
+	<country code="SH" name="Saint Helena" status="unblocked"/>
+	<country code="SI" name="Slovenia" status="unblocked"/>
+	<country code="SJ" name="Svalbard and Jan Mayen" status="unblocked"/>
+	<country code="SK" name="Slovakia" status="unblocked"/>
+	<country code="SL" name="Sierra Leone" status="unblocked"/>
+	<country code="SM" name="San Marino" status="unblocked"/>
+	<country code="SN" name="Senegal" status="unblocked"/>
+	<country code="SO" name="Somalia" status="unblocked"/>
+	<country code="SR" name="Suriname" status="unblocked"/>
+	<country code="SS" name="South Sudan" status="unblocked"/>
+	<country code="ST" name="Sao Tome and Principe" status="unblocked"/>
+	<country code="SV" name="El Salvador" status="unblocked"/>
+	<country code="SX" name="Sint Maarten" status="unblocked"/>
+	<country code="SY" name="Syria" status="blocked"/>
+	<country code="SZ" name="Swaziland" status="unblocked"/>
+	<country code="TC" name="Turks and Caicos Islands" status="unblocked"/>
+	<country code="TD" name="Chad" status="unblocked"/>
+	<country code="TF" name="French Southern Territories" status="unblocked"/>
+	<country code="TG" name="Togo" status="unblocked"/>
+	<country code="TH" name="Thailand" status="unblocked"/>
+	<country code="TJ" name="Tajikistan" status="blocked"/>
+	<country code="TK" name="Tokelau" status="unblocked"/>
+	<country code="TL" name="East Timor" status="unblocked"/>
+	<country code="TM" name="Turkmenistan" status="blocked"/>
+	<country code="TN" name="Tunisia" status="blocked"/>
+	<country code="TO" name="Tonga" status="unblocked"/>
+	<country code="TR" name="Turkey" status="unblocked"/>
+	<country code="TT" name="Trinidad and Tobago" status="unblocked"/>
+	<country code="TV" name="Tuvalu" status="unblocked"/>
+	<country code="TW" name="Taiwan" status="unblocked"/>
+	<country code="TZ" name="Tanzania" status="unblocked"/>
+	<country code="UA" name="Ukraine" status="blocked"/>
+	<country code="UG" name="Uganda" status="unblocked"/>
+	<country code="UM" name="U.S. Minor Outlying Islands" status="unblocked"/>
+	<country code="US" name="United States" status="unblocked"/>
+	<country code="UY" name="Uruguay" status="unblocked"/>
+	<country code="UZ" name="Uzbekistan" status="blocked"/>
+	<country code="VA" name="Vatican City" status="unblocked"/>
+	<country code="VC" name="Saint Vincent and the Grenadines" status="unblocked"/>
+	<country code="VE" name="Venezuela" status="unblocked"/>
+	<country code="VG" name="British Virgin Islands" status="unblocked"/>
+	<country code="VI" name="U.S. Virgin Islands" status="unblocked"/>
+	<country code="VN" name="Vietnam" status="unblocked"/>
+	<country code="VU" name="Vanuatu" status="unblocked"/>
+	<country code="WF" name="Wallis and Futuna" status="unblocked"/>
+	<country code="WS" name="Samoa" status="unblocked"/>
+	<country code="XK" name="Kosovo" status="unblocked"/>
+	<country code="YE" name="Yemen" status="blocked"/>
+	<country code="YT" name="Mayotte" status="unblocked"/>
+	<country code="ZA" name="South Africa" status="unblocked"/>
+	<country code="ZM" name="Zambia" status="unblocked"/>
+	<country code="ZW" name="Zimbabwe" status="unblocked"/>
+</list>

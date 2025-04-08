@@ -1,12 +1,12 @@
 import { deepEqual } from 'platform-bible-utils';
-import MenuDocumentCombiner from './menu-document-combiner';
+import { MenuDocumentCombiner } from './menu-document-combiner';
 
 const startingDoc = {
   mainMenu: {
     columns: {
-      'platform.window': { label: '%mainMenu_Window%', order: 1 },
-      'platform.layout': { label: '%mainMenu_Layout%', order: 2 },
-      'platform.help': { label: '%mainMenu_Help%', order: 3, isExtensible: true },
+      'platform.window': { label: '%mainMenu_window%', order: 1 },
+      'platform.layout': { label: '%mainMenu_layout%', order: 2 },
+      'platform.help': { label: '%mainMenu_help%', order: 3, isExtensible: true },
       isExtensible: true,
     },
     groups: {
@@ -19,14 +19,14 @@ const startingDoc = {
   },
   defaultWebViewTopMenu: {
     columns: {
-      'platform.project': { label: '%webView_Project%', order: 1 },
-      'platform.edit': { label: '%webView_Edit%', order: 2, isExtensible: true },
+      'platform.app': { label: '%webView_project%', order: 1 },
+      'platform.edit': { label: '%webView_edit%', order: 2, isExtensible: true },
     },
     groups: {
-      'platform.projectTop': { column: 'platform.project', order: 1 },
-      'platform.manageBooks': { column: 'platform.project', order: 2 },
-      'platform.deleteProject': { column: 'platform.project', order: 3 },
-      'platform.projectDetails': { column: 'platform.project', order: 4, isExtensible: true },
+      'platform.projectTop': { column: 'platform.app', order: 1 },
+      'platform.manageBooks': { column: 'platform.app', order: 2 },
+      'platform.deleteProject': { column: 'platform.app', order: 3 },
+      'platform.projectDetails': { column: 'platform.app', order: 4, isExtensible: true },
       'platform.undoRedo': { column: 'platform.edit', order: 1 },
       'platform.cutCopyPaste': { column: 'platform.edit', order: 2 },
     },
@@ -61,7 +61,7 @@ const startingDoc = {
         command: 'platform.insertNote',
       },
       {
-        label: '%wordList%',
+        label: '%menuItemName_wordList%',
         localizeNotes: 'Web view context menu > Word list...',
         group: 'platform.wordList',
         order: 1,
@@ -195,9 +195,9 @@ const expectedOutput = {
   mainMenu: {
     columns: {
       'paratext.paratext': { label: '%mainMenu_Paratext%', order: 0 },
-      'platform.window': { label: '%mainMenu_Window%', order: 1 },
-      'platform.layout': { label: '%mainMenu_Layout%', order: 2 },
-      'platform.help': { label: '%mainMenu_Help%', order: 3, isExtensible: true },
+      'platform.window': { label: '%mainMenu_window%', order: 1 },
+      'platform.layout': { label: '%mainMenu_layout%', order: 2 },
+      'platform.help': { label: '%mainMenu_help%', order: 3, isExtensible: true },
       isExtensible: true,
     },
     groups: {
@@ -284,14 +284,14 @@ const expectedOutput = {
   },
   defaultWebViewTopMenu: {
     columns: {
-      'platform.project': { label: '%webView_Project%', order: 1 },
-      'platform.edit': { label: '%webView_Edit%', order: 2, isExtensible: true },
+      'platform.app': { label: '%webView_project%', order: 1 },
+      'platform.edit': { label: '%webView_edit%', order: 2, isExtensible: true },
     },
     groups: {
-      'platform.projectTop': { column: 'platform.project', order: 1 },
-      'platform.manageBooks': { column: 'platform.project', order: 2 },
-      'platform.deleteProject': { column: 'platform.project', order: 3 },
-      'platform.projectDetails': { column: 'platform.project', order: 4, isExtensible: true },
+      'platform.projectTop': { column: 'platform.app', order: 1 },
+      'platform.manageBooks': { column: 'platform.app', order: 2 },
+      'platform.deleteProject': { column: 'platform.app', order: 3 },
+      'platform.projectDetails': { column: 'platform.app', order: 4, isExtensible: true },
       'platform.undoRedo': { column: 'platform.edit', order: 1 },
       'platform.cutCopyPaste': { column: 'platform.edit', order: 2 },
     },
@@ -326,7 +326,7 @@ const expectedOutput = {
         command: 'platform.insertNote',
       },
       {
-        label: '%wordList%',
+        label: '%menuItemName_wordList%',
         localizeNotes: 'Web view context menu > Word list...',
         group: 'platform.wordList',
         order: 1,

@@ -1,4 +1,4 @@
-import NumberFormat from './intl-number-format';
+import { NumberFormat } from './intl-number-format';
 
 const testNumberFormatter: NumberFormat = new NumberFormat('en');
 const START_NUMBER = 654321.987;

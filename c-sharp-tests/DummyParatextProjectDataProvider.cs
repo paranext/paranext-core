@@ -1,5 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider;
 using Paranext.DataProvider.Projects;
 
 namespace TestParanextDataProvider

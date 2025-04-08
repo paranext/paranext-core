@@ -7,16 +7,17 @@ interface NoExtensionsFoundProps {
 /**
  * This component displays a message to the user when no extensions are found in the marketplace.
  *
- * @param id Optional unique identifier
- * @param message The message to display.
+ * @param NoExtensionsFoundProps
  * @returns {JSX.Element} - Returns the message component that displays the message to the user.
  */
-export default function NoExtensionsFound({ id, message }: NoExtensionsFoundProps) {
+export function NoExtensionsFound({ id, message }: NoExtensionsFoundProps) {
   return (
-    <div id={id} className="pr-mb-20 pr-mt-20 pr-flex pr-items-center pr-justify-center">
-      <div className="pr-w-3/4 pr-rounded-lg pr-bg-gray-100 pr-p-8 pr-text-center">
-        <p className="pr-text-lg pr-text-gray-800">{message}</p>
+    <div id={id} className="tw-mb-20 tw-mt-20 tw-flex tw-items-center tw-justify-center">
+      <div className="tw-w-3/4 tw-rounded-lg tw-bg-gray-100 tw-p-8 tw-text-center">
+        <p className="tw-text-lg tw-text-gray-800">{message}</p>
       </div>
     </div>
   );
 }
+
+export default NoExtensionsFound;

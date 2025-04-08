@@ -38,7 +38,7 @@ internal class RawDirectoryProjectStreamManager : IProjectStreamManager
             {
                 MatchType = MatchType.Simple,
                 RecurseSubdirectories = true,
-                ReturnSpecialDirectories = false
+                ReturnSpecialDirectories = false,
             }
         );
 

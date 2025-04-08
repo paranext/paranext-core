@@ -32,7 +32,7 @@ function getExtensionDataKey(scope: ExtensionDataScope): string {
   return `${scope.extensionName}/${scope.dataQualifier}`;
 }
 
-class HelloWorldProjectDataProviderEngine
+export class HelloWorldProjectDataProviderEngine
   extends BaseProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
   implements IBaseProjectDataProviderEngine<typeof HELLO_WORLD_PROJECT_INTERFACES>
 {
@@ -128,7 +128,8 @@ class HelloWorldProjectDataProviderEngine
     return newNumber;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  // Required method since this is a data provider engine
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async setNames(): Promise<
     DataProviderUpdateInstructions<ProjectInterfaceDataTypes['helloWorld']>
   > {

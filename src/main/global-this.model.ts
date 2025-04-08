@@ -8,7 +8,7 @@
  */
 
 import path from 'path';
-import polyfillLocalStorage from '@node/polyfills/local-storage.polyfill';
+import { polyfillLocalStorage } from '@node/polyfills/local-storage.polyfill';
 import { ProcessType } from '@shared/global-this.model';
 import { app } from 'electron';
 import { getCommandLineArgument, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';

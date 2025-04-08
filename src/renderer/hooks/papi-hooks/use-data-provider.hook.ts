@@ -1,7 +1,7 @@
-import dataProviderService from '@shared/services/data-provider.service';
-import createUseNetworkObjectHook from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import { createUseNetworkObjectHook } from '@renderer/hooks/hook-generators/create-use-network-object-hook.util';
+import { IDataProvider } from '@shared/models/data-provider.interface';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderNames, DataProviders } from 'papi-shared-types';
-import IDataProvider from '@shared/models/data-provider.interface';
 
 /**
  * Gets a data provider with specified provider name
@@ -16,7 +16,7 @@ import IDataProvider from '@shared/models/data-provider.interface';
 
 // Assert to the specific data provider types for this hook
 // eslint-disable-next-line no-type-assertion/no-type-assertion
-const useDataProvider = createUseNetworkObjectHook(
+export const useDataProvider = createUseNetworkObjectHook(
   // Type assert to more general function signature because the hook wants it to be more general.
   // This is fine in this case since we're also casting the hook itself to the correct specific type
   // eslint-disable-next-line no-type-assertion/no-type-assertion

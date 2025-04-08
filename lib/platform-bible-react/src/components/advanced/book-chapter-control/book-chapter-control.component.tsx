@@ -1,18 +1,19 @@
-import BookChapterInput from '@/components/advanced/book-chapter-control/book-chapter-input.component';
-import BookMenuItem, {
+import { BookChapterInput } from '@/components/advanced/book-chapter-control/book-chapter-input.component';
+import {
+  BookMenuItem,
   BookType,
 } from '@/components/advanced/book-chapter-control/book-menu-item.component';
-import ChapterSelect from '@/components/advanced/book-chapter-control/chapter-select.component';
-import GoToMenuItem from '@/components/advanced/book-chapter-control/go-to-menu-item.component';
+import { ChapterSelect } from '@/components/advanced/book-chapter-control/chapter-select.component';
 import {
-  DropdownMenu as ShadDropdownMenu,
-  DropdownMenuContent as ShadDropdownMenuContent,
-  DropdownMenuLabel as ShadDropdownMenuLabel,
-  DropdownMenuSeparator as ShadDropdownMenuSeparator,
-  DropdownMenuTrigger as ShadDropdownMenuTrigger,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { Canon } from '@sillsdev/scripture';
-import { ScriptureReference, getChaptersForBook } from 'platform-bible-utils';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
+import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
+import { getChaptersForBook } from 'platform-bible-utils';
 import {
   KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -25,12 +26,15 @@ import {
 type BookTypeLabels = {
   [bookType in BookType]: string;
 };
-type BookChapterControlProps = {
-  scrRef: ScriptureReference;
-  handleSubmit: (scrRef: ScriptureReference) => void;
+
+export type BookChapterControlProps = {
+  scrRef: SerializedVerseRef;
+  handleSubmit: (scrRef: SerializedVerseRef) => void;
+  className?: string;
+  getActiveBookIds?: () => string[];
 };
 
-const ALL_BOOK_IDS = Canon.allBookIds;
+const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
 const BOOK_TYPE_LABELS: BookTypeLabels = {
   OT: 'Old Testament',
   NT: 'New Testament',
@@ -45,14 +49,7 @@ const SEARCH_QUERY_FORMATS = [
   /^(\w+)(?:\s(\d+))$/i, // Matches a word followed by a chapter number
   /^(\w+)(?:\s(\d+):(\d+))$/i, // Matches a word followed by a chapter and verse number
 ];
-const fetchGroupedBooks = (bookType: BookType) => {
-  const groupedBooks = {
-    OT: ALL_BOOK_IDS.filter((bookId) => Canon.isBookOT(bookId)),
-    NT: ALL_BOOK_IDS.filter((bookId) => Canon.isBookNT(bookId)),
-    DC: ALL_BOOK_IDS.filter((bookId) => Canon.isBookDC(bookId)),
-  };
-  return groupedBooks[bookType];
-};
+
 const fetchEndChapter = (bookId: string) => {
   // getChaptersForBook returns -1 if not found in scrBookData
   // scrBookData only includes OT and NT, so all DC will return -1
@@ -101,15 +98,17 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
-function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
+export function BookChapterControl({
+  scrRef,
+  handleSubmit,
+  className,
+  getActiveBookIds,
+}: BookChapterControlProps) {
+  const dir: Direction = readDirection();
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedBookId, setSelectedBookId] = useState<string>(
-    Canon.bookNumberToId(scrRef.bookNum),
-  );
+  const [selectedBookId, setSelectedBookId] = useState<string>(scrRef.book);
   const [highlightedChapter, setHighlightedChapter] = useState<number>(scrRef.chapterNum ?? 0);
-  const [highlightedBookId, setHighlightedBookId] = useState<string>(
-    Canon.bookNumberToId(scrRef.bookNum),
-  );
+  const [highlightedBookId, setHighlightedBookId] = useState<string>(scrRef.book);
   const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
   const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
 
@@ -123,7 +122,13 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
-      return fetchGroupedBooks(bookType).filter((bookId: string) => {
+      const newBookIds = getActiveBookIds ? getActiveBookIds() : ALL_BOOK_IDS;
+
+      return {
+        OT: newBookIds.filter((bookId) => Canon.isBookOT(bookId)),
+        NT: newBookIds.filter((bookId) => Canon.isBookNT(bookId)),
+        DC: newBookIds.filter((bookId) => Canon.isBookDC(bookId)),
+      }[bookType].filter((bookId: string) => {
         const englishNameLowerCase = Canon.bookIdToEnglishName(bookId).toLowerCase();
         const normalizedQuery = searchQuery.replace(/[^a-zA-Z]/g, '').toLowerCase();
         return (
@@ -132,7 +137,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         );
       });
     },
-    [searchQuery],
+    [searchQuery, getActiveBookIds], // Only recompute when relevant values change
   );
 
   const handleSearchInput = (searchString: string) => {
@@ -157,13 +162,11 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   const updateReference = useCallback(
     (bookId: string, shouldClose: boolean, chapter?: number, verse?: number) => {
-      setHighlightedChapter(
-        Canon.bookNumberToId(scrRef.bookNum) !== bookId ? 1 : scrRef.chapterNum,
-      );
+      setHighlightedChapter(scrRef.book !== bookId ? 1 : scrRef.chapterNum);
 
       if (shouldClose || fetchEndChapter(bookId) === -1) {
         handleSubmit({
-          bookNum: Canon.bookIdToNumber(bookId),
+          book: bookId,
           chapterNum: chapter || 1,
           verseNum: verse || 1,
         });
@@ -176,7 +179,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
       setSelectedBookId(selectedBookId !== bookId ? bookId : '');
       setIsContentOpen(!shouldClose);
     },
-    [handleSubmit, scrRef.bookNum, scrRef.chapterNum, selectedBookId],
+    [handleSubmit, scrRef.book, scrRef.chapterNum, selectedBookId],
   );
 
   const handleSelectChapter = (chapterNumber: number) => {
@@ -259,15 +262,23 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
         return;
       }
 
+      const upOneChapter =
+        (key === 'ArrowRight' && !dir) ||
+        (key === 'ArrowRight' && dir === 'ltr') ||
+        (key === 'ArrowLeft' && dir === 'rtl');
+      const downOneChapter =
+        (key === 'ArrowLeft' && !dir) ||
+        (key === 'ArrowLeft' && dir === 'ltr') ||
+        (key === 'ArrowRight' && dir === 'rtl');
       let chapterOffSet = 0;
-      if (key === 'ArrowRight') {
+      if (upOneChapter) {
         if (highlightedChapter < fetchEndChapter(highlightedBookId)) {
           chapterOffSet = 1;
         } else {
           event.preventDefault();
           return;
         }
-      } else if (key === 'ArrowLeft') {
+      } else if (downOneChapter) {
         if (highlightedChapter > 1) {
           chapterOffSet = -1;
         } else {
@@ -293,7 +304,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
 
   useEffect(() => {
     if (selectedBookId === highlightedBookId) {
-      if (selectedBookId === Canon.bookNumberToId(scrRef.bookNum)) {
+      if (selectedBookId === scrRef.book) {
         setHighlightedChapter(scrRef.chapterNum);
       } else {
         setHighlightedChapter(1);
@@ -301,7 +312,7 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
     } else {
       setHighlightedChapter(0);
     }
-  }, [highlightedBookId, scrRef.bookNum, scrRef.chapterNum, selectedBookId]);
+  }, [highlightedBookId, scrRef.book, scrRef.chapterNum, selectedBookId]);
 
   // The purpose of these useLayoutEffects and timeout is to delay the scroll just
   // enough so that the refs are defined and available when they are used after the timeout
@@ -323,17 +334,17 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
   }, [isContentOpenDelayed]);
 
   return (
-    <div className="pr-twp pr-flex">
-      <ShadDropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
-        <ShadDropdownMenuTrigger asChild>
+    <div className="pr-twp tw-flex">
+      <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
+        <DropdownMenuTrigger asChild>
           <BookChapterInput
             ref={inputRef}
             value={searchQuery}
             handleSearch={handleSearchInput}
             handleKeyDown={handleKeyDownInput}
             handleOnClick={() => {
-              setSelectedBookId(Canon.bookNumberToId(scrRef.bookNum));
-              setHighlightedBookId(Canon.bookNumberToId(scrRef.bookNum));
+              setSelectedBookId(scrRef.book);
+              setHighlightedBookId(scrRef.book);
               setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
               setIsContentOpen(true);
               inputRef.current.focus();
@@ -343,66 +354,65 @@ function BookChapterControl({ scrRef, handleSubmit }: BookChapterControlProps) {
               shouldPreventAutoClosing.current = true;
             }}
             handleSubmit={handleInputSubmit}
-            placeholder={`${Canon.bookNumberToEnglishName(scrRef.bookNum)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
+            placeholder={`${Canon.bookIdToEnglishName(scrRef.book)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
+            className={className}
           />
-        </ShadDropdownMenuTrigger>
-        <ShadDropdownMenuContent
-          className="pr-m-1 pr-overflow-y-auto pr-p-0 pr-font-normal pr-text-slate-700"
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
           // Need to get over the floating window z-index 200
           style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
           onKeyDown={handleKeyDownContent}
-          align="start"
+          align={dir === 'ltr' ? 'start' : 'end'}
           ref={contentRef}
         >
-          <GoToMenuItem
-            handleSort={() => console.log('sorting')}
-            handleLocationHistory={() => console.log('location history')}
-            handleBookmarks={() => console.log('bookmarks')}
-          />
-          {BOOK_TYPE_ARRAY.map(
-            (bookType, bookTypeIndex) =>
-              fetchFilteredBooks(bookType).length > 0 && (
-                <div key={bookType}>
-                  <ShadDropdownMenuLabel className="pr-font-semibold pr-text-slate-700">
-                    {BOOK_TYPE_LABELS[bookType]}
-                  </ShadDropdownMenuLabel>
+          {/* work around until DropdownMenuContent supports a dir prop */}
+          <div className="rtl:tw-ps-2">
+            {BOOK_TYPE_ARRAY.map((bookType, bookTypeIndex) => {
+              const filteredBooks = fetchFilteredBooks(bookType);
+              return (
+                filteredBooks.length > 0 && (
+                  <div key={bookType}>
+                    <DropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
+                      {BOOK_TYPE_LABELS[bookType]}
+                    </DropdownMenuLabel>
 
-                  {fetchFilteredBooks(bookType).map((bookId) => (
-                    <div key={bookId}>
-                      <BookMenuItem
-                        bookId={bookId}
-                        handleSelectBook={() => updateReference(bookId, false)}
-                        isSelected={selectedBookId === bookId}
-                        handleHighlightBook={() => setHighlightedBookId(bookId)}
-                        handleKeyDown={handleKeyDownMenuItem}
-                        bookType={bookType}
-                        ref={(element: HTMLDivElement) => {
-                          if (selectedBookId === bookId) menuItemRef.current = element;
-                        }}
-                      >
-                        <ChapterSelect
-                          handleSelectChapter={handleSelectChapter}
-                          endChapter={fetchEndChapter(bookId)}
-                          // Without this condition- will highlight that chapterNum in every book- not just the selected book
-                          activeChapter={
-                            scrRef.bookNum === Canon.bookIdToNumber(bookId) ? scrRef.chapterNum : 0
-                          }
-                          highlightedChapter={highlightedChapter}
-                          handleHighlightedChapter={(chapterNumber: number): void => {
-                            setHighlightedChapter(chapterNumber);
+                    {filteredBooks.map((bookId) => (
+                      <div key={bookId}>
+                        <BookMenuItem
+                          bookId={bookId}
+                          handleSelectBook={() => updateReference(bookId, false)}
+                          isSelected={selectedBookId === bookId}
+                          handleHighlightBook={() => setHighlightedBookId(bookId)}
+                          handleKeyDown={handleKeyDownMenuItem}
+                          bookType={bookType}
+                          ref={(element: HTMLDivElement) => {
+                            if (selectedBookId === bookId) menuItemRef.current = element;
                           }}
-                        />
-                      </BookMenuItem>
-                    </div>
-                  ))}
-                  {BOOK_TYPE_ARRAY.length - 1 !== bookTypeIndex ? (
-                    <ShadDropdownMenuSeparator />
-                  ) : undefined}
-                </div>
-              ),
-          )}
-        </ShadDropdownMenuContent>
-      </ShadDropdownMenu>
+                        >
+                          <ChapterSelect
+                            handleSelectChapter={handleSelectChapter}
+                            endChapter={fetchEndChapter(bookId)}
+                            // Without this condition- will highlight that chapterNum in every book- not just the selected book
+                            activeChapter={scrRef.book === bookId ? scrRef.chapterNum : 0}
+                            highlightedChapter={highlightedChapter}
+                            handleHighlightedChapter={(chapterNumber: number): void => {
+                              setHighlightedChapter(chapterNumber);
+                            }}
+                          />
+                        </BookMenuItem>
+                      </div>
+                    ))}
+                    {BOOK_TYPE_ARRAY.length - 1 !== bookTypeIndex ? (
+                      <DropdownMenuSeparator />
+                    ) : undefined}
+                  </div>
+                )
+              );
+            })}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 }

@@ -1,13 +1,13 @@
 import './test-buttons-panel.component.css';
-import { Button, TextField, useEvent } from 'platform-bible-react';
+import { Button, TextField } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
 import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
 import { debounce, getErrorMessage, isString, serialize } from 'platform-bible-utils';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
-import useData from '@renderer/hooks/papi-hooks/use-data.hook';
-import useDataProvider from '@renderer/hooks/papi-hooks/use-data-provider.hook';
+import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
+import { useDataProvider } from '@renderer/hooks/papi-hooks/use-data-provider.hook';
 
 export const TAB_TYPE_BUTTONS = 'buttons';
 
@@ -74,7 +74,7 @@ const executeMany = async <T,>(fn: () => Promise<T>) => {
   }
 };
 
-export default function TestButtonsPanel() {
+export function TestButtonsPanel() {
   const [promiseReturn, setPromiseReturn] = useState('Click a button.');
   const updatePromiseReturn = useCallback(
     (state: unknown) => setPromiseReturn(isString(state) ? state : serialize(state)),
@@ -97,18 +97,6 @@ export default function TestButtonsPanel() {
       }
     },
     [updatePromiseReturn],
-  );
-
-  useEvent(
-    networkService.onDidClientConnect,
-    useCallback(
-      ({ clientId, didReconnect }) => {
-        const result = `Client with id ${clientId} ${didReconnect ? 're' : ''}connected!`;
-        logger.debug(result);
-        updatePromiseReturn(result);
-      },
-      [updatePromiseReturn],
-    ),
   );
 
   const [verseRef, setVerseRef] = useState<string>('JHN 11:35');
@@ -164,7 +152,7 @@ export default function TestButtonsPanel() {
 
   return (
     <div className="buttons-panel">
-      <div className="hello">
+      <div className="test-panel">
         <TextField
           label="Verse Ref"
           value={verseRefIntermediate}
@@ -297,7 +285,7 @@ export default function TestButtonsPanel() {
           Test
         </Button>
       </div>
-      <div className="hello">
+      <div className="test-panel">
         <div>{promiseReturn}</div>
       </div>
     </div>
@@ -311,3 +299,5 @@ export function loadButtonsTab(savedTabInfo: SavedTabInfo): TabInfo {
     content: <TestButtonsPanel />,
   };
 }
+
+export default TestButtonsPanel;

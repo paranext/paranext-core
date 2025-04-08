@@ -1,10 +1,10 @@
-using System.Text.Json;
+using System.Diagnostics;
 using Paranext.DataProvider.Checks;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.MessageTransports;
 using Paranext.DataProvider.NetworkObjects;
 using Paranext.DataProvider.Projects;
+using Paranext.DataProvider.Projects.DigitalBibleLibrary;
 using Paranext.DataProvider.Services;
+using Paranext.DataProvider.Users;
 using Paratext.Data;
 using PtxUtils;
 
@@ -17,6 +17,13 @@ public static class Program
         Console.WriteLine("Paranext data provider starting up");
         Thread.CurrentThread.Name = "Main";
 
+        var listener = new ConsoleTraceListener { TraceOutputOptions = TraceOptions.DateTime };
+        // Clear the default listeners to stop Debug.Assert from crashing the app
+        Trace.Listeners.Clear();
+        // Log all trace messages to the console
+        Trace.Listeners.Add(listener);
+        Trace.AutoFlush = true;
+
         using PapiClient papi = new();
         try
         {
@@ -26,15 +33,31 @@ public static class Program
                 return;
             }
 
+            // Log the ParatextData.dll assembly version then change it to 10.<our semver>
+            var appInfo = AppService.GetAppInfo(papi);
+            var appVersion = SemVerUtils.ConvertSemVerToVersion(appInfo.Version);
+            Console.WriteLine(
+                $"ParatextData.dll assembly version: {ParatextInfo.ParatextVersion}. Changing to {appVersion}"
+            );
+            ParatextInfo.ParatextVersion = appVersion;
+
             var paratextProjects = new LocalParatextProjects();
 
             // Adapted from Paratext's `Program.StaticInitialization`
             ParatextDataSettings.Initialize(new PersistedParatextDataSettings(papi));
             PtxUtilsDataSettings.Initialize(new PersistedPtxUtilsSettings(papi));
 
+            SettingsService.Initialize(papi);
             var paratextFactory = new ParatextProjectDataProviderFactory(papi, paratextProjects);
             var checkRunner = new CheckRunner(papi);
-            await Task.WhenAll(paratextFactory.Initialize(), checkRunner.RegisterDataProvider());
+            var dblResources = new DblResourcesDataProvider(papi);
+            var paratextRegistrationService = new ParatextRegistrationService(papi);
+            await Task.WhenAll(
+                paratextFactory.InitializeAsync(),
+                checkRunner.RegisterDataProviderAsync(),
+                dblResources.RegisterDataProviderAsync(),
+                paratextRegistrationService.InitializeAsync()
+            );
 
             // Things that only run in our "noisy dev mode" go here
             var noisyDevModeEnvVar = Environment.GetEnvironmentVariable("DEV_NOISY");
@@ -43,16 +66,16 @@ public static class Program
             {
                 var tdp = new TimeDataProvider(papi);
                 await Task.WhenAll(
-                    tdp.RegisterDataProvider(),
+                    tdp.RegisterDataProviderAsync(),
                     //TODO: Delete this once we stop including test objects in the builds
-                    papi.RegisterRequestHandler("command:test.addOne", RequestAddOne)
+                    papi.RegisterRequestHandlerAsync("command:test.addOne", RequestAddOne)
                 );
             }
 
             Console.WriteLine(
                 $"Paranext data provider ready! {(isNoisyDevMode ? " (noisy dev mode)" : "")}"
             );
-            await papi.MessageHandlingCompleteTask;
+            await papi.DisconnectTask;
             Console.WriteLine("Paranext data provider message handling complete");
         }
         finally
@@ -65,17 +88,9 @@ public static class Program
 
     #region Request handlers
 
-    private static ResponseToRequest RequestAddOne(JsonElement element)
+    private static int RequestAddOne(int value)
     {
-        if (element.GetArrayLength() != 1)
-            return ResponseToRequest.Failed("Unexpected data in request: " + element);
-
-        int intVal = ErrorUtils.IgnoreErrors(
-            "Trying to parse data from server",
-            () => element[0].GetInt32()
-        );
-
-        return ResponseToRequest.Succeeded(intVal + 1);
+        return value + 1;
     }
 
     #endregion

@@ -14,8 +14,8 @@ import {
   setWebViewStateById,
   resetWebViewStateById,
 } from '@renderer/services/web-view-state.service';
-import useWebViewState from '@renderer/hooks/use-web-view-state.hook';
-import useWebViewScrollGroupScrRef from '@renderer/hooks/use-web-view-scroll-group-scr-ref.hook';
+import { useWebViewState } from '@renderer/hooks/use-web-view-state.hook';
+import { useWebViewScrollGroupScrRef } from '@renderer/hooks/use-web-view-scroll-group-scr-ref.hook';
 import * as papiReact from '@renderer/services/papi-frontend-react.service';
 import * as platformBibleReact from 'platform-bible-react';
 import * as platformBibleUtils from 'platform-bible-utils';
@@ -31,6 +31,8 @@ declare const webpackRenderer: {
 
 // #region declare items used in `web-view.service.ts`
 
+// WARNING: This code should not be edited without serious review. For more information,
+// see https://github.com/paranext/paranext/wiki/Module-import-restrictions
 // Module types aren't compatible with each other
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const moduleMap = new Map<string, any>();
@@ -53,6 +55,9 @@ const registeredModuleList = [...moduleMap]
 /**
  * Provide a require implementation so we can provide some needed packages for extensions or for
  * packages that extensions import
+ *
+ * WARNING: This code should not be edited without serious review. For more information, see
+ * https://github.com/paranext/paranext/wiki/Module-import-restrictions
  */
 function webViewRequire(moduleName: string) {
   const module = moduleMap.get(moduleName);
@@ -72,9 +77,6 @@ type WebViewRequire = typeof webViewRequire;
 /* eslint-disable vars-on-top, no-var */
 declare global {
   var papi: Papi;
-  // @ts-expect-error ts(2300) we're declaring React here because it may not always be available in
-  // all contexts
-  var React: typeof ReactModule;
   var ReactJsxRuntime: ReactJsxRuntimeType;
   // For some reason, TypeScript throws an index signature error on assignment to
   // globalThis.ReactDOM, so this is ReactDom, not ReactDOM

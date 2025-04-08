@@ -5,7 +5,7 @@
  *
  * Note that Node doesn't have a native implementation, so this is only for the renderer.
  */
-export default class PapiRendererXMLHttpRequest implements XMLHttpRequest {
+export class PapiRendererXMLHttpRequest implements XMLHttpRequest {
   // Use "any" to match the XMLHttpRequest interface
   /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/lines-between-class-members */
   readonly DONE!: 4;
@@ -67,3 +67,5 @@ export default class PapiRendererXMLHttpRequest implements XMLHttpRequest {
     return new XMLHttpRequest();
   }
 }
+
+export default PapiRendererXMLHttpRequest;

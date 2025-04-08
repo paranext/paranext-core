@@ -1,8 +1,8 @@
-import { ProjectInterfaces } from 'papi-shared-types';
+import { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
-import { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
-import projectLookupService from '@shared/services/project-lookup.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
+import { ProjectInterfaces } from 'papi-shared-types';
 import { escapeStringRegexp } from 'platform-bible-utils';
 
 /**

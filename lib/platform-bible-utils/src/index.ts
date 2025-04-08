@@ -1,16 +1,19 @@
 // Classes
-export { default as AsyncVariable } from './async-variable';
-export { default as Collator } from './intl-collator';
-export { default as DateTimeFormat } from './intl-date-time-format';
-export { default as DocumentCombiner } from './document-combiner';
-export { default as Mutex } from './mutex';
-export { default as MutexMap } from './mutex-map';
-export { default as NonValidatingDocumentCombiner } from './non-validating-document-combiner';
-export { default as NumberFormat } from './intl-number-format';
-export { default as PlatformEventEmitter } from './platform-event-emitter.model';
-export { default as UnsubscriberAsyncList } from './unsubscriber-async-list';
+export { AsyncVariable } from './async-variable';
+export { Collator } from './intl-collator';
+export { DateTimeFormat } from './intl-date-time-format';
+export { DocumentCombiner } from './document-combiner';
+export { EventRollingTimeCounter } from './event-rolling-time-counter';
+export { Mutex } from './mutex';
+export { MutexMap } from './mutex-map';
+export { NonValidatingDocumentCombiner } from './non-validating-document-combiner';
+export { NumberFormat } from './intl-number-format';
+export { PlatformEventEmitter } from './platform-event-emitter.model';
+export { PromiseChainingMap } from './promise-chaining-map';
+export { UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
+export { PLATFORM_ERROR_VERSION } from './platform-error';
 export {
   getChaptersForBook,
   offsetBook,
@@ -22,26 +25,33 @@ export {
   FIRST_SCR_VERSE_NUM,
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
+  defaultScrRef,
 } from './scripture-util';
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
+export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';
 
 // Functions
 export {
-  newGuid,
-  isString,
-  deepClone,
+  createSyncProxyForAsyncObject,
   debounce,
-  groupBy,
+  deepClone,
+  getAllObjectFunctionNames,
   getErrorMessage,
+  groupBy,
+  isErrorMessageAboutParatextBlockingInternetAccess,
+  isErrorMessageAboutRegistryAuthFailure,
+  isString,
+  newGuid,
   wait,
   waitForDuration,
-  getAllObjectFunctionNames,
-  createSyncProxyForAsyncObject,
 } from './util';
 export {
+  areUsjContentsEqualExceptWhitespace,
   compareScrRefs,
   formatScrRef,
   getLocalizedIdFromBookNumber,
+  normalizeScriptureSpaces,
+  scrRefToBBBCCC,
   scrRefToBBBCCCVVV,
 } from './scripture-util';
 export {
@@ -51,6 +61,7 @@ export {
   endsWith,
   escapeStringRegexp,
   formatReplacementString,
+  formatReplacementStringToArray,
   includes,
   indexOf,
   isLocalizeKey,
@@ -64,16 +75,20 @@ export {
   startsWith,
   substring,
   toArray,
+  toKebabCase,
   ordinalCompare,
   transformAndEnsureRegExpRegExpArray,
   transformAndEnsureRegExpArray,
+  isWhiteSpace,
 } from './string-util';
+export { newPlatformError, isPlatformError } from './platform-error';
 export { default as deepEqual } from './equality-checking';
 export { default as isSubset } from './subset-checking';
 export { serialize, deserialize, isSerializable, htmlEncode } from './serialization';
 export { default as getCurrentLocale } from './intl-util';
 export { default as formatBytes } from './number-utils';
 export { default as ensureArray } from './array-util';
+export { default as formatTimeSpan } from './date-time-format-util';
 
 // Types
 export type { DeepPartial, ReplaceType, UnionToIntersection } from './util';
@@ -83,10 +98,10 @@ export type {
   CannotHaveOnDidDispose,
   CanHaveOnDidDispose,
 } from './disposal.model';
+export type { PlatformError } from './platform-error';
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
 export type {
   BookInfo,
-  ScriptureReference,
   ScrollGroupId,
   ScriptureNode,
   ScriptureSelection,
@@ -124,6 +139,7 @@ export type {
   Localized,
 } from './menus.model';
 export { menuDocumentSchema } from './menus.model';
+export type { DblResourceData, ResourceType } from './resources.model';
 export type {
   ExtensionControlledProjectSetting,
   ExtensionControlledSetting,
@@ -146,3 +162,9 @@ export type {
   UserStateContribution,
 } from './settings.model';
 export { projectSettingsDocumentSchema, settingsDocumentSchema } from './settings.model';
+export type {
+  IUsjReaderWriter,
+  UsjContentLocation,
+  VerseRefOffset,
+} from './usj-reader-writer.model';
+export { default as UsjReaderWriter } from './usj-reader-writer';

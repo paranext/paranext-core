@@ -10,14 +10,15 @@ import {
   SortingState,
   ColumnDef as TSColumnDef,
   Row as TSRow,
+  RowSelectionState as TSRowSelectionState,
   SortDirection as TSSortDirection,
   Table as TSTable,
   useReactTable,
   VisibilityState,
 } from '@tanstack/react-table';
 
-import DataTableViewOptions from '@/components/advanced/data-table/data-table-column-toggle.component';
-import DataTablePagination from '@/components/advanced/data-table/data-table-pagination.component';
+import { DataTableViewOptions } from '@/components/advanced/data-table/data-table-column-toggle.component';
+import { DataTablePagination } from '@/components/advanced/data-table/data-table-pagination.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Table,
@@ -32,6 +33,7 @@ export type ColumnDef<TData, TValue = unknown> = TSColumnDef<TData, TValue>;
 export type RowContents<TData> = TSRow<TData>;
 export type TableContents<TData> = TSTable<TData>;
 export type SortDirection = TSSortDirection;
+export type RowSelectionState = TSRowSelectionState;
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -47,7 +49,7 @@ interface DataTableProps<TData, TValue> {
  * Feature-rich table component that infuses our basic shadcn-based Table component with features
  * from TanStack's React Table library
  */
-function DataTable<TData, TValue>({
+export function DataTable<TData, TValue>({
   columns,
   data,
   enablePagination = false,
@@ -81,7 +83,7 @@ function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="pr-twp pr-font-sans">
+    <div className="pr-twp">
       {showColumnVisibilityControls && <DataTableViewOptions table={table} />}
       <Table stickyHeader={stickyHeader}>
         <TableHeader stickyHeader={stickyHeader}>
@@ -116,7 +118,7 @@ function DataTable<TData, TValue>({
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={columns.length} className="pr-h-24 pr-text-center">
+              <TableCell colSpan={columns.length} className="tw-h-24 tw-text-center">
                 No results.
               </TableCell>
             </TableRow>
@@ -124,7 +126,7 @@ function DataTable<TData, TValue>({
         </TableBody>
       </Table>
       {enablePagination && (
-        <div className="pr-flex pr-items-center pr-justify-end pr-space-x-2 pr-py-4">
+        <div className="tw-flex tw-items-center tw-justify-end tw-space-x-2 tw-py-4">
           <Button
             variant="outline"
             size="sm"

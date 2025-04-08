@@ -1,6 +1,4 @@
-/* eslint-disable import/first */
-jest.mock('../../../shared/services/logger.service');
-
+import { vi } from 'vitest';
 import DockLayout from 'rc-dock';
 import { anything, instance, mock, verify, when } from 'ts-mockito';
 import {
@@ -10,7 +8,8 @@ import {
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
 import { addTabToDock, addWebViewToDock, loadTab } from './platform-dock-layout-storage.util';
-/* eslint-enable */
+
+vi.mock('../../../shared/services/logger.service');
 
 describe('Dock Layout Component', () => {
   const mockDockLayout = mock(DockLayout);

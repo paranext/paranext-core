@@ -1,6 +1,7 @@
 import { MutableRefObject, ReactNode } from 'react';
 import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
+import { LocalizeKey } from 'platform-bible-utils';
 
 /**
  * Saved information used to recreate a tab.
@@ -30,11 +31,14 @@ export type TabInfo = SavedTabInfo & {
   /**
    * Url of image to show on the title bar of the tab
    *
-   * Defaults to Platform.Bible logo
+   * Defaults to the software's standard logo.
    */
   tabIconUrl?: string;
-  /** Text to show on the title bar of the tab */
-  tabTitle: string;
+  /**
+   * Text to show (or a localizeKey that will automatically be localized) on the title bar of the
+   * tab
+   */
+  tabTitle: string | LocalizeKey;
   /** Text to show when hovering over the title bar of the tab */
   tabTooltip?: string;
   /** Content to show inside the tab. */
@@ -115,11 +119,23 @@ export type Layout = TabLayout | FloatLayout | PanelLayout;
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;
 
-/** Rc-dock's onLayoutChange prop made asynchronous - resolves */
+/**
+ * Rc-dock's onLayoutChange prop made asynchronous with `webViewDefinition` added. The dock layout
+ * component calls this on the web view service when the layout changes.
+ *
+ * @param newLayout The changed layout to save.
+ * @param currentTabId The tab being changed
+ * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
+ *   the word "direction" here loosely)
+ * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
+ *   otherwise
+ * @returns Promise that resolves when finished doing things
+ */
 export type OnLayoutChangeRCDock = (
   newLayout: LayoutBase,
   currentTabId?: string,
   direction?: DropDirection,
+  webViewDefinition?: WebViewDefinition,
 ) => Promise<void>;
 
 /** Properties related to the dock layout */

@@ -6,12 +6,13 @@ import {
 } from '@/components/basics/tabs-vertical';
 import { Button } from '@/components/shadcn-ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-export default function TabExamples({ direction }: HasDirection) {
+export function TabExamples() {
+  const dir: Direction = readDirection();
   return (
     <>
-      <Tabs defaultValue="2-youShouldNotSeeThis" dir={direction}>
+      <Tabs defaultValue="2-youShouldNotSeeThis" dir={dir}>
         <TabsList>
           <TabsTrigger value="1">
             <Button>non-text tab trigger</Button>
@@ -23,8 +24,8 @@ export default function TabExamples({ direction }: HasDirection) {
         <TabsContent value="2-youShouldNotSeeThis">Tab 2 Content</TabsContent>
         {/* intentionally left out 3 to see the effect */}
       </Tabs>
-      <hr className="pr-my-4" />
-      <VerticalTabs defaultValue="2-youShouldNotSeeThis" dir={direction}>
+      <hr className="tw-my-4" />
+      <VerticalTabs defaultValue="2-youShouldNotSeeThis">
         <VerticalTabsList>
           <VerticalTabsTrigger value="1">
             <Button>non-text tab trigger</Button>
@@ -37,7 +38,7 @@ export default function TabExamples({ direction }: HasDirection) {
         <VerticalTabsContent value="2-youShouldNotSeeThis">
           <div>
             Tab 2 Content: Another set of vertical tabs without a default value
-            <VerticalTabs dir={direction}>
+            <VerticalTabs>
               <VerticalTabsList>
                 <VerticalTabsTrigger value="1">Tab 2-1</VerticalTabsTrigger>
                 <VerticalTabsTrigger value="2">Tab 2-2</VerticalTabsTrigger>
@@ -53,3 +54,5 @@ export default function TabExamples({ direction }: HasDirection) {
     </>
   );
 }
+
+export default TabExamples;

@@ -1,6 +1,6 @@
 import { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio, spawn } from 'child_process';
 import path from 'path';
-import logger, { formatLog } from '@shared/services/logger.service';
+import { formatLog, logger } from '@shared/services/logger.service';
 import { waitForDuration } from 'platform-bible-utils';
 
 /** Pretty name for the process this service manages. Used in logs */
@@ -98,9 +98,10 @@ function startDotnetDataProvider() {
   });
 }
 
-const dotnetDataProvider = {
+export const dotnetDataProvider = {
   start: startDotnetDataProvider,
   kill: killDotnetDataProvider,
   waitForClose: waitForDotnetDataProvider,
 };
+
 export default dotnetDataProvider;

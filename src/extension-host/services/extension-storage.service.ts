@@ -6,8 +6,8 @@ import {
   deleteFile,
 } from '@node/services/node-file-system.service';
 import { ExecutionToken } from '@node/models/execution-token.model';
-import executionTokenService from '@node/services/execution-token.service';
-import { Buffer } from 'buffer';
+import { executionTokenService } from '@node/services/execution-token.service';
+import { Buffer } from 'node:buffer';
 import { stringLength, includes } from 'platform-bible-utils';
 
 // #region Functions that need to be called by other services to initialize this service
@@ -30,7 +30,7 @@ export function setExtensionUris(urisPerExtension: Map<string, string>) {
 function isValidFileOrDirectoryName(name: string): boolean {
   // Regex with no match returns null
   // eslint-disable-next-line no-null/no-null
-  return name.match(/^[\w\d-_.()/\\]*$/) !== null;
+  return /^[\w\d-_.()/\\]*$/.exec(name) !== null;
 }
 
 /** Replace any characters that are not alphanumeric or one of the following: -_.() */
@@ -167,7 +167,7 @@ export interface ExtensionStorageService {
  * the extension identity and current user (as identified by the OS). This service will not work
  * within the renderer.
  */
-const extensionStorageService: ExtensionStorageService = {
+export const extensionStorageService: ExtensionStorageService = {
   readTextFileFromInstallDirectory,
   readBinaryFileFromInstallDirectory,
   readUserData,

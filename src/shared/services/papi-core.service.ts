@@ -5,7 +5,17 @@ export default core;
 export type { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 export type { ExecutionToken } from '@node/models/execution-token.model';
 export type { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
-export type { ManageExtensions } from '@shared/models/manage-extensions-privilege.model';
+export type {
+  ExtensionIdentifier,
+  HashValues,
+  InstalledExtensions,
+  ManageExtensions,
+} from '@shared/models/manage-extensions-privilege.model';
+export type {
+  HandleUri,
+  RegisterUriHandler,
+  UriHandler,
+} from '@shared/models/handle-uri-privilege.model';
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export type {
@@ -20,6 +30,14 @@ export type {
 export type { WithNotifyUpdate } from '@shared/models/data-provider-engine.model';
 export type { default as IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 export type { DialogOptions } from '@shared/models/dialog-options.model';
+export type { NetworkableObject, NetworkObject } from '@shared/models/network-object.model';
+export type { PlatformNotification } from '@shared/models/notification.service-model';
+export type {
+  Components as ComponentsDocumentation,
+  MethodDocumentationWithoutName,
+  NetworkObjectDocumentation,
+  SingleMethodDocumentation,
+} from '@shared/models/openrpc.model';
 export type {
   ExtensionDataScope,
   MandatoryProjectDataTypes,
@@ -42,6 +60,7 @@ export type {
   LocalizationSelectors,
 } from '@shared/services/localization.service-model';
 export type { NetworkObjectDetails } from '@shared/models/network-object.model';
+export type { AppInfo } from '@shared/services/app.service-model';
 export type { SettingValidator } from '@shared/services/settings.service-model';
 export type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 export type {
@@ -53,7 +72,10 @@ export type {
   WebViewDefinition,
   WebViewProps,
 } from '@shared/models/web-view.model';
-export type { IWebViewProvider } from '@shared/models/web-view-provider.model';
+export type {
+  IDisposableWebViewProvider,
+  IWebViewProvider,
+} from '@shared/models/web-view-provider.model';
 export type {
   SimultaneousProjectSettingsChanges,
   ProjectSettingValidator,

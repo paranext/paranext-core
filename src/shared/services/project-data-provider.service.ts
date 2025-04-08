@@ -4,7 +4,7 @@ import {
   ProjectDataProviderInterfaces,
 } from 'papi-shared-types';
 import { IProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import { getByType, registerEngineByType } from '@shared/services/data-provider.service';
 import { newNonce } from '@shared/utils/util';
 import {
@@ -13,11 +13,12 @@ import {
   UnionToIntersection,
   UnsubscriberAsyncList,
 } from 'platform-bible-utils';
-import IProjectDataProviderFactory, {
+import {
+  IProjectDataProviderFactory,
   PDP_FACTORY_OBJECT_TYPE,
   ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
-import projectLookupService from '@shared/services/project-lookup.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
 import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
 import { getPDPFactoryNetworkObjectNameFromId } from '@shared/models/project-lookup.service-model';
@@ -149,7 +150,7 @@ export async function registerProjectDataProviderEngineFactory<
  *
  * ```typescript
  * const pdp = await get('platformScripture.USFM_Verse', 'ProjectID12345');
- * pdp.getVerseUSFM(new VerseRef('JHN', '1', '1'));
+ * pdp.getVerseUSFM({ book: 'JHN', chapterNum: 1, verseNum: 1 });
  * ```
  *
  * @param projectInterface `projectInterface` that the project to load must support. The TypeScript

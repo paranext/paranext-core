@@ -1,6 +1,6 @@
 import { FloatSize, TabLoader, TabSaver } from '@shared/models/docking-framework.model';
 import { DialogData } from '@shared/models/dialog-options.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { ReactElement, createElement } from 'react';
 import { serialize } from 'platform-bible-utils';
 
@@ -146,7 +146,7 @@ export function hookUpDialogService({
  * to a nonexistent `Component`. Instead of inheriting this as a class, any dialog definition can
  * spread this `{ ...DIALOG_BASE }`
  */
-const DIALOG_BASE: DialogDefinitionBase = {
+export const DIALOG_BASE: DialogDefinitionBase = {
   initialSize: DIALOG_DEFAULT_SIZE,
   loadDialog(savedTabInfo) {
     // Assert the more specific type.

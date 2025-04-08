@@ -1,12 +1,13 @@
-import InstallButton from '@/components/advanced/extension-marketplace/buttons/install-button.component';
-import DisableButton from '@/components/advanced/extension-marketplace/buttons/disable-button.component';
-import UpdateButton from '@/components/advanced/extension-marketplace/buttons/update-button.component';
-import EnableButton from '@/components/advanced/extension-marketplace/buttons/enable-button.component';
-import FilterDropdown, {
+import { InstallButton } from '@/components/advanced/extension-marketplace/buttons/install-button.component';
+import { DisableButton } from '@/components/advanced/extension-marketplace/buttons/disable-button.component';
+import { UpdateButton } from '@/components/advanced/extension-marketplace/buttons/update-button.component';
+import { EnableButton } from '@/components/advanced/extension-marketplace/buttons/enable-button.component';
+import {
   DropdownMenuItemType,
+  FilterDropdown,
 } from '@/components/advanced/extension-marketplace/filter-dropdown.component';
 
-export default function MarketplaceButtonExamples() {
+export function MarketplaceButtonExamples() {
   const publisherFilterItems = ['All', 'Verified', 'Experimental'];
 
   const filterGroup = {
@@ -32,37 +33,39 @@ export default function MarketplaceButtonExamples() {
     ],
   };
   return (
-    <>
+    <div>
       <p>
         Note: These buttons are currently styled with fixed colors and are therefore not theme-able
       </p>
       <br />
       FilterButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <FilterDropdown groups={[filterGroup, sortGroup]} />
       </div>
       InstallButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <InstallButton isInstalling={false} handleClick={() => {}} buttonText="Get" />
         <InstallButton isInstalling handleClick={() => {}} buttonText="Get" />
         <InstallButton isInstalling={false} handleClick={() => {}} />
         <InstallButton isInstalling handleClick={() => {}} />
       </div>
       DisableButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <DisableButton isDisabling={false} handleClick={() => {}} />
         <DisableButton isDisabling handleClick={() => {}} />
       </div>
       EnableButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <EnableButton isEnabling={false} handleClick={() => {}} />
         <EnableButton isEnabling handleClick={() => {}} />
       </div>
       UpdateButton Button:
-      <div className="pr-space-x-2">
+      <div className="tw-flex tw-gap-x-2">
         <UpdateButton isUpdating={false} handleClick={() => {}} />
         <UpdateButton isUpdating handleClick={() => {}} />
       </div>
-    </>
+    </div>
   );
 }
+
+export default MarketplaceButtonExamples;

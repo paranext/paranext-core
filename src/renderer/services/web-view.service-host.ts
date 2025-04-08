@@ -22,7 +22,6 @@ import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
   GetWebViewOptions,
   SavedWebViewDefinition,
-  WebViewContentType,
   WebViewDefinition,
   WebViewDefinitionReact,
   WebViewDefinitionUpdateInfo,
@@ -31,6 +30,7 @@ import {
   WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
   SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
   SavedWebViewDefinitionOmittedKeys,
+  WEB_VIEW_CONTENT_TYPE,
 } from '@shared/models/web-view.model';
 import {
   Layout,
@@ -40,20 +40,24 @@ import {
   TabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import webViewProviderService from '@shared/services/web-view-provider.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
 import { LayoutBase } from 'rc-dock';
-import logger from '@shared/services/logger.service';
-import LogError from '@shared/log-error.model';
+import { logger } from '@shared/services/logger.service';
+import { LogError } from '@shared/log-error.model';
 import memoizeOne from 'memoize-one';
 import {
-  AddWebViewEvent,
+  OpenWebViewEvent,
+  CloseWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
+  getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
   UpdateWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
-import networkObjectService from '@shared/services/network-object.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   getFullWebViewStateById,
   setFullWebViewStateById,
@@ -62,25 +66,58 @@ import { registerCommand } from '@shared/services/command.service';
 import { CommandNames } from 'papi-shared-types';
 import {
   type SettingsTabData,
-  TAB_TYPE_PROJECT_SETTINGS_TAB,
-  TAB_TYPE_USER_SETTINGS_TAB,
+  TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
+import { SCROLLBAR_STYLES, THEME } from '@renderer/theme';
 
-/** Emitter for when a webview is added */
-const onDidAddWebViewEmitter = createNetworkEventEmitter<AddWebViewEvent>(
+/**
+ * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
+ *   support anyone listening to this event over websocket
+ */
+const onDidAddWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
 );
 
-/** Event that emits with webView info when a webView is added */
-export const onDidAddWebView = onDidAddWebViewEmitter.event;
+/** Emitter for when a webview is created */
+const onDidOpenWebViewEmitter = createNetworkEventEmitter<OpenWebViewEvent>(
+  EVENT_NAME_ON_DID_OPEN_WEB_VIEW,
+);
+
+/**
+ * Emits an event for when a web view is created
+ *
+ * Actually emits two updates to support backwards compatibility with deprecated
+ * {@link onDidAddWebViewEmitter}, but this will likely be removed at some point
+ */
+function emitOnDidOpenWebView(event: OpenWebViewEvent) {
+  onDidAddWebViewEmitter.emit(event);
+  onDidOpenWebViewEmitter.emit(event);
+}
+
+/** Event that emits with webView info when a webView is created */
+export const onDidOpenWebView = onDidOpenWebViewEmitter.event;
 
 /** Emitter for when a webview is updated */
 const onDidUpdateWebViewEmitter = createNetworkEventEmitter<UpdateWebViewEvent>(
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
 );
 
-/** Event that emits with webView info when a webView is added */
+/** Event that emits with webView info when a webView is updated */
 export const onDidUpdateWebView = onDidUpdateWebViewEmitter.event;
+
+/** Emitter for when a webview is removed */
+const onDidCloseWebViewEmitter = createNetworkEventEmitter<CloseWebViewEvent>(
+  EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
+);
+
+/** Event that emits with webView info when a webView is removed */
+export const onDidCloseWebView = onDidCloseWebViewEmitter.event;
+
+/**
+ * Alias for `window.open` because `window.open` is deleted to prevent web views from accessing it.
+ * Do not give web views access to this function
+ */
+export const openWindow = window.open.bind(window);
 
 // #region Security
 
@@ -508,13 +545,26 @@ function setDockLayout(dockLayout: PapiDockLayout | undefined): void {
 }
 
 /**
- * When rc-dock detects a changed layout, save it. This function is given to the registered
- * papiDockLayout to run when the dock layout changes.
+ * When rc-dock detects a changed layout, save it and do other processing as needed. This function
+ * is given to the registered papiDockLayout to run when the dock layout changes.
  *
  * @param newLayout The changed layout to save.
+ * @param _currentTabId The tab being changed
+ * @param direction The direction the tab is being moved (or deleted or other things - RCDock uses
+ *   the word "direction" here loosely)
+ * @param webViewDefinition The web view definition if the edit was on a web view; `undefined`
+ *   otherwise
  */
 // TODO: We could filter whether we need to save based on the `direction` argument. - IJH 2023-05-1
-const onLayoutChange: OnLayoutChangeRCDock = async (newLayout) => {
+const onLayoutChange: OnLayoutChangeRCDock = async (
+  newLayout,
+  _currentTabId,
+  direction,
+  webViewDefinition,
+) => {
+  if (direction === 'remove' && webViewDefinition)
+    onDidCloseWebViewEmitter.emit({ webView: convertWebViewDefinitionToSaved(webViewDefinition) });
+
   return saveLayout(newLayout);
 };
 
@@ -613,12 +663,12 @@ export const addTab = async <TData = unknown>(
 };
 
 /**
- * Remove a tab in the layout
+ * Closes a tab in the layout
  *
- * @param tabId ID of the tab to remove
- * @returns True if successfully found the tab to remove
+ * @param tabId ID of the tab to close
+ * @returns True if successfully found the tab to close
  */
-export const removeTab = async (tabId: string): Promise<boolean> => {
+export const closeTab = async (tabId: string): Promise<boolean> => {
   return (await getDockLayout()).removeTabFromDock(tabId);
 };
 
@@ -650,7 +700,7 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
  * @throws If the papi dock layout has not been registered
  */
 export function updateWebViewDefinitionSync(
-  webViewId: string,
+  webViewId: WebViewId,
   webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
 ): boolean {
   const didUpdateWebView = getDockLayoutSync().updateWebViewDefinition(
@@ -726,8 +776,8 @@ export function convertWebViewDefinitionToSaved(
 }
 
 /** Explanation in web-view.service-model.ts */
-async function getSavedWebViewDefinition(
-  webViewId: string,
+async function getOpenWebViewDefinition(
+  webViewId: WebViewId,
 ): Promise<SavedWebViewDefinition | undefined> {
   const webViewDefinition = (await getDockLayout()).getWebViewDefinition(webViewId);
   if (webViewDefinition === undefined) return undefined;
@@ -744,7 +794,7 @@ async function getSavedWebViewDefinition(
  * @throws If the papi dock layout has not been registered
  */
 export function getSavedWebViewDefinitionSync(
-  webViewId: string,
+  webViewId: WebViewId,
 ): SavedWebViewDefinition | undefined {
   const webViewDefinition = getDockLayoutSync().getWebViewDefinition(webViewId);
   if (webViewDefinition === undefined) return undefined;
@@ -767,14 +817,75 @@ function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOption
 
 // #endregion
 
-// #region Set up global variables to use in `getWebView`'s `imports` below
+// #region webViewNonce
+
+/**
+ * Map of web view id to `webViewNonce` for that web view. `webViewNonce`s are used to perform
+ * privileged interactions with the web view such as `papi.webViewProviders.postMessageToWebView`.
+ * The web view service generates this nonce and sends it _only_ to the web view provider that
+ * creates the web view. It is generally recommended that this web view provider not share this
+ * nonce with anyone else but only use it within itself and in the web view controller created for
+ * this web view if applicable (See `papi.webViewProviders.registerWebViewController`)
+ */
+const webViewNoncesById = new Map<WebViewId, string>();
+
+/**
+ * Get an existing `webViewNonce` or generate one if one did not already exist.
+ *
+ * WARNING: DO NOT SHARE THIS VALUE. `webViewNonce`s are PRIVILEGED INFORMATION and are not to be
+ * shared except with the web view provider that creates a web view. See {@link webViewNoncesById}
+ * for more info.
+ */
+function getWebViewNonce(id: WebViewId) {
+  const existingNonce = webViewNoncesById.get(id);
+
+  if (existingNonce) return existingNonce;
+
+  const nonce = newNonce();
+  webViewNoncesById.set(id, nonce);
+
+  return nonce;
+}
+
+/**
+ * Determine whether a nonce is valid for a specific web view
+ *
+ * @param id Id of the web view whose nonce to check against
+ * @param webViewNonce Nonce to test against the real web view nonce. See {@link webViewNoncesById}
+ *   for more info.
+ * @returns `true` if the provided `webViewNonce` is correct and valid; `false` otherwise
+ */
+export function isWebViewNonceCorrect(id: WebViewId, webViewNonce: string) {
+  return webViewNonce === getWebViewNonce(id);
+}
+
+/**
+ * Delete a web view nonce. Should be done when the web view is closed.
+ *
+ * @returns `true` if successfully deleted a nonce for this id; `false` if there was not a nonce for
+ *   this id
+ */
+function deleteWebViewNonce(id: WebViewId) {
+  return webViewNoncesById.delete(id);
+}
+
+onDidCloseWebView(({ webView: { id, webViewType } }) => {
+  if (!deleteWebViewNonce(id))
+    logger.warn(
+      `Tried to delete webViewNonce for web view with id ${id} (type ${webViewType}), but a nonce was not found. May not be an issue, but worth investigating`,
+    );
+});
+
+// #endregion
+
+// #region Set up global variables to use in `openWebView`'s `imports` below
 
 globalThis.getSavedWebViewDefinitionById = getSavedWebViewDefinitionSync;
 globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 
 // #endregion
 
-// #region getWebView
+// #region openWebView
 
 /**
  * Creates a new web view or gets an existing one depending on if you request an existing one and if
@@ -788,7 +899,7 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
  *   not create a WebView for this request.
  * @throws If something went wrong like the provider for the webViewType was not found
  */
-export const getWebView = async (
+export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
   options: GetWebViewOptions = {},
@@ -799,7 +910,7 @@ export const getWebView = async (
   // to the renderer, then search for an existing webview, then get the webview
 
   // Get the webview definition from the webview provider
-  const webViewProvider = await webViewProviderService.get(webViewType);
+  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
 
   if (!webViewProvider)
     throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
@@ -846,17 +957,24 @@ export const getWebView = async (
   }
 
   // Create the new webview or load if it already existed
-  const webView = await webViewProvider.getWebView(existingSavedWebView, optionsDefaulted);
+  const webView = await webViewProvider.getWebView(
+    existingSavedWebView,
+    optionsDefaulted,
+    getWebViewNonce(existingSavedWebView.id),
+  );
 
   // The web view provider didn't want to create this web view
-  if (!webView) return undefined;
+  if (!webView) {
+    deleteWebViewNonce(existingSavedWebView.id);
+    return undefined;
+  }
 
   // Set up WebViewDefinition default values
   /** WebView.contentType is assumed to be React by default. Extensions can specify otherwise */
-  const contentType = webView.contentType ? webView.contentType : WebViewContentType.React;
-  /** Default allowScripts to false for WebViewContentType.URL and true otherwise */
+  const contentType = webView.contentType ? webView.contentType : WEB_VIEW_CONTENT_TYPE.REACT;
+  /** Default allowScripts to false for WEB_VIEW_CONTENT_TYPE.URL and true otherwise */
   let { allowScripts } = webView;
-  if (contentType !== WebViewContentType.URL) allowScripts = webView.allowScripts ?? true;
+  if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) allowScripts = webView.allowScripts ?? true;
   /** Default allowSameOrigin to true */
   const allowSameOrigin = webView.allowSameOrigin ?? true;
   /**
@@ -865,7 +983,7 @@ export const getWebView = async (
    * WebView. For URL WebViews, this controls what urls the WebView can be.
    */
   let { allowedFrameSources } = webView;
-  if (contentType !== WebViewContentType.URL && allowedFrameSources)
+  if (contentType !== WEB_VIEW_CONTENT_TYPE.URL && allowedFrameSources)
     allowedFrameSources = allowedFrameSources.filter(
       (hostValue) => startsWith(hostValue, 'https:') || startsWith(hostValue, 'papi-extension:'),
     );
@@ -874,7 +992,7 @@ export const getWebView = async (
   // If this is a URL WebView, it must match at least one of its `allowedFrameSources` Regex strings
   // if any are supplied
   if (
-    contentType === WebViewContentType.URL &&
+    contentType === WEB_VIEW_CONTENT_TYPE.URL &&
     allowedFrameSources &&
     !allowedFrameSources.some((regexString) => new RegExp(regexString).test(webView.content))
   )
@@ -910,6 +1028,7 @@ export const getWebView = async (
   var getWebViewStateById = window.parent.getWebViewStateById;
   var setWebViewStateById = window.parent.setWebViewStateById;
   var resetWebViewStateById = window.parent.resetWebViewStateById;
+  window.webViewId = '${webView.id}';
   window.getWebViewState = (stateKey, defaultValue) => { return getWebViewStateById('${webView.id}', stateKey, defaultValue) };
   window.setWebViewState = (stateKey, stateValue) => { setWebViewStateById('${webView.id}', stateKey, stateValue) };
   window.resetWebViewState = (stateKey) => { resetWebViewStateById('${webView.id}', stateKey) };
@@ -939,15 +1058,15 @@ export const getWebView = async (
   /** CSP for allowing only certain scripts and styles */
   let specificSrcPolicy: string;
   switch (contentType) {
-    case WebViewContentType.HTML:
+    case WEB_VIEW_CONTENT_TYPE.HTML:
       // Add wrapping to turn a plain string into an iframe
       webViewContent = webView.content.includes('<html')
         ? webView.content
-        : `<html><head></head><body>${webView.content}</body></html>`;
+        : `<html><head><style>${SCROLLBAR_STYLES}</style></head><body>${webView.content}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
-    case WebViewContentType.URL:
+    case WEB_VIEW_CONTENT_TYPE.URL:
       webViewContent = webView.content;
       // CSP does not apply to these webViews. If we ever add a `csp` attribute to WebView iframes,
       // we might need to add this URL's schema to the CSP
@@ -967,12 +1086,16 @@ export const getWebView = async (
             ${
               reactWebView.styles
                 ? `<style nonce="${srcNonce}">
+              /* extension styles */
               ${reactWebView.styles}
             </style>`
                 : ''
             }
+            <style>
+              ${SCROLLBAR_STYLES}
+            </style>
           </head>
-          <body>
+          <body class="${THEME}">
             <div id="root">
             </div>
             <script nonce="${srcNonce}">${reactWebView.content}
@@ -1113,7 +1236,7 @@ export const getWebView = async (
   const headEnd = indexOf(webViewContent, '>', headStart);
 
   // Inject the CSP and import scripts into the html if it is not a URL iframe
-  if (contentType !== WebViewContentType.URL)
+  if (contentType !== WEB_VIEW_CONTENT_TYPE.URL)
     webViewContent = `${substring(webViewContent, 0, headEnd + 1)}
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
@@ -1134,7 +1257,7 @@ export const getWebView = async (
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
   if (finalLayout)
-    onDidAddWebViewEmitter.emit({
+    emitOnDidOpenWebView({
       webView: convertWebViewDefinitionToSaved(finalWebView),
       layout: finalLayout,
     });
@@ -1285,47 +1408,33 @@ export const initialize = () => {
 // #endregion
 
 const papiWebViewService: WebViewServiceType = {
-  onDidAddWebView,
+  onDidAddWebView: onDidOpenWebView,
+  onDidOpenWebView,
   onDidUpdateWebView,
-  getWebView,
-  getSavedWebViewDefinition,
+  onDidCloseWebView,
+  getWebView: openWebView,
+  openWebView,
+  getSavedWebViewDefinition: getOpenWebViewDefinition,
+  getOpenWebViewDefinition,
+  getWebViewController,
 };
 
-async function openProjectSettingsTab(webViewId: string): Promise<Layout | undefined> {
+async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined> {
   const settingsTabId = newGuid();
-  const projectIdFromWebView = (await getSavedWebViewDefinition(webViewId))?.projectId;
-
-  if (!projectIdFromWebView) return undefined;
+  const projectIdFromWebView = (await getOpenWebViewDefinition(webViewId))?.projectId;
 
   return addTab<SettingsTabData>(
     {
       id: settingsTabId,
-      tabType: TAB_TYPE_PROJECT_SETTINGS_TAB,
+      tabType: TAB_TYPE_SETTINGS_TAB,
       data: {
-        projectId: projectIdFromWebView,
+        projectIdToLimitSettings: projectIdFromWebView,
       },
     },
     {
       type: 'float',
       position: 'center',
-      floatSize: { height: 400, width: 500 },
-    },
-  );
-}
-
-async function openUserSettingsTab(): Promise<Layout | undefined> {
-  const settingsTabId = newGuid();
-
-  return addTab<SettingsTabData>(
-    {
-      id: settingsTabId,
-      tabType: TAB_TYPE_USER_SETTINGS_TAB,
-      data: {},
-    },
-    {
-      type: 'float',
-      position: 'center',
-      floatSize: { height: 400, width: 500 },
+      floatSize: { height: 600, width: 1000 },
     },
   );
 }
@@ -1342,8 +1451,9 @@ export async function startWebViewService(): Promise<void> {
   // This map should allow any functions because commands can be any function type
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const commandHandlers: { [commandName: string]: (...args: any[]) => any } = {
-    'platform.openProjectSettings': openProjectSettingsTab,
-    'platform.openUserSettings': openUserSettingsTab,
+    'platform.openSettings': openSettingsTab,
+    'platform.openProjectSettings': openSettingsTab,
+    'platform.openUserSettings': openSettingsTab,
   };
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {

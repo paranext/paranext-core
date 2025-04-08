@@ -3,7 +3,7 @@
 Extensible Bible translation software
 
 <div align="center">
-  <img src="doc-meta/doc-icon.png" />
+  <img src="./assets/icon.svg" width="256" alt="Platform icon" />
 </div>
 
 <div align="center">
@@ -16,39 +16,43 @@ Extensible Bible translation software
 
 ## Summary
 
-Platform.Bible is an extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
+Platform.Bible is extensible Bible translation software. Its functionality is provided almost completely by extensions in order to be very powerful and flexible, giving developers the freedom to create and to share their desired Bible translation experience.
 
-This repository contains the core Platform.Bible software (Electron client, extension host including "PAPI", and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional Platform.Bible extensions.
+This repository contains the core Platform.Bible software (Electron client, extension host including the Platform API (PAPI), and .NET library) and the extensions that come bundled with it. There are many other repositories containing additional extensions.
 
 ## Users
 
 This software is not yet ready for users. We'll update here with where you can install it when it is ready.
 
-If you would still like to try Platform.Bible, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
+If you would still like to try it, you can [download early releases here on GitHub](https://github.com/paranext/paranext-core/releases).
 
 ### Linux Users
 
-To use `.AppImage` files in Linux, [install FUSE](https://github.com/AppImage/AppImageKit/wiki/FUSE) (you only need to do this once), for example, on Ubuntu (>= 22.04):
+We produce [`snap` packages](<https://en.wikipedia.org/wiki/Snap_(software)>) available [on the snap store](https://snapcraft.io/platform-bible) for users to run our
+software on Linux. Once you have all the `snap` tools installed for your flavor of Linux, run `sudo snap install platform-bible` for our most recent stable build (none yet) or `sudo snap install platform-bible --channel=edge` for our most recent, pre-release build that has passed our limited, automated testing suite.
 
-```bash
-sudo apt install libfuse2
+To install a locally created `snap` package, run the following commands:
+
+```sh
+sudo snap install <path to snap file> --dangerous
+sudo snap connect platform-bible:dot-platform-bible
 ```
 
-Then simply [execute/run](https://github.com/AppImage/AppImageKit/wiki) the `.AppImage` file, which you can download from [Releases](https://github.com/paranext/paranext-core/releases).
+Some users may find that not everything works properly in Linux without some additional setup. Please see [How to set up Platform.Bible on Linux](https://github.com/paranext/paranext/wiki/How-to-set-up-Platform.Bible-on-Linux) for more information.
 
 ### Mac Users
 
-If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is damaged and can't be opened. You should move it to the Trash." or something very similar:
+If you download and run the ARM release of Platform.Bible from [a computer running Apple Silicon](https://support.apple.com/en-us/116943), you will likely encounter a warning from Apple's Gatekeeper stating that "Platform.Bible is an app downloaded from the Internet. Are you sure you want to open it?":
 
-![mac-arm-damaged-warning](doc-meta/mac-arm-damaged-warning.png)
+![mac-arm-downloaded-internet-warning](doc-meta/mac-arm-downloaded-internet-warning.png)
 
-Unfortunately, this is the message Apple chose to display for ARM applications that are not signed (including Platform.Bible since we have not yet set up application code signing on Mac).
+Don't be alarmed! This is a typical warning, seen when downloading most apps from the Internet. It also says "Apple checked it for malicious software and none was detected." If you trust Platform.Bible and would like to run it select "Open."
 
-If you trust Platform.Bible and would like to run it even though it is not code signed, you will need to run the following terminal command every time you install a new version of Platform.Bible:
+Once the app is opened, you may see a dialog that says "Platform.Bible wants to use your confidential information stored in 'Platform.Bible Safe Storage' in your keychain."
 
-`xattr -c /Applications/Platform.Bible.app`
+![mac-arm-keychain-access-warning](doc-meta/mac-arm-keychain-access-warning.png)
 
-[`xattr -c` clears all attributes on the provided file](https://ss64.com/mac/xattr.html). Running this command removes all attributes on the currently-installed Platform.Bible application file including the quarantine flag Gatekeeper puts on unsigned ARM applications downloaded from the internet.
+We use encryption to keep your data safe, allowing access to keychain provides encryption services with `papi.dataProtection` so extensions can store user data securely. If you approve of this, please allow keychain access.
 
 ## Developer Install
 
@@ -97,18 +101,29 @@ dotnet --list-sdks
 
 ### Cloning and installing dependencies (all platforms)
 
-Clone the repo and install dependencies:
+Clone the repo:
 
 ```bash
 git clone https://github.com/paranext/paranext-core.git
 cd paranext-core
+```
+
+If you want to develop an extension for Platform.Bible, check out the Git reference (usually a [tag](https://github.com/paranext/paranext-core/tags)) corresponding to the version for which you want to develop your extension. We recommend you develop for the latest released version, _not_ `main`. Consult [the version table](https://github.com/paranext/paranext/wiki/Software-Version-Info) for more information. For example, if you want to develop your extension for version 0.3.0, run the following:
+
+```bash
+git checkout v0.3.0
+```
+
+Install dependencies:
+
+```bash
 npm install
 ```
 
-To build the declaration type file `papi.d.ts` for extensions to use, run the following:
+To build, run the following:
 
 ```bash
-npm run build:types
+npm run build
 ```
 
 ## Starting Development
@@ -119,14 +134,14 @@ Start the app in the `dev` environment:
 npm start
 ```
 
-After you run `npm start` (or, in VSCode, launch `Debug Paranext Core`), you can edit the code, and the relevant processes will hot reload.
+After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit the code, and the relevant processes will hot reload.
 
 ### Developing Extensions
 
-Paranext Core extensions are found in the `extensions` folder. Please follow the instructions in
-`extensions/README.md` to develop extensions.
+Platfrom.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
+[extensions/README.md](extensions/README.md) to develop core extensions.
 
-Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing extensions.
+Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core. Once you have packaged an extension, it can be distributed for Platform.Bible users to install. See [Running your extension in an app](https://github.com/paranext/paranext-extension-template/wiki/Debugging-Your-Extension-in-the-Production-Application#running-your-extension-in-an-app) for installation information.
 
 ## GitHub Pages
 
@@ -141,6 +156,10 @@ Please see the [Extension Template wiki](https://github.com/paranext/paranext-ex
 **[Platform.Bible Utilities Documentation](https://paranext.github.io/paranext-core/platform-bible-utils)**
 
 - Check out the utility functions, types, and classes available to use.
+
+**[Platform.Bible and Paratext 10 Studio Wiki](https://github.com/paranext/paranext-core/wiki/Platform.Bible-and-Paratext-10-Studio)**
+
+- Explore links to other resources relevant to Platform.Bible and Paratext 10 Studio.
 
 ## JavaScript Tool Manager
 
@@ -301,7 +320,8 @@ Some important decisions in this project were inspired by the work done in [Visu
 
 ## License
 
-MIT © [SIL International](https://www.sil.org/)
+This project is licensed under the [MIT License](./LICENSE).
+Copyright © 2017-2025 [SIL Global](https://www.sil.org/) and [United Bible Societies](https://unitedbiblesocieties.org/)
 
 <!-- define variables used above -->
 

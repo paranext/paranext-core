@@ -15,26 +15,16 @@ import {
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
-import LogError from '@shared/log-error.model';
+import { LogError } from '@shared/log-error.model';
 
 import {
   mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
   saveTabInfoBase,
 } from '@renderer/services/web-view.service-host';
-import DIALOGS from '@renderer/components/dialogs';
+import { DIALOGS } from '@renderer/components/dialogs';
 import {
-  TAB_TYPE_EXTENSION_MANAGER,
-  loadExtensionManagerTab,
-} from '@renderer/components/extension-manager/extension-manager-tab.component';
-import {
-  TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG,
-  loadDownloadUpdateProjectTab,
-} from '@renderer/components/projects/download-update-project-tab.component';
-import {
-  TAB_TYPE_PROJECT_SETTINGS_TAB,
-  loadProjectSettingsTab,
-  TAB_TYPE_USER_SETTINGS_TAB,
-  loadUserSettingsTab,
+  TAB_TYPE_SETTINGS_TAB,
+  loadSettingsTab,
 } from '@renderer/components/settings-tabs/settings-tab.component';
 import {
   TAB_TYPE_WEBVIEW,
@@ -52,7 +42,7 @@ import {
 
 import { layoutDefaults, getFloatPosition } from './platform-dock-layout-positioning.util';
 import { TabType, RCDockTabInfo, isTab } from './docking-framework-internal.model';
-import createRCDockTabFromTabInfo from './platform-dock-tab.component';
+import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
 
 /** Tab loader functions for each Platform tab type */
@@ -63,10 +53,7 @@ if (globalThis.isNoisyDevModeEnabled) {
     [TAB_TYPE_QUICK_VERSE_HERESY, loadQuickVerseHeresyTab],
     [TAB_TYPE_TEST, loadTestTab],
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
-    [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
-    [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
-    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
-    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
+    [TAB_TYPE_SETTINGS_TAB, loadSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition
@@ -77,10 +64,7 @@ if (globalThis.isNoisyDevModeEnabled) {
   tabLoaderMap = new Map<TabType, TabLoader>([
     [TAB_TYPE_BUTTONS, loadButtonsTab],
     [TAB_TYPE_WEBVIEW, loadWebViewTab],
-    [TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG, loadDownloadUpdateProjectTab],
-    [TAB_TYPE_EXTENSION_MANAGER, loadExtensionManagerTab],
-    [TAB_TYPE_USER_SETTINGS_TAB, loadUserSettingsTab],
-    [TAB_TYPE_PROJECT_SETTINGS_TAB, loadProjectSettingsTab],
+    [TAB_TYPE_SETTINGS_TAB, loadSettingsTab],
     ...Object.entries(DIALOGS).map(
       ([dialogTabType, dialogDefinition]) =>
         // The default implementation of `loadDialog` uses `this`, so bind it to the definition
@@ -319,8 +303,12 @@ export function addTabToDock(
 
   // Add new tab
   switch (updatedLayout.type) {
-    case 'tab':
-      targetTab = findPreviousTab(dockLayout);
+    case 'tab': {
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const dockLayoutDockBoxChildren = dockLayout.getLayout().dockbox.children as PanelData[];
+      const isDockBoxEmpty =
+        dockLayoutDockBoxChildren.length === 1 && dockLayoutDockBoxChildren[0].tabs.length === 0;
+      targetTab = isDockBoxEmpty ? undefined : findPreviousTab(dockLayout);
       if (targetTab) {
         if (previousTabId === undefined)
           // The target tab is the first found tab, so just add this as a new panel on top.
@@ -342,7 +330,7 @@ export function addTabToDock(
         );
       previousTabId = tab.id;
       break;
-
+    }
     case 'float': {
       const floatPosition = getFloatPosition(
         updatedLayout,

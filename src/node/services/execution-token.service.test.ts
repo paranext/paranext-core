@@ -1,5 +1,5 @@
 import { createUuid } from '@node/utils/crypto-util';
-import executionTokenService from './execution-token.service';
+import { executionTokenService } from './execution-token.service';
 
 test('Token returned from registering an extension has expected data', () => {
   const name = createUuid();

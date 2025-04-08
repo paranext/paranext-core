@@ -1,7 +1,7 @@
 {
   "entryPoints": ["src/index.ts"],
+  "kindSortOrder": ["Function"],
   "out": "docs",
-  "tsconfig": "tsconfig.json",
   "sort": ["kind", "alphabetical"],
-  "kindSortOrder": ["Function"]
+  "tsconfig": "tsconfig.json"
 }

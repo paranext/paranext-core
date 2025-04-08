@@ -23,7 +23,7 @@
     "jsx": "react-jsx",
     "typeRoots": [
       // Include default type declarations
-      "node_modules/@types",
+      "../../../node_modules/@types",
       // Include papi-dts type declarations (for papi.d.ts)
       "../../../lib",
       // Include core extensions' type declarations
@@ -43,7 +43,6 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src"],
   "exclude": ["node_modules"],
   "ts-node": {
     // This allows us to use path aliases in ts-node

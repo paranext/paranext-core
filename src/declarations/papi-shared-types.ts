@@ -1,5 +1,5 @@
 declare module 'papi-shared-types' {
-  import type { ScriptureReference, UnsubscriberAsync } from 'platform-bible-utils';
+  import type { UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -11,9 +11,20 @@ declare module 'papi-shared-types' {
     PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
   } from '@shared/models/project-data-provider.model';
-  import type { IDisposableDataProvider } from '@shared/models/data-provider.interface';
-  import type IDataProvider from '@shared/models/data-provider.interface';
-  import type ExtractDataProviderDataTypes from '@shared/models/extract-data-provider-data-types.model';
+  import type {
+    IDataProvider,
+    IDisposableDataProvider,
+  } from '@shared/models/data-provider.interface';
+  import type { ExtractDataProviderDataTypes } from '@shared/models/extract-data-provider-data-types.model';
+  import type { NetworkableObject } from '@shared/models/network-object.model';
+  // Used in JSDocs
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import type { WebViewFactory } from '@shared/models/web-view-factory.model';
+  // Used in JSDocs
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
+  import { WebViewId } from '@shared/models/web-view.model';
+  import { SerializedVerseRef } from '@sillsdev/scripture';
 
   // #region Commands
 
@@ -46,9 +57,39 @@ declare module 'papi-shared-types' {
     'test.echoExtensionHost': (message: string) => Promise<string>;
     'test.throwError': (message: string) => void;
     'platform.restartExtensionHost': () => Promise<void>;
+    /** Shut down the application */
     'platform.quit': () => Promise<void>;
+    /** Restart the application */
+    'platform.restart': () => Promise<void>;
+    /** Get the operating system platform */
+    'platform.getOSPlatform': () => Promise<string | undefined>;
+    /** If the browser window is in full screen */
+    'platform.isFullScreen': () => Promise<boolean>;
+    /** Open a browser to the platform's OpenRPC documentation */
+    'platform.openDeveloperDocumentationUrl': () => Promise<void>;
+    /**
+     * Open a link in a new browser window. Like `window.open` in the frontend with
+     * `target='_blank'` Consider using a visual indication along with this. E.g. for a menu
+     * download the https://lucide.dev/icons/external-link icon, add it to your extension's assets
+     * folder and use it like
+     *
+     * - `"iconPathAfter": "papi-extension://<yourExtension>/assets/icons/external-link.svg"`. We plan
+     *   to provide a common set of icons via an API in the future.
+     *
+     * For a button that opens external urls add
+     *
+     * - `aria-label="{localizedStrings['%ariaLabel_opensInBrowser%']}"`
+     * - Lucide icon `<ExternalLink />`
+     */
+    'platform.openWindow': (url: string) => Promise<void>;
+
+    // These commands are provided in `web-view.service-host.ts`
+    /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openProjectSettings': (webViewId: string) => Promise<void>;
+    /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
+    'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
     // `extension-host.ts`
@@ -96,7 +137,7 @@ declare module 'papi-shared-types' {
      * Current Verse Reference for Scroll Group A. Deprecated - please use `papi.scrollGroups` and
      * `useWebViewScrollGroupScrRef`
      */
-    'platform.verseRef': ScriptureReference;
+    'platform.verseRef': SerializedVerseRef;
     /**
      * List of locales to use when localizing the interface. First in the list receives highest
      * priority. Please always add 'en' (English) at the end when using this setting so everything
@@ -113,6 +154,14 @@ declare module 'papi-shared-types' {
      * interacting with ParatextData.
      */
     'platform.paratextDataLastRegistryDataCachedTimes': { [key: string]: string };
+    /** Enable reading and writing comments in projects. This is an experimental feature. */
+    'platform.commentsEnabled': boolean;
+    /**
+     * Timeout in seconds for requests to be resolved before they are considered to have failed.
+     *
+     * If the timeout is set to 0, then requests will never timeout.
+     */
+    'platform.requestTimeout': number;
   }
 
   /**
@@ -477,6 +526,7 @@ declare module 'papi-shared-types' {
    * ```
    */
   export interface DataProviders {
+    // These are examples. Feel free to take them out if we actually need to provide real ones in core
     'platform.stuff': IDataProvider<StuffDataTypes>;
     'platform.placeholder': IDataProvider<PlaceholderDataTypes>;
   }
@@ -524,6 +574,60 @@ declare module 'papi-shared-types' {
       DataProviders[DataProviderName]
     >;
   };
+
+  /**
+   * {@link NetworkableObject} types for each web view controller supported by PAPI. A Web View
+   * Controller is a network object that represents a web view and whose methods facilitate
+   * communication between its associated web view and extensions that want to interact with it.
+   * `WebViewControllers` can be created by {@link IWebViewProvider} of the same `webViewType`.
+   * Extensions can add web view controllers with corresponding `webViewType`s by adding details to
+   * their `.d.ts` file and registering a web view controller in their web view provider's
+   * `getWebView` function with `papi.webViewProviders.registerWebViewController`. If you want to
+   * create web view controllers, we recommend you create a class derived from the abstract class
+   * {@link WebViewFactory}, which automatically manage the lifecycle of the web view controllers for
+   * you.
+   *
+   * Note: The keys of this interface are the `webViewType`s for the web views associated with these
+   * web view controllers. They must consist of two strings separated by at least one period. We
+   * recommend one period and lower camel case in case we expand the api in the future to allow dot
+   * notation.
+   *
+   * An extension can extend this interface to add a type for the web view controller it registers
+   * by adding the following to its `.d.ts` file (in this example, we are adding the
+   * `'helloSomeone.peopleWebView'` web view controller type):
+   *
+   * @example
+   *
+   * ```typescript
+   * declare module 'papi-shared-types' {
+   *   export type PeopleWebViewController = NetworkableObject<{
+   *     setSelectedPerson(name: string): Promise<boolean>;
+   *     testRandomMethod(things: string): Promise<string>;
+   *   }>;
+   *
+   *   export interface WebViewControllers {
+   *     'helloSomeone.peopleWebView': PeopleWebViewController;
+   *   }
+   * }
+   * ```
+   */
+  export interface WebViewControllers {
+    // These are examples. Feel free to take them out if we actually need to provide real ones in core
+    'platform.stuffWebView': NetworkableObject<{ doStuff(thing: string): Promise<boolean> }>;
+    'platform.placeholderWebView': NetworkableObject<{
+      runPlaceholderStuff(thing: string): Promise<boolean>;
+    }>;
+  }
+
+  /**
+   * `webViewType`s for each web view controller available on the papi.
+   *
+   * Automatically includes all extensions' web view controllers that are added to
+   * {@link WebViewControllers}.
+   *
+   * @example 'platform.placeholderWebView'
+   */
+  export type WebViewControllerTypes = keyof WebViewControllers;
 
   // #endregion
 }

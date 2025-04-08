@@ -62,7 +62,7 @@ function tokenIsValid(executionToken: ExecutionToken): boolean {
   );
 }
 
-const executionTokenService = {
+export const executionTokenService = {
   registerExtension,
   unregisterExtension,
   tokenIsValid,

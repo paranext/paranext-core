@@ -53,6 +53,5 @@
       "backgroundColor": "none",
       "overviewRulerColor": "#6cf5ff60"
     }
-  ],
-  "jestrunner.jestPath": "../../node_modules/jest/bin/jest.js"
+  ]
 }

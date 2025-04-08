@@ -11,7 +11,6 @@ import { IWebSocket } from './web-socket.interface';
  *
  * @returns WebSocket
  */
-// eslint-disable-next-line import/prefer-default-export
 export const createWebSocket = async (url: string): Promise<IWebSocket> => {
   if (isRenderer()) {
     const Ws = (await import('@renderer/services/renderer-web-socket.service')).default;

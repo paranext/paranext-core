@@ -1,24 +1,33 @@
 import type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 // Used in JSDoc link
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ScriptureReference, ScrollGroupId } from 'platform-bible-utils';
+import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
 
-/** The type of code that defines a webview's content */
-export enum WebViewContentType {
-  /**
-   * This webview is a React webview. It must specify its component by setting it to
-   * `globalThis.webViewComponent`
-   */
-  React = 'react',
-  /** This webview is a raw HTML/JS/CSS webview. */
-  HTML = 'html',
-  /**
-   * This webview's content is fetched from the url specified (iframe `src` attribute). Note that
-   * webViews of this type cannot access the `papi` because they cannot be on the same origin as the
-   * parent window.
-   */
-  URL = 'url',
-}
+/**
+ * The type of code that defines a webview's content.
+ *
+ * If `react`: This webview is a React webview. It must specify its component by setting it to
+ * `globalThis.webViewComponent`. See {@link WebViewDefinitionReact} for more information.
+ *
+ * If `html`: This webview is a raw HTML/JS/CSS webview. See {@link WebViewDefinitionHtml} for more
+ * information.
+ *
+ * If `url`: This webview's content is fetched from the url specified (iframe `src` attribute). Note
+ * that webViews of this type cannot access the `papi` because they cannot be on the same origin as
+ * the parent window. See {@link WebViewDefinitionURL} for more information.
+ */
+export type WebViewContentType = 'react' | 'html' | 'url';
+
+/**
+ * String values for each {@link WebViewContentType}. As opposed to {@link WebViewContentType}, these
+ * can only be used in core
+ */
+export const WEB_VIEW_CONTENT_TYPE = Object.freeze({
+  REACT: 'react',
+  HTML: 'html',
+  URL: 'url',
+});
 
 /** What type a WebView is. Each WebView definition must have a unique type. */
 export type WebViewType = string;
@@ -32,16 +41,73 @@ type WebViewDefinitionBase = {
   webViewType: WebViewType;
   /** Unique ID among webviews specific to this webview instance. */
   id: WebViewId;
-  /** The code for the WebView that papi puts into an iframe */
+  /**
+   * The content for the WebView that papi puts into an iframe. This field differs significantly
+   * depending on which `contentType` you use in your `WebViewDefinition` as described below. If you
+   * are using a React or HTML WebView, you will probably want to use a bundler to bundle your code
+   * together and provide it here.
+   * [`paranext-extension-template`](https://github.com/paranext/paranext-extension-template) is set
+   * up for this use case. Feel free to use it for your extension!
+   *
+   *     ---
+   *
+   * **For React WebViews (default):** string containing all the code you want to run in the iframe
+   * on the frontend. You should set a function component to `globalThis.webViewComponent` in this
+   * code.
+   *
+   * For example, you could pass the bundled output of the following code to as your React Web View
+   * `content`:
+   *
+   * ```tsx
+   * globalThis.webViewComponent = function MyWebView() {
+   *  return <div>Hello World!! This is my React WebView!</div>;
+   * }
+   * ```
+   *
+   * **For HTML WebViews:** string containing all the code you want to run in the iframe on the
+   * frontend. This should be a complete HTML document. Usually,
+   *
+   * For example, you could pass the following string as your HTML Web View `content`:
+   *
+   * ```html
+   * <html>
+   *   <head>
+   *     <style>
+   *       .title {
+   *         color: darkgreen;
+   *       }
+   *     </style>
+   *   </head>
+   *   <body>
+   *     <div class="title">Hello World!! This is my HTML Web View!</div>
+   *   </body>
+   * </html>
+   * ```
+   *
+   *     ---
+   *
+   * **For URL WebViews:** the url you want to load into the iframe on the frontend.
+   *
+   * Note: URL WebViews must have `papi-extension:` or `https:` urls.
+   *
+   * For example, you could pass the following string as your URL Web View `content`:
+   *
+   * ```plain
+   * https://example.com/
+   * ```
+   */
   content: string;
   /**
    * Url of image to show on the title bar of the tab
    *
-   * Defaults to Platform.Bible logo
+   * Defaults to the software's standard logo.
    */
   iconUrl?: string;
-  /** Name of the tab for the WebView */
-  title?: string;
+  /**
+   * Name of the tab (or a localizeKey for the name that will automatically be localized) for the
+   * WebView
+   */
+  title?: string | LocalizeKey;
   /** Tooltip that is shown when hovering over the webview title */
   tooltip?: string;
   /**
@@ -52,8 +118,8 @@ type WebViewDefinitionBase = {
    */
   projectId?: string;
   /**
-   * With which scroll group this web view is synced or the {@link ScriptureReference} this web view
-   * is focusing independently of a scroll group
+   * With which scroll group this web view is synced or the SerializedVerseRef this web view is
+   * focusing independently of a scroll group
    */
   scrollGroupScrRef?: ScrollGroupScrRef;
   /**
@@ -65,9 +131,9 @@ type WebViewDefinitionBase = {
   state?: Record<string, unknown>;
   /**
    * Whether to allow the WebView iframe to interact with its parent as a same-origin website.
-   * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox attribute]
-   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to
-   * `true`.
+   * Setting this to true adds `allow-same-origin` to the WebView iframe's [sandbox
+   * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+   * to `true`.
    *
    * Setting this to false on an HTML or React WebView prevents the iframe from importing the `papi`
    * and such and also prevents others from accessing its document. This could be useful when you
@@ -91,9 +157,9 @@ type WebViewDefinitionBase = {
   allowSameOrigin?: boolean;
   /**
    * Whether to allow scripts to run in this iframe. Setting this to true adds `allow-scripts` to
-   * the WebView iframe's [sandbox attribute]
-   * (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults to `true`
-   * for HTML and React WebViews and `false` for URL WebViews
+   * the WebView iframe's [sandbox
+   * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+   * to `true` for HTML and React WebViews and `false` for URL WebViews
    *
    * WARNING: Setting this to `true` increases the possibility of a security threat occurring. If it
    * is not necessary to run scripts in your WebView, you should set this to `false` to reduce
@@ -102,7 +168,7 @@ type WebViewDefinitionBase = {
   allowScripts?: boolean;
   /**
    * **For HTML and React WebViews:** List of [Host or scheme
-   * values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy#hosts_values)
+   * values](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy#host-source)
    * to include in the [`frame-src`
    * directive](https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Content-Security-Policy/frame-src)
    * for this WebView's iframe content-security-policy. This allows iframes with `src` attributes
@@ -146,24 +212,29 @@ type WebViewDefinitionBase = {
   /**
    * Whether to allow this iframe to open separate windows with window.open and anchor tags with
    * `target="_blank"`. Setting this to true adds `allow-popups` to the WebView iframe's [sandbox
-   * attribute] (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
+   * attribute](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/iframe#sandbox). Defaults
    * to `false`
    */
   allowPopups?: boolean;
+  /**
+   * Whether a toolbar should be displayed at the top of the web view. Currently this toolbar cannot
+   * be modified and is provided as is. It displays a BookChapterControl and a ScrollGroupSelector.
+   */
+  shouldShowToolbar?: boolean;
 };
 
 /** WebView representation using React */
 export type WebViewDefinitionReact = WebViewDefinitionBase & {
-  /** Indicates this WebView uses React */
-  contentType?: WebViewContentType.React;
+  /** Indicates this WebView uses React. See {@link WebViewContentType} for more information. */
+  contentType?: 'react';
   /** String of styles to be loaded into the iframe for this WebView */
   styles?: string;
 };
 
 /** WebView representation using HTML */
 export type WebViewDefinitionHtml = WebViewDefinitionBase & {
-  /** Indicates this WebView uses HTML */
-  contentType: WebViewContentType.HTML;
+  /** Indicates this WebView uses HTML. See {@link WebViewContentType} for more information. */
+  contentType: 'html';
 };
 
 /**
@@ -172,8 +243,8 @@ export type WebViewDefinitionHtml = WebViewDefinitionBase & {
  * Note: you can only use `papi-extension:` and `https:` urls
  */
 export type WebViewDefinitionURL = WebViewDefinitionBase & {
-  /** Indicates this WebView uses a URL */
-  contentType: WebViewContentType.URL;
+  /** Indicates this WebView uses a URL. See {@link WebViewContentType} for more information. */
+  contentType: 'url';
 };
 
 /** Properties defining a type of WebView created by extensions to show web content */
@@ -315,7 +386,7 @@ export type UseWebViewStateHook = <T>(
  * JSDOC SOURCE UseWebViewScrollGroupScrRefHook
  *
  * A React hook for working with this web view's scroll group and Scripture Reference. Returns a
- * value and a function to set the value for both the {@link ScriptureReference} and the
+ * value and a function to set the value for both the SerializedVerseRef and the
  * {@link ScrollGroupId} with which this web view is synced (using this web view's
  * `scrollGroupScrRef` property). Use similarly to `useState`.
  *
@@ -337,8 +408,8 @@ export type UseWebViewStateHook = <T>(
  * ```
  */
 export type UseWebViewScrollGroupScrRefHook = () => [
-  scrRef: ScriptureReference,
-  setScrRef: (newScrRef: ScriptureReference) => void,
+  scrRef: SerializedVerseRef,
+  setScrRef: (newScrRef: SerializedVerseRef) => void,
   scrollGroupId: ScrollGroupId | undefined,
   setScrollGroupId: (newScrollGroupId: ScrollGroupId | undefined) => void,
 ];

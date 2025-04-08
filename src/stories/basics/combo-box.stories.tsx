@@ -1,41 +1,21 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { ComboBox } from 'platform-bible-react';
 
-const meta: Meta<typeof ComboBox> = {
+export const Meta: MetaBase<typeof ComboBox> = {
   title: 'Basics/ComboBox',
   component: ComboBox,
   tags: ['autodocs'],
   argTypes: {
-    title: { control: 'text' },
-    isDisabled: { control: 'boolean' },
-    hasError: { control: 'boolean' },
-    isFullWidth: { control: 'boolean' },
     options: { control: 'object' },
-    className: { control: 'text' },
+    buttonClassName: { control: 'text' },
   },
 };
-export default meta;
+export default Meta;
 
 type Story = StoryObj<typeof ComboBox>;
 
 export const Default: Story = {
   args: {},
-};
-
-export const Disabled: Story = {
-  args: { isDisabled: true },
-};
-
-export const ErrorState: Story = {
-  args: { hasError: true },
-};
-
-export const FullWidth: Story = {
-  args: { isFullWidth: true },
-};
-
-export const Title: Story = {
-  args: { title: 'Combo box' },
 };
 
 export const Placeholder: Story = {
@@ -46,12 +26,12 @@ export const Placeholder: Story = {
 
 export const Paratext: Story = {
   args: {
-    className: 'paratext',
+    buttonClassName: 'paratext',
   },
 };
 
 export const ParatextBright: Story = {
   args: {
-    className: 'paratext bright',
+    buttonClassName: 'paratext bright',
   },
 };

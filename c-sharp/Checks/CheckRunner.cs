@@ -1,12 +1,11 @@
+using System.Collections.Concurrent;
 using System.Text.Json;
-using System.Text.Json.Nodes;
-using Paranext.DataProvider.JsonUtils;
-using Paranext.DataProvider.MessageHandlers;
-using Paranext.DataProvider.MessageTransports;
+using Paranext.DataProvider.ParatextUtils;
 using Paranext.DataProvider.Projects;
 using Paratext.Checks;
 using Paratext.Data;
 using Paratext.Data.Checking;
+using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
 
@@ -23,7 +22,8 @@ internal class CheckRunner(PapiClient papiClient)
     private sealed class CheckForProject(ScriptureCheckBase check, string checkId, string projectId)
     {
         public ScriptureCheckBase Check { get; } = check;
-        public CheckResultsRecorder ResultsRecorder { get; } = new (checkId, projectId);
+        public CheckResultsRecorder ResultsRecorder { get; } = new(checkId, projectId);
+        public object Lock = new();
     }
 
     #endregion
@@ -36,84 +36,76 @@ internal class CheckRunner(PapiClient papiClient)
 
     // Note that CheckType.Schema is not available outside Paratext itself due to dependencies
     // It cannot be easily copied, either, without some refactoring
-    private readonly Dictionary<string, ParatextCheckDetails> _checkDetailsByCheckId = new()
-    {
-        { CheckType.Capitalization.InternalValue, new (CheckType.Capitalization) },
-        { CheckType.ChapterVerse.InternalValue, new (CheckType.ChapterVerse) },
-        { CheckType.Character.InternalValue, new (CheckType.Character) },
-        { CheckType.Marker.InternalValue, new (CheckType.Marker) },
-        { CheckType.MatchedPairs.InternalValue, new (CheckType.MatchedPairs) },
-        { CheckType.Numbers.InternalValue, new (CheckType.Numbers) },
-        { CheckType.ParagraphFinalPunctuation.InternalValue, new (CheckType.ParagraphFinalPunctuation) },
-        { CheckType.Punctuation.InternalValue, new (CheckType.Punctuation) },
-        { CheckType.Quotation.InternalValue, new (CheckType.Quotation) },
-        { CheckType.QuotationTypes.InternalValue, new (CheckType.QuotationTypes) },
-        { CheckType.QuotedText.InternalValue, new (CheckType.QuotedText) },
-        { CheckType.Reference.InternalValue, new (CheckType.Reference) },
-        { CheckType.RepeatedWord.InternalValue, new (CheckType.RepeatedWord) },
-    };
+    private readonly Dictionary<string, ParatextCheckDetails> _checkDetailsByCheckId =
+        new()
+        {
+            { CheckType.Capitalization.InternalValue, new(CheckType.Capitalization) },
+            { CheckType.ChapterVerse.InternalValue, new(CheckType.ChapterVerse) },
+            { CheckType.Character.InternalValue, new(CheckType.Character) },
+            { CheckType.Marker.InternalValue, new(CheckType.Marker) },
+            { CheckType.MatchedPairs.InternalValue, new(CheckType.MatchedPairs) },
+            { CheckType.Numbers.InternalValue, new(CheckType.Numbers) },
+            {
+                CheckType.ParagraphFinalPunctuation.InternalValue,
+                new(CheckType.ParagraphFinalPunctuation)
+            },
+            { CheckType.Punctuation.InternalValue, new(CheckType.Punctuation) },
+            { CheckType.Quotation.InternalValue, new(CheckType.Quotation) },
+            { CheckType.QuotationTypes.InternalValue, new(CheckType.QuotationTypes) },
+            { CheckType.QuotedText.InternalValue, new(CheckType.QuotedText) },
+            { CheckType.Reference.InternalValue, new(CheckType.Reference) },
+            { CheckType.RepeatedWord.InternalValue, new(CheckType.RepeatedWord) },
+        };
     private CheckInputRange[] _activeRanges = [];
-    private readonly Dictionary<string, ChecksDataSource> _dataSourcesByProjectId = [];
-    private readonly Dictionary<(string checkId, string projectId), CheckForProject> _checksByIds = [];
-    private readonly object _dataProviderLock = new();
+    private readonly ConcurrentDictionary<string, ChecksDataSource> _dataSourcesByProjectId = [];
+    private readonly ConcurrentDictionary<string, ErrorMessageDenials> _denialsByProjectId = [];
+    private readonly ConcurrentDictionary<
+        (string checkId, string projectId),
+        CheckForProject
+    > _checksByIds = [];
+    private readonly object _setActiveRangesLock = new();
+    private readonly object _runChecksLock = new();
 
     #endregion
 
     #region DataProvider methods
 
     // Must provide all functions that are part of ICheckRunner in TS
-    protected override List<string> GetFunctionNames()
+    protected override List<(string functionName, Delegate function)> GetFunctions()
     {
         return
         [
-            "disableCheck",
-            "enableCheck",
-            "getActiveRanges",
-            "getAvailableChecks",
-            "getCheckResults",
-            "setActiveRanges",
+            ("allowCheckResult", AllowCheckResult),
+            ("denyCheckResult", DenyCheckResult),
+            ("disableCheck", DisableCheck),
+            ("enableCheck", EnableCheck),
+            ("getActiveRanges", GetActiveRanges),
+            ("getAvailableChecks", GetAvailableChecks),
+            ("getCheckResults", GetCheckResults),
+            ("setActiveRanges", SetActiveRanges),
         ];
     }
 
-    protected override Task StartDataProvider()
+    protected override Task StartDataProviderAsync()
     {
         return Task.CompletedTask;
-    }
-
-    protected override ResponseToRequest HandleRequest(string functionName, JsonArray args)
-    {
-        lock (_dataProviderLock)
-        {
-            Console.WriteLine($"Calling {functionName} with args {args}");
-
-            return functionName switch
-            {
-                "disableCheck" => DisableCheck(args[0].Deserialize<string>() ?? "", args.Count > 1 ? args[1].Deserialize<string>() : null),
-                "enableCheck" => EnableCheck(args[0].Deserialize<string>() ?? "", args[1].Deserialize<string>() ?? ""),
-                "getActiveRanges" => GetActiveRanges(),
-                "getAvailableChecks" => GetAvailableChecks(),
-                "getCheckResults" => GetCheckResults(),
-                "setActiveRanges" => SetActiveRanges(CheckInputRangeConverter.CreateCheckInputRangeArray(args[1])),
-                _ => ResponseToRequest.Failed($"Unknown function: {functionName}"),
-            };
-        }
     }
 
     #endregion
 
     #region CheckRunner methods
 
-    private ResponseToRequest GetAvailableChecks()
+    private List<ParatextCheckDetails> GetAvailableChecks(JsonElement _ignore)
     {
-        return ResponseToRequest.Succeeded(new List<ParatextCheckDetails>(_checkDetailsByCheckId.Values));
+        return new List<ParatextCheckDetails>(_checkDetailsByCheckId.Values);
     }
 
-    private ResponseToRequest GetActiveRanges()
+    private CheckInputRange[] GetActiveRanges(JsonElement _ignore)
     {
-        return ResponseToRequest.Succeeded(_activeRanges);
+        return _activeRanges;
     }
 
-    private ResponseToRequest SetActiveRanges(CheckInputRange[]? ranges)
+    private bool SetActiveRanges(JsonElement _ignore, CheckInputRange[]? ranges)
     {
         ArgumentNullException.ThrowIfNull(ranges);
 
@@ -123,32 +115,40 @@ internal class CheckRunner(PapiClient papiClient)
                 throw new ArgumentException("Ranges cannot span between books");
         }
 
-        foreach(var projectId in _activeRanges.Select(range => range.ProjectId).Distinct())
-            GetOrCreateDataSource(projectId).ScrText.TextChanged -= RerunChecks;
-        foreach(var projectId in ranges.Select(range => range.ProjectId).Distinct())
-            GetOrCreateDataSource(projectId).ScrText.TextChanged += RerunChecks;
-        _activeRanges = ranges;
-
-        bool notifyOfUpdatedCheckResults = false;
-        foreach (var projectId in ranges.Select(range => range.ProjectId).Distinct())
+        lock (_setActiveRangesLock)
         {
-            bool producedNewOrDifferentResults = RunChecksForProject(projectId);
-            notifyOfUpdatedCheckResults |= producedNewOrDifferentResults;
+            var oldProjectIds = _activeRanges.Select(range => range.ProjectId).Distinct();
+            var newProjectIds = ranges.Select(range => range.ProjectId).Distinct();
+
+            foreach (var projectId in oldProjectIds)
+                GetOrCreateDataSource(projectId).ScrText.TextChanged -= RerunChecks;
+            foreach (var projectId in newProjectIds)
+                GetOrCreateDataSource(projectId).ScrText.TextChanged += RerunChecks;
+            _activeRanges = ranges;
+
+            foreach (var projectId in newProjectIds)
+                RunChecksForProject(projectId);
+
+            SendDataUpdateEvent(DATA_TYPE_ACTIVE_RANGES, "SetActiveRanges");
+            return true;
         }
-
-        List<string> updateEvents = [ DATA_TYPE_ACTIVE_RANGES ];
-        if (notifyOfUpdatedCheckResults)
-            updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
-
-        SendDataUpdateEvent(updateEvents);
-        return ResponseToRequest.Succeeded(updateEvents);
     }
 
-    private ResponseToRequest GetCheckResults()
+    private List<CheckRunResult> GetCheckResults(JsonElement _ignore)
     {
         var retVal = new List<CheckRunResult>();
+
         foreach (var check in _checksByIds.Values)
-            retVal.AddRange(check.ResultsRecorder.CheckRunResults);
+        {
+            lock (check.Lock)
+            {
+                retVal.AddRange(check.ResultsRecorder.CheckRunResults);
+            }
+
+            if (retVal.Count >= 1000)
+                break;
+        }
+
         if (retVal.Count > 1000)
         {
             var fullCount = retVal.Count;
@@ -156,71 +156,110 @@ internal class CheckRunner(PapiClient papiClient)
             retVal.TrimExcess();
             Console.WriteLine($"Trimming {fullCount} check results to 1000");
         }
+
         Console.WriteLine($"Returning {retVal.Count} check results");
-        return ResponseToRequest.Succeeded(retVal);
+        return retVal;
     }
 
-    private ResponseToRequest EnableCheck(string checkId, string projectId)
+    private void EnableCheck(string checkId, string projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
         ArgumentException.ThrowIfNullOrEmpty(projectId);
 
-        List<string> updateEvents = [];
-
         var enabledProjectIds = _checkDetailsByCheckId[checkId].EnabledProjectIds;
         if (enabledProjectIds.Contains(projectId))
-            Console.WriteLine($"Check {checkId} for project {projectId} was already enabled");
-        else
         {
-            updateEvents.Add(DATA_TYPE_AVAILABLE_CHECKS);
-            enabledProjectIds.Add(projectId);
-            var check = CheckFactory.CreateCheck(checkId, GetOrCreateDataSource(projectId));
-            _checksByIds.Add((checkId, projectId), new CheckForProject(check, checkId, projectId));
-            Console.WriteLine($"Enabled check {checkId} for project {projectId}");
-            if (RunChecksForProject(projectId))
-                updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
+            Console.WriteLine($"Check {checkId} for project {projectId} was already enabled");
+            return;
         }
 
-        if (updateEvents.Count > 0)
-            SendDataUpdateEvent(updateEvents);
-        return ResponseToRequest.Succeeded();
+        enabledProjectIds.Add(projectId);
+        var check = CheckFactory.CreateCheck(checkId, GetOrCreateDataSource(projectId));
+        _checksByIds.TryAdd((checkId, projectId), new CheckForProject(check, checkId, projectId));
+        Console.WriteLine($"Enabled check {checkId} for project {projectId}");
+        RunChecksForProject(projectId);
+        SendDataUpdateEvent(DATA_TYPE_AVAILABLE_CHECKS, "EnableCheck");
     }
 
-    private ResponseToRequest DisableCheck(string checkId, string? projectId)
+    private void DisableCheck(string checkId, string? projectId)
     {
         ArgumentException.ThrowIfNullOrEmpty(checkId);
 
-        List<string> updateEvents = [ DATA_TYPE_AVAILABLE_CHECKS ];
+        HashSet<string> updateEvents = [DATA_TYPE_AVAILABLE_CHECKS];
         var checkDetails = _checkDetailsByCheckId[checkId];
 
+        string[] projectIds;
         if (string.IsNullOrEmpty(projectId))
-        {
-            Console.WriteLine($"Disabled check {checkId} for all projects");
-            checkDetails.EnabledProjectIds.Clear();
-            bool resultsRemoved = false;
-            foreach (var ids in _checksByIds.Keys.Where(ids => ids.checkId == checkId))
-            {
-                resultsRemoved |= _checksByIds[ids].ResultsRecorder.CheckRunResults.Count > 0;
-                _checksByIds.Remove(ids);
-            }
-            if (resultsRemoved)
-                updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
+            projectIds = _checksByIds
+                .Keys.Where(ids => ids.checkId == checkId)
+                .Select(ids => ids.projectId)
+                .Distinct()
+                .ToArray();
+        else
+            projectIds = [projectId];
 
-            SendDataUpdateEvent(updateEvents);
-            return ResponseToRequest.Succeeded(updateEvents);
+        var cid = checkId;
+        foreach (var pid in projectIds)
+        {
+            var checkData = _checksByIds[(cid, pid)];
+            lock (checkData.Lock)
+            {
+                if (checkData.ResultsRecorder.CheckRunResults.Count > 0)
+                    updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
+                _checksByIds.TryRemove((cid, pid), out _);
+                Console.WriteLine(
+                    checkDetails.EnabledProjectIds.Remove(pid)
+                        ? $"Disabled check {cid} for project {pid}"
+                        : $"Project {pid} was not enabled for check {cid}"
+                );
+            }
         }
 
-        var projectIds = checkDetails.EnabledProjectIds;
-        int resultsCount = _checksByIds[(checkId, projectId)].ResultsRecorder.CheckRunResults.Count;
-        _checksByIds.Remove((checkId, projectId));
-        Console.WriteLine(projectIds.Remove(projectId)
-            ? $"Disabled check {checkId} for project {projectId}"
-            : $"Project {projectId} was not enabled for check {checkId}");
-        if (resultsCount > 0)
-            updateEvents.Add(DATA_TYPE_CHECK_RESULTS);
+        SendDataUpdateEvent(updateEvents.ToList(), "disable check update");
+    }
 
-        SendDataUpdateEvent(updateEvents);
-        return ResponseToRequest.Succeeded(updateEvents);
+    private bool DenyCheckResult(
+        string checkId,
+        string checkResultType,
+        string projectId,
+        VerseRef vRef,
+        string selectedText,
+        string? _checkResultUniqueId
+    )
+    {
+        if (!_checksByIds.TryGetValue((checkId, projectId), out var check))
+            throw new Exception($"Check {checkId} is not enabled for project {projectId}");
+        lock (check.Lock)
+        {
+            var denials = GetOrCreateDenials(projectId);
+            denials.AddDenial(MessageId.UnknownUseMsgText, vRef, checkResultType, selectedText);
+            denials.Save();
+            check.ResultsRecorder.PostProcessResults(null, denials, null);
+            SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "Denied check result");
+            return true;
+        }
+    }
+
+    private bool AllowCheckResult(
+        string checkId,
+        string checkResultType,
+        string projectId,
+        VerseRef vRef,
+        string selectedText,
+        string? _checkResultUniqueId
+    )
+    {
+        if (!_checksByIds.TryGetValue((checkId, projectId), out var check))
+            throw new Exception($"Check {checkId} has not been run for project {projectId}");
+        lock (check.Lock)
+        {
+            var denials = GetOrCreateDenials(projectId);
+            denials.RemoveDenial(MessageId.UnknownUseMsgText, vRef, checkResultType, selectedText);
+            denials.Save();
+            check.ResultsRecorder.PostProcessResults(null, denials, null);
+            SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "Allowed check result");
+            return true;
+        }
     }
 
     private void RerunChecks(object? sender, TextChangedEventArgs e)
@@ -228,94 +267,125 @@ internal class CheckRunner(PapiClient papiClient)
         var projectId = _dataSourcesByProjectId.First((kvp) => kvp.Value.ScrText == e.ScrText).Key;
         if (string.IsNullOrEmpty(projectId))
         {
-            Console.WriteLine($"Attempted to run checks on project {e.ScrText.Guid} but couldn't find its project ID");
+            Console.WriteLine(
+                $"Attempted to run checks on project {e.ScrText.Guid} but couldn't find its project ID"
+            );
             return;
         }
 
-        bool notifyOfNewOrDifferentResults = false;
-
         // Only run the checks if we have some range active that includes the text that changed
         if (_activeRanges.Any((range) => range.IsWithinRange(projectId, e.BookNum, e.ChapterNum)))
-            notifyOfNewOrDifferentResults = RunChecksForProject(projectId);
+            RunChecksForProject(projectId);
+    }
 
-        if (notifyOfNewOrDifferentResults)
-            SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS);
+    /// <summary>
+    /// Asynchronously run all enabled checks on a project for books within active ranges
+    /// </summary>
+    private void RunChecksForProject(string projectId)
+    {
+        ThreadingUtils.RunTask(
+            Task.Run(() => RunChecksForProjectInternal(projectId)),
+            $"RunChecksForProject {projectId}"
+        );
     }
 
     /// <summary>
     /// Run all enabled checks on a project for books within active ranges
     /// </summary>
-    /// <returns>true if some check produced any new or different results, false otherwise</returns>
-    private bool RunChecksForProject(string projectId)
+    private void RunChecksForProjectInternal(string projectId)
     {
-        bool retVal = false;
+        lock (_runChecksLock)
+        {
+            bool signalUpdatedData = false;
 
-        // Text has to be tokenized for the checks before the checks can run
-        var enabledChecksForProject = _checksByIds
+            // Text has to be tokenized for the checks before the checks can run
+            var enabledChecksForProject = _checksByIds
                 .Where((kvp) => kvp.Key.projectId == projectId)
                 .Select((kvp) => kvp.Value.Check);
-        CheckDataFormat neededDataFormat = 0;
-        foreach (var check in enabledChecksForProject)
-            neededDataFormat |= check.NeededFormat;
+            CheckDataFormat neededDataFormat = 0;
+            foreach (var check in enabledChecksForProject)
+                neededDataFormat |= check.NeededFormat;
 
-        foreach (var range in _activeRanges.Where((range) => range.ProjectId == projectId))
-        {
-            // "GetText" will tokenize the text for checks to use
-            // "0" chapter number means all chapters
-            _dataSourcesByProjectId[projectId].GetText(range.Start.BookNum, 0, neededDataFormat);
-
-            foreach (var checkId in _checkDetailsByCheckId.Values
-                .Where((checkDetails) => checkDetails.EnabledProjectIds.Contains(projectId))
-                .Select((checkDetails) => checkDetails.CheckId))
+            foreach (var range in _activeRanges.Where((range) => range.ProjectId == projectId))
             {
-                var check = _checksByIds[(checkId, projectId)].Check;
-                bool newResultsReturned = RunCheck(checkId, check, range);
-                retVal |= newResultsReturned;
+                // "GetText" will tokenize the text for checks to use
+                // "0" chapter number means all chapters
+                _dataSourcesByProjectId[projectId]
+                    .GetText(range.Start.BookNum, 0, neededDataFormat);
+
+                var scrText = LocalParatextProjects.GetParatextProject(projectId);
+                var indexer = new UsfmBookIndexer(scrText.GetText(range.Start.BookNum));
+
+                foreach (
+                    var checkId in _checkDetailsByCheckId
+                        .Values.Where(
+                            (checkDetails) => checkDetails.EnabledProjectIds.Contains(projectId)
+                        )
+                        .Select((checkDetails) => checkDetails.CheckId)
+                )
+                {
+                    if (_checksByIds.TryGetValue((checkId, projectId), out var x))
+                    {
+                        bool newResultsReturned = RunCheck(checkId, x.Check, range, indexer);
+                        signalUpdatedData |= newResultsReturned;
+                    }
+                }
             }
+
+            if (signalUpdatedData)
+                SendDataUpdateEvent(DATA_TYPE_CHECK_RESULTS, "RunChecksForProject");
         }
-        return retVal;
     }
 
     /// <summary>
     /// Returns true if the check produced any new or different results, false otherwise.
     /// </summary>
-    private bool RunCheck(string checkId, ScriptureCheckBase check, CheckInputRange range)
+    private bool RunCheck(
+        string checkId,
+        ScriptureCheckBase check,
+        CheckInputRange range,
+        UsfmBookIndexer indexer
+    )
     {
-        CheckResultsRecorder recorder;
-        if (!_checksByIds.TryGetValue((checkId, range.ProjectId), out var data))
+        var checkData = _checksByIds.GetOrAdd(
+            (checkId, range.ProjectId),
+            (ids) => new CheckForProject(check, ids.checkId, ids.projectId)
+        );
+        CheckResultsRecorder recorder = checkData.ResultsRecorder;
+        ErrorMessageDenials denials = GetOrCreateDenials(range.ProjectId);
+
+        lock (checkData.Lock)
         {
-            var checkData = new CheckForProject(check, checkId, range.ProjectId);
-            _checksByIds.Add((checkId, range.ProjectId), checkData);
-            recorder = checkData.ResultsRecorder;
+            var removedItems = recorder.TrimResultsFromBook(range.Start.BookNum);
+            int totalBeforeRunning = recorder.CheckRunResults.Count;
+            check.Run(range.Start.BookNum, GetOrCreateDataSource(range.ProjectId), recorder);
+            recorder.PostProcessResults(_activeRanges, denials, indexer);
+            int totalAfterRunning = recorder.CheckRunResults.Count;
+
+            if (totalAfterRunning == totalBeforeRunning)
+                return removedItems.Count != 0;
+
+            if (totalAfterRunning != totalBeforeRunning + removedItems.Count)
+                return true;
+
+            return removedItems.Exists(item => !recorder.CheckRunResults.Contains(item));
         }
-        else
-            recorder = data.ResultsRecorder;
-
-        var removedItems = recorder.CheckRunResults.FindAll((result) => result.Start.VerseRef.BookNum == range.Start.BookNum);
-        recorder.CheckRunResults.RemoveAll((result) => result.Start.VerseRef.BookNum == range.Start.BookNum);
-        int totalBeforeRunning = recorder.CheckRunResults.Count;
-        recorder.CurrentBookNumber = range.Start.BookNum;
-        check.Run(range.Start.BookNum, GetOrCreateDataSource(range.ProjectId), recorder);
-        int totalAfterRunning = recorder.CheckRunResults.Count;
-
-        if (totalAfterRunning == totalBeforeRunning)
-            return removedItems.Count != 0;
-
-        if (totalAfterRunning != totalBeforeRunning + removedItems.Count)
-            return true;
-
-        return removedItems.Exists(item => !recorder.CheckRunResults.Contains(item));
     }
 
     private ChecksDataSource GetOrCreateDataSource(string projectId)
     {
-        if (!_dataSourcesByProjectId.TryGetValue(projectId, out var dataSource))
-        {
-            var scrText = LocalParatextProjects.GetParatextProject(projectId);
-            dataSource = new ChecksDataSource(scrText);
-            _dataSourcesByProjectId.Add(projectId, dataSource);
-        }
-        return dataSource;
+        return _dataSourcesByProjectId.GetOrAdd(
+            projectId,
+            id => new ChecksDataSource(LocalParatextProjects.GetParatextProject(id))
+        );
+    }
+
+    private ErrorMessageDenials GetOrCreateDenials(string projectId)
+    {
+        return _denialsByProjectId.GetOrAdd(
+            projectId,
+            id => ErrorMessageDenials.Get(LocalParatextProjects.GetParatextProject(id))
+        );
     }
 
     #endregion

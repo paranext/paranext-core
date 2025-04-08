@@ -2,7 +2,7 @@ import { useProjectSetting } from '@papi/frontend/react';
 import type { IBaseProjectDataProvider } from 'papi-shared-types';
 import { CSSProperties, useMemo } from 'react';
 
-function useHelloWorldProjectSettings(
+export function useHelloWorldProjectSettings(
   // Any Base PDP type works. Without `any`, the DataProviderUpdateInstructions types are incompatible
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,

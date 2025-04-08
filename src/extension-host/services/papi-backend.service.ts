@@ -8,13 +8,13 @@ import * as commandService from '@shared/services/command.service';
 import papiLogger from '@shared/services/logger.service';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
-import webViewService from '@shared/services/web-view.service';
+import { webViewService } from '@shared/services/web-view.service';
 import {
   papiWebViewProviderService,
   PapiWebViewProviderService,
 } from '@shared/services/web-view-provider.service';
-import internetService, { InternetService } from '@shared/services/internet.service';
-import dataProviderService, { DataProviderService } from '@shared/services/data-provider.service';
+import { internetService, InternetService } from '@shared/services/internet.service';
+import { dataProviderService, DataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine as PapiDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from '@shared/models/project-data-provider-engine.model';
 import { BaseProjectDataProviderEngine as PapiBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
@@ -23,29 +23,35 @@ import {
   papiBackendProjectDataProviderService,
   PapiBackendProjectDataProviderService,
 } from '@shared/services/project-data-provider.service';
-import extensionStorageService, {
+import {
+  extensionStorageService,
   ExtensionStorageService,
 } from '@extension-host/services/extension-storage.service';
 import { ProjectLookupServiceType } from '@shared/models/project-lookup.service-model';
-import projectLookupService from '@shared/services/project-lookup.service';
+import { projectLookupService } from '@shared/services/project-lookup.service';
 import { DialogService } from '@shared/services/dialog.service-model';
-import dialogService from '@shared/services/dialog.service';
+import { dialogService } from '@shared/services/dialog.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
-import menuDataService from '@shared/services/menu-data.service';
+import { menuDataService } from '@shared/services/menu-data.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
-import scrollGroupService from '@shared/services/scroll-group.service';
+import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
-import localizationService from '@shared/services/localization.service';
+import { localizationService } from '@shared/services/localization.service';
 import {
   MinimalNetworkObjectService,
   minimalNetworkObjectService,
 } from '@shared/services/network-object.service';
 import { NetworkObjectStatusServiceType } from '@shared/models/network-object-status.service-model';
-import networkObjectStatusService from '@shared/services/network-object-status.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
-import settingsService from '@shared/services/settings.service';
+import { settingsService } from '@shared/services/settings.service';
 import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
-import projectSettingsService from '@shared/services/project-settings.service';
+import { projectSettingsService } from '@shared/services/project-settings.service';
+import { WebViewFactory as PapiWebViewFactory } from '@shared/models/web-view-factory.model';
+import { dataProtectionService } from '@shared/services/data-protection.service';
+import { INotificationService } from '@shared/models/notification.service-model';
+import { notificationService } from '@shared/services/notification.service';
+import { appService } from '@shared/services/app.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -65,14 +71,20 @@ const papi = {
   BaseProjectDataProviderEngine: PapiBaseProjectDataProviderEngine,
   /** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
   LayeringProjectDataProviderEngineFactory: PapiLayeringProjectDataProviderEngineFactory,
+  /** JSDOC DESTINATION WebViewFactory */
+  WebViewFactory: PapiWebViewFactory,
 
   // Functions
   /** This is just an alias for internet.fetch */
   fetch: internetService.fetch,
 
   // Services/modules
+  /** JSDOC DESTINATION appService */
+  app: appService,
   /** JSDOC DESTINATION commandService */
   commands: commandService,
+  /** JSDOC DESTINATION dataProtectionService */
+  dataProtection: dataProtectionService,
   /** JSDOC DESTINATION papiWebViewService */
   webViews: webViewService as WebViewServiceType,
   /** JSDOC DESTINATION papiWebViewProviderService */
@@ -108,6 +120,8 @@ const papi = {
   scrollGroups: scrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
   localization: localizationService as ILocalizationService,
+  /** JSDOC DESTINATION notificationService */
+  notifications: notificationService as INotificationService,
 };
 /* eslint-enable */
 
@@ -130,12 +144,21 @@ Object.freeze(papi.BaseProjectDataProviderEngine);
 /** JSDOC DESTINATION LayeringProjectDataProviderEngineFactory */
 export const { LayeringProjectDataProviderEngineFactory } = papi;
 Object.freeze(papi.LayeringProjectDataProviderEngineFactory);
+/** JSDOC DESTINATION WebViewFactory */
+export const { WebViewFactory } = papi;
+Object.freeze(papi.WebViewFactory);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);
+/** JSDOC DESTINATION appService */
+export const { app } = papi;
+Object.freeze(papi.app);
 /** JSDOC DESTINATION commandService */
 export const { commands } = papi;
 Object.freeze(papi.commands);
+/** JSDOC DESTINATION dataProtectionService */
+export const { dataProtection } = papi;
+Object.freeze(papi.dataProtection);
 /** JSDOC DESTINATION papiWebViewService */
 export const { webViews } = papi;
 Object.freeze(papi.webViews);
@@ -187,3 +210,6 @@ Object.freeze(papi.scrollGroups);
 /** JSDOC DESTINATION localizationDataService */
 export const { localization } = papi;
 Object.freeze(papi.localization);
+/** JSDOC DESTINATION notificationService */
+export const { notifications } = papi;
+Object.freeze(papi.notifications);

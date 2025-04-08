@@ -1,6 +1,7 @@
 .select-books-dialog {
   display: flex;
   flex-direction: column;
+  gap: 16px;
   padding: 5%;
   overflow-x: hidden;
   overflow-y: hidden;
@@ -11,8 +12,6 @@
 }
 
 .book-list {
-  height: 250px;
-  width: 400px;
   columns: 2;
   column-fill: balance;
   overflow-y: auto;

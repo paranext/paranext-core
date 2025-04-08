@@ -1,5 +1,5 @@
 import path from 'path';
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import { peerDependencies, dependencies } from './package.json';
 
 const config = defineConfig({
@@ -20,6 +20,9 @@ const config = defineConfig({
         },
       },
     },
+  },
+  test: {
+    globals: true,
   },
 });
 export default config;

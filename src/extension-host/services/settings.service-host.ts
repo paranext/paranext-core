@@ -1,10 +1,10 @@
 import * as networkService from '@shared/services/network.service';
-import IDataProviderEngine, { DataProviderEngine } from '@shared/models/data-provider-engine.model';
+import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import {
   DataProviderDataType,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import dataProviderService from '@shared/services/data-provider.service';
+import { dataProviderService } from '@shared/services/data-provider.service';
 import {
   AllSettingsData,
   CATEGORY_EXTENSION_SETTING_VALIDATOR,
@@ -13,16 +13,14 @@ import {
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
 } from '@shared/services/settings.service-model';
-import {
-  coreSettingsValidators,
-  platformSettings,
-} from '@extension-host/data/core-settings-info.data';
+import { coreSettingsValidators } from '@extension-host/data/core-settings-info.data';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   Unsubscriber,
   createSyncProxyForAsyncObject,
   debounce,
   deserialize,
+  getErrorMessage,
   includes,
   isLocalizeKey,
   isString,
@@ -31,21 +29,13 @@ import {
 import { joinUriPaths } from '@node/utils/util';
 import * as nodeFS from '@node/services/node-file-system.service';
 import { serializeRequestType } from '@shared/utils/util';
-import SettingsDocumentCombiner from '@shared/utils/settings-document-combiner';
 import { LocalizedSettingsContributionInfo } from '@shared/utils/settings-document-combiner-base';
-import { dataProviders } from './papi-backend.service';
+import {
+  settingsDocumentCombiner,
+  waitForResyncContributions,
+} from '@extension-host/services/contribution.service';
 
 const SETTINGS_FILE_URI = joinUriPaths('data://', 'settings.json');
-
-/**
- * Object that keeps track of all settings contributions in the platform. To listen to updates to
- * the settings contributions, subscribe to its `onDidRebuild` event (consider debouncing as each
- * contribution will trigger a rebuild).
- *
- * Keeping this object separate from the data provider and disabling the `set` calls in the data
- * provider prevents random services from changing system settings contributions unexpectedly.
- */
-export const settingsDocumentCombiner = new SettingsDocumentCombiner(platformSettings);
 
 async function getSettingsDataFromFile() {
   const settingsFileExists = await nodeFS.getStats(SETTINGS_FILE_URI);
@@ -66,6 +56,7 @@ async function writeSettingsDataToFile(settingsData: Partial<AllSettingsData>) {
 async function getDefaultValueForKey<SettingName extends SettingNames>(
   key: SettingName,
 ): Promise<SettingTypes[SettingName]> {
+  await waitForResyncContributions();
   const settingInfo = settingsDocumentCombiner.getSettingsContributionInfo()?.settings[key];
   if (!settingInfo) {
     throw new Error(`No setting exists for key ${key}`);
@@ -138,11 +129,13 @@ class SettingDataProviderEngine
     );
   }
 
-  // eslint-disable-next-line class-methods-use-this
-  @dataProviders.decorators.ignore
+  /* eslint-disable @typescript-eslint/class-methods-use-this */
+  @dataProviderService.decorators.ignore
   async getLocalizedSettingsContributionInfo(): Promise<
+    /* eslint-enable */
     LocalizedSettingsContributionInfo | undefined
   > {
+    await waitForResyncContributions();
     return settingsDocumentCombiner.getLocalizedSettingsContributionInfo();
   }
 
@@ -169,12 +162,12 @@ class SettingDataProviderEngine
       this.settingsData[key] = newSetting;
       await writeSettingsDataToFile(this.settingsData);
     } catch (error) {
-      throw new Error(`Error setting value for key '${key}': ${error}`);
+      throw new Error(`Error setting value for key '${key}': ${getErrorMessage(error)}`);
     }
     return true;
   }
 
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async validateSetting<SettingName extends SettingNames>(
     key: SettingName,
     newValue: SettingTypes[SettingName],
@@ -187,17 +180,13 @@ class SettingDataProviderEngine
       // If there is no validator just let the change go through
       return true;
     }
+    const requestType = serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key);
     try {
-      return await networkService.request(
-        serializeRequestType(CATEGORY_EXTENSION_SETTING_VALIDATOR, key),
-        newValue,
-        currentValue,
-        allChanges ?? {},
-      );
+      return await networkService.request(requestType, newValue, currentValue, allChanges ?? {});
     } catch (error) {
       // If there is no validator just let the change go through
-      const missingValidatorMsg = `No handler was found to process the request of type`;
-      if (includes(`${error}`, missingValidatorMsg)) return true;
+      const missingValidatorMsg = `'${requestType}' not found`;
+      if (includes(getErrorMessage(error), missingValidatorMsg)) return true;
       throw error;
     }
   }
@@ -212,7 +201,7 @@ class SettingDataProviderEngine
       this.notifyUpdate('');
       return true;
     } catch (error) {
-      throw new Error(`Error resetting key ${key}: ${error}`);
+      throw new Error(`Error resetting key ${key}: ${getErrorMessage(error)}`);
     }
   }
 

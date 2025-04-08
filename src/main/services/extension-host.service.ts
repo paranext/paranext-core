@@ -5,10 +5,12 @@ import {
   COMMAND_LINE_ARGS,
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
-import logger, { formatLog, WARN_TAG } from '@shared/services/logger.service';
+import { formatLog, logger, WARN_TAG } from '@shared/services/logger.service';
 import { AsyncVariable, includes, split, waitForDuration } from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
+import { PathLike } from 'fs';
+import { FileHandle, readFile } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
@@ -78,6 +80,16 @@ async function waitForExtensionHost(maxWaitTimeInMS: number) {
   if (!didExit) logger.warn(`Extension host did not exit within ${maxWaitTimeInMS.toString()} ms`);
 }
 
+async function restartExtensionHost(maxWaitTimeInMS: number) {
+  if (globalThis.isPackaged) {
+    await waitForExtensionHost(maxWaitTimeInMS);
+    logger.debug('Extension host closed, restarting now');
+    return startExtensionHost();
+  }
+  // Tells nodemon to restart the process https://github.com/remy/nodemon/blob/HEAD/doc/events.md#using-nodemon-as-child-process
+  extensionHost?.send('restart');
+}
+
 function hardKillExtensionHost() {
   if (!extensionHost) return;
 
@@ -105,6 +117,19 @@ function getCommandLineArgumentsToForward() {
   ];
 }
 
+/**
+ * Read the contents of a JSON file.
+ *
+ * @param filePath - A path to a file. If a URL is provided, it must use the file: protocol. If a
+ *   FileHandle is provided, the underlying file will not be closed automatically.
+ * @returns The JSON file contents.
+ * @see https://stackoverflow.com/questions/70601733/dynamic-import-with-json-file-doesnt-work-typescript
+ */
+async function readJsonFile(filePath: PathLike | FileHandle) {
+  const file = await readFile(filePath, 'utf8');
+  return JSON.parse(file);
+}
+
 /** Starts the extension host process if it isn't already running. */
 async function startExtensionHost() {
   if (extensionHost) return;
@@ -125,19 +150,22 @@ async function startExtensionHost() {
   if (app.isPackaged) {
     extensionHost = fork(
       path.join(__dirname, '../extension-host/extension-host.js'),
-      [commandLineArgumentsAliases[COMMAND_LINE_ARGS.Packaged][0], ...sharedArgs],
+      [
+        commandLineArgumentsAliases[COMMAND_LINE_ARGS.Packaged][0],
+        ...(process.env.PORTABLE_EXECUTABLE_FILE
+          ? [commandLineArgumentsAliases[COMMAND_LINE_ARGS.Portable][0]]
+          : []),
+        ...sharedArgs,
+      ],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
       },
     );
   } else {
     // If we are in development, get the nodemon watch config so we can pass it in along with the
-    // external extension directories
-    // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
-    // For this dev-only code, it is useful to be able to synchronously get the nodemon.json file
-    const nodemonConfig = await import(
-      /* webpackIgnore: true */ path.join(globalThis.resourcesPath, 'nodemon.json')
-    );
+    // external extension directories.
+    // For this dev-only code, it is useful to be able to get the nodemon.json file.
+    const nodemonConfig = await readJsonFile(path.join(globalThis.resourcesPath, 'nodemon.json'));
     const nodemonWatchPaths: string[] = nodemonConfig?.watch ? nodemonConfig.watch : [];
 
     extensionHost = spawn(
@@ -153,7 +181,7 @@ async function startExtensionHost() {
         ...sharedArgs,
       ],
       {
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
         env: { ...process.env, NODE_ENV: 'development' },
       },
     );
@@ -182,10 +210,11 @@ async function startExtensionHost() {
 }
 
 /** Service that runs the extension-host process from the main file */
-const extensionHostService = {
+export const extensionHostService = {
   start: startExtensionHost,
   kill: hardKillExtensionHost,
   waitForClose: waitForExtensionHost,
+  restart: restartExtensionHost,
 };
 
 export default extensionHostService;

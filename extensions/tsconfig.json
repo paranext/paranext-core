@@ -23,7 +23,7 @@
     "jsx": "react-jsx",
     "typeRoots": [
       // Include default type declarations
-      "./node_modules/@types",
+      "../node_modules/@types",
       // Include papi-dts type declarations (for papi.d.ts)
       "../lib",
       // Include these bundled extensions' type declarations

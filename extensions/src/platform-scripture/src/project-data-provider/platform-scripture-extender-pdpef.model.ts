@@ -1,10 +1,11 @@
-import { IProjectDataProviderEngine, IProjectDataProviderEngineFactory } from '@papi/core';
 import papi, { LayeringProjectDataProviderEngineFactory } from '@papi/backend';
+import { IProjectDataProviderEngine, IProjectDataProviderEngineFactory } from '@papi/core';
 import { escapeStringRegexp } from 'platform-bible-utils';
-import ScriptureExtenderProjectDataProviderEngine, {
+import {
   SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES,
   SCRIPTURE_EXTENDER_PROJECT_INTERFACES,
   ScriptureExtenderOverlayPDPs,
+  ScriptureExtenderProjectDataProviderEngine,
 } from './platform-scripture-extender-pdpe.model';
 
 /** PDP Factory ID for the Scripture Extender PDPF */
@@ -22,7 +23,7 @@ const SCRIPTURE_EXTENDER_OVERLAY_PROJECT_INTERFACES_REGEX_STRINGS = [
   ),
 ];
 
-class ScriptureExtenderProjectDataProviderEngineFactory
+export class ScriptureExtenderProjectDataProviderEngineFactory
   extends LayeringProjectDataProviderEngineFactory<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
   implements IProjectDataProviderEngineFactory<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>
 {
@@ -31,7 +32,7 @@ class ScriptureExtenderProjectDataProviderEngineFactory
   providedProjectInterfaces = SCRIPTURE_EXTENDER_PROJECT_INTERFACES;
 
   // Implementing an interface method, so can't be static
-  // eslint-disable-next-line class-methods-use-this
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async createProjectDataProviderEngine(
     projectId: string,
   ): Promise<IProjectDataProviderEngine<typeof SCRIPTURE_EXTENDER_PROJECT_INTERFACES>> {

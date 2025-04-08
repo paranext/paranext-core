@@ -2,12 +2,18 @@ import React from 'react';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * The Card component displays a card with header, content, and footer. This component is built and
+ * styled with Shadcn UI.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
       className={cn(
-        'pr-rounded-lg pr-border pr-bg-card pr-text-card-foreground pr-shadow-sm',
+        'pr-twp tw-rounded-lg tw-border tw-bg-card tw-text-card-foreground tw-shadow-sm',
         className,
       )}
       {...props}
@@ -16,22 +22,33 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
 );
 Card.displayName = 'Card';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('pr-flex pr-flex-col pr-space-y-1.5 pr-p-6', className)}
+      className={cn('pr-twp tw-flex tw-flex-col tw-space-y-1.5 tw-p-6', className)}
       {...props}
     />
   ),
 );
 CardHeader.displayName = 'CardHeader';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('pr-text-2xl pr-font-semibold pr-leading-none pr-tracking-tight', className)}
+      className={cn(
+        'pr-twp tw-text-2xl tw-font-semibold tw-leading-none tw-tracking-tight',
+        className,
+      )}
       {...props}
     >
       {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
@@ -41,24 +58,40 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
 );
 CardTitle.displayName = 'CardTitle';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <p ref={ref} className={cn('pr-text-sm pr-text-muted-foreground', className)} {...props} />
+  <p ref={ref} className={cn('pr-twp tw-text-sm tw-text-muted-foreground', className)} {...props} />
 ));
 CardDescription.displayName = 'CardDescription';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('pr-p-6 pr-pt-0', className)} {...props} />
+    <div ref={ref} className={cn('pr-twp tw-p-6 tw-pt-0', className)} {...props} />
   ),
 );
 CardContent.displayName = 'CardContent';
 
+/**
+ * @inheritdoc Card
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/card}
+ */
 const CardFooter = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('pr-flex pr-items-center pr-p-6 pr-pt-0', className)} {...props} />
+    <div
+      ref={ref}
+      className={cn('pr-twp tw-flex tw-items-center tw-p-6 tw-pt-0', className)}
+      {...props}
+    />
   ),
 );
 CardFooter.displayName = 'CardFooter';

@@ -1,11 +1,18 @@
 name: Test
 
+# Make sure these match with the matrix.os values below
+env:
+  OS_WINDOWS: windows-latest
+  OS_MACOS: macos-latest
+  # The Ubuntu version must align with the "core" version in electron-builder.json5
+  OS_LINUX: ubuntu-22.04
+
 on:
   push:
-    branches: ['main']
+    branches: ['main', 'release-prep', 'hotfix-*']
   pull_request:
     # The branches below should be a subset of the branches above
-    branches: ['main']
+    branches: ['main', 'release-prep', 'hotfix-*']
   workflow_dispatch:
     inputs:
       debug_enabled:
@@ -22,17 +29,68 @@ jobs:
 
     strategy:
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        # Make sure these match with the env values above
+        os: [windows-latest, macos-latest, ubuntu-22.04]
         dotnet_version: [8.0.x]
 
     steps:
       - name: Install MacPorts
-        if: ${{ matrix.os == 'macos-latest' }}
+        if: ${{ matrix.os == env.OS_MACOS }}
         uses: melusina-org/setup-macports@v1
 
-      - name: Install icu4c on macOS
+      - name: Update MacPorts ports tree
         if: ${{ matrix.os == 'macos-latest' }}
-        run: sudo port -v install icu
+        # Not using `-v` for verbose because it is very slow and does not add much value
+        run: |
+          sudo port sync
+
+      - name: Install loader tools on macOS
+        if: ${{ matrix.os == env.OS_MACOS }}
+        run: |
+          sudo port -v install ld64
+
+      - name: Install icu4c on macOS
+        if: ${{ matrix.os == env.OS_MACOS }}
+        run: |
+          sudo port -v install icu @76.1_0 +universal
+
+      - name: Fixup loader paths for icu4c
+        if: ${{ matrix.os == env.OS_MACOS }}
+        # LIB_DEPENDENCIES are of the form "<ICU lib short name> <dependency as ICU lib short name>"
+        # For example, libicuuc (shortened to "uc") depends on libicudata (shortened to "data")
+        # Dependencies can be seen by running "dyld_info -dependents /path/to/something.dylib"
+        run: |
+          ICU_VERSION=76
+          LIB_DEPENDENCIES="
+          i18n data
+          i18n uc
+          io data
+          io i18n
+          io uc
+          uc data
+          "
+          LIB_DEPENDENCIES=$(echo "$LIB_DEPENDENCIES" | sed '/^$/d')
+          while IFS= read -r line; do
+            set -- $line
+            sudo install_name_tool -change "/opt/local/lib/libicu$2.$ICU_VERSION.dylib" "@loader_path/libicu$2.$ICU_VERSION.dylib" "/opt/local/lib/libicu$1.$ICU_VERSION.dylib"
+          done <<< "$LIB_DEPENDENCIES"
+
+      - name: Install snap tools on Linux
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: |
+          sudo apt update
+          sudo apt install -y snapd
+          sudo snap install snapcraft --classic
+          sudo snap install lxd
+          sudo snap refresh lxd
+          sudo lxd init --auto
+          # Add the current user to the lxd group
+          getent group lxd | grep -qwF "$USER" || sudo usermod -aG lxd "$USER"
+          newgrp lxd
+          # Force the socket to be usable by the current user
+          sudo chmod 666 /var/snap/lxd/common/lxd/unix.socket
+          # https://github.com/canonical/action-build/blob/master/src/tools.ts#L54
+          sudo iptables -P FORWARD ACCEPT
 
       - name: Check out Git repository
         uses: actions/checkout@v4
@@ -54,11 +112,29 @@ jobs:
           node-version: ${{ fromJson(steps.package_json.outputs.volta).node }}
           cache: npm
 
-      - name: npm install
-        run: npm install
+      - name: Install packages
+        run: npm ci
+
+      # build:main has to run before typecheck as it creates buildInfo.json which typecheck requires
+      - name: type checking
+        run: |
+          npm run build:main
+          npm run typecheck
 
       - name: Build
         run: npm run build
+
+      - name: Verify no files changed after build
+        id: verify-changed-files
+        uses: tj-actions/verify-changed-files@v20
+
+      - name: Report file changes
+        if: steps.verify-changed-files.outputs.files_changed == 'true'
+        env:
+          CHANGED_FILES: ${{ steps.verify-changed-files.outputs.changed_files }}
+        run: |
+          echo "Error - changed files after build: $CHANGED_FILES"
+          exit 1
 
       - name: dotnet unit tests
         run: dotnet test c-sharp-tests/c-sharp-tests.csproj
@@ -84,6 +160,84 @@ jobs:
           USE_HARD_LINKS: false
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run package
+
+      - name: Delete previous Windows artifacts created by this workflow
+        if: ${{ matrix.os == env.OS_WINDOWS }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          (gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-windows-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id') -split "`n" | ForEach-Object { gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/$_ }
+
+      - name: Rename Windows exe to include GitHub Action Run ID
+        if: ${{ matrix.os == env.OS_WINDOWS }}
+        run: |
+          Get-ChildItem -Path ./release/build/*.exe | ForEach-Object {
+            if (-not ($_.Name -like "*Setup*.exe")) {
+              $newName = "$($_.BaseName)-${{ github.run_id }}.exe"
+              Rename-Item -Path $_.FullName -NewName $newName
+              Write-Host "Renamed $($_.Name) to $newName"
+            }
+          }
+
+      - name: Upload Windows artifacts
+        if: ${{ matrix.os == env.OS_WINDOWS }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-windows-test
+          retention-days: 14
+          path: |
+            ./release/build/*.exe
+            !./release/build/*Setup*.exe
+
+      - name: Delete previous macOS artifacts created by this workflow
+        if: ${{ matrix.os == env.OS_MACOS }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-macos-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
+
+      - name: Rename macOS dmg to include GitHub Action Run ID
+        if: ${{ matrix.os == env.OS_MACOS }}
+        run: |
+          for file in ./release/build/*.dmg; do
+            newName="${file%.dmg}-${{ github.run_id }}.dmg"
+            mv "$file" "$newName"
+            echo "Renamed $file to $newName"
+          done
+
+      - name: Upload macOS artifacts
+        if: ${{ matrix.os == env.OS_MACOS }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-macos-test
+          retention-days: 14
+          path: |
+            ./release/build/*.dmg
+
+      - name: Delete previous Linux artifacts created by this workflow
+        if: ${{ matrix.os == env.OS_LINUX }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api -X GET /repos/${{ github.repository }}/actions/artifacts --jq '.artifacts[] | select(.name == "app-linux-test" and .workflow_run.head_branch == "${{ github.ref_name }}") | .id' | xargs -I {} gh api -X DELETE /repos/${{ github.repository }}/actions/artifacts/{}
+
+      - name: Rename Linux snap to include GitHub Action Run ID
+        if: ${{ matrix.os == env.OS_LINUX }}
+        run: |
+          for file in ./release/build/*.snap; do
+            newName="${file%.snap}-${{ github.run_id }}.snap"
+            mv "$file" "$newName"
+            echo "Renamed $file to $newName"
+          done
+
+      - name: Upload Linux artifacts
+        if: ${{ matrix.os == env.OS_LINUX }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-linux-test
+          retention-days: 14
+          path: |
+            ./release/build/*.snap
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

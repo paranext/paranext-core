@@ -1,6 +1,6 @@
-import DocumentCombiner, { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
+import { DocumentCombiner, DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 
-export default class NonValidatingDocumentCombiner extends DocumentCombiner {
+export class NonValidatingDocumentCombiner extends DocumentCombiner {
   // Making the protected base constructor public
   // eslint-disable-next-line @typescript-eslint/no-useless-constructor
   constructor(baseDocument: JsonDocumentLike, options: DocumentCombinerOptions) {
@@ -11,3 +11,5 @@ export default class NonValidatingDocumentCombiner extends DocumentCombiner {
     return this.latestOutput;
   }
 }
+
+export default NonValidatingDocumentCombiner;

@@ -3,6 +3,9 @@ module.exports = {
     // https://github.com/electron-react-boilerplate/eslint-config-erb/blob/main/index.js
     // airbnb rules are embedded in erb https://github.com/airbnb/javascript/tree/master/packages/eslint-config-airbnb
     'erb',
+    // https://github.com/import-js/eslint-plugin-import?tab=readme-ov-file#typescript
+    'plugin:import/recommended',
+    'plugin:import/typescript',
     // https://github.com/storybookjs/eslint-plugin-storybook/blob/main/lib/configs/recommended.ts
     'plugin:storybook/recommended',
     // Make sure this is last so it gets the chance to override other configs.
@@ -15,11 +18,15 @@ module.exports = {
 
     // #region ERB rules
 
+    // Use `noImplicitReturns` instead. See https://typescript-eslint.io/rules/consistent-return/.
+    'consistent-return': 'off',
+    'import/default': 'off',
     'import/extensions': 'off',
     // A temporary hack related to IDE not resolving correct package.json
     'import/no-extraneous-dependencies': 'off',
     'import/no-import-module-exports': 'off',
     'import/no-unresolved': 'error',
+    'import/prefer-default-export': 'off',
     'react/jsx-filename-extension': 'off',
     'react/react-in-jsx-scope': 'off',
 
@@ -30,7 +37,11 @@ module.exports = {
     // Rules in each section are generally in alphabetical order. However, several
     // `@typescript-eslint` rules require disabling the equivalent ESLint rule. So in these cases
     // each ESLint rule is turned off immediately above the corresponding `@typescript-eslint` rule.
-    'import/no-anonymous-default-export': ['error', { allowCallExpression: false }],
+    'class-methods-use-this': 'off',
+    '@typescript-eslint/class-methods-use-this': [
+      'error',
+      { ignoreOverrideMethods: true, ignoreClassesThatImplementAnInterface: false },
+    ],
     '@typescript-eslint/explicit-member-accessibility': ['error', { accessibility: 'no-public' }],
     'lines-between-class-members': 'off',
     '@typescript-eslint/lines-between-class-members': [
@@ -73,6 +84,7 @@ module.exports = {
     'no-useless-constructor': 'off',
     '@typescript-eslint/no-useless-constructor': 'error',
     'comma-dangle': ['error', 'always-multiline'],
+    'import/no-anonymous-default-export': ['error', { allowCallExpression: false }],
     indent: 'off',
     'jsx-a11y/label-has-associated-control': [
       'error',
@@ -108,7 +120,10 @@ module.exports = {
   settings: {
     'import/resolver': {
       // See https://github.com/benmosher/eslint-plugin-import/issues/1396#issuecomment-575727774 for line below
-      node: {},
+      node: {
+        extensions: ['.js', '.jsx', '.ts', '.tsx'],
+        moduleDirectory: ['node_modules', 'src/'],
+      },
       webpack: {
         config: require.resolve('./.erb/configs/webpack.config.eslint.ts'),
       },

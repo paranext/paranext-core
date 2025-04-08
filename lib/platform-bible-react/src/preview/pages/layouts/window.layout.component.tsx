@@ -1,4 +1,4 @@
-import BookChapterControl from '@/components/advanced/book-chapter-control/book-chapter-control.component';
+import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   DropdownMenu,
@@ -11,32 +11,69 @@ import {
   DropdownMenuTrigger,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/shadcn-ui/tabs';
-import { HasDirection } from '@/preview/preview-components/direction-toggle.component';
-import { ScriptureReference } from 'platform-bible-utils';
+import { Canon } from '@sillsdev/scripture';
+
+import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 
-export default function WindowOrTabExample({ direction }: HasDirection) {
-  const defaultScrRef: ScriptureReference = {
-    bookNum: 1,
-    chapterNum: 1,
-    verseNum: 1,
-  };
+export type HasIsFocused = {
+  isFocused?: boolean;
+};
+
+export function WindowOrTabExample({ isFocused }: HasIsFocused) {
   const [scrRef, setScrRef] = useState(defaultScrRef);
+  // Example hardcoded active book IDs
+
+  const randomBinaryString = Array.from({ length: 71 }, () =>
+    Math.random() < 0.8 ? '0' : '1',
+  ).join('');
+
+  const initialActiveBookNums = Array.from(randomBinaryString).reduce(
+    (ids: number[], char, index) => {
+      if (char === '1') {
+        ids.push(index + 1);
+      }
+      return ids;
+    },
+    [],
+  );
+
+  const getActiveBookIds = () => {
+    // Add ES3 to demonstrate that an obsolete book in use will display (easier than trying to
+    // figure out which 0 to make a 1 in the above string.)
+    const activeBookNums = Array.from(
+      new Set([
+        ...initialActiveBookNums,
+        Canon.bookIdToNumber(scrRef.book),
+        Canon.bookIdToNumber('3ES'),
+      ]),
+    );
+    activeBookNums.sort((a, b) => a - b);
+    return activeBookNums.map((bookNum) => Canon.bookNumberToId(bookNum));
+  };
+
+  const highlightClassName = isFocused
+    ? 'tw-bg-primary tw-text-primary-foreground'
+    : 'tw-bg-secondary tw-text-secondary-foreground';
   return (
-    <div className="pr-rounded-md pr-border">
-      <div className="pr-flex pr-flex-row pr-rounded-se-md pr-bg-muted/50">
-        <div className="pr-m-2">
-          <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
+    <div className="tw-rounded-md tw-border">
+      <div className="tw-flex tw-flex-row tw-rounded-se-md tw-bg-muted/50">
+        <div className="tw-m-2">
+          <BookChapterControl
+            scrRef={scrRef}
+            handleSubmit={setScrRef}
+            getActiveBookIds={getActiveBookIds}
+          />
         </div>
-        <div className="pr-grow" />
-        <div className="pr-m-2 pr-flex">
-          <Tabs defaultValue="a" dir={direction}>
+        <div className="tw-grow" />
+        <div className="tw-m-2 tw-flex">
+          <Tabs defaultValue="a">
             <TabsList>
               <TabsTrigger value="a">A</TabsTrigger>
               <TabsTrigger value="b">B</TabsTrigger>
             </TabsList>
           </Tabs>
-          <DropdownMenu dir={direction}>
+          <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost">&#x22ee;</Button>
             </DropdownMenuTrigger>
@@ -44,20 +81,20 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
               <DropdownMenuLabel>Tab Options</DropdownMenuLabel>
               <DropdownMenuGroup>
                 <DropdownMenuItem
-                  className="pr-flex pr-justify-between pr-gap-2"
+                  className="tw-flex tw-justify-between tw-gap-2"
                   onClick={(e) => {
                     e.preventDefault();
                   }}
                 >
                   <span>Zoom</span>
-                  <span className="pr-flex pr-gap-2">
+                  <span className="tw-flex tw-gap-2">
                     <span>50%</span>
                     <span>-----o-----</span>
                     <span>200%</span>
                   </span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="pr-flex pr-justify-between pr-gap-2"
+                  className="tw-flex tw-justify-between tw-gap-2"
                   onClick={(e) => {
                     e.preventDefault();
                   }}
@@ -66,27 +103,27 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
                   <span>[Publish v]</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="pr-flex pr-justify-between pr-gap-2"
+                  className="tw-flex tw-justify-between tw-gap-2"
                   onClick={(e) => {
                     e.preventDefault();
                   }}
                 >
                   <span>Scroll with</span>
-                  <Tabs defaultValue="a" dir={direction}>
-                    <TabsList className="pr-h-7">
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="a">
+                  <Tabs defaultValue="a">
+                    <TabsList className="tw-h-7">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="a">
                         A
                       </TabsTrigger>
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="b">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="b">
                         B
                       </TabsTrigger>
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="c">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="c">
                         C
                       </TabsTrigger>
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="d">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="d">
                         D
                       </TabsTrigger>
-                      <TabsTrigger className="pr-h-6 pr-w-0" value="-">
+                      <TabsTrigger className="tw-h-6 tw-w-0" value="-">
                         -
                       </TabsTrigger>
                     </TabsList>
@@ -95,13 +132,13 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
               <DropdownMenuGroup>
-                <DropdownMenuItem className="pr-flex pr-justify-between pr-gap-2">
+                <DropdownMenuItem className="tw-flex tw-justify-between tw-gap-2">
                   <span>1 item in a group</span>
                   <DropdownMenuShortcut>CTRL⇧F</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </DropdownMenuGroup>
               <DropdownMenuSeparator />
-              <DropdownMenuItem className="pr-flex pr-justify-between pr-gap-2">
+              <DropdownMenuItem className="tw-flex tw-justify-between tw-gap-2">
                 <span>Item without group</span>
                 <DropdownMenuShortcut>CTRL⇧F</DropdownMenuShortcut>
               </DropdownMenuItem>
@@ -110,24 +147,25 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
           <Button variant="ghost">X</Button>
         </div>
         <Button
-          className="pr-h-14 pr-w-14 pr-rounded-ee-none pr-rounded-ss-none"
+          className="tw-h-14 tw-w-14 tw-rounded-ee-none tw-rounded-ss-none"
           variant="secondary"
         >
-          <p className="pr-text-2xl">+</p>
+          <p className="tw-text-2xl">+</p>
         </Button>
       </div>
-      <div className="pr-p-4">
+      <div className="tw-p-4">
         <p>
           Imagine here the text of <code>{JSON.stringify(scrRef)}</code>
         </p>
         <br />
         <p>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt
-          ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation
-          ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in
-          reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur
-          sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id
-          est laborum.
+          Lorem{' '}
+          <span className={highlightClassName}>ipsum dolor sit amet, consectetur adipiscing</span>{' '}
+          elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+          veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+          Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat
+          nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia
+          deserunt mollit anim id est laborum.
         </p>
         <br />
         <p>
@@ -151,3 +189,5 @@ export default function WindowOrTabExample({ direction }: HasDirection) {
     </div>
   );
 }
+
+export default WindowOrTabExample;

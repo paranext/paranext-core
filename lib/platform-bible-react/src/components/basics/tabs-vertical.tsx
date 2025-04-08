@@ -3,6 +3,7 @@
 'use client';
 
 import { TabsContentProps, TabsListProps, TabsTriggerProps } from '@/components/shadcn-ui/tabs';
+import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { cn } from '@/utils/shadcn-ui.util';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import React from 'react';
@@ -19,14 +20,18 @@ export type LeftTabsTriggerProps = TabsTriggerProps & {
 export const VerticalTabs = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Root>,
   VerticalTabsProps
->(({ className, ...props }, ref) => (
-  <TabsPrimitive.Root
-    orientation="vertical"
-    ref={ref}
-    className={cn('pr-flex pr-gap-1 pr-rounded-md pr-text-muted-foreground', className)}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  const dir: Direction = readDirection();
+  return (
+    <TabsPrimitive.Root
+      orientation="vertical"
+      ref={ref}
+      className={cn('tw-flex tw-gap-1 tw-rounded-md tw-text-muted-foreground', className)}
+      {...props}
+      dir={dir}
+    />
+  );
+});
 
 VerticalTabs.displayName = TabsPrimitive.List.displayName;
 
@@ -37,7 +42,7 @@ export const VerticalTabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'pr-flex-fit pr-mlk-items-center pr-w-[124px] pr-justify-center pr-rounded-md pr-bg-muted pr-p-1 pr-text-muted-foreground',
+      'tw-flex-fit tw-mlk-items-center tw-w-[124px] tw-justify-center tw-rounded-md tw-bg-muted tw-p-1 tw-text-muted-foreground',
       className,
     )}
     {...props}
@@ -53,7 +58,7 @@ export const VerticalTabsTrigger = React.forwardRef<
     ref={ref}
     {...props}
     className={cn(
-      'overflow-clip pr-inline-flex pr-w-[116px] pr-cursor-pointer pr-items-center pr-justify-center pr-break-words pr-rounded-sm pr-border-0 pr-bg-muted pr-px-3 pr-py-1.5 pr-text-sm pr-font-medium pr-text-inherit pr-ring-offset-background pr-transition-all hover:pr-text-foreground focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2 disabled:pr-pointer-events-none disabled:pr-opacity-50 data-[state=active]:pr-bg-background data-[state=active]:pr-text-foreground data-[state=active]:pr-shadow-sm',
+      'overflow-clip tw-inline-flex tw-w-[116px] tw-cursor-pointer tw-items-center tw-justify-center tw-break-words tw-rounded-sm tw-border-0 tw-bg-muted tw-px-3 tw-py-1.5 tw-text-sm tw-font-medium tw-text-inherit tw-ring-offset-background tw-transition-all hover:tw-text-foreground focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2 disabled:tw-pointer-events-none disabled:tw-opacity-50 data-[state=active]:tw-bg-background data-[state=active]:tw-text-foreground data-[state=active]:tw-shadow-sm',
       className,
     )}
   />
@@ -66,7 +71,8 @@ export const VerticalTabsContent = React.forwardRef<
   <TabsPrimitive.Content
     ref={ref}
     className={cn(
-      'mt-2 pr-ms-5 pr-flex-grow pr-text-foreground pr-ring-offset-background focus-visible:pr-outline-none focus-visible:pr-ring-2 focus-visible:pr-ring-ring focus-visible:pr-ring-offset-2',
+      // Removed tw-mt-2 because Sebastian said so
+      'tw-ms-5 tw-flex-grow tw-text-foreground tw-ring-offset-background focus-visible:tw-outline-none focus-visible:tw-ring-2 focus-visible:tw-ring-ring focus-visible:tw-ring-offset-2',
       className,
     )}
     {...props}

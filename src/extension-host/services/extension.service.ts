@@ -11,32 +11,35 @@ import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
 import * as SillsdevScripture from '@sillsdev/scripture';
 import * as platformBibleUtils from 'platform-bible-utils';
-import logger from '@shared/services/logger.service';
-import { getCommandLineArgumentsGroup, COMMAND_LINE_ARGS } from '@node/utils/command-line.util';
+import * as crypto from 'crypto';
+import { logger } from '@shared/services/logger.service';
+import {
+  getCommandLineArgumentsGroup,
+  COMMAND_LINE_ARGS,
+  getCommandLineSwitch,
+} from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
-import papi, { network, fetch as papiFetch } from '@extension-host/services/papi-backend.service';
-import executionTokenService from '@node/services/execution-token.service';
+import papi, { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import * as papiCore from '@shared/services/papi-core.service';
+import { executionTokenService } from '@node/services/execution-token.service';
 import { ExecutionActivationContext } from '@extension-host/extension-types/extension-activation-context.model';
 import {
   debounce,
-  UnsubscriberAsync,
-  UnsubscriberAsyncList,
   deserialize,
   endsWith,
+  formatReplacementString,
   includes,
   stringLength,
   startsWith,
   slice,
-  JsonDocumentLike,
+  toKebabCase,
+  UnsubscriberAsync,
+  UnsubscriberAsyncList,
+  getErrorMessage,
 } from 'platform-bible-utils';
-import LogError from '@shared/log-error.model';
+import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
-import { menuDocumentCombiner } from '@extension-host/services/menu-data.service-host';
-import menuDataService from '@shared/services/menu-data.service';
-import { localizedStringsDocumentCombiner } from '@extension-host/services/localization.service-host';
-import { settingsDocumentCombiner } from '@extension-host/services/settings.service-host';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import { projectSettingsDocumentCombiner } from '@extension-host/services/project-settings.service-host';
 import {
   ElevatedPrivilegeNames,
   ElevatedPrivileges,
@@ -51,6 +54,23 @@ import {
 import { CreateProcess } from '@shared/models/create-process-privilege.model';
 import { wrappedFork, wrappedSpawn } from '@extension-host/services/create-process.service';
 import os from 'os';
+import { resyncContributions } from '@extension-host/services/contribution.service';
+import {
+  HandleUri,
+  RegisterUriHandler,
+  UriHandler,
+} from '@shared/models/handle-uri-privilege.model';
+import {
+  createNetworkEventEmitter,
+  registerRequestHandler,
+} from '@shared/services/network.service';
+import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+import { notificationService } from '@shared/services/notification.service';
+import { localizationService } from '@shared/services/localization.service';
+import { appService } from '@shared/services/app.service';
+// Used in JSDoc
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { AppInfo } from '@shared/services/app.service-model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -107,6 +127,14 @@ type DtsInfo = {
 };
 
 /**
+ * Key to uniquely identify an extension with some extra certainty that the extension is who it says
+ * it is.
+ *
+ * Format: `<extension-publisher>.<extension-name>`.toLowerCase()
+ */
+type ExtensionKey = `${string}.${string}`;
+
+/**
  * Name of the file describing the extension and its capabilities. Provided by the extension
  * developer
  */
@@ -114,6 +142,12 @@ const MANIFEST_FILE_NAME = 'manifest.json';
 
 /** List of all forbidden extension names. Extensions with these names will not work */
 const FORBIDDEN_EXTENSION_NAMES = ['', PLATFORM_NAMESPACE];
+
+/**
+ * Debounce time and time to wait to restart immediately after restarting if another restart was
+ * requested
+ */
+const RESTART_DELAY_MS = 2000;
 
 /** Save the original `require` function. */
 const requireOriginal = Module.prototype.require;
@@ -162,6 +196,17 @@ let availableExtensions: ExtensionInfo[];
  */
 let reloadFinishedEventEmitter: platformBibleUtils.PlatformEventEmitter<boolean>;
 
+/** Whether we are currently reloading extensions */
+let isReloading = false;
+/** Whether we should reload extensions again once finished currently reloading */
+let shouldReload = false;
+
+/** Map of registered URI handlers for each extension keyed by the extension publisher name and name */
+const uriHandlersByExtensionKey = new Map<ExtensionKey, UriHandler>();
+
+/** Regex matching to spaces */
+const spaceRegex = /\s/;
+
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest: ExtensionManifest = deserialize(extensionManifestJson);
@@ -179,6 +224,13 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
 }
 
 /**
+ * The directory for extensions bundled into the application
+ *
+ * - In development: `paranext-core/extensions/dist`
+ * - In production: `resources/extensions`
+ */
+const bundledExtensionDir = `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`;
+/**
  * The directories we will search for extension directories and zips.
  *
  * Command-line-provided directories are given priority, so they are provided in this order:
@@ -194,12 +246,30 @@ function parseManifest(extensionManifestJson: string): ExtensionManifest {
  *    - In production: `resources/extensions`
  */
 const extensionRootDirectories: Uri[] = [
+  // 1. `--extensionDirs`-provided directories
   ...getCommandLineArgumentsGroup(COMMAND_LINE_ARGS.ExtensionsDir).map(
     (extensionDirPath) => `${FILE_PROTOCOL}${path.resolve(extensionDirPath)}`,
   ),
+  // 2. Installed extensions directory
   installedExtensionsUri,
-  `resources://extensions${globalThis.isPackaged ? '' : '/dist'}`,
+  // 3. Core extensions directory
+  bundledExtensionDir,
 ];
+/**
+ * The root extension directories we should watch for changes to extensions.
+ *
+ * We do not want to watch the bundled extension directory if we are in the portable application
+ * because it deletes and unzips all app files every time it is launched including when the user
+ * navigates to a url containing our {@link AppInfo.uriScheme}. See {@link handleExtensionUri} for
+ * more information about navigating to our uri scheme.
+ */
+const extensionRootDirectoriesToWatch: Uri[] = [...extensionRootDirectories];
+if (getCommandLineSwitch(COMMAND_LINE_ARGS.Portable)) {
+  extensionRootDirectoriesToWatch.splice(
+    extensionRootDirectoriesToWatch.indexOf(bundledExtensionDir),
+    1,
+  );
+}
 
 /** Individual extension folders and/or zips to load as provided by command-line `--extensions` */
 const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
@@ -446,6 +516,11 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
     if (extB.name === 'platformScripture') return 1;
     if (extA.name === 'platformScriptureEditor') return -1;
     if (extB.name === 'platformScriptureEditor') return 1;
+    const extAIsPlatform = extA.name.startsWith('platform');
+    const extBIsPlatform = extB.name.startsWith('platform');
+    if (extAIsPlatform && !extBIsPlatform) return -1;
+    if (extBIsPlatform && !extAIsPlatform) return 1;
+    if (extAIsPlatform && extBIsPlatform) return extA.name < extB.name ? -1 : 1;
     const extAIsPT = extA.name.startsWith('paratext');
     const extBIsPT = extB.name.startsWith('paratext');
     if (extAIsPT && !extBIsPT) return -1;
@@ -471,22 +546,23 @@ function createDtsInfoFromUri(declarationUri: Uri): DtsInfo {
 
 /**
  * Caches type declaration files for each extension. Gets the type declaration file from each
- * extension and copies it to `extension-types/<extension_type_file_name_without_.d.ts>/index.d.ts`
+ * extension and copies it to `extension-types/<extension-type-file-name-without-.d.ts>/index.d.ts`
  * because that is the path that works. If the extension's type declaration file does not start with
- * `<extension_name>`, the folder created will be named `<extension_name>` instead of the name of
- * the extension type declaration file name.
+ * `<extension-name>` (kebab-case version of the extension name), the folder created will be named
+ * `<extension-name>` instead of the name of the extension type declaration file name.
  *
  * We look first at the location provided by the extension manifest's `types` property. If one is
  * not provided, we look for files according to the specification in the JSDoc for
- * {@link ExtensionManifest}'s `types` property order and copy over the first one found.
+ * {@link ExtensionManifest.types} order and copy over the first one found.
  *
  * @param extensionInfos Extension info for extensions whose types to cache
  */
 async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
   return Promise.all(
     extensionInfos.map(async (extensionInfo) => {
+      const extensionNameKebabCase = toKebabCase(extensionInfo.name);
       /** The default assumed name for the dts file including `.d.ts` */
-      const extensionDtsBaseDefault = `${extensionInfo.name}.d.ts`;
+      const extensionDtsBaseDefault = `${extensionNameKebabCase}.d.ts`;
       /** The declaration file uri we are copying for this extension */
       let extensionDtsInfo: DtsInfo | undefined;
       /** The declaration file name we are creating for this extension including `.d.ts` */
@@ -531,7 +607,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
         // with version number or something
         if (!extensionDtsInfo)
           extensionDtsInfo = dtsInfos.find((dtsInfo) =>
-            startsWith(dtsInfo.base, extensionInfo.name),
+            startsWith(dtsInfo.base, extensionNameKebabCase),
           );
 
         // Try using a dts file whose name is `index.d.ts`
@@ -548,7 +624,7 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
 
       // If the dts file has stuff after the extension name, we want to use it so they can suffix a
       // version number or something
-      if (startsWith(extensionDtsInfo.base, extensionInfo.name))
+      if (startsWith(extensionDtsInfo.base, extensionNameKebabCase))
         extensionDtsBaseDestination = extensionDtsInfo.base;
 
       // Put the extension's dts in the types cache in its own folder
@@ -581,17 +657,15 @@ function watchForExtensionChanges(): UnsubscriberAsync {
   const reloadExtensionsDebounced = debounce(async (shouldDeactivateExtensions) => {
     try {
       logger.debug('Reload extensions from watching');
-      await reloadExtensions(shouldDeactivateExtensions);
-      reloadFinishedEventEmitter.emit(true);
+      await reloadExtensions(shouldDeactivateExtensions, true);
     } catch (e) {
-      reloadFinishedEventEmitter.emit(false);
       throw new LogError(`Reload extensions from watching failed. Investigate: ${e}`);
     }
-  });
+  }, RESTART_DELAY_MS);
 
   const watcher = chokidar
     .watch(
-      extensionRootDirectories
+      extensionRootDirectoriesToWatch
         .concat(commandLineExtensionDirectories)
         .map((uri) => getPathFromUri(uri)),
       { ignoreInitial: true, awaitWriteFinish: true },
@@ -765,7 +839,9 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
       !enabled.find((enabledId) => enabledId.extensionName === disabledId.extensionName),
   );
 
-  // "Packaged" extensions are all the running extensions that aren't "enabled"
+  // "Packaged" extensions are all the running extensions that aren't "enabled".
+  // `undefined` items are filtered out so can assert here.
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
   const packaged = [...activeExtensions.values()]
     .map((active) => {
       const packagedId: ExtensionIdentifier = {
@@ -777,7 +853,7 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
         ? undefined
         : packagedId;
     })
-    .filter((identifier) => !!identifier);
+    .filter((identifier) => !!identifier) as ExtensionIdentifier[];
 
   return {
     enabled,
@@ -788,10 +864,84 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
 
 // #endregion
 
+// #region Extension URI handling privileges
+
+let appUriScheme: string | undefined;
+
+function getExtensionKey(manifest: ExtensionManifest): ExtensionKey {
+  if (!manifest.publisher || spaceRegex.test(manifest.publisher))
+    throw new Error('Extension publisher must not be empty string, undefined, or contain spaces');
+  if (!manifest.name || spaceRegex.test(manifest.name))
+    throw new Error('Extension name must not be empty string, undefined, or contain spaces');
+  const extensionKey: ExtensionKey = `${manifest.publisher.toLowerCase()}.${manifest.name.toLowerCase()}`;
+  return extensionKey;
+}
+
+function getRedirectUri(manifest: ExtensionManifest) {
+  return `${appUriScheme}://${getExtensionKey(manifest)}`;
+}
+
+function createRegisterUriHandlerFunction(manifest: ExtensionManifest): RegisterUriHandler {
+  return (uriHandler) => {
+    const extensionKey = getExtensionKey(manifest);
+    if (uriHandlersByExtensionKey.has(extensionKey))
+      throw new Error(
+        `Extension ${extensionKey} already has a registered Uri handler. Cannot have multiple.`,
+      );
+
+    uriHandlersByExtensionKey.set(extensionKey, uriHandler);
+
+    return () => uriHandlersByExtensionKey.delete(extensionKey);
+  };
+}
+
+function handleExtensionUri(uri: string) {
+  // need to use `new URL` instead of `URL.parse` because Node<22.1.0 doesn't have it. Can change
+  // when we get there
+  let url: URL;
+  try {
+    url = new URL(uri);
+  } catch (e) {
+    logger.warn(`Extension service received uri ${uri} but could not parse it. ${e}`);
+    return;
+  }
+  if (url.protocol !== `${appUriScheme}:`) {
+    logger.warn(
+      `Extension service received uri ${uri} but protocol does not match ${appUriScheme}`,
+    );
+    return;
+  }
+
+  // Validating the map keys when setting in createRegisterUriHandlerFunction, so this won't match
+  // to anything if it is not properly formatted. Implicitly validating as ExtensionKey
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const extensionKey = url?.hostname.toLowerCase() as ExtensionKey;
+  const uriHandler = uriHandlersByExtensionKey.get(extensionKey);
+
+  if (!uriHandler) {
+    logger.warn(
+      `Extension service received uri ${uri}, but there was not a registered URI handler for ${extensionKey}`,
+    );
+    return;
+  }
+
+  (async () => {
+    try {
+      logger.debug(`Extension service sending uri ${uri} to extension ${extensionKey} to handle`);
+      await uriHandler(uri);
+    } catch (e) {
+      logger.warn(`Extension service ran uri handler for ${uri}, but it threw. ${e}`);
+    }
+  })();
+}
+
+// #endregion
+
 function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<ElevatedPrivileges> {
   const retVal: ElevatedPrivileges = {
     createProcess: undefined,
     manageExtensions: undefined,
+    handleUri: undefined,
   };
   if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.createProcess)) {
     const createProcess: CreateProcess = {
@@ -816,6 +966,14 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
     Object.freeze(manageExtensions);
     retVal.manageExtensions = manageExtensions;
   }
+  if (manifest.elevatedPrivileges?.find((p) => p === ElevatedPrivilegeNames.handleUri)) {
+    const handleUri: HandleUri = {
+      redirectUri: getRedirectUri(manifest),
+      registerUriHandler: createRegisterUriHandlerFunction(manifest),
+    };
+    Object.freeze(handleUri);
+    retVal.handleUri = handleUri;
+  }
   Object.freeze(retVal);
   return retVal;
 }
@@ -830,6 +988,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
  * @returns Unsubscriber that deactivates the extension.
  */
 async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
+  logger.info(`extension.service: importing ${extension.name}`);
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
   // bundle and should not be looked up in the bundle. Assert a more ambiguous type.
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
@@ -837,6 +996,7 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   const extensionModuleAmbiguous = systemRequire(
     /* webpackIgnore: true */ getPathFromUri(extension.dirUri),
   ) as AmbiguousExtensionModule;
+  logger.info(`extension.service: finished importing ${extension.name}`);
   // Some modules import with their exports directly on the module object, while others put their
   // exports in a `default` member on the module. Let's use the module object itself if `activate`
   // is on it, and let's go into `default` otherwise.
@@ -861,13 +1021,11 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   };
   Object.freeze(context);
 
-  // Activate the extension
-  await extensionModule.activate(context);
-
-  // Add registrations that the extension didn't explicitly make itself
-  if (extensionModule.deactivate) context.registrations.add(extensionModule.deactivate);
+  // Automatically unregister the execution token when the extension is deactivated
   context.registrations.add(() => executionTokenService.unregisterExtension(tokenName, tokenHash));
-  context.registrations.add(() => activeExtensions.delete(extension.name));
+
+  // Call activate() on the extension
+  await callActivateOnExtension(extensionModule, context, extension);
 
   // Store information about our newly activated extension
   const activeExtension: ActiveExtension = {
@@ -875,7 +1033,91 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
     registrations: context.registrations,
   };
   activeExtensions.set(extension.name, activeExtension);
+  context.registrations.add(() => activeExtensions.delete(context.name));
   return activeExtension;
+}
+
+/** Get the length of time in milliseconds to wait for an extension to activate before timing out */
+function getExtensionActivationTimeoutMs(): number {
+  // 5 seconds tries to balance flexibility with exceeding other timeouts
+  const timeoutDefaultMs = 5000;
+  if (!process.env.EXTENSION_ACTIVATION_TIMEOUT) return timeoutDefaultMs;
+  const parsedTimeout = parseInt(process.env.EXTENSION_ACTIVATION_TIMEOUT, 10);
+  if (Number.isNaN(parsedTimeout) || parsedTimeout < 1000) return timeoutDefaultMs;
+  return parsedTimeout;
+}
+
+/**
+ * Calls the activate function on an extension and handles problems that arise
+ *
+ * @param extension - The extension to activate
+ * @param context - Context object to pass into the extension's activate function
+ * @param info - Information about the extension
+ * @returns A promise that resolves when the extension has been activated
+ * @throws An error if the extension had a problem during activation or takes too long to activate
+ */
+async function callActivateOnExtension(
+  extension: IExtension,
+  context: ExecutionActivationContext,
+  info: ExtensionInfo,
+): Promise<void> {
+  logger.info(`extension.service: activating ${context.name}`);
+
+  let timeoutOccurred = false;
+  let errorDuringActivation: unknown;
+  const deactivationObject = {
+    info,
+    registrations: context.registrations,
+  };
+  await Promise.race([
+    (async () => {
+      try {
+        await extension.activate(context);
+        if (extension.deactivate) context.registrations.add(extension.deactivate);
+        if (timeoutOccurred) await deactivateExtension(deactivationObject);
+      } catch (e) {
+        errorDuringActivation = e;
+        if (timeoutOccurred)
+          logger.error(
+            `Extension '${context.name}' threw after timed out activation: ${getErrorMessage(e)}`,
+          );
+        else {
+          try {
+            // Not adding `extension.deactivate` to registrations since `extension.activate` threw
+            await deactivateExtension(deactivationObject);
+          } catch (deactivationError) {
+            logger.error(
+              `Extension '${context.name}' threw while deactivating after activation threw: ${getErrorMessage(deactivationError)}`,
+            );
+          }
+        }
+      }
+    })(),
+    new Promise<void>((resolve) => {
+      setTimeout(() => {
+        timeoutOccurred = true;
+        resolve();
+      }, getExtensionActivationTimeoutMs());
+    }),
+  ]);
+  if (timeoutOccurred || errorDuringActivation) {
+    // TODO: Disable extensions that didn't activate once we have a way for users to re-enable them
+    notificationService.send({
+      severity: 'error',
+      message: formatReplacementString(
+        await localizationService.getLocalizedString({
+          localizeKey: '%extension_failed_to_start%',
+        }),
+        {
+          extensionName: context.name,
+        },
+      ),
+    });
+  }
+  if (errorDuringActivation) throw errorDuringActivation;
+  if (timeoutOccurred) throw new Error(`Activation of ${context.name} timed out`);
+
+  logger.info(`extension.service: finished activating ${context.name}`);
 }
 
 /**
@@ -898,13 +1140,19 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   }));
 
   // Shim out require so extensions can use it only as prescribed.
+  // WARNING: This code should not be edited without serious review. For more information,
+  // see https://github.com/paranext/paranext/wiki/Module-import-restrictions
   // Assert the specific type.
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   Module.prototype.require = ((moduleName: string) => {
     // Allow the extension to import papi and some other things
     if (moduleName === '@papi/backend') return papi;
+    if (moduleName === '@papi/core') return papiCore;
     if (moduleName === '@sillsdev/scripture') return SillsdevScripture;
     if (moduleName === 'platform-bible-utils') return platformBibleUtils;
+
+    // Node's built-in modules
+    if (moduleName === 'crypto') return crypto;
 
     // Figure out if we are doing the import for the extension file in activateExtension
     const extensionFile = extensionsWithCheck.find(
@@ -979,23 +1227,31 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
  * @returns `true` if the extension deactivates, `false` if at least one deactivation fails,
  *   `undefined` otherwise, e.g. not active, not registered.
  */
-async function deactivateExtension(extension: ExtensionInfo): Promise<boolean | undefined> {
-  const activeExtension = activeExtensions.get(extension.name);
-
-  if (!activeExtension) logger.error(`Extension '${extension.name}' has no active extension data.`);
-  else if (!activeExtension.registrations)
+async function deactivateExtension(extension: ActiveExtension): Promise<boolean | undefined> {
+  if (!extension.registrations)
     logger.error(
-      `Extension '${extension.name}' does not have a registrations object to unregister.`,
+      `Extension '${extension.info.name}' does not have a registrations object to unregister.`,
     );
 
-  const isUnsubscribed = await activeExtension?.registrations?.runAllUnsubscribers();
+  const isUnsubscribed = await extension?.registrations?.runAllUnsubscribers();
   if (!isUnsubscribed)
-    logger.error(`Extension '${extension.name}' was not successfully unsubscribed!`);
+    logger.error(`Extension '${extension.info.name}' was not successfully unsubscribed!`);
+
+  let extensionKey: ExtensionKey | undefined;
+  try {
+    extensionKey = getExtensionKey(extension.info);
+  } catch (e) {
+    logger.debug(
+      `Could not get extension key for extension '${extension.info.name}'. Skipping attempting to delete uri handler.`,
+    );
+  }
+  if (extensionKey) uriHandlersByExtensionKey.delete(extensionKey);
 
   // Delete the extension module from Node's module cache if we previously loaded it.
-  const moduleKey = systemRequire.resolve(getPathFromUri(extension.dirUri));
+  const moduleKey = systemRequire.resolve(getPathFromUri(extension.info.dirUri));
   if (moduleKey in systemRequire.cache) delete systemRequire.cache[moduleKey];
-  else logger.warn(`Extension '${extension.name}' not found in the module cache to be removed!`);
+  else
+    logger.warn(`Extension '${extension.info.name}' not found in the module cache to be removed!`);
 
   return isUnsubscribed;
 }
@@ -1011,163 +1267,89 @@ async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> 
   // eslint-disable-next-line no-restricted-syntax
   for (const extension of [...extensions].reverse()) {
     try {
-      // eslint-disable-next-line no-await-in-loop
-      const isDeactivated = await deactivateExtension(extension);
-      if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+      const activeExtension = activeExtensions.get(extension.name);
+      if (!activeExtension) {
+        logger.error(`Cannot deactivate '${extension.name}' due to missing active extension data`);
+      } else {
+        // eslint-disable-next-line no-await-in-loop
+        const isDeactivated = await deactivateExtension(activeExtension);
+        if (!isDeactivated) logger.error(`Extension '${extension.name}' failed to deactivate.`);
+      }
     } catch (e) {
       logger.error(`Extension '${extension.name}' threw while deactivating! ${e}`);
     }
   }
 }
 
-async function resyncContributions(
-  extensionsToAdd: Readonly<ExtensionManifest & { dirUri: string }>[],
-) {
-  menuDocumentCombiner.deleteAllContributions();
-  settingsDocumentCombiner.deleteAllContributions();
-  projectSettingsDocumentCombiner.deleteAllContributions();
-  localizedStringsDocumentCombiner.deleteAllContributions();
-
-  // Load up all the extension contributions asynchronously
-  const extensionsContributions = await Promise.all(
-    extensionsToAdd.map(async (extension) => {
-      let localizedStringsDocument: JsonDocumentLike | undefined;
-      if (extension.localizedStrings) {
-        try {
-          // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
-          const localizedStringsJson = await nodeFS.readFileText(
-            joinUriPaths(extension.dirUri, extension.localizedStrings),
-          );
-          localizedStringsDocument = JSON.parse(localizedStringsJson);
-        } catch (error) {
-          logger.warn(
-            `Could not load localized strings contribution for ${extension.name}: ${error}`,
-          );
-        }
-      }
-      let menuDocument: JsonDocumentLike | undefined;
-      if (extension.menus) {
-        try {
-          // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
-          const menuJson = await nodeFS.readFileText(
-            joinUriPaths(extension.dirUri, extension.menus),
-          );
-          menuDocument = JSON.parse(menuJson);
-        } catch (error) {
-          logger.warn(`Could not load menu contribution for ${extension.name}: ${error}`);
-        }
-      }
-      let settingsDocument: JsonDocumentLike | undefined;
-      if (extension.settings) {
-        try {
-          // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
-          const settingsJson = await nodeFS.readFileText(
-            joinUriPaths(extension.dirUri, extension.settings),
-          );
-          settingsDocument = JSON.parse(settingsJson);
-        } catch (error) {
-          logger.warn(`Could not load settings contribution for ${extension.name}: ${error}`);
-        }
-      }
-      let projectSettingsDocument: JsonDocumentLike | undefined;
-      if (extension.projectSettings) {
-        try {
-          // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
-          const projectSettingsJson = await nodeFS.readFileText(
-            joinUriPaths(extension.dirUri, extension.projectSettings),
-          );
-          projectSettingsDocument = JSON.parse(projectSettingsJson);
-        } catch (error) {
-          logger.warn(
-            `Could not load project settings contribution for ${extension.name}: ${error}`,
-          );
-        }
-      }
-
-      return {
-        name: extension.name,
-        localizedStringsDocument,
-        menuDocument,
-        settingsDocument,
-        projectSettingsDocument,
-      };
-    }),
-  );
-
-  // Load contributions in the order in which the extensions are loaded
-  extensionsContributions.forEach(
-    ({
-      name,
-      localizedStringsDocument,
-      menuDocument,
-      settingsDocument,
-      projectSettingsDocument,
-    }) => {
-      if (localizedStringsDocument)
-        try {
-          localizedStringsDocumentCombiner.addOrUpdateContribution(name, localizedStringsDocument);
-        } catch (error) {
-          logger.warn(`Could not add localized strings contribution for ${name}: ${error}`);
-        }
-      if (menuDocument)
-        try {
-          menuDocumentCombiner.addOrUpdateContribution(name, menuDocument);
-        } catch (error) {
-          logger.warn(`Could not add menu contribution for ${name}: ${error}`);
-        }
-      if (settingsDocument)
-        try {
-          settingsDocumentCombiner.addOrUpdateContribution(name, settingsDocument);
-        } catch (error) {
-          logger.warn(`Could not add settings contribution for ${name}: ${error}`);
-        }
-      if (projectSettingsDocument)
-        try {
-          projectSettingsDocumentCombiner.addOrUpdateContribution(name, projectSettingsDocument);
-        } catch (error) {
-          logger.warn(`Could not add project settings contribution for ${name}: ${error}`);
-        }
-    },
-  );
-
-  await menuDataService.rebuildMenus();
-}
-
-async function reloadExtensions(shouldDeactivateExtensions: boolean): Promise<void> {
-  if (shouldDeactivateExtensions && availableExtensions) {
-    await deactivateExtensions(availableExtensions);
+async function reloadExtensions(
+  shouldDeactivateExtensions: boolean,
+  shouldEmitDidReloadEvent: boolean,
+): Promise<void> {
+  if (isReloading) {
+    shouldReload = true;
+    return;
   }
+  isReloading = true;
 
-  await unzipCompressedExtensionFiles();
+  let errorMessage = '';
 
-  // Get a list of all extensions found
-  const allExtensions = await getExtensions();
-
-  // Cache type declarations in development
-  if (!globalThis.isPackaged)
-    try {
-      await cacheExtensionTypeDeclarations(allExtensions);
-    } catch (e) {
-      logger.warn(`Could not cache extension type declarations: ${e}`);
+  try {
+    if (shouldDeactivateExtensions && availableExtensions) {
+      await deactivateExtensions(availableExtensions);
     }
 
-  // Save extensions that have JavaScript to run
-  // If main is an empty string, having no JavaScript is intentional. Do not load this extension
-  availableExtensions = allExtensions.filter((extension) => extension.main);
+    await unzipCompressedExtensionFiles();
 
-  // Store their base URIs in the extension storage service
-  const uriMap: Map<string, string> = new Map();
-  availableExtensions.forEach((extensionInfo) => {
-    uriMap.set(extensionInfo.name, extensionInfo.dirUri);
-    logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
-  });
-  setExtensionUris(uriMap);
+    // Get a list of all extensions found
+    const allExtensions = await getExtensions();
 
-  // Update the menus, settings, etc. - all json contributions the extensions make
-  await resyncContributions(allExtensions);
+    // Cache type declarations in development
+    if (!globalThis.isPackaged)
+      try {
+        await cacheExtensionTypeDeclarations(allExtensions);
+      } catch (e) {
+        logger.warn(`Could not cache extension type declarations: ${e}`);
+      }
 
-  // Active the extensions
-  await activateExtensions(availableExtensions);
+    // Save extensions that have JavaScript to run
+    // If main is an empty string, having no JavaScript is intentional. Do not load this extension
+    availableExtensions = allExtensions.filter((extension) => extension.main);
+
+    // Store their base URIs in the extension storage service
+    const uriMap: Map<string, string> = new Map();
+    availableExtensions.forEach((extensionInfo) => {
+      uriMap.set(extensionInfo.name, extensionInfo.dirUri);
+      logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
+    });
+    setExtensionUris(uriMap);
+
+    // Update the menus, settings, etc. - all json contributions the extensions make
+    await resyncContributions(allExtensions);
+
+    // Active the extensions
+    await activateExtensions(availableExtensions);
+  } catch (e) {
+    errorMessage = platformBibleUtils.getErrorMessage(e);
+  }
+
+  if (shouldEmitDidReloadEvent) {
+    reloadFinishedEventEmitter.emit(!errorMessage);
+  }
+
+  isReloading = false;
+  if (shouldReload) {
+    (async () => {
+      try {
+        await platformBibleUtils.wait(RESTART_DELAY_MS);
+        shouldReload = false;
+        await reloadExtensions(shouldDeactivateExtensions, shouldEmitDidReloadEvent);
+      } catch (e) {
+        logger.error(`Subsequent reload after initial reload extensions failed! ${e}`);
+      }
+    })();
+  }
+
+  if (errorMessage) throw new Error(errorMessage);
 }
 
 /**
@@ -1181,13 +1363,17 @@ export const initialize = () => {
   initializePromise = (async (): Promise<void> => {
     if (isInitialized) return;
 
-    reloadFinishedEventEmitter = network.createNetworkEventEmitter<boolean>(
+    appUriScheme = (await appService.getAppInfo()).uriScheme;
+
+    reloadFinishedEventEmitter = createNetworkEventEmitter<boolean>(
       'platform.onDidReloadExtensions',
     );
 
+    await registerRequestHandler(HANDLE_URI_REQUEST_TYPE, handleExtensionUri);
+
     await normalizeExtensionFileNames();
 
-    await reloadExtensions(false);
+    await reloadExtensions(false, false);
 
     watchForExtensionChanges();
 

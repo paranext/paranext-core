@@ -4,13 +4,23 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/shadcn-ui.util';
 
 const alertVariants = cva(
-  'pr-relative pr-w-full pr-rounded-lg pr-border pr-p-4 [&>svg~*]:pr-pl-7 [&>svg+div]:pr-translate-y-[-3px] [&>svg]:pr-absolute [&>svg]:pr-left-4 [&>svg]:pr-top-4 [&>svg]:pr-text-foreground',
+  // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can use
+  // images (or svgs from file) as icons
+  // Implemented by TJ Couch
+  // Approved by Alex Mercado
+  // 20 February 2025
+  'tw-relative tw-w-full tw-rounded-lg tw-border tw-p-4 [&>svg~*]:tw-pl-7 [&>svg+div]:tw-translate-y-[-3px] [&>svg]:tw-absolute [&>svg]:tw-left-4 [&>svg]:tw-top-4 [&>svg]:tw-text-foreground [&>img~*]:tw-pl-7 [&>img+div]:tw-translate-y-[-3px] [&>img]:tw-absolute [&>img]:tw-left-4 [&>img]:tw-top-4 [&>img]:tw-text-foreground',
   {
     variants: {
       variant: {
-        default: 'pr-bg-background pr-text-foreground',
+        default: 'tw-bg-background tw-text-foreground',
         destructive:
-          'pr-border-destructive/50 pr-text-destructive dark:pr-border-destructive [&>svg]:pr-text-destructive',
+          // CUSTOM: Copied all `svg` arbitrary selector variant classes as `img` variants so we can
+          // use images (or svgs from file) as icons
+          // Implemented by TJ Couch
+          // Approved by Alex Mercado
+          // 20 February 2025
+          'tw-border-destructive/50 tw-text-destructive dark:tw-border-destructive [&>svg]:tw-text-destructive [&>img]:tw-text-destructive',
       },
     },
     defaultVariants: {
@@ -19,6 +29,11 @@ const alertVariants = cva(
   },
 );
 
+/**
+ * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
+ *
+ * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
+ */
 const Alert = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof alertVariants>
@@ -27,11 +42,15 @@ const Alert = React.forwardRef<
 ));
 Alert.displayName = 'Alert';
 
+/**
+ * @inheritdoc Alert
+ * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
+ */
 const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
     <h5
       ref={ref}
-      className={cn('pr-mb-1 pr-font-medium pr-leading-none pr-tracking-tight', className)}
+      className={cn('tw-mb-1 tw-font-medium tw-leading-none tw-tracking-tight', className)}
       {...props}
     >
       {/* added because of https://github.com/jsx-eslint/eslint-plugin-jsx-a11y/blob/main/docs/rules/heading-has-content.md  */}
@@ -41,11 +60,15 @@ const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<H
 );
 AlertTitle.displayName = 'AlertTitle';
 
+/**
+ * @inheritdoc Alert
+ * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
+ */
 const AlertDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>
 >(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn('pr-text-sm [&_p]:pr-leading-relaxed', className)} {...props} />
+  <div ref={ref} className={cn('tw-text-sm [&_p]:tw-leading-relaxed', className)} {...props} />
 ));
 AlertDescription.displayName = 'AlertDescription';
 

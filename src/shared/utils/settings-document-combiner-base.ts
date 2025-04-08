@@ -1,6 +1,6 @@
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import LogError from '@shared/log-error.model';
-import localizationService from '@shared/services/localization.service';
+import { LogError } from '@shared/log-error.model';
+import { localizationService } from '@shared/services/localization.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
 import {
   DocumentCombiner,
@@ -140,7 +140,7 @@ async function localizeSettingsContributionInfo(
 
 // #endregion
 
-export default abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
+export abstract class SettingsDocumentCombinerBase extends DocumentCombiner {
   /** Name for type of setting to use in error messages */
   protected readonly settingTypeName: string = 'Setting';
 
@@ -189,14 +189,10 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     return this.localizedOutputPromise;
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
     this.performSchemaValidation(baseDocument, PLATFORM_NAMESPACE);
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformBaseDocumentAfterValidation(
     baseDocument: JsonDocumentLike,
   ): JsonDocumentLike {
@@ -208,8 +204,6 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateContribution(documentName: string, document: JsonDocumentLike): void {
     // Make sure it is a SettingsContribution
     this.performSchemaValidation(document, documentName);
@@ -241,8 +235,6 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override transformContributionAfterValidation(
     documentName: string,
     document: JsonDocumentLike,
@@ -255,8 +247,6 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
     );
   }
 
-  // We don't need `this` on this override method
-  // eslint-disable-next-line class-methods-use-this
   protected override validateOutput(): void {
     // We already validated input documents and built the output ourselves, so we don't have any more
     // validating to do. Unless someday we want to double check we have a properly formatted
@@ -266,3 +256,5 @@ export default abstract class SettingsDocumentCombinerBase extends DocumentCombi
   /** Validate the base and contribution documents against the JSON schema */
   protected abstract performSchemaValidation(document: JsonDocumentLike, docType: string): void;
 }
+
+export default SettingsDocumentCombinerBase;

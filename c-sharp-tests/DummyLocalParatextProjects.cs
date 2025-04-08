@@ -13,7 +13,7 @@ namespace TestParanextDataProvider
             ScrTextCollection.Add(scrText, true);
         }
 
-        public override void Initialize(bool shouldIncludePT9ProjectsOnWindows)
+        public override void Initialize()
         {
             // Nothing to do
         }

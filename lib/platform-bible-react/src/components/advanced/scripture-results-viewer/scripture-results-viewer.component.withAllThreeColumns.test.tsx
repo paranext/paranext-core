@@ -1,6 +1,6 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import ScriptureResultsViewer from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
+import { ScriptureResultsViewer } from '@/components/advanced/scripture-results-viewer/scripture-results-viewer.component';
 
 describe('ScriptureResultsViewer with all three column headers (showing Check Type/source column)', () => {
   const repeatedWordsCheck = { id: 'testCheck1', displayName: 'Repeated Words' };
@@ -19,7 +19,7 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
       source: repeatedWordsCheck,
       data: [
         {
-          start: { bookNum: 1, chapterNum: 1, verseNum: 1, ...textAnchor },
+          start: { book: 'GEN', chapterNum: 1, verseNum: 1, ...textAnchor },
           detail: frogRepeatedError,
         },
       ],
@@ -28,11 +28,11 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
       source: markersCheck,
       data: [
         {
-          start: { bookNum: 2, chapterNum: 2, verseNum: 3, ...textAnchor },
+          start: { book: 'EXO', chapterNum: 2, verseNum: 3, ...textAnchor },
           detail: unknownMarkerError,
         },
         {
-          start: { bookNum: 66, chapterNum: 10, verseNum: 15, ...textAnchor },
+          start: { book: 'REV', chapterNum: 10, verseNum: 15, ...textAnchor },
           detail: unclosedMarkerError,
         },
       ],
@@ -41,23 +41,25 @@ describe('ScriptureResultsViewer with all three column headers (showing Check Ty
       source: quotationsCheck,
       data: [
         {
-          start: { bookNum: 40, chapterNum: 20, verseNum: 1, ...textAnchor },
+          start: { book: 'MAT', chapterNum: 20, verseNum: 1, ...textAnchor },
           detail: missingEndQuote,
         },
       ],
     },
   ];
 
-  beforeEach(() => {
-    render(
-      <ScriptureResultsViewer
-        sources={sources}
-        typeColumnName={checkTypeHeader}
-        detailsColumnName={errorDetailsTypeHeader}
-        showColumnHeaders
-        showSourceColumn
-      />,
-    );
+  beforeEach(async () => {
+    await act(async () => {
+      render(
+        <ScriptureResultsViewer
+          sources={sources}
+          typeColumnName={checkTypeHeader}
+          detailsColumnName={errorDetailsTypeHeader}
+          showColumnHeaders
+          showSourceColumn
+        />,
+      );
+    });
   });
 
   it('should render column headers', () => {

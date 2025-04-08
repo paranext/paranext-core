@@ -2,17 +2,17 @@
 
 Manage comments from Paratext 9 projects
 
-<!-- <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info). -->
+<!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 
 ## Template Info
 
-This is a webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs. Note that the `*.web-view.*` files and the `public/assets` folder mentioned in [Summary](#summary) are not present in this template. For inspiration on what these could look like, refer to any extension that is built using this template. An example would be the [Text Collection extension](https://github.com/paranext/paranext-extension-text-collection).
+This is a Webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs. Note that the `*.web-view.*` files and the `public/assets` folder mentioned in [Summary](#summary) are not present in this template. For inspiration on what these could look like, refer to any extension that is built using this template. An example would be the [Text Collection extension](https://github.com/paranext/paranext-extension-text-collection).
 
-There is also [a template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template).
+There is also a [template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template).
 
 ### Customize extension details
 
-Follow these instructions to customize the template to be your own Platform.Bible extension. This section is a more compact version of the [`Your first extension` guide](https://github.com/paranext/paranext-extension-template/wiki/Your-First-Extension).
+Follow these instructions to customize the template to be your own Platform.Bible extension. This section is a more generalized version of the [`Your first extension` guide](https://github.com/paranext/paranext-extension-template/wiki/Your-First-Extension), which contains step-by-step instructions to build a "Hello World" extension.
 
 #### Install and hook up to the template
 
@@ -21,24 +21,27 @@ Note: please skip this section and continue with [Replace placeholders](#replace
 To make the process of customizing from the template as smooth as possible, we recommend you do the following before anything else:
 
 - [Install and set up this repo](#to-install)
-- [Update this extension from the template](#to-update-this-extension-from-the-template)
+- [Update this extension from the template](#to-update-this-extension-from-the-template) to hook everything up for smooth updates in the future.
 
 #### Replace placeholders
 
+For your extension name, we recommend that you use [lowerCamelCase](https://developer.mozilla.org/en-US/docs/Glossary/Camel_case) in some contexts and [kebab-case](https://developer.mozilla.org/en-US/docs/Glossary/Kebab_case) in other contexts. We generally recommend lowerCamelCase when using the name in code (like making a new command on the PAPI, for example), and we recommend kebab-case when using the name in relation to the file system, the repository, `npm`, and the extension's `.d.ts` types module. The following instructions are written accordingly.
+
 - At the top of this `README.md`:
 
-  - Replace the first line `# paranext-extension-template` with `# your-extension-name`
+  - Replace the first line `# paranext-extension-template` with `# your-extension-name` (kebab-case)
   - Below the first line, replace the extension description with your own description
-  - In the [Summary](#summary) section, replace `src/types/paranext-extension-template.d.ts` with `src/types/<your_extension_name>.d.ts`
+  - In the [Summary](#summary) section, replace `src/types/paranext-extension-template.d.ts` with `src/types/your-extension-name.d.ts` (kebab-case)
 
 - In `manifest.json`:
 
-  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
+  - Replace `paranextExtensionTemplate` with `yourExtensionName` (lowerCamelCase)
+  - Replace `src/types/paranext-extension-template.d.ts` with `src/types/your-extension-name.d.ts` (kebab-case)
   - Update ownership information and other relevant fields as desired
 
 - In `package.json`:
 
-  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
+  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences - kebab-case)
   - Update ownership information and other relevant fields as desired
 
 - In `assets/displayData.json`:
@@ -59,7 +62,7 @@ To make the process of customizing from the template as smooth as possible, we r
   - Adjust as desired (feel free to choose a different license)
   - If you choose to stay with the current license, update the copyright statement
 
-- Rename `src/types/paranext-extension-template.d.ts` to `src/types/<your_extension_name>.d.ts`
+- Rename `src/types/paranext-extension-template.d.ts` to `src/types/your-extension-name.d.ts` (kebab-case)
 
   - In this renamed file, replace `paranext-extension-template` with `your-extension-name`
 
@@ -71,7 +74,7 @@ The `manifest.json` and `package.json` files contain information specific to you
 
 #### Hide Template Info
 
-Once finished customizing this template to be your own, you can uncomment the [HTML comment tag](https://www.w3schools.com/html/html_comments.asp) above the [Template Info](#template-info) section to hide this template-related info in this readme. Leaving this info commented in your readme will hide it in your readme while avoiding merge conflicts if you decide to [update this extension from the template](#to-update-this-extension-from-the-template) in the future. If you never want to update this extension from the template, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
+Once finished customizing this template to be your own, you can uncomment the [HTML comment tag](https://www.w3schools.com/html/html_comments.asp) above the [Template Info](#template-info) section to hide this template-related info in this readme. You can do this by clicking on the line and doing CTRL + / in VS Code. You can also do this manually by removing the first opening '&lt;!--' and the only closing '--&gt;' on the line. Leaving this info commented in your readme will hide it in your readme while avoiding merge conflicts if you decide to [update this extension from the template](#to-update-this-extension-from-the-template) in the future. If you never want to update this extension from the template, you can remove the [Template Info](#template-info) section and sub-sections of this readme.
 
 Note: if you [update this extension from the template](#to-update-this-extension-from-the-template), there may be important changes in this section like additional customizations you must make to this extension. Please keep an eye out for readme changes when updating from the template.
 
@@ -101,15 +104,12 @@ The general file structure is as follows:
 
 ### Install dependencies:
 
-1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install).
+1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to [reconfigure paths](#configure-paths-to-paranext-core-repo) to `paranext-core`.
 2. In this repo, run `npm install` to install local and published dependencies
 
 ### Configure paths to `paranext-core` repo
 
-In order to interact with `paranext-core`, you must point `package.json` to your installed `paranext-core` repository:
-
-1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to reconfigure paths to `paranext-core`.
-2. If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
+If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
 
 ## To run
 

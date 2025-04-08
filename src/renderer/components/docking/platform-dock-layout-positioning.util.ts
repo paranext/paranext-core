@@ -6,7 +6,7 @@ import {
   SavedTabInfo,
   FloatLayout,
 } from '@shared/models/docking-framework.model';
-import DIALOGS from '@renderer/components/dialogs';
+import { DIALOGS } from '@renderer/components/dialogs';
 import { TabType } from './docking-framework-internal.model';
 
 /**

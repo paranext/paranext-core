@@ -2,6 +2,9 @@ const path = require('path');
 
 const rootPath = path.join(__dirname, '../..');
 
+const erbPath = path.join(__dirname, '..');
+const erbNodeModulesPath = path.join(erbPath, 'node_modules');
+
 const dllPath = path.join(__dirname, '../dll');
 
 const srcPath = path.join(rootPath, 'src');
@@ -30,6 +33,7 @@ const extensionsLibPath = path.join(extensionsPath, 'lib');
 
 const webpackPaths = {
   rootPath,
+  erbNodeModulesPath,
   dllPath,
   srcPath,
   srcMainPath,

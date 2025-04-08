@@ -1,26 +1,26 @@
-import papi, { logger } from '@papi/backend';
+import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
-  WebViewContentType,
-  WebViewDefinition,
-  SavedWebViewDefinition,
-  IWebViewProvider,
   GetWebViewOptions,
+  IWebViewProvider,
+  SavedWebViewDefinition,
+  WebViewDefinition,
 } from '@papi/core';
+import type { HelloWorldEvent, HelloWorldProjectWebViewController } from 'hello-world';
 import { PlatformEventEmitter } from 'platform-bible-utils';
-import type { HelloWorldEvent } from 'hello-world';
-import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
-import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
-import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
-import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
-import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
-import HelloWorldProjectDataProviderEngineFactory from './models/hello-world-project-data-provider-engine-factory.model';
-import helloWorldProjectWebView from './web-views/hello-world-project/hello-world-project.web-view?inline';
-import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hello-world-project.web-view.scss?inline';
-import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
-import { HTML_COLOR_NAMES } from './util';
-import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
 import { checkDetails, createHelloCheck } from './checks';
+import { HelloWorldProjectDataProviderEngineFactory } from './models/hello-world-project-data-provider-engine-factory.model';
+import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
+import tailwindStyles from './tailwind.css?inline';
+import { HTML_COLOR_NAMES } from './util';
+import helloWorldReactWebView2Styles from './web-views/hello-world-2.web-view.scss?inline';
+import helloWorldReactWebView2 from './web-views/hello-world-2.web-view?inline';
+import helloWorldProjectViewerWebView from './web-views/hello-world-project/hello-world-project-viewer.web-view?inline';
+import helloWorldProjectWebViewStyles from './web-views/hello-world-project/hello-world-project.web-view.scss?inline';
+import helloWorldProjectWebView from './web-views/hello-world-project/hello-world-project.web-view?inline';
+import helloWorldHtmlWebView from './web-views/hello-world.web-view.html?inline';
+import helloWorldReactWebViewStyles from './web-views/hello-world.web-view.scss?inline';
+import helloWorldReactWebView from './web-views/hello-world.web-view?inline';
 
 /** User data storage key for all hello world project data */
 const allProjectDataStorageKey = 'allHelloWorldProjectData';
@@ -42,9 +42,7 @@ const htmlWebViewProvider: IWebViewProviderWithType = {
     return {
       ...savedWebView,
       title: 'Hello World HTML',
-      // Can't use the enum value from a definition file so assert the type from the string literal.
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      contentType: 'html' as WebViewContentType.HTML,
+      contentType: 'html',
       content: helloWorldHtmlWebView,
     };
   },
@@ -93,18 +91,24 @@ const reactWebView2Provider: IWebViewProviderWithType = {
 
 // #region Hello World Project Web View, Command, etc.
 
-/** Simple web view provider that provides helloWorld project web views when papi requests them */
-const helloWorldProjectWebViewProvider: IWebViewProviderWithType = {
-  webViewType: 'helloWorld.projectWebView',
-  async getWebView(
-    savedWebView: SavedWebViewDefinition,
-    getWebViewOptions: HelloWorldProjectViewerOptions,
-  ): Promise<WebViewDefinition | undefined> {
-    if (savedWebView.webViewType !== this.webViewType)
-      throw new Error(
-        `${this.webViewType} provider received request to provide a ${savedWebView.webViewType} web view`,
-      );
+interface HelloWorldProjectOptions extends GetWebViewOptions {
+  /** The project ID this viewer should focus on */
+  projectId?: string;
+}
 
+const HELLO_WORLD_PROJECT_WEB_VIEW_TYPE = 'helloWorld.projectWebView';
+/** Simple web view provider that provides helloWorld project web views when papi requests them */
+class HelloWorldProjectWebViewFactory extends WebViewFactory<
+  typeof HELLO_WORLD_PROJECT_WEB_VIEW_TYPE
+> {
+  constructor() {
+    super(HELLO_WORLD_PROJECT_WEB_VIEW_TYPE);
+  }
+
+  override async getWebViewDefinition(
+    savedWebView: SavedWebViewDefinition,
+    getWebViewOptions: HelloWorldProjectOptions,
+  ): Promise<WebViewDefinition | undefined> {
     const projectId = getWebViewOptions.projectId || savedWebView.projectId || undefined;
     return {
       title: projectId
@@ -119,12 +123,35 @@ const helloWorldProjectWebViewProvider: IWebViewProviderWithType = {
       styles: helloWorldProjectWebViewStyles,
       projectId,
     };
-  },
-};
+  }
 
-interface HelloWorldProjectViewerOptions extends GetWebViewOptions {
-  projectId: string | undefined;
+  override async createWebViewController(
+    webViewDefinition: WebViewDefinition,
+    webViewNonce: string,
+  ): Promise<HelloWorldProjectWebViewController> {
+    return {
+      async focusName(name) {
+        try {
+          logger.info(
+            `Hello World Project Web View Controller ${webViewDefinition.id} received request to focus ${name}`,
+          );
+          await papi.webViewProviders.postMessageToWebView(webViewDefinition.id, webViewNonce, {
+            method: 'focusName',
+            name,
+          });
+          return true;
+        } catch (e) {
+          logger.warn(
+            `Hello World Project Web View Controller ${webViewDefinition.id} threw while running focusName! ${e}`,
+          );
+          return false;
+        }
+      },
+    };
+  }
 }
+
+const helloWorldProjectWebViewProvider = new HelloWorldProjectWebViewFactory();
 
 /**
  * Function to prompt for a project and open it in the hello world project web view. Registered as a
@@ -143,8 +170,12 @@ async function openHelloWorldProjectWebView(
   }
   if (!projectIdForWebView) return undefined;
 
-  const options: HelloWorldProjectViewerOptions = { projectId: projectIdForWebView };
-  return papi.webViews.getWebView(helloWorldProjectWebViewProvider.webViewType, undefined, options);
+  const options: HelloWorldProjectOptions = { projectId: projectIdForWebView };
+  return papi.webViews.openWebView(
+    helloWorldProjectWebViewProvider.webViewType,
+    undefined,
+    options,
+  );
 }
 
 // #endregion
@@ -155,6 +186,11 @@ function selectProjectToDelete(): Promise<string | undefined> {
     title: 'Delete Hello World Project',
     prompt: 'Please choose a project to delete:',
   });
+}
+
+interface HelloWorldProjectViewerOptions extends HelloWorldProjectOptions {
+  /** The id of the web view that opened this viewer if opened from a web view */
+  callerWebViewId?: string;
 }
 
 /**
@@ -184,8 +220,12 @@ const helloWorldProjectViewerProvider: IWebViewProviderWithType = {
         : 'Hello World Project Viewer',
       ...savedWebView,
       content: helloWorldProjectViewerWebView,
-      styles: helloWorldProjectWebViewStyles,
+      styles: tailwindStyles,
       projectId,
+      state: {
+        ...savedWebView.state,
+        callerWebViewId: getWebViewOptions.callerWebViewId || savedWebView.state?.callerWebViewId,
+      },
     };
   },
 };
@@ -215,6 +255,51 @@ function helloException(message: string) {
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
   logger.info('Hello world is activating!');
+
+  if (!context.elevatedPrivileges.handleUri) {
+    logger.warn(
+      'Hello World could not get handleUri. Maybe need to add handleUri in elevatedPrivileges',
+    );
+  } else {
+    context.registrations.add(
+      context.elevatedPrivileges.handleUri.registerUriHandler(async (uri) => {
+        const url = new URL(uri);
+        switch (url?.pathname) {
+          case '/greet':
+            logger.info(`Hello, ${url.searchParams.get('name')}!`);
+            break;
+          case '/greetAndOpen': {
+            const avatarUrl = `https://ui-avatars.com/api/?background=random&${url.searchParams}`;
+            logger.info(
+              `Hello, ${url.searchParams.get('name')}! Pulling up a generated avatar for you at ${avatarUrl}`,
+            );
+            await papi.commands.sendCommand('platform.openWindow', avatarUrl);
+            break;
+          }
+          default:
+            logger.info(`Hello World extension received a uri at an unknown path! ${uri}`);
+            break;
+        }
+      }),
+    );
+    logger.info(
+      `Hello world is listening to URIs. You can navigate to ${context.elevatedPrivileges.handleUri.redirectUri}/greet?name=your_name to say hello`,
+    );
+  }
+
+  // test data protection
+  try {
+    const data = 'Hello, world!';
+    const isEncryptionAvailable = await papi.dataProtection.isEncryptionAvailable();
+    const dataEncrypted = await papi.dataProtection.encryptString(data);
+    const dataDecrypted = await papi.dataProtection.decryptString(dataEncrypted);
+    if (!isEncryptionAvailable || data === dataEncrypted || data !== dataDecrypted)
+      logger.warn(
+        `Hello World Data Protection test failed! data = '${data}'. dataEncrypted = '${dataEncrypted}'. dataDecrypted = '${dataDecrypted}'. isEncryptionAvailable = ${isEncryptionAvailable}`,
+      );
+  } catch (e) {
+    logger.warn(`Hello World Data Protection test failed! ${e}`);
+  }
 
   async function readRawDataForAllProjects(): Promise<string> {
     try {
@@ -275,7 +360,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     async (webViewId) => {
       let projectId: string | undefined;
       if (webViewId) {
-        const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+        const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
         projectId = webViewDefinition?.projectId;
       }
       const projectIdToDelete = projectId ?? (await selectProjectToDelete());
@@ -293,7 +378,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     async (webViewId) => {
       let projectId: string | undefined;
       if (webViewId) {
-        const webViewDefinition = await papi.webViews.getSavedWebViewDefinition(webViewId);
+        const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(webViewId);
         projectId = webViewDefinition?.projectId;
       }
       const projectIdForWebView =
@@ -306,10 +391,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
 
       if (!projectIdForWebView) return undefined;
 
-      const options: HelloWorldProjectViewerOptions = { projectId: projectIdForWebView };
-      return papi.webViews.getWebView(
+      const options: HelloWorldProjectViewerOptions = {
+        projectId: projectIdForWebView,
+        callerWebViewId: webViewId,
+      };
+      return papi.webViews.openWebView(
         helloWorldProjectViewerProvider.webViewType,
-        { type: 'float', position: 'center' },
+        { type: 'float', position: 'center', floatSize: { width: 480, height: 320 } },
         options,
       );
     },
@@ -330,27 +418,27 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     async (newValue) => HTML_COLOR_NAMES.includes(newValue),
   );
 
-  const helloWorldProjectWebViewProviderPromise = papi.webViewProviders.register(
+  const helloWorldProjectWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     helloWorldProjectWebViewProvider.webViewType,
     helloWorldProjectWebViewProvider,
   );
 
-  const helloWorldProjectViewerProviderPromise = papi.webViewProviders.register(
+  const helloWorldProjectViewerProviderPromise = papi.webViewProviders.registerWebViewProvider(
     helloWorldProjectViewerProvider.webViewType,
     helloWorldProjectViewerProvider,
   );
 
-  const htmlWebViewProviderPromise = papi.webViewProviders.register(
+  const htmlWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     htmlWebViewProvider.webViewType,
     htmlWebViewProvider,
   );
 
-  const reactWebViewProviderPromise = papi.webViewProviders.register(
+  const reactWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     reactWebViewProvider.webViewType,
     reactWebViewProvider,
   );
 
-  const reactWebView2ProviderPromise = papi.webViewProviders.register(
+  const reactWebView2ProviderPromise = papi.webViewProviders.registerWebViewProvider(
     reactWebView2Provider.webViewType,
     reactWebView2Provider,
   );
@@ -368,17 +456,6 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   papi
     .fetch('https://www.example.com')
     .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
-
-  const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
-  if (peopleDataProvider) {
-    // Test subscribing to a data provider
-    const unsubGreetings = await peopleDataProvider.subscribeGreeting(
-      'Bill',
-      (billGreeting: string | undefined) => logger.debug(`Bill's greeting: ${billGreeting}`),
-    );
-
-    context.registrations.add(unsubGreetings);
-  }
 
   const checkPromise = papi.commands.sendCommand(
     'platformScripture.registerCheck',
@@ -413,9 +490,24 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // if one already exists. The webview that already exists could have been created by anyone
   // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
   // an existing webview that was specifically created by `hello-someone`.
-  papi.webViews.getWebView(htmlWebViewProvider.webViewType, undefined, { existingId: '?' });
-  papi.webViews.getWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
-  papi.webViews.getWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.openWebView(htmlWebViewProvider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.openWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.openWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
+
+  try {
+    const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
+    if (peopleDataProvider) {
+      // Test subscribing to a data provider
+      const unsubGreetings = await peopleDataProvider.subscribeGreeting(
+        'Bill',
+        (billGreeting: string | undefined) => logger.debug(`Bill's greeting: ${billGreeting}`),
+      );
+
+      context.registrations.add(unsubGreetings);
+    }
+  } catch (e) {
+    logger.error(`Hello world error! Could not get people data provider ${e}`);
+  }
 
   logger.info('Hello World is finished activating!');
 }

@@ -32,18 +32,4 @@ public static class SerializationExtensionMethods
     {
         return JsonSerializer.Serialize(value, s_papiOptions);
     }
-
-    /// <summary>
-    /// Calls
-    /// <see cref="JsonSerializer.SerializeToElement{TValue}(TValue, JsonSerializerOptions?)"/> with
-    /// <see cref="JsonSerializerOptions"/> that are configured to work with PAPI types. If you
-    /// need to call other versions of SerializeToElement, consider calling
-    /// <see cref="SerializationOptions.CreateSerializationOptions()"/> to create an appropriate
-    /// options object to pass in.
-    /// </summary>
-    /// <returns>A JsonDocument representation of the JSON value.</returns>
-    public static JsonElement SerializeToJsonElement<T>(this T value)
-    {
-        return JsonSerializer.SerializeToElement(value, s_papiOptions);
-    }
 }

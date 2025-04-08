@@ -1,11 +1,6 @@
-#!/bin/sh
-. "$(dirname "$0")/_/husky.sh"
-
-echo "Running Lint check..."
-
-# generate papi.d.ts as part of lint:staged
+echo "Format and stylelint fixes..."
 npm run lint:staged
-echo "Lint check finished"
+echo "Format and stylelint fixes finished"
 
-echo "If the following fails run npm run editor:unlink"
+echo "If the following fails run: npm run editor:unlink && npm run utils:unlink"
 npx yalc check

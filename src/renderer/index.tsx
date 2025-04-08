@@ -1,19 +1,25 @@
 import '@renderer/global-this.model';
 import { createRoot } from 'react-dom/client';
+import { getErrorMessage } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
-import * as commandService from '@shared/services/command.service';
 import { startWebViewService } from '@renderer/services/web-view.service-host';
-import logger from '@shared/services/logger.service';
-import webViewProviderService from '@shared/services/web-view-provider.service';
+import { logger } from '@shared/services/logger.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
 import { startDialogService } from '@renderer/services/dialog.service-host';
 import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
 import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
 import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
-import App from './app.component';
+import { App } from './app.component';
+import { SCROLLBAR_STYLES, THEME } from './theme';
+import { startNotificationService } from './services/notification.service-host';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
   logger.error(`Unhandled error in renderer from ${filename}:${lineno}:${colno}, '${error}'`);
+});
+
+window.addEventListener('unhandledrejection', (event) => {
+  logger.error(`Unhandled rejection in renderer, '${getErrorMessage(event.reason)}'`);
 });
 
 logger.info(`Starting renderer${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`);
@@ -46,11 +52,11 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     blockWebSocketsToPapiNetwork();
 
     await runPromisesAndThrowIfRejected(
-      commandService.initialize(),
       webViewProviderService.initialize(),
       startWebViewService(),
       startDialogService(),
       startScrollGroupService(),
+      startNotificationService(),
     );
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
@@ -64,6 +70,12 @@ if (!container) {
 
 const root = createRoot(container);
 root.render(<App />);
+
+if (THEME) window.document.body.classList.add(THEME);
+
+const scrollbarStyleSheet = document.createElement('style');
+scrollbarStyleSheet.textContent = SCROLLBAR_STYLES;
+document.head.appendChild(scrollbarStyleSheet);
 
 // This doesn't run if the renderer has an uncaught exception (which is a good thing)
 window.addEventListener('beforeunload', () => {

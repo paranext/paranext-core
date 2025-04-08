@@ -217,7 +217,7 @@ export type DataProviderSubscribers<TDataTypes extends DataProviderDataTypes> = 
  *
  * @see {@link IDataProvider}
  */
-type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
+export type DataProviderInternal<TDataTypes extends DataProviderDataTypes = DataProviderDataTypes> =
   NetworkableObject<
     DataProviderSetters<TDataTypes> &
       DataProviderGetters<TDataTypes> &
