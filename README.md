@@ -6,13 +6,13 @@ Basic extension template for Platform.Bible
 
 ## Template Info
 
-This is a webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs. Note that the `*.web-view.*` files and the `public/assets` folder mentioned in [Summary](#summary) are not present in this template. For inspiration on what these could look like, refer to any extension that is built using this template. An example would be the [Text Collection extension](https://github.com/paranext/paranext-extension-text-collection).
+This is a Webpack project template pre-configured to build a Platform.Bible extension. It contains the bare minimum of what an extension needs. Note that the `*.web-view.*` files and the `public/assets` folder mentioned in [Summary](#summary) are not present in this template. For inspiration on what these could look like, refer to any extension that is built using this template. An example would be the [Text Collection extension](https://github.com/paranext/paranext-extension-text-collection).
 
-There is also [a template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template).
+There is also a [template pre-configured to build an arbitrary number of Platform.Bible extensions in one repo](https://github.com/paranext/paranext-multi-extension-template).
 
 ### Customize extension details
 
-Follow these instructions to customize the template to be your own Platform.Bible extension. This section is a more compact version of the [`Your first extension` guide](https://github.com/paranext/paranext-extension-template/wiki/Your-First-Extension).
+Follow these instructions to customize the template to be your own Platform.Bible extension. This section is a more generalized version of the [`Your first extension` guide](https://github.com/paranext/paranext-extension-template/wiki/Your-First-Extension), which contains step-by-step instructions to build a "Hello World" extension.
 
 #### Install and hook up to the template
 
@@ -21,24 +21,27 @@ Note: please skip this section and continue with [Replace placeholders](#replace
 To make the process of customizing from the template as smooth as possible, we recommend you do the following before anything else:
 
 - [Install and set up this repo](#to-install)
-- [Update this extension from the template](#to-update-this-extension-from-the-template)
+- [Update this extension from the template](#to-update-this-extension-from-the-template) to hook everything up for smooth updates in the future.
 
 #### Replace placeholders
 
+For your extension name, we recommend that you use [lowerCamelCase](https://developer.mozilla.org/en-US/docs/Glossary/Camel_case) in some contexts and [kebab-case](https://developer.mozilla.org/en-US/docs/Glossary/Kebab_case) in other contexts. We generally recommend lowerCamelCase when using the name in code (like making a new command on the PAPI, for example), and we recommend kebab-case when using the name in relation to the file system, the repository, `npm`, and the extension's `.d.ts` types module. The following instructions are written accordingly.
+
 - At the top of this `README.md`:
 
-  - Replace the first line `# paranext-extension-template` with `# your-extension-name`
+  - Replace the first line `# paranext-extension-template` with `# your-extension-name` (kebab-case)
   - Below the first line, replace the extension description with your own description
-  - In the [Summary](#summary) section, replace `src/types/paranext-extension-template.d.ts` with `src/types/<your_extension_name>.d.ts`
+  - In the [Summary](#summary) section, replace `src/types/paranext-extension-template.d.ts` with `src/types/your-extension-name.d.ts` (kebab-case)
 
 - In `manifest.json`:
 
-  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
+  - Replace `paranextExtensionTemplate` with `yourExtensionName` (lowerCamelCase)
+  - Replace `src/types/paranext-extension-template.d.ts` with `src/types/your-extension-name.d.ts` (kebab-case)
   - Update ownership information and other relevant fields as desired
 
 - In `package.json`:
 
-  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences)
+  - Replace `paranext-extension-template` with `your-extension-name` (2 occurrences - kebab-case)
   - Update ownership information and other relevant fields as desired
 
 - In `assets/displayData.json`:
@@ -59,11 +62,13 @@ To make the process of customizing from the template as smooth as possible, we r
   - Adjust as desired (feel free to choose a different license)
   - If you choose to stay with the current license, update the copyright statement
 
-- Rename `src/types/paranext-extension-template.d.ts` to `src/types/<your_extension_name>.d.ts`
+- Rename `src/types/paranext-extension-template.d.ts` to `src/types/your-extension-name.d.ts` (kebab-case)
 
   - In this renamed file, replace `paranext-extension-template` with `your-extension-name`
 
 - In `src/main.ts`, replace `Extension template` with `Your Extension Name` (2 occurrences)
+
+- In `.github/assets/release-body.md`, replace `Extension template` with `Your Extension Name`, and make other adjustments as desired.
 
 #### Customize the extension manifest and package information
 
@@ -94,6 +99,9 @@ The general file structure is as follows:
     - `assets/descriptions/description-<locale>.md` contains a brief description of the extension in the language specified by `<locale>`
 - `contributions/` contains JSON files the platform uses to extend data structures for things like menus and settings. The JSON files are referenced from the manifest
 - `public/` contains other static files that are copied into the build folder
+- `.github/` contains files to facilitate integration with GitHub
+  - `.github/workflows` contains [GitHub Actions](https://github.com/features/actions) workflows for automating various processes in this repo
+  - `.github/assets/release-body.md` combined with a generated changelog becomes the body of [releases published using GitHub Actions](#publishing)
 - `dist/` is a generated folder containing the built extension files
 - `release/` is a generated folder containing a zip of the built extension files
 
@@ -101,15 +109,12 @@ The general file structure is as follows:
 
 ### Install dependencies:
 
-1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install).
+1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to [reconfigure paths](#configure-paths-to-paranext-core-repo) to `paranext-core`.
 2. In this repo, run `npm install` to install local and published dependencies
 
 ### Configure paths to `paranext-core` repo
 
-In order to interact with `paranext-core`, you must point `package.json` to your installed `paranext-core` repository:
-
-1. Follow the instructions to install [`paranext-core`](https://github.com/paranext/paranext-core#developer-install). We recommend you clone `paranext-core` in the same parent directory in which you cloned this repository so you do not have to reconfigure paths to `paranext-core`.
-2. If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
+If you cloned `paranext-core` anywhere other than in the same parent directory in which you cloned this repository, update the paths to `paranext-core` in this repository's `package.json` to point to the correct `paranext-core` directory.
 
 ## To run
 
@@ -136,6 +141,75 @@ To build the extension once:
 To package this extension into a zip file for distribution:
 
 `npm run package`
+
+## Publishing
+
+These steps will walk you through releasing a version on GitHub and bumping the version to a new version so future changes apply to the new in-progress version.
+
+1. Make sure the versions in this repo are on the version number you want to release. If they are not, run the `bump-versions` npm script to set the versions to what you want to release. This script will create a branch named `bump-versions-<version>` from your current head with the needed changes. Open a PR and merge that new branch into the branch you plan to release from. For example, to bump branch `my-branch` to version 0.2.0, run the following:
+
+   ```bash
+   git checkout my-branch
+   npm run bump-versions 0.2.0
+   ```
+
+   Then create a PR and merge the `bump-versions-0.2.0` branch into `my-branch`. `my-branch` is now ready for release.
+
+2. Manually dispatch the Publish workflow in GitHub Actions targeting the branch you want to release from (in the previous example, this would be `my-branch`). This workflow creates a new pre-release for the version you intend to release and creates a new `bump-versions-<next_version>` branch to bump the version after the release so future changes apply to a new in-progress version instead of to the already released version. This workflow has the following inputs:
+
+   - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
+   - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
+   - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `main` onto `release-prep` when you are ready to start preparing the next stable release.
+
+    <details>
+        <summary>[Optional] Create a new pre-release and bump versions branch manually </summary>
+
+   #### Manually create a new pre-release and bump versions branch
+
+   Alternatively, you can create a new pre-release manually:
+
+   ```bash
+   npm run package
+   # Create a new pre-release in GitHub on tag `v<version>`
+   # Copy `.github/assets/release-body.md` into the GitHub branch
+   # Generate changelog
+   # Attach contents of `release` folder
+   ```
+
+   Then bump versions by running the following:
+
+   ```bash
+   npm run bump-versions <next_version>
+   ```
+
+   Or bump versions manually:
+
+   ```bash
+   git checkout -b bump-versions-<next_version>
+   npm version <next_version> --git-tag-version false
+   # Change version in each extension's `manifest.json`
+   git commit -a -m "Bumped versions to <next_version>"; git push -u origin HEAD
+   ```
+
+    </details>
+
+3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
+4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
+
+### Publishing problems
+
+Following are some problems you may encounter while publishing and steps to solve them.
+
+#### `@swc/core` Failed to load native binding
+
+If you see the following error in the GitHub Actions workflow logs while packaging:
+
+```
+Module build failed (from ./node_modules/swc-loader/src/index.js):
+Error: Failed to load native binding
+```
+
+You may have a different effective version of `@swc/core` than `paranext-core` does. Please make sure the version of `@swc/core` in your `package-lock.json` is the same as its version in [`paranext-core/package-lock.json`](https://github.com/paranext/paranext-core/blob/main/package-lock.json). If they are not the same, please fix them to be the same by running `npm i -D @swc/core <version>` where the version is the version of `@swc/core` installed in `paranext-core/package-lock.json` (if you would like to set the version of `@swc/core` back to what it was before in `package.json` to stay synced with the extension template, change it back manually in `package.json` and then run `npm i`). If they are already the same, you may need to try regenerating your `package-lock.json` file by deleting it and running `npm i`.
 
 ## To update this extension from the template
 
