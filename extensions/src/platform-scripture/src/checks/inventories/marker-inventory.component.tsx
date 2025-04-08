@@ -1,3 +1,4 @@
+import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useSetting } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -18,6 +19,7 @@ import {
 import {
   deepEqual,
   defaultScrRef,
+  isPlatformError,
   LanguageStrings,
   LocalizeKey,
   substring,
@@ -193,12 +195,24 @@ export function MarkerInventory({
   onScopeChange,
   projectId,
 }: MarkerInventoryProps) {
+  // REVIEW: Why use platform.verseRef setting instead of the verseRef that is passed in?
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
+
+  const bookNumber = useMemo(() => {
+    if (isPlatformError(scrRef)) {
+      logger.warn('Failed to load setting: platform.verseRef', scrRef);
+      // I think 99.9% of the time, the markers defined in a project will be the same for all normal
+      // Scripture books, so no matter what we fall back to, we'll probably get the same markers.
+      return Canon.bookIdToNumber(defaultScrRef.book);
+    } else {
+      return Canon.bookIdToNumber(scrRef.book);
+    }
+  }, [scrRef]);
 
   const [markerNames] = useProjectData(
     'platformScripture.MarkerNames',
     projectId ?? undefined,
-  ).MarkerNames(Canon.bookIdToNumber(scrRef.book), []);
+  ).MarkerNames(bookNumber, []);
 
   const [markerInventoryStrings] = useLocalizedStrings(MARKER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(
