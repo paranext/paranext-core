@@ -27,6 +27,7 @@ internal class LocalParatextProjects
     private readonly List<string> _requiredProjectRootFiles =
     [
         "usfm.sty",
+        "usfm_sb.sty",
         "Attribution.md",
         "CountryStatuses.xml",
     ];
