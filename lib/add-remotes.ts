@@ -4,7 +4,7 @@ import {
   MULTI_TEMPLATE_URL,
   SINGLE_TEMPLATE_NAME,
   SINGLE_TEMPLATE_URL,
-  execGitCommand,
+  execCommand,
 } from './git.util';
 
 (async () => {
@@ -13,7 +13,7 @@ import {
   // Helper function to handle remote addition
   async function addRemote(name: string, url: string, errorString: string) {
     try {
-      await execGitCommand(`git remote add ${name} ${url}`);
+      await execCommand(`git remote add ${name} ${url}`);
     } catch (error: unknown) {
       if (error instanceof Error) {
         if (error.message.toLowerCase().includes(errorString.toLowerCase())) {

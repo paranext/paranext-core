@@ -66,8 +66,10 @@ export const ERROR_STRINGS = Object.fromEntries(
 
 // #endregion
 
+// #region shared with https://github.com/paranext/paranext-extension-template/blob/main/lib/git.util.ts
+
 /**
- * Executes a git command from the repo root directory, logging both the command and the results.
+ * Executes a command from the repo root directory, logging both the command and the results.
  *
  * For some reason, git likes to use stderr to return things that are not errors, so we only throw
  * if the command throws
@@ -75,12 +77,12 @@ export const ERROR_STRINGS = Object.fromEntries(
  * @param command
  * @param options The options for the exec command. Add quiet to not log anything
  */
-export async function execGitCommand(
+export async function execCommand(
   command: string,
   options: ExecOptions & { quiet?: boolean } = {},
 ): Promise<{ stdout: string; stderr: string }> {
   const { quiet, ...execOptions } = options;
-  if (!quiet) console.log(`\n> ${command}`);
+  if (!quiet) console.log(`\n>${execOptions.cwd ? ` cd ${execOptions.cwd};` : ''} ${command}`);
   try {
     const result = await execAsync(command, {
       cwd: path.resolve(path.join(__dirname, '..')),
@@ -95,12 +97,12 @@ export async function execGitCommand(
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const execError = error as ExecException;
       throw new Error(
-        `code ${execError.code}!${execError.stderr ? `\n${execError.stderr}` : ''}${
+        `ExecException while executing command ${command}! code ${execError.code}!${execError.stderr ? `\n${execError.stderr}` : ''}${
           execError.stdout ? `\n${execError.stdout}` : ''
         }`,
       );
     } else {
-      throw new Error(`An unknown error occurred while executing git command: ${error}`);
+      throw new Error(`An unknown error occurred while executing command ${command}: ${error}`);
     }
   }
 }
@@ -113,7 +115,7 @@ export async function execGitCommand(
  */
 export async function checkForWorkingChanges(quiet = false) {
   // Check the git status to make sure there are no working changes
-  const status = await execGitCommand('git status --porcelain=v2', {
+  const status = await execCommand('git status --porcelain=v2', {
     quiet: true,
   });
 
@@ -137,7 +139,7 @@ export async function checkForWorkingChanges(quiet = false) {
 export async function fetchFromSingleTemplate() {
   // Fetch latest SINGLE_TEMPLATE_REMOTE_NAME branch
   try {
-    await execGitCommand(`git fetch ${SINGLE_TEMPLATE_NAME} ${SINGLE_TEMPLATE_BRANCH}`);
+    await execCommand(`git fetch ${SINGLE_TEMPLATE_NAME} ${SINGLE_TEMPLATE_BRANCH}`);
   } catch (error: unknown) {
     if (error instanceof Error) {
       console.error(`Error on git fetch on ${SINGLE_TEMPLATE_NAME}: ${error.message}`);

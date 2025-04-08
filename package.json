@@ -26,7 +26,8 @@
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
     "postinstall": "tsx ./lib/add-remotes.ts",
     "create-extension": "tsx ./lib/create-extension.ts",
-    "update-from-templates": "tsx ./lib/update-from-templates.ts"
+    "update-from-templates": "tsx ./lib/update-from-templates.ts",
+    "bump-versions": "tsx ./lib/bump-versions.ts"
   },
   "browserslist": [],
   "peerDependencies": {
@@ -58,7 +59,6 @@
     "eslint-import-resolver-typescript": "^3.8.3",
     "eslint-plugin-compat": "^4.2.0",
     "eslint-plugin-import": "^2.31.0",
-    "eslint-plugin-jest": "^27.9.0",
     "eslint-plugin-jsx-a11y": "^6.10.0",
     "eslint-plugin-no-null": "^1.0.2",
     "eslint-plugin-no-type-assertion": "^1.3.0",

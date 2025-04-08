@@ -9,7 +9,7 @@ if (!areExtensionsPresent) {
   // This is a command-line utility for which it is fine to print to the console
   // eslint-disable-next-line no-console
   console.log(
-    'No extensions found! Please run `npm run create-extension -- <extension_name>` to create an extension. See README.md for more information.',
+    'No extensions found! Please run `npm run create-extension -- <extension-name>` (kebab-case) to create an extension. See README.md for more information.',
   );
   process.exit(0);
 }
@@ -38,9 +38,13 @@ const configBase: webpack.Configuration = {
   // Use require for externals as it is the only type of importing that Platform.Bible supports
   // https://webpack.js.org/configuration/externals/#externalstypecommonjs
   externalsType: LIBRARY_TYPE,
-  // Modules that Platform.Bible supplies to extensions https://webpack.js.org/configuration/externals/
-  // All other dependencies must be bundled into the extension
+  // Modules that Platform.Bible supplies to extensions. All other dependencies must be bundled into
+  // the extension. Read more at https://github.com/paranext/paranext/wiki/Module-import-restrictions
+  // https://webpack.js.org/configuration/externals/
   externals: [
+    // Built-in node modules that are not blocked by Platform.Bible
+    'crypto',
+    // Additional modules provided by Platform.Bible
     'react',
     'react/jsx-runtime',
     'react-dom',
@@ -143,30 +147,6 @@ const configBase: webpack.Configuration = {
       // use tsconfig.json paths https://www.npmjs.com/package/tsconfig-paths-webpack-plugin
       new TsconfigPathsPlugin(),
     ],
-    // Load `platform-bible-react`' `dependencies` from `paranext-core` so the extension will share
-    // these dependencies with the bundled copy of `platform-bible-react` and avoid duplicate
-    // packages. These paths are broken up like this so multi-extension folder can format the path
-    // properly
-    // https://webpack.js.org/configuration/resolve/#resolvealias
-    // TODO: Remove this when `platform-bible-react` is published to npm
-    alias: {
-      '@emotion/react': path.resolve(
-        __dirname,
-        '..',
-        '../paranext-core/node_modules/@emotion/react',
-      ),
-      '@emotion/styled': path.resolve(
-        __dirname,
-        '..',
-        '../paranext-core/node_modules/@emotion/styled',
-      ),
-      '@mui/material': path.resolve(__dirname, '..', '../paranext-core/node_modules/@mui/material'),
-      'react-data-grid': path.resolve(
-        __dirname,
-        '..',
-        '../paranext-core/node_modules/react-data-grid',
-      ),
-    },
   },
 };
 

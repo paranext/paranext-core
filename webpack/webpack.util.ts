@@ -249,14 +249,12 @@ export function getMainEntries(extensions: ExtensionInfo[]): webpack.EntryObject
  * Get the path to the extension directory relative to root
  *
  * @param extensionDirName The name of the directory that this extension is in
+ * @param shouldBeOSIndependent If true, use the OS-independent path separator. This path needs to
+ *   be OS-independent in git commands identifying the git subtree for this extension
  * @returns Path to the extension to format relative to root
- *
- *   WARNING: This does not use the operating system's path separator because it needs to be
- *   consistent for use in git commands. If you need an OS-dependent path separator, make a new
- *   path
  */
-export function getExtensionPathOSIndependent(extensionDirName: string) {
-  return `${sourceFolder}/${extensionDirName}`;
+export function getExtensionPath(extensionDirName: string, shouldBeOSIndependent: boolean) {
+  return `${sourceFolder}${shouldBeOSIndependent ? '/' : path.sep}${extensionDirName}`;
 }
 
 // #endregion
@@ -286,8 +284,8 @@ type ExtensionManifest = {
    *
    * If not provided, Platform.Bible will look in the following locations:
    *
-   * 1. `<extension_name>.d.ts`
-   * 2. `<extension_name><other_stuff>.d.ts`
+   * 1. `<extension-name>.d.ts` (kebab-case version of the extension name)
+   * 2. `<extension-name><other_stuff>.d.ts` (kebab-case version of the extension name)
    * 3. `index.d.ts`
    *
    * See [Extension Anatomy - Type Declaration
@@ -315,6 +313,12 @@ export type ExtensionInfo = ExtensionManifest & {
   /**
    * Path to the extension directory relative to root
    *
+   * This uses the operating system's path separator
+   */
+  dirPath: string;
+  /**
+   * Path to the extension directory relative to root
+   *
    * WARNING: This does not use the operating system's path separator because it needs to be
    * consistent for use in git commands. If you need an OS-dependent path separator, make a new
    * path
@@ -330,6 +334,10 @@ export type ExtensionInfo = ExtensionManifest & {
    * do not build anything but just copy the folder
    */
   shouldCopyOnly?: boolean;
+  /** Path to the manifest file */
+  manifestPath: string;
+  /** The original manifest straight out of the file and run through `JSON.parse` */
+  manifest: Readonly<ExtensionManifest>;
 };
 
 /** Cached list of extension folder names */
@@ -388,11 +396,9 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
     await Promise.all(
       extensionFolderNames.map(async (extensionFolderName): Promise<ExtensionInfo | undefined> => {
         let extensionManifestJson: string;
+        const manifestPath = path.join(sourceFolder, extensionFolderName, 'manifest.json');
         try {
-          extensionManifestJson = await fs.promises.readFile(
-            path.join(sourceFolder, extensionFolderName, 'manifest.json'),
-            'utf8',
-          );
+          extensionManifestJson = await fs.promises.readFile(manifestPath, 'utf8');
         } catch {
           // This folder doesn't have a manifest.json, so it must not be an extension. Skip it
           return undefined;
@@ -415,18 +421,24 @@ export async function getExtensions(): Promise<ExtensionInfo[]> {
           ? {
               ...extensionManifest,
               dirName: extensionFolderName,
-              dirPathOSIndependent: getExtensionPathOSIndependent(extensionFolderName),
+              dirPath: getExtensionPath(extensionFolderName, false),
+              dirPathOSIndependent: getExtensionPath(extensionFolderName, true),
               entryFileName: path.parse(extensionManifest.main).name,
               entryFilePath: path.join(sourceFolder, extensionFolderName, extensionManifest.main),
               version: extensionManifest.version,
+              manifestPath,
+              manifest: extensionManifest,
             }
           : {
               ...extensionManifest,
               dirName: extensionFolderName,
-              dirPathOSIndependent: getExtensionPathOSIndependent(extensionFolderName),
+              dirPath: getExtensionPath(extensionFolderName, false),
+              dirPathOSIndependent: getExtensionPath(extensionFolderName, true),
               entryFileName: '',
               entryFilePath: '',
               version: extensionManifest.version,
+              manifestPath,
+              manifest: extensionManifest,
               shouldCopyOnly: true,
             };
       }),
