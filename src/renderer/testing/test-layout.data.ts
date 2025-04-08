@@ -1,4 +1,3 @@
-import { TAB_TYPE_ABOUT } from '@renderer/testing/about-panel.component';
 import { TAB_TYPE_BUTTONS } from '@renderer/testing/test-buttons-panel.component';
 import { SavedTabInfo } from '@shared/models/docking-framework.model';
 import { LayoutBase } from 'rc-dock';

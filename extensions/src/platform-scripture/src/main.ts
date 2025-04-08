@@ -156,13 +156,12 @@ export async function activate(context: ExecutionActivationContext) {
   const punctuationInventoryWebViewProvider = new InventoryWebViewProvider(
     '%webView_punctuationInventory_title%',
     punctuationInventoryWebViewType,
-
+  );
   const showAboutDialogPromise = papi.commands.registerCommand('platform.about', async () =>
     papi.dialogs.showAboutDialog(),
   );
 
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
-  const openAboutTabPromise = papi.commands.registerCommand('platform.about', openAboutTab);
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
     booksPresentValidator,

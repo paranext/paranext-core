@@ -19,7 +19,7 @@ import { SELECT_PROJECT_DIALOG } from '@renderer/components/dialogs/select-proje
 import { DialogTabTypes, DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 import * as DialogTypesValues from '@renderer/components/dialogs/dialog-definition.model';
 import { hookUpDialogService } from '@renderer/components/dialogs/dialog-base.data';
-import localizationService from '@shared/services/localization.service';
+import { localizationService } from '@shared/services/localization.service';
 import ABOUT_DIALOG from '@renderer/components/dialogs/about-dialog.component';
 
 /** A live dialog request. Includes the dialog's id and the functions to run on receiving results */
@@ -250,12 +250,6 @@ async function selectProject(
   return showDialog(SELECT_PROJECT_DIALOG.tabType, options);
 }
 
-const dialogService: DialogService = {
-  showDialog,
-  showAboutDialog,
-  selectProject,
-};
-
 /** Register the commands that back the PAPI dialog service */
 export async function startDialogService(): Promise<void> {
   await initialize();
@@ -379,6 +373,12 @@ export async function startDialogService(): Promise<void> {
           },
         },
       },
+    ),
+  );
+  unsubPromises.push(
+    networkService.registerRequestHandler(
+      serializeRequestType(CATEGORY_DIALOG, 'showAboutDialog'),
+      showAboutDialog,
     ),
   );
 

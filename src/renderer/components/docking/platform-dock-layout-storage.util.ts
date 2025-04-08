@@ -3,9 +3,9 @@
 // a shared file.
 // TODO: please move these utility functions with #203
 
-import DockLayout, { FloatPosition, TabData, PanelData } from 'rc-dock';
+import DockLayout, { FloatPosition, PanelData, TabData } from 'rc-dock';
 
-import { getErrorMessage } from 'platform-bible-utils';
+import { LogError } from '@shared/log-error.model';
 import {
   Layout,
   SavedTabInfo,
@@ -15,13 +15,9 @@ import {
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
 import { WebViewDefinition, WebViewDefinitionUpdateInfo } from '@shared/models/web-view.model';
-import { LogError } from '@shared/log-error.model';
+import { getErrorMessage } from 'platform-bible-utils';
 
-import {
-  mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
-  saveTabInfoBase,
-} from '@renderer/services/web-view.service-host';
-import { DIALOGS } from '@renderer/components/dialogs';
+import DIALOGS from '@renderer/components/dialogs';
 import {
   TAB_TYPE_SETTINGS_TAB,
   loadSettingsTab,
@@ -32,6 +28,10 @@ import {
   saveWebViewTab,
   updateWebViewTab,
 } from '@renderer/components/web-view.component';
+import {
+  mergeUpdatablePropertiesIntoWebViewDefinitionIfChangesArePresent,
+  saveTabInfoBase,
+} from '@renderer/services/web-view.service-host';
 
 import { TAB_TYPE_BUTTONS, loadButtonsTab } from '@renderer/testing/test-buttons-panel.component';
 import { TAB_TYPE_TEST, loadTestTab } from '@renderer/testing/test-panel.component';
@@ -40,10 +40,10 @@ import {
   loadQuickVerseHeresyTab,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 
-import { layoutDefaults, getFloatPosition } from './platform-dock-layout-positioning.util';
-import { TabType, RCDockTabInfo, isTab } from './docking-framework-internal.model';
-import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
+import { RCDockTabInfo, TabType, isTab } from './docking-framework-internal.model';
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
+import { getFloatPosition, layoutDefaults } from './platform-dock-layout-positioning.util';
+import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
 
 /** Tab loader functions for each Platform tab type */
 let tabLoaderMap: Map<TabType, TabLoader>;

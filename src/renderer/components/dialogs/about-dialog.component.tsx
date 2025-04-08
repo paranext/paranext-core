@@ -1,15 +1,17 @@
-import { useCallback } from 'react';
-import { usePromise } from 'platform-bible-react';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { appService } from '@shared/services/app.service';
+import { AppInfo } from '@shared/services/app.service-model';
+import { usePromise } from 'platform-bible-react';
 import {
   formatReplacementString,
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { appService } from '@shared/services/app.service';
-import { AppInfo } from '@shared/services/app.service-model';
-import packageInfo from '../../../release/app/package.json';
+import { useCallback } from 'react';
+import packageInfo from '../../../../release/app/package.json';
+import { DIALOG_BASE } from './dialog-base.data';
+import { ABOUT_DIALOG_TYPE, DialogDefinition } from './dialog-definition.model';
 
 export const TAB_TYPE_ABOUT = 'about';
 
