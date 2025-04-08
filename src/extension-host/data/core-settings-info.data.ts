@@ -9,6 +9,12 @@ export const platformSettings: SettingsContribution = [
     label: '%settings_platform_group1_label_alternative%',
     description: '%settings_platform_group1_description%',
     properties: {
+      'platform.verseRef': {
+        label: '%settings_platform_verseRef_label%',
+        description: '%settings_platform_verseRef_description%',
+        default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+        isHidden: true,
+      },
       'platform.interfaceLanguage': {
         label: '%settings_platform_interfaceLanguage_label%',
         description: '%settings_platform_interfaceLanguage_description%',
@@ -26,7 +32,7 @@ export const platformSettings: SettingsContribution = [
         label: '%settings_platform_comments_enabled_label%',
         description: '%settings_platform_comments_enabled_description%',
         default: false,
-        hideSetting: true,
+        isHidden: true,
       },
       'platform.requestTimeout': {
         label: '%settings_platform_requestTimeout_label%',

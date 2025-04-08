@@ -41,7 +41,7 @@ export function ProjectOrOtherSettingsList({
       </CardHeader>
       <CardContent>
         {Object.entries(settingProperties)
-          .filter(([, property]) => !property.hideSetting)
+          .filter(([, property]) => !property.isHidden)
           .map(([key, property]) =>
             projectId ? (
               <ProjectSetting
