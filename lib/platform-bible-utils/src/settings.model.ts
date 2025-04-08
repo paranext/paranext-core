@@ -18,6 +18,8 @@ export type SettingBase = StateBase & {
   label: LocalizeKey;
   /** LocalizeKey that displays in the settings dialog to describe the setting */
   description?: LocalizeKey;
+  /** Boolean that controls whether a setting should be hidden or not */
+  hideSetting?: boolean;
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
