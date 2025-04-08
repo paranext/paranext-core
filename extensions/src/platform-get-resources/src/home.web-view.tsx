@@ -36,6 +36,7 @@ import {
   getErrorMessage,
   isErrorMessageAboutParatextBlockingInternetAccess,
   isErrorMessageAboutRegistryAuthFailure,
+  isPlatformError,
   LocalizeKey,
   newGuid,
 } from 'platform-bible-utils';
@@ -267,12 +268,23 @@ globalThis.webViewComponent = function HomeDialog() {
     [],
   );
 
+  let excludePdpFactoryIds: string[];
+  if (isPlatformError(excludePdpFactoryIdsInHome)) {
+    logger.warn(
+      'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
+      excludePdpFactoryIdsInHome,
+    );
+    excludePdpFactoryIds = [];
+  } else {
+    excludePdpFactoryIds = excludePdpFactoryIdsInHome;
+  }
+
   useEffect(() => {
     let promiseIsCurrent = true;
     const getLocalProjects = async () => {
       const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-        excludePdpFactoryIds: excludePdpFactoryIdsInHome,
+        excludePdpFactoryIds: excludePdpFactoryIds,
       });
       const projectInfo = await Promise.all(
         projectMetadata.map(async (data) => {
@@ -302,7 +314,7 @@ globalThis.webViewComponent = function HomeDialog() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveInProgress, excludePdpFactoryIdsInHome]);
+  }, [isSendReceiveInProgress, excludePdpFactoryIds]);
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
@@ -420,9 +432,18 @@ globalThis.webViewComponent = function HomeDialog() {
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', ['en']);
 
-  const relativeTimeFormatter = useMemo(() => {
-    return new Intl.RelativeTimeFormat(interfaceLanguages, { style: 'long', numeric: 'auto' });
+  const uiLocales = useMemo(() => {
+    if (isPlatformError(interfaceLanguages)) {
+      logger.warn('Failed to load setting: platform.interfaceLanguage', interfaceLanguages);
+      return ['en'];
+    } else {
+      return interfaceLanguages;
+    }
   }, [interfaceLanguages]);
+
+  const relativeTimeFormatter = useMemo(() => {
+    return new Intl.RelativeTimeFormat(uiLocales, { style: 'long', numeric: 'auto' });
+  }, [uiLocales]);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
     if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
