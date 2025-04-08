@@ -10,8 +10,15 @@ import { LIBRARY_TYPE, outputFolder } from './webpack.util';
 const configMain: webpack.Configuration = merge(configBase, {
   // #region shared with https://github.com/paranext/paranext-multi-extension-template/blob/main/webpack/webpack.config.main.ts
 
-  // Build for node since Platform.Bible loads this in node https://webpack.js.org/concepts/targets/
-  target: 'node',
+  // Build for web (default) because, though Platform.Bible loads this in node, built-in node
+  // modules are not available except specific exceptions which are included in
+  // `webpack.config.base`'s `externals`. Building for web prevents webpack from assuming it can
+  // `require` the built-in node modules. Read more at
+  // https://github.com/paranext/paranext/wiki/Module-import-restrictions
+  // Note: Extensions can include polyfills of built-in modules using `resolve.fallback` as
+  // documented at https://webpack.js.org/configuration/resolve/#resolvefallback
+  // https://webpack.js.org/concepts/targets/
+  target: 'web',
   // configuration name
   name: 'main',
   // wait until webView bundling finishes - webpack.config.web-view.ts
@@ -26,6 +33,9 @@ const configMain: webpack.Configuration = merge(configBase, {
     },
     // Empty the output folder before building
     clean: true,
+    // Set the chunk format to build for a Node.js module even though our target is `web`
+    // https://webpack.js.org/configuration/output/#outputchunkformat
+    chunkFormat: 'commonjs',
   },
   resolve: {
     plugins: [
