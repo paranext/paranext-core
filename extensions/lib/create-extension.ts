@@ -2,11 +2,11 @@ import {
   SINGLE_TEMPLATE_BRANCH,
   SINGLE_TEMPLATE_NAME,
   checkForWorkingChanges,
-  execGitCommand,
+  execCommand,
   fetchFromSingleTemplate,
   formatExtensionFolder,
 } from './git.util';
-import { getExtensionPathOSIndependent } from '../webpack/webpack.util';
+import { getExtensionPath } from '../webpack/webpack.util';
 
 const newExtensionName = process.argv[2];
 
@@ -24,11 +24,11 @@ const newExtensionName = process.argv[2];
    * consistent for use in git commands. If you need an OS-dependent path separator, make a new
    * path
    */
-  const extensionPathOSIndependent = getExtensionPathOSIndependent(newExtensionName);
+  const extensionPathOSIndependent = getExtensionPath(newExtensionName, true);
 
   // Try putting SINGLE_TEMPLATE_REMOTE_NAME into a new extension folder
   try {
-    await execGitCommand(
+    await execCommand(
       `git subtree add --prefix ${extensionPathOSIndependent} ${SINGLE_TEMPLATE_NAME} ${SINGLE_TEMPLATE_BRANCH} --squash`,
     );
   } catch (e) {
