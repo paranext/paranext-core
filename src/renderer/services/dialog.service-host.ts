@@ -326,6 +326,9 @@ export async function startDialogService(): Promise<void> {
           },
         },
       },
+      {
+        timeoutMilliseconds: 0,
+      },
     ),
   );
   unsubPromises.push(
@@ -378,6 +381,9 @@ export async function startDialogService(): Promise<void> {
           },
         },
       },
+      {
+        timeoutMilliseconds: 0,
+      },
     ),
   );
   unsubPromises.push(
@@ -393,6 +399,9 @@ export async function startDialogService(): Promise<void> {
             schema: {},
           },
         },
+      },
+      {
+        timeoutMilliseconds: 0,
       },
     ),
   );
