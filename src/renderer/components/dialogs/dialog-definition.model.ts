@@ -37,7 +37,7 @@ export type SelectBooksDialogOptions = DialogOptions & {
  * If you add a dialog here, you must also add it on {@link DIALOGS}
  */
 export interface DialogTypes {
-  [ABOUT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, undefined>;
+  [ABOUT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, void>;
   [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
   [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
     SelectMultipleProjectsDialogOptions,
