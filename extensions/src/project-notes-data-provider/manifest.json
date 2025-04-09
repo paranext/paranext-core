@@ -1,6 +1,6 @@
 {
   "name": "projectNotesDataProvider",
-  "version": "0.4.0-alpha.0",
+  "version": "0.5.0-alpha.0",
   "description": "Project Notes Data Provider for Paranext - provided by C# data provider",
   "author": "Paranext",
   "license": "MIT",
