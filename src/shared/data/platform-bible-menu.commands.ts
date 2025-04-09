@@ -27,8 +27,6 @@ export function handleMenuCommand(command: Command, tabId?: string) {
     case 'platform.visitSupportPage':
       (async () => {
         try {
-          // Assert the more specific type.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
           await commandService.sendCommand('platform.openWindow', 'https://support.bible');
         } catch (e) {
           throw new Error(
