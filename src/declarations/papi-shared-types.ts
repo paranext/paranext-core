@@ -90,7 +90,7 @@ declare module 'papi-shared-types' {
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     /** Open a dialog that displays essential information about the application */
-    'platform.about': () => Promise<undefined>;
+    'platform.about': () => Promise<void>;
 
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see

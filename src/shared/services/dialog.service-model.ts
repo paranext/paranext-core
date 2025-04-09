@@ -30,7 +30,7 @@ export interface DialogService {
    */
   selectProject(options?: SelectProjectDialogOptions): Promise<string | undefined>;
   /** Shows the about dialog */
-  showAboutDialog(): Promise<undefined>;
+  showAboutDialog(): Promise<void>;
 }
 
 /** Prefix on requests that indicates that the request is related to dialog operations */

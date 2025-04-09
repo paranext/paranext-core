@@ -3147,7 +3147,7 @@ declare module 'papi-shared-types' {
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     /** Open a dialog that displays essential information about the application */
-    'platform.about': () => Promise<undefined>;
+    'platform.about': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -5378,7 +5378,7 @@ declare module 'shared/services/dialog.service-model' {
      */
     selectProject(options?: SelectProjectDialogOptions): Promise<string | undefined>;
     /** Shows the about dialog */
-    showAboutDialog(): Promise<undefined>;
+    showAboutDialog(): Promise<void>;
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';

@@ -8,7 +8,7 @@ import {
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { useCallback } from 'react';
+import { Fragment, useCallback } from 'react';
 import packageInfo from '../../../../release/app/package.json';
 import './about-dialog.component.scss';
 import { DIALOG_BASE } from './dialog-base.data';
@@ -79,7 +79,11 @@ function AboutDialog() {
                 {dbIpAttributionTerms}
               </a>
             ),
-          })}
+          }).map((contribution, index) => (
+            // We can use index as key here because the array is static and will not change.
+            // eslint-disable-next-line react/no-array-index-key
+            <Fragment key={`key-${index}`}>{contribution}</Fragment>
+          ))}
         </p>
       </div>
     </div>

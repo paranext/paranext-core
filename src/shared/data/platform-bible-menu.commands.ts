@@ -45,7 +45,7 @@ export function handleMenuCommand(command: Command, tabId?: string) {
           await commandService.sendCommand(command.command as CommandNames, tabId);
         } catch (e) {
           throw new Error(
-            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${e}`,
+            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${JSON.stringify(e)}`,
           );
         }
       })();
