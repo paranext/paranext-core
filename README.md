@@ -196,7 +196,8 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 
 3. In GitHub, adjust the new draft release's body and other metadata as desired, then publish the release.
 4. Open a PR and merge the newly created `bump-versions-<next_version>` branch.
-5. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
+5. Update the [Software Version Info](https://github.com/paranext/paranext/wiki/Software-Version-Info) page with information about this release.
+6. When appropriate, in [Snapcraft](https://snapcraft.io/platform-bible/releases), promote the newly uploaded release to the appropriate channel.
 
 ## Testing
 
