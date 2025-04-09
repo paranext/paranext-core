@@ -98,6 +98,10 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
+function getScriptureReference(scrRef: SerializedVerseRef): string {
+  return `${Canon.bookIdToEnglishName(scrRef.book)} ${scrRef.chapterNum}:${scrRef.verseNum}`;
+}
+
 export function BookChapterControl({
   scrRef,
   handleSubmit,
@@ -167,8 +171,8 @@ export function BookChapterControl({
       if (shouldClose || fetchEndChapter(bookId) === -1) {
         handleSubmit({
           book: bookId,
-          chapterNum: chapter || 1,
-          verseNum: verse || 1,
+          chapterNum: chapter ?? 1,
+          verseNum: verse ?? 1,
         });
 
         setIsContentOpen(false);
@@ -191,7 +195,7 @@ export function BookChapterControl({
 
   const handleInputSubmit = useCallback(() => {
     SEARCH_QUERY_FORMATS.forEach((format) => {
-      const matches = searchQuery.match(format);
+      const matches = RegExp(format).exec(searchQuery);
       if (matches) {
         // Book should be a bookId or an english name
         const [book, chapter = undefined, verse = undefined] = matches.slice(1);
@@ -207,6 +211,7 @@ export function BookChapterControl({
         }
       }
     });
+    inputRef.current.blur();
   }, [updateReference, searchQuery]);
 
   const handleKeyDownInput = useCallback(
@@ -214,19 +219,9 @@ export function BookChapterControl({
       if (!isContentOpen) {
         setIsContentOpen(true);
       } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        if (
-          typeof menuItemRef !== 'undefined' &&
-          // Ref uses null
-          // eslint-disable-next-line no-null/no-null
-          menuItemRef.current !== null
-        ) {
+        if (menuItemRef?.current) {
           menuItemRef.current.focus();
-        } else if (
-          typeof contentRef !== 'undefined' &&
-          // Ref uses null
-          // eslint-disable-next-line no-null/no-null
-          contentRef.current !== null
-        ) {
+        } else if (contentRef.current) {
           contentRef.current.focus();
         }
         event.preventDefault();
@@ -250,7 +245,6 @@ export function BookChapterControl({
     }
 
     inputRef.current.dispatchEvent(new KeyboardEvent('keydown', { key }));
-    inputRef.current.focus();
   };
 
   const handleKeyDownMenuItem = (event: ReactKeyboardEvent) => {
@@ -322,7 +316,7 @@ export function BookChapterControl({
 
   useLayoutEffect(() => {
     const scrollTimeout = setTimeout(() => {
-      if (isContentOpenDelayed && contentRef.current && menuItemRef.current) {
+      if (isContentOpenDelayed && contentRef.current && menuItemRef.current && !searchQuery) {
         const menuItemOffsetTop = menuItemRef.current.offsetTop;
         const scrollPosition = menuItemOffsetTop - SCROLL_OFFSET;
         contentRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
@@ -331,7 +325,7 @@ export function BookChapterControl({
     return () => {
       clearTimeout(scrollTimeout);
     };
-  }, [isContentOpenDelayed]);
+  }, [isContentOpenDelayed, searchQuery]);
 
   return (
     <div className="pr-twp tw-flex">
@@ -347,14 +341,18 @@ export function BookChapterControl({
               setHighlightedBookId(scrRef.book);
               setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
               setIsContentOpen(true);
+              setSearchQuery(getScriptureReference(scrRef));
               inputRef.current.focus();
             }}
             onFocus={() => {
               // Radix thinks we want to close because the input is being focused. Prevent that
               shouldPreventAutoClosing.current = true;
             }}
+            onBlur={() => {
+              setSearchQuery('');
+            }}
             handleSubmit={handleInputSubmit}
-            placeholder={`${Canon.bookIdToEnglishName(scrRef.book)} ${scrRef.chapterNum}:${scrRef.verseNum}`}
+            placeholder={getScriptureReference(scrRef)}
             className={className}
           />
         </DropdownMenuTrigger>
