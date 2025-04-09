@@ -12,8 +12,6 @@ export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProj
 /** The tabType for the select books dialog in `select-books.dialog.tsx` */
 export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
 
-export type AboutDialogOptions = DialogOptions;
-
 type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
 
 /** Options to provide when showing the Select Project dialog */
@@ -39,7 +37,7 @@ export type SelectBooksDialogOptions = DialogOptions & {
  * If you add a dialog here, you must also add it on {@link DIALOGS}
  */
 export interface DialogTypes {
-  [ABOUT_DIALOG_TYPE]: DialogDataTypes<AboutDialogOptions, string>;
+  [ABOUT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, undefined>;
   [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
   [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
     SelectMultipleProjectsDialogOptions,
