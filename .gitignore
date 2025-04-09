@@ -24,6 +24,7 @@ node_modules
 release/app/buildInfo.json
 release/app/dist
 release/build
+release/staged
 .erb/dll
 storybook-static
 

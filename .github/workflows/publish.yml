@@ -1,4 +1,5 @@
 name: Publish
+run-name: Publish release v${{ github.event.inputs.version }} on ${{ github.head_ref || github.ref_name }}
 
 # Make sure these match with the matrix.os values below
 env:
@@ -8,10 +9,17 @@ env:
   OS_LINUX: ubuntu-22.04
 
 on:
-  push:
-    branches: [release/*]
   workflow_dispatch:
     inputs:
+      version:
+        description: 'Version to publish. For verification purposes only; if the package.json version is different on the specified branch, the workflow will fail.'
+        required: true
+      newVersionAfterPublishing:
+        description: "Version to bump all the repo's versions to on a new branch (called `bump-versions-<version>`) after making a new release, e.g. 0.3.0-alpha.0. If empty, will not bump the versions."
+        required: false
+      bumpRef:
+        description: 'Git ref to create the new `bump-versions-<version>` branch from. If empty, will use the current branch.'
+        required: false
       debug_enabled:
         type: boolean
         description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
@@ -24,6 +32,9 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    permissions:
+      contents: write
+
     strategy:
       matrix:
         # Make sure these match with the env values above
@@ -31,6 +42,9 @@ jobs:
         dotnet_version: [8.0.x]
 
     steps:
+      - name: Output Workflow Dispatch Inputs
+        run: echo "${{ toJSON(github.event.inputs) }}"
+
       - name: Install MacPorts
         if: ${{ matrix.os == env.OS_MACOS }}
         uses: melusina-org/setup-macports@v1
@@ -109,6 +123,12 @@ jobs:
         with:
           file_path: 'release/app/package.json'
 
+      - name: Verify version (skips if versions match)
+        if: '${{ inputs.version != steps.release_package_json.outputs.version }}'
+        run: |
+          echo "Version mismatch! Expected ${{ inputs.version }} but found ${{ steps.release_package_json.outputs.version }}"
+          exit 1
+
       - name: Install Node and NPM
         uses: actions/setup-node@v4
         with:
@@ -121,17 +141,16 @@ jobs:
           npm run build
 
       - name: Prepare release - Windows
-        # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        if: ${{ matrix.os == env.OS_WINDOWS }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          npm exec electron-builder -- --win
+          npm exec electron-builder -- --publish never --win
           mkdir release\\staged
           move release\\build\\*Setup*.exe release\\staged
 
       - name: Code signing - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+        if: ${{ matrix.os == env.OS_WINDOWS }}
         # See https://github.com/cognitedata/code-sign-action/blob/main/README.md for descriptions
         env:
           CERTIFICATE_HOST: ${{ secrets.WIN_CODE_SIGNING_CERT_HOST }}
@@ -144,20 +163,8 @@ jobs:
         with:
           path-to-binary: 'release\\staged'
 
-      - name: Publish releases - Windows
-        if: ${{ matrix.os == env.OS_WINDOWS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: 'Windows-PlatformBible-${{ steps.release_package_json.outputs.version }}'
-          path: release/staged
-          if-no-files-found: error
-          compression-level: 0
-
-      - name: Publish releases - macOS
-        # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == env.OS_MACOS && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+      - name: Prepare release - macOS
+        if: ${{ matrix.os == env.OS_MACOS }}
         env:
           # The APPLE_* values are used for auto updates signing
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
@@ -167,11 +174,13 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
           # This is used for uploading release assets to github
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm exec electron-builder -- --publish always --mac
+        run: |
+          npm exec electron-builder -- --publish never --mac
+          mkdir release/staged
+          mv release/build/*.dmg release/staged
 
-      - name: Publish releases to the snap store - Linux
-        # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
+      - name: Prepare release and publish to the snap store - Linux
+        if: ${{ matrix.os == env.OS_LINUX }}
         env:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
@@ -185,17 +194,42 @@ jobs:
           mkdir release/staged
           mv release/build/*.snap release/staged
 
-      - name: Upload Linux artifacts to GitHub
-        # If the branch is labeled as a release version (e.g. "release/v1.2.3"),
-        if: ${{ matrix.os == env.OS_LINUX && startsWith(github.ref, 'refs/heads/release/v') && contains(github.ref, '.') }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        uses: actions/upload-artifact@v4
+      - name: Publish draft release
+        uses: ncipollo/release-action@v1
         with:
-          name: 'Linux-PlatformBible-${{ steps.release_package_json.outputs.version }}'
-          path: release/staged
-          if-no-files-found: error
-          compression-level: 0
+          # Need to allow updates in order to upload artifacts from each OS
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: |
+            release/staged/*
+          bodyFile: .github/assets/release-body.md
+          # make the new release a draft instead of automatically publishing
+          draft: true
+          generateReleaseNotes: true
+          # if the release already exists, leave its metadata alone
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true
+          omitPrereleaseDuringUpdate: true
+          # make the new release a pre-release
+          prerelease: true
+          tag: v${{ inputs.version }}
+          # only update if the release is still a draft
+          updateOnlyUnreleased: true
+
+      - name: Checkout bump ref
+        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' && inputs.bumpRef != '' && inputs.bumpRef != (github.head_ref || github.ref_name) }}
+        uses: actions/checkout@v4
+        with:
+          clean: false
+          ref: ${{ inputs.bumpRef }}
+
+      - name: Bump repo versions
+        if: ${{ matrix.os == env.OS_LINUX && inputs.newVersionAfterPublishing != '' }}
+        # Bump versions using the built-in git token https://github.com/actions/checkout/tree/v4/?tab=readme-ov-file#push-a-commit-using-the-built-in-token
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm run bump-versions -- ${{ inputs.newVersionAfterPublishing }}
 
       # Enable tmate debugging of manually-triggered workflows if the input option was provided
       - name: Setup tmate session

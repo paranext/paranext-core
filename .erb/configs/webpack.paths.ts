@@ -51,6 +51,7 @@ const webpackPaths = {
   distExtensionHostPath,
   distRendererPath,
   buildPath,
+  extensionsPath,
   extensionsDistPath,
   extensionsLibPath,
 };
