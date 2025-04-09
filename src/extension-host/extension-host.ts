@@ -1,6 +1,7 @@
 import '@extension-host/global-this.model';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import * as extensionService from '@extension-host/services/extension.service';
 import { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import { logger } from '@shared/services/logger.service';
@@ -48,8 +49,9 @@ process.on('unhandledRejection', (reason) => {
 
 (async () => {
   try {
-    // The network service has to be running before anything else
+    // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    await initializeSharedStoreService(networkService);
 
     // Prepare all services that need to be running because extensions might rely on them
     await Promise.all([

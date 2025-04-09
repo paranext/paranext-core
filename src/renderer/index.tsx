@@ -2,6 +2,7 @@ import '@renderer/global-this.model';
 import { createRoot } from 'react-dom/client';
 import { getErrorMessage } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { startWebViewService } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import { webViewProviderService } from '@shared/services/web-view-provider.service';
@@ -46,7 +47,9 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 //   this point. TODO: https://github.com/paranext/paranext-core/issues/559
 (async () => {
   try {
+    // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    await initializeSharedStoreService(networkService);
 
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
