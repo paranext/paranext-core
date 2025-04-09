@@ -9,6 +9,7 @@ import { serializeRequestType } from '@shared/utils/util';
 import { CommandHandlers, CommandNames } from 'papi-shared-types';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 
 /**
  * Register a command on the papi to be handled here
@@ -19,6 +20,8 @@ import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
  *       period and lower camel case in case we expand the api in the future to allow dot notation.
  *
  * @param handler Function to run when the command is invoked
+ * @param commandDocs Documentation for the command
+ * @param commandOptions Options for the command
  * @returns Promise that resolves if the command successfully registered and unsubscriber function
  *   to run to stop the passed-in function from handling commands
  */
@@ -26,11 +29,13 @@ export const registerCommand = <CommandName extends CommandNames>(
   commandName: CommandName,
   handler: CommandHandlers[CommandName],
   commandDocs?: SingleMethodDocumentation,
+  commandOptions?: NetworkMethodHandlerOptions,
 ): Promise<UnsubscriberAsync> => {
   return networkService.registerRequestHandler(
     serializeRequestType(CATEGORY_COMMAND, commandName),
     handler,
     commandDocs,
+    commandOptions,
   );
 };
 
