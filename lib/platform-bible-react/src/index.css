@@ -154,21 +154,9 @@
     --sidebar-ring: 15.5 13.2% 53.9%;
   }
 }
-
-@layer base {
-  * {
-    @apply tw-border-border;
-  }
-
-  body {
-    @apply tw-bg-background tw-text-foreground;
-  }
-}
-
 /* #endregion */
 
-/* overwriting for core only */
-
+/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css but with the difference of being scoped to .pr-twp here */
 @layer base {
   .pr-twp {
     @apply tw-border-border;
@@ -178,3 +166,4 @@
     @apply tw-bg-background tw-text-foreground;
   }
 }
+/* #endregion */
