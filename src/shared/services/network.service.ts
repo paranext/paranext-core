@@ -28,6 +28,7 @@ import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { JSONRPCResponse } from '@node_modules/json-rpc-2.0/dist';
+import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 
 // #region Local event handling
 
@@ -113,6 +114,9 @@ export function setRequestTimeout(timeoutSeconds: number) {
   logger.info(`[${globalThis.processType}] Request timeout set to ${requestTimeoutMs}ms`);
 }
 
+// Map of request types to custom timeouts for each request type to override the default timeout
+const requestTimeoutMsPerRequestType = new Map<SerializedRequestType, number>();
+
 /** Inspect a value to see if we should process it as a JSONRPCResponse of some sort */
 function isJsonRpcResponse(response: unknown): response is JSONRPCResponse {
   return !!response && typeof response === 'object' && 'jsonrpc' in response;
@@ -161,8 +165,9 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   if (!jsonRpc) throw new Error('RPC handler not set');
   let timeoutOccurred = false;
   let response: unknown;
+  const timeoutMs = requestTimeoutMsPerRequestType.get(requestType) ?? requestTimeoutMs;
   // If the request takes longer than the configured timeout, throw an error
-  if (requestTimeoutMs > 0) {
+  if (timeoutMs > 0) {
     await Promise.race([
       (async () => {
         try {
@@ -175,7 +180,7 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
         setTimeout(() => {
           timeoutOccurred = true;
           resolve();
-        }, requestTimeoutMs);
+        }, timeoutMs);
       }),
     ]);
   }
@@ -208,6 +213,8 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
  *
  * @param requestType The type of request on which to register the handler
  * @param handler Function to register to run on requests
+ * @param requestDocs Documentation for the this requestType
+ * @param options Options to change the behavior of the request handler
  * @returns Promise that resolves if the request successfully registered and unsubscriber function
  *   to run to stop the passed-in function from handling requests
  */
@@ -215,12 +222,16 @@ export async function registerRequestHandler(
   requestType: SerializedRequestType,
   requestHandler: InternalRequestHandler,
   requestDocs?: SingleMethodDocumentation,
+  requestHandlerOptions?: NetworkMethodHandlerOptions,
 ): Promise<UnsubscriberAsync> {
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
   const success = await jsonRpc.registerMethod(requestType, requestHandler, requestDocs);
   if (!success) throw new Error(`Could not register request handler for ${requestType}`);
+  if (requestHandlerOptions?.timeoutMilliseconds !== undefined)
+    requestTimeoutMsPerRequestType.set(requestType, requestHandlerOptions.timeoutMilliseconds);
   return async () => {
+    requestTimeoutMsPerRequestType.delete(requestType);
     if (!jsonRpc) return false;
     return jsonRpc.unregisterMethod(requestType);
   };
