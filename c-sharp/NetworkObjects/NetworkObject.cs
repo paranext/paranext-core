@@ -1,3 +1,5 @@
+using System.Reflection;
+
 namespace Paranext.DataProvider.NetworkObjects;
 
 internal abstract class NetworkObject
@@ -34,12 +36,37 @@ internal abstract class NetworkObject
         foreach (var (functionName, function) in functionsToRegister)
         {
             var req = $"{objPrefix}.{functionName}";
-            requests.Add(PapiClient.RegisterRequestHandlerAsync(req, function));
+            TimeSpan? timeout = GetTimeoutFromDelegate(function);
+            requests.Add(PapiClient.RegisterRequestHandlerAsync(req, function, timeout));
         }
         await Task.WhenAll(requests);
 
         // Notify the network that we registered this network object
         _registrationParameters = registrationParameters;
         await PapiClient.SendEventAsync("object:onDidCreateNetworkObject", registrationParameters);
+    }
+
+    /// <summary>
+    /// Extracts the timeout value from a NetworkTimeoutAttribute if it exists on the method
+    /// represented by the delegate.
+    /// </summary>
+    /// <param name="function">The delegate to check for the NetworkTimeoutAttribute.</param>
+    /// <returns>A TimeSpan representing the timeout if the attribute exists, otherwise null.</returns>
+    private static TimeSpan? GetTimeoutFromDelegate(Delegate function)
+    {
+        // Get the method info from the delegate
+        MethodInfo? methodInfo = function.Method;
+
+        if (methodInfo == null)
+            return null;
+
+        // Check if the method has the NetworkTimeoutAttribute
+        var attribute = methodInfo.GetCustomAttribute<NetworkTimeoutAttribute>();
+
+        if (attribute == null)
+            return null;
+
+        // Return the timeout as a TimeSpan
+        return TimeSpan.FromMilliseconds(attribute.TimeoutMilliseconds);
     }
 }
