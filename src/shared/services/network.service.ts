@@ -21,6 +21,7 @@ import {
   stringLength,
   UnsubscriberAsync,
 } from 'platform-bible-utils';
+import { sharedStoreService } from '@shared/services/shared-store.service';
 import { deserializeRequestType, SerializedRequestType } from '@shared/utils/util';
 import { PapiNetworkEventEmitter } from '@shared/models/papi-network-event-emitter.model';
 import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
@@ -28,6 +29,7 @@ import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
 import { JSONRPCResponse } from '@node_modules/json-rpc-2.0/dist';
+import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 
 // #region Local event handling
 
@@ -161,8 +163,10 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
   if (!jsonRpc) throw new Error('RPC handler not set');
   let timeoutOccurred = false;
   let response: unknown;
+  const sharedVal = sharedStoreService.get('platform.customNetworkTimeouts')?.[requestType];
+  const timeoutMs = typeof sharedVal === 'number' && sharedVal >= 0 ? sharedVal : requestTimeoutMs;
   // If the request takes longer than the configured timeout, throw an error
-  if (requestTimeoutMs > 0) {
+  if (timeoutMs > 0) {
     await Promise.race([
       (async () => {
         try {
@@ -175,7 +179,7 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
         setTimeout(() => {
           timeoutOccurred = true;
           resolve();
-        }, requestTimeoutMs);
+        }, timeoutMs);
       }),
     ]);
   }
@@ -208,6 +212,8 @@ export const request = async <TParam extends Array<unknown>, TReturn>(
  *
  * @param requestType The type of request on which to register the handler
  * @param handler Function to register to run on requests
+ * @param requestDocs Documentation for the this requestType
+ * @param options Options to change the behavior of the request handler
  * @returns Promise that resolves if the request successfully registered and unsubscriber function
  *   to run to stop the passed-in function from handling requests
  */
@@ -215,13 +221,24 @@ export async function registerRequestHandler(
   requestType: SerializedRequestType,
   requestHandler: InternalRequestHandler,
   requestDocs?: SingleMethodDocumentation,
+  requestHandlerOptions?: NetworkMethodHandlerOptions,
 ): Promise<UnsubscriberAsync> {
   await initialize();
   if (!jsonRpc) throw new Error('RPC handler not set');
   const success = await jsonRpc.registerMethod(requestType, requestHandler, requestDocs);
   if (!success) throw new Error(`Could not register request handler for ${requestType}`);
+  if (requestHandlerOptions?.timeoutMilliseconds !== undefined) {
+    const sharedVal = sharedStoreService.get('platform.customNetworkTimeouts') ?? {};
+    sharedVal[requestType] = requestHandlerOptions.timeoutMilliseconds;
+    sharedStoreService.set('platform.customNetworkTimeouts', sharedVal);
+  }
   return async () => {
     if (!jsonRpc) return false;
+    const sharedVal = sharedStoreService.get('platform.customNetworkTimeouts');
+    if (sharedVal) {
+      delete sharedVal[requestType];
+      sharedStoreService.set('platform.customNetworkTimeouts', sharedVal);
+    }
     return jsonRpc.unregisterMethod(requestType);
   };
 }

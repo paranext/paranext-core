@@ -955,6 +955,78 @@ declare module 'shared/data/rpc.model' {
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
 }
+declare module 'shared/services/shared-store.service' {
+  type NetworkService = typeof import('shared/services/network.service');
+  /**
+   * Initialize the shared store service, setting up request handlers and event listeners. This
+   * function should be called by each of our JS processes early during start up.
+   *
+   * @param networkService The network service to use for communication between processes
+   * @returns A promise that resolves when the service is initialized
+   */
+  export function initialize(networkService: NetworkService): Promise<void>;
+  /**
+   * Reset the shared store service state for testing. This function is only exported for testing
+   * purposes and should not be used in production code.
+   */
+  export function resetForTesting(): void;
+  /**
+   * Get a value from the shared store with proper typing
+   *
+   * @param key The key of the value to retrieve
+   * @returns A cloned copy of the value associated with the key, or undefined if not found
+   */
+  function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefined;
+  /**
+   * Set a value in the shared store and notify other processes
+   *
+   * @param key The key to set
+   * @param value The value to set. Note that the stored value is a cloned copy of the provided value,
+   *   so changes to the original value will not affect the stored value. Also, any non-serializable
+   *   data will removed from the value during the cloning process.
+   * @returns True if the value was set successfully, false otherwise
+   */
+  function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): boolean;
+  /**
+   * Remove a value from the shared store and notify other processes of the change.
+   *
+   * Note that removing a key sets its value to undefined in the store. The key-value pair isn't
+   * actually deleted. This is done to avoid race conditions if a value for this key is set again
+   * quickly.
+   *
+   * @param key The key to remove
+   * @returns True if the value was removed successfully, false otherwise
+   */
+  function remove<K extends SharedStoreKeys>(key: K): boolean;
+  /**
+   * Defines the keys and types of values held in key-value pairs within the shared store service.
+   * Since this service is not part of the public API, the keys and types are not included in
+   * `papi-shared-types.ts`. If the platform needs more key-value pairs, they should be added here.
+   */
+  export interface SharedStoreValues {
+    'platform.customNetworkTimeouts': Record<string, number>;
+  }
+  export type SharedStoreKeys = keyof SharedStoreValues;
+  /**
+   * This provides an in-memory, key-value store that can be read without a network call but updates
+   * automatically in the background using network events. This allows synchronous reading of shared,
+   * non-persisted key-value pairs between processes. It can be thought of as a distributed key-value
+   * store. It relies only on the network service, not other services like network objects or
+   * settings.
+   *
+   * This uses {@link https://en.wikipedia.org/wiki/Lamport_timestamp | Lamport logical clocks} for
+   * conflict resolution to ensure consistency across processes.
+   *
+   * This service is not intended to be accessed directly by extensions. It was created as a utility
+   * for the platform and is not part of the public API. Extensions should use settings and other data
+   * providers for sharing data.
+   */
+  export const sharedStoreService: {
+    get: typeof get;
+    set: typeof set;
+    remove: typeof remove;
+  };
+}
 declare module 'shared/models/papi-network-event-emitter.model' {
   import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
   /**
@@ -1487,6 +1559,16 @@ declare module 'shared/services/rpc-handler.factory' {
   /** Creates a server or client RPC handler depending on if we're in main or some other process */
   export const createRpcHandler: () => Promise<IRpcMethodRegistrar>;
 }
+declare module 'shared/models/network.model' {
+  /** Options related to calling a method over the network */
+  export type NetworkMethodHandlerOptions = {
+    /**
+     * Custom timeout to use for callers of a method instead of the platform-wide timeout value. Set
+     * to 0 to disable the timeout.
+     */
+    timeoutMilliseconds?: number;
+  };
+}
 declare module 'shared/services/network.service' {
   /**
    * Handles requests, responses, subscriptions, etc. to the backend. Likely shouldn't need/want to
@@ -1497,6 +1579,7 @@ declare module 'shared/services/network.service' {
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
   import { SerializedRequestType } from 'shared/utils/util';
   import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1518,6 +1601,8 @@ declare module 'shared/services/network.service' {
    *
    * @param requestType The type of request on which to register the handler
    * @param handler Function to register to run on requests
+   * @param requestDocs Documentation for the this requestType
+   * @param options Options to change the behavior of the request handler
    * @returns Promise that resolves if the request successfully registered and unsubscriber function
    *   to run to stop the passed-in function from handling requests
    */
@@ -1525,6 +1610,7 @@ declare module 'shared/services/network.service' {
     requestType: SerializedRequestType,
     requestHandler: InternalRequestHandler,
     requestDocs?: SingleMethodDocumentation,
+    requestHandlerOptions?: NetworkMethodHandlerOptions,
   ): Promise<UnsubscriberAsync>;
   /**
    * Creates a function that is a request function with a baked requestType. This is also nice because
@@ -3677,6 +3763,7 @@ declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
   import { CommandHandlers } from 'papi-shared-types';
   import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
   /**
    * Register a command on the papi to be handled here
    *
@@ -3693,6 +3780,7 @@ declare module 'shared/services/command.service' {
     commandName: CommandName,
     handler: CommandHandlers[CommandName],
     commandDocs?: SingleMethodDocumentation,
+    commandOptions?: NetworkMethodHandlerOptions,
   ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
   export const sendCommand: <CommandName extends keyof CommandHandlers>(
