@@ -10,6 +10,7 @@ import {
 } from 'platform-bible-utils';
 import { useCallback } from 'react';
 import packageInfo from '../../../../release/app/package.json';
+import './about-dialog.component.scss';
 import { DIALOG_BASE } from './dialog-base.data';
 import { ABOUT_DIALOG_TYPE, DialogDefinition } from './dialog-definition.model';
 
@@ -90,8 +91,8 @@ export const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.f
   tabType: ABOUT_DIALOG_TYPE,
   defaultTitle: 'About',
   initialSize: {
-    width: 500,
-    height: 500,
+    width: 800,
+    height: 700,
   },
   Component: AboutDialog,
 });
