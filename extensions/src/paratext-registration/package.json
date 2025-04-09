@@ -1,7 +1,7 @@
 {
   "name": "paratext-registration",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.4.0-alpha.0",
   "main": "src/main.js",
   "types": "src/types/paratext-registration.d.ts",
   "author": "Paranext",
