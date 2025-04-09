@@ -4,7 +4,7 @@ import { ReactElement } from 'react';
 import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provider-factory.interface';
 
 /** The tabType for the about dialog in `about-dialog.component.tsx` */
-export const ABOUT_DIALOG_TYPE = 'platform.about';
+export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
 /** The tabType for the select project dialog in `select-project.dialog.tsx` */
 export const SELECT_PROJECT_DIALOG_TYPE = 'platform.selectProject';
 /** The tabType for the select multiple projects dialog in `select-multiple-projects.dialog.tsx` */
