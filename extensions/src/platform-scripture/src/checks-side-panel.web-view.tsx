@@ -334,7 +334,7 @@ global.webViewComponent = function ChecksSidePanelWebView({
   }
 
   return (
-    <div className="pr-twp tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen">
+    <div className="pr-twp tw-flex tw-flex-col tw-box-border tw-bg-sidebar tw-p-3 tw-h-screen tw-min-w-[10rem]">
       <div className="tw-flex tw-flex-row tw-flex-wrap tw-gap-1 tw-items-center tw-pb-2 tw-w-full">
         <ChecksProjectFilter
           handleSelectProject={handleSelectProject}
@@ -349,20 +349,22 @@ global.webViewComponent = function ChecksSidePanelWebView({
           onOpenChange={(open) => setIsCheckTypesOpen(open)}
         />
       </div>
-      <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3">
-        {
-          // TODO: Display something else if there is an error getting check results
-          isPlatformError(checkResults) || checkResults.length === 0 ? (
-            <div className="tw-flex tw-flex-col tw-box-border tw-items-center tw-justify-center tw-h-screen tw-w-full">
+      {
+        // TODO: Display something else if there is an error getting check results
+        isPlatformError(checkResults) || checkResults.length === 0 ? (
+          <div className="tw-grow tw-flex tw-flex-col tw-items-center tw-justify-center tw-w-full">
+            <div className="tw-mb-2">
               {selectedCheckTypeIds.length === 0
                 ? localizedStrings['%webView_checksSidePanel_noChecksSelected%']
                 : localizedStrings['%webView_checksSidePanel_noCheckResults%']}
-              <Button onClick={() => setIsCheckTypesOpen(!isCheckTypesOpen)}>
-                {localizedStrings['%webView_checksSidePanel_selectChecks%']}
-              </Button>
             </div>
-          ) : (
-            checkResults?.map((result, index) => (
+            <Button onClick={() => setIsCheckTypesOpen(!isCheckTypesOpen)}>
+              {localizedStrings['%webView_checksSidePanel_selectChecks%']}
+            </Button>
+          </div>
+        ) : (
+          <div className="tw-flex tw-flex-col tw-justify-center tw-items-start tw-p-0 tw-gap-3 tw-pb-3">
+            {checkResults?.map((result, index) => (
               <CheckCard
                 key={writeCheckId(result, index)}
                 checkResult={result}
@@ -377,10 +379,10 @@ global.webViewComponent = function ChecksSidePanelWebView({
                 showBadge
                 checkName={getLocalizedCheckDescription(result.checkId ?? result.checkResultType)}
               />
-            ))
-          )
-        }
-      </div>
+            ))}
+          </div>
+        )
+      }
     </div>
   );
 };
