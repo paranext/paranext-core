@@ -8,6 +8,7 @@ export type BookChapterInputProps = {
   handleOnClick: MouseEventHandler<HTMLInputElement>;
   handleSubmit: () => void;
   onFocus?: FocusEventHandler<HTMLInputElement>;
+  onBlur?: FocusEventHandler<HTMLInputElement>;
   value: string;
   placeholder: string;
   className?: string;
@@ -39,8 +40,8 @@ export const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputPro
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               handleSubmit();
-            }
-            handleKeyDown(e);
+              e.preventDefault();
+            } else handleKeyDown(e);
           }}
           onClick={handleOnClick}
           ref={ref}
