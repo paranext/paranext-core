@@ -85,7 +85,7 @@ function AboutDialog() {
   );
 }
 
-const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.freeze({
+export const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.freeze({
   ...DIALOG_BASE,
   tabType: ABOUT_DIALOG_TYPE,
   defaultTitle: 'About',

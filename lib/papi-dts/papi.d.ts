@@ -3146,6 +3146,8 @@ declare module 'papi-shared-types' {
     /** @deprecated 3 December 2024. Renamed to `platform.openSettings` */
     'platform.openUserSettings': () => Promise<void>;
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
+    /** Open a dialog that displays essential information about the application */
+    'platform.about': () => Promise<undefined>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
@@ -5277,7 +5279,6 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
   export const SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE = 'platform.selectMultipleProjects';
   /** The tabType for the select books dialog in `select-books.dialog.tsx` */
   export const SELECT_BOOKS_DIALOG_TYPE = 'platform.selectBooks';
-  export type AboutDialogOptions = DialogOptions;
   type ProjectDialogOptionsBase = DialogOptions & ProjectMetadataFilterOptions;
   /** Options to provide when showing the Select Project dialog */
   export type SelectProjectDialogOptions = ProjectDialogOptionsBase;
@@ -5299,7 +5300,7 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
    * If you add a dialog here, you must also add it on {@link DIALOGS}
    */
   export interface DialogTypes {
-    [ABOUT_DIALOG_TYPE]: DialogDataTypes<AboutDialogOptions, string>;
+    [ABOUT_DIALOG_TYPE]: DialogDataTypes<DialogOptions, undefined>;
     [SELECT_PROJECT_DIALOG_TYPE]: DialogDataTypes<SelectProjectDialogOptions, string>;
     [SELECT_MULTIPLE_PROJECTS_DIALOG_TYPE]: DialogDataTypes<
       SelectMultipleProjectsDialogOptions,
@@ -5348,7 +5349,6 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
 }
 declare module 'shared/services/dialog.service-model' {
   import {
-    AboutDialogOptions,
     DialogTabTypes,
     DialogTypes,
     SelectProjectDialogOptions,
@@ -5377,13 +5377,8 @@ declare module 'shared/services/dialog.service-model' {
      * @returns Returns the user's selected project id or `undefined` if the user cancels
      */
     selectProject(options?: SelectProjectDialogOptions): Promise<string | undefined>;
-    /**
-     * Shows the about dialog
-     *
-     * @param options Various options for configuring the dialog that shows
-     * @returns Returns the user's selected project id or `undefined` if the user cancels
-     */
-    showAboutDialog(options?: AboutDialogOptions): Promise<string | undefined>;
+    /** Shows the about dialog */
+    showAboutDialog(): Promise<undefined>;
   }
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';

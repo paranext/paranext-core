@@ -157,9 +157,6 @@ export async function activate(context: ExecutionActivationContext) {
     '%webView_punctuationInventory_title%',
     punctuationInventoryWebViewType,
   );
-  const showAboutDialogPromise = papi.commands.registerCommand('platform.about', async () =>
-    papi.dialogs.showAboutDialog(),
-  );
 
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
   const booksPresentPromise = papi.projectSettings.registerValidator(
@@ -320,7 +317,6 @@ export async function activate(context: ExecutionActivationContext) {
   await checkAggregatorService.initialize();
 
   context.registrations.add(
-    await showAboutDialogPromise,
     await scriptureExtenderPdpefPromise,
     await booksPresentPromise,
     await versificationPromise,
