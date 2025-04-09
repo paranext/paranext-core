@@ -18,6 +18,12 @@ export type SettingBase = StateBase & {
   label: LocalizeKey;
   /** LocalizeKey that displays in the settings dialog to describe the setting */
   description?: LocalizeKey;
+  /**
+   * Boolean that controls whether a setting should be hidden or not. If hidden, the setting will
+   * not show up in the settings dialog in `paranext-core`, and thus will not be configurable by the
+   * user unless an extension provides a way to interact with the setting.
+   */
+  isHidden?: boolean;
 };
 /** The data an extension provides to inform Platform.Bible of the project settings it provides */
 export type ProjectSettingsContribution = ProjectSettingsGroup | ProjectSettingsGroup[];
@@ -432,6 +438,13 @@ const settingsDefs = {
           description: {
             description: 'localizeKey that displays in the settings dialog to describe the setting',
             $ref: '#/$defs/localizeKey',
+          },
+          isHidden: {
+            description: `Boolean that controls whether a setting should be hidden or not. If hidden
+            , the setting will not show up in the settings dialog in \`paranext-core\`, and thus
+            will not be configurable by the user unless an extension provides a way to interact with
+            the setting.`,
+            type: 'boolean',
           },
         },
         required: ['label'],
