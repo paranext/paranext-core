@@ -7,7 +7,7 @@ import type {
   WebViewDefinition,
 } from '@papi/core';
 import type { HelloWorldEvent, HelloWorldProjectWebViewController } from 'hello-world';
-import { PlatformEventEmitter } from 'platform-bible-utils';
+import { PlatformError, PlatformEventEmitter } from 'platform-bible-utils';
 import { checkDetails, createHelloCheck } from './checks';
 import { HelloWorldProjectDataProviderEngineFactory } from './models/hello-world-project-data-provider-engine-factory.model';
 import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
@@ -498,9 +498,8 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
     if (peopleDataProvider) {
       // Test subscribing to a data provider
-      const unsubGreetings = await peopleDataProvider.subscribeGreeting(
-        'Bill',
-        (billGreeting: string | undefined) => logger.debug(`Bill's greeting: ${billGreeting}`),
+      const unsubGreetings = await peopleDataProvider.subscribeGreeting('Bill', (billGreeting) =>
+        logger.debug(`Bill's greeting: ${billGreeting}`),
       );
 
       context.registrations.add(unsubGreetings);

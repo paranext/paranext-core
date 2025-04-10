@@ -104,7 +104,7 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   on the data provider papi creates for this engine.
    */
   async setGreeting(
-    name: string,
+    name: string | PlatformError,
     greeting: string,
   ): Promise<DataProviderUpdateInstructions<PeopleDataTypes>> {
     const person = this.getPerson(name);
@@ -147,7 +147,7 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   the data provider papi creates for this engine.
    */
   async setAge(
-    name: string,
+    name: string | PlatformError,
     age: number,
   ): Promise<DataProviderUpdateInstructions<PeopleDataTypes>> {
     const person = this.getPerson(name);
@@ -170,7 +170,7 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   Note: this method is used when someone uses the `useData('helloSomeone.people').Age` hook or
    *   the `subscribeAge` method on the data provider papi creates for this engine.
    */
-  async getAge(name: string) {
+  async getAge(name: string | PlatformError) {
     const person = this.getPerson(name, false);
     return isPlatformError(person) ? person : person?.age;
   },
