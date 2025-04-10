@@ -229,16 +229,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [decorationsLocalizedStringsBase],
   );
 
-  const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
+  const [commentsEnabledPossiblyError] = useSetting('platform.commentsEnabled', false);
 
-  const showComments = useMemo(() => {
-    if (isPlatformError(commentsEnabled)) {
-      logger.warn('Failed to load setting: platform.commentsEnabled', commentsEnabled);
+  const commentsEnabled = useMemo(() => {
+    if (isPlatformError(commentsEnabledPossiblyError)) {
+      logger.warn('Failed to load setting: platform.commentsEnabled', commentsEnabledPossiblyError);
       return false;
     }
 
-    return commentsEnabled;
-  }, [commentsEnabled]);
+    return commentsEnabledPossiblyError;
+  }, [commentsEnabledPossiblyError]);
 
   /**
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
@@ -351,7 +351,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [legacyCommentsFromPdp, saveLegacyCommentsToPdp] = useProjectData(
     'legacyCommentManager.comments',
     // Only load comments if we have them turned on
-    showComments ? projectId : undefined,
+    commentsEnabled ? projectId : undefined,
   ).Comments(
     useMemo(() => {
       return { bookId: scrRef.book, chapterNum: scrRef.chapterNum };
@@ -550,7 +550,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     /* Workaround to pull in platform-bible-react styles into the editor */
     const workaround = <Button className="tw-hidden" />;
 
-    if (showComments && !isReadOnly) {
+    if (commentsEnabled && !isReadOnly) {
       return (
         <>
           {workaround}

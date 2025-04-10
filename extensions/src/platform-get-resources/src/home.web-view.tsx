@@ -88,6 +88,9 @@ type MergedProjectInfo = {
   lastSendReceiveDate?: string;
 };
 
+const defaultExcludePdpFactoryIds: string[] = [];
+const defaultInterfaceLanguages: string[] = ['en'];
+
 globalThis.webViewComponent = function HomeDialog() {
   const isMounted = useRef(false);
   useEffect(() => {
@@ -263,8 +266,6 @@ globalThis.webViewComponent = function HomeDialog() {
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
 
-  const defaultExcludePdpFactoryIds: string[] = [];
-
   const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
     'platformGetResources.excludePdpFactoryIdsInHome',
     defaultExcludePdpFactoryIds,
@@ -279,7 +280,7 @@ globalThis.webViewComponent = function HomeDialog() {
       return defaultExcludePdpFactoryIds;
     }
     return excludePdpFactoryIdsInHomePossiblyError;
-  }, [excludePdpFactoryIdsInHomePossiblyError, logger]);
+  }, [excludePdpFactoryIdsInHomePossiblyError]);
 
   useEffect(() => {
     let promiseIsCurrent = true;
@@ -431,8 +432,6 @@ globalThis.webViewComponent = function HomeDialog() {
       </div>
     </TableHead>
   );
-
-  const defaultInterfaceLanguages = ['en'];
 
   const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 

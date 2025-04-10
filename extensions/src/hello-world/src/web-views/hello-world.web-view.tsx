@@ -182,7 +182,7 @@ globalThis.webViewComponent = function HelloWorld({
       currentRender: currentRender.current,
       optionsSource: 'hook',
       includeProjectInterfaces: ['platformScripture.USFM_Verse'],
-      excludePdpFactoryIds: excludePdpFactoryIds,
+      excludePdpFactoryIds,
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
@@ -239,7 +239,14 @@ globalThis.webViewComponent = function HelloWorld({
     ),
   );
 
-  const [name, setNameInternal] = useSetting('helloWorld.personName', 'Kathy');
+  const [namePossiblyError, setNameInternal] = useSetting('helloWorld.personName', 'Kathy');
+
+  const name = useMemo(() => {
+    if (isPlatformError(namePossiblyError)) {
+      return '';
+    }
+    return namePossiblyError;
+  }, [namePossiblyError]);
 
   const nameIsError = isPlatformError(name);
 
@@ -270,8 +277,12 @@ globalThis.webViewComponent = function HelloWorld({
 
   const peopleDataProvider = useDataProvider('helloSomeone.people');
 
-  const [personGreeting] = useData('helloSomeone.people').Greeting(name, localizedGreetingLoading);
-  const [personAge] = useData('helloSomeone.people').Age(name, -1);
+  const [personGreeting] = useData<'helloSomeone.people'>(
+    nameIsError ? undefined : 'helloSomeone.people',
+  ).Greeting(name, localizedGreetingLoading);
+  const [personAge] = useData<'helloSomeone.people'>(
+    nameIsError ? undefined : 'helloSomeone.people',
+  ).Age(name, -1);
 
   const [currentProjectVerse] = useProjectData(
     'platformScripture.USFM_Verse',

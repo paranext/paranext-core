@@ -10,7 +10,6 @@ import {
 } from '@papi/core';
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
-import { isPlatformError, PlatformError } from 'platform-bible-utils';
 
 logger.info('Hello Someone is importing!');
 
@@ -51,9 +50,9 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
   PeopleDataMethods & {
     people: PeopleData;
     getPerson<T extends boolean = true>(
-      name: string | PlatformError,
+      name: string,
       createIfDoesNotExist?: T,
-    ): (T extends true ? Person : Person | undefined) | PlatformError;
+    ): T extends true ? Person : Person | undefined;
   } = {
   /** People that are the data this engine serves */
   people: {
@@ -76,12 +75,11 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   anything that doesn't start with `get` like `_getPerson` or `internalGetPerson`.
    */
   getPerson<T extends boolean = true>(
-    name: string | PlatformError,
+    name: string,
     // Assert the conditional type.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
     createIfDoesNotExist: T = true as T,
-  ): (T extends true ? Person : Person | undefined) | PlatformError {
-    if (isPlatformError(name)) return name;
+  ): T extends true ? Person : Person | undefined {
     const nameLower = name.toLowerCase();
     if (createIfDoesNotExist && !this.people[nameLower]) this.people[nameLower] = {};
     // Type assert because we know this person exists
@@ -104,11 +102,10 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   on the data provider papi creates for this engine.
    */
   async setGreeting(
-    name: string | PlatformError,
+    name: string,
     greeting: string,
   ): Promise<DataProviderUpdateInstructions<PeopleDataTypes>> {
     const person = this.getPerson(name);
-    if (isPlatformError(person)) return false;
     // If there is no change in the greeting, don't update
     if (greeting === person.greeting) return false;
 
@@ -127,9 +124,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   Note: this method is used when someone uses the `useData('helloSomeone.people').Greeting` hook
    *   or the `subscribeGreeting` method on the data provider papi creates for this engine.
    */
-  async getGreeting(name: string | PlatformError) {
-    const person = this.getPerson(name, false);
-    return isPlatformError(person) ? person : person?.greeting;
+  async getGreeting(name: string) {
+    return this.getPerson(name, false)?.greeting;
   },
 
   /**
@@ -147,11 +143,10 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   the data provider papi creates for this engine.
    */
   async setAge(
-    name: string | PlatformError,
+    name: string,
     age: number,
   ): Promise<DataProviderUpdateInstructions<PeopleDataTypes>> {
     const person = this.getPerson(name);
-    if (isPlatformError(person)) return false;
     // If there is no change in the age, don't update
     if (age === person.age) return false;
 
@@ -170,9 +165,8 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   Note: this method is used when someone uses the `useData('helloSomeone.people').Age` hook or
    *   the `subscribeAge` method on the data provider papi creates for this engine.
    */
-  async getAge(name: string | PlatformError) {
-    const person = this.getPerson(name, false);
-    return isPlatformError(person) ? person : person?.age;
+  async getAge(name: string) {
+    return this.getPerson(name, false)?.age;
   },
 
   /**
@@ -226,7 +220,6 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    */
   async deletePerson(name: string) {
     const person = this.getPerson(name, false);
-    if (isPlatformError(person)) return false;
     if (person) {
       logger.info(`RIP ${name}, who died tragically young at age ${person.age}. ;(`);
       delete this.people[name.toLowerCase()];
