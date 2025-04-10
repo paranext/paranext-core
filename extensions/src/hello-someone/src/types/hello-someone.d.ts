@@ -1,4 +1,5 @@
-import { PlatformError } from 'platform-bible-utils';
+import type { PlatformError } from 'platform-bible-utils';
+import type { PeopleDataProvider } from 'hello-someone';
 
 declare module 'hello-someone' {
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
@@ -32,8 +33,6 @@ declare module 'hello-someone' {
 }
 
 declare module 'papi-shared-types' {
-  import type { PeopleDataProvider } from 'hello-someone';
-
   export interface CommandHandlers {
     'helloSomeone.helloSomeone': (name: string) => string;
   }
