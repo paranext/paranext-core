@@ -209,13 +209,13 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
     if (!contributions) return true; // If contributions is undefined, show zero results
 
     // Check if any contribution has at least one property
-    return !Object.values(contributions).some((groups) =>
-      groups?.some((group) => Object.keys(group.properties).length > 0),
-    );
+    return !Object.entries(contributions)
+      .filter(([key]) => !selectedSidebarItem.projectId && key === selectedSidebarItem.label)
+      .some(([, groups]) => groups?.some((group) => Object.keys(group.properties).length > 0));
   }, [
     filteredAndMatchedProjectSettingsContributions,
     matchedSettingsContributions,
-    selectedSidebarItem.projectId,
+    selectedSidebarItem,
   ]);
 
   if (projectIdToLimitSettings) {
