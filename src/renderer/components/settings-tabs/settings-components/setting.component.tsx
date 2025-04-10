@@ -20,7 +20,13 @@ import {
   TooltipTrigger,
   UiLanguageSelector,
 } from 'platform-bible-react';
-import { debounce, getErrorMessage, isPlatformError, LocalizeKey } from 'platform-bible-utils';
+import {
+  debounce,
+  getErrorMessage,
+  isPlatformError,
+  LocalizeKey,
+  PlatformError,
+} from 'platform-bible-utils';
 import { ChangeEvent, useCallback, useMemo, useState } from 'react';
 import './settings.component.scss';
 
@@ -71,7 +77,7 @@ export type OtherSettingProps = BaseSettingProps<SettingNames, OtherSettingValue
 
 /** Values from the useSetting hook to manage the setting */
 type OtherSettingsControls = {
-  setting: OtherSettingValues;
+  setting: OtherSettingValues | PlatformError;
   // Necessary for flexibility in handleChangeSetting, ProjectSettingValues and
   // UserSettingValues are not the same so it couldn't assign
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -154,11 +160,18 @@ export function Setting({
     return languages;
   }, [setting, settingKey]);
 
+  const settingErrorMessage = useMemo(() => {
+    if (isPlatformError(setting)) {
+      return setting.message;
+    }
+    return undefined;
+  }, [setting]);
+
   const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
     undefined,
     defaultLanguages,
   );
-  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(settingErrorMessage);
 
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 
