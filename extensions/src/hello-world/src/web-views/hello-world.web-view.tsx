@@ -250,7 +250,7 @@ globalThis.webViewComponent = function HelloWorld({
 
   useEffect(() => {
     if (!nameIsError) setNameTemp(name);
-  }, [name]);
+  }, [name, nameIsError]);
 
   const debouncedSetName = useMemo(
     () =>
@@ -270,11 +270,8 @@ globalThis.webViewComponent = function HelloWorld({
 
   const peopleDataProvider = useDataProvider('helloSomeone.people');
 
-  const [personGreeting] = nameIsError
-    ? [name]
-    : useData('helloSomeone.people').Greeting(name, localizedGreetingLoading);
-
-  const [personAge] = nameIsError ? [name] : useData('helloSomeone.people').Age(name, -1);
+  const [personGreeting] = useData('helloSomeone.people').Greeting(name, localizedGreetingLoading);
+  const [personAge] = useData('helloSomeone.people').Age(name, -1);
 
   const [currentProjectVerse] = useProjectData(
     'platformScripture.USFM_Verse',

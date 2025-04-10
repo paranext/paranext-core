@@ -268,28 +268,30 @@ globalThis.webViewComponent = function HomeDialog() {
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
 
-  const [excludePdpFactoryIdsInHome] = useSetting(
+  const defaultExcludePdpFactoryIds: string[] = [];
+
+  const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
     'platformGetResources.excludePdpFactoryIdsInHome',
-    [],
+    defaultExcludePdpFactoryIds,
   );
 
-  let excludePdpFactoryIds: string[];
-  if (isPlatformError(excludePdpFactoryIdsInHome)) {
-    logger.warn(
-      'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
-      excludePdpFactoryIdsInHome,
-    );
-    excludePdpFactoryIds = [];
-  } else {
-    excludePdpFactoryIds = excludePdpFactoryIdsInHome;
-  }
+  const excludePdpFactoryIds = useMemo(() => {
+    if (isPlatformError(excludePdpFactoryIdsInHomePossiblyError)) {
+      logger.warn(
+        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
+        excludePdpFactoryIdsInHomePossiblyError,
+      );
+      return defaultExcludePdpFactoryIds;
+    }
+    return excludePdpFactoryIdsInHomePossiblyError;
+  }, [excludePdpFactoryIdsInHomePossiblyError, logger]);
 
   useEffect(() => {
     let promiseIsCurrent = true;
     const getLocalProjects = async () => {
       const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-        excludePdpFactoryIds: excludePdpFactoryIds,
+        excludePdpFactoryIds,
       });
       const projectInfo = await Promise.all(
         projectMetadata.map(async (data) => {
@@ -435,15 +437,17 @@ globalThis.webViewComponent = function HomeDialog() {
     </TableHead>
   );
 
-  const [interfaceLanguages] = useSetting('platform.interfaceLanguage', ['en']);
+  const defaultInterfaceLanguages = ['en'];
+
+  const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
 
   const uiLocales = useMemo(() => {
     if (isPlatformError(interfaceLanguages)) {
       logger.warn('Failed to load setting: platform.interfaceLanguage', interfaceLanguages);
-      return ['en'];
-    } else {
-      return interfaceLanguages;
+      return defaultInterfaceLanguages;
     }
+
+    return interfaceLanguages;
   }, [interfaceLanguages]);
 
   const relativeTimeFormatter = useMemo(() => {
