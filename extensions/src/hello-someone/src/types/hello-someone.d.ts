@@ -1,6 +1,3 @@
-import type { PlatformError } from 'platform-bible-utils';
-import type { PeopleDataProvider } from 'hello-someone';
-
 declare module 'hello-someone' {
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   import { IDataProvider, DataProviderDataType } from '@papi/core';
@@ -11,16 +8,12 @@ declare module 'hello-someone' {
   };
 
   export type PeopleData = {
-    [name: string]: Person | undefined | PlatformError;
+    [name: string]: Person | undefined;
   };
 
   export type PeopleDataTypes = {
-    Greeting: DataProviderDataType<
-      string | PlatformError,
-      string | undefined | PlatformError,
-      string
-    >;
-    Age: DataProviderDataType<string | PlatformError, number | undefined | PlatformError, number>;
+    Greeting: DataProviderDataType<string, string | undefined, string>;
+    Age: DataProviderDataType<string, number | undefined, number>;
     People: DataProviderDataType<undefined, PeopleData, never>;
   };
 
@@ -33,6 +26,8 @@ declare module 'hello-someone' {
 }
 
 declare module 'papi-shared-types' {
+  import type { PeopleDataProvider } from 'hello-someone';
+
   export interface CommandHandlers {
     'helloSomeone.helloSomeone': (name: string) => string;
   }
