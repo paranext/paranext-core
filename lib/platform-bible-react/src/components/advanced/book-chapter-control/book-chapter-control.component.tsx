@@ -324,7 +324,7 @@ export function BookChapterControl({
   }, [isContentOpenDelayed, searchQuery]);
 
   return (
-    <div className="pr-twp tw-flex">
+    <div className="pr-twp tw-flex tw-bg-transparent">
       <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
         <DropdownMenuTrigger asChild>
           <BookChapterInput
