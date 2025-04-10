@@ -1,5 +1,4 @@
-import { logger } from '@papi/frontend';
-import { useLocalizedStrings, useProjectData, useSetting } from '@papi/frontend/react';
+import { useLocalizedStrings, useProjectData } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
@@ -16,14 +15,7 @@ import {
   InventoryTableData,
   Scope,
 } from 'platform-bible-react';
-import {
-  deepEqual,
-  defaultScrRef,
-  isPlatformError,
-  LanguageStrings,
-  LocalizeKey,
-  substring,
-} from 'platform-bible-utils';
+import { deepEqual, LanguageStrings, LocalizeKey, substring } from 'platform-bible-utils';
 import { useMemo } from 'react';
 
 const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
