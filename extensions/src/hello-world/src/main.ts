@@ -503,18 +503,15 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
     if (peopleDataProvider) {
       // Test subscribing to a data provider
-      const unsubGreetings = await peopleDataProvider.subscribeGreeting(
-        'Bill',
-        (billGreeting: string | undefined | PlatformError) => {
-          if (isPlatformError(billGreeting)) {
-            logger.warn(
-              `Hello world main Bill's greeting subscription threw! ${getErrorMessage(billGreeting)}`,
-            );
-            return;
-          }
-          logger.debug(`Bill's greeting: ${billGreeting}`);
-        },
-      );
+      const unsubGreetings = await peopleDataProvider.subscribeGreeting('Bill', (billGreeting) => {
+        if (isPlatformError(billGreeting)) {
+          logger.warn(
+            `Hello world main Bill's greeting subscription threw! ${getErrorMessage(billGreeting)}`,
+          );
+          return;
+        }
+        logger.debug(`Bill's greeting: ${billGreeting}`);
+      });
 
       context.registrations.add(unsubGreetings);
     }
