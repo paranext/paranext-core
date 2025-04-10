@@ -27,7 +27,7 @@ import {
   LocalizeKey,
   PlatformError,
 } from 'platform-bible-utils';
-import { ChangeEvent, useCallback, useMemo, useState } from 'react';
+import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import './settings.component.scss';
 
 /** Props shared between the user and project setting components */
@@ -160,18 +160,15 @@ export function Setting({
     return languages;
   }, [setting, settingKey]);
 
-  const settingErrorMessage = useMemo(() => {
-    if (isPlatformError(setting)) {
-      return setting.message;
-    }
-    return undefined;
-  }, [setting]);
-
   const [languages] = useData(localizationService.dataProviderName).AvailableInterfaceLanguages(
     undefined,
     defaultLanguages,
   );
-  const [errorMessage, setErrorMessage] = useState<string | undefined>(settingErrorMessage);
+  const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    setErrorMessage(isPlatformError(setting) ? setting.message : undefined);
+  }, [setting]);
 
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZE_SETTING_KEYS, []));
 

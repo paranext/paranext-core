@@ -232,12 +232,12 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
 
   const showComments = useMemo(() => {
-    if (isPlatformError(scrRef)) {
+    if (isPlatformError(commentsEnabled)) {
       logger.warn('Failed to load setting: platform.commentsEnabled', commentsEnabled);
       return false;
-    } else {
-      return commentsEnabled;
     }
+
+    return commentsEnabled;
   }, [commentsEnabled]);
 
   /**
@@ -541,10 +541,10 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   function renderEditor() {
     const commonProps = {
       ref: editorRef,
-      scrRef: scrRef,
+      scrRef,
       onScrRefChange: setScrRefNoScroll,
-      options: options,
-      logger: logger,
+      options,
+      logger,
     };
 
     /* Workaround to pull in platform-bible-react styles into the editor */
