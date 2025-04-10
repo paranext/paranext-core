@@ -39,7 +39,7 @@ export const platformSettings: SettingsContribution = [
       'platform.requestTimeout': {
         label: '%settings_platform_requestTimeout_label%',
         description: '%settings_platform_requestTimeout_description%',
-        default: 10,
+        default: 30,
       },
     },
   },
