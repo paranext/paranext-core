@@ -21,6 +21,10 @@ export const dialogService: DialogService = {
     await initialize();
     return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'selectProject'), ...args);
   },
+  showAboutDialog: async () => {
+    await initialize();
+    return networkService.request(serializeRequestType(CATEGORY_DIALOG, 'showAboutDialog'));
+  },
 };
 
 export default dialogService;
