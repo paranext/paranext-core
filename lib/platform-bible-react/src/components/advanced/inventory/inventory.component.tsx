@@ -336,8 +336,12 @@ export function Inventory({
   }, [additionalItemsLabels?.tableHeaders, columns, showAdditionalItems]);
 
   useEffect(() => {
-    setSelectedItem([]);
-  }, [filteredTableData]);
+    if (filteredTableData.length === 0) {
+      setSelectedItem([]);
+    } else if (filteredTableData.length === 1) {
+      setSelectedItem(filteredTableData[0].items);
+    }
+  }, [filteredTableData, selectedItem]);
 
   const rowClickHandler = (
     row: RowContents<InventoryTableData>,
@@ -422,7 +426,6 @@ export function Inventory({
               className="tw-m-1"
               checked={showAdditionalItems}
               onCheckedChange={(checked: boolean) => {
-                setSelectedItem([]);
                 setShowAdditionalItems(checked);
               }}
             />
