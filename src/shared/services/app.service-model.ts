@@ -36,10 +36,16 @@ export type AppInfo = Readonly<{
   uriScheme: string;
 }>;
 
+export type MarketingInfo = Readonly<{
+  marketingVersion: string;
+  marketingVersionMoniker: string;
+}>;
+
 /** JSDOC DESTINATION appService */
 export interface IAppService {
   /** Retrieve information about the application that is currently running like name and version. */
   getAppInfo(): Promise<AppInfo>;
+  getMarketingInfo(): Promise<MarketingInfo>;
 }
 
 export const appServiceNetworkObjectName = 'AppService';

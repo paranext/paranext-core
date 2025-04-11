@@ -1153,7 +1153,7 @@ export declare const AvatarFallback: React$1.ForwardRefExoticComponent<Omit<Avat
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "blueIndicator" | "mutedIndicator" | null | undefined;
+	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
@@ -1169,7 +1169,7 @@ export interface BadgeProps extends React$1.HTMLAttributes<HTMLDivElement>, Vari
  * @param BadgeProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
-export declare function Badge({ className, variant, ...props }: BadgeProps): import("react/jsx-runtime").JSX.Element;
+export declare const Badge: React$1.ForwardRefExoticComponent<BadgeProps & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * The Card component displays a card with header, content, and footer. This component is built and
  * styled with Shadcn UI.
