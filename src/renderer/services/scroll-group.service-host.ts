@@ -13,6 +13,7 @@ import {
   compareScrRefs,
   deepClone,
   deserialize,
+  isPlatformError,
   ScrollGroupId,
   serialize,
 } from 'platform-bible-utils';
@@ -142,6 +143,12 @@ export async function startScrollGroupService(): Promise<void> {
 
   // Keep scroll group 0 in sync with the verse ref setting for backwards compatibility
   await settingsService.subscribe('platform.verseRef', (newScrRef) => {
+    if (isPlatformError(newScrRef)) {
+      logger.warn(
+        `Scroll group service failed to get platform.verseRef setting to keep in sync! ${newScrRef}`,
+      );
+      return;
+    }
     setScrRefSync(0, newScrRef, false);
   });
 }

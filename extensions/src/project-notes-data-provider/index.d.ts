@@ -5,7 +5,7 @@ import type {
   IDataProvider,
   // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
 } from '@papi/core';
-import { PlatformEvent, Unsubscriber } from 'platform-bible-utils';
+import { PlatformError, PlatformEvent, Unsubscriber } from 'platform-bible-utils';
 
 declare module 'project-notes-data-provider' {
   export type ProjectNotesProviderDataTypes = {
@@ -234,13 +234,16 @@ declare module 'project-notes-data-provider' {
      * Subscribe to run a callback function when notes are added
      *
      * @param notesSelector Tells the provider what notes to listen for
-     * @param callback Function to run with the updated notes for this selector
+     * @param callback Function to run with the updated notes for this selector. If there is an
+     *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+     *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+     *   error.
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeNotes(
       notesSelector: ProjectNotesSelector,
-      callback: (notes: ProjectNote[]) => void,
+      callback: (notes: ProjectNote[] | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Unsubscriber;
     /**

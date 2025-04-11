@@ -1,11 +1,16 @@
 import * as networkService from '@shared/services/network.service';
-import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
+import {
+  createSyncProxyForAsyncObject,
+  isPlatformError,
+  PlatformError,
+} from 'platform-bible-utils';
 import { dataProviderService } from '@shared/services/data-provider.service';
+import { logger } from '@shared/services/logger.service';
 import {
   ISettingsService,
   settingsServiceDataProviderName,
   settingsServiceObjectToProxy,
-} from './settings.service-model';
+} from '@shared/services/settings.service-model';
 
 let dataProvider: ISettingsService;
 let initializationPromise: Promise<void>;
@@ -19,8 +24,17 @@ async function initialize(): Promise<void> {
           dataProvider = provider;
           // Inject the network timeout into every JS process once the settings service is available
           // We can't pull from within the network service as it would create a dependency loop
-          dataProvider.subscribe('platform.requestTimeout', (newTimeout: number) =>
-            networkService.setRequestTimeout(newTimeout),
+          dataProvider.subscribe(
+            'platform.requestTimeout',
+            (newTimeout: number | PlatformError) => {
+              if (isPlatformError(newTimeout)) {
+                logger.warn(
+                  `Settings service error while retrieving value for setting platform.requestTimeout: ${newTimeout}`,
+                );
+                return;
+              }
+              networkService.setRequestTimeout(newTimeout);
+            },
           );
           resolve();
         } catch (error) {
