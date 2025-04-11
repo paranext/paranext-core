@@ -2,6 +2,7 @@ import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
 import { Command } from 'platform-bible-react';
 import { CommandNames } from 'papi-shared-types';
+import { getErrorMessage } from 'platform-bible-utils';
 
 /**
  * Run a command from a menu
@@ -30,7 +31,7 @@ export function handleMenuCommand(command: Command, tabId?: string) {
           await commandService.sendCommand('platform.openWindow', 'https://support.bible');
         } catch (e) {
           throw new Error(
-            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${e}`,
+            `handleMenuCommand error: command: ${command.command}, tabId: ${tabId}. ${getErrorMessage(e)}`,
           );
         }
       })();
