@@ -4,11 +4,15 @@ import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
 import { useCallback, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import papi from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { CharacterInventory } from './checks/inventories/character-inventory.component';
 import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inventory.component';
 import { MarkerInventory } from './checks/inventories/marker-inventory.component';
 import { PunctuationInventory } from './checks/inventories/punctuation-inventory.component';
+
+const VALID_ITEMS_DEFAULT = '';
+const INVALID_ITEMS_DEFAULT = '';
 
 /**
  * Get scripture text for the provided scope and reference for the specified projectId
@@ -90,8 +94,33 @@ global.webViewComponent = function InventoryWebView({
     useMemo(() => '', []),
   );
 
-  const [validItems, setValidItems] = useProjectSetting(projectId, validItemsSetting, '');
-  const [invalidItems, setInvalidItems] = useProjectSetting(projectId, invalidItemsSetting, '');
+  const [validItemsPossiblyError, setValidItems] = useProjectSetting(
+    projectId,
+    validItemsSetting,
+    VALID_ITEMS_DEFAULT,
+  );
+
+  const validItems = useMemo(() => {
+    if (isPlatformError(validItemsPossiblyError)) {
+      logger.warn(`Error getting valid items: ${getErrorMessage(validItemsPossiblyError)}`);
+      return VALID_ITEMS_DEFAULT;
+    }
+    return validItemsPossiblyError;
+  }, [validItemsPossiblyError]);
+
+  const [invalidItemsPossiblyError, setInvalidItems] = useProjectSetting(
+    projectId,
+    invalidItemsSetting,
+    INVALID_ITEMS_DEFAULT,
+  );
+
+  const invalidItems = useMemo(() => {
+    if (isPlatformError(invalidItemsPossiblyError)) {
+      logger.warn(`Error getting invalid items: ${getErrorMessage(invalidItemsPossiblyError)}`);
+      return INVALID_ITEMS_DEFAULT;
+    }
+    return invalidItemsPossiblyError;
+  }, [invalidItemsPossiblyError]);
 
   const validItemsArray = useMemo(() => validItems.split(' '), [validItems]);
   const invalidItemsArray = useMemo(() => invalidItems.split(' '), [invalidItems]);

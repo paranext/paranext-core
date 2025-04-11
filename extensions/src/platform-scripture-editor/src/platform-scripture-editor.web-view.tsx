@@ -67,6 +67,8 @@ const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
 const defaultEditorDecorations: EditorDecorations = {};
 
+const defaultProjectName = '';
+
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
  * iframes successfully test as equal
@@ -527,7 +529,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
-  const [projectName] = useProjectSetting(projectId, 'platform.name', '');
+  const [projectNamePossiblyError] = useProjectSetting(
+    projectId,
+    'platform.name',
+    defaultProjectName,
+  );
+
+  const projectName = useMemo(() => {
+    if (isPlatformError(projectNamePossiblyError)) {
+      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
+      return defaultProjectName;
+    }
+    return projectNamePossiblyError;
+  }, [projectNamePossiblyError]);
 
   const options = useMemo<EditorOptions>(
     () => ({

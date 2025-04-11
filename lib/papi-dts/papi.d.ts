@@ -7888,6 +7888,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   export default useProjectData;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
+  import { PlatformError } from 'platform-bible-utils';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
   import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   /**
@@ -7916,7 +7917,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    * @returns `[setting, setSetting, resetSetting]`
    *
    *   - `setting`: the current value for the project setting from the Project Data Provider with the
-   *       specified key, either the `defaultValue` or the resolved setting value
+   *       specified key, either the `defaultValue`, the resolved setting value, or a
+   *       {@link PlatformError} if the Project Data Provider throws an error. You can call
+   *       {@link isPlatformError} on this value to check if it is an error.
    *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
    *       setting with the specified key. Returns `true` if successful. Note that this function does
    *       not update the data. The Project Data Provider sends out an update to this subscription if
@@ -7934,7 +7937,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
     defaultValue: ProjectSettingTypes[ProjectSettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
-    setting: ProjectSettingTypes[ProjectSettingName],
+    setting: ProjectSettingTypes[ProjectSettingName] | PlatformError,
     setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
     resetSetting: (() => void) | undefined,
     isLoading: boolean,

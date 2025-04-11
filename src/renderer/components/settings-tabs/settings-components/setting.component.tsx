@@ -61,7 +61,7 @@ export type ProjectSettingProps = BaseSettingProps<ProjectSettingNames, ProjectS
 
 /** Values from the useProjectSetting hook to manage the setting */
 type ProjectSettingsControls = {
-  setting: ProjectSettingValues;
+  setting: ProjectSettingValues | PlatformError;
   // Necessary for flexibility in handleChangeSetting, ProjectSettingValues and
   // UserSettingValues are not the same so it couldn't assign
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
