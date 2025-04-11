@@ -1,16 +1,18 @@
-import { useCallback } from 'react';
-import { usePromise } from 'platform-bible-react';
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
-import { SavedTabInfo, TabInfo } from '@shared/models/docking-framework.model';
 import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
+import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { appService } from '@shared/services/app.service';
+import { AppInfo } from '@shared/services/app.service-model';
+import { usePromise } from 'platform-bible-react';
 import {
   formatReplacementString,
   formatReplacementStringToArray,
   LocalizeKey,
 } from 'platform-bible-utils';
-import { appService } from '@shared/services/app.service';
-import { AppInfo } from '@shared/services/app.service-model';
-import packageInfo from '../../../release/app/package.json';
+import { Fragment, useCallback } from 'react';
+import packageInfo from '../../../../release/app/package.json';
+import './about-dialog.component.scss';
+import { DIALOG_BASE } from './dialog-base.data';
+import { ABOUT_DIALOG_TYPE, DialogDefinition } from './dialog-definition.model';
 
 export const TAB_TYPE_ABOUT = 'about';
 
@@ -34,7 +36,7 @@ const defaultAppInfo: AppInfo = {
   uriScheme: 'ignore',
 };
 
-export function AboutPanel() {
+function AboutDialog() {
   const [
     {
       '%product_name%': productName,
@@ -77,21 +79,26 @@ export function AboutPanel() {
                 {dbIpAttributionTerms}
               </a>
             ),
-          })}
+          }).map((contribution, index) => (
+            // We can use index as key here because the array is static and will not change.
+            // eslint-disable-next-line react/no-array-index-key
+            <Fragment key={`key-${index}`}>{contribution}</Fragment>
+          ))}
         </p>
       </div>
     </div>
   );
 }
 
-export function loadAboutTab(savedTabInfo: SavedTabInfo): TabInfo {
-  return {
-    ...savedTabInfo,
-    tabTitle: 'About',
-    content: <AboutPanel />,
-    minWidth: 230,
-    minHeight: 230,
-  };
-}
+export const ABOUT_DIALOG: DialogDefinition<typeof ABOUT_DIALOG_TYPE> = Object.freeze({
+  ...DIALOG_BASE,
+  tabType: ABOUT_DIALOG_TYPE,
+  defaultTitle: '%mainMenu_about%',
+  initialSize: {
+    width: 800,
+    height: 700,
+  },
+  Component: AboutDialog,
+});
 
-export default AboutPanel;
+export default ABOUT_DIALOG;

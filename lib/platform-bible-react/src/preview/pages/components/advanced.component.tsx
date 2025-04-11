@@ -103,7 +103,6 @@ export function Compositions() {
 
         <VerticalTabsContent value="Book Chapter Control">
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
-          <div>{JSON.stringify(scrRef)}</div>
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Book Selector">

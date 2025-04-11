@@ -1,7 +1,7 @@
 {
   "name": "paranext-extensions",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.5.0-alpha.0",
   "author": "Paranext",
   "license": "MIT",
   "scripts": {
@@ -27,7 +27,8 @@
     "lint:staged": "lint-staged -q",
     "postinstall": "tsx ./lib/add-remotes.ts",
     "create-extension": "tsx ./lib/create-extension.ts",
-    "update-from-templates": "tsx ./lib/update-from-templates.ts"
+    "update-from-templates": "tsx ./lib/update-from-templates.ts",
+    "bump-versions": "tsx ./lib/bump-versions.ts"
   },
   "lint-staged": {
     "*.{cjs,js,jsx,ts,tsx}": ["prettier --write"],

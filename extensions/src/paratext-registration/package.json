@@ -1,7 +1,7 @@
 {
   "name": "paratext-registration",
   "private": true,
-  "version": "0.0.1",
+  "version": "0.5.0-alpha.0",
   "main": "src/main.js",
   "types": "src/types/paratext-registration.d.ts",
   "author": "Paranext",
@@ -26,6 +26,7 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
+    "bump-versions": "ts-node ./lib/bump-versions.ts",
     "typecheck": "tsc -p ./tsconfig.json"
   },
   "browserslist": [],

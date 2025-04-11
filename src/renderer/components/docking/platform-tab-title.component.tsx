@@ -94,6 +94,7 @@ export function PlatformTabTitle({
               icon
             ) : (
               <TabDropdownMenu
+                variant="muted"
                 commandHandler={commandHandler}
                 menuData={webViewMenu.topMenu}
                 tabLabel={tabLabel}

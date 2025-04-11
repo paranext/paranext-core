@@ -83,7 +83,18 @@ export function PlatformBibleToolbar() {
   const [menuData] = usePromise(
     useCallback(async () => {
       setUpdateMenuData(false);
-      return provideMenuData(false);
+      const newMenuData = await provideMenuData(false);
+
+      if (
+        Object.values(newMenuData.columns).some(
+          (column) =>
+            typeof column === 'object' && 'label' in column && column.label.startsWith('%'),
+        )
+      ) {
+        setTimeout(() => setUpdateMenuData(true), 1000);
+      }
+
+      return newMenuData;
       // updateMenuData needs to be included for the menu contents to reevaluate when menu is (re)opened
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [updateMenuData]),

@@ -176,7 +176,8 @@ export const inventoryStatusColumn = (
       return (
         <ToggleGroup value={status} variant="outline" type="single">
           <ToggleGroupItem
-            onClick={() =>
+            onClick={(event) => {
+              event.stopPropagation();
               statusChangeHandler(
                 [item],
                 'approved',
@@ -184,14 +185,15 @@ export const inventoryStatusColumn = (
                 onApprovedItemsChange,
                 unapprovedItems,
                 onUnapprovedItemsChange,
-              )
-            }
+              );
+            }}
             value="approved"
           >
             <CircleCheckIcon />
           </ToggleGroupItem>
           <ToggleGroupItem
-            onClick={() =>
+            onClick={(event) => {
+              event.stopPropagation();
               statusChangeHandler(
                 [item],
                 'unapproved',
@@ -199,14 +201,15 @@ export const inventoryStatusColumn = (
                 onApprovedItemsChange,
                 unapprovedItems,
                 onUnapprovedItemsChange,
-              )
-            }
+              );
+            }}
             value="unapproved"
           >
             <CircleXIcon />
           </ToggleGroupItem>
           <ToggleGroupItem
-            onClick={() =>
+            onClick={(event) => {
+              event.stopPropagation();
               statusChangeHandler(
                 [item],
                 'unknown',
@@ -214,8 +217,8 @@ export const inventoryStatusColumn = (
                 onApprovedItemsChange,
                 unapprovedItems,
                 onUnapprovedItemsChange,
-              )
-            }
+              );
+            }}
             value="unknown"
           >
             <CircleHelpIcon />

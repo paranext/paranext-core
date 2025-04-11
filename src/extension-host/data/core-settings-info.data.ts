@@ -13,6 +13,7 @@ export const platformSettings: SettingsContribution = [
         label: '%settings_platform_verseRef_label%',
         description: '%settings_platform_verseRef_description%',
         default: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+        isHidden: true,
       },
       'platform.interfaceLanguage': {
         label: '%settings_platform_interfaceLanguage_label%',
@@ -22,20 +23,23 @@ export const platformSettings: SettingsContribution = [
       'platform.ptxUtilsMementoData': {
         label: '%settings_platform_ptxUtilsMementoData_label%',
         default: {},
+        isHidden: true,
       },
       'platform.paratextDataLastRegistryDataCachedTimes': {
         label: '%settings_platform_paratextDataLastRegistryDataCachedTimes_label%',
         default: {},
+        isHidden: true,
       },
       'platform.commentsEnabled': {
         label: '%settings_platform_comments_enabled_label%',
         description: '%settings_platform_comments_enabled_description%',
         default: false,
+        isHidden: true,
       },
       'platform.requestTimeout': {
         label: '%settings_platform_requestTimeout_label%',
         description: '%settings_platform_requestTimeout_description%',
-        default: 10,
+        default: 30,
       },
     },
   },
