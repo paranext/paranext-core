@@ -21,7 +21,7 @@ import {
   TextField,
   useEvent,
 } from 'platform-bible-react';
-import { debounce, isPlatformError } from 'platform-bible-utils';
+import { debounce, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Logo from '../../assets/offline.svg';
 import { Clock } from './components/clock.component';
@@ -286,10 +286,17 @@ globalThis.webViewComponent = function HelloWorld({
     nameIsError ? undefined : 'helloSomeone.people',
   ).Age(name, -1);
 
-  const [currentProjectVerse] = useProjectData(
+  const [currentProjectVersePossiblyError] = useProjectData(
     'platformScripture.USFM_Verse',
     projectId ?? undefined,
   ).VerseUSFM(scrRef, localizedScriptureLoadingVerse);
+
+  const currentProjectVerse = useMemo(() => {
+    if (isPlatformError(currentProjectVersePossiblyError)) {
+      return getErrorMessage(currentProjectVersePossiblyError);
+    }
+    return currentProjectVersePossiblyError;
+  }, [currentProjectVersePossiblyError]);
 
   const helloWorldProjectSettings = useHelloWorldProjectSettings(projectId);
   const { headerStyle } = helloWorldProjectSettings;
