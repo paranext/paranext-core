@@ -5994,6 +5994,10 @@ declare module 'shared/services/app.service-model' {
      */
     uriScheme: string;
   }>;
+  export type MarketingInfo = Readonly<{
+    marketingVersion: string;
+    marketingVersionMoniker: string;
+  }>;
   /**
    *
    * Provides information about this app like name and version.
@@ -6001,6 +6005,7 @@ declare module 'shared/services/app.service-model' {
   export interface IAppService {
     /** Retrieve information about the application that is currently running like name and version. */
     getAppInfo(): Promise<AppInfo>;
+    getMarketingInfo(): Promise<MarketingInfo>;
   }
   export const appServiceNetworkObjectName = 'AppService';
 }

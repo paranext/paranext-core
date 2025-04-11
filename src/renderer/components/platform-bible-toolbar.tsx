@@ -5,6 +5,7 @@ import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 import { HomeIcon, User } from 'lucide-react';
 import {
+  Badge,
   BookChapterControl,
   Button,
   cn,
@@ -20,6 +21,7 @@ import {
 import { getLocalizeKeysForScrollGroupIds, LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
 import { useCallback, useState } from 'react';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
+import { app } from '@renderer/services/papi-frontend.service';
 import { provideMenuData } from './platform-bible-menu.data';
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
@@ -99,6 +101,14 @@ export function PlatformBibleToolbar() {
     { columns: {}, groups: {}, items: [] },
   );
 
+  const [marketingVersion] = usePromise(
+    useCallback(async () => {
+      const marketingInfo = await app.getMarketingInfo();
+      return marketingInfo.marketingVersion.concat(' ', marketingInfo.marketingVersionMoniker);
+    }, []),
+    'Marketing Version',
+  );
+
   return (
     <Toolbar
       menuData={menuData}
@@ -114,29 +124,45 @@ export function PlatformBibleToolbar() {
       shouldUseAsAppDragArea
       appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
-        // This is a placeholder for the actual user menu
-
-        <TooltipProvider delayDuration={300}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="pr-twp tw-h-8"
-                onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
-              >
-                <User />
-              </Button>
-            </TooltipTrigger>
-            {localizedStrings['%mainMenu_openParatextRegistration%'] && (
+        <>
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge
+                  variant="ghost"
+                  className="tw-block tw-max-w-[150px] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-font-normal tw-shrink"
+                >
+                  {marketingVersion}
+                </Badge>
+              </TooltipTrigger>
               <TooltipContent>
-                <p className="tw-font-light">
-                  {localizedStrings['%mainMenu_openParatextRegistration%']}
-                </p>
+                <p className="tw-font-light">{marketingVersion}</p>
               </TooltipContent>
-            )}
-          </Tooltip>
-        </TooltipProvider>
+            </Tooltip>
+          </TooltipProvider>
+          {/* This is a placeholder for the actual user menu */}
+          <TooltipProvider delayDuration={300}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  onClick={() => sendCommand('paratextRegistration.showParatextRegistration')}
+                >
+                  <User />
+                </Button>
+              </TooltipTrigger>
+              {localizedStrings['%mainMenu_openParatextRegistration%'] && (
+                <TooltipContent>
+                  <p className="tw-font-light">
+                    {localizedStrings['%mainMenu_openParatextRegistration%']}
+                  </p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
+        </>
       }
     >
       <TooltipProvider delayDuration={300}>

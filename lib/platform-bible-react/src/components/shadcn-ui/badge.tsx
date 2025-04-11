@@ -24,6 +24,7 @@ const badgeVariants = cva(
         outline: 'tw-border tw-text-foreground',
         blueIndicator: 'tw-w-[5px] tw-h-[5px] tw-bg-blue-400 tw-px-0',
         mutedIndicator: 'tw-w-[5px] tw-h-[5px] tw-bg-zinc-400 tw-px-0',
+        ghost: 'hover:tw-bg-accent hover:tw-text-accent-foreground tw-text-mu',
       },
     },
     defaultVariants: {
@@ -48,8 +49,14 @@ export interface BadgeProps
  * @param BadgeProps
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
-function Badge({ className, variant, ...props }: BadgeProps) {
-  return <div className={cn('pr-twp', badgeVariants({ variant }), className)} {...props} />;
-}
+const Badge = React.forwardRef<HTMLDivElement, BadgeProps>(
+  ({ className, variant, ...props }, ref) => {
+    return (
+      <div ref={ref} className={cn('pr-twp', badgeVariants({ variant }), className)} {...props} />
+    );
+  },
+);
+
+Badge.displayName = 'Badge';
 
 export { Badge, badgeVariants };
