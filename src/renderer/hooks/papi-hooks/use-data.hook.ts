@@ -25,7 +25,6 @@ type UseDataHook = {
       defaultValue: DataProviderTypes[DataProviderName][TDataType]['getData'],
       subscriberOptions?: DataProviderSubscriberOptions,
     ) => [
-      // Adding PlatformError to the return type since the data provider could throw an error
       // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
       DataProviderTypes[DataProviderName][TDataType]['getData'] | PlatformError,
       (
@@ -52,7 +51,7 @@ type UseDataHook = {
  *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
  *       subscriberOptions?: DataProviderSubscriberOptions,
  *     ) => [
- *       DataProviderTypes[DataProviderName][DataType]['getData'],
+ *       DataProviderTypes[DataProviderName][DataType]['getData'] | PlatformError,
  *       (
  *         | ((
  *             newData: DataProviderTypes[DataProviderName][DataType]['setData'],

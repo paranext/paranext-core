@@ -1,3 +1,4 @@
+import { PlatformError } from 'platform-bible-utils';
 import { useData } from '@renderer/hooks/papi-hooks/use-data.hook';
 import {
   DataProviderSubscriberOptions,
@@ -9,10 +10,10 @@ import { SettingNames, SettingTypes } from 'papi-shared-types';
 import { useCallback } from 'react';
 
 /**
- * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
+ * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
  * and gets updated when the setting is changed by others.
  *
- * @param key The string id that is used to identify the setting that will be stored on the papi
+ * @param key The string id that is used to identify the setting that will be stored on the PAPI
  *
  *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
  *   updated every render
@@ -25,8 +26,8 @@ import { useCallback } from 'react';
  *   until `dataProviderSource` or `selector` changes.
  * @returns `[setting, setSetting, resetSetting]`
  *
- *   - `setting`: The current state of the setting, either `defaultState` or the stored state on the
- *       papi, if any
+ *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
+ *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
  *   - `setSetting`: Function that updates the setting to a new value
  *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
  *
@@ -38,7 +39,7 @@ export const useSetting = <SettingName extends SettingNames>(
   defaultState: SettingTypes[SettingName],
   subscriberOptions?: DataProviderSubscriberOptions,
 ): [
-  setting: SettingTypes[SettingName],
+  setting: SettingTypes[SettingName] | PlatformError,
   setSetting: (
     newData: SettingTypes[SettingName],
   ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
@@ -56,7 +57,7 @@ export const useSetting = <SettingName extends SettingNames>(
         defaultValue: SettingTypes[SettingName],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
-        setting: SettingTypes[SettingName],
+        setting: SettingTypes[SettingName] | PlatformError,
         setSetting: (
           newData: SettingTypes[SettingName],
         ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,

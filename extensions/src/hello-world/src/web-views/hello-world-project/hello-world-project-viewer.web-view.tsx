@@ -1,7 +1,10 @@
 import { WebViewProps } from '@papi/core';
-import { useProjectData, useProjectSetting, useWebViewController } from '@papi/frontend/react';
+import { logger } from '@papi/frontend';
+import { useProjectData, useWebViewController } from '@papi/frontend/react';
 import { Button } from 'platform-bible-react';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { CSSProperties, useMemo } from 'react';
+import { useHelloWorldProjectSettings } from './use-hello-world-project-settings.hook';
 
 const namesDefault: string[] = [];
 
@@ -16,11 +19,20 @@ globalThis.webViewComponent = function HelloWorldProjectViewer({
     callerWebViewId,
   );
 
-  const [names] = useProjectData('helloWorld', projectId).Names(undefined, namesDefault);
+  const [namesPossiblyError] = useProjectData('helloWorld', projectId).Names(
+    undefined,
+    namesDefault,
+  );
 
-  const [headerSize] = useProjectSetting(projectId, 'helloWorld.headerSize', 15);
+  const names = useMemo(() => {
+    if (isPlatformError(namesPossiblyError)) {
+      logger.warn(`Error getting names: ${getErrorMessage(namesPossiblyError)}`);
+      return namesDefault;
+    }
+    return namesPossiblyError;
+  }, [namesPossiblyError]);
 
-  const [headerColor] = useProjectSetting(projectId, 'helloWorld.headerColor', 'Black');
+  const { headerSize, headerColor } = useHelloWorldProjectSettings(projectId);
 
   const headerStyle = useMemo<CSSProperties>(() => {
     const colorPropertyName = callerWebViewController ? 'backgroundColor' : 'color';

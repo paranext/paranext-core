@@ -19,7 +19,7 @@ export type {
 export type { DialogTypes } from '@renderer/components/dialogs/dialog-definition.model';
 export type { UseDialogCallbackOptions } from '@renderer/hooks/papi-hooks/use-dialog-callback.hook';
 export type {
-  default as IDataProvider,
+  IDataProvider,
   IDisposableDataProvider,
 } from '@shared/models/data-provider.interface';
 export type {
@@ -28,7 +28,7 @@ export type {
   DataProviderSubscriberOptions,
 } from '@shared/models/data-provider.model';
 export type { WithNotifyUpdate } from '@shared/models/data-provider-engine.model';
-export type { default as IDataProviderEngine } from '@shared/models/data-provider-engine.model';
+export type { IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 export type { DialogOptions } from '@shared/models/dialog-options.model';
 export type { NetworkableObject, NetworkObject } from '@shared/models/network-object.model';
 export type { PlatformNotification } from '@shared/models/notification.service-model';
@@ -46,7 +46,7 @@ export type { IProjectDataProviderEngine } from '@shared/models/project-data-pro
 export type { IProjectDataProviderEngineFactory } from '@shared/models/project-data-provider-engine-factory.model.ts';
 export type { IBaseProjectDataProviderEngine } from '@shared/models/base-project-data-provider-engine.model';
 export type {
-  default as IProjectDataProviderFactory,
+  IProjectDataProviderFactory,
   ProjectMetadataFilterOptions,
 } from '@shared/models/project-data-provider-factory.interface';
 export type {

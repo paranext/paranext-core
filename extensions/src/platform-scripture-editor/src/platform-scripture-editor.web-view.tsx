@@ -65,7 +65,11 @@ const EDITOR_LOAD_DELAY_TIME = 100;
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
+const defaultLegacyComments: LegacyComment[] = [];
+
 const defaultEditorDecorations: EditorDecorations = {};
+
+const defaultProjectName = '';
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -229,7 +233,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [decorationsLocalizedStringsBase],
   );
 
-  const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
+  const [commentsEnabledPossiblyError] = useSetting('platform.commentsEnabled', false);
+
+  const commentsEnabled = useMemo(() => {
+    if (isPlatformError(commentsEnabledPossiblyError)) {
+      logger.warn('Failed to load setting: platform.commentsEnabled', commentsEnabledPossiblyError);
+      return false;
+    }
+
+    return commentsEnabledPossiblyError;
+  }, [commentsEnabledPossiblyError]);
 
   /**
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
@@ -339,7 +352,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return saveUsjToPdpIfUpdatedInternal;
   }, [saveUsjToPdpRaw]);
 
-  const [legacyCommentsFromPdp, saveLegacyCommentsToPdp] = useProjectData(
+  const [legacyCommentsFromPdpPossiblyError, saveLegacyCommentsToPdp] = useProjectData(
     'legacyCommentManager.comments',
     // Only load comments if we have them turned on
     commentsEnabled ? projectId : undefined,
@@ -347,8 +360,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     useMemo(() => {
       return { bookId: scrRef.book, chapterNum: scrRef.chapterNum };
     }, [scrRef.book, scrRef.chapterNum]),
-    [],
+    defaultLegacyComments,
   );
+
+  const legacyCommentsFromPdp = useMemo(() => {
+    if (isPlatformError(legacyCommentsFromPdpPossiblyError)) {
+      logger.warn(
+        `Error getting legacy comments from PDP: ${getErrorMessage(legacyCommentsFromPdpPossiblyError)}`,
+      );
+      return defaultLegacyComments;
+    }
+    return legacyCommentsFromPdpPossiblyError;
+  }, [legacyCommentsFromPdpPossiblyError]);
 
   /**
    * Write the latest comments back to the PDP. We need `usjWithAnchors` to know where (e.g., verse
@@ -518,7 +541,19 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     };
   }, [scrRef]);
 
-  const [projectName] = useProjectSetting(projectId, 'platform.name', '');
+  const [projectNamePossiblyError] = useProjectSetting(
+    projectId,
+    'platform.name',
+    defaultProjectName,
+  );
+
+  const projectName = useMemo(() => {
+    if (isPlatformError(projectNamePossiblyError)) {
+      logger.warn(`Error getting project name: ${getErrorMessage(projectNamePossiblyError)}`);
+      return defaultProjectName;
+    }
+    return projectNamePossiblyError;
+  }, [projectNamePossiblyError]);
 
   const options = useMemo<EditorOptions>(
     () => ({
@@ -530,50 +565,33 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   function renderEditor() {
-    if (isReadOnly) {
+    const commonProps = {
+      ref: editorRef,
+      scrRef,
+      onScrRefChange: setScrRefNoScroll,
+      options,
+      logger,
+    };
+
+    /* Workaround to pull in platform-bible-react styles into the editor */
+    const workaround = <Button className="tw-hidden" />;
+
+    if (commentsEnabled && !isReadOnly) {
       return (
         <>
-          {/* Workaround to pull in platform-bible-react styles into the editor */}
-          <Button className="tw-hidden" />
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRefNoScroll}
-            options={options}
-            logger={logger}
-          />
-        </>
-      );
-    }
-    if (commentsEnabled) {
-      return (
-        <>
-          {/* Workaround to pull in platform-bible-react styles into the editor */}
-          <Button className="tw-hidden" />
+          {workaround}
           <Marginal
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRefNoScroll}
+            {...commonProps}
             onUsjChange={onUsjAndCommentsChange}
             onCommentChange={saveCommentsToPdp}
-            options={options}
-            logger={logger}
           />
         </>
       );
     }
     return (
       <>
-        {/* Workaround to pull in platform-bible-react styles into the editor */}
-        <Button className="tw-hidden" />
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={setScrRefNoScroll}
-          onUsjChange={saveUsjToPdpIfUpdated}
-          options={options}
-          logger={logger}
-        />
+        {workaround}
+        <Editorial {...commonProps} onUsjChange={isReadOnly ? undefined : saveUsjToPdpIfUpdated} />
       </>
     );
   }

@@ -1,11 +1,14 @@
 import { WebViewProps } from '@papi/core';
 import { logger } from '@papi/frontend';
 import { useProjectData, useProjectDataProvider } from '@papi/frontend/react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { ProjectSettingsEditor } from './project-settings-editor.component';
 import { useHelloWorldProjectSettings } from './use-hello-world-project-settings.hook';
 
+const numDefault = -1;
 const namesDefault: string[] = [];
+const extensionDataDefault = '';
 
 const testExtensionDataScope = {
   extensionName: 'helloWorld',
@@ -42,14 +45,41 @@ globalThis.webViewComponent = function HelloWorldProjectWebView({
 
   const pdp = useProjectDataProvider('helloWorld', projectId);
 
-  const [num, setNum] = useProjectData('helloWorld', pdp).RandomNumber(max, -1);
-
-  const [names] = useProjectData('helloWorld', pdp).Names(undefined, namesDefault);
-
-  const [extensionData, setExtensionData] = useProjectData('helloWorld', pdp).ExtensionData(
-    testExtensionDataScope,
-    '',
+  const [numPossiblyError, setNum] = useProjectData('helloWorld', pdp).RandomNumber(
+    max,
+    numDefault,
   );
+
+  const num = useMemo(() => {
+    if (isPlatformError(numPossiblyError)) {
+      logger.warn(`Error getting num: ${getErrorMessage(numPossiblyError)}`);
+      return numDefault;
+    }
+    return numPossiblyError;
+  }, [numPossiblyError]);
+
+  const [namesPossiblyError] = useProjectData('helloWorld', pdp).Names(undefined, namesDefault);
+
+  const names = useMemo(() => {
+    if (isPlatformError(namesPossiblyError)) {
+      logger.warn(`Error getting names: ${getErrorMessage(namesPossiblyError)}`);
+      return namesDefault;
+    }
+    return namesPossiblyError;
+  }, [namesPossiblyError]);
+
+  const [extensionDataPossiblyError, setExtensionData] = useProjectData(
+    'helloWorld',
+    pdp,
+  ).ExtensionData(testExtensionDataScope, extensionDataDefault);
+
+  const extensionData = useMemo(() => {
+    if (isPlatformError(extensionDataPossiblyError)) {
+      logger.warn(`Error getting extension data: ${getErrorMessage(extensionDataPossiblyError)}`);
+      return extensionDataDefault;
+    }
+    return extensionDataPossiblyError;
+  }, [extensionDataPossiblyError]);
 
   const [currentName, setCurrentName] = useWebViewState('currentName', '');
 

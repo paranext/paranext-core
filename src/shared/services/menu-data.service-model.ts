@@ -5,6 +5,7 @@ import {
   ReferencedItem,
   WebViewMenu,
   Localized,
+  PlatformError,
 } from 'platform-bible-utils';
 import {
   DataProviderDataType,
@@ -72,13 +73,16 @@ export type IMenuDataService = {
    * Subscribe to run a callback function when the localized main menu data is changed
    *
    * @param mainMenuType Does not have to be defined
-   * @param callback Function to run with the updated localized menuContent for this selector
+   * @param callback Function to run with the updated localized menuContent for this selector. If
+   *   there is an error while retrieving the updated data, the function will run with a
+   *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+   *   to check if it is an error.
    * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber function (run to unsubscribe from listening for updates)
    */
   subscribeMainMenu(
     mainMenuType: undefined,
-    callback: (menuContent: Localized<MultiColumnMenu>) => void,
+    callback: (menuContent: Localized<MultiColumnMenu> | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
   /**
@@ -107,13 +111,16 @@ export type IMenuDataService = {
    * Subscribe to run a callback function when the unlocalized main menu data is changed
    *
    * @param mainMenuType Does not have to be defined
-   * @param callback Function to run with the updated unlocalized menuContent for this selector
+   * @param callback Function to run with the updated unlocalized menuContent for this selector. If
+   *   there is an error while retrieving the updated data, the function will run with a
+   *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+   *   to check if it is an error.
    * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber function (run to unsubscribe from listening for updates)
    */
   subscribeUnlocalizedMainMenu(
     mainMenuType: undefined,
-    callback: (menuContent: MultiColumnMenu) => void,
+    callback: (menuContent: MultiColumnMenu | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
   /**
@@ -138,13 +145,16 @@ export type IMenuDataService = {
    * Subscribe to run a callback function when the localized web view menu data is changed
    *
    * @param webViewType The type of webview for which a menu should be subscribed
-   * @param callback Function to run with the updated menuContent for this selector
+   * @param callback Function to run with the updated menuContent for this selector. If there is an
+   *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+   *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+   *   error.
    * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber function (run to unsubscribe from listening for updates)
    */
   subscribeWebViewMenu(
     webViewType: ReferencedItem,
-    callback: (menuContent: Localized<WebViewMenu>) => void,
+    callback: (menuContent: Localized<WebViewMenu> | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &
