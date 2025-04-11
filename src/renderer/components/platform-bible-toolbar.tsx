@@ -104,7 +104,9 @@ export function PlatformBibleToolbar() {
   const [marketingVersion] = usePromise(
     useCallback(async () => {
       const marketingInfo = await app.getMarketingInfo();
-      return marketingInfo.marketingVersion.concat(' ', marketingInfo.marketingVersionMoniker);
+      return marketingInfo.marketingVersion.concat(
+        marketingInfo.marketingVersionMoniker ? ` ${marketingInfo.marketingVersionMoniker}` : '',
+      );
     }, []),
     'Marketing Version',
   );
@@ -125,21 +127,23 @@ export function PlatformBibleToolbar() {
       appMenuAreaChildren={<img width={24} height={24} src={`${logo}`} alt="Application Logo" />}
       configAreaChildren={
         <>
-          <TooltipProvider delayDuration={300}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Badge
-                  variant="ghost"
-                  className="tw-block tw-max-w-[150px] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-font-normal tw-shrink"
-                >
-                  {marketingVersion}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="tw-font-light">{marketingVersion}</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+          {marketingVersion !== '' && (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge
+                    variant="ghost"
+                    className="tw-block tw-max-w-[150px] tw-overflow-hidden tw-text-ellipsis tw-whitespace-nowrap tw-font-normal tw-shrink"
+                  >
+                    {marketingVersion}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="tw-font-light">{marketingVersion}</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
           {/* This is a placeholder for the actual user menu */}
           <TooltipProvider delayDuration={300}>
             <Tooltip>
