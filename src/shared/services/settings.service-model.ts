@@ -1,6 +1,6 @@
 import * as networkService from '@shared/services/network.service';
 import { SettingNames, SettingTypes } from 'papi-shared-types';
-import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
+import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
 import { serializeRequestType } from '@shared/utils/util';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
@@ -191,13 +191,16 @@ export type ISettingsService = {
    * callback function is executed.
    *
    * @param key The string id of the setting for which the value is being subscribed to
-   * @param callback The function that will be called whenever the specified setting is updated
+   * @param callback The function that will be called whenever the specified setting is updated. If
+   *   there is an error while retrieving the updated data, the function will run with a
+   *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+   *   to check if it is an error.
    * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber that should be called whenever the subscription should be deleted
    */
   subscribe<SettingName extends SettingNames>(
     key: SettingName,
-    callback: (newSetting: SettingTypes[SettingName]) => void,
+    callback: (newSetting: SettingTypes[SettingName] | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 

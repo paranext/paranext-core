@@ -1,5 +1,5 @@
 declare module 'papi-shared-types' {
-  import type { UnsubscriberAsync } from 'platform-bible-utils';
+  import type { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -353,13 +353,16 @@ declare module 'papi-shared-types' {
          * turn this functionality off in the `options` parameter.
          *
          * @param key The string id of the project setting for which to listen to changes
-         * @param callback Function to run with the updated project setting value
+         * @param callback Function to run with the updated project setting value. If there is an
+         *   error while retrieving the updated data, the function will run with a
+         *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+         *   value to check if it is an error.
          * @param options Various options to adjust how the subscriber emits updates
          * @returns Unsubscriber to stop listening for updates
          */
         subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
           key: ProjectSettingName,
-          callback: (value: ProjectSettingTypes[ProjectSettingName]) => void,
+          callback: (value: ProjectSettingTypes[ProjectSettingName] | PlatformError) => void,
           options: DataProviderSubscriberOptions,
         ) => Promise<UnsubscriberAsync>;
       };

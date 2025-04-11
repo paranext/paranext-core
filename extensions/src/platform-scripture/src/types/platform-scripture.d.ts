@@ -9,7 +9,7 @@ declare module 'platform-scripture' {
     // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
-  import { Dispose, LocalizeKey, UnsubscriberAsync } from 'platform-bible-utils';
+  import { Dispose, LocalizeKey, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type { Usj } from '@biblionexus-foundation/scripture-utilities';
 
   // #region Project Interface Data Types
@@ -148,13 +148,16 @@ declare module 'platform-scripture' {
      *
      * @param dataScope Contains the name of the extension requesting the data and which data it is
      *   requesting
-     * @param callback Function to run with the updated extension data for this selector
+     * @param callback Function to run with the updated extension data for this selector. If there
+     *   is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeExtensionData(
       dataScope: ExtensionDataScope,
-      callback: (extensionData: string | undefined) => void,
+      callback: (extensionData: string | undefined | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
   };
@@ -177,13 +180,16 @@ declare module 'platform-scripture' {
        * Subscribe to run a callback function when the "raw" USFM data is changed
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USFM for this selector
+       * @param callback Function to run with the updated USFM for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSFM(
         verseRef: SerializedVerseRef,
-        callback: (usfm: string | undefined) => void,
+        callback: (usfm: string | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -202,13 +208,16 @@ declare module 'platform-scripture' {
        * Subscribe to run a callback function when the "raw" USFM data is changed
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USFM for this selector
+       * @param callback Function to run with the updated USFM for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSFM(
         verseRef: SerializedVerseRef,
-        callback: (usfm: string | undefined) => void,
+        callback: (usfm: string | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -227,13 +236,16 @@ declare module 'platform-scripture' {
        * Subscribe to run a callback function when the "raw" USFM data is changed
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USFM for this selector
+       * @param callback Function to run with the updated USFM for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSFM(
         verseRef: SerializedVerseRef,
-        callback: (usfm: string | undefined) => void,
+        callback: (usfm: string | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -252,13 +264,16 @@ declare module 'platform-scripture' {
        * Subscribe to run a callback function when the "raw" USX data is changed
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USX for this selector
+       * @param callback Function to run with the updated USX for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSX(
         verseRef: SerializedVerseRef,
-        callback: (usx: string | undefined) => void,
+        callback: (usx: string | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -277,13 +292,16 @@ declare module 'platform-scripture' {
        * Subscribe to run a callback function when the USX data is changed
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USX for this selector
+       * @param callback Function to run with the updated USX for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSX(
         verseRef: SerializedVerseRef,
-        callback: (usx: string | undefined) => void,
+        callback: (usx: string | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -302,13 +320,16 @@ declare module 'platform-scripture' {
        * Subscribe to run a callback function when the "raw" USX data is changed
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USX for this selector
+       * @param callback Function to run with the updated USX for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSX(
         verseRef: SerializedVerseRef,
-        callback: (usx: string | undefined) => void,
+        callback: (usx: string | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -343,13 +364,16 @@ declare module 'platform-scripture' {
        * change over time.
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USJ for this selector
+       * @param callback Function to run with the updated USJ for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeBookUSJ(
         verseRef: SerializedVerseRef,
-        callback: (usj: Usj | undefined) => void,
+        callback: (usj: Usj | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -378,13 +402,16 @@ declare module 'platform-scripture' {
        * WARNING: USJ is in very early stages of proposal, so it will likely change over time.
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USJ for this selector
+       * @param callback Function to run with the updated USJ for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeChapterUSJ(
         verseRef: SerializedVerseRef,
-        callback: (usj: Usj | undefined) => void,
+        callback: (usj: Usj | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -419,13 +446,16 @@ declare module 'platform-scripture' {
        * change over time.
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USJ for this selector
+       * @param callback Function to run with the updated USJ for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVerseUSJ(
         verseRef: SerializedVerseRef,
-        callback: (usj: Usj | undefined) => void,
+        callback: (usj: Usj | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -454,13 +484,16 @@ declare module 'platform-scripture' {
        * not include notes, figures, and other things that are not considered "verse text"
        *
        * @param verseRef Tells the provider what changes to listen for
-       * @param callback Function to run with the updated USJ for this selector
+       * @param callback Function to run with the updated USJ for this selector. If there is an
+       *   error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscribeVersePlainText(
         verseRef: SerializedVerseRef,
-        callback: (usj: Usj | undefined) => void,
+        callback: (usj: Usj | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };
@@ -482,13 +515,16 @@ declare module 'platform-scripture' {
        * Subscribe to run a callback function when marker info changed
        *
        * @param bookNum Tells the provider what changes to listen for
-       * @param callback Function to run with the updated marker info for this selector
+       * @param callback Function to run with the updated marker info for this selector. If there is
+       *   an error while retrieving the updated data, the function will run with a
+       *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+       *   value to check if it is an error.
        * @param options Various options to adjust how the subscriber emits updates
        * @returns Unsubscriber function (run to unsubscribe from listening for updates)
        */
       subscriberMarkerNames(
         bookNum: number,
-        callback: (markerNames: string[] | undefined) => void,
+        callback: (markerNames: string[] | undefined | PlatformError) => void,
         options?: DataProviderSubscriberOptions,
       ): Promise<UnsubscriberAsync>;
     };

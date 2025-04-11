@@ -6,6 +6,9 @@ import {
   Localized,
   GroupsInMultiColumnMenu,
   formatReplacementString,
+  PlatformError,
+  isPlatformError,
+  getErrorMessage,
 } from 'platform-bible-utils';
 import {
   macosMenubarObject,
@@ -32,9 +35,11 @@ import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 export async function subscribeCurrentMacosMenubar() {
   await menuDataService.subscribeUnlocalizedMainMenu(
     undefined,
-    async (menuContent: MultiColumnMenu) => {
+    async (menuContent: MultiColumnMenu | PlatformError) => {
       let currentMacosMenubarTemplate;
       try {
+        if (isPlatformError(menuContent))
+          throw new Error(`PlatformError: ${getErrorMessage(menuContent)}`);
         currentMacosMenubarTemplate = await translatePlatformMenuItemsAndCombine(menuContent);
       } catch (error) {
         logger.error(
