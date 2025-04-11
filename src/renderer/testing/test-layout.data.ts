@@ -6,6 +6,7 @@ import { TAB_TYPE_TEST } from '@renderer/testing/test-panel.component';
 // import { TAB_TYPE_DOWNLOAD_UPDATE_PROJECT_DIALOG } from '@renderer/components/project-dialogs/download-update-project-tab.component';
 // import { TAB_TYPE_OPEN_MULTIPLE_PROJECTS_DIALOG } from '@renderer/components/project-dialogs/open-multiple-projects-tab.component';
 // import { TAB_TYPE_EXTENSION_MANAGER } from '@renderer/components/extension-manager/extension-manager-tab.component';
+import { TAB_TYPE_WEBVIEW } from '@renderer/components/web-view.component';
 import { LOREM_IPSUM } from './lorem-ipsum';
 
 // Using `as` here simplifies type changes.
@@ -97,7 +98,19 @@ export const testLayout: LayoutBase = globalThis.isNoisyDevModeEnabled
             size: 250,
             children: [
               {
-                tabs: [] as SavedTabInfo[],
+                tabs: [
+                  {
+                    id: '7fc0e34a-d601-4995-fadc-92daa9ef713f',
+                    tabType: TAB_TYPE_WEBVIEW,
+                    data: {
+                      title: '%home_dialog_title%',
+                      webViewType: 'platformGetResources.home',
+                      id: '7fc0e34a-d601-4995-fadc-92daa9ef713f',
+                      contentType: 'react',
+                      state: {},
+                    },
+                  },
+                ] as SavedTabInfo[],
               },
             ],
           },
