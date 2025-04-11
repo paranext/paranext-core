@@ -1,6 +1,8 @@
 import { WebViewProps } from '@papi/core';
+import { logger } from '@papi/frontend';
 import { useProjectData, useProjectSetting, useWebViewController } from '@papi/frontend/react';
 import { Button } from 'platform-bible-react';
+import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import { CSSProperties, useMemo } from 'react';
 
 const namesDefault: string[] = [];
@@ -16,7 +18,18 @@ globalThis.webViewComponent = function HelloWorldProjectViewer({
     callerWebViewId,
   );
 
-  const [names] = useProjectData('helloWorld', projectId).Names(undefined, namesDefault);
+  const [namesPossiblyError] = useProjectData('helloWorld', projectId).Names(
+    undefined,
+    namesDefault,
+  );
+
+  const names = useMemo(() => {
+    if (isPlatformError(namesPossiblyError)) {
+      logger.warn(`Error getting names: ${getErrorMessage(namesPossiblyError)}`);
+      return namesDefault;
+    }
+    return namesPossiblyError;
+  }, [namesPossiblyError]);
 
   const [headerSize] = useProjectSetting(projectId, 'helloWorld.headerSize', 15);
 

@@ -1,3 +1,4 @@
+import { logger } from '@papi/frontend';
 import { useLocalizedStrings, useProjectData, useSetting } from '@papi/frontend/react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
@@ -18,6 +19,8 @@ import {
 import {
   deepEqual,
   defaultScrRef,
+  getErrorMessage,
+  isPlatformError,
   LanguageStrings,
   LocalizeKey,
   substring,
@@ -33,6 +36,8 @@ const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_show_preceding_marker%',
   '%webView_inventory_unknown_marker%',
 ];
+
+const MARKER_NAMES_DEFAULT: string[] = [];
 
 const extractMarkers = (
   text: string | undefined,
@@ -195,10 +200,18 @@ export function MarkerInventory({
 }: MarkerInventoryProps) {
   const [scrRef] = useSetting('platform.verseRef', defaultScrRef);
 
-  const [markerNames] = useProjectData(
+  const [markerNamesPossiblyError] = useProjectData(
     'platformScripture.MarkerNames',
     projectId ?? undefined,
   ).MarkerNames(Canon.bookIdToNumber(scrRef.book), []);
+
+  const markerNames = useMemo(() => {
+    if (isPlatformError(markerNamesPossiblyError)) {
+      logger.warn(`Error getting marker names: ${getErrorMessage(markerNamesPossiblyError)}`);
+      return MARKER_NAMES_DEFAULT;
+    }
+    return markerNamesPossiblyError;
+  }, [markerNamesPossiblyError]);
 
   const [markerInventoryStrings] = useLocalizedStrings(MARKER_INVENTORY_STRING_KEYS);
   const itemLabel = useMemo(

@@ -1,3 +1,4 @@
+import { PlatformError } from 'platform-bible-utils';
 import { createUseDataHook } from '@renderer/hooks/hook-generators/create-use-data-hook.util';
 import { useProjectDataProvider } from '@renderer/hooks/papi-hooks/use-project-data-provider.hook';
 import { IDataProvider } from '@shared/models/data-provider.interface';
@@ -29,7 +30,7 @@ type UseProjectDataHook = {
       subscriberOptions?: DataProviderSubscriberOptions,
     ) => [
       // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-      ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
+      ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'] | PlatformError,
       (
         | ((
             // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
@@ -55,7 +56,7 @@ type UseProjectDataHook = {
  *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
  *       subscriberOptions?: DataProviderSubscriberOptions,
  *     ) => [
- *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
+ *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'] | PlatformError,
  *       (
  *         | ((
  *             newData: ProjectInterfaceDataTypes[ProjectInterface][DataType]['setData'],
@@ -114,7 +115,9 @@ type UseProjectDataHook = {
  * _＠returns_ `[data, setData, isLoading]`
  *
  * - `data`: the current value for the data from the Project Data Provider with the specified data
- *   type and selector, either the `defaultValue` or the resolved data
+ *   type and selector, either the `defaultValue`, the resolved data, or a {@link PlatformError} if
+ *   the project data provider throws an error. You can call {@link isPlatformError} on this value to
+ *   check if it is an error.
  * - `setData`: asynchronous function to request that the Project Data Provider update the data at
  *   this data type and selector. Returns `true` if successful. Note that this function does not
  *   update the data. The Project Data Provider sends out an update to this subscription if it
