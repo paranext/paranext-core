@@ -322,7 +322,7 @@ globalThis.webViewComponent = function HomeDialog() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveInProgress, excludePdpFactoryIdsInHome, resourcesList]);
+  }, [isSendReceiveInProgress, excludePdpFactoryIds, resourcesList]);
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
