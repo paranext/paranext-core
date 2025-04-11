@@ -28,9 +28,7 @@ const getResourcesWebViewProvider: IWebViewProvider = {
       );
 
     return {
-      title: await papi.localization.getLocalizedString({
-        localizeKey: '%resources_dialog_title%',
-      }),
+      title: '%resources_dialog_title%',
       ...savedWebView,
       content: getResourcesDialogReact,
       styles: getResourcesDialogReactStyles,
@@ -46,9 +44,7 @@ const homeWebViewProvider: IWebViewProvider = {
       );
 
     return {
-      title: await papi.localization.getLocalizedString({
-        localizeKey: '%home_dialog_title%',
-      }),
+      title: '%home_dialog_title%',
       ...savedWebView,
       content: homeDialogReact,
       styles: homeDialogReactStyles,
