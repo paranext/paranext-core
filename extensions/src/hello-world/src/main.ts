@@ -7,12 +7,7 @@ import type {
   WebViewDefinition,
 } from '@papi/core';
 import type { HelloWorldEvent, HelloWorldProjectWebViewController } from 'hello-world';
-import {
-  getErrorMessage,
-  isPlatformError,
-  PlatformError,
-  PlatformEventEmitter,
-} from 'platform-bible-utils';
+import { getErrorMessage, isPlatformError, PlatformEventEmitter } from 'platform-bible-utils';
 import { checkDetails, createHelloCheck } from './checks';
 import { HelloWorldProjectDataProviderEngineFactory } from './models/hello-world-project-data-provider-engine-factory.model';
 import { HELLO_WORLD_PROJECT_INTERFACES } from './models/hello-world-project-data-provider-engine.model';
