@@ -65,6 +65,8 @@ const EDITOR_LOAD_DELAY_TIME = 100;
 
 const defaultUsj: Usj = { type: USJ_TYPE, version: USJ_VERSION, content: [] };
 
+const defaultLegacyComments: LegacyComment[] = [];
+
 const defaultEditorDecorations: EditorDecorations = {};
 
 const defaultProjectName = '';
@@ -350,7 +352,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return saveUsjToPdpIfUpdatedInternal;
   }, [saveUsjToPdpRaw]);
 
-  const [legacyCommentsFromPdp, saveLegacyCommentsToPdp] = useProjectData(
+  const [legacyCommentsFromPdpPossiblyError, saveLegacyCommentsToPdp] = useProjectData(
     'legacyCommentManager.comments',
     // Only load comments if we have them turned on
     commentsEnabled ? projectId : undefined,
@@ -358,8 +360,18 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     useMemo(() => {
       return { bookId: scrRef.book, chapterNum: scrRef.chapterNum };
     }, [scrRef.book, scrRef.chapterNum]),
-    [],
+    defaultLegacyComments,
   );
+
+  const legacyCommentsFromPdp = useMemo(() => {
+    if (isPlatformError(legacyCommentsFromPdpPossiblyError)) {
+      logger.warn(
+        `Error getting legacy comments from PDP: ${getErrorMessage(legacyCommentsFromPdpPossiblyError)}`,
+      );
+      return defaultLegacyComments;
+    }
+    return legacyCommentsFromPdpPossiblyError;
+  }, [legacyCommentsFromPdpPossiblyError]);
 
   /**
    * Write the latest comments back to the PDP. We need `usjWithAnchors` to know where (e.g., verse
