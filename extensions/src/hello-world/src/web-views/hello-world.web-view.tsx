@@ -30,6 +30,8 @@ import { useHelloWorldProjectSettings } from './hello-world-project/use-hello-wo
 
 const NAME = 'Hello World React WebView';
 
+const defaultExcludePdpFactoryIds: string[] = [];
+
 // Test fetching
 papi
   .fetch('https://www.example.com', { mode: 'no-cors' })
@@ -153,21 +155,21 @@ globalThis.webViewComponent = function HelloWorld({
   const currentRender = useRef(-1);
   currentRender.current += 1;
 
-  const [excludePdpFactoryIdsInHome] = useSetting(
+  const [excludePdpFactoryIdsPossiblyError] = useSetting(
     'platformGetResources.excludePdpFactoryIdsInHome',
-    useMemo(() => [], []),
+    defaultExcludePdpFactoryIds,
   );
 
-  let excludePdpFactoryIds: string[];
-  if (isPlatformError(excludePdpFactoryIdsInHome)) {
-    logger.warn(
-      'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
-      excludePdpFactoryIdsInHome,
-    );
-    excludePdpFactoryIds = [];
-  } else {
-    excludePdpFactoryIds = excludePdpFactoryIdsInHome;
-  }
+  const excludePdpFactoryIds = useMemo(() => {
+    if (isPlatformError(excludePdpFactoryIdsPossiblyError)) {
+      logger.warn(
+        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
+        excludePdpFactoryIdsPossiblyError,
+      );
+      return defaultExcludePdpFactoryIds;
+    }
+    return excludePdpFactoryIdsPossiblyError;
+  }, [excludePdpFactoryIdsPossiblyError]);
 
   const showProjectDialog = useDialogCallback(
     'platform.selectProject',
