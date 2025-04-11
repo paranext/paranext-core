@@ -7688,6 +7688,7 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   export default useScrollGroupScrRef;
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
+  import { PlatformError } from 'platform-bible-utils';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
@@ -7695,10 +7696,10 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { SettingDataTypes } from 'shared/services/settings.service-model';
   import { SettingTypes } from 'papi-shared-types';
   /**
-   * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
+   * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
    * and gets updated when the setting is changed by others.
    *
-   * @param key The string id that is used to identify the setting that will be stored on the papi
+   * @param key The string id that is used to identify the setting that will be stored on the PAPI
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
@@ -7711,8 +7712,8 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *   until `dataProviderSource` or `selector` changes.
    * @returns `[setting, setSetting, resetSetting]`
    *
-   *   - `setting`: The current state of the setting, either `defaultState` or the stored state on the
-   *       papi, if any
+   *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
+   *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
    *   - `setSetting`: Function that updates the setting to a new value
    *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
    *
@@ -7724,7 +7725,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     defaultState: SettingTypes[SettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
-    setting: SettingTypes[SettingName],
+    setting: SettingTypes[SettingName] | PlatformError,
     setSetting: (
       newData: SettingTypes[SettingName],
     ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,

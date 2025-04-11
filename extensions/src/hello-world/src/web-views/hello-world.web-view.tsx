@@ -30,6 +30,8 @@ import { useHelloWorldProjectSettings } from './hello-world-project/use-hello-wo
 
 const NAME = 'Hello World React WebView';
 
+const defaultExcludePdpFactoryIds: string[] = [];
+
 // Test fetching
 papi
   .fetch('https://www.example.com', { mode: 'no-cors' })
@@ -153,10 +155,21 @@ globalThis.webViewComponent = function HelloWorld({
   const currentRender = useRef(-1);
   currentRender.current += 1;
 
-  const [excludePdpFactoryIdsInHome] = useSetting(
+  const [excludePdpFactoryIdsPossiblyError] = useSetting(
     'platformGetResources.excludePdpFactoryIdsInHome',
-    useMemo(() => [], []),
+    defaultExcludePdpFactoryIds,
   );
+
+  const excludePdpFactoryIds = useMemo(() => {
+    if (isPlatformError(excludePdpFactoryIdsPossiblyError)) {
+      logger.warn(
+        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
+        excludePdpFactoryIdsPossiblyError,
+      );
+      return defaultExcludePdpFactoryIds;
+    }
+    return excludePdpFactoryIdsPossiblyError;
+  }, [excludePdpFactoryIdsPossiblyError]);
 
   const showProjectDialog = useDialogCallback(
     'platform.selectProject',
@@ -171,7 +184,7 @@ globalThis.webViewComponent = function HelloWorld({
       currentRender: currentRender.current,
       optionsSource: 'hook',
       includeProjectInterfaces: ['platformScripture.USFM_Verse'],
-      excludePdpFactoryIds: excludePdpFactoryIdsInHome,
+      excludePdpFactoryIds,
     },
     useCallback(
       (selectedProject, _dialogType, { currentRender: dialogRender, optionsSource }) => {
@@ -228,14 +241,25 @@ globalThis.webViewComponent = function HelloWorld({
     ),
   );
 
-  const [name, setNameInternal] = useSetting('helloWorld.personName', 'Kathy');
+  const [namePossiblyError, setNameInternal] = useSetting('helloWorld.personName', 'Kathy');
 
-  // Name used for display and editing in the input field while debouncing the actual setting change
-  const [nameTemp, setNameTemp] = useState(name);
+  const name = useMemo(() => {
+    if (isPlatformError(namePossiblyError)) {
+      return '';
+    }
+    return namePossiblyError;
+  }, [namePossiblyError]);
+
+  const nameIsError = isPlatformError(name);
+
+  // Name used for display and editing in the input field while debouncing the actual setting change.
+  // Code should never try to use nameTemp for anything if nameIsError, but I'm setting the value to
+  // "ERR" just so it'll be more obvious if we do use it.
+  const [nameTemp, setNameTemp] = useState(!nameIsError ? name : 'ERR');
 
   useEffect(() => {
-    setNameTemp(name);
-  }, [name]);
+    if (!nameIsError) setNameTemp(name);
+  }, [name, nameIsError]);
 
   const debouncedSetName = useMemo(
     () =>
@@ -255,9 +279,12 @@ globalThis.webViewComponent = function HelloWorld({
 
   const peopleDataProvider = useDataProvider('helloSomeone.people');
 
-  const [personGreeting] = useData('helloSomeone.people').Greeting(name, localizedGreetingLoading);
-
-  const [personAge] = useData('helloSomeone.people').Age(name, -1);
+  const [personGreeting] = useData<'helloSomeone.people'>(
+    nameIsError ? undefined : 'helloSomeone.people',
+  ).Greeting(name, localizedGreetingLoading);
+  const [personAge] = useData<'helloSomeone.people'>(
+    nameIsError ? undefined : 'helloSomeone.people',
+  ).Age(name, -1);
 
   const [currentProjectVerse] = useProjectData(
     'platformScripture.USFM_Verse',
@@ -365,12 +392,16 @@ globalThis.webViewComponent = function HelloWorld({
       </div>
       <div>{isPlatformError(latestVerseText) ? latestVerseText.message : latestVerseText}</div>
       <Clock />
-      <div>
-        <input value={nameTemp} onChange={(e) => setName(e.target.value)} />
-        <Button onClick={() => peopleDataProvider?.deletePerson(name)}>
-          {localizedDelete} {name}
-        </Button>
-      </div>
+      {nameIsError ? (
+        <div>{name.message}</div>
+      ) : (
+        <div>
+          <input value={nameTemp} onChange={(e) => setName(e.target.value)} />
+          <Button onClick={() => peopleDataProvider?.deletePerson(name)}>
+            {localizedDelete} {name}
+          </Button>
+        </div>
+      )}
       <div>{isPlatformError(personGreeting) ? personGreeting.message : personGreeting}</div>
       <div>{isPlatformError(personAge) ? personAge.message : personAge}</div>
       <br />

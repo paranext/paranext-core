@@ -229,7 +229,16 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     [decorationsLocalizedStringsBase],
   );
 
-  const [commentsEnabled] = useSetting('platform.commentsEnabled', false);
+  const [commentsEnabledPossiblyError] = useSetting('platform.commentsEnabled', false);
+
+  const commentsEnabled = useMemo(() => {
+    if (isPlatformError(commentsEnabledPossiblyError)) {
+      logger.warn('Failed to load setting: platform.commentsEnabled', commentsEnabledPossiblyError);
+      return false;
+    }
+
+    return commentsEnabledPossiblyError;
+  }, [commentsEnabledPossiblyError]);
 
   /**
    * Scripture reference we set most recently. Used so we don't scroll on updates to scrRef that
@@ -530,50 +539,33 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   );
 
   function renderEditor() {
-    if (isReadOnly) {
+    const commonProps = {
+      ref: editorRef,
+      scrRef,
+      onScrRefChange: setScrRefNoScroll,
+      options,
+      logger,
+    };
+
+    /* Workaround to pull in platform-bible-react styles into the editor */
+    const workaround = <Button className="tw-hidden" />;
+
+    if (commentsEnabled && !isReadOnly) {
       return (
         <>
-          {/* Workaround to pull in platform-bible-react styles into the editor */}
-          <Button className="tw-hidden" />
-          <Editorial
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRefNoScroll}
-            options={options}
-            logger={logger}
-          />
-        </>
-      );
-    }
-    if (commentsEnabled) {
-      return (
-        <>
-          {/* Workaround to pull in platform-bible-react styles into the editor */}
-          <Button className="tw-hidden" />
+          {workaround}
           <Marginal
-            ref={editorRef}
-            scrRef={scrRef}
-            onScrRefChange={setScrRefNoScroll}
+            {...commonProps}
             onUsjChange={onUsjAndCommentsChange}
             onCommentChange={saveCommentsToPdp}
-            options={options}
-            logger={logger}
           />
         </>
       );
     }
     return (
       <>
-        {/* Workaround to pull in platform-bible-react styles into the editor */}
-        <Button className="tw-hidden" />
-        <Editorial
-          ref={editorRef}
-          scrRef={scrRef}
-          onScrRefChange={setScrRefNoScroll}
-          onUsjChange={saveUsjToPdpIfUpdated}
-          options={options}
-          logger={logger}
-        />
+        {workaround}
+        <Editorial {...commonProps} onUsjChange={isReadOnly ? undefined : saveUsjToPdpIfUpdated} />
       </>
     );
   }
