@@ -1,5 +1,5 @@
 import papi, { logger } from '@papi/frontend';
-import { useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
+import { useData, useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
 import {
   BookOpen,
   ChevronDown,
@@ -140,6 +140,11 @@ globalThis.webViewComponent = function HomeDialog() {
 
     fetchAvailability();
   }, [dblResourcesProvider]);
+
+  const [resourcesList] = useData('platformGetResources.dblResourcesProvider').DblResources(
+    undefined,
+    [],
+  );
 
   const openResource = (projectId: string, isEditable: boolean) =>
     papi.commands.sendCommand(
@@ -317,7 +322,7 @@ globalThis.webViewComponent = function HomeDialog() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveInProgress, excludePdpFactoryIds]);
+  }, [isSendReceiveInProgress, excludePdpFactoryIds, resourcesList]);
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
