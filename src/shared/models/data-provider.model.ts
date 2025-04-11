@@ -4,6 +4,7 @@ import {
   PlatformEventHandler,
   substring,
   startsWith,
+  PlatformError,
 } from 'platform-bible-utils';
 import { NetworkableObject } from '@shared/models/network-object.model';
 
@@ -102,13 +103,15 @@ export type DataProviderGetter<TDataType extends DataProviderDataType> = (
  * functionality off in the `options` parameter.
  *
  * @param selector Tells the provider what data this listener is listening for
- * @param callback Function to run with the updated data for this selector
+ * @param callback Function to run with the updated data for this selector. If there is an error
+ *   while retrieving the updated data, the function will run with a {@link PlatformError} instead of
+ *   the data. You can call {@link isPlatformError} on this value to check if it is an error.
  * @param options Various options to adjust how the subscriber emits updates
  * @returns Unsubscriber to stop listening for updates
  */
 export type DataProviderSubscriber<TDataType extends DataProviderDataType> = (
   selector: TDataType['selector'],
-  callback: PlatformEventHandler<TDataType['getData']>,
+  callback: PlatformEventHandler<TDataType['getData'] | PlatformError>,
   options?: DataProviderSubscriberOptions,
 ) => Promise<UnsubscriberAsync>;
 

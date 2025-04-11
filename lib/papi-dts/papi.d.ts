@@ -1790,7 +1790,7 @@ declare module 'shared/models/network-object.model' {
   };
 }
 declare module 'shared/models/data-provider.model' {
-  import { UnsubscriberAsync, PlatformEventHandler } from 'platform-bible-utils';
+  import { UnsubscriberAsync, PlatformEventHandler, PlatformError } from 'platform-bible-utils';
   import { NetworkableObject } from 'shared/models/network-object.model';
   /** Various options to adjust how the data provider subscriber emits updates */
   export type DataProviderSubscriberOptions = {
@@ -1883,13 +1883,15 @@ declare module 'shared/models/data-provider.model' {
    * functionality off in the `options` parameter.
    *
    * @param selector Tells the provider what data this listener is listening for
-   * @param callback Function to run with the updated data for this selector
+   * @param callback Function to run with the updated data for this selector. If there is an error
+   *   while retrieving the updated data, the function will run with a {@link PlatformError} instead of
+   *   the data. You can call {@link isPlatformError} on this value to check if it is an error.
    * @param options Various options to adjust how the subscriber emits updates
    * @returns Unsubscriber to stop listening for updates
    */
   export type DataProviderSubscriber<TDataType extends DataProviderDataType> = (
     selector: TDataType['selector'],
-    callback: PlatformEventHandler<TDataType['getData']>,
+    callback: PlatformEventHandler<TDataType['getData'] | PlatformError>,
     options?: DataProviderSubscriberOptions,
   ) => Promise<UnsubscriberAsync>;
   /**
@@ -3070,7 +3072,7 @@ declare module 'shared/models/web-view-factory.model' {
   }
 }
 declare module 'papi-shared-types' {
-  import type { UnsubscriberAsync } from 'platform-bible-utils';
+  import type { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
@@ -3390,13 +3392,16 @@ declare module 'papi-shared-types' {
          * turn this functionality off in the `options` parameter.
          *
          * @param key The string id of the project setting for which to listen to changes
-         * @param callback Function to run with the updated project setting value
+         * @param callback Function to run with the updated project setting value. If there is an
+         *   error while retrieving the updated data, the function will run with a
+         *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this
+         *   value to check if it is an error.
          * @param options Various options to adjust how the subscriber emits updates
          * @returns Unsubscriber to stop listening for updates
          */
         subscribeSetting: <ProjectSettingName extends ProjectSettingNames>(
           key: ProjectSettingName,
-          callback: (value: ProjectSettingTypes[ProjectSettingName]) => void,
+          callback: (value: ProjectSettingTypes[ProjectSettingName] | PlatformError) => void,
           options: DataProviderSubscriberOptions,
         ) => Promise<UnsubscriberAsync>;
       };
@@ -6100,7 +6105,7 @@ declare module 'shared/utils/settings-document-combiner-base' {
 }
 declare module 'shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
-  import { OnDidDispose, UnsubscriberAsync } from 'platform-bible-utils';
+  import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import { IDataProvider } from 'shared/models/data-provider.interface';
   import {
     DataProviderSubscriberOptions,
@@ -6221,13 +6226,16 @@ declare module 'shared/services/settings.service-model' {
      * callback function is executed.
      *
      * @param key The string id of the setting for which the value is being subscribed to
-     * @param callback The function that will be called whenever the specified setting is updated
+     * @param callback The function that will be called whenever the specified setting is updated. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber that should be called whenever the subscription should be deleted
      */
     subscribe<SettingName extends SettingNames>(
       key: SettingName,
-      callback: (newSetting: SettingTypes[SettingName]) => void,
+      callback: (newSetting: SettingTypes[SettingName] | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
@@ -6455,7 +6463,7 @@ declare module '@papi/core' {
   export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
   export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
-    default as IDataProvider,
+    IDataProvider,
     IDisposableDataProvider,
   } from 'shared/models/data-provider.interface';
   export type {
@@ -6464,7 +6472,7 @@ declare module '@papi/core' {
     DataProviderSubscriberOptions,
   } from 'shared/models/data-provider.model';
   export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
-  export type { default as IDataProviderEngine } from 'shared/models/data-provider-engine.model';
+  export type { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
   export type { DialogOptions } from 'shared/models/dialog-options.model';
   export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
   export type { PlatformNotification } from 'shared/models/notification.service-model';
@@ -6482,7 +6490,7 @@ declare module '@papi/core' {
   export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
   export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
   export type {
-    default as IProjectDataProviderFactory,
+    IProjectDataProviderFactory,
     ProjectMetadataFilterOptions,
   } from 'shared/models/project-data-provider-factory.interface';
   export type {
@@ -6525,6 +6533,7 @@ declare module 'shared/services/menu-data.service-model' {
     ReferencedItem,
     WebViewMenu,
     Localized,
+    PlatformError,
   } from 'platform-bible-utils';
   import {
     DataProviderDataType,
@@ -6594,13 +6603,16 @@ declare module 'shared/services/menu-data.service-model' {
      * Subscribe to run a callback function when the localized main menu data is changed
      *
      * @param mainMenuType Does not have to be defined
-     * @param callback Function to run with the updated localized menuContent for this selector
+     * @param callback Function to run with the updated localized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeMainMenu(
       mainMenuType: undefined,
-      callback: (menuContent: Localized<MultiColumnMenu>) => void,
+      callback: (menuContent: Localized<MultiColumnMenu> | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
@@ -6634,13 +6646,16 @@ declare module 'shared/services/menu-data.service-model' {
      * Subscribe to run a callback function when the unlocalized main menu data is changed
      *
      * @param mainMenuType Does not have to be defined
-     * @param callback Function to run with the updated unlocalized menuContent for this selector
+     * @param callback Function to run with the updated unlocalized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeUnlocalizedMainMenu(
       mainMenuType: undefined,
-      callback: (menuContent: MultiColumnMenu) => void,
+      callback: (menuContent: MultiColumnMenu | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
@@ -6665,13 +6680,16 @@ declare module 'shared/services/menu-data.service-model' {
      * Subscribe to run a callback function when the localized web view menu data is changed
      *
      * @param webViewType The type of webview for which a menu should be subscribed
-     * @param callback Function to run with the updated menuContent for this selector
+     * @param callback Function to run with the updated menuContent for this selector. If there is an
+     *   error while retrieving the updated data, the function will run with a {@link PlatformError}
+     *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an
+     *   error.
      * @param options Various options to adjust how the subscriber emits updates
      * @returns Unsubscriber function (run to unsubscribe from listening for updates)
      */
     subscribeWebViewMenu(
       webViewType: ReferencedItem,
-      callback: (menuContent: Localized<WebViewMenu>) => void,
+      callback: (menuContent: Localized<WebViewMenu> | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
   } & OnDidDispose &
@@ -7435,6 +7453,7 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { PlatformError } from 'platform-bible-utils';
   import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
   /**
    * The final function called as part of the `useData` hook that is the actual React hook
@@ -7449,7 +7468,7 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
     defaultValue: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
-    ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+    ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'] | PlatformError,
     (
       | ((
           newData: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['setData'],
@@ -7542,7 +7561,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
    *       subscriberOptions?: DataProviderSubscriberOptions,
    *     ) => [
-   *       DataProviderTypes[DataProviderName][DataType]['getData'],
+   *       DataProviderTypes[DataProviderName][DataType]['getData'] | PlatformError,
    *       (
    *         | ((
    *             newData: DataProviderTypes[DataProviderName][DataType]['setData'],
@@ -7674,6 +7693,7 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   export default useScrollGroupScrRef;
 }
 declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
+  import { PlatformError } from 'platform-bible-utils';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
@@ -7681,10 +7701,10 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   import { SettingDataTypes } from 'shared/services/settings.service-model';
   import { SettingTypes } from 'papi-shared-types';
   /**
-   * Gets, sets and resets a setting on the papi. Also notifies subscribers when the setting changes
+   * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
    * and gets updated when the setting is changed by others.
    *
-   * @param key The string id that is used to identify the setting that will be stored on the papi
+   * @param key The string id that is used to identify the setting that will be stored on the PAPI
    *
    *   WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
    *   updated every render
@@ -7697,8 +7717,8 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    *   until `dataProviderSource` or `selector` changes.
    * @returns `[setting, setSetting, resetSetting]`
    *
-   *   - `setting`: The current state of the setting, either `defaultState` or the stored state on the
-   *       papi, if any
+   *   - `setting`: The current state of the setting, either `defaultState`, the stored value, or a
+   *       `PlatformError` if loading the value fails. Use `isPlatformError()` to check.
    *   - `setSetting`: Function that updates the setting to a new value
    *   - `resetSetting`: Function that removes the setting and resets the value to `defaultState`
    *
@@ -7710,7 +7730,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     defaultState: SettingTypes[SettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
-    setting: SettingTypes[SettingName],
+    setting: SettingTypes[SettingName] | PlatformError,
     setSetting: (
       newData: SettingTypes[SettingName],
     ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
@@ -7748,6 +7768,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
   export default useProjectDataProvider;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
+  import { PlatformError } from 'platform-bible-utils';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
@@ -7778,7 +7799,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
         // @ts-ignore TypeScript pretends it can't find `getData`, but it works just fine
-        ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'],
+        ProjectInterfaceDataTypes[ProjectInterface][TDataType]['getData'] | PlatformError,
         (
           | ((
               // @ts-ignore TypeScript pretends it can't find `setData`, but it works just fine
@@ -7802,7 +7823,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
    *       subscriberOptions?: DataProviderSubscriberOptions,
    *     ) => [
-   *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
+   *       ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'] | PlatformError,
    *       (
    *         | ((
    *             newData: ProjectInterfaceDataTypes[ProjectInterface][DataType]['setData'],
@@ -7861,7 +7882,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * _＠returns_ `[data, setData, isLoading]`
    *
    * - `data`: the current value for the data from the Project Data Provider with the specified data
-   *   type and selector, either the `defaultValue` or the resolved data
+   *   type and selector, either the `defaultValue`, the resolved data, or a {@link PlatformError} if
+   *   the project data provider throws an error. You can call {@link isPlatformError} on this value to
+   *   check if it is an error.
    * - `setData`: asynchronous function to request that the Project Data Provider update the data at
    *   this data type and selector. Returns `true` if successful. Note that this function does not
    *   update the data. The Project Data Provider sends out an update to this subscription if it
@@ -7873,6 +7896,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   export default useProjectData;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
+  import { PlatformError } from 'platform-bible-utils';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
   import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   /**
@@ -7901,7 +7925,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    * @returns `[setting, setSetting, resetSetting]`
    *
    *   - `setting`: the current value for the project setting from the Project Data Provider with the
-   *       specified key, either the `defaultValue` or the resolved setting value
+   *       specified key, either the `defaultValue`, the resolved setting value, or a
+   *       {@link PlatformError} if the Project Data Provider throws an error. You can call
+   *       {@link isPlatformError} on this value to check if it is an error.
    *   - `setSetting`: asynchronous function to request that the Project Data Provider update the project
    *       setting with the specified key. Returns `true` if successful. Note that this function does
    *       not update the data. The Project Data Provider sends out an update to this subscription if
@@ -7919,7 +7945,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
     defaultValue: ProjectSettingTypes[ProjectSettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
   ) => [
-    setting: ProjectSettingTypes[ProjectSettingName],
+    setting: ProjectSettingTypes[ProjectSettingName] | PlatformError,
     setSetting: ((newSetting: ProjectSettingTypes[ProjectSettingName]) => void) | undefined,
     resetSetting: (() => void) | undefined,
     isLoading: boolean,

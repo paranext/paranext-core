@@ -34,7 +34,7 @@ type UseDataFunctionWithProviderType<
   defaultValue: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
   subscriberOptions?: DataProviderSubscriberOptions,
 ) => [
-  ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'],
+  ExtractDataProviderDataTypes<TDataProvider>[TDataType]['getData'] | PlatformError,
   (
     | ((
         newData: ExtractDataProviderDataTypes<TDataProvider>[TDataType]['setData'],
@@ -139,7 +139,9 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
       subscriberOptionsRef.current = subscriberOptions;
 
       // The data from the data provider at this selector
-      const [data, setDataInternal] = useState<TDataTypes[TDataType]['getData']>(defaultValue);
+      const [data, setDataInternal] = useState<TDataTypes[TDataType]['getData'] | PlatformError>(
+        defaultValue,
+      );
 
       // Get the data provider for this data provider name
       const dataProvider = useDataProviderHook(...args);
@@ -149,11 +151,15 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
 
       // Wrap subscribe so we can call it as a normal PapiEvent in useEvent
       const wrappedSubscribeEvent:
-        | PlatformEventAsync<TDataTypes[TDataType]['getData']>
+        | PlatformEventAsync<TDataTypes[TDataType]['getData'] | PlatformError>
         | undefined = useMemo(
         () =>
           dataProvider
-            ? async (eventCallback: PlatformEventHandler<TDataTypes[TDataType]['getData']>) => {
+            ? async (
+                eventCallback: PlatformEventHandler<
+                  TDataTypes[TDataType]['getData'] | PlatformError
+                >,
+              ) => {
                 const unsub =
                   // We need any here because for some reason IDataProvider loses its ability to
                   // index subscribe. Assert to specified generic type.
@@ -165,7 +171,7 @@ export function createUseDataHook<TUseDataProviderParams extends unknown[]>(
                   )(
                     /* eslint-enable */
                     selector,
-                    (subscriptionData: TDataTypes[TDataType]['getData']) => {
+                    (subscriptionData: TDataTypes[TDataType]['getData'] | PlatformError) => {
                       eventCallback(subscriptionData);
                       // When we receive updated data, mark that we are not loading
                       setIsLoading(false);

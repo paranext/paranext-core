@@ -21,6 +21,8 @@ import {
   isLocalizeKey,
   serialize,
   getLocalizeKeysForScrollGroupIds,
+  isPlatformError,
+  getErrorMessage,
 } from 'platform-bible-utils';
 import { BookChapterControl, ScrollGroupSelector, useEvent } from 'platform-bible-react';
 import './web-view.component.css';
@@ -38,6 +40,8 @@ import {
 import { Canon } from '@sillsdev/scripture';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
+
+const BOOKS_PRESENT_DEFAULT = '';
 
 const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availableScrollGroupIds);
 
@@ -215,7 +219,19 @@ export function WebView({
 
   const [scrollGroupLocalizedStrings] = useLocalizedStrings(scrollGroupLocalizedStringKeys);
 
-  const [booksPresent] = useProjectSetting(projectId, 'platformScripture.booksPresent', '');
+  const [booksPresentPossiblyError] = useProjectSetting(
+    projectId,
+    'platformScripture.booksPresent',
+    BOOKS_PRESENT_DEFAULT,
+  );
+
+  const booksPresent = useMemo(() => {
+    if (isPlatformError(booksPresentPossiblyError)) {
+      logger.warn(`Error getting books present: ${getErrorMessage(booksPresentPossiblyError)}`);
+      return BOOKS_PRESENT_DEFAULT;
+    }
+    return booksPresentPossiblyError;
+  }, [booksPresentPossiblyError]);
 
   const fetchActiveBooks = () => {
     return Array.from(booksPresent).reduce((ids: string[], char, index) => {

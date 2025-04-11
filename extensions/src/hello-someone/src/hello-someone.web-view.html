@@ -34,7 +34,12 @@
     <script>
       const papi = require('@papi/frontend');
       const { logger } = require('@papi/frontend');
-      const { htmlEncode, serialize } = require('platform-bible-utils');
+      const {
+        getErrorMessage,
+        htmlEncode,
+        isPlatformError,
+        serialize,
+      } = require('platform-bible-utils');
 
       function print(input) {
         logger.debug(input);
@@ -114,6 +119,10 @@
 
         // Update the 'people' display on load and on updates
         peopleDataProvider.subscribePeople(undefined, (people) => {
+          if (isPlatformError(people)) {
+            logger.warn(`subscribePeople received PlatformError: ${getErrorMessage(people)}`);
+            return;
+          }
           const peopleData = document.getElementById('people-data');
           const peopleString = serialize(people, undefined, 2);
           peopleData.textContent = htmlEncode(peopleString.replace(/"/g, '`'));

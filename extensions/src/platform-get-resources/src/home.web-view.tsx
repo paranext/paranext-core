@@ -36,6 +36,7 @@ import {
   getErrorMessage,
   isErrorMessageAboutParatextBlockingInternetAccess,
   isErrorMessageAboutRegistryAuthFailure,
+  isPlatformError,
   LocalizeKey,
   newGuid,
 } from 'platform-bible-utils';
@@ -86,6 +87,9 @@ type MergedProjectInfo = {
   editedStatus?: EditedStatus;
   lastSendReceiveDate?: string;
 };
+
+const defaultExcludePdpFactoryIds: string[] = [];
+const defaultInterfaceLanguages: string[] = ['en'];
 
 globalThis.webViewComponent = function HomeDialog() {
   const isMounted = useRef(false);
@@ -267,17 +271,28 @@ globalThis.webViewComponent = function HomeDialog() {
   const [localProjectsInfo, setLocalProjectsInfo] = useState<LocalProjectInfo[]>([]);
   const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
 
-  const [excludePdpFactoryIdsInHome] = useSetting(
+  const [excludePdpFactoryIdsInHomePossiblyError] = useSetting(
     'platformGetResources.excludePdpFactoryIdsInHome',
-    [],
+    defaultExcludePdpFactoryIds,
   );
+
+  const excludePdpFactoryIds = useMemo(() => {
+    if (isPlatformError(excludePdpFactoryIdsInHomePossiblyError)) {
+      logger.warn(
+        'Failed to load setting: platformGetResources.excludePdpFactoryIdsInHome',
+        excludePdpFactoryIdsInHomePossiblyError,
+      );
+      return defaultExcludePdpFactoryIds;
+    }
+    return excludePdpFactoryIdsInHomePossiblyError;
+  }, [excludePdpFactoryIdsInHomePossiblyError]);
 
   useEffect(() => {
     let promiseIsCurrent = true;
     const getLocalProjects = async () => {
       const projectMetadata = await papi.projectLookup.getMetadataForAllProjects({
         includeProjectInterfaces: ['platformScripture.USJ_Chapter'],
-        excludePdpFactoryIds: excludePdpFactoryIdsInHome,
+        excludePdpFactoryIds,
       });
       const projectInfo = await Promise.all(
         projectMetadata.map(async (data) => {
@@ -307,7 +322,7 @@ globalThis.webViewComponent = function HomeDialog() {
       // Mark this promise as old and not to be used
       promiseIsCurrent = false;
     };
-  }, [isSendReceiveInProgress, excludePdpFactoryIdsInHome, resourcesList]);
+  }, [isSendReceiveInProgress, excludePdpFactoryIds, resourcesList]);
 
   const mergedProjectInfo: MergedProjectInfo[] = useMemo(() => {
     const newMergedProjectInfo: MergedProjectInfo[] = [];
@@ -423,11 +438,20 @@ globalThis.webViewComponent = function HomeDialog() {
     </TableHead>
   );
 
-  const [interfaceLanguages] = useSetting('platform.interfaceLanguage', ['en']);
+  const [interfaceLanguages] = useSetting('platform.interfaceLanguage', defaultInterfaceLanguages);
+
+  const uiLocales = useMemo(() => {
+    if (isPlatformError(interfaceLanguages)) {
+      logger.warn('Failed to load setting: platform.interfaceLanguage', interfaceLanguages);
+      return defaultInterfaceLanguages;
+    }
+
+    return interfaceLanguages;
+  }, [interfaceLanguages]);
 
   const relativeTimeFormatter = useMemo(() => {
-    return new Intl.RelativeTimeFormat(interfaceLanguages, { style: 'long', numeric: 'auto' });
-  }, [interfaceLanguages]);
+    return new Intl.RelativeTimeFormat(uiLocales, { style: 'long', numeric: 'auto' });
+  }, [uiLocales]);
 
   const getSendReceiveButtonContent = (project: MergedProjectInfo) => {
     if (isSendReceiveInProgress && activeSendReceiveProjects.includes(project.projectId)) {
