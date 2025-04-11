@@ -57,7 +57,7 @@ export const useSetting = <SettingName extends SettingNames>(
         defaultValue: SettingTypes[SettingName],
         subscriberOptions?: DataProviderSubscriberOptions,
       ) => [
-        setting: SettingTypes[SettingName],
+        setting: SettingTypes[SettingName] | PlatformError,
         setSetting: (
           newData: SettingTypes[SettingName],
         ) => Promise<DataProviderUpdateInstructions<SettingDataTypes>>,
