@@ -1,6 +1,6 @@
 {
   "name": "platform-scripture-editor",
-  "version": "0.4.0-rc.1",
+  "version": "0.4.0",
   "description": "Editor extension for Platform.Bible",
   "main": "src/main.js",
   "types": "src/types/platform-scripture-editor.d.ts",

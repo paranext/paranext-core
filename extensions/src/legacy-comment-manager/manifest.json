@@ -1,6 +1,6 @@
 {
   "name": "legacyCommentManager",
-  "version": "0.4.0-rc.1",
+  "version": "0.4.0",
   "publisher": "platform",
   "displayData": "assets/displayData.json",
   "author": "Paranext",
