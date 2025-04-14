@@ -394,6 +394,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                 placeholder={typesText}
                 icon={<Shapes />}
                 badgesPlaceholder={anyText}
+                isDisabled={isLoadingResources}
               />
 
               <Filter
@@ -408,6 +409,7 @@ globalThis.webViewComponent = function GetResourcesDialog({ useWebViewState }: W
                 sortSelected
                 icon={<Globe />}
                 badgesPlaceholder={anyText}
+                isDisabled={isLoadingResources}
               />
             </div>
           </div>
