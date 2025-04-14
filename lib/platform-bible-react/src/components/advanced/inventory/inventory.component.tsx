@@ -341,7 +341,7 @@ export function Inventory({
     } else if (filteredTableData.length === 1) {
       setSelectedItem(filteredTableData[0].items);
     }
-  }, [filteredTableData, selectedItem]);
+  }, [filteredTableData]);
 
   const rowClickHandler = (
     row: RowContents<InventoryTableData>,
