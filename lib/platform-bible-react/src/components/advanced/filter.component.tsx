@@ -26,6 +26,7 @@ export function Filter({
   placeholder,
   commandEmptyMessage,
   customSelectedText,
+  isDisabled,
   sortSelected,
   icon,
   className,
@@ -41,6 +42,7 @@ export function Filter({
         placeholder={placeholder}
         commandEmptyMessage={commandEmptyMessage}
         customSelectedText={customSelectedText}
+        isDisabled={isDisabled}
         sortSelected={sortSelected}
         icon={icon}
         className={className}

@@ -26,6 +26,7 @@ export interface MultiSelectComboBoxProps {
   placeholder: string;
   commandEmptyMessage?: string;
   customSelectedText?: string;
+  isDisabled?: boolean;
   sortSelected?: boolean;
   icon?: ReactNode;
   className?: string;
@@ -39,6 +40,7 @@ export function MultiSelectComboBox({
   placeholder,
   commandEmptyMessage = 'No entries found',
   customSelectedText,
+  isDisabled = false,
   sortSelected = false,
   icon = undefined,
   className = undefined,
@@ -93,6 +95,7 @@ export function MultiSelectComboBox({
               selected.length > 0 && selected.length < entries.length && 'tw-border-primary',
               'tw-group',
             )}
+            disabled={isDisabled}
           >
             <div className="tw-flex tw-items-center tw-gap-2">
               <div className="tw-ml-2 tw-h-4 tw-w-4 tw-shrink-0 tw-opacity-50">
