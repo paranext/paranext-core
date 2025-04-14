@@ -71,7 +71,7 @@ const defaultEditorDecorations: EditorDecorations = {};
 
 const defaultProjectName = '';
 
-const defaultIsRightToLeft = false;
+const defaultTextDirection = 'ltr';
 
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
@@ -557,31 +557,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return projectNamePossiblyError;
   }, [projectNamePossiblyError]);
 
-  const [isRightToLeftPossiblyError] = useProjectSetting(
+  const [textDirectionPossiblyError] = useProjectSetting(
     projectId,
-    'platform.isRightToLeft',
-    defaultIsRightToLeft,
+    'platform.textDirection',
+    defaultTextDirection,
   );
 
-  const isRightToLeft = useMemo(() => {
-    if (isPlatformError(isRightToLeftPossiblyError)) {
-      logger.warn(`Error getting is right to left: ${getErrorMessage(isRightToLeftPossiblyError)}`);
-      return defaultIsRightToLeft;
+  const textDirection = useMemo(() => {
+    if (isPlatformError(textDirectionPossiblyError)) {
+      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
+      return defaultTextDirection;
     }
 
     // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
     if (projectName === 'OHEBGRK')
-      if (Canon.isBookOT(scrRef.book)) return true;
-      else return false;
+      if (Canon.isBookOT(scrRef.book)) return 'rtl';
+      else return 'ltr';
 
-    return isRightToLeftPossiblyError;
-  }, [isRightToLeftPossiblyError]);
+    // Using || to make sure we get default if it is an empty string or if it is undefined
+    return textDirectionPossiblyError || defaultTextDirection;
+  }, [textDirectionPossiblyError]);
 
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: isRightToLeft ? 'rtl' : 'ltr',
+      textDirection,
     }),
     [isReadOnly, projectName, scrRef],
   );

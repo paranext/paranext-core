@@ -3278,10 +3278,11 @@ declare module 'papi-shared-types' {
      */
     'platform.isEditable': boolean;
     /**
-     * Whether the project's text flows from right to left instead of from left to right. This is
-     * generally derived from the language definition for the project's language code.
+     * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
+     * undefined = left-to-right (may be changed in the future to detect). Defaults to 'ltr'. This
+     * is generally derived from the language definition for the project's language code.
      */
-    'platform.isRightToLeft': boolean;
+    'platform.textDirection': 'ltr' | 'rtl' | '' | undefined;
   }
   /**
    * Names for each user setting available on the papi.

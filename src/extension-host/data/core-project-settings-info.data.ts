@@ -26,10 +26,10 @@ export const platformProjectSettings: ProjectSettingsContribution = {
       description: '%project_settings_platform_isEditable_description%',
       default: true,
     },
-    'platform.isRightToLeft': {
-      label: '%project_settings_platform_isRightToLeft_label%',
-      description: '%project_settings_platform_isRightToLeft_description%',
-      default: false,
+    'platform.textDirection': {
+      label: '%project_settings_platform_textDirection_label%',
+      description: '%project_settings_platform_textDirection_description%',
+      default: '',
       isHidden: true,
     },
   },
@@ -49,11 +49,15 @@ const languageValidator: ProjectSettingValidator<'platform.language'> = async (
   return typeof newValue === 'string';
 };
 
-const booleanValidator = async (newValue: boolean) => {
-  return typeof newValue === 'boolean';
+const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = async (
+  newValue: boolean,
+) => typeof newValue === 'boolean';
+
+const textDirectionValidator: ProjectSettingValidator<'platform.textDirection'> = async (
+  newValue: string | undefined,
+) => {
+  return newValue === 'rtl' || newValue === 'ltr' || newValue === '' || newValue === undefined;
 };
-const isRightToLeftValidator: ProjectSettingValidator<'platform.isRightToLeft'> = booleanValidator;
-const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = booleanValidator;
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators> = {
@@ -61,5 +65,5 @@ export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators
   'platform.fullName': fullNameValidator,
   'platform.language': languageValidator,
   'platform.isEditable': isEditableValidator,
-  'platform.isRightToLeft': isRightToLeftValidator,
+  'platform.textDirection': textDirectionValidator,
 };
