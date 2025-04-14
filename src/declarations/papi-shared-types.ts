@@ -230,6 +230,11 @@ declare module 'papi-shared-types' {
      * Projects that are not editable are sometimes called "resources".
      */
     'platform.isEditable': boolean;
+    /**
+     * Whether the project's text flows from right to left instead of from left to right. This is
+     * generally derived from the language definition for the project's language code.
+     */
+    'platform.isRightToLeft': boolean;
   }
 
   /**

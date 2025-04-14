@@ -285,6 +285,11 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (scrText.IsResourceProject && paratextSettingName == ProjectSettingsNames.PT_IS_EDITABLE)
             return false;
 
+        // Right-to-left comes from the project's language definition ldml. It doesn't come from the
+        // project settings
+        if (paratextSettingName == ProjectSettingsNames.PT_IS_RIGHT_TO_LEFT)
+            return scrText.RightToLeft;
+
         if (
             scrText.Settings.ParametersDictionary.TryGetValue(
                 paratextSettingName,
@@ -336,6 +341,13 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         var paratextSettingName =
             ProjectSettingsNames.GetParatextSettingNameFromPlatformBibleSettingName(settingName)
             ?? settingName;
+
+        // Right-to-left comes from the project's language definition ldml. It doesn't come from the
+        // project settings
+        if (paratextSettingName == ProjectSettingsNames.PT_IS_RIGHT_TO_LEFT)
+            throw new Exception(
+                "Cannot set right to left this way. Must edit the language definition ldml file"
+            );
 
         // Now actually write the setting
         string? errorMessage = null;

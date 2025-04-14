@@ -71,6 +71,8 @@ const defaultEditorDecorations: EditorDecorations = {};
 
 const defaultProjectName = '';
 
+const defaultIsRightToLeft = false;
+
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
  * iframes successfully test as equal
@@ -555,11 +557,31 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return projectNamePossiblyError;
   }, [projectNamePossiblyError]);
 
+  const [isRightToLeftPossiblyError] = useProjectSetting(
+    projectId,
+    'platform.isRightToLeft',
+    defaultIsRightToLeft,
+  );
+
+  const isRightToLeft = useMemo(() => {
+    if (isPlatformError(isRightToLeftPossiblyError)) {
+      logger.warn(`Error getting is right to left: ${getErrorMessage(isRightToLeftPossiblyError)}`);
+      return defaultIsRightToLeft;
+    }
+
+    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
+    if (projectName === 'OHEBGRK')
+      if (Canon.isBookOT(scrRef.book)) return true;
+      else return false;
+
+    return isRightToLeftPossiblyError;
+  }, [isRightToLeftPossiblyError]);
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.book) ? 'rtl' : 'ltr',
+      textDirection: isRightToLeft ? 'rtl' : 'ltr',
     }),
     [isReadOnly, projectName, scrRef],
   );
