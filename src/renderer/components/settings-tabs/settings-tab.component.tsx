@@ -208,10 +208,18 @@ export function SettingsTab({ projectIdToLimitSettings }: SettingsTabProps) {
 
     if (!contributions) return true; // If contributions is undefined, show zero results
 
+    const allContributions = Object.entries(contributions);
+
+    const relevantContributions = selectedSidebarItem.projectId
+      ? allContributions
+      : allContributions.filter(
+          ([key]) => !selectedSidebarItem.projectId && key === selectedSidebarItem.label,
+        );
+
     // Check if any contribution has at least one property
-    return !Object.entries(contributions)
-      .filter(([key]) => !selectedSidebarItem.projectId && key === selectedSidebarItem.label)
-      .some(([, groups]) => groups?.some((group) => Object.keys(group.properties).length > 0));
+    return !relevantContributions.some(([, groups]) =>
+      groups?.some((group) => Object.keys(group.properties).length > 0),
+    );
   }, [
     filteredAndMatchedProjectSettingsContributions,
     matchedSettingsContributions,
