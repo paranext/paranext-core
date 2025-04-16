@@ -71,6 +71,8 @@ const defaultEditorDecorations: EditorDecorations = {};
 
 const defaultProjectName = '';
 
+const defaultTextDirection = 'ltr';
+
 /**
  * Check deep equality of two values such that two equal objects or arrays created in two different
  * iframes successfully test as equal
@@ -555,13 +557,38 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return projectNamePossiblyError;
   }, [projectNamePossiblyError]);
 
+  const [textDirectionPossiblyError] = useProjectSetting(
+    projectId,
+    'platform.textDirection',
+    defaultTextDirection,
+  );
+
+  const textDirection = useMemo(() => {
+    if (isPlatformError(textDirectionPossiblyError)) {
+      logger.warn(`Error getting is right to left: ${getErrorMessage(textDirectionPossiblyError)}`);
+      return defaultTextDirection;
+    }
+
+    // Using || to make sure we get default if it is an empty string or if it is undefined
+    return textDirectionPossiblyError || defaultTextDirection;
+  }, [textDirectionPossiblyError]);
+
+  const textDirectionEffective = useMemo(() => {
+    // OHEBGRK is a special case where we want to show the OT in RTL but the NT in LTR
+    if (projectName === 'OHEBGRK')
+      if (Canon.isBookOT(scrRef.book)) return 'rtl';
+      else return 'ltr';
+
+    return textDirection;
+  }, [projectName, scrRef, textDirection]);
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
-      textDirection: projectName === 'OHEBGRK' && Canon.isBookOT(scrRef.book) ? 'rtl' : 'ltr',
+      textDirection: textDirectionEffective,
     }),
-    [isReadOnly, projectName, scrRef],
+    [isReadOnly, textDirectionEffective],
   );
 
   function renderEditor() {

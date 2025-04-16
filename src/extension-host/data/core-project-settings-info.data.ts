@@ -26,6 +26,12 @@ export const platformProjectSettings: ProjectSettingsContribution = {
       description: '%project_settings_platform_isEditable_description%',
       default: true,
     },
+    'platform.textDirection': {
+      label: '%project_settings_platform_textDirection_label%',
+      description: '%project_settings_platform_textDirection_description%',
+      default: '',
+      isHidden: true,
+    },
   },
 };
 
@@ -47,10 +53,17 @@ const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = asyn
   newValue: boolean,
 ) => typeof newValue === 'boolean';
 
+const textDirectionValidator: ProjectSettingValidator<'platform.textDirection'> = async (
+  newValue: string | undefined,
+) => {
+  return newValue === 'rtl' || newValue === 'ltr' || newValue === '' || newValue === undefined;
+};
+
 /** Info about all settings built into core. Does not contain info for extensions' settings */
 export const coreProjectSettingsValidators: Partial<AllProjectSettingsValidators> = {
   'platform.name': nameValidator,
   'platform.fullName': fullNameValidator,
   'platform.language': languageValidator,
   'platform.isEditable': isEditableValidator,
+  'platform.textDirection': textDirectionValidator,
 };

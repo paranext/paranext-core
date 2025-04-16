@@ -20,6 +20,9 @@ public sealed class ProjectSettingsNames
     public const string PB_IS_EDITABLE = "platform.isEditable";
     public const string PT_IS_EDITABLE = "Editable";
 
+    public const string PB_TEXT_DIRECTION = "platform.textDirection";
+    public const string PT_TEXT_DIRECTION = "TextDirection";
+
     public const string PB_VALID_CHARACTERS = "platformScripture.validCharacters";
     public const string PT_VALID_CHARACTERS = "ValidCharacters";
 
@@ -53,6 +56,7 @@ public sealed class ProjectSettingsNames
             { PB_NAME, PT_NAME },
             { PB_VERSIFICATION, PT_VERSIFICATION },
             { PB_IS_EDITABLE, PT_IS_EDITABLE },
+            { PB_TEXT_DIRECTION, PT_TEXT_DIRECTION },
             { PB_VALID_CHARACTERS, PT_VALID_CHARACTERS },
             { PB_INVALID_CHARACTERS, PT_INVALID_CHARACTERS },
             { PB_REPEATABLE_WORDS, PT_REPEATABLE_WORDS },

@@ -3277,6 +3277,14 @@ declare module 'papi-shared-types' {
      * Projects that are not editable are sometimes called "resources".
      */
     'platform.isEditable': boolean;
+    /**
+     * Which way the project's text flows. 'ltr' = left-to-right; 'rtl' = right-to-left. '' or
+     * undefined = left-to-right (may be changed in the future to detect). Defaults to ''. This is
+     * generally derived from the language definition for the project's language code. Note that
+     * additional string options may be added in the future, so handle accordingly. Adding
+     * additional options will not be considered a breaking change.
+     */
+    'platform.textDirection': 'ltr' | 'rtl' | '' | undefined;
   }
   /**
    * Names for each user setting available on the papi.
