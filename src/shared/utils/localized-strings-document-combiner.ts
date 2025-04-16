@@ -2,12 +2,18 @@ import {
   DocumentCombiner,
   JsonDocumentLike,
   LanguageStrings,
+  LocalizeKey,
   LocalizedStringDataContribution,
+  isLocalizeKey,
   isString,
   localizedStringsDocumentSchema,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
+import { logger } from '@shared/services/logger.service';
+
+/** Map from localized string key to deprecation message for that string if one exists */
+type DeprecationInfo = { [key: LocalizeKey]: string | undefined };
 
 // #region Helper functions
 
@@ -38,12 +44,41 @@ function transformLocalizedStringDataToCanonicalLocales(
   };
 }
 
+function gatherDeprecationInfo(document: LocalizedStringDataContribution) {
+  const deprecationInfo: DeprecationInfo = {};
+
+  if (!document.metadata) return deprecationInfo;
+
+  Object.entries(document.metadata).forEach(([key, metadata]) => {
+    if (metadata.deprecated) {
+      // Object.entries is not preserving that key is a LocalizeKey
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      deprecationInfo[key as LocalizeKey] = metadata.deprecated;
+    }
+  });
+
+  return deprecationInfo;
+}
+
 // #endregion
 
 /** Combines Localized String contributions. Normalizes locales to BCP 47 form */
 export class LocalizedStringsDocumentCombiner extends DocumentCombiner {
+  /** Map from localized string key to deprecation message for that string if one exists */
+  deprecatedStringsByKey: DeprecationInfo = {};
+
   constructor(baseDocument: JsonDocumentLike) {
     super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: true });
+
+    const rebuildDeprecationInfo = () => {
+      this.deprecatedStringsByKey = gatherDeprecationInfo(this.getLocalizedStringData());
+    };
+
+    rebuildDeprecationInfo();
+    // on rebuild, update deprecation info
+    this.onDidRebuild(rebuildDeprecationInfo);
+
+    // TODO: log on using a deprecated localized string
   }
 
   /**
@@ -87,6 +122,47 @@ export class LocalizedStringsDocumentCombiner extends DocumentCombiner {
         ? localizedStringData.localizedStrings?.[Intl.getCanonicalLocales(locale)[0]]
         : localizedStringData
     ) as T extends string ? LanguageStrings | undefined : LocalizedStringDataContribution;
+  }
+
+  override addOrUpdateContribution(documentName: string, document: JsonDocumentLike) {
+    // Log a warning if someone adds a localization to an existing deprecated string before adding
+    // that extension's strings
+
+    // We will verify everything we need to use
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const contribution = document as LocalizedStringDataContribution;
+
+    if (
+      typeof contribution === 'object' &&
+      !Array.isArray(contribution) &&
+      // Testing null to make sure we don't try to iterate over null
+      // eslint-disable-next-line no-null/no-null
+      contribution !== null &&
+      typeof contribution.localizedStrings === 'object' &&
+      !Array.isArray(contribution.localizedStrings) &&
+      // Testing null to make sure we don't try to iterate over null
+      // eslint-disable-next-line no-null/no-null
+      contribution !== null
+    ) {
+      Object.entries(contribution.localizedStrings).forEach(([language, strings]) => {
+        // Testing null to make sure we don't try to iterate over null
+        // eslint-disable-next-line no-null/no-null
+        if (typeof strings !== 'object' || Array.isArray(strings) || strings === null) return;
+        Object.keys(strings).forEach((localizeKey) => {
+          if (!isString(localizeKey) || !isLocalizeKey(localizeKey)) return;
+          const deprecationMessage = this.deprecatedStringsByKey[localizeKey];
+          if (deprecationMessage) {
+            logger.warn(
+              `Extension ${documentName} added a localization in ${language} to deprecated LocalizeKey ${localizeKey}: ${deprecationMessage}`,
+            );
+          }
+        });
+      });
+    }
+
+    const newDoc = super.addOrUpdateContribution(documentName, document);
+
+    return newDoc;
   }
 
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {

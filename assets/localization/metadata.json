@@ -4,6 +4,9 @@
     "fallbackKey": "%confirm%"
   },
   "%submit%": { "fallbackKey": "%yes%" },
+  "%submitButton%": {
+    "deprecated": "15 April 2025. This was a test string with an outdated key format. Use %general_button_submit%"
+  },
   "%about_db_ip_attribution_intro%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;  Internet safety features use data&#xA;from &quot;%"
   },

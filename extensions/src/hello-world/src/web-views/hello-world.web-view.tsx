@@ -71,6 +71,7 @@ globalThis.webViewComponent = function HelloWorld({
   const selectProjectsTitle = '%helloWorld_selectProjects_title%';
   const selectProjectTitle = '%helloWorld_selectProject_title%';
   const submit = '%general_button_submit%';
+  const submitDeprecated = '%submitButton%';
   const testException = '%helloWorld_throw_test_exception%';
   const testMe = '%helloWorld_testMe%';
 
@@ -101,6 +102,7 @@ globalThis.webViewComponent = function HelloWorld({
         selectProjectsTitle,
         selectProjectTitle,
         submit,
+        submitDeprecated,
         testException,
         testMe,
       ],
@@ -133,6 +135,7 @@ globalThis.webViewComponent = function HelloWorld({
   const localizedSelectProjectsTitle = localizedStrings[selectProjectsTitle];
   const localizedSelectProjectTitle = localizedStrings[selectProjectTitle];
   const localizedSubmit = localizedStrings[submit];
+  const localizedSubmitDeprecated = localizedStrings[submitDeprecated];
   const localizedTestException = localizedStrings[testException];
   const localizedTestMe = localizedStrings[testMe];
 
@@ -489,6 +492,7 @@ globalThis.webViewComponent = function HelloWorld({
       <div>
         <h3>{localizedFrenchLocalizationSubmit}:</h3>
         <div>{localizedSubmit}</div>
+        <div>{localizedSubmitDeprecated}</div>
       </div>
     </div>
   );
