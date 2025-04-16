@@ -220,6 +220,7 @@ $tab-bottom-rounding: vars.$space--s;
 .dock-tab-close-btn:hover,
 .dock-tab-close-btn:focus {
   background-color: hsl(var(--secondary));
+  transform: none;
 }
 
 .dock-dropdown-menu-item .dock-tab-close-btn {
