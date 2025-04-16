@@ -16,7 +16,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/shadcn-ui/tooltip';
-import { cn } from '@/utils/shadcn-ui.util';
 import { MenuIcon } from 'lucide-react';
 import {
   GroupsInMultiColumnMenu,
@@ -26,6 +25,7 @@ import {
   MultiColumnMenu,
 } from 'platform-bible-utils';
 import { Fragment, ReactNode } from 'react';
+import { Button } from '@/components/shadcn-ui/button';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import { CommandHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
@@ -135,13 +135,10 @@ export default function TabDropdownMenu({
 }: TabDropdownMenuProps) {
   return (
     <DropdownMenu variant={variant}>
-      <DropdownMenuTrigger
-        aria-label={tabLabel}
-        className={cn('tw-cursor-pointer', className)}
-        asChild
-        id={id}
-      >
-        {icon ?? <MenuIcon />}
+      <DropdownMenuTrigger aria-label={tabLabel} className={className} asChild id={id}>
+        <Button variant="ghost" className="tw-h-6 tw-p-1">
+          {icon ?? <MenuIcon />}
+        </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="tw-z-[250]">
         {Object.entries(menuData.columns)
