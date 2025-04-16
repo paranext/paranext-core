@@ -16,12 +16,6 @@
   background-color: hsl(var(--accent));
 }
 
-.dock-tab-close-btn:hover,
-.dock-tab:hover .dock-tab-close-btn,
-.dock-tab-close-btn:focus {
-  color: hsl(var(--foreground));
-}
-
 // #region GENERAL //////////////////////////////////////////////
 /* space around app and in between windows */
 .dock-divider {
@@ -102,7 +96,7 @@
 }
 // #endregion
 
-// #region TABS / RIBBONS //////////////////////////////////////////////
+// #region TAB HEADER //////////////////////////////////////////////
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab {
   margin-right: 0;
   border: 0;
@@ -118,6 +112,21 @@
   z-index: 1; // fix for box shadow of active tab as well as hiding divider next to it
 
   box-shadow: 0 4px 20px 0 vars.$color--shadow; // Box shadow around active tab
+}
+
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
+  padding-left: vars.$space--xs;
+  padding-right: 26px;
+  padding-top: vars.$space--xs;
+  padding-bottom: vars.$space--xs;
+}
+
+.dock-dropdown-menu-item .title {
+  padding-right: vars.$space--s + vars.$space--xs;
+}
+
+.title span {
+  padding-left: 2px;
 }
 // #endregion
 
@@ -180,33 +189,52 @@ $tab-bottom-rounding: vars.$space--s;
 
 // #region CONTROLS //////////////////////////////////////////////
 /* Close buttons */
-.dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
-  padding-left: vars.$space--s;
-  padding-right: vars.$space--m + vars.$space--xs + vars.$space--xxs;
+.dock-tab-close-btn::before {
+  content: '';
+  display: block;
+  width: 16px;
+  height: 16px;
+  /* X icon from https://lucide.dev/icons/x */
+  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLXgtaWNvbiBsdWNpZGUteCI+PHBhdGggZD0iTTE4IDYgNiAxOCIvPjxwYXRoIGQ9Im02IDYgMTIgMTIiLz48L3N2Zz4=');
+  background-size: 100%;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 .dock-panel.dock-style-card .dock-tab-close-btn {
-  right: vars.$space--xs;
+  font-family: vars.$font-family;
+  border-radius: vars.$space--l;
+  height: 16px;
+  padding: 2px;
+  top: 5px;
+  right: 5px;
+  color: hsl(var(--foreground));
+  visibility: hidden;
+}
+
+.dock-tab.dock-tab-active .dock-tab-close-btn,
+.dock-tab:hover .dock-tab-close-btn {
+  visibility: visible;
+}
+
+.dock-tab-close-btn:hover,
+.dock-tab-close-btn:focus {
+  background-color: hsl(var(--secondary));
 }
 
 .dock-dropdown-menu-item .dock-tab-close-btn {
   right: vars.$space--xs;
-  top: vars.$space--xs + vars.$space--xxs;
+  top: 8px;
+  visibility: hidden;
 }
 
-.dock-dropdown-menu-item .title {
-  padding-right: vars.$space--s + vars.$space--xs;
+.dock-dropdown-menu-item:hover .dock-tab-close-btn {
+  visibility: visible;
 }
 
-.dock-tab-close-btn {
-  font-family: vars.$font-family;
-  color: transparent;
-}
-
-.dock-tab.dock-tab-active {
-  .dock-tab-close-btn {
-    color: hsl(var(--foreground));
-  }
+.dock-dropdown-menu-item .dock-tab-close-btn:hover {
+  background-color: hsl(var(--background));
+  border-radius: vars.$space--l;
 }
 
 /* maximize - minimize control */
