@@ -1943,6 +1943,13 @@ export interface StringMetadata {
 	 * translate this localized string accurately
 	 */
 	notes?: string;
+	/**
+	 * If this property is filled, the localized string is deprecated. This string should contain the
+	 * date of deprecation, the reason for deprecation, and what to use instead in what contexts.
+	 *
+	 * @example 13 November 2024. Reworded to clarify the meaning. Use %my_key_2% instead.
+	 */
+	deprecated?: string;
 }
 /**
  * Map whose keys are localized string keys and whose values provide information about how to
@@ -2004,6 +2011,10 @@ export declare const localizedStringsDocumentSchema: {
 					tsType: string;
 				};
 				notes: {
+					description: string;
+					type: string;
+				};
+				deprecated: {
 					description: string;
 					type: string;
 				};

@@ -95,6 +95,9 @@
       "%project_settings_helloWorld_headerSize_description%": "Tamaño de la fuente del encabezado en `em`",
       "%project_settings_helloWorld_headerColor_label%": "Color del Encabezado",
       "%project_settings_helloWorld_headerColor_description%": "Color de los encabezados (debe ser un válido [nombre de color HTML](https://htmlcolorcodes.com/color-names/))"
+    },
+    "de": {
+      "%submitButton%": "Submit in German"
     }
   }
 }
