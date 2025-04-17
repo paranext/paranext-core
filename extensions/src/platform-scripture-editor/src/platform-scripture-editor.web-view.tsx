@@ -5,6 +5,8 @@ import {
   EditorRef,
   Marginal,
   MarginalRef,
+  ViewOptions,
+  getViewOptions,
 } from '@biblionexus-foundation/platform-editor';
 import {
   MarkerContent,
@@ -13,7 +15,7 @@ import {
   Usj,
 } from '@biblionexus-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
+import { JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -131,6 +133,9 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   useWebViewScrollGroupScrRef,
 }: WebViewProps): JSX.Element {
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
+  const [markerMode, setMarkerMode] = useState<'visible' | 'editable' | 'hidden'>('hidden');
+  const [hasSpacing, setHasSpacing] = useState(true);
+  const [isFormattedFont, setIsFormattedFont] = useState(true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
     'decorations',
     defaultEditorDecorations,
@@ -599,13 +604,32 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
     return textDirection;
   }, [projectName, scrRef, textDirection]);
 
+  const applyViewMode = useCallback((viewMode: string) => {
+    const viewOptions = getViewOptions(viewMode);
+    if (viewOptions) {
+      setMarkerMode(viewOptions.markerMode);
+      setHasSpacing(viewOptions.hasSpacing);
+      setIsFormattedFont(viewOptions.isFormattedFont);
+    }
+  }, []);
+
+  const viewOptions = useMemo<ViewOptions>(
+    () => ({
+      markerMode,
+      hasSpacing,
+      isFormattedFont,
+    }),
+    [markerMode, hasSpacing, isFormattedFont],
+  );
+
   const options = useMemo<EditorOptions>(
     () => ({
       isReadonly: isReadOnly,
       hasSpellCheck: false,
       textDirection: textDirectionEffective,
+      view: viewOptions,
     }),
-    [isReadOnly, textDirectionEffective],
+    [isReadOnly, textDirectionEffective, viewOptions],
   );
 
   function renderEditor() {
@@ -642,6 +666,46 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
 
   return (
     <>
+      <div className="tw-flex tw-gap-4 tw-mb-2">
+        <div className="tw-flex tw-items-center tw-gap-2">
+          <label htmlFor="markerModeSelect">Marker Mode:</label>
+          <select
+            id="markerModeSelect"
+            value={markerMode}
+            onChange={(e) => setMarkerMode(e.target.value as 'visible' | 'editable' | 'hidden')}
+            className="tw-px-2 tw-py-1 tw-border tw-border-gray-300 tw-rounded"
+          >
+            <option value="hidden">Hidden</option>
+            <option value="visible">Visible</option>
+            <option value="editable">Editable</option>
+          </select>
+        </div>
+        <div className="checkbox">
+          <input
+            type="checkbox"
+            id="hasSpacingCheckBox"
+            checked={hasSpacing}
+            onChange={(e) => setHasSpacing(e.target.checked)}
+          />
+          <label htmlFor="hasSpacingCheckBox">Has Spacing</label>
+        </div>
+        <div className="checkbox">
+          <input
+            type="checkbox"
+            id="isFormattedFontCheckBox"
+            checked={isFormattedFont}
+            onChange={(e) => setIsFormattedFont(e.target.checked)}
+          />
+          <label htmlFor="isFormattedFontCheckBox">Is Formatted Font</label>
+        </div>
+        <button
+          type="button"
+          onClick={() => applyViewMode('formatted')}
+          className="tw-px-3 tw-py-1 tw-bg-blue-500 tw-text-white tw-rounded hover:tw-bg-blue-600"
+        >
+          Formatted View
+        </button>
+      </div>
       {/** Mount the editor in a reverse portal so it doesn't unmount and lose its internal state */}
       <InPortal node={editorPortalNode}>{renderEditor()}</InPortal>
       <div className="tw-h-screen tw-w-screen">
