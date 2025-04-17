@@ -17,6 +17,7 @@ import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service'
 import { logger } from '@shared/services/logger.service';
 import * as networkService from '@shared/services/network.service';
 import * as commandService from '@shared/services/command.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { resolveHtmlPath } from '@node/utils/util';
 import { extensionHostService } from '@main/services/extension-host.service';
 import { networkObjectService } from '@shared/services/network-object.service';
@@ -94,8 +95,9 @@ async function openExternal(url: string) {
 }
 
 async function main() {
-  // The network service relies on nothing else, and other things rely on it, so start it first
+  // The network service has to start first, and it uses the shared store after initialization
   await networkService.initialize();
+  await initializeSharedStoreService(networkService);
 
   // The network object status service relies on seeing everything else start up later
   await startNetworkObjectStatusService();

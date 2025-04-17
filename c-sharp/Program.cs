@@ -33,6 +33,10 @@ public static class Program
                 return;
             }
 
+            // Initialize the shared store early since papi uses it
+            await SharedStoreService.InitializeAsync(papi);
+            papi.SetSharedStore(SharedStoreService.GetSharedStore());
+
             // Log the ParatextData.dll assembly version then change it to 10.<our semver>
             var appInfo = AppService.GetAppInfo(papi);
             var appVersion = SemVerUtils.ConvertSemVerToVersion(appInfo.Version);

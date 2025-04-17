@@ -9,6 +9,7 @@ import { serializeRequestType } from '@shared/utils/util';
 import { CommandHandlers, CommandNames } from 'papi-shared-types';
 import { CATEGORY_COMMAND } from '@shared/data/rpc.model';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
+import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 
 /**
  * Register a command on the papi to be handled here
@@ -26,11 +27,13 @@ export const registerCommand = <CommandName extends CommandNames>(
   commandName: CommandName,
   handler: CommandHandlers[CommandName],
   commandDocs?: SingleMethodDocumentation,
+  commandOptions?: NetworkMethodHandlerOptions,
 ): Promise<UnsubscriberAsync> => {
   return networkService.registerRequestHandler(
     serializeRequestType(CATEGORY_COMMAND, commandName),
     handler,
     commandDocs,
+    commandOptions,
   );
 };
 

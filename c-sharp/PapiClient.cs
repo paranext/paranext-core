@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.WebSockets;
 using Paranext.DataProvider.JsonUtils;
+using Paranext.DataProvider.Services;
 using StreamJsonRpc;
 
 namespace Paranext.DataProvider;
@@ -21,6 +22,7 @@ internal class PapiClient : IDisposable
     private readonly CancellationToken _cancellationToken;
     private TaskCompletionSource _disconnectTaskCompletionSource = new();
     private TimeSpan _requestTimeout = TimeSpan.FromSeconds(30);
+    private ISharedStore? _sharedStore = null;
 
     private bool _isDisposed = false;
 
@@ -151,6 +153,19 @@ internal class PapiClient : IDisposable
     }
 
     /// <summary>
+    /// Set the shared store for PapiClient to read and write to.
+    /// This is used to share data between different processes.
+    /// </summary>
+    public void SetSharedStore(ISharedStore? store)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+        if (_sharedStore != null)
+            throw new InvalidOperationException("Shared store already set");
+
+        _sharedStore = store;
+    }
+
+    /// <summary>
     /// Send a request to the server expecting a returned value
     /// </summary>
     /// <param name="requestType">Type of request intended for the server</param>
@@ -175,8 +190,9 @@ internal class PapiClient : IDisposable
             return (T)result;
         }
 
+        var timeoutMs = GetRequestTimeoutMs(requestType);
         using var timeoutCancellationTokenSource = new CancellationTokenSource();
-        timeoutCancellationTokenSource.CancelAfter(_requestTimeout);
+        timeoutCancellationTokenSource.CancelAfter(timeoutMs);
         using var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
             _cancellationToken,
             timeoutCancellationTokenSource.Token
@@ -185,7 +201,7 @@ internal class PapiClient : IDisposable
         return await _jsonRpc.InvokeWithCancellationAsync<T?>(
             requestType,
             requestContents,
-            _requestTimeout.TotalMilliseconds > 0 ? linkedTokenSource.Token : _cancellationToken
+            timeoutMs > 0 ? linkedTokenSource.Token : _cancellationToken
         );
     }
 
@@ -205,8 +221,9 @@ internal class PapiClient : IDisposable
             handler.DynamicInvoke(requestContents?.ToArray());
         else
         {
+            var timeoutMs = GetRequestTimeoutMs(requestType);
             using var timeoutCancellationTokenSource = new CancellationTokenSource();
-            timeoutCancellationTokenSource.CancelAfter(_requestTimeout);
+            timeoutCancellationTokenSource.CancelAfter(timeoutMs);
             using var linkedTokenSource = CancellationTokenSource.CreateLinkedTokenSource(
                 _cancellationToken,
                 timeoutCancellationTokenSource.Token
@@ -215,7 +232,7 @@ internal class PapiClient : IDisposable
             await _jsonRpc.InvokeWithCancellationAsync(
                 requestType,
                 requestContents,
-                _requestTimeout.TotalMilliseconds > 0 ? linkedTokenSource.Token : _cancellationToken
+                timeoutMs > 0 ? linkedTokenSource.Token : _cancellationToken
             );
         }
     }
@@ -287,6 +304,39 @@ internal class PapiClient : IDisposable
         ObjectDisposedException.ThrowIf(_isDisposed, this);
 
         await _jsonRpc.NotifyAsync(eventType, [eventParameters]);
+    }
+
+    #endregion
+
+    #region Private methods
+
+    /// <summary>
+    /// Gets the request timeout, in milliseconds, for a specific request type.
+    /// Checks the shared store for custom timeouts before falling back to the default timeout.
+    /// </summary>
+    /// <param name="requestType">The request type to get the timeout for</param>
+    /// <returns>The timeout to use for the request</returns>
+    private int GetRequestTimeoutMs(string requestType)
+    {
+        ObjectDisposedException.ThrowIf(_isDisposed, this);
+
+        try
+        {
+            if (
+                _sharedStore != null
+                && _sharedStore.TryGetValue(SharedStoreKeys.CustomNetworkTimeouts, out var timeouts)
+                && timeouts != null
+                && timeouts.TryGetValue(requestType, out int customTimeoutMs)
+            )
+                return customTimeoutMs;
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error getting custom network timeouts: {ex}");
+        }
+
+        // Fall back to default timeout
+        return (int)_requestTimeout.TotalMilliseconds;
     }
 
     #endregion
