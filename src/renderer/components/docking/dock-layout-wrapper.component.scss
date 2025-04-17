@@ -115,18 +115,18 @@
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
-  padding-left: vars.$space--xs;
-  padding-right: 26px;
+  padding-inline-start: vars.$space--xs;
+  padding-inline-end: 26px;
   padding-top: vars.$space--xs;
   padding-bottom: vars.$space--xs;
 }
 
 .dock-dropdown-menu-item .title {
-  padding-right: vars.$space--s + vars.$space--xs;
+  padding-inline-end: 12px;
 }
 
 .title span {
-  padding-left: 2px;
+  padding-inline-start: 2px;
 }
 // #endregion
 
@@ -202,7 +202,6 @@ $tab-bottom-rounding: vars.$space--s;
 }
 
 .dock-panel.dock-style-card .dock-tab-close-btn {
-  font-family: vars.$font-family;
   border-radius: vars.$space--l;
   height: 16px;
   padding: 2px;
