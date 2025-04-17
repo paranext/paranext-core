@@ -83,11 +83,11 @@ declare module 'shared-react/views/view-options.utils' {
     isFormattedFont: boolean;
   };
 
-  export type getDefaultViewMode = () => ViewMode;
+  export function getDefaultViewMode(): ViewMode;
 
-  export type getDefaultViewOptions = () => ViewOptions | undefined;
+  export function getDefaultViewOptions(): ViewOptions | undefined;
 
-  export type getViewOptions = (viewMode?: string | undefined) => ViewOptions | undefined;
+  export function getViewOptions(viewMode?: string | undefined): ViewOptions | undefined;
 
-  export type getViewMode = (viewOptions: ViewOptions | undefined) => ViewMode | undefined;
+  export function getViewMode(viewOptions: ViewOptions | undefined): ViewMode | undefined;
 }
