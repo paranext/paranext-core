@@ -91,7 +91,7 @@ export function PlatformTabTitle({
         <TooltipTrigger asChild>
           <div ref={containerRef} className="title">
             {isLoading || isPlatformError(webViewMenu) || !webViewMenu?.topMenu ? (
-              icon
+              <div className="tw-p-1 tw-cursor-default">{icon}</div>
             ) : (
               <TabDropdownMenu
                 variant="muted"
