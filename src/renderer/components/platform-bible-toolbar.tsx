@@ -8,7 +8,7 @@ import {
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { HomeIcon, User } from 'lucide-react';
+import { HomeIcon, Moon, Sun, User } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -29,11 +29,12 @@ import {
   isPlatformError,
   LocalizeKey,
   ScrollGroupId,
+  ThemeData,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useState } from 'react';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { app } from '@renderer/services/papi-frontend.service';
-import { ThemeData, themeServiceDataProviderName } from '@shared/services/theme.service-model';
+import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
 import { logger } from '@shared/services/logger.service';
 import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
 
@@ -210,7 +211,7 @@ export function PlatformBibleToolbar() {
                   onClick={() => isThemeLoadedNotError && flipTheme()}
                   disabled={!isThemeLoadedNotError}
                 >
-                  {isThemeLoadedNotError && theme.type === 'dark' ? '🌙' : '☀️'}
+                  {isThemeLoadedNotError && theme.type === 'dark' ? <Moon /> : <Sun />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
