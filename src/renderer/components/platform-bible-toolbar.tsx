@@ -1,5 +1,10 @@
 import logo from '@assets/icon.png';
-import { useData, useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useScrollGroupScrRef,
+} from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
@@ -25,7 +30,7 @@ import {
   LocalizeKey,
   ScrollGroupId,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { app } from '@renderer/services/papi-frontend.service';
 import { ThemeData, themeServiceDataProviderName } from '@shared/services/theme.service-model';
@@ -41,8 +46,6 @@ const DEFAULT_THEME_VALUE: ThemeData = {
   type: 'light',
   cssVariables: {},
 };
-
-const DEFAULT_SHOULD_MATCH_SYSTEM = false;
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
 
@@ -135,40 +138,17 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
-  const [shouldMatchSystemPossiblyError, setShouldMatchSystem] = useData(
-    themeServiceDataProviderName,
-  ).ShouldMatchSystem(undefined, DEFAULT_SHOULD_MATCH_SYSTEM);
+  const themeDataProvider = useDataProvider(themeServiceDataProviderName);
 
-  const shouldMatchSystem = useMemo(() => {
-    if (isPlatformError(shouldMatchSystemPossiblyError)) {
-      logger.warn(
-        `Error getting shouldMatchSystem for toolbar button. ${getErrorMessage(shouldMatchSystemPossiblyError)}`,
-      );
-      return DEFAULT_SHOULD_MATCH_SYSTEM;
+  const [theme] = useData(themeDataProvider).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
+
+  const flipTheme = useCallback(async () => {
+    try {
+      await themeDataProvider?.flipTheme();
+    } catch (e) {
+      logger.warn(`Failed to flip theme with toolbar button. ${getErrorMessage(e)}`);
     }
-    return shouldMatchSystemPossiblyError;
-  }, [shouldMatchSystemPossiblyError]);
-
-  const [theme, setThemeInternal] = useData(themeServiceDataProviderName).CurrentTheme(
-    undefined,
-    DEFAULT_THEME_VALUE,
-  );
-
-  const setTheme = useCallback(
-    async (newThemeId: string) => {
-      try {
-        // If we are changing the theme by hand with this button, assume the user doesn't want to match
-        // system theme
-        if (shouldMatchSystem) setShouldMatchSystem?.(false);
-        setThemeInternal?.(newThemeId);
-      } catch (e) {
-        logger.warn(
-          `Failed to set theme to ${newThemeId} with toolbar button. ${getErrorMessage(e)}`,
-        );
-      }
-    },
-    [setShouldMatchSystem, setThemeInternal, shouldMatchSystem],
-  );
+  }, [themeDataProvider]);
 
   // Warn if the theme came back as a PlatformError. Will handle the PlatformError in the jsx too
   useEffect(() => {
@@ -227,12 +207,10 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() =>
-                    isThemeLoadedNotError && setTheme(theme.type === 'dark' ? 'light' : 'dark')
-                  }
+                  onClick={() => isThemeLoadedNotError && flipTheme()}
                   disabled={!isThemeLoadedNotError}
                 >
-                  {isThemeLoadedNotError && theme.id === 'dark' ? '🌙' : '☀️'}
+                  {isThemeLoadedNotError && theme.type === 'dark' ? '🌙' : '☀️'}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>

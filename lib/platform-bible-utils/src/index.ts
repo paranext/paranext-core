@@ -164,6 +164,8 @@ export type {
   UserStateContribution,
 } from './settings.model';
 export { projectSettingsDocumentSchema, settingsDocumentSchema } from './settings.model';
+export * from './theme.model';
+export * from './theme.util';
 export type {
   IUsjReaderWriter,
   UsjContentLocation,

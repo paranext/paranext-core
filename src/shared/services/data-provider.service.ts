@@ -741,6 +741,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
    */
   const dataProviderVariable = new AsyncVariable<DataProviders[DataProviderName]>(
     `DataProvider-${providerName}`,
+    globalThis.isPackaged ? undefined : 30000,
   );
 
   // Create a networked update event

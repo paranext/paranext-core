@@ -1,4 +1,4 @@
-import { LocalizeKey, OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
+import { OnDidDispose, PlatformError, UnsubscriberAsync, ThemeData } from 'platform-bible-utils';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
   DataProviderDataType,
@@ -18,119 +18,7 @@ export const themeServiceObjectToProxy = Object.freeze({
   dataProviderName: themeServiceDataProviderName,
 });
 
-// #region TODO: Move to PBU
-
-export type ThemeContribution = {
-  /**
-   * Programmatic name for the theme. Alphanumeric and dashes only. Will be converted to kebab-case
-   * as this will be used as the class name in the HTML document.
-   *
-   * If `type` is not specified, it will be determined by whether this has `dark` at the end.
-   */
-  id: string;
-  /**
-   * What kind of theme this is. Some UI elements use this to determine how to look. Colors not
-   * present in the theme will fall back to the built-in colors for this type. This theme may be
-   * paired to a theme of the opposite type (light/dark) by `id` for quick theme switching. For
-   * example, `id: 'my-theme'` and `id: 'my-theme-dark'` would be paired together.
-   *
-   * If this is not specified, it will be determined by whether `id` ends with `dark`.
-   *
-   * TODO: maybe this should not be optional since there isn't really a good way to say for sure
-   * that light is default
-   */
-  type?: 'light' | 'dark';
-  /** LocalizeKey that is the display name for the theme */
-  label: LocalizeKey;
-  /**
-   * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
-   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`
-   *
-   * See the wiki's [Matching Application
-   * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
-   * section for more information
-   */
-  cssVariables: {
-    [variableName: string]: string | undefined;
-    background?: string;
-    foreground?: string;
-    card?: string;
-    'card-foreground'?: string;
-    popover?: string;
-    'popover-foreground'?: string;
-    primary?: string;
-    'primary-foreground'?: string;
-    secondary?: string;
-    'secondary-foreground'?: string;
-    muted?: string;
-    'muted-foreground'?: string;
-    accent?: string;
-    'accent-foreground'?: string;
-    destructive?: string;
-    'destructive-foreground'?: string;
-    border?: string;
-    input?: string;
-    ring?: string;
-    'sidebar-background'?: string;
-    'sidebar-foreground'?: string;
-    'sidebar-primary'?: string;
-    'sidebar-primary-foreground'?: string;
-    'sidebar-accent'?: string;
-    'sidebar-accent-foreground'?: string;
-    'sidebar-border'?: string;
-    'sidebar-ring'?: string;
-    radius?: string;
-  };
-};
-
-export type ThemeData = ThemeContribution & Required<Pick<ThemeContribution, 'type'>>;
-
 export type AllThemeData = { [themeId: string]: ThemeData | undefined };
-
-/** ID for the style element the theme styles should go into */
-export const THEME_STYLE_ELEMENT_ID = 'theme-styles';
-
-/** Gets the CSS stylesheet that should be applied for the given theme */
-export function getStylesheetForTheme(theme: ThemeData): string {
-  return `
-.${theme.id} {
-${Object.entries(theme.cssVariables)
-  .map(([variableName, value]) => `  --${variableName}: ${value};`)
-  .join('\n')}
-}
-`;
-}
-
-/**
- * Applies a CSS stylesheet for the provided theme to the current window
- *
- * @param theme Theme to apply
- * @param previousStyleElement Previous style element if applicable
- * @param styleElementId ID to apply to the new style element. Defaults to
- *   {@link THEME_STYLE_ELEMENT_ID}
- * @returns
- */
-export function applyThemeStylesheet(
-  theme: ThemeData,
-  previousStyleElement?: HTMLStyleElement,
-  styleElementId = THEME_STYLE_ELEMENT_ID,
-): HTMLStyleElement {
-  // Set the class on the body
-  const previousThemeId = previousStyleElement?.dataset.themeId;
-  if (previousThemeId) window.document.body.classList.remove(previousThemeId);
-  window.document.body.classList.add(theme.id);
-
-  // Set up the stylesheet element
-  if (previousStyleElement) window.document.head.removeChild(previousStyleElement);
-  const themeStyleElement = document.createElement('style');
-  themeStyleElement.id = styleElementId;
-  themeStyleElement.dataset.themeId = theme.id;
-  themeStyleElement.textContent = getStylesheetForTheme(theme);
-  document.head.appendChild(themeStyleElement);
-  return themeStyleElement;
-}
-
-// #endregion
 
 /** ThemeDataTypes handles getting and setting the application theme. */
 export type ThemeDataTypes = {
@@ -183,6 +71,15 @@ export type IThemeService = {
     selector: undefined,
     newThemeId: string,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+
+  /**
+   * Sets the current theme to the theme with the same name (other than suffix) and the opposite
+   * type of the current theme.
+   *
+   * For example, `paratext-light` theme will flip to `paratext-dark`. `my-theme` will flip to
+   * `my-theme-dark`.
+   */
+  flipTheme(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
 
   /**
    * Subscribes to updates of the current theme. Whenever the current theme changes, the callback
