@@ -31,12 +31,13 @@ import {
   ScrollGroupId,
   ThemeData,
 } from 'platform-bible-utils';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { app } from '@renderer/services/papi-frontend.service';
 import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
 import { logger } from '@shared/services/logger.service';
 import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
+import { localThemeService } from '@renderer/services/theme.service-host';
 
 const TOOLTIP_DELAY = 300;
 
@@ -141,7 +142,13 @@ export function PlatformBibleToolbar() {
 
   const themeDataProvider = useDataProvider(themeServiceDataProviderName);
 
-  const [theme] = useData(themeDataProvider).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
+  /** Get the theme on first load so we can show the right symbol on the toolbar */
+  const themeOnFirstLoad = useMemo(() => localThemeService.getCurrentThemeSync(), []);
+
+  const [theme] = useData<typeof themeServiceDataProviderName>(themeDataProvider).CurrentTheme(
+    undefined,
+    DEFAULT_THEME_VALUE,
+  );
 
   const flipTheme = useCallback(async () => {
     try {
@@ -167,6 +174,9 @@ export function PlatformBibleToolbar() {
   } else {
     themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_dark%'];
   }
+
+  // Get the theme type from the first theme load or the current theme data, whichever is available
+  const themeTypeEffective = isThemeLoadedNotError ? theme.type : themeOnFirstLoad.type;
 
   return (
     <Toolbar
@@ -211,7 +221,7 @@ export function PlatformBibleToolbar() {
                   onClick={() => isThemeLoadedNotError && flipTheme()}
                   disabled={!isThemeLoadedNotError}
                 >
-                  {isThemeLoadedNotError && theme.type === 'dark' ? <Moon /> : <Sun />}
+                  {themeTypeEffective === 'dark' ? <Moon /> : <Sun />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>

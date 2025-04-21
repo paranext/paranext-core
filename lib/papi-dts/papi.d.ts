@@ -6781,15 +6781,18 @@ declare module 'shared/services/theme.service-model' {
      */
     getCurrentTheme(): Promise<ThemeData>;
     /**
-     * Sets the current theme
+     * Sets the current theme. Will set to the OS-appropriate version of the theme if
+     * `getShouldMatchSystem` is `true`.
      *
      * @param newThemeId The string id of the theme to change to
      * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If `newThemeId` is not a valid theme id
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
     setCurrentTheme(newThemeId: string): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     /**
-     * Sets the current theme
+     * Sets the current theme. Will set to the OS-appropriate version of the theme if
+     * `getShouldMatchSystem` is `true`.
      *
      * @param selector `undefined`. Does not have to be provided
      * @param newThemeId The string id of the theme to change to

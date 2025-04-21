@@ -18,6 +18,9 @@ import {
   ThemeData,
   THEME_SUFFIX_LIGHT,
   THEME_SUFFIX_DARK,
+  PlatformEventEmitter,
+  slice,
+  endsWith,
 } from 'platform-bible-utils';
 
 const LIGHT_THEME: ThemeData = Object.freeze({
@@ -60,7 +63,7 @@ const LIGHT_THEME: ThemeData = Object.freeze({
 
 const DARK_THEME: ThemeData = Object.freeze({
   id: `dark`,
-  label: '%theme_label_light%',
+  label: '%theme_label_dark%',
   type: 'dark',
   cssVariables: {
     background: '222.2 84% 4.9%',
@@ -94,6 +97,78 @@ const DARK_THEME: ThemeData = Object.freeze({
   },
 });
 
+const PARATEXT_LIGHT_THEME: ThemeData = Object.freeze({
+  id: `paratext-light`,
+  label: '%theme_label_paratext_light%',
+  type: 'light',
+  cssVariables: {
+    background: '0 0% 100%',
+    foreground: '0 0% 0%',
+    muted: '33.9 32.4% 86.1%',
+    'muted-foreground': '15.5 13.2% 53.9%',
+    popover: '40 20% 98%',
+    'popover-foreground': '0 0% 0%',
+    card: '0 0% 100%',
+    'card-foreground': '0 0% 0%',
+    border: '220 13% 91%',
+    input: '161.3 26.7% 88.2%',
+    primary: '173.4 82.1% 15.3%',
+    'primary-foreground': '40 85.7% 97.3%',
+    secondary: '161.3 26.7% 88.2%',
+    'secondary-foreground': '173.4 82.1% 15.3%',
+    accent: '161.3 26.7% 88.2%',
+    'accent-foreground': '173.4 82.1% 15.3%',
+    destructive: '0 60% 51%',
+    'destructive-foreground': '210 20% 98%',
+    ring: '15.5 13.2% 53.9%',
+
+    'sidebar-background': '40 20% 98%',
+    'sidebar-foreground': '12 10.95% 26.86%',
+    'sidebar-primary': '173.4 82.1% 15.3%',
+    'sidebar-primary-foreground': '40 85.7% 97.3%',
+    'sidebar-accent': '33.9 32.4% 86.1%',
+    'sidebar-accent-foreground': '0 0% 0%',
+    'sidebar-border': '220 13% 91%',
+    'sidebar-ring': '15.5 13.2% 53.9%',
+  },
+});
+
+const PARATEXT_DARK_THEME: ThemeData = Object.freeze({
+  id: `paratext-dark`,
+  label: '%theme_label_paratext_dark%',
+  type: 'dark',
+  cssVariables: {
+    background: '0 0% 0%',
+    foreground: '0 0% 100%',
+    muted: '15.5 13.2% 53.9%',
+    'muted-foreground': '33.9 32.4% 86.1%',
+    popover: '180 71.4% 5%',
+    'popover-foreground': '0 0% 100%',
+    card: '0 0% 0%',
+    'card-foreground': '0 0% 100%',
+    border: '220 13% 20%',
+    input: '220 13% 20%',
+    primary: '161.3 26.7% 88.2%',
+    'primary-foreground': '173.4 82.1% 15.3%',
+    secondary: '180 71.4% 11%',
+    'secondary-foreground': '161.3 26.7% 88.2%',
+    accent: '180 71.4% 11%',
+    'accent-foreground': '161.3 26.7% 88.2%',
+    destructive: '0 60% 51%',
+    'destructive-foreground': '210 20% 98%',
+    ring: '13.5 13.2% 53.9%',
+
+    'sidebar-background': '180 71.4% 5%',
+    'sidebar-foreground': '33.9 32.4% 86.1%',
+    'sidebar-primary': '161.3 26.7% 88.2%',
+    'sidebar-primary-foreground': '173.4 82.1% 15.3%',
+    'sidebar-accent': '15.5 13.2% 53.9%',
+    'sidebar-accent-foreground': '33.9 32.4% 86.1%',
+    'sidebar-border': '220 13% 20%',
+    'sidebar-ring': '15.5 13.2% 53.9%',
+  },
+});
+
 const DEFAULT_THEME = LIGHT_THEME;
 
 /**
@@ -119,7 +194,7 @@ function saveCurrentThemeToLocalStorage(newCurrentTheme: ThemeData) {
   localStorage.setItem(CURRENT_THEME_STORAGE_KEY, serialize(newCurrentTheme));
 }
 
-const SHOULD_MATCH_SYSTEM_STORAGE_KEY = 'theme.service-host.currentTheme';
+const SHOULD_MATCH_SYSTEM_STORAGE_KEY = 'theme.service-host.shouldMatchSystem';
 
 /** FOR LOADING ONLY! DO NOT USE */
 const shouldMatchSystemSerialized = localStorage.getItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY);
@@ -147,20 +222,21 @@ function generateThemeDataWithPairs(allThemeData: AllThemeData): AllThemeDataWit
   }
 
   allThemeIds.forEach((themeId) => {
+    if (themeId === 'light' || themeId === 'dark') return;
     const themeData = allThemeData[themeId];
     if (!themeData) return;
 
     if (themeData.type === 'light') {
-      const darkThemeId = themeId.endsWith(THEME_SUFFIX_LIGHT)
-        ? `${themeId.slice(0, -THEME_SUFFIX_LIGHT.length)}${THEME_SUFFIX_DARK}`
+      const darkThemeId = endsWith(themeId, THEME_SUFFIX_LIGHT)
+        ? `${slice(themeId, 0, -THEME_SUFFIX_LIGHT.length)}${THEME_SUFFIX_DARK}`
         : `${themeId}${THEME_SUFFIX_DARK}`;
       if (allThemeIds.includes(darkThemeId)) {
         pairIds.set(themeId, darkThemeId);
         pairIds.set(darkThemeId, themeId);
       }
     } else if (themeData.type === 'dark') {
-      const lightThemeId = themeId.endsWith(THEME_SUFFIX_DARK)
-        ? `${themeId.slice(0, -THEME_SUFFIX_DARK.length)}${THEME_SUFFIX_LIGHT}`
+      const lightThemeId = endsWith(themeId, THEME_SUFFIX_DARK)
+        ? `${slice(themeId, 0, -THEME_SUFFIX_DARK.length)}${THEME_SUFFIX_LIGHT}`
         : `${themeId}${THEME_SUFFIX_LIGHT}`;
       if (allThemeIds.includes(lightThemeId)) {
         pairIds.set(themeId, lightThemeId);
@@ -171,6 +247,42 @@ function generateThemeDataWithPairs(allThemeData: AllThemeData): AllThemeDataWit
   return {
     themeData: allThemeData,
     pairIds,
+  };
+}
+
+const onDidChangeSystemThemeEmitter = new PlatformEventEmitter<'light' | 'dark'>();
+
+/**
+ * Get a media query on `window` for whether the current system theme is dark
+ *
+ * @returns Media query results for checking dark mode. Use `matches` to check if dark mode
+ */
+function getSystemDarkThemeMediaQuery(): MediaQueryList {
+  const darkModeMediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+  return darkModeMediaQuery;
+}
+
+/**
+ * Listen to the system theme change using media query on `window` and fire
+ * {@link onDidChangeSystemThemeEmitter}
+ *
+ * @returns Unsubscriber to stop listening to system theme changes
+ */
+function listenToSystemThemeChanges() {
+  const darkModeMediaQuery = getSystemDarkThemeMediaQuery();
+
+  const emitUpdate = (event: MediaQueryListEvent) => {
+    const newTheme = event.matches ? 'dark' : 'light';
+    onDidChangeSystemThemeEmitter.emit(newTheme);
+  };
+
+  darkModeMediaQuery.addEventListener('change', emitUpdate);
+
+  return {
+    currentTheme: darkModeMediaQuery.matches ? 'dark' : 'light',
+    unsubscribe: () => {
+      darkModeMediaQuery.removeEventListener('change', emitUpdate);
+    },
   };
 }
 
@@ -191,21 +303,25 @@ class ThemeDataProviderEngine
     public shouldMatchSystem: boolean,
     public saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
     onDidUpdateAllThemes: PlatformEvent<AllThemeData>,
+    public currentSystemTheme: 'light' | 'dark',
+    onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
   ) {
     super();
 
     // Immediately subscribe to and get latest themes
-    const updateThemeData = (allThemeData: AllThemeData) => {
+    const updateAllThemeData = (allThemeData: AllThemeData) => {
       this.allThemeDataWithPairs = generateThemeDataWithPairs(allThemeData);
       const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
 
-      // TODO: detect system theme and update current theme if needed
-      // TODO: react to system theme changes
       const updatedCurrentTheme = this.allThemeDataWithPairs.themeData[this.currentTheme.id];
       if (!updatedCurrentTheme) {
         this.#setCurrentThemeNoUpdate(
           this.allThemeDataWithPairs.themeData[DEFAULT_THEME.id] ?? DEFAULT_THEME,
         );
+        dataTypesToUpdate.push('CurrentTheme');
+      } else if (this.shouldMatchSystem && updatedCurrentTheme.type !== this.currentSystemTheme) {
+        // Flip the theme to the system-matching version
+        this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
         dataTypesToUpdate.push('CurrentTheme');
       } else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
         this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
@@ -214,10 +330,29 @@ class ThemeDataProviderEngine
 
       this.notifyUpdate(dataTypesToUpdate);
     };
-    onDidUpdateAllThemes(updateThemeData);
+    onDidUpdateAllThemes(updateAllThemeData);
 
     // TODO: REMOVE THIS WHEN WE HAVE CONTRIBUTIONS
-    updateThemeData({ light: LIGHT_THEME, dark: DARK_THEME });
+    updateAllThemeData({
+      light: LIGHT_THEME,
+      dark: DARK_THEME,
+      'paratext-light': PARATEXT_LIGHT_THEME,
+      'paratext-dark': PARATEXT_DARK_THEME,
+    });
+
+    // Listen to system theme change and update current theme
+    const updateThemeToSystem = (newThemeType: 'light' | 'dark') => {
+      this.currentSystemTheme = newThemeType;
+
+      if (!this.shouldMatchSystem || this.currentTheme.type === newThemeType) return;
+
+      const flippedTheme = this.#getFlippedTheme();
+      if (!flippedTheme) return;
+
+      this.setCurrentTheme(flippedTheme.id);
+    };
+    updateThemeToSystem(currentSystemTheme);
+    onDidChangeSystemTheme(updateThemeToSystem);
   }
 
   async getCurrentTheme(): Promise<ThemeData> {
@@ -235,10 +370,8 @@ class ThemeDataProviderEngine
     if (!newThemeId) throw new Error('Theme ID not provided');
     if (newThemeId === this.currentTheme.id) return false;
     const newTheme = this.allThemeDataWithPairs?.themeData[newThemeId];
-    // TODO: Should this throw? Also below in setCurrentThemeSync
-    if (!newTheme) return false;
+    if (!newTheme) throw new Error(`Theme data not found for id ${newThemeId}`);
 
-    // TODO: match system theme if appropriate. Also below in setCurrentThemeSync
     this.#setCurrentThemeNoUpdate(newTheme);
     return true;
   }
@@ -246,19 +379,8 @@ class ThemeDataProviderEngine
   async flipTheme(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
     // TODO: AWAIT GETTING ALLTHEMEDATA
 
-    const { allThemeDataWithPairs } = this;
-    if (!allThemeDataWithPairs)
-      throw new Error('All theme data not available. This should not happen');
-
-    const flippedThemeId = allThemeDataWithPairs?.pairIds.get(this.currentTheme.id);
-
-    if (!flippedThemeId) return false;
-
-    const flippedTheme = allThemeDataWithPairs.themeData[flippedThemeId];
-    if (!flippedTheme)
-      throw new Error(
-        `Flipped theme data not found for id ${flippedThemeId}. This should not happen`,
-      );
+    const flippedTheme = this.#getFlippedTheme();
+    if (!flippedTheme) return false;
 
     const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['CurrentTheme'];
 
@@ -314,12 +436,43 @@ class ThemeDataProviderEngine
 
   #setCurrentThemeNoUpdate(newTheme: ThemeData) {
     this.currentTheme = newTheme;
+
+    // If we should match system theme and the theme has a version that matches system theme, set it
+    // to that system theme version. Otherwise, just set to the new theme
+    if (this.shouldMatchSystem && newTheme.type !== this.currentSystemTheme) {
+      this.currentTheme = this.#getFlippedTheme(newTheme.id) ?? newTheme;
+    }
+
     this.saveCurrentTheme(this.currentTheme);
   }
 
   #setShouldMatchSystemNoUpdate(newShouldMatchSystem: boolean) {
     this.shouldMatchSystem = newShouldMatchSystem;
     this.saveShouldMatchSystem(this.shouldMatchSystem);
+  }
+
+  /**
+   * Returns the flipped light/dark theme data for the provided theme
+   *
+   * @param themeId Theme id to get flipped data for. Defaults to current theme
+   * @returns Flipped theme data for `themeId` or `undefined` if not found
+   */
+  #getFlippedTheme(themeId = this.currentTheme.id): ThemeData | undefined {
+    const { allThemeDataWithPairs } = this;
+    if (!allThemeDataWithPairs)
+      throw new Error('All theme data not available. This should not happen');
+
+    const flippedThemeId = allThemeDataWithPairs?.pairIds.get(themeId);
+
+    if (!flippedThemeId) return undefined;
+
+    const flippedTheme = allThemeDataWithPairs.themeData[flippedThemeId];
+    if (!flippedTheme)
+      throw new Error(
+        `Flipped theme data not found for id ${flippedThemeId}. This should not happen`,
+      );
+
+    return flippedTheme;
   }
 }
 
@@ -332,22 +485,28 @@ const themeServiceEngine = new ThemeDataProviderEngine(
   () => {
     return () => true;
   },
+  getSystemDarkThemeMediaQuery().matches ? 'dark' : 'light',
+  onDidChangeSystemThemeEmitter.event,
 );
 
 let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IThemeService;
 export async function initialize(): Promise<void> {
-  console.log('Initializing theme service');
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
+          const systemThemeChangesInfo = listenToSystemThemeChanges();
+
           dataProvider = await dataProviderService.registerEngine(
             themeServiceDataProviderName,
             themeServiceEngine,
           );
-          console.log('Resolving theme service');
+
+          dataProvider.onDidDispose(() => {
+            systemThemeChangesInfo.unsubscribe();
+          });
           resolve();
         } catch (error) {
           reject(error);
@@ -367,6 +526,8 @@ export const testingThemeService = {
     shouldMatchSystem: boolean,
     saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
     onDidUpdateAllThemes: PlatformEvent<AllThemeData>,
+    currentSystemTheme: 'light' | 'dark',
+    onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
   ) => {
     return new ThemeDataProviderEngine(
       currentTheme,
@@ -374,6 +535,8 @@ export const testingThemeService = {
       shouldMatchSystem,
       saveShouldMatchSystem,
       onDidUpdateAllThemes,
+      currentSystemTheme,
+      onDidChangeSystemTheme,
     );
   },
 };
@@ -387,11 +550,13 @@ const themeServiceEngineSyncAdditions = {
     let newThemeId = newThemeIdProvided;
     if (newThemeId === '') newThemeId = DEFAULT_THEME.id;
     const newTheme = themeServiceEngine.allThemeDataWithPairs?.themeData[newThemeId];
-    if (!newTheme) return false;
+    if (!newTheme) throw new Error(`Theme data not found for id ${newThemeId}`);
 
     themeServiceEngine.currentTheme = newTheme;
     saveCurrentThemeToLocalStorage(newTheme);
 
+    // TODO: Delete this method?
+    // TODO: Match current system theme if needed
     // TODO: NOTIFY UPDATE?
     return true;
   },
