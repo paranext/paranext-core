@@ -3,7 +3,6 @@ import {
   IThemeService,
   themeServiceObjectToProxy,
   themeServiceDataProviderName,
-  ThemeData,
   AllThemeData,
 } from '@shared/services/theme.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
@@ -16,6 +15,9 @@ import {
   serialize,
   PlatformEvent,
   deepEqual,
+  ThemeData,
+  THEME_SUFFIX_LIGHT,
+  THEME_SUFFIX_DARK,
 } from 'platform-bible-utils';
 
 const LIGHT_THEME: ThemeData = Object.freeze({
@@ -94,6 +96,12 @@ const DARK_THEME: ThemeData = Object.freeze({
 
 const DEFAULT_THEME = LIGHT_THEME;
 
+/**
+ * All theme data available to the application along with a bi-directional map of theme ids to the
+ * corresponding theme of the opposite type (light/dark).
+ */
+type AllThemeDataWithPairs = { themeData: AllThemeData; pairIds: Map<string, string> };
+
 // #region interacting with localStorage
 
 const CURRENT_THEME_STORAGE_KEY = 'theme.service-host.currentTheme';
@@ -129,12 +137,52 @@ function saveShouldMatchSystemToLocalStorage(newShouldMatchSystem: boolean) {
 
 // #endregion
 
+function generateThemeDataWithPairs(allThemeData: AllThemeData): AllThemeDataWithPairs {
+  const pairIds = new Map<string, string>();
+  const allThemeIds = Object.keys(allThemeData);
+
+  if (allThemeIds.includes('light') && allThemeIds.includes('dark')) {
+    pairIds.set('light', 'dark');
+    pairIds.set('dark', 'light');
+  }
+
+  allThemeIds.forEach((themeId) => {
+    const themeData = allThemeData[themeId];
+    if (!themeData) return;
+
+    if (themeData.type === 'light') {
+      const darkThemeId = themeId.endsWith(THEME_SUFFIX_LIGHT)
+        ? `${themeId.slice(0, -THEME_SUFFIX_LIGHT.length)}${THEME_SUFFIX_DARK}`
+        : `${themeId}${THEME_SUFFIX_DARK}`;
+      if (allThemeIds.includes(darkThemeId)) {
+        pairIds.set(themeId, darkThemeId);
+        pairIds.set(darkThemeId, themeId);
+      }
+    } else if (themeData.type === 'dark') {
+      const lightThemeId = themeId.endsWith(THEME_SUFFIX_DARK)
+        ? `${themeId.slice(0, -THEME_SUFFIX_DARK.length)}${THEME_SUFFIX_LIGHT}`
+        : `${themeId}${THEME_SUFFIX_LIGHT}`;
+      if (allThemeIds.includes(lightThemeId)) {
+        pairIds.set(themeId, lightThemeId);
+        pairIds.set(lightThemeId, themeId);
+      }
+    }
+  });
+  return {
+    themeData: allThemeData,
+    pairIds,
+  };
+}
+
 class ThemeDataProviderEngine
   extends DataProviderEngine<ThemeDataTypes>
   implements IDataProviderEngine<ThemeDataTypes>
 {
-  /** All Theme Data available to the application. `undefined` if not yet loaded. */
-  allThemeData: AllThemeData | undefined;
+  /**
+   * All Theme Data available to the application. Includes which themes are light/dark pairs
+   * `undefined` if not yet loaded.
+   */
+  allThemeDataWithPairs: AllThemeDataWithPairs | undefined;
   private unsubscribeOnDidUpdateAllThemes: Unsubscriber | undefined;
 
   constructor(
@@ -148,14 +196,16 @@ class ThemeDataProviderEngine
 
     // Immediately subscribe to and get latest themes
     const updateThemeData = (allThemeData: AllThemeData) => {
-      this.allThemeData = allThemeData;
+      this.allThemeDataWithPairs = generateThemeDataWithPairs(allThemeData);
       const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
 
       // TODO: detect system theme and update current theme if needed
       // TODO: react to system theme changes
-      const updatedCurrentTheme = this.allThemeData[this.currentTheme.id];
+      const updatedCurrentTheme = this.allThemeDataWithPairs.themeData[this.currentTheme.id];
       if (!updatedCurrentTheme) {
-        this.#setCurrentThemeNoUpdate(this.allThemeData[DEFAULT_THEME.id] ?? DEFAULT_THEME);
+        this.#setCurrentThemeNoUpdate(
+          this.allThemeDataWithPairs.themeData[DEFAULT_THEME.id] ?? DEFAULT_THEME,
+        );
         dataTypesToUpdate.push('CurrentTheme');
       } else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
         this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
@@ -166,6 +216,7 @@ class ThemeDataProviderEngine
     };
     onDidUpdateAllThemes(updateThemeData);
 
+    // TODO: REMOVE THIS WHEN WE HAVE CONTRIBUTIONS
     updateThemeData({ light: LIGHT_THEME, dark: DARK_THEME });
   }
 
@@ -183,13 +234,44 @@ class ThemeDataProviderEngine
 
     if (!newThemeId) throw new Error('Theme ID not provided');
     if (newThemeId === this.currentTheme.id) return false;
-    const newTheme = this.allThemeData?.[newThemeId];
+    const newTheme = this.allThemeDataWithPairs?.themeData[newThemeId];
     // TODO: Should this throw? Also below in setCurrentThemeSync
     if (!newTheme) return false;
 
     // TODO: match system theme if appropriate. Also below in setCurrentThemeSync
     this.#setCurrentThemeNoUpdate(newTheme);
     return true;
+  }
+
+  async flipTheme(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
+    // TODO: AWAIT GETTING ALLTHEMEDATA
+
+    const { allThemeDataWithPairs } = this;
+    if (!allThemeDataWithPairs)
+      throw new Error('All theme data not available. This should not happen');
+
+    const flippedThemeId = allThemeDataWithPairs?.pairIds.get(this.currentTheme.id);
+
+    if (!flippedThemeId) return false;
+
+    const flippedTheme = allThemeDataWithPairs.themeData[flippedThemeId];
+    if (!flippedTheme)
+      throw new Error(
+        `Flipped theme data not found for id ${flippedThemeId}. This should not happen`,
+      );
+
+    const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['CurrentTheme'];
+
+    // Flipping the theme implies they don't want to follow system theme anymore
+    if (this.shouldMatchSystem) {
+      this.#setShouldMatchSystemNoUpdate(false);
+      dataTypesToUpdate.push('ShouldMatchSystem');
+    }
+
+    this.#setCurrentThemeNoUpdate(flippedTheme);
+
+    this.notifyUpdate(dataTypesToUpdate);
+    return dataTypesToUpdate;
   }
 
   async getShouldMatchSystem(): Promise<boolean> {
@@ -206,14 +288,13 @@ class ThemeDataProviderEngine
     if (newShouldMatchSystem === undefined) throw new Error('shouldMatchSystem not provided');
     if (newShouldMatchSystem === this.shouldMatchSystem) return false;
 
-    this.shouldMatchSystem = newShouldMatchSystem;
-    this.saveShouldMatchSystem(this.shouldMatchSystem);
+    this.#setShouldMatchSystemNoUpdate(newShouldMatchSystem);
     return true;
   }
 
   async getAllThemes(): Promise<AllThemeData> {
-    // TODO: SET UP TO WAIT FOR ALLTHEMEDATA
-    return this.allThemeData ?? {};
+    // TODO: SET UP TO WAIT FOR allThemeData
+    return this.allThemeDataWithPairs?.themeData ?? {};
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
@@ -235,6 +316,11 @@ class ThemeDataProviderEngine
     this.currentTheme = newTheme;
     this.saveCurrentTheme(this.currentTheme);
   }
+
+  #setShouldMatchSystemNoUpdate(newShouldMatchSystem: boolean) {
+    this.shouldMatchSystem = newShouldMatchSystem;
+    this.saveShouldMatchSystem(this.shouldMatchSystem);
+  }
 }
 
 const themeServiceEngine = new ThemeDataProviderEngine(
@@ -252,6 +338,7 @@ let initializationPromise: Promise<void>;
 /** Need to run initialize before using this */
 let dataProvider: IThemeService;
 export async function initialize(): Promise<void> {
+  console.log('Initializing theme service');
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
@@ -260,6 +347,7 @@ export async function initialize(): Promise<void> {
             themeServiceDataProviderName,
             themeServiceEngine,
           );
+          console.log('Resolving theme service');
           resolve();
         } catch (error) {
           reject(error);
@@ -298,11 +386,13 @@ const themeServiceEngineSyncAdditions = {
   setCurrentThemeSync(newThemeIdProvided: string) {
     let newThemeId = newThemeIdProvided;
     if (newThemeId === '') newThemeId = DEFAULT_THEME.id;
-    const newTheme = themeServiceEngine.allThemeData?.[newThemeId];
+    const newTheme = themeServiceEngine.allThemeDataWithPairs?.themeData[newThemeId];
     if (!newTheme) return false;
 
     themeServiceEngine.currentTheme = newTheme;
     saveCurrentThemeToLocalStorage(newTheme);
+
+    // TODO: NOTIFY UPDATE?
     return true;
   },
 };

@@ -1,6 +1,6 @@
 import '@renderer/global-this.model';
 import { createRoot } from 'react-dom/client';
-import { getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import { applyThemeStylesheet, getErrorMessage, isPlatformError } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { startWebViewService } from '@renderer/services/web-view.service-host';
@@ -17,7 +17,6 @@ import {
 } from '@renderer/services/theme.service-host';
 import { App } from '@renderer/app.component';
 import { SCROLLBAR_STYLES } from '@renderer/theme';
-import { applyThemeStylesheet } from '@shared/services/theme.service-model';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -32,6 +31,7 @@ logger.info(`Starting renderer${globalThis.isNoisyDevModeEnabled ? ' in noisy de
 
 /** The style element applied to the DOM for the current theme */
 let currentThemeElement: HTMLStyleElement | undefined;
+const applyThemeStylesheetRenderer = applyThemeStylesheet.bind(window);
 
 // #region set up services
 
@@ -79,7 +79,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
         logger.warn(`Failed to get new current theme: ${getErrorMessage(newTheme)}`);
         return;
       }
-      currentThemeElement = applyThemeStylesheet(newTheme, currentThemeElement);
+      currentThemeElement = applyThemeStylesheetRenderer(newTheme, currentThemeElement);
     });
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
@@ -108,7 +108,7 @@ document.head.appendChild(scrollbarStyleSheet);
 
 // TODO: Test if this is worth doing or if I should just leave it in the subscribe section
 const currentTheme = localThemeService.getCurrentThemeSync();
-currentThemeElement = applyThemeStylesheet(currentTheme);
+currentThemeElement = applyThemeStylesheetRenderer(currentTheme);
 
 // #endregion
 
