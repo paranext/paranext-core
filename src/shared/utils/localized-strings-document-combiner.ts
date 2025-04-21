@@ -1,4 +1,5 @@
 import {
+  LocalizedStringDeprecationInfo,
   DocumentCombiner,
   JsonDocumentLike,
   LanguageStrings,
@@ -13,7 +14,7 @@ import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import { logger } from '@shared/services/logger.service';
 
 /** Map from localized string key to deprecation message for that string if one exists */
-type DeprecationInfo = { [key: LocalizeKey]: string | undefined };
+type StringsDeprecationInfo = { [key: LocalizeKey]: LocalizedStringDeprecationInfo | undefined };
 
 // #region Helper functions
 
@@ -45,15 +46,15 @@ function transformLocalizedStringDataToCanonicalLocales(
 }
 
 function gatherDeprecationInfo(document: LocalizedStringDataContribution) {
-  const deprecationInfo: DeprecationInfo = {};
+  const deprecationInfo: StringsDeprecationInfo = {};
 
   if (!document.metadata) return deprecationInfo;
 
   Object.entries(document.metadata).forEach(([key, metadata]) => {
-    if (metadata.deprecated) {
+    if (metadata.deprecationInfo) {
       // Object.entries is not preserving that key is a LocalizeKey
       // eslint-disable-next-line no-type-assertion/no-type-assertion
-      deprecationInfo[key as LocalizeKey] = metadata.deprecated;
+      deprecationInfo[key as LocalizeKey] = metadata.deprecationInfo;
     }
   });
 
@@ -65,7 +66,7 @@ function gatherDeprecationInfo(document: LocalizedStringDataContribution) {
 /** Combines Localized String contributions. Normalizes locales to BCP 47 form */
 export class LocalizedStringsDocumentCombiner extends DocumentCombiner {
   /** Map from localized string key to deprecation message for that string if one exists */
-  deprecatedStringsByKey: DeprecationInfo = {};
+  deprecatedStringsByKey: StringsDeprecationInfo = {};
 
   constructor(baseDocument: JsonDocumentLike) {
     super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: true });
@@ -77,8 +78,6 @@ export class LocalizedStringsDocumentCombiner extends DocumentCombiner {
     rebuildDeprecationInfo();
     // on rebuild, update deprecation info
     this.onDidRebuild(rebuildDeprecationInfo);
-
-    // TODO: log on using a deprecated localized string
   }
 
   /**
@@ -150,19 +149,17 @@ export class LocalizedStringsDocumentCombiner extends DocumentCombiner {
         if (typeof strings !== 'object' || Array.isArray(strings) || strings === null) return;
         Object.keys(strings).forEach((localizeKey) => {
           if (!isString(localizeKey) || !isLocalizeKey(localizeKey)) return;
-          const deprecationMessage = this.deprecatedStringsByKey[localizeKey];
-          if (deprecationMessage) {
+          const deprecationInfo = this.deprecatedStringsByKey[localizeKey];
+          if (deprecationInfo) {
             logger.warn(
-              `Extension ${documentName} added a localization in ${language} to deprecated LocalizeKey ${localizeKey}: ${deprecationMessage}`,
+              `Extension ${documentName} added a localization in ${language} to LocalizeKey ${localizeKey} deprecated ${deprecationInfo.date}: ${deprecationInfo.message}`,
             );
           }
         });
       });
     }
 
-    const newDoc = super.addOrUpdateContribution(documentName, document);
-
-    return newDoc;
+    return super.addOrUpdateContribution(documentName, document);
   }
 
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {

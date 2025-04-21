@@ -97,7 +97,7 @@
       "%project_settings_helloWorld_headerColor_description%": "Color de los encabezados (debe ser un válido [nombre de color HTML](https://htmlcolorcodes.com/color-names/))"
     },
     "de": {
-      "%submitButton%": "Submit in German"
+      "%test_deprecated_string%": "Test Deprecated String in German"
     }
   }
 }

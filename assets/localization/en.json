@@ -124,6 +124,7 @@
   "%tab_aria_tab%": "Tab",
   "%tab_title_error%": "Error",
   "%tab_title_unknown%": "Unknown",
+  "%test_deprecated_string%": "Test Deprecated String",
   "%webView_defaultTitle_webView%": "Web View",
   "%webView_edit%": "Edit",
   "%webView_openProjectSettings%": "Open Project Settings...",
