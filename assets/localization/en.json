@@ -127,6 +127,8 @@
   "%test_deprecated_string%": "Test Deprecated String",
   "%theme_label_light%": "Light",
   "%theme_label_dark%": "Dark",
+  "%theme_label_paratext_light%": "Paratext Light",
+  "%theme_label_paratext_dark%": "Paratext Dark",
   "%toolbar_theme_change_to_light%": "Change to Light theme",
   "%toolbar_theme_change_to_dark%": "Change to Dark theme",
   "%toolbar_theme_loading%": "Loading theme...",
