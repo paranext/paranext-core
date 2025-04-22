@@ -225,6 +225,8 @@ function generateThemeDataWithPairs(allThemeData: AllThemeData): AllThemeDataWit
     if (themeId === 'light' || themeId === 'dark') return;
     const themeData = allThemeData[themeId];
     if (!themeData) return;
+    // If this theme is already paired, don't calculate and have the chance to accidentally make a trio
+    if (pairIds.has(themeId)) return;
 
     if (themeData.type === 'light') {
       const darkThemeId = endsWith(themeId, THEME_SUFFIX_LIGHT)
