@@ -165,3 +165,32 @@ describe('fallbackKey regex', () => {
     ).toBeTruthy();
   });
 });
+
+describe('LocalizedStringDeprecationInfo.date regex', () => {
+  const dateRegExp = new RegExp(
+    localizedStringsDocumentSchema.$defs.localizedStringDeprecationInfo.properties.date.pattern,
+  );
+
+  it('passes on valid dates in YYYY-MM-DD format', () => {
+    expect(dateRegExp.test('2024-11-13')).toBeTruthy();
+    expect(dateRegExp.test('1999-01-01')).toBeTruthy();
+    expect(dateRegExp.test('2050-12-31')).toBeTruthy();
+  });
+
+  it('fails on invalid date formats', () => {
+    expect(dateRegExp.test('24-11-13')).toBeFalsy(); // Missing century
+    expect(dateRegExp.test('2024/11/13')).toBeFalsy(); // Wrong separator
+    expect(dateRegExp.test('2024-13-01')).toBeFalsy(); // Invalid month
+    expect(dateRegExp.test('2024-00-01')).toBeFalsy(); // Invalid month
+    expect(dateRegExp.test('2024-11-32')).toBeFalsy(); // Invalid day
+    expect(dateRegExp.test('2024-11')).toBeFalsy(); // Missing day
+    expect(dateRegExp.test('20241113')).toBeFalsy(); // No separators
+  });
+
+  it('fails on non-date strings', () => {
+    expect(dateRegExp.test('random string')).toBeFalsy();
+    expect(dateRegExp.test('')).toBeFalsy();
+    expect(dateRegExp.test('2024')).toBeFalsy();
+    expect(dateRegExp.test('11-13-2024')).toBeFalsy(); // Wrong order
+  });
+});
