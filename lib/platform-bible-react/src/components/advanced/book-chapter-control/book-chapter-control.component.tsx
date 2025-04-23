@@ -98,6 +98,20 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
   return undefined;
 }
 
+/**
+ * `BookChapterControl` is a component that provides an interactive UI for selecting book chapters.
+ * It allows users to input a search query to find specific books and chapters, navigate through
+ * options with keyboard interactions, and submit selections. The component handles various
+ * interactions such as opening and closing the dropdown menu, filtering book lists based on search
+ * input, and managing highlighted selections. It also integrates with external handlers for
+ * submitting selected references and retrieving active book IDs.
+ *
+ * @param {BookChapterControlProps} props
+ * @param {SerializedVerseRef} props.scrRef - The current scripture reference.
+ * @param {function} props.handleSubmit - Function to handle the submission of selected references.
+ * @param {string} [props.className] - Optional additional class name for styling.
+ * @param {function} [props.getActiveBookIds] - Function to retrieve active book IDs.
+ */
 export function BookChapterControl({
   scrRef,
   handleSubmit,

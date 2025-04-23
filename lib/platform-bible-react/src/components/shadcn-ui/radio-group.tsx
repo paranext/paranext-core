@@ -10,8 +10,8 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
  * than one of the buttons can be checked at a time. These components are built on Radix UI
  * primitives and styled with Shadcn UI.
  *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radio-group}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/radio-group}
+ * See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/radio-group See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/radio-group
  */
 const RadioGroup = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Root>,
@@ -29,11 +29,7 @@ const RadioGroup = React.forwardRef<
 });
 RadioGroup.displayName = RadioGroupPrimitive.Root.displayName;
 
-/**
- * @inheritdoc RadioGroup
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/radio-group}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/radio-group}
- */
+/** @inheritdoc RadioGroup */
 const RadioGroupItem = React.forwardRef<
   React.ElementRef<typeof RadioGroupPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof RadioGroupPrimitive.Item>

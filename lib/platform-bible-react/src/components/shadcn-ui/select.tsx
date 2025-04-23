@@ -9,30 +9,18 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
  * Select components display a list of options for the user to pick from—triggered by a button.
  * These components are built on Radix UI primitives and styled with Shadcn UI.
  *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
+ * See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/select See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/select
  */
 const Select = SelectPrimitive.Root;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectGroup = SelectPrimitive.Group;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectValue = SelectPrimitive.Value;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectTrigger = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Trigger>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>
@@ -57,11 +45,7 @@ const SelectTrigger = React.forwardRef<
 });
 SelectTrigger.displayName = SelectPrimitive.Trigger.displayName;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectScrollUpButton = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.ScrollUpButton>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollUpButton>
@@ -76,11 +60,7 @@ const SelectScrollUpButton = React.forwardRef<
 ));
 SelectScrollUpButton.displayName = SelectPrimitive.ScrollUpButton.displayName;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectScrollDownButton = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.ScrollDownButton>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.ScrollDownButton>
@@ -95,11 +75,7 @@ const SelectScrollDownButton = React.forwardRef<
 ));
 SelectScrollDownButton.displayName = SelectPrimitive.ScrollDownButton.displayName;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectContent = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Content>
@@ -135,11 +111,7 @@ const SelectContent = React.forwardRef<
 });
 SelectContent.displayName = SelectPrimitive.Content.displayName;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectLabel = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Label>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label>
@@ -152,11 +124,7 @@ const SelectLabel = React.forwardRef<
 ));
 SelectLabel.displayName = SelectPrimitive.Label.displayName;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item>
@@ -180,11 +148,7 @@ const SelectItem = React.forwardRef<
 ));
 SelectItem.displayName = SelectPrimitive.Item.displayName;
 
-/**
- * @inheritdoc Select
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/select}
- */
+/** @inheritdoc Select */
 const SelectSeparator = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Separator>,
   React.ComponentPropsWithoutRef<typeof SelectPrimitive.Separator>

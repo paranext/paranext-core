@@ -3,6 +3,10 @@ import * as AvatarPrimitive from '@radix-ui/react-avatar';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * The Avatar component displays a user's profile picture or initials. The component is built and
+ * styled by Shadcn UI. See Shadcn UI Documentation https://ui.shadcn.com/docs/components/avatar
+ */
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
@@ -18,6 +22,7 @@ const Avatar = React.forwardRef<
 ));
 Avatar.displayName = AvatarPrimitive.Root.displayName;
 
+/** @inheritdoc Avatar */
 const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
@@ -30,6 +35,7 @@ const AvatarImage = React.forwardRef<
 ));
 AvatarImage.displayName = AvatarPrimitive.Image.displayName;
 
+/** @inheritdoc Avatar */
 const AvatarFallback = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Fallback>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>

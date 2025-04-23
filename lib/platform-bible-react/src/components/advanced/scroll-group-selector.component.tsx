@@ -45,8 +45,8 @@ const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
 
 export type ScrollGroupSelectorProps = {
   /**
-   * List of scroll group ids to show to the user. Either a {@link ScrollGroupId} or `undefined` for
-   * no scroll group
+   * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
+   * scroll group
    */
   availableScrollGroupIds: (ScrollGroupId | undefined)[];
   /** Currently selected scroll group id. `undefined` for no scroll group */

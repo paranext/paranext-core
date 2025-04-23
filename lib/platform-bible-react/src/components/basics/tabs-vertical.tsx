@@ -17,6 +17,12 @@ export type LeftTabsTriggerProps = TabsTriggerProps & {
   ref?: React.Ref<HTMLButtonElement>;
 };
 
+/**
+ * Tabs components provide a set of layered sections of content—known as tab panels–that are
+ * displayed one at a time. These components are built on Radix UI primitives and styled with Shadcn
+ * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tabs See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
+ */
 export const VerticalTabs = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Root>,
   VerticalTabsProps
@@ -35,6 +41,7 @@ export const VerticalTabs = React.forwardRef<
 
 VerticalTabs.displayName = TabsPrimitive.List.displayName;
 
+/** @inheritdoc VerticalTabs */
 export const VerticalTabsList = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.List>,
   TabsListProps
@@ -50,6 +57,7 @@ export const VerticalTabsList = React.forwardRef<
 ));
 VerticalTabsList.displayName = TabsPrimitive.List.displayName;
 
+/** @inheritdoc VerticalTabs */
 export const VerticalTabsTrigger = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Trigger>,
   LeftTabsTriggerProps
@@ -64,6 +72,7 @@ export const VerticalTabsTrigger = React.forwardRef<
   />
 ));
 
+/** @inheritdoc VerticalTabs */
 export const VerticalTabsContent = React.forwardRef<
   React.ElementRef<typeof TabsPrimitive.Content>,
   TabsContentProps

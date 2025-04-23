@@ -9,6 +9,7 @@ import {
   ChapterRangeSelectorProps,
 } from '../basics/chapter-range-selector.component';
 
+/** Enumeration of possible book selection modes */
 export enum BookSelectionMode {
   CURRENT_BOOK = 'current book',
   CHOOSE_BOOKS = 'choose books',
@@ -52,6 +53,21 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
   localizedStrings: BookSelectorLocalizedStrings;
 };
 
+/**
+ * BookSelector is a component that provides an interactive UI for selecting books. It can be set to
+ * either allow the user to select a single book or to choose multiple books. In the former case, it
+ * will display the range of chapters in the selected book, and in the latter case it will display a
+ * list of the selected books.
+ *
+ * @param {BookSelectorProps} props
+ * @param {function} props.handleBookSelectionModeChange - Callback function to handle changes in
+ *   book selection mode.
+ * @param {string} props.currentBookName - The name of the currently selected book.
+ * @param {function} props.onSelectBooks - Callback function to handle book selection.
+ * @param {string[]} props.selectedBookIds - An array of book IDs that have been selected.
+ * @param {BookSelectorLocalizedStrings} props.localizedStrings - Object containing localized
+ *   strings for the component.
+ */
 export function BookSelector({
   handleBookSelectionModeChange,
   currentBookName,
