@@ -94,7 +94,7 @@ function transformThemeContributionToAllThemeData(contribution: ThemeContributio
 // #endregion
 
 /** Combines Theme contributions */
-export class ThemeDocumentCombiner extends DocumentCombiner {
+export class ThemesDocumentCombiner extends DocumentCombiner {
   constructor(baseDocument: JsonDocumentLike) {
     super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: false });
   }
