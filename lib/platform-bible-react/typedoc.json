@@ -11,12 +11,5 @@
     "rewrittenLink": true,
     "unusedMergeModuleWith": true
   },
-  "requiredToBeDocumented": [
-    "Enum",
-    "Variable",
-    "Function",
-    "Class",
-    "Interface",
-    "Method",
-  ],
+  "requiredToBeDocumented": ["Enum", "Variable", "Function", "Class", "Interface", "Method"]
 }
