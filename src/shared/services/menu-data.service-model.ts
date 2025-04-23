@@ -59,11 +59,8 @@ export type IMenuDataService = {
   /** JSDOC DESTINATION getMainMenu */
   getMainMenu(): Promise<Localized<MultiColumnMenu>>;
   /**
-   * This data cannot be changed. Trying to use this setter this will always throw
-   *
-   * @param mainMenuType Does not have to be defined
-   * @param value MultiColumnMenu object to set as the localized main menu
-   * @returns Unsubscriber function
+   * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+   * provide menu items in contributions
    */
   setMainMenu(
     mainMenuType: undefined,
@@ -97,11 +94,8 @@ export type IMenuDataService = {
   /** JSDOC DESTINATION getUnlocalizedMainMenu */
   getUnlocalizedMainMenu(): Promise<MultiColumnMenu>;
   /**
-   * This data cannot be changed. Trying to use this setter this will always throw
-   *
-   * @param mainMenuType Does not have to be defined
-   * @param value MultiColumnMenu object to set as the unlocalized main menu
-   * @returns Unsubscriber function
+   * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+   * provide menu items in contributions
    */
   setUnlocalizedMainMenu(
     mainMenuType: undefined,
@@ -131,11 +125,8 @@ export type IMenuDataService = {
    */
   getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
   /**
-   * This data cannot be changed. Trying to use this setter this will always throw
-   *
-   * @param webViewType The type of webview for which a menu should be set
-   * @param value Menu of specified webViewType
-   * @returns Unsubscriber function
+   * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+   * provide menu items in contributions
    */
   setWebViewMenu(
     webViewType: ReferencedItem,
