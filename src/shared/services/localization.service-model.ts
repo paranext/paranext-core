@@ -77,21 +77,18 @@ export type ILocalizationService = {
    */
   retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
   /**
-   * This data cannot be changed. Trying to use this setter this will always throw
-   *
-   * @returns Unsubscriber function
+   * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+   * provide localized strings in contributions
    */
   setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
   /**
-   * This data cannot be changed. Trying to use this setter this will always throw
-   *
-   * @returns Unsubscriber function
+   * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+   * provide localized strings in contributions
    */
   setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
   /**
-   * This data cannot be changed. Trying to use this setter this will always throw
-   *
-   * @returns Unsubscriber function
+   * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+   * provide new interface languages in contributions
    */
   setAvailableInterfaceLanguages(): Promise<
     DataProviderUpdateInstructions<LocalizationDataDataTypes>
