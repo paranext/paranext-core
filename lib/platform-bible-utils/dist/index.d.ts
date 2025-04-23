@@ -2919,12 +2919,20 @@ export declare const settingsDocumentSchema: {
 		};
 	};
 };
-export type ThemeContribution = {
+/** The data an extension provides to inform Platform.Bible of the themes it provides. */
+export type ThemeContribution = ThemeDataPartial | ThemeDataPartial[];
+/**
+ * The data an extension provides for one theme. An extension can provide multiple themes with
+ * {@link ThemeContribution}. This is then modified to `ThemeData` for use throughout the
+ * application.
+ */
+export interface ThemeDataPartial {
+	[k: string]: unknown;
 	/**
-	 * Programmatic name for the theme. Alphanumeric and dashes only. Will be converted to kebab-case
-	 * as this will be used as the class name in the HTML document.
+	 * Programmatic name for the theme. Will be converted to kebab-case as this will be used as the
+	 * class name in the HTML document.
 	 *
-	 * If `type` is not specified, it will be determined by whether this has `dark` at the end.
+	 * If `type` is not specified, it will be determined by whether this ends with `-dark`.
 	 */
 	id: string;
 	/**
@@ -2934,54 +2942,200 @@ export type ThemeContribution = {
 	 * example, `id: 'my-theme'` and `id: 'my-theme-dark'` would be paired together.
 	 *
 	 * If this is not specified, it will be determined by whether `id` ends with `-dark`.
-	 *
-	 * TODO: maybe this should not be optional since there isn't really a good way to say for sure
-	 * that light is default
 	 */
 	type?: "light" | "dark";
 	/** LocalizeKey that is the display name for the theme */
 	label: LocalizeKey;
 	/**
-	 * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
-	 * properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`
+	 * Theme colors and other CSS variable properties that adjust the looks of the application. These
+	 * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
+	 * `tw-bg-primary`
 	 *
 	 * See the wiki's [Matching Application
 	 * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
-	 * section for more information
+	 * section for more information.
 	 */
-	cssVariables: {
-		[variableName: string]: string | undefined;
-		background?: string;
-		foreground?: string;
-		card?: string;
-		"card-foreground"?: string;
-		popover?: string;
-		"popover-foreground"?: string;
-		primary?: string;
-		"primary-foreground"?: string;
-		secondary?: string;
-		"secondary-foreground"?: string;
-		muted?: string;
-		"muted-foreground"?: string;
-		accent?: string;
-		"accent-foreground"?: string;
-		destructive?: string;
-		"destructive-foreground"?: string;
-		border?: string;
-		input?: string;
-		ring?: string;
-		"sidebar-background"?: string;
-		"sidebar-foreground"?: string;
-		"sidebar-primary"?: string;
-		"sidebar-primary-foreground"?: string;
-		"sidebar-accent"?: string;
-		"sidebar-accent-foreground"?: string;
-		"sidebar-border"?: string;
-		"sidebar-ring"?: string;
-		radius?: string;
+	cssVariables: ThemeCssVariables;
+}
+/**
+ * Theme colors and other CSS variable properties that adjust the looks of the application. These
+ * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
+ * `tw-bg-primary`
+ *
+ * See the wiki's [Matching Application
+ * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+ * section for more information.
+ */
+export interface ThemeCssVariables {
+	[variableName: string]: string | undefined;
+	background?: string;
+	foreground?: string;
+	card?: string;
+	"card-foreground"?: string;
+	popover?: string;
+	"popover-foreground"?: string;
+	primary?: string;
+	"primary-foreground"?: string;
+	secondary?: string;
+	"secondary-foreground"?: string;
+	muted?: string;
+	"muted-foreground"?: string;
+	accent?: string;
+	"accent-foreground"?: string;
+	destructive?: string;
+	"destructive-foreground"?: string;
+	border?: string;
+	input?: string;
+	ring?: string;
+	"sidebar-background"?: string;
+	"sidebar-foreground"?: string;
+	"sidebar-primary"?: string;
+	"sidebar-primary-foreground"?: string;
+	"sidebar-accent"?: string;
+	"sidebar-accent-foreground"?: string;
+	"sidebar-border"?: string;
+	"sidebar-ring"?: string;
+	radius?: string;
+}
+export declare const themeDocumentSchema: {
+	$schema: string;
+	title: string;
+	description: string;
+	anyOf: ({
+		$ref: string;
+		type?: undefined;
+		items?: undefined;
+	} | {
+		type: string;
+		items: {
+			$ref: string;
+		};
+		$ref?: undefined;
+	})[];
+	$defs: {
+		themeCssVariables: {
+			description: string;
+			type: string;
+			properties: {
+				background: {
+					type: string;
+				};
+				foreground: {
+					type: string;
+				};
+				card: {
+					type: string;
+				};
+				"card-foreground": {
+					type: string;
+				};
+				popover: {
+					type: string;
+				};
+				"popover-foreground": {
+					type: string;
+				};
+				primary: {
+					type: string;
+				};
+				"primary-foreground": {
+					type: string;
+				};
+				secondary: {
+					type: string;
+				};
+				"secondary-foreground": {
+					type: string;
+				};
+				muted: {
+					type: string;
+				};
+				"muted-foreground": {
+					type: string;
+				};
+				accent: {
+					type: string;
+				};
+				"accent-foreground": {
+					type: string;
+				};
+				destructive: {
+					type: string;
+				};
+				"destructive-foreground": {
+					type: string;
+				};
+				border: {
+					type: string;
+				};
+				input: {
+					type: string;
+				};
+				ring: {
+					type: string;
+				};
+				"sidebar-background": {
+					type: string;
+				};
+				"sidebar-foreground": {
+					type: string;
+				};
+				"sidebar-primary": {
+					type: string;
+				};
+				"sidebar-primary-foreground": {
+					type: string;
+				};
+				"sidebar-accent": {
+					type: string;
+				};
+				"sidebar-accent-foreground": {
+					type: string;
+				};
+				"sidebar-border": {
+					type: string;
+				};
+				"sidebar-ring": {
+					type: string;
+				};
+				radius: {
+					type: string;
+				};
+			};
+			additionalProperties: {
+				anyOf: {
+					type: string;
+				}[];
+			};
+		};
+		themeDataPartial: {
+			description: string;
+			type: string;
+			properties: {
+				id: {
+					description: string;
+					type: string;
+				};
+				type: {
+					description: string;
+					type: string;
+					enum: string[];
+				};
+				label: {
+					description: string;
+					type: string;
+					pattern: string;
+					tsType: string;
+				};
+				cssVariables: {
+					$ref: string;
+				};
+			};
+			required: string[];
+		};
 	};
 };
-export type ThemeData = ThemeContribution & Required<Pick<ThemeContribution, "type">>;
+export type ThemeData = ThemeDataPartial & Required<Pick<ThemeDataPartial, "type">>;
 /**
  * Optional suffix on the end of themes that are light type. A theme with the same name but with
  * {@link THEME_SUFFIX_DARK} suffix instead will be paired with a theme with this suffix (or no

@@ -5,6 +5,7 @@ import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
+import { AllThemeData } from '@shared/utils/theme-document-combiner';
 
 /** JSDOC DESTINATION themeServiceDataProviderName */
 export const themeServiceDataProviderName = 'platform.themeServiceDataProvider';
@@ -17,8 +18,6 @@ export const themeServiceObjectToProxy = Object.freeze({
    */
   dataProviderName: themeServiceDataProviderName,
 });
-
-export type AllThemeData = { [themeId: string]: ThemeData | undefined };
 
 /** ThemeDataTypes handles getting and setting the application theme. */
 export type ThemeDataTypes = {
