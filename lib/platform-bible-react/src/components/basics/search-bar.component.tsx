@@ -25,6 +25,19 @@ export type SearchBarProps = {
   className?: string;
 };
 
+/**
+ * A search bar component with a search icon and a clear button when the search query is not empty.
+ *
+ * @param {SearchBarProps} props - The props for the component.
+ * @param {string} props.value - The search query for the search bar
+ * @param {(searchQuery: string) => void} props.onSearch - Callback fired to handle the search query
+ *   is updated
+ * @param {string} [props.placeholder] - Optional string that appears in the search bar without a
+ *   search string
+ * @param {boolean} [props.isFullWidth] - Optional boolean to set the input base to full width
+ * @param {string} [props.className] - Additional css classes to help with unique styling of the
+ *   search bar
+ */
 export function SearchBar({
   value,
   onSearch,

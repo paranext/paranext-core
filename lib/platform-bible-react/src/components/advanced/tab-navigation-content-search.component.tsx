@@ -33,6 +33,22 @@ export type TabNavigationContentSearchProps = {
   searchClassName?: string;
 };
 
+/**
+ * TabNavigationContentSearch component provides a vertical tab navigation interface with a search
+ * bar at the top. This component allows users to filter content within tabs based on a search
+ * query.
+ *
+ * @param {TabNavigationContentSearchProps} props
+ * @param {TabKeyValueContent[]} props.tabList - List of objects containing keys, values, and
+ *   content for each tab to be displayed.
+ * @param {string} props.searchValue - The current value of the search input.
+ * @param {function} props.onSearch - Callback function called when the search input changes;
+ *   receives the new search query as an argument.
+ * @param {string} [props.searchPlaceholder] - Optional placeholder text for the search input.
+ * @param {string} [props.headerTitle] - Optional title to display above the search input.
+ * @param {string} [props.searchClassName] - Optional CSS class name to apply custom styles to the
+ *   search input.
+ */
 export function TabNavigationContentSearch({
   tabList,
   searchValue,

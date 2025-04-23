@@ -80,6 +80,12 @@ export type UiLanguageSelectorProps = {
   className?: string;
 };
 
+/**
+ * A component for selecting the user interface language and managing fallback languages. Allows
+ * users to choose a primary UI language and optionally select fallback languages.
+ *
+ * @param {UiLanguageSelectorProps} props - The props for the component.
+ */
 export function UiLanguageSelector({
   knownUiLanguages,
   primaryLanguage = 'en',

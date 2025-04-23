@@ -3,12 +3,21 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/** @inheritdoc Tooltip */
 const TooltipProvider = TooltipPrimitive.Provider;
 
+/**
+ * Tooltip components provide a popover that displays information related to an element when hovered
+ * or focused. These components are built on Radix UI primitives and styled with Shadcn UI. See
+ * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tooltip See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/tooltip
+ */
 const Tooltip = TooltipPrimitive.Root;
 
+/** @inheritdoc Tooltip */
 const TooltipTrigger = TooltipPrimitive.Trigger;
 
+/** @inheritdoc Tooltip */
 const TooltipContent = React.forwardRef<
   React.ElementRef<typeof TooltipPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>

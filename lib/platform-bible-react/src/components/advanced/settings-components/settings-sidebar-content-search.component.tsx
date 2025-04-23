@@ -5,9 +5,6 @@ import { SettingsSidebar, SettingsSidebarProps } from './settings-sidebar.compon
 
 export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
   PropsWithChildren & {
-    /** Optional id for testing */
-    id?: string;
-
     /** The search query in the search bar */
     searchValue: string;
 
@@ -15,6 +12,13 @@ export type SettingsSidebarContentSearchProps = SettingsSidebarProps &
     onSearch: (searchQuery: string) => void;
   };
 
+/**
+ * A component that wraps a search bar and a settings sidebar, providing a way to search and
+ * navigate to different settings pages.
+ *
+ * @param {SettingsSidebarContentSearchProps} props - The props for the component.
+ * @param {string} props.id - The id of the sidebar.
+ */
 export function SettingsSidebarContentSearch({
   id,
   extensionLabels,
