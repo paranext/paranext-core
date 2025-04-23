@@ -55,6 +55,10 @@ export interface StringMetadata {
    */
   deprecationInfo?: LocalizedStringDeprecationInfo;
 }
+/**
+ * Contains information about the deprecation of a localized string key, including the date of
+ * deprecation and the reason.
+ */
 export interface LocalizedStringDeprecationInfo {
   [k: string]: unknown;
   /**

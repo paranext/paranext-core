@@ -36,6 +36,8 @@ export function deepClone<T>(obj: T): T {
 /**
  * Get a function that reduces calls to the function passed in
  *
+ * @template T - A function type that takes any arguments and returns void. This is the type of the
+ *   function being debounced.
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
@@ -54,6 +56,12 @@ export function debounce<T extends (...args: any[]) => void>(fn: T, delay = 300)
   }) as T;
 }
 
+export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
+export function groupBy<T, K, V>(
+  items: T[],
+  keySelector: (item: T) => K,
+  valueSelector: (item: T, key: K) => V,
+): Map<K, Array<V>>;
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *
@@ -63,12 +71,6 @@ export function debounce<T extends (...args: any[]) => void>(fn: T, delay = 300)
  *   (like map function). If not provided, uses the item itself
  * @returns Map of keys to groups of values corresponding to each item
  */
-export function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
-export function groupBy<T, K, V>(
-  items: T[],
-  keySelector: (item: T) => K,
-  valueSelector: (item: T, key: K) => V,
-): Map<K, Array<V>>;
 export function groupBy<T, K, V = T>(
   items: T[],
   keySelector: (item: T) => K,

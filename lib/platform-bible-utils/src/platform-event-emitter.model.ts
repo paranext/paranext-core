@@ -17,7 +17,6 @@ export class PlatformEventEmitter<T> implements Dispose {
    * @param callback Function to run with the event when it is emitted
    * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
    *   emitted
-   * @alias event
    */
   subscribe = this.event;
 
@@ -32,7 +31,6 @@ export class PlatformEventEmitter<T> implements Dispose {
    * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
    * Use like `const unsubscriber = event(callback)`
    *
-   * @param callback Function to run with the event when it is emitted
    * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
    *   emitted
    */
