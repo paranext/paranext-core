@@ -1,6 +1,6 @@
-import { ThemeContribution } from './theme.model';
+import { ThemeDataPartial } from './theme.model';
 
-export type ThemeData = ThemeContribution & Required<Pick<ThemeContribution, 'type'>>;
+export type ThemeData = ThemeDataPartial & Required<Pick<ThemeDataPartial, 'type'>>;
 
 /**
  * Optional suffix on the end of themes that are light type. A theme with the same name but with

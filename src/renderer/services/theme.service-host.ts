@@ -3,7 +3,6 @@ import {
   IThemeService,
   themeServiceObjectToProxy,
   themeServiceDataProviderName,
-  AllThemeData,
   IThemeServiceLocal,
 } from '@shared/services/theme.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
@@ -17,15 +16,13 @@ import {
   PlatformEvent,
   deepEqual,
   ThemeData,
-  THEME_SUFFIX_LIGHT,
-  THEME_SUFFIX_DARK,
   PlatformEventEmitter,
-  slice,
-  endsWith,
 } from 'platform-bible-utils';
+import { AllThemeData, ThemeDataExpanded } from '@shared/utils/theme-document-combiner';
 
-const LIGHT_THEME: ThemeData = Object.freeze({
-  id: `light`,
+const LIGHT_THEME: ThemeDataExpanded = Object.freeze({
+  id: 'light',
+  pairId: 'dark',
   label: '%theme_label_light%',
   type: 'light',
   cssVariables: {
@@ -62,8 +59,9 @@ const LIGHT_THEME: ThemeData = Object.freeze({
   },
 });
 
-const DARK_THEME: ThemeData = Object.freeze({
-  id: `dark`,
+const DARK_THEME: ThemeDataExpanded = Object.freeze({
+  id: 'dark',
+  pairId: 'light',
   label: '%theme_label_dark%',
   type: 'dark',
   cssVariables: {
@@ -98,8 +96,9 @@ const DARK_THEME: ThemeData = Object.freeze({
   },
 });
 
-const PARATEXT_LIGHT_THEME: ThemeData = Object.freeze({
-  id: `paratext-light`,
+const PARATEXT_LIGHT_THEME: ThemeDataExpanded = Object.freeze({
+  id: 'paratext-light',
+  pairId: 'paratext-dark',
   label: '%theme_label_paratext_light%',
   type: 'light',
   cssVariables: {
@@ -134,8 +133,9 @@ const PARATEXT_LIGHT_THEME: ThemeData = Object.freeze({
   },
 });
 
-const PARATEXT_DARK_THEME: ThemeData = Object.freeze({
-  id: `paratext-dark`,
+const PARATEXT_DARK_THEME: ThemeDataExpanded = Object.freeze({
+  id: 'paratext-dark',
+  pairId: 'paratext-light',
   label: '%theme_label_paratext_dark%',
   type: 'dark',
   cssVariables: {
@@ -170,13 +170,14 @@ const PARATEXT_DARK_THEME: ThemeData = Object.freeze({
   },
 });
 
-const DEFAULT_THEME = LIGHT_THEME;
+const BUILT_IN_THEMES: AllThemeData = Object.freeze({
+  [LIGHT_THEME.id]: LIGHT_THEME,
+  [DARK_THEME.id]: DARK_THEME,
+  [PARATEXT_LIGHT_THEME.id]: PARATEXT_LIGHT_THEME,
+  [PARATEXT_DARK_THEME.id]: PARATEXT_DARK_THEME,
+});
 
-/**
- * All theme data available to the application along with a bi-directional map of theme ids to the
- * corresponding theme of the opposite type (light/dark).
- */
-type AllThemeDataWithPairs = { themeData: AllThemeData; pairIds: Map<string, string> };
+const DEFAULT_THEME = LIGHT_THEME;
 
 // #region interacting with localStorage
 
@@ -212,46 +213,6 @@ function saveShouldMatchSystemToLocalStorage(newShouldMatchSystem: boolean) {
 }
 
 // #endregion
-
-function generateThemeDataWithPairs(allThemeData: AllThemeData): AllThemeDataWithPairs {
-  const pairIds = new Map<string, string>();
-  const allThemeIds = Object.keys(allThemeData);
-
-  if (allThemeIds.includes('light') && allThemeIds.includes('dark')) {
-    pairIds.set('light', 'dark');
-    pairIds.set('dark', 'light');
-  }
-
-  allThemeIds.forEach((themeId) => {
-    if (themeId === 'light' || themeId === 'dark') return;
-    const themeData = allThemeData[themeId];
-    if (!themeData) return;
-    // If this theme is already paired, don't calculate and have the chance to accidentally make a trio
-    if (pairIds.has(themeId)) return;
-
-    if (themeData.type === 'light') {
-      const darkThemeId = endsWith(themeId, THEME_SUFFIX_LIGHT)
-        ? `${slice(themeId, 0, -THEME_SUFFIX_LIGHT.length)}${THEME_SUFFIX_DARK}`
-        : `${themeId}${THEME_SUFFIX_DARK}`;
-      if (allThemeIds.includes(darkThemeId)) {
-        pairIds.set(themeId, darkThemeId);
-        pairIds.set(darkThemeId, themeId);
-      }
-    } else if (themeData.type === 'dark') {
-      const lightThemeId = endsWith(themeId, THEME_SUFFIX_DARK)
-        ? `${slice(themeId, 0, -THEME_SUFFIX_DARK.length)}${THEME_SUFFIX_LIGHT}`
-        : `${themeId}${THEME_SUFFIX_LIGHT}`;
-      if (allThemeIds.includes(lightThemeId)) {
-        pairIds.set(themeId, lightThemeId);
-        pairIds.set(lightThemeId, themeId);
-      }
-    }
-  });
-  return {
-    themeData: allThemeData,
-    pairIds,
-  };
-}
 
 const onDidChangeSystemThemeEmitter = new PlatformEventEmitter<'light' | 'dark'>();
 
@@ -293,11 +254,8 @@ class ThemeDataProviderEngine
   extends DataProviderEngine<ThemeDataTypes>
   implements IDataProviderEngine<ThemeDataTypes>
 {
-  /**
-   * All Theme Data available to the application. Includes which themes are light/dark pairs
-   * `undefined` if not yet loaded.
-   */
-  allThemeDataWithPairs: AllThemeDataWithPairs | undefined;
+  /** All Theme Data available to the application. `undefined` if not yet loaded. */
+  allThemeData: AllThemeData | undefined;
   private unsubscribeOnDidUpdateAllThemes: Unsubscriber | undefined;
 
   constructor(
@@ -313,35 +271,33 @@ class ThemeDataProviderEngine
 
     // Immediately subscribe to and get latest themes
     const updateAllThemeData = (allThemeData: AllThemeData) => {
-      this.allThemeDataWithPairs = generateThemeDataWithPairs(allThemeData);
+      this.allThemeData = allThemeData;
       const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
 
-      const updatedCurrentTheme = this.allThemeDataWithPairs.themeData[this.currentTheme.id];
+      const updatedCurrentTheme = this.allThemeData[this.currentTheme.id];
+      // If the current theme no longer exists, set back to default
       if (!updatedCurrentTheme) {
-        this.#setCurrentThemeNoUpdate(
-          this.allThemeDataWithPairs.themeData[DEFAULT_THEME.id] ?? DEFAULT_THEME,
-        );
+        this.#setCurrentThemeNoUpdate(this.allThemeData[DEFAULT_THEME.id] ?? DEFAULT_THEME);
         dataTypesToUpdate.push('CurrentTheme');
-      } else if (this.shouldMatchSystem && updatedCurrentTheme.type !== this.currentSystemTheme) {
-        // Flip the theme to the system-matching version
+      }
+      // If we should match the system theme, flip the theme to the system-matching version
+      else if (this.shouldMatchSystem && updatedCurrentTheme.type !== this.currentSystemTheme) {
         this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
         dataTypesToUpdate.push('CurrentTheme');
-      } else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
+      }
+      // If the current theme's definition was updated, update it
+      else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
         this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
         dataTypesToUpdate.push('CurrentTheme');
       }
 
+      // Notify others that theme data changed
       this.notifyUpdate(dataTypesToUpdate);
     };
     onDidUpdateAllThemes(updateAllThemeData);
 
     // TODO: REMOVE THIS WHEN WE HAVE CONTRIBUTIONS
-    updateAllThemeData({
-      light: LIGHT_THEME,
-      dark: DARK_THEME,
-      'paratext-light': PARATEXT_LIGHT_THEME,
-      'paratext-dark': PARATEXT_DARK_THEME,
-    });
+    updateAllThemeData(BUILT_IN_THEMES);
 
     // Listen to system theme change and update current theme
     const updateThemeToSystem = (newThemeType: 'light' | 'dark') => {
@@ -367,12 +323,14 @@ class ThemeDataProviderEngine
     newThemeIdPossiblyUndefinedSelector: string | undefined,
     newThemeIdPossiblyNotProvided?: string,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
+    // TODO: AWAIT GETTING ALLTHEMEDATA
+
     let newThemeId = newThemeIdPossiblyUndefinedSelector ?? newThemeIdPossiblyNotProvided;
     if (newThemeId === '') newThemeId = DEFAULT_THEME.id;
 
     if (!newThemeId) throw new Error('Theme ID not provided');
     if (newThemeId === this.currentTheme.id) return false;
-    const newTheme = this.allThemeDataWithPairs?.themeData[newThemeId];
+    const newTheme = this.allThemeData?.[newThemeId];
     if (!newTheme) throw new Error(`Theme data not found for id ${newThemeId}`);
 
     this.#setCurrentThemeNoUpdate(newTheme);
@@ -413,13 +371,21 @@ class ThemeDataProviderEngine
     if (newShouldMatchSystem === undefined) throw new Error('shouldMatchSystem not provided');
     if (newShouldMatchSystem === this.shouldMatchSystem) return false;
 
+    const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['ShouldMatchSystem'];
     this.#setShouldMatchSystemNoUpdate(newShouldMatchSystem);
-    return true;
+
+    // If we should match the system theme, flip the theme to the system-matching version
+    if (this.shouldMatchSystem && this.currentTheme.type !== this.currentSystemTheme) {
+      this.#setCurrentThemeNoUpdate(this.currentTheme);
+      dataTypesToUpdate.push('CurrentTheme');
+    }
+
+    return dataTypesToUpdate;
   }
 
   async getAllThemes(): Promise<AllThemeData> {
     // TODO: SET UP TO WAIT FOR allThemeData
-    return this.allThemeDataWithPairs?.themeData ?? {};
+    return this.allThemeData ?? {};
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
@@ -461,15 +427,14 @@ class ThemeDataProviderEngine
    * @returns Flipped theme data for `themeId` or `undefined` if not found
    */
   #getFlippedTheme(themeId = this.currentTheme.id): ThemeData | undefined {
-    const { allThemeDataWithPairs } = this;
-    if (!allThemeDataWithPairs)
-      throw new Error('All theme data not available. This should not happen');
+    const { allThemeData } = this;
+    if (!allThemeData) throw new Error('All theme data not available. This should not happen');
 
-    const flippedThemeId = allThemeDataWithPairs?.pairIds.get(themeId);
+    const flippedThemeId = allThemeData[themeId]?.pairId;
 
     if (!flippedThemeId) return undefined;
 
-    const flippedTheme = allThemeDataWithPairs.themeData[flippedThemeId];
+    const flippedTheme = allThemeData[flippedThemeId];
     if (!flippedTheme)
       throw new Error(
         `Flipped theme data not found for id ${flippedThemeId}. This should not happen`,
