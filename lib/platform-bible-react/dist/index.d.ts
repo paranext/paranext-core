@@ -23,9 +23,13 @@ import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildre
 import { Toaster, toast as sonner } from 'sonner';
 
 export type BookChapterControlProps = {
+	/** The current scripture reference */
 	scrRef: SerializedVerseRef;
+	/** Function to handle the submission of selected references */
 	handleSubmit: (scrRef: SerializedVerseRef) => void;
+	/** Optional additional class name for styling */
 	className?: string;
+	/** Function to retrieve active book IDs */
 	getActiveBookIds?: () => string[];
 };
 /**
@@ -138,11 +142,17 @@ interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
 export type ChapterRangeSelectorProps = {
+	/** The selected start chapter */
 	startChapter: number;
+	/** The selected end chapter */
 	endChapter: number;
+	/** Callback function to handle the selection of the start chapter */
 	handleSelectStartChapter: (chapter: number) => void;
+	/** Callback function to handle the selection of the end chapter */
 	handleSelectEndChapter: (chapter: number) => void;
+	/** Flag to disable the component */
 	isDisabled?: boolean;
+	/** The total number of chapters available */
 	chapterCount: number;
 };
 /**

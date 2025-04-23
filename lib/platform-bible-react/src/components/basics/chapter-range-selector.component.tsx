@@ -3,11 +3,17 @@ import { Label } from '@/components/shadcn-ui/label';
 import { useMemo } from 'react';
 
 export type ChapterRangeSelectorProps = {
+  /** The selected start chapter */
   startChapter: number;
+  /** The selected end chapter */
   endChapter: number;
+  /** Callback function to handle the selection of the start chapter */
   handleSelectStartChapter: (chapter: number) => void;
+  /** Callback function to handle the selection of the end chapter */
   handleSelectEndChapter: (chapter: number) => void;
+  /** Flag to disable the component */
   isDisabled?: boolean;
+  /** The total number of chapters available */
   chapterCount: number;
 };
 

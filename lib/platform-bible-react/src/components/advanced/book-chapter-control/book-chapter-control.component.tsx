@@ -28,9 +28,13 @@ type BookTypeLabels = {
 };
 
 export type BookChapterControlProps = {
+  /** The current scripture reference */
   scrRef: SerializedVerseRef;
+  /** Function to handle the submission of selected references */
   handleSubmit: (scrRef: SerializedVerseRef) => void;
+  /** Optional additional class name for styling */
   className?: string;
+  /** Function to retrieve active book IDs */
   getActiveBookIds?: () => string[];
 };
 
