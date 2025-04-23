@@ -6711,6 +6711,50 @@ declare module 'shared/services/settings.service' {
   export const settingsService: ISettingsService;
   export default settingsService;
 }
+declare module 'shared/utils/themes-document-combiner' {
+  import { DocumentCombiner, JsonDocumentLike, ThemeData } from 'platform-bible-utils';
+  /** {@link ThemeData} with some extra information to help with managing the theme */
+  export type ThemeDataExpanded = ThemeData & {
+    /**
+     * Id of the theme this theme is paired with (light/dark). Used for flipping the theme. No pair if
+     * `undefined`
+     */
+    pairId: string | undefined;
+  };
+  /**
+   * {@link ThemeDataExpanded} mapped by theme id. All extensions' theme contributions are combined and
+   * aggregated into one of these
+   */
+  export type AllThemeData = {
+    [themeId: string]: ThemeDataExpanded | undefined;
+  };
+  /** Combines Theme contributions */
+  export class ThemesDocumentCombiner extends DocumentCombiner {
+    constructor(baseDocument: JsonDocumentLike);
+    /**
+     * Get the current set of all theme data based on theme contributions given all the input
+     * documents. Localized string keys have not been localized to corresponding strings.
+     *
+     * NOTE: If the input documents might have changed since the last time the theme contributions
+     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
+     * this getter. For example, if one of the input document objects changed and
+     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
+     * the current set of theme contributions. If all the input documents are static, then there is no
+     * need to ever rebuild once all the documents have been contributed to this combiner.
+     */
+    getAllThemeData(): AllThemeData | undefined;
+    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
+    protected transformBaseDocumentAfterValidation(
+      baseDocument: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
+    protected transformContributionAfterValidation(
+      _documentName: string,
+      document: JsonDocumentLike,
+    ): JsonDocumentLike;
+    protected validateOutput(): void;
+  }
+}
 declare module 'shared/services/theme.service-model' {
   import { OnDidDispose, PlatformError, UnsubscriberAsync, ThemeData } from 'platform-bible-utils';
   import { IDataProvider } from 'shared/models/data-provider.interface';
@@ -6719,6 +6763,7 @@ declare module 'shared/services/theme.service-model' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
+  import { AllThemeData } from 'shared/utils/themes-document-combiner';
   /**
    *
    * This name is used to register the theme service data provider on the papi. You can use this
@@ -6733,9 +6778,6 @@ declare module 'shared/services/theme.service-model' {
      */
     dataProviderName: 'platform.themeServiceDataProvider';
   }>;
-  export type AllThemeData = {
-    [themeId: string]: ThemeData | undefined;
-  };
   /** ThemeDataTypes handles getting and setting the application theme. */
   export type ThemeDataTypes = {
     CurrentTheme: DataProviderDataType<undefined, ThemeData, string>;
@@ -7653,6 +7695,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
     projectSettings?: string;
     /** Path to the JSON file that defines the localized strings this extension is adding. */
     localizedStrings?: string;
+    /** Path to the JSON file that defines the themes this extension is adding. */
+    themes?: string;
     /**
      * List of events that occur that should cause this extension to be activated. Not yet
      * implemented.

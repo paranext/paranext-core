@@ -5,7 +5,7 @@ import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import { AllThemeData } from '@shared/utils/theme-document-combiner';
+import { AllThemeData } from '@shared/utils/themes-document-combiner';
 
 /** JSDOC DESTINATION themeServiceDataProviderName */
 export const themeServiceDataProviderName = 'platform.themeServiceDataProvider';

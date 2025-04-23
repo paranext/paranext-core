@@ -3,6 +3,7 @@
 // changed so they align.
 //----------------------------------------------------------------------------------------------
 
+import { removeJsonToTypeScriptTypesStuff } from './settings.model';
 import { LocalizeKey } from './menus.model';
 
 /** The data an extension provides to inform Platform.Bible of the themes it provides. */
@@ -151,6 +152,8 @@ const themeDefs = {
     required: ['id', 'label', 'cssVariables'],
   },
 };
+
+removeJsonToTypeScriptTypesStuff(themeDefs);
 
 // JSON schema object for ThemeContribution
 export const themeDocumentSchema = {
