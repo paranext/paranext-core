@@ -6876,8 +6876,9 @@ declare module 'shared/services/theme.service-model' {
      */
     getCurrentTheme(): Promise<ThemeData>;
     /**
-     * Sets the current theme. Will set to the OS-appropriate version of the theme if
-     * `getShouldMatchSystem` is `true`.
+     * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
+     * pair of the type the system theme is set to, this will set the theme to the version of the
+     * theme that matches the current system theme.
      *
      * @param newThemeId The string id of the theme to change to
      * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
@@ -6886,8 +6887,9 @@ declare module 'shared/services/theme.service-model' {
      */
     setCurrentTheme(newThemeId: string): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     /**
-     * Sets the current theme. Will set to the OS-appropriate version of the theme if
-     * `getShouldMatchSystem` is `true`.
+     * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
+     * pair of the type the system theme is set to, this will set the theme to the version of the
+     * theme that matches the current system theme.
      *
      * @param selector `undefined`. Does not have to be provided
      * @param newThemeId The string id of the theme to change to
@@ -6925,9 +6927,12 @@ declare module 'shared/services/theme.service-model' {
     ): Promise<UnsubscriberAsync>;
     /**
      *
-     * TODO: UPDATE ShouldMatchSystem TSDocs BEFORE MERGE!!
+     * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
+     * current theme will match the system-wide theme where possible.
      *
-     * Retrieves the current theme information
+     * If the current theme gets set to a theme with the wrong type but with a theme pair that is the
+     * right type, it will automatically change to that theme. If the system theme changes, the
+     * current theme will automatically attempt to change to match it.
      *
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
@@ -6935,18 +6940,21 @@ declare module 'shared/services/theme.service-model' {
     getShouldMatchSystem(selector: undefined): Promise<boolean>;
     /**
      *
-     * TODO: UPDATE ShouldMatchSystem TSDocs BEFORE MERGE!!
+     * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
+     * current theme will match the system-wide theme where possible.
      *
-     * Retrieves the current theme information
+     * If the current theme gets set to a theme with the wrong type but with a theme pair that is the
+     * right type, it will automatically change to that theme. If the system theme changes, the
+     * current theme will automatically attempt to change to match it.
      *
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
     getShouldMatchSystem(): Promise<boolean>;
     /**
-     * Sets the current theme
+     * Sets whether the theme type should follow the system-wide theme (dark/light).
      *
-     * @param newThemeId The string id of the theme to change to
+     * @param shouldMatchSystem Whether the theme type should follow the system-wide theme
      * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
@@ -6954,10 +6962,10 @@ declare module 'shared/services/theme.service-model' {
       shouldMatchSystem: boolean,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     /**
-     * Sets the current theme
+     * Sets whether the theme type should follow the system-wide theme (dark/light).
      *
      * @param selector `undefined`. Does not have to be provided
-     * @param newThemeId The string id of the theme to change to
+     * @param shouldMatchSystem Whether the theme type should follow the system-wide theme
      * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
@@ -6966,11 +6974,11 @@ declare module 'shared/services/theme.service-model' {
       shouldMatchSystem: boolean,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     /**
-     * Subscribes to updates of the current theme. Whenever the current theme changes, the callback
-     * function is executed.
+     * Subscribes to updates of whether the theme type should follow the system-wide theme
+     * (dark/light). Whenever `shouldMatchSystem` changes, the callback function is executed.
      *
      * @param selector `undefined`
-     * @param callback The function that will be called whenever the current theme is updated. If
+     * @param callback The function that will be called whenever `shouldMatchSystem` is updated. If
      *   there is an error while retrieving the updated data, the function will run with a
      *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
      *   to check if it is an error.
@@ -6984,9 +6992,8 @@ declare module 'shared/services/theme.service-model' {
     ): Promise<UnsubscriberAsync>;
     /**
      *
-     * TODO: UPDATE AllThemes TSDocs BEFORE MERGE!!
-     *
-     * Retrieves the current theme information
+     * Retrieves information about all themes available in the app. These are provided by the platform
+     * and by extensions.
      *
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
@@ -6994,9 +7001,8 @@ declare module 'shared/services/theme.service-model' {
     getAllThemes(selector: undefined): Promise<AllThemeData>;
     /**
      *
-     * TODO: UPDATE AllThemes TSDocs BEFORE MERGE!!
-     *
-     * Retrieves the current theme information
+     * Retrieves information about all themes available in the app. These are provided by the platform
+     * and by extensions.
      *
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
@@ -7005,19 +7011,14 @@ declare module 'shared/services/theme.service-model' {
     /**
      * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
      * provide themes in contributions
-     *
-     * @param selector `undefined`. Does not have to be provided
-     * @param value
-     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
-     * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
     setAllThemes(
       selector: undefined,
       value: never,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     /**
-     * Subscribes to updates of the current theme. Whenever the current theme changes, the callback
-     * function is executed.
+     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
+     * callback function is executed.
      *
      * @param selector `undefined`
      * @param callback The function that will be called when a theme is added/updated/removed. If

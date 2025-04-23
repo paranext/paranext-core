@@ -1,6 +1,11 @@
 import '@renderer/global-this.model';
 import { createRoot } from 'react-dom/client';
-import { applyThemeStylesheet, getErrorMessage, isPlatformError } from 'platform-bible-utils';
+import {
+  applyThemeStylesheet,
+  getErrorMessage,
+  isPlatformError,
+  ThemeData,
+} from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import { startWebViewService } from '@renderer/services/web-view.service-host';
@@ -32,6 +37,20 @@ logger.info(`Starting renderer${globalThis.isNoisyDevModeEnabled ? ' in noisy de
 /** The style element applied to the DOM for the current theme */
 let currentThemeElement: HTMLStyleElement | undefined;
 const applyThemeStylesheetRenderer = applyThemeStylesheet.bind(window);
+
+/**
+ * Does everything needed to apply the theme. Does not throw
+ *
+ * @param themeData Theme to apply
+ * @param when Description of when this is being run e.g. 'subscribe'. Used for logging
+ */
+const applyThemeSafe = (themeData: ThemeData, when: string) => {
+  try {
+    currentThemeElement = applyThemeStylesheetRenderer(themeData, currentThemeElement);
+  } catch (e) {
+    logger.warn(`Failed to apply current theme on ${when}: ${getErrorMessage(e)}`);
+  }
+};
 
 // #region set up services
 
@@ -74,12 +93,12 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
     );
 
     // Subscribe to updates to the current theme
-    localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {
+    await localThemeService.subscribeCurrentTheme(undefined, (newTheme) => {
       if (isPlatformError(newTheme)) {
         logger.warn(`Failed to get new current theme: ${getErrorMessage(newTheme)}`);
         return;
       }
-      currentThemeElement = applyThemeStylesheetRenderer(newTheme, currentThemeElement);
+      applyThemeSafe(newTheme, 'subscribe');
     });
   } catch (e) {
     logger.error(`Service(s) failed to initialize! Error: ${e}`);
@@ -108,7 +127,7 @@ document.head.appendChild(scrollbarStyleSheet);
 
 // TODO: Test if this is worth doing or if I should just leave it in the subscribe section
 const currentTheme = localThemeService.getCurrentThemeSync();
-currentThemeElement = applyThemeStylesheetRenderer(currentTheme);
+applyThemeSafe(currentTheme, 'first load');
 
 // #endregion
 
