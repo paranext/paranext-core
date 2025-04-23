@@ -35,7 +35,7 @@
 }
 
 // focus ring
-:focus-visible,
+:focus-visible:not(.editor-input),
 .CommentPlugin_CommentInputBox_Editor:focus {
   outline: 2px solid transparent;
   outline-offset: 2px;
