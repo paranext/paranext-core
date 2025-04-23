@@ -15,6 +15,14 @@
   border-top-right-radius: 10px;
 }
 
+.editor-toolbar-container-readonly {
+  display: none;
+}
+
+.editor-toolbar-container-editable {
+  display: inline;
+}
+
 .editor-inner {
   background: #fff;
   position: relative;

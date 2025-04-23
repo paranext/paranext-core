@@ -1911,6 +1911,14 @@ export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeFormat, since: Date, to?: Date): string;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
+/**
+ * Date in YYYY-MM-DD format
+ *
+ * Use regex `^\d\d\d\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$` to test.
+ *
+ * Thanks to Vinod at https://stackoverflow.com/a/22061879 for the regex.
+ */
+export type DateYYYYMMDD = `${number}-${number}-${number}`;
 /** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
 export interface LocalizedStringDataContribution {
 	[k: string]: unknown;
@@ -1944,12 +1952,27 @@ export interface StringMetadata {
 	 */
 	notes?: string;
 	/**
-	 * If this property is filled, the localized string is deprecated. This string should contain the
-	 * date of deprecation, the reason for deprecation, and what to use instead in what contexts.
-	 *
-	 * @example 13 November 2024. Reworded to clarify the meaning. Use %my_key_2% instead.
+	 * If this property is filled, the localized string is deprecated. Contains information about the
+	 * deprecation.
 	 */
-	deprecated?: string;
+	deprecationInfo?: LocalizedStringDeprecationInfo;
+}
+export interface LocalizedStringDeprecationInfo {
+	[k: string]: unknown;
+	/**
+	 * Date of deprecation. Must be in YYYY-MM-DD format e.g. 2024-11-13.
+	 *
+	 * Tested against regex `^\d\d\d\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$`.
+	 *
+	 * Thanks to Vinod at https://stackoverflow.com/a/22061879 for the regex.
+	 */
+	date: DateYYYYMMDD;
+	/**
+	 * Should contain the reason for deprecation and what to use instead in what contexts.
+	 *
+	 * @example Reworded to clarify the meaning. Use %my_key_2% instead.
+	 */
+	message: string;
 }
 /**
  * Map whose keys are localized string keys and whose values provide information about how to
@@ -2014,11 +2037,28 @@ export declare const localizedStringsDocumentSchema: {
 					description: string;
 					type: string;
 				};
-				deprecated: {
+				deprecationInfo: {
+					description: string;
+					$ref: string;
+				};
+			};
+		};
+		localizedStringDeprecationInfo: {
+			description: string;
+			type: string;
+			properties: {
+				date: {
+					description: string;
+					type: string;
+					pattern: string;
+					tsType: string;
+				};
+				message: {
 					description: string;
 					type: string;
 				};
 			};
+			required: string[];
 		};
 		localizeKey: {
 			description: string;

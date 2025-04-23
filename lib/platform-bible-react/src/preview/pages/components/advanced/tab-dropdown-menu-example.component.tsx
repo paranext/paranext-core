@@ -174,7 +174,20 @@ export function TabDropdownMenuExample() {
       <TabDropdownMenu
         commandHandler={(command) => console.log('Run command: ', command)}
         menuData={menuData}
-        icon={<BookIcon />}
+        icon={<BookIcon className="tw-h-4 tw-w-4" />}
+        tabLabel="Tab Label"
+      />
+
+      <TabDropdownMenu
+        commandHandler={(command) => console.log('Run command: ', command)}
+        menuData={menuData}
+        icon={
+          <div className="tw-h-4 tw-w-4">
+            {/* adding a custom icon here for demo purpose - windows icon */}
+            {/* eslint-disable-next-line jsx-a11y/alt-text */}
+            <img src="data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20xmlns%3Axlink%3D%22http%3A%2F%2Fwww.w3.org%2F1999%2Fxlink%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cpath%20d%3D%22M%2029.333%202.667%20L%2014.933%204.8%20L%2014.933%2015.467%20L%2029.333%2015.333%20Z%20M%2013.6%2016.667%20L%202.667%2016.533%20L%202.667%2025.6%20L%2013.467%2027.067%20Z%20M%202.667%206.4%20L%202.667%2015.467%20L%2013.467%2015.467%20L%2013.467%204.933%20Z%20M%2014.8%2016.667%20L%2014.8%2027.2%20L%2029.333%2029.333%20L%2029.333%2016.8%20Z%22%20fill%3D%22rgb(10%2C%2064%2C%2058)%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E" />
+          </div>
+        }
         tabLabel="Tab Label"
       />
 

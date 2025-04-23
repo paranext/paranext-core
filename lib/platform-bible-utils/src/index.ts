@@ -110,8 +110,10 @@ export type {
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 export type {
+  DateYYYYMMDD,
   LanguageStrings,
   LocalizedStringDataContribution,
+  LocalizedStringDeprecationInfo,
   LocalizedStringValue,
   StringMetadata,
   StringsMetadata,

@@ -5,7 +5,16 @@
   },
   "%submit%": { "fallbackKey": "%yes%" },
   "%submitButton%": {
-    "deprecated": "15 April 2025. This was a test string with an outdated key format. Use %general_button_submit%"
+    "deprecationInfo": {
+      "date": "2025-04-15",
+      "message": "This was a test string with an outdated key format. Use %general_button_submit%"
+    }
+  },
+  "%test_deprecated_string%": {
+    "deprecationInfo": {
+      "date": "2025-04-21",
+      "message": "This exists to test deprecating localized strings. Do not remove or use."
+    }
   },
   "%about_db_ip_attribution_intro%": {
     "fallbackKey": "%Paratext.Base.SplashScreen.Splash_Load.&quot;  Internet safety features use data&#xA;from &quot;%"
