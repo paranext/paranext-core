@@ -2,7 +2,7 @@ import { ComponentProps } from 'react';
 import { toast as sonner, Toaster } from 'sonner';
 
 /**
- * Props for SOnner component.
+ * Props for Sonner component.
  *
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/sonner}
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}

@@ -4,9 +4,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 
 /**
  * Table components provide a responsive table. These components are built and styled with Shadcn
- * UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
+ * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/table
  */
 const Table = React.forwardRef<
   HTMLTableElement,
@@ -22,10 +20,7 @@ const Table = React.forwardRef<
 ));
 Table.displayName = 'Table';
 
-/**
- * @inheritdoc Table
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
- */
+/** @inheritdoc Table */
 const TableHeader = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement> & { stickyHeader?: boolean }
@@ -42,10 +37,7 @@ const TableHeader = React.forwardRef<
 ));
 TableHeader.displayName = 'TableHeader';
 
-/**
- * @inheritdoc Table
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
- */
+/** @inheritdoc Table */
 const TableBody = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -54,10 +46,7 @@ const TableBody = React.forwardRef<
 ));
 TableBody.displayName = 'TableBody';
 
-/**
- * @inheritdoc Table
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
- */
+/** @inheritdoc Table */
 const TableFooter = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
@@ -70,10 +59,7 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = 'TableFooter';
 
-/**
- * @inheritdoc Table
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
- */
+/** @inheritdoc Table */
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
   ({ className, ...props }, ref) => (
     <tr
@@ -88,10 +74,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
 );
 TableRow.displayName = 'TableRow';
 
-/**
- * @inheritdoc Table
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
- */
+/** @inheritdoc Table */
 const TableHead = React.forwardRef<
   HTMLTableCellElement,
   React.ThHTMLAttributes<HTMLTableCellElement>
@@ -107,10 +90,7 @@ const TableHead = React.forwardRef<
 ));
 TableHead.displayName = 'TableHead';
 
-/**
- * @inheritdoc Table
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
- */
+/** @inheritdoc Table */
 const TableCell = React.forwardRef<
   HTMLTableCellElement,
   React.TdHTMLAttributes<HTMLTableCellElement>
@@ -123,10 +103,7 @@ const TableCell = React.forwardRef<
 ));
 TableCell.displayName = 'TableCell';
 
-/**
- * @inheritdoc Table
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/table}
- */
+/** @inheritdoc Table */
 const TableCaption = React.forwardRef<
   HTMLTableCaptionElement,
   React.HTMLAttributes<HTMLTableCaptionElement>

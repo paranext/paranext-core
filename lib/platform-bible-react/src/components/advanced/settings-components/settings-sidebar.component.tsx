@@ -49,6 +49,12 @@ export type SettingsSidebarProps = {
   className?: string;
 };
 
+/**
+ * The SettingsSidebar component is a sidebar that displays a list of extension settings and project
+ * settings. It can be used to navigate to different settings pages.
+ *
+ * @param props - {@link SettingsSidebarProps} The props for the component.
+ */
 export function SettingsSidebar({
   id,
   extensionLabels,
