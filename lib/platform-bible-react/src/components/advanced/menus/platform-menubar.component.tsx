@@ -41,7 +41,7 @@ export type Command = MenuItemInfoBase & {
 
 /**
  * Defines a function that takes a `Command` object as an argument and returns `void`. Used to
- * define the shape of a function that can handle commands, but it does not provide and
+ * define the shape of a function that can handle commands, but it does not provide an
  * implementation.
  */
 export interface CommandHandler {
