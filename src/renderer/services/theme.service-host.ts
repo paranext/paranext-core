@@ -4,6 +4,7 @@ import {
   themeServiceObjectToProxy,
   themeServiceDataProviderName,
   AllThemeData,
+  IThemeServiceLocal,
 } from '@shared/services/theme.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
@@ -548,23 +549,7 @@ const themeServiceEngineSyncAdditions = {
   getCurrentThemeSync() {
     return themeServiceEngine.currentTheme;
   },
-  setCurrentThemeSync(newThemeIdProvided: string) {
-    let newThemeId = newThemeIdProvided;
-    if (newThemeId === '') newThemeId = DEFAULT_THEME.id;
-    const newTheme = themeServiceEngine.allThemeDataWithPairs?.themeData[newThemeId];
-    if (!newTheme) throw new Error(`Theme data not found for id ${newThemeId}`);
-
-    themeServiceEngine.currentTheme = newTheme;
-    saveCurrentThemeToLocalStorage(newTheme);
-
-    // TODO: Delete this method?
-    // TODO: Match current system theme if needed
-    // TODO: NOTIFY UPDATE?
-    return true;
-  },
 };
-
-type IThemeServiceLocal = IThemeService & typeof themeServiceEngineSyncAdditions;
 
 /**
  * Theme service that is available locally in the renderer only and can perform synchronous

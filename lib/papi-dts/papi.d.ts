@@ -5946,21 +5946,18 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
      */
     setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
      */
     setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide new interface languages in contributions
      */
     setAvailableInterfaceLanguages(): Promise<
       DataProviderUpdateInstructions<LocalizationDataDataTypes>
@@ -6597,11 +6594,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getMainMenu(): Promise<Localized<MultiColumnMenu>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param mainMenuType Does not have to be defined
-     * @param value MultiColumnMenu object to set as the localized main menu
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setMainMenu(
       mainMenuType: undefined,
@@ -6640,11 +6634,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getUnlocalizedMainMenu(): Promise<MultiColumnMenu>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param mainMenuType Does not have to be defined
-     * @param value MultiColumnMenu object to set as the unlocalized main menu
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setUnlocalizedMainMenu(
       mainMenuType: undefined,
@@ -6674,11 +6665,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param webViewType The type of webview for which a menu should be set
-     * @param value Menu of specified webViewType
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setWebViewMenu(
       webViewType: ReferencedItem,
@@ -6761,7 +6749,10 @@ declare module 'shared/services/theme.service-model' {
   }
   /**
    *
-   * Service that allows to interact with the application theme
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
    */
   export type IThemeService = {
     /**
@@ -6941,6 +6932,23 @@ declare module 'shared/services/theme.service-model' {
   } & OnDidDispose &
     IDataProvider<ThemeDataTypes> &
     typeof themeServiceObjectToProxy;
+  /**
+   *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export type IThemeServiceLocal = IThemeService & {
+    /**
+     *
+     * Retrieves the current theme information
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getCurrentThemeSync(): ThemeData;
+  };
 }
 declare module 'shared/services/theme.service' {
   import { IThemeService } from 'shared/services/theme.service-model';
@@ -7316,7 +7324,10 @@ declare module '@papi/backend' {
     settings: ISettingsService;
     /**
      *
-     * Service that allows to interact with the application theme
+     * Service that allows to interact with the application theme.
+     *
+     * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+     * {@link IThemeServiceLocal}
      */
     themes: IThemeService;
     /**
@@ -7550,7 +7561,10 @@ declare module '@papi/backend' {
   export const settings: ISettingsService;
   /**
    *
-   * Service that allows to interact with the application theme
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
    */
   export const themes: IThemeService;
   /**
@@ -8384,7 +8398,7 @@ declare module '@papi/frontend' {
   import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
-  import { IThemeService } from 'shared/services/theme.service-model';
+  import { IThemeServiceLocal } from 'shared/services/theme.service-model';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
@@ -8474,9 +8488,12 @@ declare module '@papi/frontend' {
     settings: ISettingsService;
     /**
      *
-     * Service that allows to interact with the application theme
+     * Service that allows to interact with the application theme.
+     *
+     * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+     * {@link IThemeServiceLocal}
      */
-    themes: IThemeService;
+    themes: IThemeServiceLocal;
     /**
      *
      * Service that allows to get and store menu data
@@ -8585,9 +8602,12 @@ declare module '@papi/frontend' {
   export const settings: ISettingsService;
   /**
    *
-   * Service that allows to interact with the application theme
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
    */
-  export const themes: IThemeService;
+  export const themes: IThemeServiceLocal;
   /**
    *
    * Service that allows to get and store menu data

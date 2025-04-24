@@ -36,7 +36,10 @@ declare module 'papi-shared-types' {
 /**
  * JSDOC SOURCE themeService
  *
- * Service that allows to interact with the application theme
+ * Service that allows to interact with the application theme.
+ *
+ * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+ * {@link IThemeServiceLocal}
  */
 export type IThemeService = {
   /**
@@ -204,3 +207,9 @@ export type IThemeService = {
 } & OnDidDispose &
   IDataProvider<ThemeDataTypes> &
   typeof themeServiceObjectToProxy;
+
+/** JSDOC DESTINATION themeService */
+export type IThemeServiceLocal = IThemeService & {
+  /** JSDOC DESTINATION getCurrentTheme */
+  getCurrentThemeSync(): ThemeData;
+};
