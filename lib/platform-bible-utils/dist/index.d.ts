@@ -666,6 +666,23 @@ export declare function deepClone<T>(obj: T): T;
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms
  */
 export declare function debounce<T extends (...args: any[]) => void>(fn: T, delay?: number): T;
+/**
+ * Groups each item in the array of items into a map according to the keySelector
+ *
+ * There are two overloads:
+ *
+ * - `groupBy(items, keySelector)` – groups the original items using the key returned by
+ *   `keySelector`.
+ * - `groupBy(items, keySelector, valueSelector)` – groups transformed values using the key returned
+ *   by `keySelector` and the value returned by `valueSelector`.
+ *
+ * If `valueSelector` is not provided, the original item is used in the resulting groups.
+ *
+ * @param items - Array of items to group by.
+ * @param keySelector - Function to run on each item to get the key for the group to which it
+ *   belongs
+ * @returns Map of keys to groups of values corresponding to each item.
+ */
 export declare function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
 export declare function groupBy<T, K, V>(items: T[], keySelector: (item: T) => K, valueSelector: (item: T, key: K) => V): Map<K, Array<V>>;
 /**
