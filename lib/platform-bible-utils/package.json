@@ -29,9 +29,7 @@
     "import": "./dist/index.js",
     "require": "./dist/index.cjs"
   },
-  "files": [
-    "dist"
-  ],
+  "files": ["dist"],
   "scripts": {
     "start": "vite --host --open",
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
@@ -47,6 +45,7 @@
     "test": "vitest",
     "typecheck": "tsc -p ./tsconfig.json"
   },
+  "peerDependencies": {},
   "dependencies": {
     "async-mutex": "^0.5.0",
     "jsonpath-plus": "^10.3.0"
