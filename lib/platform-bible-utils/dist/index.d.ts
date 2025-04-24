@@ -350,6 +350,13 @@ export declare class Mutex extends AsyncMutex {
 /** Map of {@link Mutex}es that automatically (lazily) generates a new {@link Mutex} for any new key */
 export declare class MutexMap {
 	private mutexesByID;
+	/**
+	 * Retrieves the {@link Mutex} associated with the given ID. If no Mutex exists for the provided
+	 * ID, a new Mutex is created, stored, and returned.
+	 *
+	 * @param mutexID Unique identifier for the desired Mutex
+	 * @returns The Mutex associated with the provided ID
+	 */
 	get(mutexID: string): Mutex;
 }
 export declare class NonValidatingDocumentCombiner extends DocumentCombiner {
@@ -439,7 +446,6 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 * @param callback Function to run with the event when it is emitted
 	 * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
 	 *   emitted
-	 * @alias event
 	 */
 	subscribe: PlatformEvent<T>;
 	/** All callback functions that will run when this event is emitted. Lazy loaded */
@@ -452,7 +458,6 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
 	 * Use like `const unsubscriber = event(callback)`
 	 *
-	 * @param callback Function to run with the event when it is emitted
 	 * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
 	 *   emitted
 	 */
@@ -549,32 +554,33 @@ export declare class UnsubscriberAsyncList {
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
 }
+/** The version of the PlatformError type */
 export declare const PLATFORM_ERROR_VERSION = 1;
 /**
- * PlatformError is an error type with stronger typing of properties than {@link Error}. It is used
- * to represent errors that are returned by the platform.
+ * PlatformError is an error type with stronger typing of properties than `Error`. It is used to
+ * represent errors that are returned by the platform.
  *
  * You can create a new PlatformError object using {@link newPlatformError}. You can check if a value
  * is a PlatformError object using {@link isPlatformError}.
  */
 export type PlatformError = {
 	/**
-	 * The underlying cause of the error, if any. Normally this will be copied from an {@link Error}
-	 * object passed to {@link newPlatformError}. If a non-Error object is passed to
-	 * {@link newPlatformError}, it will be stored here.
+	 * The underlying cause of the error, if any. Normally this will be copied from an `Error object
+	 * passed to {@link newPlatformError}. If a non-Error object is passed to {@link newPlatformError},
+	 * it will be stored here.
 	 */
 	cause?: unknown;
 	/**
-	 * A descriptive message explaining the error. Normally this will be copied from an {@link Error}
-	 * object passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it
-	 * will be stored here.
+	 * A descriptive message explaining the error. Normally this will be copied from an `Error` object
+	 * passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it will be
+	 * stored here.
 	 */
 	message: string;
 	/** The version of the PlatformError type. */
 	platformErrorVersion: number;
 	/**
-	 * The stack trace of the error, if available. Normally this will be copied from an {@link Error}
-	 * object passed to {@link newPlatformError}.
+	 * The stack trace of the error, if available. Normally this will be copied from an `Error` object
+	 * passed to {@link newPlatformError}.
 	 */
 	stack?: string;
 };
@@ -594,6 +600,10 @@ export declare function newPlatformError(error?: unknown): PlatformError;
  * @returns `true` if the value is a PlatformError object, otherwise `false`
  */
 export declare function isPlatformError(error: unknown): error is PlatformError;
+/**
+ * Represents a book, with its short name (e.g. "Gen") and full names (e.g. "Genesis"), and number
+ * of chapters.
+ */
 export interface BookInfo {
 	shortName: string;
 	fullNames: string[];
@@ -648,6 +658,8 @@ export declare function deepClone<T>(obj: T): T;
 /**
  * Get a function that reduces calls to the function passed in
  *
+ * @template T - A function type that takes any arguments and returns void. This is the type of the
+ *   function being debounced.
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
@@ -657,11 +669,19 @@ export declare function debounce<T extends (...args: any[]) => void>(fn: T, dela
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *
- * @param items Array of items to group by
- * @param keySelector Function to run on each item to get the key for the group to which it belongs
- * @param valueSelector Function to run on each item to get the value it should have in the group
- *   (like map function). If not provided, uses the item itself
- * @returns Map of keys to groups of values corresponding to each item
+ * There are two overloads:
+ *
+ * - `groupBy(items, keySelector)` – groups the original items using the key returned by
+ *   `keySelector`.
+ * - `groupBy(items, keySelector, valueSelector)` – groups transformed values using the key returned
+ *   by `keySelector` and the value returned by `valueSelector`.
+ *
+ * If `valueSelector` is not provided, the original item is used in the resulting groups.
+ *
+ * @param items - Array of items to group by.
+ * @param keySelector - Function to run on each item to get the key for the group to which it
+ *   belongs
+ * @returns Map of keys to groups of values corresponding to each item.
  */
 export declare function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
 export declare function groupBy<T, K, V>(items: T[], keySelector: (item: T) => K, valueSelector: (item: T, key: K) => V): Map<K, Array<V>>;
@@ -1144,14 +1164,53 @@ export declare const menuDocumentSchema: {
 		};
 	};
 };
+/** The first book number */
 export declare const FIRST_SCR_BOOK_NUM = 1;
+/** The last book number */
 export declare const LAST_SCR_BOOK_NUM: number;
+/** The first chapter number */
 export declare const FIRST_SCR_CHAPTER_NUM = 1;
+/** The first verse number */
 export declare const FIRST_SCR_VERSE_NUM = 1;
+/** The default Scripture reference, representing the first chapter and verse of the first book. */
 export declare const defaultScrRef: SerializedVerseRef;
+/**
+ * Retrieves the number of chapters for a given book number.
+ *
+ * @param bookNum The number representing the book.
+ * @returns The number of chapters in the book, or -1 if the book number is invalid.
+ */
 export declare const getChaptersForBook: (bookNum: number) => number;
+/**
+ * Adjusts the book of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose book is to be adjusted.
+ * @param offset The number of books to offset the current book by. Positive values move forward,
+ *   negative values move backward.
+ * @returns A new Scripture reference with the adjusted book. The chapter and verse numbers are
+ *   reset to 1. If the resulting book number exceeds the bounds of available books, it is clamped
+ *   to the nearest valid book.
+ */
 export declare const offsetBook: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
+/**
+ * Adjusts the chapter of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose chapter is to be adjusted.
+ * @param offset The number of chapters to offset the current chapter by. Positive values move
+ *   forward, negative values move backward.
+ * @returns A new Scripture reference with the adjusted chapter. The verse number is reset to 1. The
+ *   chapter number is clamped to stay within valid bounds for the book.
+ */
 export declare const offsetChapter: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
+/**
+ * Adjusts the verse of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose verse is to be adjusted.
+ * @param offset The number of verses to offset the current verse by. Positive values move forward,
+ *   negative values move backward.
+ * @returns A new Scripture reference with the adjusted verse. The verse number is clamped to stay
+ *   within valid bounds for the chapter.
+ */
 export declare const offsetVerse: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
  * https://github.com/ubsicap/Paratext/blob/master/ParatextData/SILScriptureExtensions.cs#L72
@@ -1957,6 +2016,10 @@ export interface StringMetadata {
 	 */
 	deprecationInfo?: LocalizedStringDeprecationInfo;
 }
+/**
+ * Contains information about the deprecation of a localized string key, including the date of
+ * deprecation and the reason.
+ */
 export interface LocalizedStringDeprecationInfo {
 	[k: string]: unknown;
 	/**
@@ -2159,6 +2222,10 @@ export interface ProjectSettingsGroup {
 export interface ProjectSettingProperties {
 	[k: ReferencedItem]: ProjectSetting;
 }
+/**
+ * Defines a set of optional properties that can be used to filter projects based on their
+ * `projectInterface` and Project Data Provider Factory Ids.
+ */
 export interface ModifierProject {
 	/**
 	 * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
@@ -2179,7 +2246,7 @@ export interface ModifierProject {
 	 * In other words, each entry in the first-level array is `OR`'ed together. Each entry in
 	 * second-level arrays (arrays within the first-level array) are `AND`'ed together.
 	 *
-	 * Defaults to all {@link ProjectInterfaces}, so all projects that do not match
+	 * Defaults to all `ProjectInterfaces`, so all projects that do not match
 	 * `excludeProjectInterfaces` will be included
 	 *
 	 * @example
@@ -2215,8 +2282,8 @@ export interface ModifierProject {
 	 * In other words, each entry in the first-level array is `OR`'ed together. Each entry in
 	 * second-level arrays (arrays within the first-level array) are `AND`'ed together.
 	 *
-	 * Defaults to no {@link ProjectInterfaces}, so all projects that match `includeProjectInterfaces`
-	 * will be included
+	 * Defaults to no `ProjectInterfaces`, so all projects that match `includeProjectInterfaces` will
+	 * be included
 	 *
 	 * @example
 	 *

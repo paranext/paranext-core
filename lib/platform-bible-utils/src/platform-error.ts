@@ -1,32 +1,33 @@
 import { isString } from './util';
 
+/** The version of the PlatformError type */
 export const PLATFORM_ERROR_VERSION = 1;
 
 /**
- * PlatformError is an error type with stronger typing of properties than {@link Error}. It is used
- * to represent errors that are returned by the platform.
+ * PlatformError is an error type with stronger typing of properties than `Error`. It is used to
+ * represent errors that are returned by the platform.
  *
  * You can create a new PlatformError object using {@link newPlatformError}. You can check if a value
  * is a PlatformError object using {@link isPlatformError}.
  */
 export type PlatformError = {
   /**
-   * The underlying cause of the error, if any. Normally this will be copied from an {@link Error}
-   * object passed to {@link newPlatformError}. If a non-Error object is passed to
-   * {@link newPlatformError}, it will be stored here.
+   * The underlying cause of the error, if any. Normally this will be copied from an `Error object
+   * passed to {@link newPlatformError}. If a non-Error object is passed to {@link newPlatformError},
+   * it will be stored here.
    */
   cause?: unknown;
   /**
-   * A descriptive message explaining the error. Normally this will be copied from an {@link Error}
-   * object passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it
-   * will be stored here.
+   * A descriptive message explaining the error. Normally this will be copied from an `Error` object
+   * passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it will be
+   * stored here.
    */
   message: string;
   /** The version of the PlatformError type. */
   platformErrorVersion: number;
   /**
-   * The stack trace of the error, if available. Normally this will be copied from an {@link Error}
-   * object passed to {@link newPlatformError}.
+   * The stack trace of the error, if available. Normally this will be copied from an `Error` object
+   * passed to {@link newPlatformError}.
    */
   stack?: string;
 };

@@ -1,5 +1,9 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
+/**
+ * Represents a book, with its short name (e.g. "Gen") and full names (e.g. "Genesis"), and number
+ * of chapters.
+ */
 export interface BookInfo {
   shortName: string;
   fullNames: string[];

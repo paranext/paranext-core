@@ -3,5 +3,13 @@
   "out": "docs",
   "tsconfig": "tsconfig.json",
   "sort": ["kind", "alphabetical"],
-  "kindSortOrder": ["Function"]
+  "kindSortOrder": ["Function"],
+  "validation": {
+    "notExported": false,
+    "invalidLink": true,
+    "notDocumented": true,
+    "rewrittenLink": true,
+    "unusedMergeModuleWith": true
+  },
+  "requiredToBeDocumented": ["Enum", "Variable", "Function", "Class", "Interface", "Method"]
 }
