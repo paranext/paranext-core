@@ -1,11 +1,16 @@
-import { OnDidDispose, PlatformError, UnsubscriberAsync, ThemeData } from 'platform-bible-utils';
+import {
+  OnDidDispose,
+  PlatformError,
+  UnsubscriberAsync,
+  ThemeDefinition,
+} from 'platform-bible-utils';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
   DataProviderDataType,
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import { AllThemeData } from '@shared/utils/themes-document-combiner';
+import { ThemeDefinitionsById } from '@shared/utils/themes-document-combiner';
 
 /** JSDOC DESTINATION themeServiceDataProviderName */
 export const themeServiceDataProviderName = 'platform.themeServiceDataProvider';
@@ -21,9 +26,9 @@ export const themeServiceObjectToProxy = Object.freeze({
 
 /** ThemeDataTypes handles getting and setting the application theme. */
 export type ThemeDataTypes = {
-  CurrentTheme: DataProviderDataType<undefined, ThemeData, string>;
+  CurrentTheme: DataProviderDataType<undefined, ThemeDefinition, string>;
   ShouldMatchSystem: DataProviderDataType<undefined, boolean, boolean>;
-  AllThemes: DataProviderDataType<undefined, AllThemeData, never>;
+  AllThemes: DataProviderDataType<undefined, ThemeDefinitionsById, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -49,9 +54,9 @@ export type IThemeService = {
    * @param selector `undefined`. Does not have to be provided
    * @returns Information about the currently selected theme
    */
-  getCurrentTheme(selector: undefined): Promise<ThemeData>;
+  getCurrentTheme(selector: undefined): Promise<ThemeDefinition>;
   /** JSDOC DESTINATION getCurrentTheme */
-  getCurrentTheme(): Promise<ThemeData>;
+  getCurrentTheme(): Promise<ThemeDefinition>;
 
   /**
    * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
@@ -102,7 +107,7 @@ export type IThemeService = {
    */
   subscribeCurrentTheme(
     selector: undefined,
-    callback: (currentTheme: ThemeData | PlatformError) => void,
+    callback: (currentTheme: ThemeDefinition | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 
@@ -173,9 +178,9 @@ export type IThemeService = {
    * @param selector `undefined`. Does not have to be provided
    * @returns Information about the currently selected theme
    */
-  getAllThemes(selector: undefined): Promise<AllThemeData>;
+  getAllThemes(selector: undefined): Promise<ThemeDefinitionsById>;
   /** JSDOC DESTINATION getAllThemes */
-  getAllThemes(): Promise<AllThemeData>;
+  getAllThemes(): Promise<ThemeDefinitionsById>;
 
   /**
    * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
@@ -200,7 +205,7 @@ export type IThemeService = {
    */
   subscribeAllThemes(
     selector: undefined,
-    callback: (allThemes: AllThemeData | PlatformError) => void,
+    callback: (allThemes: ThemeDefinitionsById | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &
@@ -210,5 +215,5 @@ export type IThemeService = {
 /** JSDOC DESTINATION themeService */
 export type IThemeServiceLocal = IThemeService & {
   /** JSDOC DESTINATION getCurrentTheme */
-  getCurrentThemeSync(): ThemeData;
+  getCurrentThemeSync(): ThemeDefinition;
 };

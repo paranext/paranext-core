@@ -6807,9 +6807,9 @@ declare module 'shared/services/settings.service' {
   export default settingsService;
 }
 declare module 'shared/utils/themes-document-combiner' {
-  import { DocumentCombiner, JsonDocumentLike, ThemeData } from 'platform-bible-utils';
-  /** {@link ThemeData} with some extra information to help with managing the theme */
-  export type ThemeDataExpanded = ThemeData & {
+  import { DocumentCombiner, JsonDocumentLike, ThemeDefinition } from 'platform-bible-utils';
+  /** {@link ThemeDefinition} with some extra information to help with managing the theme */
+  export type ThemeDefinitionExpanded = ThemeDefinition & {
     /**
      * Id of the theme this theme is paired with (light/dark). Used for flipping the theme. No pair if
      * `undefined`
@@ -6817,11 +6817,11 @@ declare module 'shared/utils/themes-document-combiner' {
     pairId: string | undefined;
   };
   /**
-   * {@link ThemeDataExpanded} mapped by theme id. All extensions' theme contributions are combined and
-   * aggregated into one of these
+   * {@link ThemeDefinitionExpanded} mapped by theme id. All extensions' theme contributions are
+   * combined and aggregated into one of these
    */
-  export type AllThemeData = {
-    [themeId: string]: ThemeDataExpanded | undefined;
+  export type ThemeDefinitionsById = {
+    [themeId: string]: ThemeDefinitionExpanded | undefined;
   };
   /** Combines Theme contributions */
   export class ThemesDocumentCombiner extends DocumentCombiner {
@@ -6837,7 +6837,7 @@ declare module 'shared/utils/themes-document-combiner' {
      * the current set of theme contributions. If all the input documents are static, then there is no
      * need to ever rebuild once all the documents have been contributed to this combiner.
      */
-    getAllThemeData(): AllThemeData | undefined;
+    getAllThemeDefinitionsById(): ThemeDefinitionsById | undefined;
     protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
     protected transformBaseDocumentAfterValidation(
       baseDocument: JsonDocumentLike,
@@ -6851,14 +6851,19 @@ declare module 'shared/utils/themes-document-combiner' {
   }
 }
 declare module 'shared/services/theme.service-model' {
-  import { OnDidDispose, PlatformError, UnsubscriberAsync, ThemeData } from 'platform-bible-utils';
+  import {
+    OnDidDispose,
+    PlatformError,
+    UnsubscriberAsync,
+    ThemeDefinition,
+  } from 'platform-bible-utils';
   import { IDataProvider } from 'shared/models/data-provider.interface';
   import {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import { AllThemeData } from 'shared/utils/themes-document-combiner';
+  import { ThemeDefinitionsById } from 'shared/utils/themes-document-combiner';
   /**
    *
    * This name is used to register the theme service data provider on the papi. You can use this
@@ -6875,9 +6880,9 @@ declare module 'shared/services/theme.service-model' {
   }>;
   /** ThemeDataTypes handles getting and setting the application theme. */
   export type ThemeDataTypes = {
-    CurrentTheme: DataProviderDataType<undefined, ThemeData, string>;
+    CurrentTheme: DataProviderDataType<undefined, ThemeDefinition, string>;
     ShouldMatchSystem: DataProviderDataType<undefined, boolean, boolean>;
-    AllThemes: DataProviderDataType<undefined, AllThemeData, never>;
+    AllThemes: DataProviderDataType<undefined, ThemeDefinitionsById, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -6899,7 +6904,7 @@ declare module 'shared/services/theme.service-model' {
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getCurrentTheme(selector: undefined): Promise<ThemeData>;
+    getCurrentTheme(selector: undefined): Promise<ThemeDefinition>;
     /**
      *
      * Retrieves the current theme information
@@ -6907,7 +6912,7 @@ declare module 'shared/services/theme.service-model' {
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getCurrentTheme(): Promise<ThemeData>;
+    getCurrentTheme(): Promise<ThemeDefinition>;
     /**
      * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
      * pair of the type the system theme is set to, this will set the theme to the version of the
@@ -6955,7 +6960,7 @@ declare module 'shared/services/theme.service-model' {
      */
     subscribeCurrentTheme(
       selector: undefined,
-      callback: (currentTheme: ThemeData | PlatformError) => void,
+      callback: (currentTheme: ThemeDefinition | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
@@ -7031,7 +7036,7 @@ declare module 'shared/services/theme.service-model' {
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getAllThemes(selector: undefined): Promise<AllThemeData>;
+    getAllThemes(selector: undefined): Promise<ThemeDefinitionsById>;
     /**
      *
      * Retrieves information about all themes available in the app. These are provided by the platform
@@ -7040,7 +7045,7 @@ declare module 'shared/services/theme.service-model' {
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getAllThemes(): Promise<AllThemeData>;
+    getAllThemes(): Promise<ThemeDefinitionsById>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
      * provide themes in contributions
@@ -7063,7 +7068,7 @@ declare module 'shared/services/theme.service-model' {
      */
     subscribeAllThemes(
       selector: undefined,
-      callback: (allThemes: AllThemeData | PlatformError) => void,
+      callback: (allThemes: ThemeDefinitionsById | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
   } & OnDidDispose &
@@ -7084,7 +7089,7 @@ declare module 'shared/services/theme.service-model' {
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getCurrentThemeSync(): ThemeData;
+    getCurrentThemeSync(): ThemeDefinition;
   };
 }
 declare module 'shared/services/theme.service' {

@@ -29,7 +29,7 @@ import {
   isPlatformError,
   LocalizeKey,
   ScrollGroupId,
-  ThemeData,
+  ThemeDefinition,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
@@ -42,7 +42,7 @@ import { localThemeService } from '@renderer/services/theme.service-host';
 const TOOLTIP_DELAY = 300;
 
 /** Placeholder theme to detect when we are loading */
-const DEFAULT_THEME_VALUE: ThemeData = {
+const DEFAULT_THEME_VALUE: ThemeDefinition = {
   id: 'light',
   label: '%unused%',
   type: 'light',

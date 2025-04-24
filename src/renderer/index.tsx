@@ -4,7 +4,7 @@ import {
   applyThemeStylesheet,
   getErrorMessage,
   isPlatformError,
-  ThemeData,
+  ThemeDefinition,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
@@ -41,12 +41,12 @@ const applyThemeStylesheetRenderer = applyThemeStylesheet.bind(window);
 /**
  * Does everything needed to apply the theme. Does not throw
  *
- * @param themeData Theme to apply
+ * @param themeDefinition Theme to apply
  * @param when Description of when this is being run e.g. 'subscribe'. Used for logging
  */
-const applyThemeSafe = (themeData: ThemeData, when: string) => {
+const applyThemeSafe = (themeDefinition: ThemeDefinition, when: string) => {
   try {
-    currentThemeElement = applyThemeStylesheetRenderer(themeData, currentThemeElement);
+    currentThemeElement = applyThemeStylesheetRenderer(themeDefinition, currentThemeElement);
   } catch (e) {
     logger.warn(`Failed to apply current theme on ${when}: ${getErrorMessage(e)}`);
   }

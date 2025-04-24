@@ -7,14 +7,14 @@ import { removeJsonToTypeScriptTypesStuff } from './settings.model';
 import { LocalizeKey } from './menus.model';
 
 /** The data an extension provides to inform Platform.Bible of the themes it provides. */
-export type ThemeContribution = ThemeDataPartial | ThemeDataPartial[];
+export type ThemeContribution = ThemeDefinitionPartial | ThemeDefinitionPartial[];
 
 /**
  * The data an extension provides for one theme. An extension can provide multiple themes with
- * {@link ThemeContribution}. This is then modified to `ThemeData` for use throughout the
+ * {@link ThemeContribution}. This is then modified to `ThemeDefinition` for use throughout the
  * application.
  */
-export interface ThemeDataPartial {
+export interface ThemeDefinitionPartial {
   [k: string]: unknown;
   /**
    * Programmatic name for the theme. Will be converted to kebab-case as this will be used as the
@@ -123,9 +123,9 @@ const themeDefs = {
     },
     additionalProperties: { anyOf: [{ type: 'string' }, { type: 'null' }] },
   },
-  themeDataPartial: {
+  themeDefinitionPartial: {
     description:
-      'The data an extension provides for one theme. An extension can provide multiple themes with {@link ThemeContribution}. This is then modified to `ThemeData` for use throughout the application.',
+      'The data an extension provides for one theme. An extension can provide multiple themes with {@link ThemeContribution}. This is then modified to `ThemeDefinition` for use throughout the application.',
     type: 'object',
     properties: {
       id: {
@@ -162,12 +162,12 @@ export const themeDocumentSchema = {
   description: 'The data an extension provides to inform Platform.Bible of the themes it provides.',
   anyOf: [
     {
-      $ref: '#/$defs/themeDataPartial',
+      $ref: '#/$defs/themeDefinitionPartial',
     },
     {
       type: 'array',
       items: {
-        $ref: '#/$defs/themeDataPartial',
+        $ref: '#/$defs/themeDefinitionPartial',
       },
     },
   ],
