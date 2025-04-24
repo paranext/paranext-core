@@ -1,6 +1,7 @@
-import { ThemeDataPartial } from './theme.model';
+import { ThemeDefinitionPartial } from './theme.model';
 
-export type ThemeData = ThemeDataPartial & Required<Pick<ThemeDataPartial, 'type'>>;
+export type ThemeDefinition = ThemeDefinitionPartial &
+  Required<Pick<ThemeDefinitionPartial, 'type'>>;
 
 /**
  * Optional suffix on the end of themes that are light type. A theme with the same name but with
@@ -19,7 +20,7 @@ export const THEME_SUFFIX_DARK = '-dark';
 export const THEME_STYLE_ELEMENT_ID = 'theme-styles';
 
 /** Gets the CSS stylesheet that should be applied for the given theme */
-export function getStylesheetForTheme(theme: ThemeData): string {
+export function getStylesheetForTheme(theme: ThemeDefinition): string {
   return `
 .${theme.id} {
 ${Object.entries(theme.cssVariables)
@@ -47,7 +48,7 @@ ${Object.entries(theme.cssVariables)
 // Must use `this` so it works across iframes
 export function applyThemeStylesheet(
   this: Window,
-  theme: ThemeData,
+  theme: ThemeDefinition,
   previousStyleElement?: HTMLStyleElement,
   styleElementIdSuffix?: string,
 ): HTMLStyleElement {

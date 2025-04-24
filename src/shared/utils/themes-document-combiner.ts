@@ -7,15 +7,15 @@ import {
   THEME_SUFFIX_DARK,
   THEME_SUFFIX_LIGHT,
   ThemeContribution,
-  ThemeData,
-  ThemeDataPartial,
+  ThemeDefinition,
+  ThemeDefinitionPartial,
   themeDocumentSchema,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 
-/** {@link ThemeData} with some extra information to help with managing the theme */
-export type ThemeDataExpanded = ThemeData & {
+/** {@link ThemeDefinition} with some extra information to help with managing the theme */
+export type ThemeDefinitionExpanded = ThemeDefinition & {
   /**
    * Id of the theme this theme is paired with (light/dark). Used for flipping the theme. No pair if
    * `undefined`
@@ -24,10 +24,10 @@ export type ThemeDataExpanded = ThemeData & {
 };
 
 /**
- * {@link ThemeDataExpanded} mapped by theme id. All extensions' theme contributions are combined and
- * aggregated into one of these
+ * {@link ThemeDefinitionExpanded} mapped by theme id. All extensions' theme contributions are
+ * combined and aggregated into one of these
  */
-export type AllThemeData = { [themeId: string]: ThemeDataExpanded | undefined };
+export type ThemeDefinitionsById = { [themeId: string]: ThemeDefinitionExpanded | undefined };
 
 // #region Helper functions
 
@@ -39,56 +39,66 @@ function performSchemaValidation(document: JsonDocumentLike, docType: string): v
     throw new Error(`Invalid ${docType} theme document: ${ajv.errorsText(validate.errors)}`);
 }
 
-function getThemePair(themeData: ThemeData, themesData: ThemeData[]): ThemeData | undefined {
+function getThemePair(
+  themeDefinition: ThemeDefinition,
+  themesData: ThemeDefinition[],
+): ThemeDefinition | undefined {
   let pairId = '';
-  if (themeData.id === 'light') pairId = 'dark';
-  else if (themeData.id === 'dark') pairId = 'light';
-  else if (themeData.type === 'light') {
-    pairId = endsWith(themeData.id, THEME_SUFFIX_LIGHT)
-      ? `${slice(themeData.id, 0, -THEME_SUFFIX_LIGHT.length)}${THEME_SUFFIX_DARK}`
-      : `${themeData.id}${THEME_SUFFIX_DARK}`;
-  } else if (themeData.type === 'dark') {
-    pairId = endsWith(themeData.id, THEME_SUFFIX_DARK)
-      ? `${slice(themeData.id, 0, -THEME_SUFFIX_DARK.length)}${THEME_SUFFIX_LIGHT}`
-      : `${themeData.id}${THEME_SUFFIX_LIGHT}`;
+  if (themeDefinition.id === 'light') pairId = 'dark';
+  else if (themeDefinition.id === 'dark') pairId = 'light';
+  else if (themeDefinition.type === 'light') {
+    pairId = endsWith(themeDefinition.id, THEME_SUFFIX_LIGHT)
+      ? `${slice(themeDefinition.id, 0, -THEME_SUFFIX_LIGHT.length)}${THEME_SUFFIX_DARK}`
+      : `${themeDefinition.id}${THEME_SUFFIX_DARK}`;
+  } else if (themeDefinition.type === 'dark') {
+    pairId = endsWith(themeDefinition.id, THEME_SUFFIX_DARK)
+      ? `${slice(themeDefinition.id, 0, -THEME_SUFFIX_DARK.length)}${THEME_SUFFIX_LIGHT}`
+      : `${themeDefinition.id}${THEME_SUFFIX_LIGHT}`;
   }
 
-  if (pairId) return themesData.find((themeDataToPair) => themeDataToPair.id === pairId);
+  if (pairId)
+    return themesData.find((themeDefinitionToPair) => themeDefinitionToPair.id === pairId);
 
   return undefined;
 }
 
-function transformThemeDataPartialToThemeData(themeDataPartial: ThemeDataPartial): ThemeData {
+function transformThemeDefinitionPartialToThemeDefinition(
+  themeDefinitionPartial: ThemeDefinitionPartial,
+): ThemeDefinition {
   return {
-    type: endsWith(themeDataPartial.id, THEME_SUFFIX_DARK) ? 'dark' : 'light',
-    ...themeDataPartial,
+    type: endsWith(themeDefinitionPartial.id, THEME_SUFFIX_DARK) ? 'dark' : 'light',
+    ...themeDefinitionPartial,
   };
 }
 
-function transformThemeContributionToAllThemeData(contribution: ThemeContribution): AllThemeData {
-  const themesData = ensureArray(contribution).map(transformThemeDataPartialToThemeData);
-  const allThemeData: AllThemeData = {};
+function transformThemeContributionToThemeDefinitionsById(
+  contribution: ThemeContribution,
+): ThemeDefinitionsById {
+  const themesData = ensureArray(contribution).map(
+    transformThemeDefinitionPartialToThemeDefinition,
+  );
+  const themeDefinitionsById: ThemeDefinitionsById = {};
 
-  themesData.forEach((themeData) => {
+  themesData.forEach((themeDefinition) => {
     // If the theme is already added as a pair of another theme, don't need to re-add it
-    if (allThemeData[themeData.id]) return;
+    if (themeDefinitionsById[themeDefinition.id]) return;
 
-    const themePair = getThemePair(themeData, themesData);
+    const themePair = getThemePair(themeDefinition, themesData);
 
-    allThemeData[themeData.id] = {
-      ...themeData,
+    themeDefinitionsById[themeDefinition.id] = {
+      ...themeDefinition,
       pairId: themePair?.id,
     };
 
     if (!themePair) return;
 
-    allThemeData[themePair.id] = {
+    themeDefinitionsById[themePair.id] = {
       ...themePair,
-      pairId: themeData.id,
+      pairId: themeDefinition.id,
     };
   });
 
-  return allThemeData;
+  return themeDefinitionsById;
 }
 
 // #endregion
@@ -110,12 +120,12 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
    * the current set of theme contributions. If all the input documents are static, then there is no
    * need to ever rebuild once all the documents have been contributed to this combiner.
    */
-  getAllThemeData(): AllThemeData | undefined {
+  getAllThemeDefinitionsById(): ThemeDefinitionsById | undefined {
     if (!this.latestOutput) return undefined;
 
     // All our validation and stuff was to make this the case
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return this.latestOutput as AllThemeData;
+    return this.latestOutput as ThemeDefinitionsById;
   }
 
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
@@ -125,7 +135,7 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
   protected override transformBaseDocumentAfterValidation(
     baseDocument: JsonDocumentLike,
   ): JsonDocumentLike {
-    return transformThemeContributionToAllThemeData(
+    return transformThemeContributionToThemeDefinitionsById(
       // We validated that this is true
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       baseDocument as ThemeContribution,
@@ -141,7 +151,7 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
     _documentName: string,
     document: JsonDocumentLike,
   ): JsonDocumentLike {
-    return transformThemeContributionToAllThemeData(
+    return transformThemeContributionToThemeDefinitionsById(
       // We validated that this is true
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       document as ThemeContribution,
@@ -151,6 +161,6 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
   protected override validateOutput(): void {
     // We already validated input documents and built the output ourselves, so we don't have any more
     // validating to do. Unless someday we want to double check we have a properly formatted
-    // `AllThemeData`
+    // `AllThemeDefinitionsById`
   }
 }

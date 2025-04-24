@@ -2853,13 +2853,13 @@ export declare const settingsDocumentSchema: {
 	};
 };
 /** The data an extension provides to inform Platform.Bible of the themes it provides. */
-export type ThemeContribution = ThemeDataPartial | ThemeDataPartial[];
+export type ThemeContribution = ThemeDefinitionPartial | ThemeDefinitionPartial[];
 /**
  * The data an extension provides for one theme. An extension can provide multiple themes with
- * {@link ThemeContribution}. This is then modified to `ThemeData` for use throughout the
+ * {@link ThemeContribution}. This is then modified to `ThemeDefinition` for use throughout the
  * application.
  */
-export interface ThemeDataPartial {
+export interface ThemeDefinitionPartial {
 	[k: string]: unknown;
 	/**
 	 * Programmatic name for the theme. Will be converted to kebab-case as this will be used as the
@@ -3041,7 +3041,7 @@ export declare const themeDocumentSchema: {
 				}[];
 			};
 		};
-		themeDataPartial: {
+		themeDefinitionPartial: {
 			description: string;
 			type: string;
 			properties: {
@@ -3068,7 +3068,7 @@ export declare const themeDocumentSchema: {
 		};
 	};
 };
-export type ThemeData = ThemeDataPartial & Required<Pick<ThemeDataPartial, "type">>;
+export type ThemeDefinition = ThemeDefinitionPartial & Required<Pick<ThemeDefinitionPartial, "type">>;
 /**
  * Optional suffix on the end of themes that are light type. A theme with the same name but with
  * {@link THEME_SUFFIX_DARK} suffix instead will be paired with a theme with this suffix (or no
@@ -3084,7 +3084,7 @@ export declare const THEME_SUFFIX_DARK = "-dark";
 /** ID for the style element the theme styles should go into */
 export declare const THEME_STYLE_ELEMENT_ID = "theme-styles";
 /** Gets the CSS stylesheet that should be applied for the given theme */
-export declare function getStylesheetForTheme(theme: ThemeData): string;
+export declare function getStylesheetForTheme(theme: ThemeDefinition): string;
 /**
  * Applies a CSS stylesheet for the provided theme to the current window
  *
@@ -3100,7 +3100,7 @@ export declare function getStylesheetForTheme(theme: ThemeData): string;
  *   {@link THEME_STYLE_ELEMENT_ID} with a dash and the suffix added to it
  * @returns
  */
-export declare function applyThemeStylesheet(this: Window, theme: ThemeData, previousStyleElement?: HTMLStyleElement, styleElementIdSuffix?: string): HTMLStyleElement;
+export declare function applyThemeStylesheet(this: Window, theme: ThemeDefinition, previousStyleElement?: HTMLStyleElement, styleElementIdSuffix?: string): HTMLStyleElement;
 /** Represents USJ formatted scripture with helpful utilities for working with it */
 export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private readonly usj;
