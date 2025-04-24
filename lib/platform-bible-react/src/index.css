@@ -19,12 +19,12 @@
     src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
   }
 
-  /*
-   * Theme colors in Platform.Bible. These are applied in CSS properties using `hsl(var(--varName))`
-   * or Tailwind classes like `tw-bg-primary`
+  /**
+   * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
+   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`
    *
-   * See the wiki's
-   * [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+   * See the wiki's [Matching Application
+   * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
    * section for more information
    */
   :root {

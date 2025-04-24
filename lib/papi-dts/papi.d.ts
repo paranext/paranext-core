@@ -5946,21 +5946,18 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
      */
     setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
      */
     setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide new interface languages in contributions
      */
     setAvailableInterfaceLanguages(): Promise<
       DataProviderUpdateInstructions<LocalizationDataDataTypes>
@@ -6597,11 +6594,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getMainMenu(): Promise<Localized<MultiColumnMenu>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param mainMenuType Does not have to be defined
-     * @param value MultiColumnMenu object to set as the localized main menu
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setMainMenu(
       mainMenuType: undefined,
@@ -6640,11 +6634,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getUnlocalizedMainMenu(): Promise<MultiColumnMenu>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param mainMenuType Does not have to be defined
-     * @param value MultiColumnMenu object to set as the unlocalized main menu
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setUnlocalizedMainMenu(
       mainMenuType: undefined,
@@ -6674,11 +6665,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param webViewType The type of webview for which a menu should be set
-     * @param value Menu of specified webViewType
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setWebViewMenu(
       webViewType: ReferencedItem,
@@ -6722,6 +6710,249 @@ declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   export const settingsService: ISettingsService;
   export default settingsService;
+}
+declare module 'shared/services/theme.service-model' {
+  import { OnDidDispose, PlatformError, UnsubscriberAsync, ThemeData } from 'platform-bible-utils';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  /**
+   *
+   * This name is used to register the theme service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const themeServiceDataProviderName = 'platform.themeServiceDataProvider';
+  export const themeServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the theme service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.themeServiceDataProvider';
+  }>;
+  export type AllThemeData = {
+    [themeId: string]: ThemeData | undefined;
+  };
+  /** ThemeDataTypes handles getting and setting the application theme. */
+  export type ThemeDataTypes = {
+    CurrentTheme: DataProviderDataType<undefined, ThemeData, string>;
+    ShouldMatchSystem: DataProviderDataType<undefined, boolean, boolean>;
+    AllThemes: DataProviderDataType<undefined, AllThemeData, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [themeServiceDataProviderName]: IThemeService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export type IThemeService = {
+    /**
+     *
+     * Retrieves the current theme information
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getCurrentTheme(selector: undefined): Promise<ThemeData>;
+    /**
+     *
+     * Retrieves the current theme information
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getCurrentTheme(): Promise<ThemeData>;
+    /**
+     * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
+     * pair of the type the system theme is set to, this will set the theme to the version of the
+     * theme that matches the current system theme.
+     *
+     * @param newThemeId The string id of the theme to change to
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If `newThemeId` is not a valid theme id
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setCurrentTheme(newThemeId: string): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
+     * pair of the type the system theme is set to, this will set the theme to the version of the
+     * theme that matches the current system theme.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param newThemeId The string id of the theme to change to
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setCurrentTheme(
+      selector: undefined,
+      newThemeId: string,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Sets the current theme to the theme with the same name (other than suffix) and the opposite
+     * type of the current theme.
+     *
+     * For example, `paratext-light` theme will flip to `paratext-dark`. `my-theme` will flip to
+     * `my-theme-dark`.
+     */
+    flipTheme(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Subscribes to updates of the current theme. Whenever the current theme changes, the callback
+     * function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called whenever the current theme is updated. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeCurrentTheme(
+      selector: undefined,
+      callback: (currentTheme: ThemeData | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
+     * current theme will match the system-wide theme where possible.
+     *
+     * If the current theme gets set to a theme with the wrong type but with a theme pair that is the
+     * right type, it will automatically change to that theme. If the system theme changes, the
+     * current theme will automatically attempt to change to match it.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getShouldMatchSystem(selector: undefined): Promise<boolean>;
+    /**
+     *
+     * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
+     * current theme will match the system-wide theme where possible.
+     *
+     * If the current theme gets set to a theme with the wrong type but with a theme pair that is the
+     * right type, it will automatically change to that theme. If the system theme changes, the
+     * current theme will automatically attempt to change to match it.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getShouldMatchSystem(): Promise<boolean>;
+    /**
+     * Sets whether the theme type should follow the system-wide theme (dark/light).
+     *
+     * @param shouldMatchSystem Whether the theme type should follow the system-wide theme
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setShouldMatchSystem(
+      shouldMatchSystem: boolean,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Sets whether the theme type should follow the system-wide theme (dark/light).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param shouldMatchSystem Whether the theme type should follow the system-wide theme
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setShouldMatchSystem(
+      selector: undefined,
+      shouldMatchSystem: boolean,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Subscribes to updates of whether the theme type should follow the system-wide theme
+     * (dark/light). Whenever `shouldMatchSystem` changes, the callback function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called whenever `shouldMatchSystem` is updated. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeShouldMatchSystem(
+      selector: undefined,
+      callback: (shouldMatchSystem: boolean | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Retrieves information about all themes available in the app. These are provided by the platform
+     * and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(selector: undefined): Promise<AllThemeData>;
+    /**
+     *
+     * Retrieves information about all themes available in the app. These are provided by the platform
+     * and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(): Promise<AllThemeData>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide themes in contributions
+     */
+    setAllThemes(
+      selector: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
+     * callback function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called when a theme is added/updated/removed. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeAllThemes(
+      selector: undefined,
+      callback: (allThemes: AllThemeData | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    IDataProvider<ThemeDataTypes> &
+    typeof themeServiceObjectToProxy;
+  /**
+   *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export type IThemeServiceLocal = IThemeService & {
+    /**
+     *
+     * Retrieves the current theme information
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getCurrentThemeSync(): ThemeData;
+  };
+}
+declare module 'shared/services/theme.service' {
+  import { IThemeService } from 'shared/services/theme.service-model';
+  export const themeService: IThemeService;
 }
 declare module 'shared/services/project-settings.service' {
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
@@ -6879,6 +7110,7 @@ declare module '@papi/backend' {
   import { MinimalNetworkObjectService } from 'shared/services/network-object.service';
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
+  import { IThemeService } from 'shared/services/theme.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
   import { INotificationService } from 'shared/models/notification.service-model';
@@ -7090,6 +7322,14 @@ declare module '@papi/backend' {
     storage: ExtensionStorageService;
     /** */
     settings: ISettingsService;
+    /**
+     *
+     * Service that allows to interact with the application theme.
+     *
+     * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+     * {@link IThemeServiceLocal}
+     */
+    themes: IThemeService;
     /**
      *
      * Service that allows to get and store menu data
@@ -7319,6 +7559,14 @@ declare module '@papi/backend' {
   export const storage: ExtensionStorageService;
   /** */
   export const settings: ISettingsService;
+  /**
+   *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export const themes: IThemeService;
   /**
    *
    * Service that allows to get and store menu data
@@ -8150,6 +8398,7 @@ declare module '@papi/frontend' {
   import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
+  import { IThemeServiceLocal } from 'shared/services/theme.service-model';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
@@ -8237,6 +8486,14 @@ declare module '@papi/frontend' {
     react: typeof papiReact;
     /** */
     settings: ISettingsService;
+    /**
+     *
+     * Service that allows to interact with the application theme.
+     *
+     * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+     * {@link IThemeServiceLocal}
+     */
+    themes: IThemeServiceLocal;
     /**
      *
      * Service that allows to get and store menu data
@@ -8343,6 +8600,14 @@ declare module '@papi/frontend' {
   export const react: typeof papiReact;
   /** */
   export const settings: ISettingsService;
+  /**
+   *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export const themes: IThemeServiceLocal;
   /**
    *
    * Service that allows to get and store menu data
