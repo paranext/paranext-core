@@ -31,7 +31,7 @@ import { IScrollGroupService } from '@shared/services/scroll-group.service-model
 import { settingsService } from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
 import { themeService } from '@shared/services/theme.service';
-import { IThemeService } from '@shared/services/theme.service-model';
+import { IThemeServiceLocal } from '@shared/services/theme.service-model';
 import { webViewService } from '@shared/services/web-view.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
 import { PapiRendererXMLHttpRequest } from './renderer-xml-http-request.service';
@@ -86,7 +86,7 @@ const papi = {
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as ISettingsService,
   /** JSDOC DESTINATION themeService */
-  themes: themeService as IThemeService,
+  themes: themeService as IThemeServiceLocal,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
   /** JSDOC DESTINATION scrollGroupService */
