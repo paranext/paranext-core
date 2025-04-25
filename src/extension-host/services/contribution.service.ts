@@ -12,6 +12,7 @@ import { ProjectSettingsDocumentCombiner } from '@shared/utils/project-settings-
 import { platformProjectSettings } from '@extension-host/data/core-project-settings-info.data';
 import { LocalizedStringsDocumentCombiner } from '@shared/utils/localized-strings-document-combiner';
 import { ThemesDocumentCombiner } from '@shared/utils/themes-document-combiner';
+import { DEFAULT_THEME_FAMILY } from '@shared/data/platform.data';
 
 // #region document combiners - manage the extension contributions. Services should layer over these
 
@@ -61,7 +62,10 @@ export const localizedStringsDocumentCombiner = new LocalizedStringsDocumentComb
  * Keeping this object separate from the data provider and disabling the `set` calls in the data
  * provider prevents random services from changing system theme contributions unexpectedly.
  */
-export const themesDocumentCombiner = new ThemesDocumentCombiner(themesDataObject);
+export const themesDocumentCombiner = new ThemesDocumentCombiner(
+  themesDataObject,
+  DEFAULT_THEME_FAMILY,
+);
 
 // #endregion
 

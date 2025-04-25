@@ -4,7 +4,7 @@ import {
   applyThemeStylesheet,
   getErrorMessage,
   isPlatformError,
-  ThemeDefinition,
+  ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
@@ -21,7 +21,7 @@ import {
   localThemeService,
 } from '@renderer/services/theme.service-host';
 import { App } from '@renderer/app.component';
-import { SCROLLBAR_STYLES } from '@renderer/theme';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -44,7 +44,7 @@ const applyThemeStylesheetRenderer = applyThemeStylesheet.bind(window);
  * @param themeDefinition Theme to apply
  * @param when Description of when this is being run e.g. 'subscribe'. Used for logging
  */
-const applyThemeSafe = (themeDefinition: ThemeDefinition, when: string) => {
+const applyThemeSafe = (themeDefinition: ThemeDefinitionExpanded, when: string) => {
   try {
     currentThemeElement = applyThemeStylesheetRenderer(themeDefinition, currentThemeElement);
   } catch (e) {
@@ -122,10 +122,10 @@ root.render(<App />);
 // #region set up the current theme
 
 const scrollbarStyleSheet = document.createElement('style');
-scrollbarStyleSheet.textContent = SCROLLBAR_STYLES;
+scrollbarStyleSheet.textContent = SCROLLBAR_STYLES_RAW;
 document.head.appendChild(scrollbarStyleSheet);
 
-// TODO: Test if this is worth doing or if I should just leave it in the subscribe section
+// Apply theme on first load since it applies the theme a lot faster than the subscribe application does
 const currentTheme = localThemeService.getCurrentThemeSync();
 applyThemeSafe(currentTheme, 'first load');
 

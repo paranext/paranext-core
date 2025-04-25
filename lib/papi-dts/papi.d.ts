@@ -6122,6 +6122,10 @@ declare module 'shared/data/platform.data' {
   export const PLATFORM_NAMESPACE = 'platform';
   /** Query string passed to the renderer when starting if it should enable noisy dev mode */
   export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
+  /** ID of the default theme family for use in the application */
+  export const DEFAULT_THEME_FAMILY = '';
+  /** Type of the default theme for use in the application */
+  export const DEFAULT_THEME_TYPE = 'light';
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
@@ -6806,56 +6810,13 @@ declare module 'shared/services/settings.service' {
   export const settingsService: ISettingsService;
   export default settingsService;
 }
-declare module 'shared/utils/themes-document-combiner' {
-  import { DocumentCombiner, JsonDocumentLike, ThemeDefinition } from 'platform-bible-utils';
-  /** {@link ThemeDefinition} with some extra information to help with managing the theme */
-  export type ThemeDefinitionExpanded = ThemeDefinition & {
-    /**
-     * Id of the theme this theme is paired with (light/dark). Used for flipping the theme. No pair if
-     * `undefined`
-     */
-    pairId: string | undefined;
-  };
-  /**
-   * {@link ThemeDefinitionExpanded} mapped by theme id. All extensions' theme contributions are
-   * combined and aggregated into one of these
-   */
-  export type ThemeDefinitionsById = {
-    [themeId: string]: ThemeDefinitionExpanded | undefined;
-  };
-  /** Combines Theme contributions */
-  export class ThemesDocumentCombiner extends DocumentCombiner {
-    constructor(baseDocument: JsonDocumentLike);
-    /**
-     * Get the current set of all theme data based on theme contributions given all the input
-     * documents. Localized string keys have not been localized to corresponding strings.
-     *
-     * NOTE: If the input documents might have changed since the last time the theme contributions
-     * were retrieved, you can call `rebuild` to incorporate those document changes before calling
-     * this getter. For example, if one of the input document objects changed and
-     * `addOrUpdateContribution` wasn't called explicitly, those document changes will not be seen in
-     * the current set of theme contributions. If all the input documents are static, then there is no
-     * need to ever rebuild once all the documents have been contributed to this combiner.
-     */
-    getAllThemeDefinitionsById(): ThemeDefinitionsById | undefined;
-    protected validateBaseDocument(baseDocument: JsonDocumentLike): void;
-    protected transformBaseDocumentAfterValidation(
-      baseDocument: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateContribution(documentName: string, document: JsonDocumentLike): void;
-    protected transformContributionAfterValidation(
-      _documentName: string,
-      document: JsonDocumentLike,
-    ): JsonDocumentLike;
-    protected validateOutput(): void;
-  }
-}
 declare module 'shared/services/theme.service-model' {
   import {
     OnDidDispose,
     PlatformError,
     UnsubscriberAsync,
-    ThemeDefinition,
+    ThemeDefinitionExpanded,
+    ThemeFamiliesByIdExpanded,
   } from 'platform-bible-utils';
   import { IDataProvider } from 'shared/models/data-provider.interface';
   import {
@@ -6863,7 +6824,6 @@ declare module 'shared/services/theme.service-model' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
-  import { ThemeDefinitionsById } from 'shared/utils/themes-document-combiner';
   /**
    *
    * This name is used to register the theme service data provider on the papi. You can use this
@@ -6878,11 +6838,25 @@ declare module 'shared/services/theme.service-model' {
      */
     dataProviderName: 'platform.themeServiceDataProvider';
   }>;
+  /**
+   * Object containing any/all of the identifying information for a theme.
+   *
+   * Use this when setting the current theme. Can set just theme family, just theme type, or both
+   */
+  export type CurrentThemeSpecifier = {
+    /** Which theme family to change to. Does not change `shouldMatchSystem` */
+    themeFamilyId?: string;
+    /**
+     * Which theme type to change to (e.g. 'light', 'dark'). If this does not match system theme, sets
+     * `shouldMatchSystem` to false
+     */
+    type?: string;
+  };
   /** ThemeDataTypes handles getting and setting the application theme. */
   export type ThemeDataTypes = {
-    CurrentTheme: DataProviderDataType<undefined, ThemeDefinition, string>;
+    CurrentTheme: DataProviderDataType<undefined, ThemeDefinitionExpanded, CurrentThemeSpecifier>;
     ShouldMatchSystem: DataProviderDataType<undefined, boolean, boolean>;
-    AllThemes: DataProviderDataType<undefined, ThemeDefinitionsById, never>;
+    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -6904,7 +6878,7 @@ declare module 'shared/services/theme.service-model' {
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getCurrentTheme(selector: undefined): Promise<ThemeDefinition>;
+    getCurrentTheme(selector: undefined): Promise<ThemeDefinitionExpanded>;
     /**
      *
      * Retrieves the current theme information
@@ -6912,40 +6886,33 @@ declare module 'shared/services/theme.service-model' {
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getCurrentTheme(): Promise<ThemeDefinition>;
+    getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
     /**
-     * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
-     * pair of the type the system theme is set to, this will set the theme to the version of the
-     * theme that matches the current system theme.
+     * Sets the current theme family and/or type.
      *
-     * @param newThemeId The string id of the theme to change to
+     * @param newThemeSpecifier Which theme family and/or type to set to. See
+     *   {@link CurrentThemeSpecifier} for more info
      * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
-     * @throws If `newThemeId` is not a valid theme id
+     * @throws If `newThemeSpecifier` specified theme family or type that do not exist
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
-    setCurrentTheme(newThemeId: string): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    setCurrentTheme(
+      newThemeSpecifier: CurrentThemeSpecifier,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     /**
-     * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
-     * pair of the type the system theme is set to, this will set the theme to the version of the
-     * theme that matches the current system theme.
+     * Sets the current theme family and/or type.
      *
      * @param selector `undefined`. Does not have to be provided
-     * @param newThemeId The string id of the theme to change to
+     * @param newThemeSpecifier Which theme family and/or type to set to. See
+     *   {@link CurrentThemeSpecifier} for more info
      * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If `newThemeSpecifier` specified theme family or type that do not exist
      * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
     setCurrentTheme(
       selector: undefined,
-      newThemeId: string,
+      newThemeSpecifier: CurrentThemeSpecifier,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
-    /**
-     * Sets the current theme to the theme with the same name (other than suffix) and the opposite
-     * type of the current theme.
-     *
-     * For example, `paratext-light` theme will flip to `paratext-dark`. `my-theme` will flip to
-     * `my-theme-dark`.
-     */
-    flipTheme(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     /**
      * Subscribes to updates of the current theme. Whenever the current theme changes, the callback
      * function is executed.
@@ -6960,7 +6927,7 @@ declare module 'shared/services/theme.service-model' {
      */
     subscribeCurrentTheme(
       selector: undefined,
-      callback: (currentTheme: ThemeDefinition | PlatformError) => void,
+      callback: (currentTheme: ThemeDefinitionExpanded | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
     /**
@@ -6968,9 +6935,8 @@ declare module 'shared/services/theme.service-model' {
      * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
      * current theme will match the system-wide theme where possible.
      *
-     * If the current theme gets set to a theme with the wrong type but with a theme pair that is the
-     * right type, it will automatically change to that theme. If the system theme changes, the
-     * current theme will automatically attempt to change to match it.
+     * If the system theme changes, the current theme will automatically change to match it if there
+     * is a theme with the matching type in the currently selected theme family.
      *
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
@@ -6981,9 +6947,8 @@ declare module 'shared/services/theme.service-model' {
      * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
      * current theme will match the system-wide theme where possible.
      *
-     * If the current theme gets set to a theme with the wrong type but with a theme pair that is the
-     * right type, it will automatically change to that theme. If the system theme changes, the
-     * current theme will automatically attempt to change to match it.
+     * If the system theme changes, the current theme will automatically change to match it if there
+     * is a theme with the matching type in the currently selected theme family.
      *
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
@@ -7030,22 +6995,22 @@ declare module 'shared/services/theme.service-model' {
     ): Promise<UnsubscriberAsync>;
     /**
      *
-     * Retrieves information about all themes available in the app. These are provided by the platform
-     * and by extensions.
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
      *
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getAllThemes(selector: undefined): Promise<ThemeDefinitionsById>;
+    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
     /**
      *
-     * Retrieves information about all themes available in the app. These are provided by the platform
-     * and by extensions.
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
      *
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getAllThemes(): Promise<ThemeDefinitionsById>;
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
     /**
      * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
      * provide themes in contributions
@@ -7068,7 +7033,7 @@ declare module 'shared/services/theme.service-model' {
      */
     subscribeAllThemes(
       selector: undefined,
-      callback: (allThemes: ThemeDefinitionsById | PlatformError) => void,
+      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
   } & OnDidDispose &
@@ -7089,7 +7054,7 @@ declare module 'shared/services/theme.service-model' {
      * @param selector `undefined`. Does not have to be provided
      * @returns Information about the currently selected theme
      */
-    getCurrentThemeSync(): ThemeDefinition;
+    getCurrentThemeSync(): ThemeDefinitionExpanded;
   };
 }
 declare module 'shared/services/theme.service' {
@@ -8461,6 +8426,77 @@ declare module 'renderer/hooks/papi-hooks/index' {
 }
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
+}
+declare module 'renderer/services/theme.service-host' {
+  import {
+    ThemeDataTypes,
+    IThemeServiceLocal,
+    CurrentThemeSpecifier,
+  } from 'shared/services/theme.service-model';
+  import {
+    DataProviderEngine,
+    IDataProviderEngine,
+  } from 'shared/models/data-provider-engine.model';
+  import { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
+  import {
+    PlatformEvent,
+    ThemeFamiliesByIdExpanded,
+    ThemeDefinitionExpanded,
+  } from 'platform-bible-utils';
+  class ThemeDataProviderEngine
+    extends DataProviderEngine<ThemeDataTypes>
+    implements IDataProviderEngine<ThemeDataTypes>
+  {
+    #private;
+    currentTheme: ThemeDefinitionExpanded;
+    saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void;
+    shouldMatchSystem: boolean;
+    saveShouldMatchSystem: (shouldMatchSystem: boolean) => void;
+    currentSystemTheme: 'light' | 'dark';
+    /** All Theme Data available to the application. `undefined` if not yet loaded. */
+    allThemeFamiliesById: ThemeFamiliesByIdExpanded | undefined;
+    private unsubscribeOnDidUpdateAllThemes;
+    constructor(
+      currentTheme: ThemeDefinitionExpanded,
+      saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
+      shouldMatchSystem: boolean,
+      saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
+      onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
+      currentSystemTheme: 'light' | 'dark',
+      onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
+    );
+    getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
+    setCurrentTheme(
+      newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
+      newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    getShouldMatchSystem(): Promise<boolean>;
+    setShouldMatchSystem(
+      newShouldMatchSystemPossiblyUndefinedSelector: boolean | undefined,
+      newShouldMatchSystemPossiblyNotProvided?: boolean,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
+    setAllThemes(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    dispose(): Promise<boolean>;
+  }
+  export function initialize(): Promise<void>;
+  /** This is an internal-only export for testing purposes and should not be used in development */
+  export const testingThemeService: {
+    implementThemeDataProviderEngine: (
+      currentTheme: ThemeDefinitionExpanded,
+      saveCurrentTheme: () => void,
+      shouldMatchSystem: boolean,
+      saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
+      onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
+      currentSystemTheme: 'light' | 'dark',
+      onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
+    ) => ThemeDataProviderEngine;
+  };
+  /**
+   * Theme service that is available locally in the renderer only and can perform synchronous
+   * operations
+   */
+  export const localThemeService: IThemeServiceLocal;
 }
 declare module 'renderer/services/renderer-xml-http-request.service' {
   /** This wraps the browser's XMLHttpRequest implementation to

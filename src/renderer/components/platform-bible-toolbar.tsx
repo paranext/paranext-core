@@ -29,7 +29,7 @@ import {
   isPlatformError,
   LocalizeKey,
   ScrollGroupId,
-  ThemeDefinition,
+  ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
@@ -42,10 +42,11 @@ import { localThemeService } from '@renderer/services/theme.service-host';
 const TOOLTIP_DELAY = 300;
 
 /** Placeholder theme to detect when we are loading */
-const DEFAULT_THEME_VALUE: ThemeDefinition = {
+const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
+  themeFamilyId: '',
+  type: 'light',
   id: 'light',
   label: '%unused%',
-  type: 'light',
   cssVariables: {},
 };
 
@@ -145,18 +146,9 @@ export function PlatformBibleToolbar() {
   /** Get the theme on first load so we can show the right symbol on the toolbar */
   const themeOnFirstLoad = useMemo(() => localThemeService.getCurrentThemeSync(), []);
 
-  const [theme] = useData<typeof themeServiceDataProviderName>(themeDataProvider).CurrentTheme(
-    undefined,
-    DEFAULT_THEME_VALUE,
-  );
-
-  const flipTheme = useCallback(async () => {
-    try {
-      await themeDataProvider?.flipTheme();
-    } catch (e) {
-      logger.warn(`Failed to flip theme with toolbar button. ${getErrorMessage(e)}`);
-    }
-  }, [themeDataProvider]);
+  const [theme, setTheme] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
 
   // Warn if the theme came back as a PlatformError. Will handle the PlatformError in the jsx too
   useEffect(() => {
@@ -218,7 +210,18 @@ export function PlatformBibleToolbar() {
                   variant="ghost"
                   size="icon"
                   className="pr-twp tw-h-8 tw-flex-shrink-0"
-                  onClick={() => isThemeLoadedNotError && flipTheme()}
+                  onClick={() => {
+                    if (!isThemeLoadedNotError) return;
+
+                    const newThemeType = theme.type === 'dark' ? 'light' : 'dark';
+                    try {
+                      setTheme?.({ type: newThemeType });
+                    } catch (e) {
+                      logger.warn(
+                        `Toolbar caught an error while trying to set theme to ${newThemeType}: ${getErrorMessage(e)}`,
+                      );
+                    }
+                  }}
                   disabled={!isThemeLoadedNotError}
                 >
                   {themeTypeEffective === 'dark' ? <Moon /> : <Sun />}
