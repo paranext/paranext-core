@@ -4,65 +4,41 @@ import {
   themeServiceObjectToProxy,
   themeServiceDataProviderName,
   IThemeServiceLocal,
+  CurrentThemeSpecifier,
 } from '@shared/services/theme.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
   createSyncProxyForAsyncObject,
+  expandThemeContribution,
   Unsubscriber,
   deserialize,
   serialize,
   PlatformEvent,
   deepEqual,
-  ThemeDefinition,
   PlatformEventEmitter,
-} from 'platform-bible-utils';
-import {
-  ThemeDefinitionsById,
+  ThemeFamiliesByIdExpanded,
   ThemeDefinitionExpanded,
-} from '@shared/utils/themes-document-combiner';
+  ThemeFamiliesById,
+} from 'platform-bible-utils';
 import themesDataObject from '@shared/data/themes.data.json';
+import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.data';
 
-const LIGHT_THEME_ID = 'light';
-const DARK_THEME_ID = 'dark';
-const PARATEXT_LIGHT_THEME_ID = 'paratext-light';
-const PARATEXT_DARK_THEME_ID = 'paratext-dark';
+/** Themes that are built into the software. Used for loading themes immediately */
+const BUILT_IN_THEMES: ThemeFamiliesByIdExpanded = expandThemeContribution(
+  // We know this is the right data type because we write this data
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  themesDataObject as ThemeFamiliesById,
+  undefined,
+);
 
-// We know what type this JSON file is and what themes are in it, so we're using it
-// eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-unnecessary-type-assertion
-const LIGHT_THEME: ThemeDefinitionExpanded = (themesDataObject as ThemeDefinitionExpanded[]).find(
-  (theme) => theme.id === LIGHT_THEME_ID,
-)!;
-
-// We know what type this JSON file is and what themes are in it, so we're using it
-// eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-unnecessary-type-assertion
-const DARK_THEME: ThemeDefinitionExpanded = (themesDataObject as ThemeDefinitionExpanded[]).find(
-  (theme) => theme.id === DARK_THEME_ID,
-)!;
-
-const PARATEXT_LIGHT_THEME: ThemeDefinitionExpanded =
-  // We know what type this JSON file is and what themes are in it, so we're using it
-  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-unnecessary-type-assertion
-  (themesDataObject as ThemeDefinitionExpanded[]).find(
-    (theme) => theme.id === PARATEXT_LIGHT_THEME_ID,
-  )!;
-
-const PARATEXT_DARK_THEME: ThemeDefinitionExpanded =
-  // We know what type this JSON file is and what themes are in it, so we're using it
-  // eslint-disable-next-line no-type-assertion/no-type-assertion, @typescript-eslint/no-unnecessary-type-assertion
-  (themesDataObject as ThemeDefinitionExpanded[]).find(
-    (theme) => theme.id === PARATEXT_DARK_THEME_ID,
-  )!;
-
-const BUILT_IN_THEMES: ThemeDefinitionsById = Object.freeze({
-  [LIGHT_THEME.id]: LIGHT_THEME,
-  [DARK_THEME.id]: DARK_THEME,
-  [PARATEXT_LIGHT_THEME.id]: PARATEXT_LIGHT_THEME,
-  [PARATEXT_DARK_THEME.id]: PARATEXT_DARK_THEME,
-});
-
-const DEFAULT_THEME = LIGHT_THEME;
+const defaultThemePossiblyUndefined = BUILT_IN_THEMES[DEFAULT_THEME_FAMILY]?.[DEFAULT_THEME_TYPE];
+if (!defaultThemePossiblyUndefined)
+  throw new Error(
+    `Theme service host could not find the built-in default theme! Family ${DEFAULT_THEME_FAMILY} type ${DEFAULT_THEME_TYPE}. This should not happen.`,
+  );
+const DEFAULT_THEME: ThemeDefinitionExpanded = defaultThemePossiblyUndefined;
 
 // #region interacting with localStorage
 
@@ -73,11 +49,11 @@ const currentThemeSerialized = localStorage.getItem(CURRENT_THEME_STORAGE_KEY);
 // Load the whole theme data from localStorage now, then we will retrieve the actual theme data for
 // this theme when we can
 /** Current application theme that should be applied at startup. Will not be used afterward */
-const currentThemeFromLocalStorage: ThemeDefinition = currentThemeSerialized
+const currentThemeFromLocalStorage: ThemeDefinitionExpanded = currentThemeSerialized
   ? (deserialize(currentThemeSerialized) ?? {})
   : DEFAULT_THEME;
 
-function saveCurrentThemeToLocalStorage(newCurrentTheme: ThemeDefinition) {
+function saveCurrentThemeToLocalStorage(newCurrentTheme: ThemeDefinitionExpanded) {
   localStorage.setItem(CURRENT_THEME_STORAGE_KEY, serialize(newCurrentTheme));
 }
 
@@ -140,38 +116,38 @@ class ThemeDataProviderEngine
   implements IDataProviderEngine<ThemeDataTypes>
 {
   /** All Theme Data available to the application. `undefined` if not yet loaded. */
-  allThemeDefinitionsById: ThemeDefinitionsById | undefined;
+  allThemeFamiliesById: ThemeFamiliesByIdExpanded | undefined;
   private unsubscribeOnDidUpdateAllThemes: Unsubscriber | undefined;
 
   constructor(
-    public currentTheme: ThemeDefinition,
-    public saveCurrentTheme: (currentTheme: ThemeDefinition) => void,
+    public currentTheme: ThemeDefinitionExpanded,
+    public saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
     public shouldMatchSystem: boolean,
     public saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-    onDidUpdateAllThemes: PlatformEvent<ThemeDefinitionsById>,
+    onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
     public currentSystemTheme: 'light' | 'dark',
     onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
   ) {
     super();
 
     // Immediately subscribe to and get latest themes
-    const updateAllThemeDefinitions = (allThemeDefinitions: ThemeDefinitionsById) => {
-      this.allThemeDefinitionsById = allThemeDefinitions;
+    const updateAllThemeFamilies = (allThemeFamilies: ThemeFamiliesByIdExpanded) => {
+      this.allThemeFamiliesById = allThemeFamilies;
       const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
 
-      const updatedCurrentTheme = this.allThemeDefinitionsById[this.currentTheme.id];
+      const updatedCurrentTheme =
+        this.allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
       // If the current theme no longer exists, set back to default
       if (!updatedCurrentTheme) {
         this.#setCurrentThemeNoUpdate(
-          this.allThemeDefinitionsById[DEFAULT_THEME.id] ?? DEFAULT_THEME,
+          this.allThemeFamiliesById[DEFAULT_THEME_FAMILY]?.[this.currentTheme.type] ??
+            DEFAULT_THEME,
         );
         dataTypesToUpdate.push('CurrentTheme');
       }
-      // If we should match the system theme, flip the theme to the system-matching version
-      else if (this.shouldMatchSystem && updatedCurrentTheme.type !== this.currentSystemTheme) {
-        this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
+      // If we should match the system theme, flip the theme to the system-matching version in the same family
+      else if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate())
         dataTypesToUpdate.push('CurrentTheme');
-      }
       // If the current theme's definition was updated, update it
       else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
         this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
@@ -181,66 +157,68 @@ class ThemeDataProviderEngine
       // Notify others that theme data changed
       this.notifyUpdate(dataTypesToUpdate);
     };
-    onDidUpdateAllThemes(updateAllThemeDefinitions);
+    onDidUpdateAllThemes(updateAllThemeFamilies);
 
     // TODO: REMOVE THIS WHEN WE HAVE CONTRIBUTIONS
-    updateAllThemeDefinitions(BUILT_IN_THEMES);
+    updateAllThemeFamilies(BUILT_IN_THEMES);
 
     // Listen to system theme change and update current theme
     const updateThemeToSystem = (newThemeType: 'light' | 'dark') => {
       this.currentSystemTheme = newThemeType;
 
-      if (!this.shouldMatchSystem || this.currentTheme.type === newThemeType) return;
-
-      const flippedTheme = this.#getFlippedTheme();
-      if (!flippedTheme) return;
-
-      this.setCurrentTheme(flippedTheme.id);
+      if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) this.notifyUpdate('CurrentTheme');
     };
     updateThemeToSystem(currentSystemTheme);
     onDidChangeSystemTheme(updateThemeToSystem);
   }
 
-  async getCurrentTheme(): Promise<ThemeDefinition> {
+  async getCurrentTheme(): Promise<ThemeDefinitionExpanded> {
     return this.currentTheme;
   }
 
   // Can be called with or without a selector
   async setCurrentTheme(
-    newThemeIdPossiblyUndefinedSelector: string | undefined,
-    newThemeIdPossiblyNotProvided?: string,
+    newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
+    newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
     // TODO: AWAIT GETTING ALLTHEMEDEFINITIONS
 
-    let newThemeId = newThemeIdPossiblyUndefinedSelector ?? newThemeIdPossiblyNotProvided;
-    if (newThemeId === '') newThemeId = DEFAULT_THEME.id;
+    const newThemeSpecifier =
+      newThemeSpecifierPossiblyUndefinedSelector ?? newThemeSpecifierPossiblyNotProvided;
 
-    if (!newThemeId) throw new Error('Theme ID not provided');
-    if (newThemeId === this.currentTheme.id) return false;
-    const newTheme = this.allThemeDefinitionsById?.[newThemeId];
-    if (!newTheme) throw new Error(`Theme definition not found for id ${newThemeId}`);
+    // Throw if no specifier or doesn't contain any information
+    if (!newThemeSpecifier || (!newThemeSpecifier.themeFamilyId && !newThemeSpecifier.type))
+      throw new Error('Theme specifier not provided or did not contain at least family id or type');
 
-    this.#setCurrentThemeNoUpdate(newTheme);
-    return true;
-  }
+    // Backfill with current theme information so both are defined
+    const newThemeSpecifierFilled = {
+      themeFamilyId: this.currentTheme.themeFamilyId,
+      type: this.currentTheme.type,
+      ...newThemeSpecifier,
+    };
 
-  async flipTheme(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
-    // TODO: AWAIT GETTING ALLTHEMEDEFINITIONS
-
-    const flippedTheme = this.#getFlippedTheme();
-    if (!flippedTheme) return false;
+    // If the specified theme is the current theme, no change
+    if (
+      newThemeSpecifierFilled.themeFamilyId === this.currentTheme.themeFamilyId &&
+      newThemeSpecifierFilled.type === this.currentTheme.type
+    )
+      return false;
 
     const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['CurrentTheme'];
 
-    // Flipping the theme implies they don't want to follow system theme anymore
-    if (this.shouldMatchSystem) {
+    const newTheme =
+      this.allThemeFamiliesById?.[newThemeSpecifierFilled.themeFamilyId]?.[
+        newThemeSpecifierFilled.type
+      ];
+    if (!newTheme) throw new Error(`Theme definition not found for id ${newThemeSpecifier}`);
+
+    // If we're currently matching system and change type, turn off matching system
+    if (this.shouldMatchSystem && newThemeSpecifierFilled.type !== this.currentTheme.type) {
       this.#setShouldMatchSystemNoUpdate(false);
       dataTypesToUpdate.push('ShouldMatchSystem');
     }
 
-    this.#setCurrentThemeNoUpdate(flippedTheme);
-
-    this.notifyUpdate(dataTypesToUpdate);
+    this.#setCurrentThemeNoUpdate(newTheme);
     return dataTypesToUpdate;
   }
 
@@ -261,18 +239,15 @@ class ThemeDataProviderEngine
     const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['ShouldMatchSystem'];
     this.#setShouldMatchSystemNoUpdate(newShouldMatchSystem);
 
-    // If we should match the system theme, flip the theme to the system-matching version
-    if (this.shouldMatchSystem && this.currentTheme.type !== this.currentSystemTheme) {
-      this.#setCurrentThemeNoUpdate(this.currentTheme);
-      dataTypesToUpdate.push('CurrentTheme');
-    }
+    // If we should match the system theme, flip the theme to the system-matching version in the same family
+    if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) dataTypesToUpdate.push('CurrentTheme');
 
     return dataTypesToUpdate;
   }
 
-  async getAllThemes(): Promise<ThemeDefinitionsById> {
+  async getAllThemes(): Promise<ThemeFamiliesByIdExpanded> {
     // TODO: SET UP TO WAIT FOR allThemeDefinitions
-    return this.allThemeDefinitionsById ?? {};
+    return this.allThemeFamiliesById ?? {};
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
@@ -290,15 +265,8 @@ class ThemeDataProviderEngine
     return true;
   }
 
-  #setCurrentThemeNoUpdate(newTheme: ThemeDefinition) {
+  #setCurrentThemeNoUpdate(newTheme: ThemeDefinitionExpanded) {
     this.currentTheme = newTheme;
-
-    // If we should match system theme and the theme has a version that matches system theme, set it
-    // to that system theme version. Otherwise, just set to the new theme
-    if (this.shouldMatchSystem && newTheme.type !== this.currentSystemTheme) {
-      this.currentTheme = this.#getFlippedTheme(newTheme.id) ?? newTheme;
-    }
-
     this.saveCurrentTheme(this.currentTheme);
   }
 
@@ -308,27 +276,34 @@ class ThemeDataProviderEngine
   }
 
   /**
-   * Returns the flipped light/dark theme data for the provided theme
+   * Returns the theme from the current theme family that matches the current system theme.
    *
-   * @param themeId Theme id to get flipped data for. Defaults to current theme
-   * @returns Flipped theme data for `themeId` or `undefined` if not found
+   * @returns Theme from current theme family matching system theme or `undefined` if not found
    */
-  #getFlippedTheme(themeId = this.currentTheme.id): ThemeDefinition | undefined {
-    const { allThemeDefinitionsById: allThemeDefinitions } = this;
-    if (!allThemeDefinitions)
-      throw new Error('All theme definitions not available. This should not happen');
+  #getCurrentThemeMatchingSystem(): ThemeDefinitionExpanded | undefined {
+    return this.allThemeFamiliesById?.[this.currentTheme.themeFamilyId]?.[this.currentSystemTheme];
+  }
 
-    const flippedThemeId = allThemeDefinitions[themeId]?.pairId;
+  /**
+   * If we should match the system theme and there is a theme in the current family with the type
+   * matching the system theme, set the current theme to the system-matching version in the same
+   * family. Do nothing if we should not or cannot match current theme type to system.
+   *
+   * Does not send out any updates
+   *
+   * @returns `true` if changed the theme; `false` otherwise
+   */
+  #tryMatchCurrentThemeTypeToSystemNoUpdate(): boolean {
+    const updatedCurrentThemeMatchingSystem = this.#getCurrentThemeMatchingSystem();
+    if (
+      !this.shouldMatchSystem ||
+      this.currentTheme.type === this.currentSystemTheme ||
+      !updatedCurrentThemeMatchingSystem
+    )
+      return false;
 
-    if (!flippedThemeId) return undefined;
-
-    const flippedTheme = allThemeDefinitions[flippedThemeId];
-    if (!flippedTheme)
-      throw new Error(
-        `Flipped theme definition not found for id ${flippedThemeId}. This should not happen`,
-      );
-
-    return flippedTheme;
+    this.#setCurrentThemeNoUpdate(updatedCurrentThemeMatchingSystem);
+    return true;
   }
 }
 
@@ -377,11 +352,11 @@ export async function initialize(): Promise<void> {
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingThemeService = {
   implementThemeDataProviderEngine: (
-    currentTheme: ThemeDefinition,
+    currentTheme: ThemeDefinitionExpanded,
     saveCurrentTheme: () => void,
     shouldMatchSystem: boolean,
     saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-    onDidUpdateAllThemes: PlatformEvent<ThemeDefinitionsById>,
+    onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
     currentSystemTheme: 'light' | 'dark',
     onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
   ) => {

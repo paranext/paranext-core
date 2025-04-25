@@ -70,7 +70,7 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import { SCROLLBAR_STYLES, THEME } from '@renderer/theme';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { localThemeService } from '@renderer/services/theme.service-host';
 
 /**
@@ -1129,7 +1129,7 @@ export const openWebView = async (
                 : ''
             }
           </head>
-          <body class="${THEME}">
+          <body>
             <div id="root">
             </div>
             <script nonce="${srcNonce}">${reactWebView.content}
@@ -1279,7 +1279,7 @@ export const openWebView = async (
     ${imports}
     </script>
     <style nonce="${srcNonce}">
-      ${SCROLLBAR_STYLES}
+      ${SCROLLBAR_STYLES_RAW}
     </style>
     ${themeStylesheet}${substring(webViewContent, headEnd + 1)}`;
   }

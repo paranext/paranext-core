@@ -7,31 +7,33 @@ import { removeJsonToTypeScriptTypesStuff } from './settings.model';
 import { LocalizeKey } from './menus.model';
 
 /** The data an extension provides to inform Platform.Bible of the themes it provides. */
-export type ThemeContribution = ThemeDefinitionPartial | ThemeDefinitionPartial[];
+export type ThemeContribution = ThemeFamiliesById;
+
+/** Object whose keys are theme family ids and whose values are {@link ThemeFamily}. */
+export interface ThemeFamiliesById {
+  [themeFamilyId: string]: ThemeFamily | undefined;
+}
 
 /**
- * The data an extension provides for one theme. An extension can provide multiple themes with
- * {@link ThemeContribution}. This is then modified to `ThemeDefinition` for use throughout the
- * application.
+ * A group of related themes. Each key is a theme type, and each value is a {@link ThemeDefinition}.
+ *
+ * A theme type indicates the kind of theme (e.g. light, dark). Some UI elements use the theme type
+ * to determine how to look. Colors not present in the theme will fall back to the built-in colors
+ * for this type.
  */
-export interface ThemeDefinitionPartial {
+export interface ThemeFamily {
+  [themeType: string]: ThemeDefinition | undefined;
+  light?: ThemeDefinition;
+  dark?: ThemeDefinition;
+}
+
+/**
+ * The data an extension provides for one individual theme. Each theme has a type (e.g. light, dark)
+ * and belongs to a theme family. An extension can provide multiple themes with
+ * {@link ThemeContribution}.
+ */
+export interface ThemeDefinition {
   [k: string]: unknown;
-  /**
-   * Programmatic name for the theme. Will be converted to kebab-case as this will be used as the
-   * class name in the HTML document.
-   *
-   * If `type` is not specified, it will be determined by whether this ends with `-dark`.
-   */
-  id: string;
-  /**
-   * What kind of theme this is. Some UI elements use this to determine how to look. Colors not
-   * present in the theme will fall back to the built-in colors for this type. This theme may be
-   * paired to a theme of the opposite type (light/dark) by `id` for quick theme switching. For
-   * example, `id: 'my-theme'` and `id: 'my-theme-dark'` would be paired together.
-   *
-   * If this is not specified, it will be determined by whether `id` ends with `-dark`.
-   */
-  type?: 'light' | 'dark';
   /** LocalizeKey that is the display name for the theme */
   label: LocalizeKey;
   /**
@@ -123,22 +125,11 @@ const themeDefs = {
     },
     additionalProperties: { anyOf: [{ type: 'string' }, { type: 'null' }] },
   },
-  themeDefinitionPartial: {
+  themeDefinition: {
     description:
-      'The data an extension provides for one theme. An extension can provide multiple themes with {@link ThemeContribution}. This is then modified to `ThemeDefinition` for use throughout the application.',
+      'The data an extension provides for one individual theme. Each theme has a type (e.g. light, dark) and belongs to a theme family. An extension can provide multiple themes with {@link ThemeContribution}.',
     type: 'object',
     properties: {
-      id: {
-        description:
-          'Programmatic name for the theme. Will be converted to kebab-case as this will be used as the class name in the HTML document.\n\nIf `type` is not specified, it will be determined by whether this ends with `-dark`.',
-        type: 'string',
-      },
-      type: {
-        description:
-          "What kind of theme this is. Some UI elements use this to determine how to look. Colors not present in the theme will fall back to the built-in colors for this type. This theme may be paired to a theme of the opposite type (light/dark) by `id` for quick theme switching. For example, `id: 'my-theme'` and `id: 'my-theme-dark'` would be paired together.\n\nIf this is not specified, it will be determined by whether `id` ends with `-dark`.",
-        type: 'string',
-        enum: ['light', 'dark'],
-      },
       label: {
         description: 'LocalizeKey that is the display name for the theme',
         type: 'string',
@@ -149,7 +140,40 @@ const themeDefs = {
         $ref: '#/$defs/themeCssVariables',
       },
     },
-    required: ['id', 'label', 'cssVariables'],
+    required: ['label', 'cssVariables'],
+  },
+  themeFamily: {
+    description:
+      'A group of related themes. Each key is a theme type, and each value is a {@link ThemeDefinition}.\n\nA theme type indicates the kind of theme (e.g. light, dark). Some UI elements use the theme type to determine how to look. Colors not present in the theme will fall back to the built-in colors for this type.',
+    type: 'object',
+    properties: {
+      light: {
+        $ref: '#/$defs/themeDefinition',
+      },
+      dark: {
+        $ref: '#/$defs/themeDefinition',
+      },
+    },
+    additionalProperties: {
+      anyOf: [
+        {
+          $ref: '#/$defs/themeDefinition',
+        },
+        { type: 'null' },
+      ],
+    },
+  },
+  themeFamiliesById: {
+    description: 'Object whose keys are theme family ids and whose values are {@link ThemeFamily}.',
+    type: 'object',
+    additionalProperties: {
+      anyOf: [
+        {
+          $ref: '#/$defs/themeFamily',
+        },
+        { type: 'null' },
+      ],
+    },
   },
 };
 
@@ -162,13 +186,7 @@ export const themeDocumentSchema = {
   description: 'The data an extension provides to inform Platform.Bible of the themes it provides.',
   anyOf: [
     {
-      $ref: '#/$defs/themeDefinitionPartial',
-    },
-    {
-      type: 'array',
-      items: {
-        $ref: '#/$defs/themeDefinitionPartial',
-      },
+      $ref: '#/$defs/themeFamiliesById',
     },
   ],
   $defs: themeDefs,

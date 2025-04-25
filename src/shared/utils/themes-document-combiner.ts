@@ -1,33 +1,13 @@
 import {
   DocumentCombiner,
-  endsWith,
-  ensureArray,
+  expandThemeContribution,
   JsonDocumentLike,
-  slice,
-  THEME_SUFFIX_DARK,
-  THEME_SUFFIX_LIGHT,
   ThemeContribution,
-  ThemeDefinition,
-  ThemeDefinitionPartial,
   themeDocumentSchema,
+  ThemeFamiliesByIdExpanded,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-
-/** {@link ThemeDefinition} with some extra information to help with managing the theme */
-export type ThemeDefinitionExpanded = ThemeDefinition & {
-  /**
-   * Id of the theme this theme is paired with (light/dark). Used for flipping the theme. No pair if
-   * `undefined`
-   */
-  pairId: string | undefined;
-};
-
-/**
- * {@link ThemeDefinitionExpanded} mapped by theme id. All extensions' theme contributions are
- * combined and aggregated into one of these
- */
-export type ThemeDefinitionsById = { [themeId: string]: ThemeDefinitionExpanded | undefined };
 
 // #region Helper functions
 
@@ -39,74 +19,22 @@ function performSchemaValidation(document: JsonDocumentLike, docType: string): v
     throw new Error(`Invalid ${docType} theme document: ${ajv.errorsText(validate.errors)}`);
 }
 
-function getThemePair(
-  themeDefinition: ThemeDefinition,
-  themesData: ThemeDefinition[],
-): ThemeDefinition | undefined {
-  let pairId = '';
-  if (themeDefinition.id === 'light') pairId = 'dark';
-  else if (themeDefinition.id === 'dark') pairId = 'light';
-  else if (themeDefinition.type === 'light') {
-    pairId = endsWith(themeDefinition.id, THEME_SUFFIX_LIGHT)
-      ? `${slice(themeDefinition.id, 0, -THEME_SUFFIX_LIGHT.length)}${THEME_SUFFIX_DARK}`
-      : `${themeDefinition.id}${THEME_SUFFIX_DARK}`;
-  } else if (themeDefinition.type === 'dark') {
-    pairId = endsWith(themeDefinition.id, THEME_SUFFIX_DARK)
-      ? `${slice(themeDefinition.id, 0, -THEME_SUFFIX_DARK.length)}${THEME_SUFFIX_LIGHT}`
-      : `${themeDefinition.id}${THEME_SUFFIX_LIGHT}`;
-  }
-
-  if (pairId)
-    return themesData.find((themeDefinitionToPair) => themeDefinitionToPair.id === pairId);
-
-  return undefined;
-}
-
-function transformThemeDefinitionPartialToThemeDefinition(
-  themeDefinitionPartial: ThemeDefinitionPartial,
-): ThemeDefinition {
-  return {
-    type: endsWith(themeDefinitionPartial.id, THEME_SUFFIX_DARK) ? 'dark' : 'light',
-    ...themeDefinitionPartial,
-  };
-}
-
-function transformThemeContributionToThemeDefinitionsById(
-  contribution: ThemeContribution,
-): ThemeDefinitionsById {
-  const themesData = ensureArray(contribution).map(
-    transformThemeDefinitionPartialToThemeDefinition,
-  );
-  const themeDefinitionsById: ThemeDefinitionsById = {};
-
-  themesData.forEach((themeDefinition) => {
-    // If the theme is already added as a pair of another theme, don't need to re-add it
-    if (themeDefinitionsById[themeDefinition.id]) return;
-
-    const themePair = getThemePair(themeDefinition, themesData);
-
-    themeDefinitionsById[themeDefinition.id] = {
-      ...themeDefinition,
-      pairId: themePair?.id,
-    };
-
-    if (!themePair) return;
-
-    themeDefinitionsById[themePair.id] = {
-      ...themePair,
-      pairId: themeDefinition.id,
-    };
-  });
-
-  return themeDefinitionsById;
-}
-
 // #endregion
 
 /** Combines Theme contributions */
 export class ThemesDocumentCombiner extends DocumentCombiner {
-  constructor(baseDocument: JsonDocumentLike) {
-    super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: false });
+  /**
+   * Create a `ThemesDocumentCombiner`
+   *
+   * @param baseDocument The base {@link ThemeFamiliesById} to use
+   * @param defaultThemeFamilyId Id of the theme family that will be considered default and will be
+   *   used as the base on which other themes will be layered
+   */
+  constructor(
+    baseDocument: JsonDocumentLike,
+    public defaultThemeFamilyId: string,
+  ) {
+    super(baseDocument, { copyDocuments: false, ignoreDuplicateProperties: true });
   }
 
   /**
@@ -120,12 +48,12 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
    * the current set of theme contributions. If all the input documents are static, then there is no
    * need to ever rebuild once all the documents have been contributed to this combiner.
    */
-  getAllThemeDefinitionsById(): ThemeDefinitionsById | undefined {
+  getAllThemeFamiliesById(): ThemeFamiliesByIdExpanded | undefined {
     if (!this.latestOutput) return undefined;
 
     // All our validation and stuff was to make this the case
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    return this.latestOutput as ThemeDefinitionsById;
+    return this.latestOutput as ThemeFamiliesByIdExpanded;
   }
 
   protected override validateBaseDocument(baseDocument: JsonDocumentLike): void {
@@ -135,26 +63,51 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
   protected override transformBaseDocumentAfterValidation(
     baseDocument: JsonDocumentLike,
   ): JsonDocumentLike {
-    return transformThemeContributionToThemeDefinitionsById(
+    return expandThemeContribution(
       // We validated that this is true
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       baseDocument as ThemeContribution,
+      undefined,
     );
   }
 
   protected override validateContribution(documentName: string, document: JsonDocumentLike): void {
     // Make sure it is a ThemeContribution
     performSchemaValidation(document, documentName);
+
+    // Make sure there are no themes overlapping existing themes
+    const allThemeFamiliesById = this.getAllThemeFamiliesById();
+
+    if (!allThemeFamiliesById) return;
+
+    // We just validated this with the schema check above
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const themeContribution = document as ThemeFamiliesByIdExpanded;
+
+    Object.entries(themeContribution).forEach(([themeFamilyId, themeFamily]) => {
+      if (!themeFamily) return;
+
+      Object.entries(themeFamily).forEach(([type, themeDefinition]) => {
+        if (!themeDefinition) return;
+
+        if (allThemeFamiliesById[themeFamilyId]?.[type])
+          throw new Error(
+            `Extension ${documentName} tried to add theme definition over existing theme definition in family ${themeFamilyId} type ${type}`,
+          );
+      });
+    });
   }
 
   protected override transformContributionAfterValidation(
     _documentName: string,
     document: JsonDocumentLike,
   ): JsonDocumentLike {
-    return transformThemeContributionToThemeDefinitionsById(
+    return expandThemeContribution(
       // We validated that this is true
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       document as ThemeContribution,
+      // Use the default themes as backup
+      this.getAllThemeFamiliesById()?.[this.defaultThemeFamilyId],
     );
   }
 

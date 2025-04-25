@@ -2853,30 +2853,30 @@ export declare const settingsDocumentSchema: {
 	};
 };
 /** The data an extension provides to inform Platform.Bible of the themes it provides. */
-export type ThemeContribution = ThemeDefinitionPartial | ThemeDefinitionPartial[];
+export type ThemeContribution = ThemeFamiliesById;
+/** Object whose keys are theme family ids and whose values are {@link ThemeFamily}. */
+export interface ThemeFamiliesById {
+	[themeFamilyId: string]: ThemeFamily | undefined;
+}
 /**
- * The data an extension provides for one theme. An extension can provide multiple themes with
- * {@link ThemeContribution}. This is then modified to `ThemeDefinition` for use throughout the
- * application.
+ * A group of related themes. Each key is a theme type, and each value is a {@link ThemeDefinition}.
+ *
+ * A theme type indicates the kind of theme (e.g. light, dark). Some UI elements use the theme type
+ * to determine how to look. Colors not present in the theme will fall back to the built-in colors
+ * for this type.
  */
-export interface ThemeDefinitionPartial {
+export interface ThemeFamily {
+	[themeType: string]: ThemeDefinition | undefined;
+	light?: ThemeDefinition;
+	dark?: ThemeDefinition;
+}
+/**
+ * The data an extension provides for one individual theme. Each theme has a type (e.g. light, dark)
+ * and belongs to a theme family. An extension can provide multiple themes with
+ * {@link ThemeContribution}.
+ */
+export interface ThemeDefinition {
 	[k: string]: unknown;
-	/**
-	 * Programmatic name for the theme. Will be converted to kebab-case as this will be used as the
-	 * class name in the HTML document.
-	 *
-	 * If `type` is not specified, it will be determined by whether this ends with `-dark`.
-	 */
-	id: string;
-	/**
-	 * What kind of theme this is. Some UI elements use this to determine how to look. Colors not
-	 * present in the theme will fall back to the built-in colors for this type. This theme may be
-	 * paired to a theme of the opposite type (light/dark) by `id` for quick theme switching. For
-	 * example, `id: 'my-theme'` and `id: 'my-theme-dark'` would be paired together.
-	 *
-	 * If this is not specified, it will be determined by whether `id` ends with `-dark`.
-	 */
-	type?: "light" | "dark";
 	/** LocalizeKey that is the display name for the theme */
 	label: LocalizeKey;
 	/**
@@ -2934,17 +2934,9 @@ export declare const themeDocumentSchema: {
 	$schema: string;
 	title: string;
 	description: string;
-	anyOf: ({
+	anyOf: {
 		$ref: string;
-		type?: undefined;
-		items?: undefined;
-	} | {
-		type: string;
-		items: {
-			$ref: string;
-		};
-		$ref?: undefined;
-	})[];
+	}[];
 	$defs: {
 		themeCssVariables: {
 			description: string;
@@ -3041,19 +3033,10 @@ export declare const themeDocumentSchema: {
 				}[];
 			};
 		};
-		themeDefinitionPartial: {
+		themeDefinition: {
 			description: string;
 			type: string;
 			properties: {
-				id: {
-					description: string;
-					type: string;
-				};
-				type: {
-					description: string;
-					type: string;
-					enum: string[];
-				};
 				label: {
 					description: string;
 					type: string;
@@ -3066,25 +3049,100 @@ export declare const themeDocumentSchema: {
 			};
 			required: string[];
 		};
+		themeFamily: {
+			description: string;
+			type: string;
+			properties: {
+				light: {
+					$ref: string;
+				};
+				dark: {
+					$ref: string;
+				};
+			};
+			additionalProperties: {
+				anyOf: ({
+					$ref: string;
+					type?: undefined;
+				} | {
+					type: string;
+					$ref?: undefined;
+				})[];
+			};
+		};
+		themeFamiliesById: {
+			description: string;
+			type: string;
+			additionalProperties: {
+				anyOf: ({
+					$ref: string;
+					type?: undefined;
+				} | {
+					type: string;
+					$ref?: undefined;
+				})[];
+			};
+		};
 	};
 };
-export type ThemeDefinition = ThemeDefinitionPartial & Required<Pick<ThemeDefinitionPartial, "type">>;
 /**
- * Optional suffix on the end of themes that are light type. A theme with the same name but with
- * {@link THEME_SUFFIX_DARK} suffix instead will be paired with a theme with this suffix (or no
- * suffix)
+ * {@link ThemeDefinition} with some additional properties derived from the {@link ThemeFamiliesById}
+ * it comes from to help with managing the theme
  */
-export declare const THEME_SUFFIX_LIGHT = "-light";
+export type ThemeDefinitionExpanded = ThemeDefinition & {
+	/**
+	 * Unique identifier for the {@link ThemeFamily} this theme is in.
+	 *
+	 * This is derived from the key of the {@link ThemeFamiliesById} this theme is in
+	 */
+	themeFamilyId: string;
+	/**
+	 * The kind of theme (e.g. light, dark). Some UI elements use the theme type to determine how to
+	 * look. Colors not present in the theme will fall back to the built-in colors for this type.
+	 *
+	 * This is derived from the key of the {@link ThemeFamily} this theme is in
+	 */
+	type: string;
+	/**
+	 * Unique identifier for this theme.
+	 *
+	 * This is derived by combining the theme family and type
+	 */
+	id: string;
+};
 /**
- * Optional suffix on the end of themes that are dark type. A theme with the same name but with
- * {@link THEME_SUFFIX_LIGHT} suffix instead will be paired with a theme with this suffix (or no
- * suffix)
+ * Replaces {@link ThemeDefinition} with {@link ThemeDefinitionExpanded} recursively in the provided
+ * type. Modifies the type to what is used in the theme service.
  */
-export declare const THEME_SUFFIX_DARK = "-dark";
+export type ExpandThemeDefinition<T> = ReplaceType<T, ThemeDefinition, ThemeDefinitionExpanded>;
+/**
+ * {@link ThemeFamily} with all {@link ThemeDefinition} replaced by {@link ThemeDefinitionExpanded}.
+ * This is used in the theme service
+ */
+export type ThemeFamilyExpanded = ExpandThemeDefinition<ThemeFamily>;
+/**
+ * {@link ThemeFamiliesById} with all {@link ThemeDefinition} replaced by
+ * {@link ThemeDefinitionExpanded}. This is used in the theme service
+ */
+export type ThemeFamiliesByIdExpanded = ExpandThemeDefinition<ThemeFamiliesById>;
 /** ID for the style element the theme styles should go into */
 export declare const THEME_STYLE_ELEMENT_ID = "theme-styles";
+/**
+ * Add the derived properties in {@link ThemeDefinitionExpanded} to {@link ThemeDefinition}s in the
+ * given {@link ThemeFamiliesById} and fill in any missing `cssVariables` in the theme definitions
+ * with those from the default themes.
+ *
+ * Does not modify the input object.
+ *
+ * @param themeFamiliesById Theme families to expand with the additional derived properties
+ * @param defaultThemeFamily If provided, themes from this family are used to fill in missing
+ *   `cssVariables` in the theme definitions to make sure each theme definition has all necessary
+ *   `cssVariables`
+ * @returns The expanded theme families
+ */
+export declare function expandThemeContribution(themeFamiliesById: ThemeFamiliesById, defaultThemeFamily: ThemeFamilyExpanded | undefined): ThemeFamiliesByIdExpanded;
 /** Gets the CSS stylesheet that should be applied for the given theme */
-export declare function getStylesheetForTheme(theme: ThemeDefinition): string;
+export declare function getStylesheetForTheme(theme: ThemeDefinitionExpanded): string;
 /**
  * Applies a CSS stylesheet for the provided theme to the current window
  *
@@ -3100,7 +3158,7 @@ export declare function getStylesheetForTheme(theme: ThemeDefinition): string;
  *   {@link THEME_STYLE_ELEMENT_ID} with a dash and the suffix added to it
  * @returns
  */
-export declare function applyThemeStylesheet(this: Window, theme: ThemeDefinition, previousStyleElement?: HTMLStyleElement, styleElementIdSuffix?: string): HTMLStyleElement;
+export declare function applyThemeStylesheet(this: Window, theme: ThemeDefinitionExpanded, previousStyleElement?: HTMLStyleElement, styleElementIdSuffix?: string): HTMLStyleElement;
 /** Represents USJ formatted scripture with helpful utilities for working with it */
 export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private readonly usj;

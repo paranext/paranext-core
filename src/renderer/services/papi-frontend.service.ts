@@ -30,11 +30,11 @@ import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
 import { settingsService } from '@shared/services/settings.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
-import { themeService } from '@shared/services/theme.service';
+import { localThemeService } from '@renderer/services/theme.service-host';
 import { IThemeServiceLocal } from '@shared/services/theme.service-model';
 import { webViewService } from '@shared/services/web-view.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
-import { PapiRendererXMLHttpRequest } from './renderer-xml-http-request.service';
+import { PapiRendererXMLHttpRequest } from '@renderer/services/renderer-xml-http-request.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.
@@ -86,7 +86,7 @@ const papi = {
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as ISettingsService,
   /** JSDOC DESTINATION themeService */
-  themes: themeService as IThemeServiceLocal,
+  themes: localThemeService as IThemeServiceLocal,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
   /** JSDOC DESTINATION scrollGroupService */

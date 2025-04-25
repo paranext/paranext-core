@@ -59,6 +59,7 @@ const configuration: webpack.Configuration = {
     rules: [
       {
         test: /\.s?(c|a)ss$/,
+        resourceQuery: { not: [/raw/] },
         use: [
           'style-loader',
           {
@@ -75,22 +76,26 @@ const configuration: webpack.Configuration = {
       },
       {
         test: /\.s?css$/,
+        resourceQuery: { not: [/raw/] },
         use: ['style-loader', 'css-loader', 'sass-loader'],
         exclude: /\.module\.s?(c|a)ss$/,
       },
       // Fonts
       {
         test: /\.(woff|woff2|eot|ttf|otf)$/i,
+        resourceQuery: { not: [/raw/] },
         type: 'asset/resource',
       },
       // Images
       {
         test: /\.(png|jpg|jpeg|gif)$/i,
+        resourceQuery: { not: [/raw/] },
         type: 'asset/resource',
       },
       // SVG
       {
         test: /\.svg$/,
+        resourceQuery: { not: [/raw/] },
         use: [
           {
             loader: '@svgr/webpack',
