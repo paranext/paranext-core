@@ -7,7 +7,7 @@ import { SettingsDocumentCombiner } from '@shared/utils/settings-document-combin
 import { platformSettings } from '@extension-host/data/core-settings-info.data';
 import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
 import menuDataObject from '@extension-host/data/menu.data.json';
-import themesDataObject from '@shared/data/themes.data.json';
+import themesDataObject from '@shared/../../lib/platform-bible-react/src/themes.data.json';
 import { ProjectSettingsDocumentCombiner } from '@shared/utils/project-settings-document-combiner';
 import { platformProjectSettings } from '@extension-host/data/core-project-settings-info.data';
 import { LocalizedStringsDocumentCombiner } from '@shared/utils/localized-strings-document-combiner';

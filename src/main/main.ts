@@ -58,7 +58,7 @@ if (!isFirstInstance) {
 
 // #endregion
 
-const PROCESS_CLOSE_TIME_OUT = 2000;
+const PROCESS_CLOSE_TIME_OUT = 2001;
 /**
  * If this is `true`, we will restart soon. Not just using `isClosing` because we need to make sure
  * we only run `relaunch` once which has a slightly different use case than `isClosing`

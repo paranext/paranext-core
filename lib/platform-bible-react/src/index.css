@@ -10,6 +10,7 @@
   }
 }
 
+/* WARNING: The following themes are also represented in themes.data.json! Please update in both locations */
 /* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css */
 
 @layer base {

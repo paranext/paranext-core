@@ -37,21 +37,11 @@ declare module 'papi-shared-types' {
 // This could probably be combined with the IThemeService one day once we have CachedDataProviders.
 // Maybe the only reason to have that on the frontend is the caching. Probably needs more thought.
 /**
- * JSDOC SOURCE themeDataService
- *
  * Service that provides aggregated theme contributions from the platform and extensions. Serves
  * theme contribution info to the theme service
  */
 export type IThemeDataService = {
-  /**
-   * JSDOC SOURCE getAllThemes
-   *
-   * Retrieves information about all themes (including theme families) available in the app. These
-   * are provided by the platform and by extensions.
-   *
-   * @param selector `undefined`. Does not have to be provided
-   * @returns Information about the currently selected theme
-   */
+  /** JSDOC DESTINATION getAllThemes */
   getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
   /** JSDOC DESTINATION getAllThemes */
   getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;

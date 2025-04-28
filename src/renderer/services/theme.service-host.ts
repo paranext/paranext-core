@@ -27,7 +27,7 @@ import {
   getErrorMessage,
   isPlatformError,
 } from 'platform-bible-utils';
-import themesDataObject from '@shared/data/themes.data.json';
+import themesDataObject from '@shared/../../lib/platform-bible-react/src/themes.data.json';
 import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.data';
 import themeDataService from '@shared/services/theme-data.service';
 import { logger } from '@shared/services/logger.service';
@@ -183,9 +183,6 @@ class ThemeDataProviderEngine
         );
         return;
       }
-      logger.info(
-        `Theme service host updated all theme families at ${performance.now()}: ${JSON.stringify(allThemeFamilies, undefined, 2)}`,
-      );
 
       if (!this.#allThemeFamiliesById)
         this.#allThemeFamiliesByIdAsyncVariable.resolveToValue(allThemeFamilies);

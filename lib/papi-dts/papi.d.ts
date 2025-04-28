@@ -4,8 +4,8 @@
 /// <reference types="node" />
 /// <reference types="node" />
 /// <reference types="node" />
-declare module 'shared/utils/util' {
-  import { ProcessType } from 'shared/global-this.model';
+declare module 'src/shared/utils/util' {
+  import { ProcessType } from 'src/shared/global-this.model';
   /**
    * Create a nonce that is at least 128 bits long and should be (is not currently) cryptographically
    * random. See nonce spec at https://w3c.github.io/webappsec-csp/#security-nonces
@@ -67,7 +67,7 @@ declare module 'shared/utils/util' {
    */
   export function bindClassMethods<T extends object>(this: T): void;
 }
-declare module 'shared/services/scroll-group.service-model' {
+declare module 'src/shared/services/scroll-group.service-model' {
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';
   export const NETWORK_OBJECT_NAME_SCROLL_GROUP_SERVICE = 'ScrollGroupService';
@@ -119,8 +119,8 @@ declare module 'shared/services/scroll-group.service-model' {
     onDidUpdateScrRef: PlatformEvent<ScrollGroupUpdateInfo>;
   }
 }
-declare module 'shared/models/web-view.model' {
-  import type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+declare module 'src/shared/models/web-view.model' {
+  import type { ScrollGroupScrRef } from 'src/shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
   /**
@@ -621,7 +621,7 @@ declare module 'shared/models/web-view.model' {
     createNewIfNotFound?: boolean;
   };
 }
-declare module 'shared/global-this.model' {
+declare module 'src/shared/global-this.model' {
   import { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
   import {
@@ -633,7 +633,7 @@ declare module 'shared/global-this.model' {
     WebViewDefinitionUpdateInfo,
     WebViewId,
     WebViewProps,
-  } from 'shared/models/web-view.model';
+  } from 'src/shared/models/web-view.model';
   /**
    * Variables that are defined in global scope. These must be defined in main.ts (main), index.ts
    * (renderer), and extension-host.ts (extension host)
@@ -769,9 +769,9 @@ declare module 'shared/global-this.model' {
     ExtensionHost = 'extension-host',
   }
 }
-declare module 'shared/utils/internal-util' {
+declare module 'src/shared/utils/internal-util' {
   /** Utility functions specific to the internal technologies we are using. */
-  import { ProcessType } from 'shared/global-this.model';
+  import { ProcessType } from 'src/shared/global-this.model';
   /**
    * Determine if running on a client process (renderer, extension-host) or on the server.
    *
@@ -803,7 +803,7 @@ declare module 'shared/utils/internal-util' {
    */
   export const getProcessType: () => ProcessType;
 }
-declare module 'shared/services/logger.service' {
+declare module 'src/shared/services/logger.service' {
   import log from 'electron-log';
   export const WARN_TAG = '<WARN>';
   /**
@@ -824,8 +824,8 @@ declare module 'shared/services/logger.service' {
   };
   export default logger;
 }
-declare module 'shared/data/rpc.model' {
-  import { SerializedRequestType } from 'shared/utils/util';
+declare module 'src/shared/data/rpc.model' {
+  import { SerializedRequestType } from 'src/shared/utils/util';
   import {
     JSONRPCErrorCode,
     JSONRPCErrorResponse,
@@ -955,7 +955,7 @@ declare module 'shared/data/rpc.model' {
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
 }
-declare module 'shared/models/papi-network-event-emitter.model' {
+declare module 'src/shared/models/papi-network-event-emitter.model' {
   import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
   /**
    * Networked version of EventEmitter - accepts subscriptions to an event and runs the subscription
@@ -998,7 +998,7 @@ declare module 'shared/models/papi-network-event-emitter.model' {
   }
   export default PapiNetworkEventEmitter;
 }
-declare module 'shared/models/openrpc.model' {
+declare module 'src/shared/models/openrpc.model' {
   import type { JSONSchema7 } from 'json-schema';
   /**
    * Describes APIs available to call using JSON-RPC 2.0
@@ -1165,15 +1165,15 @@ declare module 'shared/models/openrpc.model' {
    */
   export function getEmptyMethodDocs(): MethodDocumentationWithoutName;
 }
-declare module 'shared/models/rpc.interface' {
+declare module 'src/shared/models/rpc.interface' {
   import {
     ConnectionStatus,
     EventHandler,
     InternalRequestHandler,
     RequestParams,
-  } from 'shared/data/rpc.model';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
-  import { SerializedRequestType } from 'shared/utils/util';
+  } from 'src/shared/data/rpc.model';
+  import { SingleMethodDocumentation } from 'src/shared/models/openrpc.model';
+  import { SerializedRequestType } from 'src/shared/utils/util';
   import { JSONRPCResponse } from 'json-rpc-2.0';
   /**
    * Defines how to support sending requests on the network and emitting events on the network
@@ -1254,7 +1254,7 @@ declare module 'shared/models/rpc.interface' {
     methodDocs?: SingleMethodDocumentation;
   };
 }
-declare module 'client/services/web-socket.interface' {
+declare module 'src/client/services/web-socket.interface' {
   /**
    * Interface that defines the webSocket functionality the extension host and the renderer must
    * implement. Used by WebSocketFactory to supply the right kind of WebSocket to
@@ -1264,7 +1264,7 @@ declare module 'client/services/web-socket.interface' {
    */
   export type IWebSocket = WebSocket;
 }
-declare module 'renderer/services/renderer-web-socket.service' {
+declare module 'src/renderer/services/renderer-web-socket.service' {
   /** Once our network is running, run this to stop extensions from connecting to it directly */
   export const blockWebSocketsToPapiNetwork: () => void;
   /** This wraps the browser's WebSocket implementation to provide
@@ -1305,7 +1305,7 @@ declare module 'renderer/services/renderer-web-socket.service' {
   }
   export default PapiRendererWebSocket;
 }
-declare module 'extension-host/services/extension-host-web-socket.model' {
+declare module 'src/extension-host/services/extension-host-web-socket.model' {
   import ws from 'ws';
   /**
    * Extension-host client uses ws as its WebSocket client, but the renderer can't use it. So we need
@@ -1313,8 +1313,8 @@ declare module 'extension-host/services/extension-host-web-socket.model' {
    */
   export default ws;
 }
-declare module 'client/services/web-socket.factory' {
-  import { IWebSocket } from 'client/services/web-socket.interface';
+declare module 'src/client/services/web-socket.factory' {
+  import { IWebSocket } from 'src/client/services/web-socket.interface';
   /**
    * Creates a WebSocket for the renderer or extension host depending on where you're running
    *
@@ -1322,17 +1322,17 @@ declare module 'client/services/web-socket.factory' {
    */
   export const createWebSocket: (url: string) => Promise<IWebSocket>;
 }
-declare module 'client/services/rpc-client' {
+declare module 'src/client/services/rpc-client' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+  import { IRpcMethodRegistrar } from 'src/shared/models/rpc.interface';
   import {
     ConnectionStatus,
     EventHandler,
     InternalRequestHandler,
     RequestParams,
-  } from 'shared/data/rpc.model';
-  import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  } from 'src/shared/data/rpc.model';
+  import { SerializedRequestType } from 'src/shared/utils/util';
+  import { SingleMethodDocumentation } from 'src/shared/models/openrpc.model';
   /**
    * Manages the JSON-RPC protocol on the client end of a websocket that connects to main
    *
@@ -1375,12 +1375,12 @@ declare module 'client/services/rpc-client' {
   }
   export default RpcClient;
 }
-declare module 'main/services/rpc-server' {
+declare module 'src/main/services/rpc-server' {
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { IRpcHandler, RegisteredRpcMethodDetails } from 'shared/models/rpc.interface';
-  import { ConnectionStatus, RequestParams } from 'shared/data/rpc.model';
-  import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { IRpcHandler, RegisteredRpcMethodDetails } from 'src/shared/models/rpc.interface';
+  import { ConnectionStatus, RequestParams } from 'src/shared/data/rpc.model';
+  import { SerializedRequestType } from 'src/shared/utils/util';
+  import { SingleMethodDocumentation } from 'src/shared/models/openrpc.model';
   type PropagateEventMethod = <T>(source: RpcServer, eventType: string, event: T) => void;
   /**
    * Manages the JSON-RPC protocol on the server end of a websocket owned by main. This class is not
@@ -1429,17 +1429,17 @@ declare module 'main/services/rpc-server' {
   }
   export default RpcServer;
 }
-declare module 'main/services/rpc-websocket-listener' {
+declare module 'src/main/services/rpc-websocket-listener' {
   import {
     ConnectionStatus,
     EventHandler,
     InternalRequestHandler,
     RequestParams,
-  } from 'shared/data/rpc.model';
-  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+  } from 'src/shared/data/rpc.model';
+  import { IRpcMethodRegistrar } from 'src/shared/models/rpc.interface';
   import { JSONRPCResponse } from 'json-rpc-2.0';
-  import { SerializedRequestType } from 'shared/utils/util';
-  import { OpenRpc, SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { SerializedRequestType } from 'src/shared/utils/util';
+  import { OpenRpc, SingleMethodDocumentation } from 'src/shared/models/openrpc.model';
   /**
    * Owns the WebSocketServer that listens for clients to connect to the web socket. When a client
    * connects, an RpcServer is created in this same process to service that connection.
@@ -1482,21 +1482,21 @@ declare module 'main/services/rpc-websocket-listener' {
   }
   export default RpcWebSocketListener;
 }
-declare module 'shared/services/rpc-handler.factory' {
-  import { IRpcMethodRegistrar } from 'shared/models/rpc.interface';
+declare module 'src/shared/services/rpc-handler.factory' {
+  import { IRpcMethodRegistrar } from 'src/shared/models/rpc.interface';
   /** Creates a server or client RPC handler depending on if we're in main or some other process */
   export const createRpcHandler: () => Promise<IRpcMethodRegistrar>;
 }
-declare module 'shared/services/network.service' {
+declare module 'src/shared/services/network.service' {
   /**
    * Handles requests, responses, subscriptions, etc. to the backend. Likely shouldn't need/want to
    * expose this whole service on papi, but there are a few things that are exposed via
    * papiNetworkService
    */
-  import { InternalRequestHandler } from 'shared/data/rpc.model';
+  import { InternalRequestHandler } from 'src/shared/data/rpc.model';
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
-  import { SerializedRequestType } from 'shared/utils/util';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { SerializedRequestType } from 'src/shared/utils/util';
+  import { SingleMethodDocumentation } from 'src/shared/models/openrpc.model';
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1565,7 +1565,7 @@ declare module 'shared/services/network.service' {
    */
   export const papiNetworkService: PapiNetworkService;
 }
-declare module 'shared/services/network-object.service' {
+declare module 'src/shared/services/network-object.service' {
   import { PlatformEvent, UnsubscriberAsync } from 'platform-bible-utils';
   import {
     NetworkObject,
@@ -1573,8 +1573,8 @@ declare module 'shared/services/network-object.service' {
     NetworkableObject,
     LocalObjectToProxyCreator,
     NetworkObjectDetails,
-  } from 'shared/models/network-object.model';
-  import { NetworkObjectDocumentation } from 'shared/models/openrpc.model';
+  } from 'src/shared/models/network-object.model';
+  import { NetworkObjectDocumentation } from 'src/shared/models/openrpc.model';
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
   /**
@@ -1710,7 +1710,7 @@ declare module 'shared/services/network-object.service' {
    */
   export const minimalNetworkObjectService: MinimalNetworkObjectService;
 }
-declare module 'shared/models/network-object.model' {
+declare module 'src/shared/models/network-object.model' {
   import {
     CanHaveOnDidDispose,
     CannotHaveOnDidDispose,
@@ -1789,9 +1789,9 @@ declare module 'shared/models/network-object.model' {
     attributes?: Record<string, unknown>;
   };
 }
-declare module 'shared/models/data-provider.model' {
+declare module 'src/shared/models/data-provider.model' {
   import { UnsubscriberAsync, PlatformEventHandler, PlatformError } from 'platform-bible-utils';
-  import { NetworkableObject } from 'shared/models/network-object.model';
+  import { NetworkableObject } from 'src/shared/models/network-object.model';
   /** Various options to adjust how the data provider subscriber emits updates */
   export type DataProviderSubscriberOptions = {
     /**
@@ -2015,12 +2015,12 @@ declare module 'shared/models/data-provider.model' {
   >(fnName: string): DataTypeNames<TDataTypes>;
   export default DataProviderInternal;
 }
-declare module 'shared/models/project-data-provider.model' {
+declare module 'src/shared/models/project-data-provider.model' {
   import type {
     DataProviderDataType,
     DataProviderDataTypes,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider.model';
   /**
    * The name of the `projectInterface` representing the essential methods every Base Project Data
    * Provider must implement
@@ -2145,13 +2145,13 @@ declare module 'shared/models/project-data-provider.model' {
     ): Promise<DataProviderUpdateInstructions<TProjectDataTypes>>;
   };
 }
-declare module 'shared/models/data-provider.interface' {
+declare module 'src/shared/models/data-provider.interface' {
   import {
     DataProviderDataTypes,
     DataProviderGetters,
     DataProviderSetters,
     DataProviderSubscribers,
-  } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider.model';
   import { Dispose, OnDidDispose } from 'platform-bible-utils';
   /**
    * An object on the papi that manages data and has methods for interacting with that data. Created
@@ -2177,14 +2177,14 @@ declare module 'shared/models/data-provider.interface' {
   export type IDisposableDataProvider<TDataProvider extends IDataProvider<any>> = TDataProvider &
     Dispose;
 }
-declare module 'shared/models/data-provider-engine.model' {
+declare module 'src/shared/models/data-provider-engine.model' {
   import {
     DataProviderDataTypes,
     DataProviderGetters,
     DataProviderUpdateInstructions,
     DataProviderSetters,
-  } from 'shared/models/data-provider.model';
-  import { NetworkableObject } from 'shared/models/network-object.model';
+  } from 'src/shared/models/data-provider.model';
+  import { NetworkableObject } from 'src/shared/models/network-object.model';
   /**
    *
    * Method to run to send clients updates for a specific data type outside of the `set<data_type>`
@@ -2365,10 +2365,13 @@ declare module 'shared/models/data-provider-engine.model' {
     notifyUpdate(updateInstructions?: DataProviderUpdateInstructions<TDataTypes>): void;
   }
 }
-declare module 'shared/models/extract-data-provider-data-types.model' {
-  import { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
-  import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
-  import { DataProviderInternal } from 'shared/models/data-provider.model';
+declare module 'src/shared/models/extract-data-provider-data-types.model' {
+  import { IDataProviderEngine } from 'src/shared/models/data-provider-engine.model';
+  import {
+    IDataProvider,
+    IDisposableDataProvider,
+  } from 'src/shared/models/data-provider.interface';
+  import { DataProviderInternal } from 'src/shared/models/data-provider.model';
   /**
    * Get the `DataProviderDataTypes` associated with the `IDataProvider` - essentially, returns
    * `TDataTypes` from `IDataProvider<TDataTypes>`.
@@ -2389,17 +2392,17 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
             : never;
   export default ExtractDataProviderDataTypes;
 }
-declare module 'shared/models/web-view-provider.model' {
+declare module 'src/shared/models/web-view-provider.model' {
   import {
     GetWebViewOptions,
     WebViewDefinition,
     SavedWebViewDefinition,
-  } from 'shared/models/web-view.model';
+  } from 'src/shared/models/web-view.model';
   import {
     DisposableNetworkObject,
     NetworkObject,
     NetworkableObject,
-  } from 'shared/models/network-object.model';
+  } from 'src/shared/models/network-object.model';
   /**
    * An object associated with a specific `webViewType` that provides a {@link WebViewDefinition} when
    * the PAPI wants to open a web view with that `webViewType`. An extension registers a web view
@@ -2468,8 +2471,8 @@ declare module 'shared/models/web-view-provider.model' {
    */
   export interface IDisposableWebViewProvider extends DisposableNetworkObject<IWebViewProvider> {}
 }
-declare module 'shared/models/network-object-status.service-model' {
-  import { NetworkObjectDetails } from 'shared/models/network-object.model';
+declare module 'src/shared/models/network-object-status.service-model' {
+  import { NetworkObjectDetails } from 'src/shared/models/network-object.model';
   export interface NetworkObjectStatusRemoteServiceType {
     /**
      * Get details about all available network objects
@@ -2502,8 +2505,8 @@ declare module 'shared/models/network-object-status.service-model' {
   }
   export const networkObjectStatusServiceNetworkObjectName = 'NetworkObjectStatusService';
 }
-declare module 'shared/services/network-object-status.service' {
-  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
+declare module 'src/shared/services/network-object-status.service' {
+  import { NetworkObjectStatusServiceType } from 'src/shared/models/network-object-status.service-model';
   /**
    *
    * Provides functions related to the set of available network objects
@@ -2511,10 +2514,10 @@ declare module 'shared/services/network-object-status.service' {
   export const networkObjectStatusService: NetworkObjectStatusServiceType;
   export default networkObjectStatusService;
 }
-declare module 'shared/models/docking-framework.model' {
+declare module 'src/shared/models/docking-framework.model' {
   import { MutableRefObject, ReactNode } from 'react';
   import { DockLayout, DropDirection, LayoutBase } from 'rc-dock';
-  import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'shared/models/web-view.model';
+  import { WebViewDefinition, WebViewDefinitionUpdateInfo } from 'src/shared/models/web-view.model';
   import { LocalizeKey } from 'platform-bible-utils';
   /**
    * Saved information used to recreate a tab.
@@ -2703,17 +2706,17 @@ declare module 'shared/models/docking-framework.model' {
     testLayout: LayoutBase;
   };
 }
-declare module 'shared/services/web-view.service-model' {
+declare module 'src/shared/services/web-view.service-model' {
   import {
     GetWebViewOptions,
     SavedWebViewDefinition,
     WebViewId,
     WebViewType,
-  } from 'shared/models/web-view.model';
-  import { Layout } from 'shared/models/docking-framework.model';
+  } from 'src/shared/models/web-view.model';
+  import { Layout } from 'src/shared/models/docking-framework.model';
   import { PlatformEvent } from 'platform-bible-utils';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
-  import { NetworkObject } from 'shared/models/network-object.model';
+  import { NetworkObject } from 'src/shared/models/network-object.model';
   /**
    *
    * Service exposing various functions related to using webViews
@@ -2833,12 +2836,12 @@ declare module 'shared/services/web-view.service-model' {
   };
   export const NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE = 'WebViewService';
 }
-declare module 'shared/services/web-view.service' {
-  import { WebViewServiceType } from 'shared/services/web-view.service-model';
+declare module 'src/shared/services/web-view.service' {
+  import { WebViewServiceType } from 'src/shared/services/web-view.service-model';
   export const webViewService: WebViewServiceType;
   export default webViewService;
 }
-declare module 'shared/services/web-view-provider.service' {
+declare module 'src/shared/services/web-view-provider.service' {
   /**
    * Handles registering web view providers and serving web views around the papi. Exposed on the
    * papi.
@@ -2847,10 +2850,10 @@ declare module 'shared/services/web-view-provider.service' {
     IDisposableWebViewProvider,
     IWebViewProvider,
     IRegisteredWebViewProvider,
-  } from 'shared/models/web-view-provider.model';
+  } from 'src/shared/models/web-view-provider.model';
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
-  import { DisposableNetworkObject } from 'shared/models/network-object.model';
-  import { WebViewId } from 'shared/models/web-view.model';
+  import { DisposableNetworkObject } from 'src/shared/models/network-object.model';
+  import { WebViewId } from 'src/shared/models/web-view.model';
   /** Sets up the service. Only runs once and always returns the same promise after that */
   const initialize: () => Promise<void>;
   /**
@@ -2951,14 +2954,14 @@ declare module 'shared/services/web-view-provider.service' {
   export const papiWebViewProviderService: PapiWebViewProviderService;
   export default webViewProviderService;
 }
-declare module 'shared/models/web-view-factory.model' {
+declare module 'src/shared/models/web-view-factory.model' {
   import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
-  import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
+  import type { IWebViewProvider } from 'src/shared/models/web-view-provider.model';
   import {
     SavedWebViewDefinition,
     GetWebViewOptions,
     WebViewDefinition,
-  } from 'shared/models/web-view.model';
+  } from 'src/shared/models/web-view.model';
   /**
    *
    * A partial implementation of {@link IWebViewProvider} that includes creating
@@ -3078,19 +3081,19 @@ declare module 'papi-shared-types' {
     DataProviderDataTypes,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider.model';
   import type {
     MandatoryProjectDataTypes,
     PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
-  } from 'shared/models/project-data-provider.model';
+  } from 'src/shared/models/project-data-provider.model';
   import type {
     IDataProvider,
     IDisposableDataProvider,
-  } from 'shared/models/data-provider.interface';
-  import type { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
-  import type { NetworkableObject } from 'shared/models/network-object.model';
-  import { WebViewId } from 'shared/models/web-view.model';
+  } from 'src/shared/models/data-provider.interface';
+  import type { ExtractDataProviderDataTypes } from 'src/shared/models/extract-data-provider-data-types.model';
+  import type { NetworkableObject } from 'src/shared/models/network-object.model';
+  import { WebViewId } from 'src/shared/models/web-view.model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   /**
    * Function types for each command available on the papi. Each extension can extend this interface
@@ -3673,10 +3676,10 @@ declare module 'papi-shared-types' {
    */
   type WebViewControllerTypes = keyof WebViewControllers;
 }
-declare module 'shared/services/command.service' {
+declare module 'src/shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
   import { CommandHandlers } from 'papi-shared-types';
-  import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { SingleMethodDocumentation } from 'src/shared/models/openrpc.model';
   /**
    * Register a command on the papi to be handled here
    *
@@ -3720,7 +3723,7 @@ declare module 'shared/services/command.service' {
    */
   export type moduleSummaryComments = {};
 }
-declare module 'shared/services/internet.service' {
+declare module 'src/shared/services/internet.service' {
   /** Our shim over fetch. Allows us to control internet access. */
   const papiFetch: typeof fetch;
   export interface InternetService {
@@ -3733,7 +3736,7 @@ declare module 'shared/services/internet.service' {
   export const internetService: InternetService;
   export default internetService;
 }
-declare module 'shared/models/notification.service-model' {
+declare module 'src/shared/models/notification.service-model' {
   import { CommandHandlers } from 'papi-shared-types';
   import { LocalizeKey } from 'platform-bible-utils';
   export type Severity = 'info' | 'warning' | 'error';
@@ -3774,8 +3777,8 @@ declare module 'shared/models/notification.service-model' {
   }
   export const NotificationServiceNetworkObjectName = 'NotificationService';
 }
-declare module 'shared/services/notification.service' {
-  import { type INotificationService } from 'shared/models/notification.service-model';
+declare module 'src/shared/services/notification.service' {
+  import { type INotificationService } from 'src/shared/models/notification.service-model';
   /**
    *
    * Service that sends notifications to users in the UI
@@ -3783,20 +3786,23 @@ declare module 'shared/services/notification.service' {
   export const notificationService: INotificationService;
   export default notificationService;
 }
-declare module 'shared/services/data-provider.service' {
+declare module 'src/shared/services/data-provider.service' {
   /** Handles registering data providers and serving data around the papi. Exposed on the papi. */
-  import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  import { DataProviderDataTypes } from 'src/shared/models/data-provider.model';
   import {
     DataProviderEngine,
     IDataProviderEngine,
-  } from 'shared/models/data-provider-engine.model';
+  } from 'src/shared/models/data-provider-engine.model';
   import {
     DataProviderNames,
     DataProviderTypes,
     DataProviders,
     DisposableDataProviders,
   } from 'papi-shared-types';
-  import { IDataProvider, IDisposableDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    IDataProvider,
+    IDisposableDataProvider,
+  } from 'src/shared/models/data-provider.interface';
   /**
    *
    * Indicate if we are aware of an existing data provider with the given name. If a data provider
@@ -4142,7 +4148,7 @@ declare module 'shared/services/data-provider.service' {
   export const dataProviderService: DataProviderService;
   export default dataProviderService;
 }
-declare module 'shared/models/project-metadata.model' {
+declare module 'src/shared/models/project-metadata.model' {
   import { ProjectInterfaces } from 'papi-shared-types';
   /**
    * Low-level information describing a project that Platform.Bible directly manages and uses to load
@@ -4195,9 +4201,9 @@ declare module 'shared/models/project-metadata.model' {
     };
   };
 }
-declare module 'shared/models/project-data-provider-factory.interface' {
+declare module 'src/shared/models/project-data-provider-factory.interface' {
   import { Dispose, ModifierProject } from 'platform-bible-utils';
-  import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
+  import { ProjectMetadataWithoutFactoryInfo } from 'src/shared/models/project-metadata.model';
   export const PDP_FACTORY_OBJECT_TYPE: string;
   export type ProjectMetadataFilterOptions = ModifierProject & {
     /** Project IDs to include */
@@ -4259,13 +4265,13 @@ declare module 'shared/models/project-data-provider-factory.interface' {
   }
   export default IProjectDataProviderFactory;
 }
-declare module 'shared/models/project-lookup.service-model' {
+declare module 'src/shared/models/project-lookup.service-model' {
   import {
     ProjectDataProviderFactoryMetadataInfo,
     ProjectMetadata,
-  } from 'shared/models/project-metadata.model';
+  } from 'src/shared/models/project-metadata.model';
   import { ProjectInterfaces } from 'papi-shared-types';
-  import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { ProjectMetadataFilterOptions } from 'src/shared/models/project-data-provider-factory.interface';
   export const NETWORK_OBJECT_NAME_PROJECT_LOOKUP_SERVICE = 'ProjectLookupService';
   /**
    * Transform the well-known pdp factory id into an id for its network object to use
@@ -4436,14 +4442,14 @@ declare module 'shared/models/project-lookup.service-model' {
     LOAD_TIME_GRACE_PERIOD_MS: number;
   };
 }
-declare module 'shared/services/project-lookup.service' {
+declare module 'src/shared/services/project-lookup.service' {
   export const projectLookupService: import('shared/models/project-lookup.service-model').ProjectLookupServiceType;
   export default projectLookupService;
 }
-declare module 'shared/models/project-data-provider-engine-factory.model' {
-  import { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
-  import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
-  import { ProjectMetadataWithoutFactoryInfo } from 'shared/models/project-metadata.model';
+declare module 'src/shared/models/project-data-provider-engine-factory.model' {
+  import { IProjectDataProviderEngine } from 'src/shared/models/project-data-provider-engine.model';
+  import { ProjectMetadataFilterOptions } from 'src/shared/models/project-data-provider-factory.interface';
+  import { ProjectMetadataWithoutFactoryInfo } from 'src/shared/models/project-metadata.model';
   import { ProjectInterfaces } from 'papi-shared-types';
   /**
    * A factory object registered with the papi that creates a Project Data Provider Engine for each
@@ -4587,12 +4593,12 @@ declare module 'shared/models/project-data-provider-engine-factory.model' {
     ): Promise<ProjectMetadataWithoutFactoryInfo[]>;
   }
 }
-declare module 'shared/models/project-data-provider-engine.model' {
+declare module 'src/shared/models/project-data-provider-engine.model' {
   import {
     DataProviderEngine,
     IDataProviderEngine,
-  } from 'shared/models/data-provider-engine.model';
-  import { DataProviderDataTypes } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider-engine.model';
+  import { DataProviderDataTypes } from 'src/shared/models/data-provider.model';
   import { ProjectInterfaceDataTypes, ProjectInterfaces } from 'papi-shared-types';
   import { UnionToIntersection } from 'platform-bible-utils';
   /**
@@ -4667,7 +4673,7 @@ declare module 'shared/models/project-data-provider-engine.model' {
       AdditionalDataTypes
   > {}
 }
-declare module 'shared/models/base-project-data-provider-engine.model' {
+declare module 'src/shared/models/base-project-data-provider-engine.model' {
   import {
     ProjectInterfaces,
     ProjectInterfaceDataTypes,
@@ -4678,13 +4684,13 @@ declare module 'shared/models/base-project-data-provider-engine.model' {
   import {
     PROJECT_INTERFACE_PLATFORM_BASE,
     WithProjectDataProviderEngineExtensionDataMethods,
-  } from 'shared/models/project-data-provider.model';
-  import { DataProviderDataType } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/project-data-provider.model';
+  import { DataProviderDataType } from 'src/shared/models/data-provider.model';
   import { UnionToIntersection } from 'platform-bible-utils';
   import {
     IProjectDataProviderEngine,
     ProjectDataProviderEngine,
-  } from 'shared/models/project-data-provider-engine.model';
+  } from 'src/shared/models/project-data-provider-engine.model';
   /**
    * The object to return from
    * {@link IProjectDataProviderEngineFactory.createProjectDataProviderEngine} that the PAPI registers
@@ -4770,10 +4776,10 @@ declare module 'shared/models/base-project-data-provider-engine.model' {
     }
   > {}
 }
-declare module 'shared/services/project-data-provider.service' {
+declare module 'src/shared/services/project-data-provider.service' {
   import { ProjectInterfaces, ProjectDataProviderInterfaces } from 'papi-shared-types';
   import { Dispose } from 'platform-bible-utils';
-  import { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
+  import { IProjectDataProviderEngineFactory } from 'src/shared/models/project-data-provider-engine-factory.model';
   /**
    * Add a new Project Data Provider Factory to PAPI that uses the given engine.
    *
@@ -4838,7 +4844,7 @@ declare module 'shared/services/project-data-provider.service' {
     get: typeof get;
   };
 }
-declare module 'shared/data/file-system.model' {
+declare module 'src/shared/data/file-system.model' {
   /** Types to use with file system operations */
   /**
    * Represents a path in file system or other. Has a scheme followed by :// followed by a relative
@@ -4863,8 +4869,8 @@ declare module 'shared/data/file-system.model' {
    */
   export type Uri = string;
 }
-declare module 'node/utils/util' {
-  import { Uri } from 'shared/data/file-system.model';
+declare module 'src/node/utils/util' {
+  import { Uri } from 'src/shared/data/file-system.model';
   export const FILE_PROTOCOL = 'file://';
   export const RESOURCES_PROTOCOL = 'resources://';
   export function resolveHtmlPath(htmlFileName: string): string;
@@ -4898,10 +4904,10 @@ declare module 'node/utils/util' {
    */
   export const isNoisyDevModeEnvVariableSet: () => boolean;
 }
-declare module 'node/services/node-file-system.service' {
+declare module 'src/node/services/node-file-system.service' {
   /** File system calls from Node */
   import fs, { BigIntStats } from 'fs';
-  import { Uri } from 'shared/data/file-system.model';
+  import { Uri } from 'src/shared/data/file-system.model';
   /**
    * Read a text file
    *
@@ -5005,7 +5011,7 @@ declare module 'node/services/node-file-system.service' {
    */
   export function deleteDir(uri: Uri): Promise<void>;
 }
-declare module 'node/utils/crypto-util' {
+declare module 'src/node/utils/crypto-util' {
   export function createUuid(): string;
   /**
    * Create a cryptographically secure nonce that is at least 128 bits long. See nonce spec at
@@ -5032,15 +5038,15 @@ declare module 'node/utils/crypto-util' {
     buffer: Buffer,
   ): string;
 }
-declare module 'shared/models/extension-basic-data.model' {
+declare module 'src/shared/models/extension-basic-data.model' {
   /** Represents an object that contains the most basic information about an extension */
   export type ExtensionBasicData = {
     /** Name of an extension */
     name: string;
   };
 }
-declare module 'node/models/execution-token.model' {
-  import { ExtensionBasicData } from 'shared/models/extension-basic-data.model';
+declare module 'src/node/models/execution-token.model' {
+  import { ExtensionBasicData } from 'src/shared/models/extension-basic-data.model';
   /** For now this is just for extensions, but maybe we will want to expand this in the future */
   export type ExecutionTokenType = 'extension';
   /** Execution tokens can be passed into API calls to provide context about their identity */
@@ -5052,8 +5058,8 @@ declare module 'node/models/execution-token.model' {
     getHash(): string;
   }
 }
-declare module 'node/services/execution-token.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
+declare module 'src/node/services/execution-token.service' {
+  import { ExecutionToken } from 'src/node/models/execution-token.model';
   /**
    * This should be called when extensions are being loaded
    *
@@ -5086,8 +5092,8 @@ declare module 'node/services/execution-token.service' {
   };
   export default executionTokenService;
 }
-declare module 'extension-host/services/extension-storage.service' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
+declare module 'src/extension-host/services/extension-storage.service' {
+  import { ExecutionToken } from 'src/node/models/execution-token.model';
   import { Buffer } from 'node:buffer';
   /**
    * This is only intended to be called by the extension service. This service cannot call into the
@@ -5162,7 +5168,7 @@ declare module 'extension-host/services/extension-storage.service' {
   export const extensionStorageService: ExtensionStorageService;
   export default extensionStorageService;
 }
-declare module 'shared/models/dialog-options.model' {
+declare module 'src/shared/models/dialog-options.model' {
   import { LocalizeKey } from 'platform-bible-utils';
   /** General options to adjust dialogs (created from `papi.dialogs`) */
   export type DialogOptions = {
@@ -5190,9 +5196,9 @@ declare module 'shared/models/dialog-options.model' {
     isDialog: true;
   };
 }
-declare module 'renderer/components/dialogs/dialog-base.data' {
-  import { FloatSize, TabLoader, TabSaver } from 'shared/models/docking-framework.model';
-  import { DialogData } from 'shared/models/dialog-options.model';
+declare module 'src/renderer/components/dialogs/dialog-base.data' {
+  import { FloatSize, TabLoader, TabSaver } from 'src/shared/models/docking-framework.model';
+  import { DialogData } from 'src/shared/models/dialog-options.model';
   import { ReactElement } from 'react';
   /** Base type for DialogDefinition. Contains reasonable defaults for dialogs */
   export type DialogDefinitionBase = Readonly<{
@@ -5279,11 +5285,14 @@ declare module 'renderer/components/dialogs/dialog-base.data' {
   export const DIALOG_BASE: DialogDefinitionBase;
   export default DIALOG_BASE;
 }
-declare module 'renderer/components/dialogs/dialog-definition.model' {
-  import { DialogOptions } from 'shared/models/dialog-options.model';
-  import { DialogDefinitionBase, DialogProps } from 'renderer/components/dialogs/dialog-base.data';
+declare module 'src/renderer/components/dialogs/dialog-definition.model' {
+  import { DialogOptions } from 'src/shared/models/dialog-options.model';
+  import {
+    DialogDefinitionBase,
+    DialogProps,
+  } from 'src/renderer/components/dialogs/dialog-base.data';
   import { ReactElement } from 'react';
-  import { ProjectMetadataFilterOptions } from 'shared/models/project-data-provider-factory.interface';
+  import { ProjectMetadataFilterOptions } from 'src/shared/models/project-data-provider-factory.interface';
   /** The tabType for the about dialog in `about-dialog.component.tsx` */
   export const ABOUT_DIALOG_TYPE = 'platform.aboutDialog';
   /** The tabType for the select project dialog in `select-project.dialog.tsx` */
@@ -5360,12 +5369,12 @@ declare module 'renderer/components/dialogs/dialog-definition.model' {
     }
   >;
 }
-declare module 'shared/services/dialog.service-model' {
+declare module 'src/shared/services/dialog.service-model' {
   import {
     DialogTabTypes,
     DialogTypes,
     SelectProjectDialogOptions,
-  } from 'renderer/components/dialogs/dialog-definition.model';
+  } from 'src/renderer/components/dialogs/dialog-definition.model';
   /**
    *
    * Prompt the user for responses with dialogs
@@ -5396,12 +5405,12 @@ declare module 'shared/services/dialog.service-model' {
   /** Prefix on requests that indicates that the request is related to dialog operations */
   export const CATEGORY_DIALOG = 'dialog';
 }
-declare module 'shared/services/dialog.service' {
-  import { DialogService } from 'shared/services/dialog.service-model';
+declare module 'src/shared/services/dialog.service' {
+  import { DialogService } from 'src/shared/services/dialog.service-model';
   export const dialogService: DialogService;
   export default dialogService;
 }
-declare module 'shared/models/create-process-privilege.model' {
+declare module 'src/shared/models/create-process-privilege.model' {
   import {
     ChildProcess,
     ChildProcessByStdio,
@@ -5410,7 +5419,7 @@ declare module 'shared/models/create-process-privilege.model' {
     StdioPipe,
   } from 'child_process';
   import { Readable, Writable } from 'stream';
-  import { ExtensionBasicData } from 'shared/models/extension-basic-data.model';
+  import { ExtensionBasicData } from 'src/shared/models/extension-basic-data.model';
   /**
    * Run {@link spawn} to create a child process. The platform will automatically kill all child
    * processes created this way in packaged builds. Child processes are not killed when running in
@@ -5506,7 +5515,7 @@ declare module 'shared/models/create-process-privilege.model' {
     osData: OperatingSystemData;
   };
 }
-declare module 'shared/models/manage-extensions-privilege.model' {
+declare module 'src/shared/models/manage-extensions-privilege.model' {
   /** Base64 encoded hash values */
   export type HashValues = Partial<{
     sha256: string;
@@ -5587,7 +5596,7 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     getInstalledExtensions: GetInstalledExtensionsFunction;
   };
 }
-declare module 'shared/models/handle-uri-privilege.model' {
+declare module 'src/shared/models/handle-uri-privilege.model' {
   import { Unsubscriber } from 'platform-bible-utils';
   /** Function that is called when the system navigates to a URI that this handler is set up to handle. */
   export type UriHandler = (uri: string) => Promise<void> | void;
@@ -5641,10 +5650,10 @@ declare module 'shared/models/handle-uri-privilege.model' {
     redirectUri: string;
   };
 }
-declare module 'shared/models/elevated-privileges.model' {
-  import { CreateProcess } from 'shared/models/create-process-privilege.model';
-  import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
-  import { HandleUri } from 'shared/models/handle-uri-privilege.model';
+declare module 'src/shared/models/elevated-privileges.model' {
+  import { CreateProcess } from 'src/shared/models/create-process-privilege.model';
+  import { ManageExtensions } from 'src/shared/models/manage-extensions-privilege.model';
+  import { HandleUri } from 'src/shared/models/handle-uri-privilege.model';
   /** String constants that are listed in an extension's manifest.json to state needed privileges */
   export enum ElevatedPrivilegeNames {
     createProcess = 'createProcess',
@@ -5664,10 +5673,10 @@ declare module 'shared/models/elevated-privileges.model' {
     handleUri: HandleUri | undefined;
   };
 }
-declare module 'extension-host/extension-types/extension-activation-context.model' {
-  import { ExecutionToken } from 'node/models/execution-token.model';
+declare module 'src/extension-host/extension-types/extension-activation-context.model' {
+  import { ExecutionToken } from 'src/node/models/execution-token.model';
   import { UnsubscriberAsyncList } from 'platform-bible-utils';
-  import { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
+  import { ElevatedPrivileges } from 'src/shared/models/elevated-privileges.model';
   /** An object of this type is passed into `activate()` for each extension during initialization */
   export type ExecutionActivationContext = {
     /** Canonical name of the extension */
@@ -5689,8 +5698,11 @@ declare module 'extension-host/extension-types/extension-activation-context.mode
     registrations: UnsubscriberAsyncList;
   };
 }
-declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
-  import { DialogTabTypes, DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
+declare module 'src/renderer/hooks/papi-hooks/use-dialog-callback.hook' {
+  import {
+    DialogTabTypes,
+    DialogTypes,
+  } from 'src/renderer/components/dialogs/dialog-definition.model';
   export type UseDialogCallbackOptions = {
     /**
      * How many dialogs are allowed to be open at once from this dialog callback. Calling the callback
@@ -5862,12 +5874,12 @@ declare module 'renderer/hooks/papi-hooks/use-dialog-callback.hook' {
   ): (optionOverrides?: Partial<DialogOptions & UseDialogCallbackOptions>) => Promise<void>;
   export default useDialogCallback;
 }
-declare module 'shared/services/localization.service-model' {
-  import { IDataProvider } from 'shared/models/data-provider.interface';
+declare module 'src/shared/services/localization.service-model' {
+  import { IDataProvider } from 'src/shared/models/data-provider.interface';
   import {
     DataProviderDataType,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider.model';
   import { LanguageInfo } from 'platform-bible-react';
   import {
     LanguageStrings,
@@ -5971,7 +5983,7 @@ declare module 'shared/services/localization.service-model' {
       getLocalizedIdFromBookNumber(bookNum: number, localizationLanguage: string): Promise<string>;
     } & IDataProvider<LocalizationDataDataTypes>;
 }
-declare module 'shared/services/app.service-model' {
+declare module 'src/shared/services/app.service-model' {
   /**
    * Information about the app that is currently running.
    *
@@ -6019,7 +6031,7 @@ declare module 'shared/services/app.service-model' {
   }
   export const appServiceNetworkObjectName = 'AppService';
 }
-declare module 'shared/data/platform.data' {
+declare module 'src/shared/data/platform.data' {
   /**
    * Namespace to use for features like commands, settings, etc. on the PAPI that are provided by
    * Platform.Bible core
@@ -6032,19 +6044,19 @@ declare module 'shared/data/platform.data' {
   /** Type of the default theme for use in the application */
   export const DEFAULT_THEME_TYPE = 'light';
 }
-declare module 'shared/log-error.model' {
+declare module 'src/shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
   export class LogError extends Error {
     constructor(message?: string);
   }
   export default LogError;
 }
-declare module 'shared/services/localization.service' {
-  import { ILocalizationService } from 'shared/services/localization.service-model';
+declare module 'src/shared/services/localization.service' {
+  import { ILocalizationService } from 'src/shared/services/localization.service-model';
   export const localizationService: ILocalizationService;
   export default localizationService;
 }
-declare module 'shared/utils/settings-document-combiner-base' {
+declare module 'src/shared/utils/settings-document-combiner-base' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
   import {
     DocumentCombiner,
@@ -6112,15 +6124,15 @@ declare module 'shared/utils/settings-document-combiner-base' {
   }
   export default SettingsDocumentCombinerBase;
 }
-declare module 'shared/services/settings.service-model' {
+declare module 'src/shared/services/settings.service-model' {
   import { SettingNames, SettingTypes } from 'papi-shared-types';
   import { OnDidDispose, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { IDataProvider } from 'src/shared/models/data-provider.interface';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { LocalizedSettingsContributionInfo } from 'shared/utils/settings-document-combiner-base';
+  } from 'src/shared/models/data-provider.model';
+  import { LocalizedSettingsContributionInfo } from 'src/shared/utils/settings-document-combiner-base';
   /** Name prefix for registered commands that call settings validators */
   export const CATEGORY_EXTENSION_SETTING_VALIDATOR = 'extensionSettingValidator';
   /**
@@ -6270,7 +6282,7 @@ declare module 'shared/services/settings.service-model' {
     IDataProvider<SettingDataTypes> &
     typeof settingsServiceObjectToProxy;
 }
-declare module 'shared/utils/project-settings-document-combiner' {
+declare module 'src/shared/utils/project-settings-document-combiner' {
   import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
   import {
     JsonDocumentLike,
@@ -6278,7 +6290,7 @@ declare module 'shared/utils/project-settings-document-combiner' {
     ProjectSetting,
     ProjectSettingsGroup,
   } from 'platform-bible-utils';
-  import { SettingsDocumentCombinerBase } from 'shared/utils/settings-document-combiner-base';
+  import { SettingsDocumentCombinerBase } from 'src/shared/utils/settings-document-combiner-base';
   /**
    * Information about one specific setting. Basically just {@link Setting} but with specific default
    * type info
@@ -6335,10 +6347,10 @@ declare module 'shared/utils/project-settings-document-combiner' {
   }
   export default ProjectSettingsDocumentCombiner;
 }
-declare module 'shared/services/project-settings.service-model' {
+declare module 'src/shared/services/project-settings.service-model' {
   import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
   import { UnsubscriberAsync } from 'platform-bible-utils';
-  import { LocalizedProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
+  import { LocalizedProjectSettingsContributionInfo } from 'src/shared/utils/project-settings-document-combiner';
   /** Name prefix for registered commands that call project settings validators */
   export const CATEGORY_EXTENSION_PROJECT_SETTING_VALIDATOR = 'extensionProjectSettingValidator';
   export const projectSettingsServiceNetworkObjectName = 'ProjectSettingsService';
@@ -6451,71 +6463,71 @@ declare module 'shared/services/project-settings.service-model' {
     [ProjectSettingName in ProjectSettingNames]: ProjectSettingValidator<ProjectSettingName>;
   };
 }
-declare module '@papi/core' {
+declare module 'src/shared/services/papi-core.service' {
   /** Exporting empty object so people don't have to put 'type' in their import statements */
   const core: {};
   export default core;
-  export type { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
-  export type { ExecutionToken } from 'node/models/execution-token.model';
-  export type { ElevatedPrivileges } from 'shared/models/elevated-privileges.model';
+  export type { ExecutionActivationContext } from 'src/extension-host/extension-types/extension-activation-context.model';
+  export type { ExecutionToken } from 'src/node/models/execution-token.model';
+  export type { ElevatedPrivileges } from 'src/shared/models/elevated-privileges.model';
   export type {
     ExtensionIdentifier,
     HashValues,
     InstalledExtensions,
     ManageExtensions,
-  } from 'shared/models/manage-extensions-privilege.model';
+  } from 'src/shared/models/manage-extensions-privilege.model';
   export type {
     HandleUri,
     RegisterUriHandler,
     UriHandler,
-  } from 'shared/models/handle-uri-privilege.model';
-  export type { DialogTypes } from 'renderer/components/dialogs/dialog-definition.model';
-  export type { UseDialogCallbackOptions } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  } from 'src/shared/models/handle-uri-privilege.model';
+  export type { DialogTypes } from 'src/renderer/components/dialogs/dialog-definition.model';
+  export type { UseDialogCallbackOptions } from 'src/renderer/hooks/papi-hooks/use-dialog-callback.hook';
   export type {
     IDataProvider,
     IDisposableDataProvider,
-  } from 'shared/models/data-provider.interface';
+  } from 'src/shared/models/data-provider.interface';
   export type {
     DataProviderUpdateInstructions,
     DataProviderDataType,
     DataProviderSubscriberOptions,
-  } from 'shared/models/data-provider.model';
-  export type { WithNotifyUpdate } from 'shared/models/data-provider-engine.model';
-  export type { IDataProviderEngine } from 'shared/models/data-provider-engine.model';
-  export type { DialogOptions } from 'shared/models/dialog-options.model';
-  export type { NetworkableObject, NetworkObject } from 'shared/models/network-object.model';
-  export type { PlatformNotification } from 'shared/models/notification.service-model';
+  } from 'src/shared/models/data-provider.model';
+  export type { WithNotifyUpdate } from 'src/shared/models/data-provider-engine.model';
+  export type { IDataProviderEngine } from 'src/shared/models/data-provider-engine.model';
+  export type { DialogOptions } from 'src/shared/models/dialog-options.model';
+  export type { NetworkableObject, NetworkObject } from 'src/shared/models/network-object.model';
+  export type { PlatformNotification } from 'src/shared/models/notification.service-model';
   export type {
     Components as ComponentsDocumentation,
     MethodDocumentationWithoutName,
     NetworkObjectDocumentation,
     SingleMethodDocumentation,
-  } from 'shared/models/openrpc.model';
+  } from 'src/shared/models/openrpc.model';
   export type {
     ExtensionDataScope,
     MandatoryProjectDataTypes,
-  } from 'shared/models/project-data-provider.model';
-  export type { IProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
-  export type { IProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
-  export type { IBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
+  } from 'src/shared/models/project-data-provider.model';
+  export type { IProjectDataProviderEngine } from 'src/shared/models/project-data-provider-engine.model';
+  export type { IProjectDataProviderEngineFactory } from 'src/shared/models/project-data-provider-engine-factory.model';
+  export type { IBaseProjectDataProviderEngine } from 'src/shared/models/base-project-data-provider-engine.model';
   export type {
     IProjectDataProviderFactory,
     ProjectMetadataFilterOptions,
-  } from 'shared/models/project-data-provider-factory.interface';
+  } from 'src/shared/models/project-data-provider-factory.interface';
   export type {
     ProjectDataProviderFactoryMetadataInfo,
     ProjectMetadata,
     ProjectMetadataWithoutFactoryInfo,
-  } from 'shared/models/project-metadata.model';
+  } from 'src/shared/models/project-metadata.model';
   export type {
     LocalizationData,
     LocalizationSelector,
     LocalizationSelectors,
-  } from 'shared/services/localization.service-model';
-  export type { NetworkObjectDetails } from 'shared/models/network-object.model';
-  export type { AppInfo } from 'shared/services/app.service-model';
-  export type { SettingValidator } from 'shared/services/settings.service-model';
-  export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  } from 'src/shared/services/localization.service-model';
+  export type { NetworkObjectDetails } from 'src/shared/models/network-object.model';
+  export type { AppInfo } from 'src/shared/services/app.service-model';
+  export type { SettingValidator } from 'src/shared/services/settings.service-model';
+  export type { ScrollGroupScrRef } from 'src/shared/services/scroll-group.service-model';
   export type {
     GetWebViewOptions,
     SavedWebViewDefinition,
@@ -6524,17 +6536,17 @@ declare module '@papi/core' {
     WebViewContentType,
     WebViewDefinition,
     WebViewProps,
-  } from 'shared/models/web-view.model';
+  } from 'src/shared/models/web-view.model';
   export type {
     IDisposableWebViewProvider,
     IWebViewProvider,
-  } from 'shared/models/web-view-provider.model';
+  } from 'src/shared/models/web-view-provider.model';
   export type {
     SimultaneousProjectSettingsChanges,
     ProjectSettingValidator,
-  } from 'shared/services/project-settings.service-model';
+  } from 'src/shared/services/project-settings.service-model';
 }
-declare module 'shared/services/menu-data.service-model' {
+declare module 'src/shared/services/menu-data.service-model' {
   import {
     OnDidDispose,
     UnsubscriberAsync,
@@ -6548,8 +6560,8 @@ declare module 'shared/services/menu-data.service-model' {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from '@papi/core';
+  } from 'src/shared/models/data-provider.model';
+  import { IDataProvider } from 'src/shared/services/papi-core.service';
   /**
    *
    * This name is used to register the menu data data provider on the papi. You can use this name to
@@ -6696,13 +6708,13 @@ declare module 'shared/services/menu-data.service-model' {
     typeof menuDataServiceObjectToProxy &
     IDataProvider<MenuDataDataTypes>;
 }
-declare module 'shared/services/menu-data.service' {
-  import { IMenuDataService } from 'shared/services/menu-data.service-model';
+declare module 'src/shared/services/menu-data.service' {
+  import { IMenuDataService } from 'src/shared/services/menu-data.service-model';
   export const menuDataService: IMenuDataService;
   export default menuDataService;
 }
-declare module 'shared/services/scroll-group.service' {
-  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
+declare module 'src/shared/services/scroll-group.service' {
+  import { IScrollGroupService } from 'src/shared/services/scroll-group.service-model';
   /**
    *
    * Provides functions related to scroll groups and Scripture references at those scroll groups
@@ -6710,12 +6722,12 @@ declare module 'shared/services/scroll-group.service' {
   export const scrollGroupService: IScrollGroupService;
   export default scrollGroupService;
 }
-declare module 'shared/services/settings.service' {
-  import { ISettingsService } from 'shared/services/settings.service-model';
+declare module 'src/shared/services/settings.service' {
+  import { ISettingsService } from 'src/shared/services/settings.service-model';
   export const settingsService: ISettingsService;
   export default settingsService;
 }
-declare module 'shared/services/theme.service-model' {
+declare module 'src/shared/services/theme.service-model' {
   import {
     OnDidDispose,
     PlatformError,
@@ -6723,12 +6735,12 @@ declare module 'shared/services/theme.service-model' {
     ThemeDefinitionExpanded,
     ThemeFamiliesByIdExpanded,
   } from 'platform-bible-utils';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import { IDataProvider } from 'src/shared/models/data-provider.interface';
   import {
     DataProviderDataType,
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider.model';
   /**
    *
    * This name is used to register the theme service data provider on the papi. You can use this
@@ -6962,14 +6974,14 @@ declare module 'shared/services/theme.service-model' {
     getCurrentThemeSync(): ThemeDefinitionExpanded;
   };
 }
-declare module 'shared/services/theme.service' {
-  import { IThemeService } from 'shared/services/theme.service-model';
+declare module 'src/shared/services/theme.service' {
+  import { IThemeService } from 'src/shared/services/theme.service-model';
   export const themeService: IThemeService;
 }
-declare module 'shared/services/project-settings.service' {
-  import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
+declare module 'src/shared/services/project-settings.service' {
+  import { IProjectSettingsService } from 'src/shared/services/project-settings.service-model';
   import { Localized } from 'platform-bible-utils';
-  import { ProjectSettingsContributionInfo } from 'shared/utils/project-settings-document-combiner';
+  import { ProjectSettingsContributionInfo } from 'src/shared/utils/project-settings-document-combiner';
   import { ProjectDataProviderInterfaces } from 'papi-shared-types';
   /**
    * Filters project settings contributions based on the provided project interfaces.
@@ -6991,7 +7003,7 @@ declare module 'shared/services/project-settings.service' {
   export const projectSettingsService: IProjectSettingsService;
   export default projectSettingsService;
 }
-declare module 'shared/models/data-protection.service-model' {
+declare module 'src/shared/models/data-protection.service-model' {
   /**
    *
    * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
@@ -7069,8 +7081,8 @@ declare module 'shared/models/data-protection.service-model' {
   }
   export const dataProtectionServiceNetworkObjectName = 'DataProtectionService';
 }
-declare module 'shared/services/data-protection.service' {
-  import { IDataProtectionService } from 'shared/models/data-protection.service-model';
+declare module 'src/shared/services/data-protection.service' {
+  import { IDataProtectionService } from 'src/shared/models/data-protection.service-model';
   /**
    *
    * Provides functions related to encrypting and decrypting strings like user data, secrets, etc.
@@ -7088,44 +7100,44 @@ declare module 'shared/services/data-protection.service' {
   export const dataProtectionService: IDataProtectionService;
   export default dataProtectionService;
 }
-declare module 'shared/services/app.service' {
-  import { IAppService } from 'shared/services/app.service-model';
+declare module 'src/shared/services/app.service' {
+  import { IAppService } from 'src/shared/services/app.service-model';
   /**
    *
    * Provides information about this app like name and version.
    */
   export const appService: IAppService;
 }
-declare module '@papi/backend' {
+declare module 'src/extension-host/services/papi-backend.service' {
   /**
    * Unified module for accessing API features in the extension host.
    *
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  import * as commandService from 'shared/services/command.service';
-  import { PapiNetworkService } from 'shared/services/network.service';
-  import { WebViewServiceType } from 'shared/services/web-view.service-model';
-  import { PapiWebViewProviderService } from 'shared/services/web-view-provider.service';
-  import { InternetService } from 'shared/services/internet.service';
-  import { DataProviderService } from 'shared/services/data-provider.service';
-  import { DataProviderEngine as PapiDataProviderEngine } from 'shared/models/data-provider-engine.model';
-  import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from 'shared/models/project-data-provider-engine.model';
-  import { BaseProjectDataProviderEngine as PapiBaseProjectDataProviderEngine } from 'shared/models/base-project-data-provider-engine.model';
-  import { LayeringProjectDataProviderEngineFactory as PapiLayeringProjectDataProviderEngineFactory } from 'shared/models/project-data-provider-engine-factory.model';
-  import { PapiBackendProjectDataProviderService } from 'shared/services/project-data-provider.service';
-  import { ExtensionStorageService } from 'extension-host/services/extension-storage.service';
-  import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
-  import { DialogService } from 'shared/services/dialog.service-model';
-  import { IMenuDataService } from 'shared/services/menu-data.service-model';
-  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
-  import { ILocalizationService } from 'shared/services/localization.service-model';
-  import { MinimalNetworkObjectService } from 'shared/services/network-object.service';
-  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
-  import { ISettingsService } from 'shared/services/settings.service-model';
-  import { IThemeService } from 'shared/services/theme.service-model';
-  import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
-  import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
-  import { INotificationService } from 'shared/models/notification.service-model';
+  import * as commandService from 'src/shared/services/command.service';
+  import { PapiNetworkService } from 'src/shared/services/network.service';
+  import { WebViewServiceType } from 'src/shared/services/web-view.service-model';
+  import { PapiWebViewProviderService } from 'src/shared/services/web-view-provider.service';
+  import { InternetService } from 'src/shared/services/internet.service';
+  import { DataProviderService } from 'src/shared/services/data-provider.service';
+  import { DataProviderEngine as PapiDataProviderEngine } from 'src/shared/models/data-provider-engine.model';
+  import { ProjectDataProviderEngine as PapiProjectDataProviderEngine } from 'src/shared/models/project-data-provider-engine.model';
+  import { BaseProjectDataProviderEngine as PapiBaseProjectDataProviderEngine } from 'src/shared/models/base-project-data-provider-engine.model';
+  import { LayeringProjectDataProviderEngineFactory as PapiLayeringProjectDataProviderEngineFactory } from 'src/shared/models/project-data-provider-engine-factory.model';
+  import { PapiBackendProjectDataProviderService } from 'src/shared/services/project-data-provider.service';
+  import { ExtensionStorageService } from 'src/extension-host/services/extension-storage.service';
+  import { ProjectLookupServiceType } from 'src/shared/models/project-lookup.service-model';
+  import { DialogService } from 'src/shared/services/dialog.service-model';
+  import { IMenuDataService } from 'src/shared/services/menu-data.service-model';
+  import { IScrollGroupService } from 'src/shared/services/scroll-group.service-model';
+  import { ILocalizationService } from 'src/shared/services/localization.service-model';
+  import { MinimalNetworkObjectService } from 'src/shared/services/network-object.service';
+  import { NetworkObjectStatusServiceType } from 'src/shared/models/network-object-status.service-model';
+  import { ISettingsService } from 'src/shared/services/settings.service-model';
+  import { IThemeService } from 'src/shared/services/theme.service-model';
+  import { IProjectSettingsService } from 'src/shared/services/project-settings.service-model';
+  import { WebViewFactory as PapiWebViewFactory } from 'src/shared/models/web-view-factory.model';
+  import { INotificationService } from 'src/shared/models/notification.service-model';
   const papi: {
     /**
      *
@@ -7208,7 +7220,7 @@ declare module '@papi/backend' {
      *
      * Provides information about this app like name and version.
      */
-    app: import('shared/services/app.service-model').IAppService;
+    app: import('src/shared/services/app.service-model').IAppService;
     /**
      *
      * The command service allows you to exchange messages with other components in the platform. You
@@ -7230,7 +7242,7 @@ declare module '@papi/backend' {
      * connection. Please note that using this service passes the unencrypted string between local
      * processes using the PAPI WebSocket.
      */
-    dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
+    dataProtection: import('src/shared/models/data-protection.service-model').IDataProtectionService;
     /**
      *
      * Service exposing various functions related to using webViews
@@ -7445,7 +7457,7 @@ declare module '@papi/backend' {
    *
    * Provides information about this app like name and version.
    */
-  export const app: import('shared/services/app.service-model').IAppService;
+  export const app: import('src/shared/services/app.service-model').IAppService;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You
@@ -7467,7 +7479,7 @@ declare module '@papi/backend' {
    * connection. Please note that using this service passes the unencrypted string between local
    * processes using the PAPI WebSocket.
    */
-  export const dataProtection: import('shared/models/data-protection.service-model').IDataProtectionService;
+  export const dataProtection: import('src/shared/models/data-protection.service-model').IDataProtectionService;
   /**
    *
    * Service exposing various functions related to using webViews
@@ -7600,9 +7612,9 @@ declare module '@papi/backend' {
    */
   export const notifications: INotificationService;
 }
-declare module 'extension-host/extension-types/extension.interface' {
+declare module 'src/extension-host/extension-types/extension.interface' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
-  import { ExecutionActivationContext } from 'extension-host/extension-types/extension-activation-context.model';
+  import { ExecutionActivationContext } from 'src/extension-host/extension-types/extension-activation-context.model';
   /** Interface for all extensions to implement */
   export interface IExtension {
     /**
@@ -7621,8 +7633,8 @@ declare module 'extension-host/extension-types/extension.interface' {
     deactivate?: UnsubscriberAsync;
   }
 }
-declare module 'extension-host/extension-types/extension-manifest.model' {
-  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges.model';
+declare module 'src/extension-host/extension-types/extension-manifest.model' {
+  import { ElevatedPrivilegeNames } from 'src/shared/models/elevated-privileges.model';
   /** Information about an extension provided by the extension developer. */
   export type ExtensionManifest = {
     /** Name of the extension */
@@ -7676,8 +7688,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
     publisher?: string;
   };
 }
-declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
-  import { NetworkObject } from 'shared/models/network-object.model';
+declare module 'src/renderer/hooks/hook-generators/create-use-network-object-hook.util' {
+  import { NetworkObject } from 'src/shared/models/network-object.model';
   /**
    * This function takes in a getNetworkObject function and creates a hook with that function in it
    * which will return a network object
@@ -7700,7 +7712,7 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
   ): (...args: THookParams) => NetworkObject<object> | undefined;
   export default createUseNetworkObjectHook;
 }
-declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
+declare module 'src/renderer/hooks/papi-hooks/use-data-provider.hook' {
   import { DataProviders } from 'papi-shared-types';
   /**
    * Gets a data provider with specified provider name
@@ -7717,14 +7729,14 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
   ) => DataProviders[DataProviderName] | undefined;
   export default useDataProvider;
 }
-declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
+declare module 'src/renderer/hooks/hook-generators/create-use-data-hook.util' {
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { IDataProvider } from 'shared/models/data-provider.interface';
+  } from 'src/shared/models/data-provider.model';
+  import { IDataProvider } from 'src/shared/models/data-provider.interface';
   import { PlatformError } from 'platform-bible-utils';
-  import { ExtractDataProviderDataTypes } from 'shared/models/extract-data-provider-data-types.model';
+  import { ExtractDataProviderDataTypes } from 'src/shared/models/extract-data-provider-data-types.model';
   /**
    * The final function called as part of the `useData` hook that is the actual React hook
    *
@@ -7786,11 +7798,11 @@ declare module 'renderer/hooks/hook-generators/create-use-data-hook.util' {
   ): UseDataHookGeneric<TUseDataProviderParams>;
   export default createUseDataHook;
 }
-declare module 'renderer/hooks/papi-hooks/use-data.hook' {
+declare module 'src/renderer/hooks/papi-hooks/use-data.hook' {
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider.model';
   import { DataProviderNames, DataProviderTypes, DataProviders } from 'papi-shared-types';
   import { PlatformError } from 'platform-bible-utils';
   /**
@@ -7890,8 +7902,8 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   export const useData: UseDataHook;
   export default useData;
 }
-declare module 'renderer/services/scroll-group.service-host' {
-  import { ScrollGroupUpdateInfo } from 'shared/services/scroll-group.service-model';
+declare module 'src/renderer/services/scroll-group.service-host' {
+  import { ScrollGroupUpdateInfo } from 'src/shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { ScrollGroupId } from 'platform-bible-utils';
   /**
@@ -7919,8 +7931,8 @@ declare module 'renderer/services/scroll-group.service-host' {
   /** Register the network object that backs the scroll group service */
   export function startScrollGroupService(): Promise<void>;
 }
-declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
-  import { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+declare module 'src/renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
+  import { ScrollGroupScrRef } from 'src/shared/services/scroll-group.service-model';
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { ScrollGroupId } from 'platform-bible-utils';
   /**
@@ -7962,13 +7974,13 @@ declare module 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook' {
   ];
   export default useScrollGroupScrRef;
 }
-declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
+declare module 'src/renderer/hooks/papi-hooks/use-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
-  import { SettingDataTypes } from 'shared/services/settings.service-model';
+  } from 'src/shared/models/data-provider.model';
+  import { SettingDataTypes } from 'src/shared/services/settings.service-model';
   import { SettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
@@ -8009,7 +8021,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   ];
   export default useSetting;
 }
-declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
+declare module 'src/renderer/hooks/papi-hooks/use-project-data-provider.hook' {
   import { ProjectDataProviderInterfaces } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
@@ -8037,12 +8049,12 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
   ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
   export default useProjectDataProvider;
 }
-declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
+declare module 'src/renderer/hooks/papi-hooks/use-project-data.hook' {
   import { PlatformError } from 'platform-bible-utils';
   import {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
-  } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider.model';
   import {
     ProjectDataProviderInterfaces,
     ProjectInterfaceDataTypes,
@@ -8165,9 +8177,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   export const useProjectData: UseProjectDataHook;
   export default useProjectData;
 }
-declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
+declare module 'src/renderer/hooks/papi-hooks/use-project-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
+  import { DataProviderSubscriberOptions } from 'src/shared/models/data-provider.model';
   import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
@@ -8222,7 +8234,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
   ];
   export default useProjectSetting;
 }
-declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
+declare module 'src/renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   import { DataProviderNames, DataProviders } from 'papi-shared-types';
   /**
    * Gets an array of data providers based on an array of input sources
@@ -8256,9 +8268,9 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider-multi.hook' {
   ): (DataProviders[EachDataProviderName[number]] | undefined)[];
   export default useDataProviderMulti;
 }
-declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
-  import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
-  import { LocalizationData } from 'shared/services/localization.service-model';
+declare module 'src/renderer/hooks/papi-hooks/use-localized-strings-hook' {
+  import { DataProviderSubscriberOptions } from 'src/shared/models/data-provider.model';
+  import { LocalizationData } from 'src/shared/services/localization.service-model';
   import { LocalizeKey } from 'platform-bible-utils';
   /**
    * Gets localizations on the papi.
@@ -8289,9 +8301,9 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
   ) => [localizedStrings: LocalizationData, isLoading: boolean];
   export default useLocalizedStrings;
 }
-declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
-  import { NetworkObject } from 'shared/models/network-object.model';
-  import { WebViewId } from 'shared/models/web-view.model';
+declare module 'src/renderer/hooks/papi-hooks/use-web-view-controller.hook' {
+  import { NetworkObject } from 'src/shared/models/network-object.model';
+  import { WebViewId } from 'src/shared/models/web-view.model';
   import { WebViewControllers } from 'papi-shared-types';
   /**
    * Gets a Web View Controller with specified provider name
@@ -8316,37 +8328,131 @@ declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
   ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
   export default useWebViewController;
 }
-declare module 'renderer/hooks/papi-hooks/index' {
-  export { default as useDataProvider } from 'renderer/hooks/papi-hooks/use-data-provider.hook';
-  export { default as useData } from 'renderer/hooks/papi-hooks/use-data.hook';
-  export { default as useScrollGroupScrRef } from 'renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
-  export { default as useSetting } from 'renderer/hooks/papi-hooks/use-setting.hook';
-  export { default as useProjectData } from 'renderer/hooks/papi-hooks/use-project-data.hook';
-  export { default as useProjectDataProvider } from 'renderer/hooks/papi-hooks/use-project-data-provider.hook';
-  export { default as useProjectSetting } from 'renderer/hooks/papi-hooks/use-project-setting.hook';
-  export { default as useDialogCallback } from 'renderer/hooks/papi-hooks/use-dialog-callback.hook';
-  export { default as useDataProviderMulti } from 'renderer/hooks/papi-hooks/use-data-provider-multi.hook';
-  export { default as useLocalizedStrings } from 'renderer/hooks/papi-hooks/use-localized-strings-hook';
-  export { default as useWebViewController } from 'renderer/hooks/papi-hooks/use-web-view-controller.hook';
+declare module 'src/renderer/hooks/papi-hooks/index' {
+  export { default as useDataProvider } from 'src/renderer/hooks/papi-hooks/use-data-provider.hook';
+  export { default as useData } from 'src/renderer/hooks/papi-hooks/use-data.hook';
+  export { default as useScrollGroupScrRef } from 'src/renderer/hooks/papi-hooks/use-scroll-group-scr-ref.hook';
+  export { default as useSetting } from 'src/renderer/hooks/papi-hooks/use-setting.hook';
+  export { default as useProjectData } from 'src/renderer/hooks/papi-hooks/use-project-data.hook';
+  export { default as useProjectDataProvider } from 'src/renderer/hooks/papi-hooks/use-project-data-provider.hook';
+  export { default as useProjectSetting } from 'src/renderer/hooks/papi-hooks/use-project-setting.hook';
+  export { default as useDialogCallback } from 'src/renderer/hooks/papi-hooks/use-dialog-callback.hook';
+  export { default as useDataProviderMulti } from 'src/renderer/hooks/papi-hooks/use-data-provider-multi.hook';
+  export { default as useLocalizedStrings } from 'src/renderer/hooks/papi-hooks/use-localized-strings-hook';
+  export { default as useWebViewController } from 'src/renderer/hooks/papi-hooks/use-web-view-controller.hook';
 }
-declare module '@papi/frontend/react' {
-  export * from 'renderer/hooks/papi-hooks/index';
+declare module 'src/renderer/services/papi-frontend-react.service' {
+  export * from 'src/renderer/hooks/papi-hooks/index';
 }
-declare module 'renderer/services/theme.service-host' {
+declare module 'src/shared/services/theme-data.service-model' {
+  import {
+    OnDidDispose,
+    UnsubscriberAsync,
+    PlatformError,
+    ThemeFamiliesByIdExpanded,
+  } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'src/shared/models/data-provider.model';
+  import { IDataProvider } from 'src/shared/services/papi-core.service';
+  /**
+   *
+   * This name is used to register the theme data data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const themeDataServiceProviderName = 'platform.themeDataServiceDataProvider';
+  export const themeDataServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the theme data data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.themeDataServiceDataProvider';
+  }>;
+  export type ThemeDataDataTypes = {
+    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [themeDataServiceProviderName]: IThemeDataService;
+    }
+  }
+  /**
+   * Service that provides aggregated theme contributions from the platform and extensions. Serves
+   * theme contribution info to the theme service
+   */
+  export type IThemeDataService = {
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide themes in contributions
+     */
+    setAllThemes(
+      selector: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataDataTypes>>;
+    /**
+     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
+     * callback function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called when a theme is added/updated/removed. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeAllThemes(
+      selector: undefined,
+      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof themeDataServiceObjectToProxy &
+    IDataProvider<ThemeDataDataTypes>;
+}
+declare module 'src/shared/services/theme-data.service' {
+  import { IThemeDataService } from 'src/shared/services/theme-data.service-model';
+  export const themeDataService: IThemeDataService;
+  export default themeDataService;
+}
+declare module 'src/renderer/services/theme.service-host' {
   import {
     ThemeDataTypes,
     IThemeServiceLocal,
     CurrentThemeSpecifier,
-  } from 'shared/services/theme.service-model';
+  } from 'src/shared/services/theme.service-model';
   import {
     DataProviderEngine,
     IDataProviderEngine,
-  } from 'shared/models/data-provider-engine.model';
-  import { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
+  } from 'src/shared/models/data-provider-engine.model';
+  import { DataProviderUpdateInstructions } from 'src/shared/models/data-provider.model';
   import {
     PlatformEvent,
     ThemeFamiliesByIdExpanded,
     ThemeDefinitionExpanded,
+    PlatformEventAsync,
+    PlatformError,
   } from 'platform-bible-utils';
   class ThemeDataProviderEngine
     extends DataProviderEngine<ThemeDataTypes>
@@ -8358,15 +8464,13 @@ declare module 'renderer/services/theme.service-host' {
     shouldMatchSystem: boolean;
     saveShouldMatchSystem: (shouldMatchSystem: boolean) => void;
     currentSystemTheme: 'light' | 'dark';
-    /** All Theme Data available to the application. `undefined` if not yet loaded. */
-    allThemeFamiliesById: ThemeFamiliesByIdExpanded | undefined;
-    private unsubscribeOnDidUpdateAllThemes;
+    private unsubscribeEventListeners;
     constructor(
       currentTheme: ThemeDefinitionExpanded,
       saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
       shouldMatchSystem: boolean,
       saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-      onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
+      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
       currentSystemTheme: 'light' | 'dark',
       onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
     );
@@ -8392,7 +8496,7 @@ declare module 'renderer/services/theme.service-host' {
       saveCurrentTheme: () => void,
       shouldMatchSystem: boolean,
       saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-      onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
+      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
       currentSystemTheme: 'light' | 'dark',
       onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
     ) => ThemeDataProviderEngine;
@@ -8403,7 +8507,7 @@ declare module 'renderer/services/theme.service-host' {
    */
   export const localThemeService: IThemeServiceLocal;
 }
-declare module 'renderer/services/renderer-xml-http-request.service' {
+declare module 'src/renderer/services/renderer-xml-http-request.service' {
   /** This wraps the browser's XMLHttpRequest implementation to
    * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
    * so it should act as a drop-in replacement.
@@ -8463,29 +8567,29 @@ declare module 'renderer/services/renderer-xml-http-request.service' {
   }
   export default PapiRendererXMLHttpRequest;
 }
-declare module '@papi/frontend' {
+declare module 'src/renderer/services/papi-frontend.service' {
   /**
    * Unified module for accessing API features in the renderer.
    *
    * WARNING: DO NOT IMPORT papi IN ANY FILE THAT papi IMPORTS AND EXPOSES.
    */
-  import * as papiReact from '@papi/frontend/react';
-  import { PapiRendererWebSocket } from 'renderer/services/renderer-web-socket.service';
-  import { INotificationService } from 'shared/models/notification.service-model';
-  import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
-  import * as commandService from 'shared/services/command.service';
-  import { DataProviderService } from 'shared/services/data-provider.service';
-  import { DialogService } from 'shared/services/dialog.service-model';
-  import { InternetService } from 'shared/services/internet.service';
-  import { ILocalizationService } from 'shared/services/localization.service-model';
-  import { IMenuDataService } from 'shared/services/menu-data.service-model';
-  import { PapiNetworkService } from 'shared/services/network.service';
-  import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
-  import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
-  import { ISettingsService } from 'shared/services/settings.service-model';
-  import { IThemeServiceLocal } from 'shared/services/theme.service-model';
-  import { WebViewServiceType } from 'shared/services/web-view.service-model';
-  import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
+  import * as papiReact from 'src/renderer/services/papi-frontend-react.service';
+  import { PapiRendererWebSocket } from 'src/renderer/services/renderer-web-socket.service';
+  import { INotificationService } from 'src/shared/models/notification.service-model';
+  import { ProjectLookupServiceType } from 'src/shared/models/project-lookup.service-model';
+  import * as commandService from 'src/shared/services/command.service';
+  import { DataProviderService } from 'src/shared/services/data-provider.service';
+  import { DialogService } from 'src/shared/services/dialog.service-model';
+  import { InternetService } from 'src/shared/services/internet.service';
+  import { ILocalizationService } from 'src/shared/services/localization.service-model';
+  import { IMenuDataService } from 'src/shared/services/menu-data.service-model';
+  import { PapiNetworkService } from 'src/shared/services/network.service';
+  import { PapiFrontendProjectDataProviderService } from 'src/shared/services/project-data-provider.service';
+  import { IScrollGroupService } from 'src/shared/services/scroll-group.service-model';
+  import { ISettingsService } from 'src/shared/services/settings.service-model';
+  import { IThemeServiceLocal } from 'src/shared/services/theme.service-model';
+  import { WebViewServiceType } from 'src/shared/services/web-view.service-model';
+  import { PapiRendererXMLHttpRequest } from 'src/renderer/services/renderer-xml-http-request.service';
   const papi: {
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
@@ -8507,7 +8611,7 @@ declare module '@papi/frontend' {
      *
      * Provides information about this app like name and version.
      */
-    app: import('shared/services/app.service-model').IAppService;
+    app: import('src/shared/services/app.service-model').IAppService;
     /**
      *
      * The command service allows you to exchange messages with other components in the platform. You
@@ -8621,7 +8725,7 @@ declare module '@papi/frontend' {
    *
    * Provides information about this app like name and version.
    */
-  export const app: import('shared/services/app.service-model').IAppService;
+  export const app: import('src/shared/services/app.service-model').IAppService;
   /**
    *
    * The command service allows you to exchange messages with other components in the platform. You
