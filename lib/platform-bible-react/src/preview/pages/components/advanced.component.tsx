@@ -24,6 +24,7 @@ import { columns, data } from './data-sources/data-table-content';
 import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.component';
 import { SettingSidebarContentSearchExamples } from './advanced/settings-sidebar-content-search.example.component';
 import { PlatformMenubarExample } from './advanced/platform-menubar-example.component';
+import HomeExample from './advanced/home.example.component';
 
 export function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -77,6 +78,7 @@ export function Compositions() {
           <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Home">Home</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Marketplace">Marketplace</VerticalTabsTrigger>
@@ -115,6 +117,10 @@ export function Compositions() {
 
         <VerticalTabsContent value="Filter">
           <FilterExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Home">
+          <HomeExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Markdown Renderer">
