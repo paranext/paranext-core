@@ -30,6 +30,7 @@ import { TabExamples } from './basics/tab.examples.component';
 import { TableExamples } from './basics/table.examples.component';
 import { ToggleGroupExamples } from './basics/toggle-group.examples.component';
 import { TooltipExamples } from './basics/tooltip.examples.component';
+import { ProjectResourceFilterExamples } from './basics/projectResourceFilter.examples.component';
 import { ProgressExamples } from './basics/progress.examples.component';
 import { SkeletonExamples } from './basics/skeleton.examples.component';
 
@@ -55,6 +56,7 @@ export function Basics() {
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Menubar">Menubar</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="ProjResFilter">Project Resource Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Progress">Progress</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
@@ -121,6 +123,10 @@ export function Basics() {
 
         <VerticalTabsContent value="Menubar">
           <MenubarExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="ProjResFilter">
+          <ProjectResourceFilterExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Radio Group">
