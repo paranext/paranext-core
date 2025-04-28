@@ -12,7 +12,6 @@ import { DataProviderUpdateInstructions } from '@shared/models/data-provider.mod
 import {
   createSyncProxyForAsyncObject,
   expandThemeContribution,
-  Unsubscriber,
   deserialize,
   serialize,
   PlatformEvent,
@@ -21,9 +20,17 @@ import {
   ThemeFamiliesByIdExpanded,
   ThemeDefinitionExpanded,
   ThemeFamiliesById,
+  AsyncVariable,
+  UnsubscriberAsyncList,
+  PlatformEventAsync,
+  PlatformError,
+  getErrorMessage,
+  isPlatformError,
 } from 'platform-bible-utils';
 import themesDataObject from '@shared/data/themes.data.json';
 import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.data';
+import themeDataService from '@shared/services/theme-data.service';
+import { logger } from '@shared/services/logger.service';
 
 /** Themes that are built into the software. Used for loading themes immediately */
 const BUILT_IN_THEMES: ThemeFamiliesByIdExpanded = expandThemeContribution(
@@ -39,6 +46,12 @@ if (!defaultThemePossiblyUndefined)
     `Theme service host could not find the built-in default theme! Family ${DEFAULT_THEME_FAMILY} type ${DEFAULT_THEME_TYPE}. This should not happen.`,
   );
 const DEFAULT_THEME: ThemeDefinitionExpanded = defaultThemePossiblyUndefined;
+
+/**
+ * Time from process start to consider to be still in startup and loading. For example, do not reset
+ * theme to default until after this time.
+ */
+const STARTUP_TIME_MS = 30000;
 
 // #region interacting with localStorage
 
@@ -115,52 +128,105 @@ class ThemeDataProviderEngine
   extends DataProviderEngine<ThemeDataTypes>
   implements IDataProviderEngine<ThemeDataTypes>
 {
+  private unsubscribeEventListeners = new UnsubscriberAsyncList('Theme Service Host');
   /** All Theme Data available to the application. `undefined` if not yet loaded. */
-  allThemeFamiliesById: ThemeFamiliesByIdExpanded | undefined;
-  private unsubscribeOnDidUpdateAllThemes: Unsubscriber | undefined;
+  #allThemeFamiliesById: ThemeFamiliesByIdExpanded | undefined;
+  /**
+   * Async Variable that resolves to the first `allThemeFamiliesById`. If `allThemeFamiliesById` is
+   * `undefined`, await this variable.
+   */
+  #allThemeFamiliesByIdAsyncVariable: AsyncVariable<ThemeFamiliesByIdExpanded>;
+  #isDisposed = false;
 
   constructor(
     public currentTheme: ThemeDefinitionExpanded,
     public saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
     public shouldMatchSystem: boolean,
     public saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-    onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
+    onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
     public currentSystemTheme: 'light' | 'dark',
     onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
   ) {
     super();
 
-    // Immediately subscribe to and get latest themes
-    const updateAllThemeFamilies = (allThemeFamilies: ThemeFamiliesByIdExpanded) => {
-      this.allThemeFamiliesById = allThemeFamilies;
-      const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
+    this.#allThemeFamiliesByIdAsyncVariable = new AsyncVariable<ThemeFamiliesByIdExpanded>(
+      'theme.service-host.allThemeFamiliesById',
+      STARTUP_TIME_MS,
+    );
+
+    // Setup timeout to reset theme to default at end of startup if the current theme does not exist
+    const resetThemeTimeout = setTimeout(async () => {
+      if (this.#isDisposed) return;
+
+      const allThemeFamiliesById = await this.#getAllThemeFamiliesByIdResolved();
 
       const updatedCurrentTheme =
-        this.allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
-      // If the current theme no longer exists, set back to default
+        allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
+      // If the current theme no longer exists, reset back to default
       if (!updatedCurrentTheme) {
-        this.#setCurrentThemeNoUpdate(
-          this.allThemeFamiliesById[DEFAULT_THEME_FAMILY]?.[this.currentTheme.type] ??
-            DEFAULT_THEME,
-        );
-        dataTypesToUpdate.push('CurrentTheme');
+        this.#resetCurrentThemeNoUpdate();
+        this.notifyUpdate('CurrentTheme');
       }
+    }, STARTUP_TIME_MS - performance.now());
+    this.unsubscribeEventListeners.add(() => {
+      clearTimeout(resetThemeTimeout);
+      return true;
+    });
+
+    // Immediately subscribe to and get latest themes
+    const updateAllThemeFamilies = (
+      allThemeFamilies: ThemeFamiliesByIdExpanded | PlatformError,
+    ) => {
+      if (isPlatformError(allThemeFamilies)) {
+        logger.warn(
+          `Theme service host received error on subscription to all theme families: ${getErrorMessage(allThemeFamilies)}`,
+        );
+        return;
+      }
+      logger.info(
+        `Theme service host updated all theme families at ${performance.now()}: ${JSON.stringify(allThemeFamilies, undefined, 2)}`,
+      );
+
+      if (!this.#allThemeFamiliesById)
+        this.#allThemeFamiliesByIdAsyncVariable.resolveToValue(allThemeFamilies);
+      this.#allThemeFamiliesById = allThemeFamilies;
+
+      const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
+
       // If we should match the system theme, flip the theme to the system-matching version in the same family
-      else if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate())
-        dataTypesToUpdate.push('CurrentTheme');
-      // If the current theme's definition was updated, update it
-      else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
-        this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
-        dataTypesToUpdate.push('CurrentTheme');
+      if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) dataTypesToUpdate.push('CurrentTheme');
+      else {
+        const updatedCurrentTheme =
+          this.#allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
+        if (!updatedCurrentTheme) {
+          if (performance.now() >= STARTUP_TIME_MS) {
+            // The current theme no longer exists, and it's after startup time. Reset theme
+            this.#resetCurrentThemeNoUpdate();
+            this.notifyUpdate('CurrentTheme');
+          }
+        }
+        // If the current theme's definition was updated, update it
+        else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
+          this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
+          dataTypesToUpdate.push('CurrentTheme');
+        }
       }
 
       // Notify others that theme data changed
       this.notifyUpdate(dataTypesToUpdate);
     };
-    onDidUpdateAllThemes(updateAllThemeFamilies);
-
-    // TODO: REMOVE THIS WHEN WE HAVE CONTRIBUTIONS
-    updateAllThemeFamilies(BUILT_IN_THEMES);
+    (async () => {
+      try {
+        const unsubscribe = await onDidUpdateAllThemes(updateAllThemeFamilies);
+        // If disposed while awaiting this subscription, immediately unsubscribe
+        if (this.#isDisposed) unsubscribe();
+        else this.unsubscribeEventListeners.add(unsubscribe);
+      } catch (e) {
+        logger.warn(
+          `Theme service failed to subscribe to onDidUpdateAllThemes: ${getErrorMessage(e)}`,
+        );
+      }
+    })();
 
     // Listen to system theme change and update current theme
     const updateThemeToSystem = (newThemeType: 'light' | 'dark') => {
@@ -169,7 +235,7 @@ class ThemeDataProviderEngine
       if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) this.notifyUpdate('CurrentTheme');
     };
     updateThemeToSystem(currentSystemTheme);
-    onDidChangeSystemTheme(updateThemeToSystem);
+    this.unsubscribeEventListeners.add(onDidChangeSystemTheme(updateThemeToSystem));
   }
 
   async getCurrentTheme(): Promise<ThemeDefinitionExpanded> {
@@ -181,8 +247,6 @@ class ThemeDataProviderEngine
     newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
     newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
-    // TODO: AWAIT GETTING ALLTHEMEDEFINITIONS
-
     const newThemeSpecifier =
       newThemeSpecifierPossiblyUndefinedSelector ?? newThemeSpecifierPossiblyNotProvided;
 
@@ -204,12 +268,12 @@ class ThemeDataProviderEngine
     )
       return false;
 
+    const allThemeFamiliesById = await this.#getAllThemeFamiliesByIdResolved();
+
     const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['CurrentTheme'];
 
     const newTheme =
-      this.allThemeFamiliesById?.[newThemeSpecifierFilled.themeFamilyId]?.[
-        newThemeSpecifierFilled.type
-      ];
+      allThemeFamiliesById[newThemeSpecifierFilled.themeFamilyId]?.[newThemeSpecifierFilled.type];
     if (!newTheme) throw new Error(`Theme definition not found for id ${newThemeSpecifier}`);
 
     // If we're currently matching system and change type, turn off matching system
@@ -247,7 +311,7 @@ class ThemeDataProviderEngine
 
   async getAllThemes(): Promise<ThemeFamiliesByIdExpanded> {
     // TODO: SET UP TO WAIT FOR allThemeDefinitions
-    return this.allThemeFamiliesById ?? {};
+    return this.#allThemeFamiliesById ?? {};
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
@@ -257,17 +321,30 @@ class ThemeDataProviderEngine
   }
 
   async dispose(): Promise<boolean> {
-    if (this.unsubscribeOnDidUpdateAllThemes) {
-      const success = this.unsubscribeOnDidUpdateAllThemes();
-      this.unsubscribeOnDidUpdateAllThemes = undefined;
-      return success;
+    const success = await this.unsubscribeEventListeners.runAllUnsubscribers();
+
+    if (!this.#allThemeFamiliesByIdAsyncVariable.hasSettled) {
+      this.#allThemeFamiliesByIdAsyncVariable.rejectWithReason('Theme service host disposing');
     }
-    return true;
+
+    this.#isDisposed = true;
+    return success;
+  }
+
+  async #getAllThemeFamiliesByIdResolved(): Promise<ThemeFamiliesByIdExpanded> {
+    return this.#allThemeFamiliesById ?? this.#allThemeFamiliesByIdAsyncVariable.promise;
   }
 
   #setCurrentThemeNoUpdate(newTheme: ThemeDefinitionExpanded) {
     this.currentTheme = newTheme;
     this.saveCurrentTheme(this.currentTheme);
+  }
+
+  /** Sets current theme to default */
+  #resetCurrentThemeNoUpdate() {
+    return this.#setCurrentThemeNoUpdate(
+      this.#allThemeFamiliesById?.[DEFAULT_THEME_FAMILY]?.[this.currentTheme.type] ?? DEFAULT_THEME,
+    );
   }
 
   #setShouldMatchSystemNoUpdate(newShouldMatchSystem: boolean) {
@@ -281,7 +358,7 @@ class ThemeDataProviderEngine
    * @returns Theme from current theme family matching system theme or `undefined` if not found
    */
   #getCurrentThemeMatchingSystem(): ThemeDefinitionExpanded | undefined {
-    return this.allThemeFamiliesById?.[this.currentTheme.themeFamilyId]?.[this.currentSystemTheme];
+    return this.#allThemeFamiliesById?.[this.currentTheme.themeFamilyId]?.[this.currentSystemTheme];
   }
 
   /**
@@ -312,9 +389,8 @@ const themeServiceEngine = new ThemeDataProviderEngine(
   saveCurrentThemeToLocalStorage,
   shouldMatchSystemFromLocalStorage,
   saveShouldMatchSystemToLocalStorage,
-  // TODO: SET UP ALLTHEMEDEFINITIONS
-  () => {
-    return () => true;
+  async (allThemesHandler) => {
+    return themeDataService.subscribeAllThemes(undefined, allThemesHandler);
   },
   getSystemDarkThemeMediaQuery().matches ? 'dark' : 'light',
   onDidChangeSystemThemeEmitter.event,
@@ -356,7 +432,7 @@ export const testingThemeService = {
     saveCurrentTheme: () => void,
     shouldMatchSystem: boolean,
     saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-    onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
+    onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
     currentSystemTheme: 'light' | 'dark',
     onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
   ) => {

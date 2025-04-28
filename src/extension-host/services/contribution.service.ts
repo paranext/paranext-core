@@ -235,7 +235,7 @@ export async function resyncContributions(
         try {
           themesDocumentCombiner.addOrUpdateContribution(name, themesDocument);
         } catch (error) {
-          logger.warn(`Could not add localized strings contribution for ${name}: ${error}`);
+          logger.warn(`Could not add theme contribution for ${name}: ${error}`);
         }
     },
   );
