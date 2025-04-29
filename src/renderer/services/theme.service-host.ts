@@ -29,7 +29,7 @@ import {
 } from 'platform-bible-utils';
 import themesDataObject from '@shared/data/themes.data.json';
 import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.data';
-import themeDataService from '@shared/services/theme-data.service';
+import { themeDataService } from '@shared/services/theme-data.service';
 import { logger } from '@shared/services/logger.service';
 
 /** Themes that are built into the software. Used for loading themes immediately */
@@ -183,9 +183,6 @@ class ThemeDataProviderEngine
         );
         return;
       }
-      logger.info(
-        `Theme service host updated all theme families at ${performance.now()}: ${JSON.stringify(allThemeFamilies, undefined, 2)}`,
-      );
 
       if (!this.#allThemeFamiliesById)
         this.#allThemeFamiliesByIdAsyncVariable.resolveToValue(allThemeFamilies);
@@ -251,7 +248,12 @@ class ThemeDataProviderEngine
       newThemeSpecifierPossiblyUndefinedSelector ?? newThemeSpecifierPossiblyNotProvided;
 
     // Throw if no specifier or doesn't contain any information
-    if (!newThemeSpecifier || (!newThemeSpecifier.themeFamilyId && !newThemeSpecifier.type))
+    if (
+      !newThemeSpecifier ||
+      (!newThemeSpecifier.themeFamilyId &&
+        newThemeSpecifier.themeFamilyId !== '' &&
+        !newThemeSpecifier.type)
+    )
       throw new Error('Theme specifier not provided or did not contain at least family id or type');
 
     // Backfill with current theme information so both are defined

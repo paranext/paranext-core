@@ -8427,6 +8427,98 @@ declare module 'renderer/hooks/papi-hooks/index' {
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
+declare module 'shared/services/theme-data.service-model' {
+  import {
+    OnDidDispose,
+    UnsubscriberAsync,
+    PlatformError,
+    ThemeFamiliesByIdExpanded,
+  } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from '@papi/core';
+  /**
+   *
+   * This name is used to register the theme data data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const themeDataServiceProviderName = 'platform.themeDataServiceDataProvider';
+  export const themeDataServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the theme data data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.themeDataServiceDataProvider';
+  }>;
+  export type ThemeDataDataTypes = {
+    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [themeDataServiceProviderName]: IThemeDataService;
+    }
+  }
+  /**
+   * Service that provides aggregated theme contributions from the platform and extensions. Serves
+   * theme contribution info to the theme service
+   */
+  export type IThemeDataService = {
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide themes in contributions
+     */
+    setAllThemes(
+      selector: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataDataTypes>>;
+    /**
+     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
+     * callback function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called when a theme is added/updated/removed. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeAllThemes(
+      selector: undefined,
+      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof themeDataServiceObjectToProxy &
+    IDataProvider<ThemeDataDataTypes>;
+}
+declare module 'shared/services/theme-data.service' {
+  import { IThemeDataService } from 'shared/services/theme-data.service-model';
+  export const themeDataService: IThemeDataService;
+  export default themeDataService;
+}
 declare module 'renderer/services/theme.service-host' {
   import {
     ThemeDataTypes,
@@ -8442,6 +8534,8 @@ declare module 'renderer/services/theme.service-host' {
     PlatformEvent,
     ThemeFamiliesByIdExpanded,
     ThemeDefinitionExpanded,
+    PlatformEventAsync,
+    PlatformError,
   } from 'platform-bible-utils';
   class ThemeDataProviderEngine
     extends DataProviderEngine<ThemeDataTypes>
@@ -8453,15 +8547,13 @@ declare module 'renderer/services/theme.service-host' {
     shouldMatchSystem: boolean;
     saveShouldMatchSystem: (shouldMatchSystem: boolean) => void;
     currentSystemTheme: 'light' | 'dark';
-    /** All Theme Data available to the application. `undefined` if not yet loaded. */
-    allThemeFamiliesById: ThemeFamiliesByIdExpanded | undefined;
-    private unsubscribeOnDidUpdateAllThemes;
+    private unsubscribeEventListeners;
     constructor(
       currentTheme: ThemeDefinitionExpanded,
       saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
       shouldMatchSystem: boolean,
       saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-      onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
+      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
       currentSystemTheme: 'light' | 'dark',
       onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
     );
@@ -8487,7 +8579,7 @@ declare module 'renderer/services/theme.service-host' {
       saveCurrentTheme: () => void,
       shouldMatchSystem: boolean,
       saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-      onDidUpdateAllThemes: PlatformEvent<ThemeFamiliesByIdExpanded>,
+      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
       currentSystemTheme: 'light' | 'dark',
       onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
     ) => ThemeDataProviderEngine;
