@@ -2,12 +2,14 @@ import {
   DocumentCombiner,
   expandThemeContribution,
   JsonDocumentLike,
+  startsWith,
   ThemeContribution,
   themeDocumentSchema,
   ThemeFamiliesByIdExpanded,
 } from 'platform-bible-utils';
 import Ajv2020 from 'ajv/dist/2020';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
+import { USER_THEME_FAMILY_PREFIX } from '@shared/services/theme.service-model';
 
 // #region Helper functions
 
@@ -63,11 +65,13 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
   protected override transformBaseDocumentAfterValidation(
     baseDocument: JsonDocumentLike,
   ): JsonDocumentLike {
+    // We validated that this is true
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const baseThemes = baseDocument as ThemeContribution;
     return expandThemeContribution(
-      // We validated that this is true
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      baseDocument as ThemeContribution,
-      undefined,
+      baseThemes,
+      // Use the default themes as backup
+      baseThemes[this.defaultThemeFamilyId],
     );
   }
 
@@ -75,7 +79,6 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
     // Make sure it is a ThemeContribution
     performSchemaValidation(document, documentName);
 
-    // Make sure there are no themes overlapping existing themes
     const allThemeFamiliesById = this.getAllThemeFamiliesById();
 
     if (!allThemeFamiliesById) return;
@@ -87,6 +90,13 @@ export class ThemesDocumentCombiner extends DocumentCombiner {
     Object.entries(themeContribution).forEach(([themeFamilyId, themeFamily]) => {
       if (!themeFamily) return;
 
+      // Make sure it contributes no theme families starting with the user-defined prefix
+      if (startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX))
+        throw new Error(
+          `Extension ${documentName} tried to add theme family ${themeFamilyId} with user-defined prefix! This is not allowed.`,
+        );
+
+      // Make sure there are no themes overlapping existing themes
       Object.entries(themeFamily).forEach(([type, themeDefinition]) => {
         if (!themeDefinition) return;
 
