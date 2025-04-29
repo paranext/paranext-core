@@ -268,7 +268,7 @@ class LocalizationDataProviderEngine
     const deprecationInfo = localizedStringsDocumentCombiner.deprecatedStringsByKey[localizeKey];
     if (deprecationInfo)
       logger.warn(
-        `Localization Service Host received getLocalizedString for LocalizeKey ${localizeKey} depreacted ${deprecationInfo.date}: ${deprecationInfo.message}`,
+        `Localization Service Host received getLocalizedString for LocalizeKey ${localizeKey} deprecated ${deprecationInfo.date}: ${deprecationInfo.message}`,
       );
 
     const languages = locales.length > 0 ? [...locales] : await getDefaultLanguages();
