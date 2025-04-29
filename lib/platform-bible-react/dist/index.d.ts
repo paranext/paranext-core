@@ -241,7 +241,7 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "destructive" | "secondary" | "ghost" | null | undefined;
+	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
 	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
@@ -679,7 +679,7 @@ export type Command = MenuItemInfoBase & {
 };
 /**
  * Defines a function that takes a `Command` object as an argument and returns `void`. Used to
- * define the shape of a function that can handle commands, but it does not provide and
+ * define the shape of a function that can handle commands, but it does not provide an
  * implementation.
  */
 export interface CommandHandler {
@@ -1283,7 +1283,7 @@ export declare const AvatarFallback: React$1.ForwardRefExoticComponent<Omit<Avat
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "destructive" | "secondary" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
+	variant?: "default" | "outline" | "muted" | "secondary" | "destructive" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
