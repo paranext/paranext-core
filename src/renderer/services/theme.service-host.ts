@@ -3,180 +3,55 @@ import {
   IThemeService,
   themeServiceObjectToProxy,
   themeServiceDataProviderName,
-  AllThemeData,
   IThemeServiceLocal,
+  CurrentThemeSpecifier,
 } from '@shared/services/theme.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
 import { DataProviderUpdateInstructions } from '@shared/models/data-provider.model';
 import {
   createSyncProxyForAsyncObject,
-  Unsubscriber,
+  expandThemeContribution,
   deserialize,
   serialize,
   PlatformEvent,
   deepEqual,
-  ThemeData,
-  THEME_SUFFIX_LIGHT,
-  THEME_SUFFIX_DARK,
   PlatformEventEmitter,
-  slice,
-  endsWith,
+  ThemeFamiliesByIdExpanded,
+  ThemeDefinitionExpanded,
+  ThemeFamiliesById,
+  AsyncVariable,
+  UnsubscriberAsyncList,
+  PlatformEventAsync,
+  PlatformError,
+  getErrorMessage,
+  isPlatformError,
 } from 'platform-bible-utils';
+import themesDataObject from '@shared/data/themes.data.json';
+import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.data';
+import { themeDataService } from '@shared/services/theme-data.service';
+import { logger } from '@shared/services/logger.service';
 
-const LIGHT_THEME: ThemeData = Object.freeze({
-  id: `light`,
-  label: '%theme_label_light%',
-  type: 'light',
-  cssVariables: {
-    background: '0 0% 100%',
-    foreground: '222.2 84% 4.9%',
-    card: '0 0% 100%',
-    'card-foreground': '222.2 84% 4.9%',
-    popover: '210 20% 98%',
-    'popover-foreground': '222.2 84% 4.9%',
-    primary: '222.2 47.4% 11.2%',
-    'primary-foreground': '210 40% 98%',
-    secondary: '210 50% 95%',
-    'secondary-foreground': '222.2 47.4% 11.2%',
-    muted: '210 50% 95%',
-    'muted-foreground': '215.4 16.3% 46.9%',
-    accent: '210 50% 95%',
-    'accent-foreground': '222.2 47.4% 11.2%',
-    destructive: '0 84.2% 60.2%',
-    'destructive-foreground': '210 40% 98%',
-    border: '214.3 31.8% 91.4%',
-    input: '214.3 31.8% 91.4%',
-    ring: '222.2 84% 4.9%',
+/** Themes that are built into the software. Used for loading themes immediately */
+const BUILT_IN_THEMES: ThemeFamiliesByIdExpanded = expandThemeContribution(
+  // We know this is the right data type because we write this data
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  themesDataObject as ThemeFamiliesById,
+  undefined,
+);
 
-    'sidebar-background': '210 20% 98%',
-    'sidebar-foreground': '222.2 84% 4.9%',
-    'sidebar-primary': '222.2 47.4% 11.2%',
-    'sidebar-primary-foreground': '210 40% 98%',
-    'sidebar-accent': '210 50% 95%',
-    'sidebar-accent-foreground': '222.2 47.4% 11.2%',
-    'sidebar-border': '214.3 31.8% 91.4%',
-    'sidebar-ring': '222.2 84% 4.9%',
-
-    radius: '0.5rem',
-  },
-});
-
-const DARK_THEME: ThemeData = Object.freeze({
-  id: `dark`,
-  label: '%theme_label_dark%',
-  type: 'dark',
-  cssVariables: {
-    background: '222.2 84% 4.9%',
-    foreground: '210 40% 98%',
-    card: '222.2 84% 4.9%',
-    'card-foreground': '210 40% 98%',
-    popover: '222.2 84% 4.9%',
-    'popover-foreground': '210 40% 98%',
-    primary: '210 40% 98%',
-    'primary-foreground': '222.2 47.4% 11.2%',
-    secondary: '217.2 32.6% 17.5%',
-    'secondary-foreground': '210 40% 98%',
-    muted: '217.2 32.6% 17.5%',
-    'muted-foreground': '215 20.2% 65.1%',
-    accent: '217.2 32.6% 17.5%',
-    'accent-foreground': '210 40% 98%',
-    destructive: '0 62.8% 30.6%',
-    'destructive-foreground': '210 40% 98%',
-    border: '217.2 32.6% 17.5%',
-    input: '217.2 32.6% 17.5%',
-    ring: '212.7 26.8% 83.9%',
-
-    'sidebar-background': '222.2 84% 4.9%',
-    'sidebar-foreground': '215 20.2% 65.1%',
-    'sidebar-primary': '210 40% 98%',
-    'sidebar-primary-foreground': '222.2 47.4% 11.2%',
-    'sidebar-accent': '217.2 32.6% 17.5%',
-    'sidebar-accent-foreground': '215 20.2% 65.1%',
-    'sidebar-border': '217.2 32.6% 17.5%',
-    'sidebar-ring': '212.7 26.8% 83.9%',
-  },
-});
-
-const PARATEXT_LIGHT_THEME: ThemeData = Object.freeze({
-  id: `paratext-light`,
-  label: '%theme_label_paratext_light%',
-  type: 'light',
-  cssVariables: {
-    background: '0 0% 100%',
-    foreground: '0 0% 0%',
-    muted: '33.9 32.4% 86.1%',
-    'muted-foreground': '15.5 13.2% 53.9%',
-    popover: '40 20% 98%',
-    'popover-foreground': '0 0% 0%',
-    card: '0 0% 100%',
-    'card-foreground': '0 0% 0%',
-    border: '220 13% 91%',
-    input: '161.3 26.7% 88.2%',
-    primary: '173.4 82.1% 15.3%',
-    'primary-foreground': '40 85.7% 97.3%',
-    secondary: '161.3 26.7% 88.2%',
-    'secondary-foreground': '173.4 82.1% 15.3%',
-    accent: '161.3 26.7% 88.2%',
-    'accent-foreground': '173.4 82.1% 15.3%',
-    destructive: '0 60% 51%',
-    'destructive-foreground': '210 20% 98%',
-    ring: '15.5 13.2% 53.9%',
-
-    'sidebar-background': '40 20% 98%',
-    'sidebar-foreground': '12 10.95% 26.86%',
-    'sidebar-primary': '173.4 82.1% 15.3%',
-    'sidebar-primary-foreground': '40 85.7% 97.3%',
-    'sidebar-accent': '33.9 32.4% 86.1%',
-    'sidebar-accent-foreground': '0 0% 0%',
-    'sidebar-border': '220 13% 91%',
-    'sidebar-ring': '15.5 13.2% 53.9%',
-  },
-});
-
-const PARATEXT_DARK_THEME: ThemeData = Object.freeze({
-  id: `paratext-dark`,
-  label: '%theme_label_paratext_dark%',
-  type: 'dark',
-  cssVariables: {
-    background: '0 0% 0%',
-    foreground: '0 0% 100%',
-    muted: '15.5 13.2% 53.9%',
-    'muted-foreground': '33.9 32.4% 86.1%',
-    popover: '180 71.4% 5%',
-    'popover-foreground': '0 0% 100%',
-    card: '0 0% 0%',
-    'card-foreground': '0 0% 100%',
-    border: '220 13% 20%',
-    input: '220 13% 20%',
-    primary: '161.3 26.7% 88.2%',
-    'primary-foreground': '173.4 82.1% 15.3%',
-    secondary: '180 71.4% 11%',
-    'secondary-foreground': '161.3 26.7% 88.2%',
-    accent: '180 71.4% 11%',
-    'accent-foreground': '161.3 26.7% 88.2%',
-    destructive: '0 60% 51%',
-    'destructive-foreground': '210 20% 98%',
-    ring: '13.5 13.2% 53.9%',
-
-    'sidebar-background': '180 71.4% 5%',
-    'sidebar-foreground': '33.9 32.4% 86.1%',
-    'sidebar-primary': '161.3 26.7% 88.2%',
-    'sidebar-primary-foreground': '173.4 82.1% 15.3%',
-    'sidebar-accent': '15.5 13.2% 53.9%',
-    'sidebar-accent-foreground': '33.9 32.4% 86.1%',
-    'sidebar-border': '220 13% 20%',
-    'sidebar-ring': '15.5 13.2% 53.9%',
-  },
-});
-
-const DEFAULT_THEME = LIGHT_THEME;
+const defaultThemePossiblyUndefined = BUILT_IN_THEMES[DEFAULT_THEME_FAMILY]?.[DEFAULT_THEME_TYPE];
+if (!defaultThemePossiblyUndefined)
+  throw new Error(
+    `Theme service host could not find the built-in default theme! Family ${DEFAULT_THEME_FAMILY} type ${DEFAULT_THEME_TYPE}. This should not happen.`,
+  );
+const DEFAULT_THEME: ThemeDefinitionExpanded = defaultThemePossiblyUndefined;
 
 /**
- * All theme data available to the application along with a bi-directional map of theme ids to the
- * corresponding theme of the opposite type (light/dark).
+ * Time from process start to consider to be still in startup and loading. For example, do not reset
+ * theme to default until after this time.
  */
-type AllThemeDataWithPairs = { themeData: AllThemeData; pairIds: Map<string, string> };
+const STARTUP_TIME_MS = 30000;
 
 // #region interacting with localStorage
 
@@ -187,11 +62,11 @@ const currentThemeSerialized = localStorage.getItem(CURRENT_THEME_STORAGE_KEY);
 // Load the whole theme data from localStorage now, then we will retrieve the actual theme data for
 // this theme when we can
 /** Current application theme that should be applied at startup. Will not be used afterward */
-const currentThemeFromLocalStorage: ThemeData = currentThemeSerialized
+const currentThemeFromLocalStorage: ThemeDefinitionExpanded = currentThemeSerialized
   ? (deserialize(currentThemeSerialized) ?? {})
   : DEFAULT_THEME;
 
-function saveCurrentThemeToLocalStorage(newCurrentTheme: ThemeData) {
+function saveCurrentThemeToLocalStorage(newCurrentTheme: ThemeDefinitionExpanded) {
   localStorage.setItem(CURRENT_THEME_STORAGE_KEY, serialize(newCurrentTheme));
 }
 
@@ -212,46 +87,6 @@ function saveShouldMatchSystemToLocalStorage(newShouldMatchSystem: boolean) {
 }
 
 // #endregion
-
-function generateThemeDataWithPairs(allThemeData: AllThemeData): AllThemeDataWithPairs {
-  const pairIds = new Map<string, string>();
-  const allThemeIds = Object.keys(allThemeData);
-
-  if (allThemeIds.includes('light') && allThemeIds.includes('dark')) {
-    pairIds.set('light', 'dark');
-    pairIds.set('dark', 'light');
-  }
-
-  allThemeIds.forEach((themeId) => {
-    if (themeId === 'light' || themeId === 'dark') return;
-    const themeData = allThemeData[themeId];
-    if (!themeData) return;
-    // If this theme is already paired, don't calculate and have the chance to accidentally make a trio
-    if (pairIds.has(themeId)) return;
-
-    if (themeData.type === 'light') {
-      const darkThemeId = endsWith(themeId, THEME_SUFFIX_LIGHT)
-        ? `${slice(themeId, 0, -THEME_SUFFIX_LIGHT.length)}${THEME_SUFFIX_DARK}`
-        : `${themeId}${THEME_SUFFIX_DARK}`;
-      if (allThemeIds.includes(darkThemeId)) {
-        pairIds.set(themeId, darkThemeId);
-        pairIds.set(darkThemeId, themeId);
-      }
-    } else if (themeData.type === 'dark') {
-      const lightThemeId = endsWith(themeId, THEME_SUFFIX_DARK)
-        ? `${slice(themeId, 0, -THEME_SUFFIX_DARK.length)}${THEME_SUFFIX_LIGHT}`
-        : `${themeId}${THEME_SUFFIX_LIGHT}`;
-      if (allThemeIds.includes(lightThemeId)) {
-        pairIds.set(themeId, lightThemeId);
-        pairIds.set(lightThemeId, themeId);
-      }
-    }
-  });
-  return {
-    themeData: allThemeData,
-    pairIds,
-  };
-}
 
 const onDidChangeSystemThemeEmitter = new PlatformEventEmitter<'light' | 'dark'>();
 
@@ -293,109 +128,163 @@ class ThemeDataProviderEngine
   extends DataProviderEngine<ThemeDataTypes>
   implements IDataProviderEngine<ThemeDataTypes>
 {
+  private unsubscribeEventListeners = new UnsubscriberAsyncList('Theme Service Host');
+  /** All Theme Data available to the application. `undefined` if not yet loaded. */
+  #allThemeFamiliesById: ThemeFamiliesByIdExpanded | undefined;
   /**
-   * All Theme Data available to the application. Includes which themes are light/dark pairs
-   * `undefined` if not yet loaded.
+   * Async Variable that resolves to the first `allThemeFamiliesById`. If `allThemeFamiliesById` is
+   * `undefined`, await this variable.
    */
-  allThemeDataWithPairs: AllThemeDataWithPairs | undefined;
-  private unsubscribeOnDidUpdateAllThemes: Unsubscriber | undefined;
+  #allThemeFamiliesByIdAsyncVariable: AsyncVariable<ThemeFamiliesByIdExpanded>;
+  #isDisposed = false;
 
   constructor(
-    public currentTheme: ThemeData,
-    public saveCurrentTheme: (currentTheme: ThemeData) => void,
+    public currentTheme: ThemeDefinitionExpanded,
+    public saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
     public shouldMatchSystem: boolean,
     public saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-    onDidUpdateAllThemes: PlatformEvent<AllThemeData>,
+    onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
     public currentSystemTheme: 'light' | 'dark',
     onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
   ) {
     super();
 
-    // Immediately subscribe to and get latest themes
-    const updateAllThemeData = (allThemeData: AllThemeData) => {
-      this.allThemeDataWithPairs = generateThemeDataWithPairs(allThemeData);
-      const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
+    this.#allThemeFamiliesByIdAsyncVariable = new AsyncVariable<ThemeFamiliesByIdExpanded>(
+      'theme.service-host.allThemeFamiliesById',
+      STARTUP_TIME_MS,
+    );
 
-      const updatedCurrentTheme = this.allThemeDataWithPairs.themeData[this.currentTheme.id];
+    // Setup timeout to reset theme to default at end of startup if the current theme does not exist
+    const resetThemeTimeout = setTimeout(async () => {
+      if (this.#isDisposed) return;
+
+      const allThemeFamiliesById = await this.#getAllThemeFamiliesByIdResolved();
+
+      const updatedCurrentTheme =
+        allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
+      // If the current theme no longer exists, reset back to default
       if (!updatedCurrentTheme) {
-        this.#setCurrentThemeNoUpdate(
-          this.allThemeDataWithPairs.themeData[DEFAULT_THEME.id] ?? DEFAULT_THEME,
+        this.#resetCurrentThemeNoUpdate();
+        this.notifyUpdate('CurrentTheme');
+      }
+    }, STARTUP_TIME_MS - performance.now());
+    this.unsubscribeEventListeners.add(() => {
+      clearTimeout(resetThemeTimeout);
+      return true;
+    });
+
+    // Immediately subscribe to and get latest themes
+    const updateAllThemeFamilies = (
+      allThemeFamilies: ThemeFamiliesByIdExpanded | PlatformError,
+    ) => {
+      if (isPlatformError(allThemeFamilies)) {
+        logger.warn(
+          `Theme service host received error on subscription to all theme families: ${getErrorMessage(allThemeFamilies)}`,
         );
-        dataTypesToUpdate.push('CurrentTheme');
-      } else if (this.shouldMatchSystem && updatedCurrentTheme.type !== this.currentSystemTheme) {
-        // Flip the theme to the system-matching version
-        this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
-        dataTypesToUpdate.push('CurrentTheme');
-      } else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
-        this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
-        dataTypesToUpdate.push('CurrentTheme');
+        return;
       }
 
+      if (!this.#allThemeFamiliesById)
+        this.#allThemeFamiliesByIdAsyncVariable.resolveToValue(allThemeFamilies);
+      this.#allThemeFamiliesById = allThemeFamilies;
+
+      const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
+
+      // If we should match the system theme, flip the theme to the system-matching version in the same family
+      if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) dataTypesToUpdate.push('CurrentTheme');
+      else {
+        const updatedCurrentTheme =
+          this.#allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
+        if (!updatedCurrentTheme) {
+          if (performance.now() >= STARTUP_TIME_MS) {
+            // The current theme no longer exists, and it's after startup time. Reset theme
+            this.#resetCurrentThemeNoUpdate();
+            this.notifyUpdate('CurrentTheme');
+          }
+        }
+        // If the current theme's definition was updated, update it
+        else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
+          this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
+          dataTypesToUpdate.push('CurrentTheme');
+        }
+      }
+
+      // Notify others that theme data changed
       this.notifyUpdate(dataTypesToUpdate);
     };
-    onDidUpdateAllThemes(updateAllThemeData);
-
-    // TODO: REMOVE THIS WHEN WE HAVE CONTRIBUTIONS
-    updateAllThemeData({
-      light: LIGHT_THEME,
-      dark: DARK_THEME,
-      'paratext-light': PARATEXT_LIGHT_THEME,
-      'paratext-dark': PARATEXT_DARK_THEME,
-    });
+    (async () => {
+      try {
+        const unsubscribe = await onDidUpdateAllThemes(updateAllThemeFamilies);
+        // If disposed while awaiting this subscription, immediately unsubscribe
+        if (this.#isDisposed) unsubscribe();
+        else this.unsubscribeEventListeners.add(unsubscribe);
+      } catch (e) {
+        logger.warn(
+          `Theme service failed to subscribe to onDidUpdateAllThemes: ${getErrorMessage(e)}`,
+        );
+      }
+    })();
 
     // Listen to system theme change and update current theme
     const updateThemeToSystem = (newThemeType: 'light' | 'dark') => {
       this.currentSystemTheme = newThemeType;
 
-      if (!this.shouldMatchSystem || this.currentTheme.type === newThemeType) return;
-
-      const flippedTheme = this.#getFlippedTheme();
-      if (!flippedTheme) return;
-
-      this.setCurrentTheme(flippedTheme.id);
+      if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) this.notifyUpdate('CurrentTheme');
     };
     updateThemeToSystem(currentSystemTheme);
-    onDidChangeSystemTheme(updateThemeToSystem);
+    this.unsubscribeEventListeners.add(onDidChangeSystemTheme(updateThemeToSystem));
   }
 
-  async getCurrentTheme(): Promise<ThemeData> {
+  async getCurrentTheme(): Promise<ThemeDefinitionExpanded> {
     return this.currentTheme;
   }
 
   // Can be called with or without a selector
   async setCurrentTheme(
-    newThemeIdPossiblyUndefinedSelector: string | undefined,
-    newThemeIdPossiblyNotProvided?: string,
+    newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
+    newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
-    let newThemeId = newThemeIdPossiblyUndefinedSelector ?? newThemeIdPossiblyNotProvided;
-    if (newThemeId === '') newThemeId = DEFAULT_THEME.id;
+    const newThemeSpecifier =
+      newThemeSpecifierPossiblyUndefinedSelector ?? newThemeSpecifierPossiblyNotProvided;
 
-    if (!newThemeId) throw new Error('Theme ID not provided');
-    if (newThemeId === this.currentTheme.id) return false;
-    const newTheme = this.allThemeDataWithPairs?.themeData[newThemeId];
-    if (!newTheme) throw new Error(`Theme data not found for id ${newThemeId}`);
+    // Throw if no specifier or doesn't contain any information
+    if (
+      !newThemeSpecifier ||
+      (!newThemeSpecifier.themeFamilyId &&
+        newThemeSpecifier.themeFamilyId !== '' &&
+        !newThemeSpecifier.type)
+    )
+      throw new Error('Theme specifier not provided or did not contain at least family id or type');
 
-    this.#setCurrentThemeNoUpdate(newTheme);
-    return true;
-  }
+    // Backfill with current theme information so both are defined
+    const newThemeSpecifierFilled = {
+      themeFamilyId: this.currentTheme.themeFamilyId,
+      type: this.currentTheme.type,
+      ...newThemeSpecifier,
+    };
 
-  async flipTheme(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
-    // TODO: AWAIT GETTING ALLTHEMEDATA
+    // If the specified theme is the current theme, no change
+    if (
+      newThemeSpecifierFilled.themeFamilyId === this.currentTheme.themeFamilyId &&
+      newThemeSpecifierFilled.type === this.currentTheme.type
+    )
+      return false;
 
-    const flippedTheme = this.#getFlippedTheme();
-    if (!flippedTheme) return false;
+    const allThemeFamiliesById = await this.#getAllThemeFamiliesByIdResolved();
 
     const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['CurrentTheme'];
 
-    // Flipping the theme implies they don't want to follow system theme anymore
-    if (this.shouldMatchSystem) {
+    const newTheme =
+      allThemeFamiliesById[newThemeSpecifierFilled.themeFamilyId]?.[newThemeSpecifierFilled.type];
+    if (!newTheme) throw new Error(`Theme definition not found for id ${newThemeSpecifier}`);
+
+    // If we're currently matching system and change type, turn off matching system
+    if (this.shouldMatchSystem && newThemeSpecifierFilled.type !== this.currentTheme.type) {
       this.#setShouldMatchSystemNoUpdate(false);
       dataTypesToUpdate.push('ShouldMatchSystem');
     }
 
-    this.#setCurrentThemeNoUpdate(flippedTheme);
-
-    this.notifyUpdate(dataTypesToUpdate);
+    this.#setCurrentThemeNoUpdate(newTheme);
     return dataTypesToUpdate;
   }
 
@@ -413,13 +302,18 @@ class ThemeDataProviderEngine
     if (newShouldMatchSystem === undefined) throw new Error('shouldMatchSystem not provided');
     if (newShouldMatchSystem === this.shouldMatchSystem) return false;
 
+    const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['ShouldMatchSystem'];
     this.#setShouldMatchSystemNoUpdate(newShouldMatchSystem);
-    return true;
+
+    // If we should match the system theme, flip the theme to the system-matching version in the same family
+    if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) dataTypesToUpdate.push('CurrentTheme');
+
+    return dataTypesToUpdate;
   }
 
-  async getAllThemes(): Promise<AllThemeData> {
-    // TODO: SET UP TO WAIT FOR allThemeData
-    return this.allThemeDataWithPairs?.themeData ?? {};
+  async getAllThemes(): Promise<ThemeFamiliesByIdExpanded> {
+    // TODO: SET UP TO WAIT FOR allThemeDefinitions
+    return this.#allThemeFamiliesById ?? {};
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
@@ -429,24 +323,30 @@ class ThemeDataProviderEngine
   }
 
   async dispose(): Promise<boolean> {
-    if (this.unsubscribeOnDidUpdateAllThemes) {
-      const success = this.unsubscribeOnDidUpdateAllThemes();
-      this.unsubscribeOnDidUpdateAllThemes = undefined;
-      return success;
+    const success = await this.unsubscribeEventListeners.runAllUnsubscribers();
+
+    if (!this.#allThemeFamiliesByIdAsyncVariable.hasSettled) {
+      this.#allThemeFamiliesByIdAsyncVariable.rejectWithReason('Theme service host disposing');
     }
-    return true;
+
+    this.#isDisposed = true;
+    return success;
   }
 
-  #setCurrentThemeNoUpdate(newTheme: ThemeData) {
+  async #getAllThemeFamiliesByIdResolved(): Promise<ThemeFamiliesByIdExpanded> {
+    return this.#allThemeFamiliesById ?? this.#allThemeFamiliesByIdAsyncVariable.promise;
+  }
+
+  #setCurrentThemeNoUpdate(newTheme: ThemeDefinitionExpanded) {
     this.currentTheme = newTheme;
-
-    // If we should match system theme and the theme has a version that matches system theme, set it
-    // to that system theme version. Otherwise, just set to the new theme
-    if (this.shouldMatchSystem && newTheme.type !== this.currentSystemTheme) {
-      this.currentTheme = this.#getFlippedTheme(newTheme.id) ?? newTheme;
-    }
-
     this.saveCurrentTheme(this.currentTheme);
+  }
+
+  /** Sets current theme to default */
+  #resetCurrentThemeNoUpdate() {
+    return this.#setCurrentThemeNoUpdate(
+      this.#allThemeFamiliesById?.[DEFAULT_THEME_FAMILY]?.[this.currentTheme.type] ?? DEFAULT_THEME,
+    );
   }
 
   #setShouldMatchSystemNoUpdate(newShouldMatchSystem: boolean) {
@@ -455,27 +355,34 @@ class ThemeDataProviderEngine
   }
 
   /**
-   * Returns the flipped light/dark theme data for the provided theme
+   * Returns the theme from the current theme family that matches the current system theme.
    *
-   * @param themeId Theme id to get flipped data for. Defaults to current theme
-   * @returns Flipped theme data for `themeId` or `undefined` if not found
+   * @returns Theme from current theme family matching system theme or `undefined` if not found
    */
-  #getFlippedTheme(themeId = this.currentTheme.id): ThemeData | undefined {
-    const { allThemeDataWithPairs } = this;
-    if (!allThemeDataWithPairs)
-      throw new Error('All theme data not available. This should not happen');
+  #getCurrentThemeMatchingSystem(): ThemeDefinitionExpanded | undefined {
+    return this.#allThemeFamiliesById?.[this.currentTheme.themeFamilyId]?.[this.currentSystemTheme];
+  }
 
-    const flippedThemeId = allThemeDataWithPairs?.pairIds.get(themeId);
+  /**
+   * If we should match the system theme and there is a theme in the current family with the type
+   * matching the system theme, set the current theme to the system-matching version in the same
+   * family. Do nothing if we should not or cannot match current theme type to system.
+   *
+   * Does not send out any updates
+   *
+   * @returns `true` if changed the theme; `false` otherwise
+   */
+  #tryMatchCurrentThemeTypeToSystemNoUpdate(): boolean {
+    const updatedCurrentThemeMatchingSystem = this.#getCurrentThemeMatchingSystem();
+    if (
+      !this.shouldMatchSystem ||
+      this.currentTheme.type === this.currentSystemTheme ||
+      !updatedCurrentThemeMatchingSystem
+    )
+      return false;
 
-    if (!flippedThemeId) return undefined;
-
-    const flippedTheme = allThemeDataWithPairs.themeData[flippedThemeId];
-    if (!flippedTheme)
-      throw new Error(
-        `Flipped theme data not found for id ${flippedThemeId}. This should not happen`,
-      );
-
-    return flippedTheme;
+    this.#setCurrentThemeNoUpdate(updatedCurrentThemeMatchingSystem);
+    return true;
   }
 }
 
@@ -484,9 +391,8 @@ const themeServiceEngine = new ThemeDataProviderEngine(
   saveCurrentThemeToLocalStorage,
   shouldMatchSystemFromLocalStorage,
   saveShouldMatchSystemToLocalStorage,
-  // TODO: SET UP ALLTHEMEDATA
-  () => {
-    return () => true;
+  async (allThemesHandler) => {
+    return themeDataService.subscribeAllThemes(undefined, allThemesHandler);
   },
   getSystemDarkThemeMediaQuery().matches ? 'dark' : 'light',
   onDidChangeSystemThemeEmitter.event,
@@ -524,11 +430,11 @@ export async function initialize(): Promise<void> {
 /** This is an internal-only export for testing purposes and should not be used in development */
 export const testingThemeService = {
   implementThemeDataProviderEngine: (
-    currentTheme: ThemeData,
+    currentTheme: ThemeDefinitionExpanded,
     saveCurrentTheme: () => void,
     shouldMatchSystem: boolean,
     saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
-    onDidUpdateAllThemes: PlatformEvent<AllThemeData>,
+    onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
     currentSystemTheme: 'light' | 'dark',
     onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
   ) => {
@@ -544,12 +450,12 @@ export const testingThemeService = {
   },
 };
 
-const themeServiceEngineSyncAdditions = {
+const themeServiceEngineSyncAdditions = Object.freeze({
   ...themeServiceObjectToProxy,
   getCurrentThemeSync() {
     return themeServiceEngine.currentTheme;
   },
-};
+});
 
 /**
  * Theme service that is available locally in the renderer only and can perform synchronous

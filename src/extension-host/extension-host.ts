@@ -12,6 +12,7 @@ import { CommandNames } from 'papi-shared-types';
 import { registerCommand } from '@shared/services/command.service';
 import { initialize as initializeMenuData } from '@extension-host/services/menu-data.service-host';
 import { initialize as initializeSettingsService } from '@extension-host/services/settings.service-host';
+import { initialize as initializeThemeData } from '@extension-host/services/theme-data.service-host';
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
@@ -56,6 +57,7 @@ process.on('unhandledRejection', (reason) => {
       extensionAssetService.initialize(),
       initializeLocalizationService(),
       initializeMenuData(),
+      initializeThemeData(),
       initializeSettingsService(),
       startProjectSettingsService(),
     ]);

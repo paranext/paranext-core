@@ -70,7 +70,7 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import { SCROLLBAR_STYLES, THEME } from '@renderer/theme';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 import { localThemeService } from '@renderer/services/theme.service-host';
 
 /**
@@ -1052,35 +1052,38 @@ export const openWebView = async (
   delete window.top;
   delete window.frameElement;
 
-  const { applyThemeStylesheet, getErrorMessage, isPlatformError } = require('platform-bible-utils');
-  const applyThemeStylesheetWebView = applyThemeStylesheet.bind(window);
+  // IIFE so we don't pollute the WebView's scope
+  (() => {
+    const { applyThemeStylesheet, getErrorMessage, isPlatformError } = require('platform-bible-utils');
+    const applyThemeStylesheetWebView = applyThemeStylesheet.bind(window);
 
-  // Set up theme and subscribe to theme changes
-  function setUpThemeStylesheet() {
-    window.document.body.classList.add('${theme.id}');
-    let currentThemeElement = document.getElementById('${THEME_STYLE_ELEMENT_ID}');
+    // Set up theme and subscribe to theme changes
+    function setUpThemeStylesheet() {
+      window.document.body.classList.add('${theme.id}');
+      let currentThemeElement = document.getElementById('${THEME_STYLE_ELEMENT_ID}');
 
-    (async () => {
-      try {
-        const unsubTheme = await window.papi.themes.subscribeCurrentTheme(undefined, (newTheme) => {
-          if (isPlatformError(newTheme)) {
-            window.papi.logger.warn(\`Error while getting new current theme in WebView import script for WebView ${webView.id}: \${getErrorMessage(newTheme)}\`);
-            return;
-          }
-          currentThemeElement = applyThemeStylesheetWebView(newTheme, currentThemeElement);
-        });
-        window.addEventListener('unload', () => {
-          unsubTheme();
-        });
-      } catch (e) {
-        window.papi.logger.warn(\`Error while subscribing to current theme in WebView import script for WebView ${webView.id}: \${getErrorMessage(e)}\`);
-      }
-    })();
-  }
+      (async () => {
+        try {
+          const unsubTheme = await window.papi.themes.subscribeCurrentTheme(undefined, (newTheme) => {
+            if (isPlatformError(newTheme)) {
+              window.papi.logger.warn(\`Error while getting new current theme in WebView import script for WebView ${webView.id}: \${getErrorMessage(newTheme)}\`);
+              return;
+            }
+            currentThemeElement = applyThemeStylesheetWebView(newTheme, currentThemeElement);
+          });
+          window.addEventListener('unload', () => {
+            unsubTheme();
+          });
+        } catch (e) {
+          window.papi.logger.warn(\`Error while subscribing to current theme in WebView import script for WebView ${webView.id}: \${getErrorMessage(e)}\`);
+        }
+      })();
+    }
 
-  if (document.readyState === 'loading')
-    document.addEventListener('DOMContentLoaded', setUpThemeStylesheet);
-  else setUpThemeStylesheet();
+    if (document.readyState === 'loading')
+      document.addEventListener('DOMContentLoaded', setUpThemeStylesheet);
+    else setUpThemeStylesheet();
+  })();
   `;
 
   /** Nonce used to allow scripts and styles to run */
@@ -1129,7 +1132,7 @@ export const openWebView = async (
                 : ''
             }
           </head>
-          <body class="${THEME}">
+          <body>
             <div id="root">
             </div>
             <script nonce="${srcNonce}">${reactWebView.content}
@@ -1279,7 +1282,7 @@ export const openWebView = async (
     ${imports}
     </script>
     <style nonce="${srcNonce}">
-      ${SCROLLBAR_STYLES}
+      ${SCROLLBAR_STYLES_RAW}
     </style>
     ${themeStylesheet}${substring(webViewContent, headEnd + 1)}`;
   }

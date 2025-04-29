@@ -1,4 +1,10 @@
-import { OnDidDispose, PlatformError, UnsubscriberAsync, ThemeData } from 'platform-bible-utils';
+import {
+  OnDidDispose,
+  PlatformError,
+  UnsubscriberAsync,
+  ThemeDefinitionExpanded,
+  ThemeFamiliesByIdExpanded,
+} from 'platform-bible-utils';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
   DataProviderDataType,
@@ -18,13 +24,26 @@ export const themeServiceObjectToProxy = Object.freeze({
   dataProviderName: themeServiceDataProviderName,
 });
 
-export type AllThemeData = { [themeId: string]: ThemeData | undefined };
+/**
+ * Object containing any/all of the identifying information for a theme.
+ *
+ * Use this when setting the current theme. Can set just theme family, just theme type, or both
+ */
+export type CurrentThemeSpecifier = {
+  /** Which theme family to change to. Does not change `shouldMatchSystem` */
+  themeFamilyId?: string;
+  /**
+   * Which theme type to change to (e.g. 'light', 'dark'). If this does not match system theme, sets
+   * `shouldMatchSystem` to false
+   */
+  type?: string;
+};
 
 /** ThemeDataTypes handles getting and setting the application theme. */
 export type ThemeDataTypes = {
-  CurrentTheme: DataProviderDataType<undefined, ThemeData, string>;
+  CurrentTheme: DataProviderDataType<undefined, ThemeDefinitionExpanded, CurrentThemeSpecifier>;
   ShouldMatchSystem: DataProviderDataType<undefined, boolean, boolean>;
-  AllThemes: DataProviderDataType<undefined, AllThemeData, never>;
+  AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
 };
 
 declare module 'papi-shared-types' {
@@ -50,44 +69,36 @@ export type IThemeService = {
    * @param selector `undefined`. Does not have to be provided
    * @returns Information about the currently selected theme
    */
-  getCurrentTheme(selector: undefined): Promise<ThemeData>;
+  getCurrentTheme(selector: undefined): Promise<ThemeDefinitionExpanded>;
   /** JSDOC DESTINATION getCurrentTheme */
-  getCurrentTheme(): Promise<ThemeData>;
+  getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
 
   /**
-   * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
-   * pair of the type the system theme is set to, this will set the theme to the version of the
-   * theme that matches the current system theme.
+   * Sets the current theme family and/or type.
    *
-   * @param newThemeId The string id of the theme to change to
+   * @param newThemeSpecifier Which theme family and/or type to set to. See
+   *   {@link CurrentThemeSpecifier} for more info
    * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
-   * @throws If `newThemeId` is not a valid theme id
+   * @throws If `newThemeSpecifier` specified theme family or type that do not exist
    * @see {@link DataProviderUpdateInstructions} for more info on what to return
    */
-  setCurrentTheme(newThemeId: string): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+  setCurrentTheme(
+    newThemeSpecifier: CurrentThemeSpecifier,
+  ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
   /**
-   * Sets the current theme. If `getShouldMatchSystem` is `true` and the current theme has a theme
-   * pair of the type the system theme is set to, this will set the theme to the version of the
-   * theme that matches the current system theme.
+   * Sets the current theme family and/or type.
    *
    * @param selector `undefined`. Does not have to be provided
-   * @param newThemeId The string id of the theme to change to
+   * @param newThemeSpecifier Which theme family and/or type to set to. See
+   *   {@link CurrentThemeSpecifier} for more info
    * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+   * @throws If `newThemeSpecifier` specified theme family or type that do not exist
    * @see {@link DataProviderUpdateInstructions} for more info on what to return
    */
   setCurrentTheme(
     selector: undefined,
-    newThemeId: string,
+    newThemeSpecifier: CurrentThemeSpecifier,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
-
-  /**
-   * Sets the current theme to the theme with the same name (other than suffix) and the opposite
-   * type of the current theme.
-   *
-   * For example, `paratext-light` theme will flip to `paratext-dark`. `my-theme` will flip to
-   * `my-theme-dark`.
-   */
-  flipTheme(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
 
   /**
    * Subscribes to updates of the current theme. Whenever the current theme changes, the callback
@@ -103,7 +114,7 @@ export type IThemeService = {
    */
   subscribeCurrentTheme(
     selector: undefined,
-    callback: (currentTheme: ThemeData | PlatformError) => void,
+    callback: (currentTheme: ThemeDefinitionExpanded | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 
@@ -113,9 +124,8 @@ export type IThemeService = {
    * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
    * current theme will match the system-wide theme where possible.
    *
-   * If the current theme gets set to a theme with the wrong type but with a theme pair that is the
-   * right type, it will automatically change to that theme. If the system theme changes, the
-   * current theme will automatically attempt to change to match it.
+   * If the system theme changes, the current theme will automatically change to match it if there
+   * is a theme with the matching type in the currently selected theme family.
    *
    * @param selector `undefined`. Does not have to be provided
    * @returns Information about the currently selected theme
@@ -168,15 +178,15 @@ export type IThemeService = {
   /**
    * JSDOC SOURCE getAllThemes
    *
-   * Retrieves information about all themes available in the app. These are provided by the platform
-   * and by extensions.
+   * Retrieves information about all themes (including theme families) available in the app. These
+   * are provided by the platform and by extensions.
    *
    * @param selector `undefined`. Does not have to be provided
    * @returns Information about the currently selected theme
    */
-  getAllThemes(selector: undefined): Promise<AllThemeData>;
+  getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
   /** JSDOC DESTINATION getAllThemes */
-  getAllThemes(): Promise<AllThemeData>;
+  getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
 
   /**
    * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
@@ -201,7 +211,7 @@ export type IThemeService = {
    */
   subscribeAllThemes(
     selector: undefined,
-    callback: (allThemes: AllThemeData | PlatformError) => void,
+    callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
     options?: DataProviderSubscriberOptions,
   ): Promise<UnsubscriberAsync>;
 } & OnDidDispose &
@@ -211,5 +221,5 @@ export type IThemeService = {
 /** JSDOC DESTINATION themeService */
 export type IThemeServiceLocal = IThemeService & {
   /** JSDOC DESTINATION getCurrentTheme */
-  getCurrentThemeSync(): ThemeData;
+  getCurrentThemeSync(): ThemeDefinitionExpanded;
 };

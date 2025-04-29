@@ -42,6 +42,8 @@ export type ExtensionManifest = {
   projectSettings?: string;
   /** Path to the JSON file that defines the localized strings this extension is adding. */
   localizedStrings?: string;
+  /** Path to the JSON file that defines the themes this extension is adding. */
+  themes?: string;
   /**
    * List of events that occur that should cause this extension to be activated. Not yet
    * implemented.
