@@ -4,6 +4,7 @@ import {
   UnsubscriberAsync,
   ThemeDefinitionExpanded,
   ThemeFamiliesByIdExpanded,
+  ThemeFamiliesById,
 } from 'platform-bible-utils';
 import { IDataProvider } from '@shared/models/data-provider.interface';
 import {
@@ -25,6 +26,12 @@ export const themeServiceObjectToProxy = Object.freeze({
 });
 
 /**
+ * Prefix on theme families that are specifically user-defined theme families that can be edited
+ * live instead of being provided by an extension
+ */
+export const USER_THEME_FAMILY_PREFIX = 'user-';
+
+/**
  * Object containing any/all of the identifying information for a theme.
  *
  * Use this when setting the current theme. Can set just theme family, just theme type, or both
@@ -43,7 +50,7 @@ export type CurrentThemeSpecifier = {
 export type ThemeDataTypes = {
   CurrentTheme: DataProviderDataType<undefined, ThemeDefinitionExpanded, CurrentThemeSpecifier>;
   ShouldMatchSystem: DataProviderDataType<undefined, boolean, boolean>;
-  AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
+  AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, Partial<ThemeFamiliesById>>;
 };
 
 declare module 'papi-shared-types' {
@@ -189,12 +196,34 @@ export type IThemeService = {
   getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
 
   /**
-   * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-   * provide themes in contributions
+   * Sets partial theme definition information (can only provide `cssVariables`). Only allowed to
+   * set user-defined themes (themes whose family id starts with {@link USER_THEME_FAMILY_PREFIX}).
+   * Extensions can provide their own themes in contributions
+   *
+   * @param updatedUserThemeFamilies Partial {@link ThemeFamiliesById} consisting of any desired
+   *   updates to user-defined themes.
+   * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+   * @throws If theme families not starting with {@link USER_THEME_FAMILY_PREFIX} are passed in
+   * @see {@link DataProviderUpdateInstructions} for more info on what to return
+   */
+  setAllThemes(
+    updatedUserThemeFamilies: Partial<ThemeFamiliesById>,
+  ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+  /**
+   * Sets partial theme definition information (can only provide `cssVariables`). Only allowed to
+   * set user-defined themes (themes whose family id starts with {@link USER_THEME_FAMILY_PREFIX}).
+   * Extensions can provide their own themes in contributions
+   *
+   * @param selector `undefined`. Does not have to be provided
+   * @param updatedUserThemeFamilies Partial {@link ThemeFamiliesById} consisting of any desired
+   *   updates to user-defined themes.
+   * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+   * @throws If theme families not starting with {@link USER_THEME_FAMILY_PREFIX} are passed in
+   * @see {@link DataProviderUpdateInstructions} for more info on what to return
    */
   setAllThemes(
     selector: undefined,
-    value: never,
+    updatedUserThemeFamilies: Partial<ThemeFamiliesById>,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
 
   /**

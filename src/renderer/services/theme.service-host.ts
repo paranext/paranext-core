@@ -5,6 +5,7 @@ import {
   themeServiceDataProviderName,
   IThemeServiceLocal,
   CurrentThemeSpecifier,
+  USER_THEME_FAMILY_PREFIX,
 } from '@shared/services/theme.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
@@ -26,19 +27,35 @@ import {
   PlatformError,
   getErrorMessage,
   isPlatformError,
+  startsWith,
+  ThemeFamily,
 } from 'platform-bible-utils';
 import themesDataObject from '@shared/data/themes.data.json';
 import { DEFAULT_THEME_FAMILY, DEFAULT_THEME_TYPE } from '@shared/data/platform.data';
 import { themeDataService } from '@shared/services/theme-data.service';
 import { logger } from '@shared/services/logger.service';
 
-/** Themes that are built into the software. Used for loading themes immediately */
-const BUILT_IN_THEMES: ThemeFamiliesByIdExpanded = expandThemeContribution(
-  // We know this is the right data type because we write this data
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  themesDataObject as ThemeFamiliesById,
-  undefined,
-);
+/** Raw un-expanded themes that are built into the software */
+// We know this is the right data type because we write this data
+// eslint-disable-next-line no-type-assertion/no-type-assertion
+const THEMES_DATA_OBJECT = themesDataObject as ThemeFamiliesById;
+
+/**
+ * Runs {@link expandThemeContribution} on the provided theme families to expand them. Uses the
+ * default built-in theme family to back up the `cssVariables` of the provided theme families
+ *
+ * @param themeFamiliesById Theme families to expand
+ * @returns Expanded theme families
+ */
+function expandThemeFamiliesByIdWithDefault(
+  themeFamiliesById: ThemeFamiliesById,
+): ThemeFamiliesByIdExpanded {
+  return expandThemeContribution(themeFamiliesById, THEMES_DATA_OBJECT[DEFAULT_THEME_FAMILY]);
+}
+
+/** Expanded Themes that are built into the software */
+const BUILT_IN_THEMES: ThemeFamiliesByIdExpanded =
+  expandThemeFamiliesByIdWithDefault(THEMES_DATA_OBJECT);
 
 const defaultThemePossiblyUndefined = BUILT_IN_THEMES[DEFAULT_THEME_FAMILY]?.[DEFAULT_THEME_TYPE];
 if (!defaultThemePossiblyUndefined)
@@ -46,6 +63,18 @@ if (!defaultThemePossiblyUndefined)
     `Theme service host could not find the built-in default theme! Family ${DEFAULT_THEME_FAMILY} type ${DEFAULT_THEME_TYPE}. This should not happen.`,
   );
 const DEFAULT_THEME: ThemeDefinitionExpanded = defaultThemePossiblyUndefined;
+
+/** Gets name of user-defined theme family for the given number */
+function getUserThemeFamilyName(themeNumber: number) {
+  return `${USER_THEME_FAMILY_PREFIX}${themeNumber}`;
+}
+
+const defaultUserThemeFamilyPossiblyUndefined = THEMES_DATA_OBJECT[getUserThemeFamilyName(0)];
+if (!defaultUserThemeFamilyPossiblyUndefined)
+  throw new Error(
+    `Theme service host could not find the built-in default user theme family! Family ${getUserThemeFamilyName(0)}. This should not happen.`,
+  );
+const DEFAULT_USER_THEME_FAMILY: ThemeFamily = defaultUserThemeFamilyPossiblyUndefined;
 
 /**
  * Time from process start to consider to be still in startup and loading. For example, do not reset
@@ -63,7 +92,7 @@ const currentThemeSerialized = localStorage.getItem(CURRENT_THEME_STORAGE_KEY);
 // this theme when we can
 /** Current application theme that should be applied at startup. Will not be used afterward */
 const currentThemeFromLocalStorage: ThemeDefinitionExpanded = currentThemeSerialized
-  ? (deserialize(currentThemeSerialized) ?? {})
+  ? deserialize(currentThemeSerialized)
   : DEFAULT_THEME;
 
 function saveCurrentThemeToLocalStorage(newCurrentTheme: ThemeDefinitionExpanded) {
@@ -79,11 +108,29 @@ const shouldMatchSystemSerialized = localStorage.getItem(SHOULD_MATCH_SYSTEM_STO
  * afterward
  */
 const shouldMatchSystemFromLocalStorage: boolean = shouldMatchSystemSerialized
-  ? (deserialize(shouldMatchSystemSerialized) ?? true)
-  : DEFAULT_THEME;
+  ? deserialize(shouldMatchSystemSerialized)
+  : true;
 
 function saveShouldMatchSystemToLocalStorage(newShouldMatchSystem: boolean) {
   localStorage.setItem(SHOULD_MATCH_SYSTEM_STORAGE_KEY, serialize(newShouldMatchSystem));
+}
+
+const USER_THEMES_STORAGE_KEY = 'theme.service-host.userThemes';
+
+/** FOR LOADING ONLY! DO NOT USE */
+const userThemesSerialized = localStorage.getItem(USER_THEMES_STORAGE_KEY);
+/** User-defined theme families at startup. Will not be used afterward */
+const userThemesFromLocalStorage: ThemeFamiliesById = {
+  ...Object.fromEntries(
+    Object.entries(THEMES_DATA_OBJECT).filter(([themeFamilyId]) =>
+      startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX),
+    ),
+  ),
+  ...(userThemesSerialized ? deserialize(userThemesSerialized) : {}),
+};
+
+function saveUserThemesToLocalStorage(newUserThemes: ThemeFamiliesById) {
+  localStorage.setItem(USER_THEMES_STORAGE_KEY, serialize(newUserThemes));
 }
 
 // #endregion
@@ -138,16 +185,28 @@ class ThemeDataProviderEngine
   #allThemeFamiliesByIdAsyncVariable: AsyncVariable<ThemeFamiliesByIdExpanded>;
   #isDisposed = false;
 
+  // Actually private methods set in the constructor. These need to be real private methods to avoid
+  // being put on the papi
+  #saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void;
+  #saveShouldMatchSystem: (shouldMatchSystem: boolean) => void;
+  #saveUserThemes: (userThemes: ThemeFamiliesById) => void;
+
   constructor(
     public currentTheme: ThemeDefinitionExpanded,
-    public saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
+    saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
     public shouldMatchSystem: boolean,
-    public saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
+    saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
     onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
     public currentSystemTheme: 'light' | 'dark',
     onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
+    public userThemes: ThemeFamiliesById,
+    saveUserThemes: (userThemes: ThemeFamiliesById) => void,
   ) {
     super();
+
+    this.#saveCurrentTheme = saveCurrentTheme;
+    this.#saveShouldMatchSystem = saveShouldMatchSystem;
+    this.#saveUserThemes = saveUserThemes;
 
     this.#allThemeFamiliesByIdAsyncVariable = new AsyncVariable<ThemeFamiliesByIdExpanded>(
       'theme.service-host.allThemeFamiliesById',
@@ -174,47 +233,13 @@ class ThemeDataProviderEngine
     });
 
     // Immediately subscribe to and get latest themes
-    const updateAllThemeFamilies = (
-      allThemeFamilies: ThemeFamiliesByIdExpanded | PlatformError,
-    ) => {
-      if (isPlatformError(allThemeFamilies)) {
-        logger.warn(
-          `Theme service host received error on subscription to all theme families: ${getErrorMessage(allThemeFamilies)}`,
-        );
-        return;
-      }
-
-      if (!this.#allThemeFamiliesById)
-        this.#allThemeFamiliesByIdAsyncVariable.resolveToValue(allThemeFamilies);
-      this.#allThemeFamiliesById = allThemeFamilies;
-
-      const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
-
-      // If we should match the system theme, flip the theme to the system-matching version in the same family
-      if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) dataTypesToUpdate.push('CurrentTheme');
-      else {
-        const updatedCurrentTheme =
-          this.#allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
-        if (!updatedCurrentTheme) {
-          if (performance.now() >= STARTUP_TIME_MS) {
-            // The current theme no longer exists, and it's after startup time. Reset theme
-            this.#resetCurrentThemeNoUpdate();
-            this.notifyUpdate('CurrentTheme');
-          }
-        }
-        // If the current theme's definition was updated, update it
-        else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
-          this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
-          dataTypesToUpdate.push('CurrentTheme');
-        }
-      }
-
-      // Notify others that theme data changed
-      this.notifyUpdate(dataTypesToUpdate);
-    };
     (async () => {
       try {
-        const unsubscribe = await onDidUpdateAllThemes(updateAllThemeFamilies);
+        const unsubscribe = await onDidUpdateAllThemes((allThemeFamilies) => {
+          const dataTypesToUpdate = this.#updateAllThemeFamiliesNoUpdate(allThemeFamilies);
+          // Notify others if theme data changed
+          if (dataTypesToUpdate) this.notifyUpdate(dataTypesToUpdate);
+        });
         // If disposed while awaiting this subscription, immediately unsubscribe
         if (this.#isDisposed) unsubscribe();
         else this.unsubscribeEventListeners.add(unsubscribe);
@@ -316,10 +341,104 @@ class ThemeDataProviderEngine
     return this.#allThemeFamiliesById ?? {};
   }
 
-  // Because this is a data provider, we have to provide this method even though it always throws
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async setAllThemes(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
-    throw new Error('Cannot set all themes. Extensions can provide themes in contributions');
+  // Can be called with or without a selector
+  async setAllThemes(
+    newUserThemesPossiblyUndefinedSelector: Partial<ThemeFamiliesById> | undefined,
+    newUserThemesPossiblyNotProvided?: Partial<ThemeFamiliesById>,
+  ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
+    const newUserThemes =
+      newUserThemesPossiblyUndefinedSelector ?? newUserThemesPossiblyNotProvided;
+
+    if (!newUserThemes) return false;
+
+    // Reject if changing anything but user-defined families
+    if (
+      Object.keys(newUserThemes).some(
+        (themeFamilyId) => !startsWith(themeFamilyId, USER_THEME_FAMILY_PREFIX),
+      )
+    )
+      throw new Error(
+        'Cannot set themes other than user-defined theme families. Extensions can provide their own themes in contributions',
+      );
+
+    // Fill in the provided partial user-defined themes so they are full themes
+    const newUserThemesFilled = Object.fromEntries(
+      Object.entries(newUserThemes).map(([themeFamilyId, newUserThemeFamily]) => [
+        themeFamilyId,
+        newUserThemeFamily
+          ? {
+              // Make sure the default theme types without `cssVariables` exist but overwrite with provided definitions
+              ...Object.fromEntries(
+                Object.entries(DEFAULT_USER_THEME_FAMILY).map(([type, defaultTheme]) => [
+                  type,
+                  defaultTheme
+                    ? {
+                        ...defaultTheme,
+                        cssVariables: {},
+                      }
+                    : defaultTheme,
+                ]),
+              ),
+              // Fill passed-in themes with default user theme definition contents so any new user themes have
+              // the contents they need
+              ...Object.fromEntries(
+                Object.entries(newUserThemeFamily).map(([type, newUserTheme]) => [
+                  type,
+                  newUserTheme
+                    ? {
+                        // If there is no default user theme of this type, back-fill with default
+                        // theme type but let it be overwritten by what is provided
+                        ...DEFAULT_USER_THEME_FAMILY[DEFAULT_THEME_TYPE],
+                        ...newUserTheme,
+                        // If there is a default user theme of this type, fill with the default
+                        // theme and overwrite what is provided
+                        ...DEFAULT_USER_THEME_FAMILY[type],
+                        // Keep only the provided cssVariables
+                        cssVariables: {
+                          ...newUserTheme?.cssVariables,
+                        },
+                      }
+                    : newUserTheme,
+                ]),
+              ),
+            }
+          : newUserThemeFamily,
+      ]),
+    );
+
+    // Write over the themes with the user-defined themes but let cssVariables be overwritten
+    this.#setUserThemesNoUpdate({
+      ...newUserThemesFilled,
+      ...Object.fromEntries(
+        Object.entries(this.userThemes).map(([themeFamilyId, existingUserThemeFamily]) => [
+          themeFamilyId,
+          existingUserThemeFamily
+            ? {
+                // Add in any newly provided user-defined themes
+                ...newUserThemesFilled[themeFamilyId],
+                // Preserve all existing user-defined themes but merge cssVariables from provided
+                ...Object.fromEntries(
+                  Object.entries(existingUserThemeFamily).map(([type, existingUserTheme]) => [
+                    type,
+                    existingUserTheme
+                      ? {
+                          ...newUserThemesFilled[themeFamilyId]?.[type],
+                          ...existingUserTheme,
+                          cssVariables: {
+                            ...existingUserTheme.cssVariables,
+                            ...newUserThemesFilled[themeFamilyId]?.[type]?.cssVariables,
+                          },
+                        }
+                      : existingUserTheme,
+                  ]),
+                ),
+              }
+            : existingUserThemeFamily,
+        ]),
+      ),
+    });
+
+    return this.#updateAllThemeFamiliesNoUpdate(await this.#getAllThemeFamiliesByIdResolved());
   }
 
   async dispose(): Promise<boolean> {
@@ -339,7 +458,7 @@ class ThemeDataProviderEngine
 
   #setCurrentThemeNoUpdate(newTheme: ThemeDefinitionExpanded) {
     this.currentTheme = newTheme;
-    this.saveCurrentTheme(this.currentTheme);
+    this.#saveCurrentTheme(this.currentTheme);
   }
 
   /** Sets current theme to default */
@@ -351,7 +470,12 @@ class ThemeDataProviderEngine
 
   #setShouldMatchSystemNoUpdate(newShouldMatchSystem: boolean) {
     this.shouldMatchSystem = newShouldMatchSystem;
-    this.saveShouldMatchSystem(this.shouldMatchSystem);
+    this.#saveShouldMatchSystem(this.shouldMatchSystem);
+  }
+
+  #setUserThemesNoUpdate(newUserThemes: ThemeFamiliesById) {
+    this.userThemes = newUserThemes;
+    this.#saveUserThemes(this.userThemes);
   }
 
   /**
@@ -384,6 +508,57 @@ class ThemeDataProviderEngine
     this.#setCurrentThemeNoUpdate(updatedCurrentThemeMatchingSystem);
     return true;
   }
+
+  /**
+   * Update all theme families with the newly passed-in theme families. Adds the user-defined theme
+   * families to the passed-in families.
+   *
+   * @param allThemeFamilies New set of all defined theme families except user-defined families
+   * @returns Array of strings of what data types updated the theme successfully updated; `false`
+   *   otherwise
+   */
+  #updateAllThemeFamiliesNoUpdate(
+    allThemeFamilies: ThemeFamiliesByIdExpanded | PlatformError,
+  ): DataProviderUpdateInstructions<ThemeDataTypes> {
+    if (isPlatformError(allThemeFamilies)) {
+      logger.warn(
+        `Theme service host received PlatformError in updateAllThemeFamilies: ${getErrorMessage(allThemeFamilies)}`,
+      );
+      return false;
+    }
+
+    const allThemeFamiliesWithUserThemes = {
+      ...allThemeFamilies,
+      ...expandThemeFamiliesByIdWithDefault(this.userThemes),
+    };
+
+    if (!this.#allThemeFamiliesById)
+      this.#allThemeFamiliesByIdAsyncVariable.resolveToValue(allThemeFamiliesWithUserThemes);
+    this.#allThemeFamiliesById = allThemeFamiliesWithUserThemes;
+
+    const dataTypesToUpdate: DataProviderUpdateInstructions<ThemeDataTypes> = ['AllThemes'];
+
+    // If we should match the system theme, flip the theme to the system-matching version in the same family
+    if (this.#tryMatchCurrentThemeTypeToSystemNoUpdate()) dataTypesToUpdate.push('CurrentTheme');
+    else {
+      const updatedCurrentTheme =
+        this.#allThemeFamiliesById[this.currentTheme.themeFamilyId]?.[this.currentTheme.type];
+      if (!updatedCurrentTheme) {
+        if (performance.now() >= STARTUP_TIME_MS) {
+          // The current theme no longer exists, and it's after startup time. Reset theme
+          this.#resetCurrentThemeNoUpdate();
+          this.notifyUpdate('CurrentTheme');
+        }
+      }
+      // If the current theme's definition was updated, update it
+      else if (!deepEqual(this.currentTheme, updatedCurrentTheme)) {
+        this.#setCurrentThemeNoUpdate(updatedCurrentTheme);
+        dataTypesToUpdate.push('CurrentTheme');
+      }
+    }
+
+    return dataTypesToUpdate;
+  }
 }
 
 const themeServiceEngine = new ThemeDataProviderEngine(
@@ -396,6 +571,8 @@ const themeServiceEngine = new ThemeDataProviderEngine(
   },
   getSystemDarkThemeMediaQuery().matches ? 'dark' : 'light',
   onDidChangeSystemThemeEmitter.event,
+  userThemesFromLocalStorage,
+  saveUserThemesToLocalStorage,
 );
 
 let initializationPromise: Promise<void>;
@@ -437,6 +614,8 @@ export const testingThemeService = {
     onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
     currentSystemTheme: 'light' | 'dark',
     onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
+    userThemes: ThemeFamiliesById,
+    saveUserThemes: (userThemes: ThemeFamiliesById) => void,
   ) => {
     return new ThemeDataProviderEngine(
       currentTheme,
@@ -446,6 +625,8 @@ export const testingThemeService = {
       onDidUpdateAllThemes,
       currentSystemTheme,
       onDidChangeSystemTheme,
+      userThemes,
+      saveUserThemes,
     );
   },
 };
