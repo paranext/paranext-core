@@ -7,9 +7,12 @@ import { SettingsDocumentCombiner } from '@shared/utils/settings-document-combin
 import { platformSettings } from '@extension-host/data/core-settings-info.data';
 import { MenuDocumentCombiner } from '@shared/utils/menu-document-combiner';
 import menuDataObject from '@extension-host/data/menu.data.json';
+import themesDataObject from '@shared/data/themes.data.json';
 import { ProjectSettingsDocumentCombiner } from '@shared/utils/project-settings-document-combiner';
 import { platformProjectSettings } from '@extension-host/data/core-project-settings-info.data';
 import { LocalizedStringsDocumentCombiner } from '@shared/utils/localized-strings-document-combiner';
+import { ThemesDocumentCombiner } from '@shared/utils/themes-document-combiner';
+import { DEFAULT_THEME_FAMILY } from '@shared/data/platform.data';
 
 // #region document combiners - manage the extension contributions. Services should layer over these
 
@@ -51,6 +54,18 @@ export const projectSettingsDocumentCombiner = new ProjectSettingsDocumentCombin
  * unexpectedly.
  */
 export const localizedStringsDocumentCombiner = new LocalizedStringsDocumentCombiner({});
+/**
+ * Object that keeps track of all theme contributions in the platform. To listen to updates to the
+ * theme contributions, subscribe to its `onDidRebuild` event (consider debouncing as each
+ * contribution will trigger a rebuild).
+ *
+ * Keeping this object separate from the data provider and disabling the `set` calls in the data
+ * provider prevents random services from changing system theme contributions unexpectedly.
+ */
+export const themesDocumentCombiner = new ThemesDocumentCombiner(
+  themesDataObject,
+  DEFAULT_THEME_FAMILY,
+);
 
 // #endregion
 
@@ -99,6 +114,7 @@ export async function resyncContributions(
   settingsDocumentCombiner.deleteAllContributions();
   projectSettingsDocumentCombiner.deleteAllContributions();
   localizedStringsDocumentCombiner.deleteAllContributions();
+  themesDocumentCombiner.deleteAllContributions();
 
   // Load up all the extension contributions asynchronously
   const extensionsContributions = await Promise.all(
@@ -155,6 +171,20 @@ export async function resyncContributions(
           );
         }
       }
+      let themesDocument: JsonDocumentLike | undefined;
+      if (extension.themes) {
+        try {
+          // TODO: Provide a way to make sure extensions don't tell us to read files outside their dir
+          const themesJson = await nodeFS.readFileText(
+            joinUriPaths(extension.dirUri, extension.themes),
+          );
+          themesDocument = JSON.parse(themesJson);
+        } catch (error) {
+          logger.warn(
+            `Could not load localized strings contribution for ${extension.name}: ${error}`,
+          );
+        }
+      }
 
       return {
         name: extension.name,
@@ -162,6 +192,7 @@ export async function resyncContributions(
         menuDocument,
         settingsDocument,
         projectSettingsDocument,
+        themesDocument,
       };
     }),
   );
@@ -174,6 +205,7 @@ export async function resyncContributions(
       menuDocument,
       settingsDocument,
       projectSettingsDocument,
+      themesDocument,
     }) => {
       if (localizedStringsDocument)
         try {
@@ -198,6 +230,12 @@ export async function resyncContributions(
           projectSettingsDocumentCombiner.addOrUpdateContribution(name, projectSettingsDocument);
         } catch (error) {
           logger.warn(`Could not add project settings contribution for ${name}: ${error}`);
+        }
+      if (themesDocument)
+        try {
+          themesDocumentCombiner.addOrUpdateContribution(name, themesDocument);
+        } catch (error) {
+          logger.warn(`Could not add theme contribution for ${name}: ${error}`);
         }
     },
   );

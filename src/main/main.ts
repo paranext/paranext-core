@@ -412,7 +412,11 @@ async function main() {
 
   // settingsService updates the request timeout during initialization, so using the service in any
   // way ensures the timeout is set
-  logger.debug(`Request timeout is ${await settingsService.get('platform.requestTimeout')} sec`);
+  try {
+    logger.debug(`Request timeout is ${await settingsService.get('platform.requestTimeout')} sec`);
+  } catch (e) {
+    logger.warn(`Failed to get request timeout from settings: ${getErrorMessage(e)}`);
+  }
 
   // #endregion
 
