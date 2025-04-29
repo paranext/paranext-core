@@ -3207,7 +3207,7 @@ export declare const THEME_STYLE_ELEMENT_ID = "theme-styles";
  *   `cssVariables`
  * @returns The expanded theme families
  */
-export declare function expandThemeContribution(themeFamiliesById: ThemeFamiliesById, defaultThemeFamily: ThemeFamilyExpanded | undefined): ThemeFamiliesByIdExpanded;
+export declare function expandThemeContribution(themeFamiliesById: ThemeFamiliesById, defaultThemeFamily: ThemeFamily | undefined): ThemeFamiliesByIdExpanded;
 /** Gets the CSS stylesheet that should be applied for the given theme */
 export declare function getStylesheetForTheme(theme: ThemeDefinitionExpanded): string;
 /**

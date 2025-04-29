@@ -136,5 +136,35 @@
         "sidebar-ring": "15.5 13.2% 53.9%"
       }
     }
+  },
+  "user-0": {
+    "light": {
+      "label": "%theme_label_user_light%",
+      "cssVariables": {}
+    },
+    "dark": {
+      "label": "%theme_label_user_dark%",
+      "cssVariables": {}
+    }
+  },
+  "user-1": {
+    "light": {
+      "label": "%theme_label_user_light%",
+      "cssVariables": {}
+    },
+    "dark": {
+      "label": "%theme_label_user_dark%",
+      "cssVariables": {}
+    }
+  },
+  "user-2": {
+    "light": {
+      "label": "%theme_label_user_light%",
+      "cssVariables": {}
+    },
+    "dark": {
+      "label": "%theme_label_user_dark%",
+      "cssVariables": {}
+    }
   }
 }

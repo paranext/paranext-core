@@ -6817,6 +6817,7 @@ declare module 'shared/services/theme.service-model' {
     UnsubscriberAsync,
     ThemeDefinitionExpanded,
     ThemeFamiliesByIdExpanded,
+    ThemeFamiliesById,
   } from 'platform-bible-utils';
   import { IDataProvider } from 'shared/models/data-provider.interface';
   import {
@@ -6839,6 +6840,11 @@ declare module 'shared/services/theme.service-model' {
     dataProviderName: 'platform.themeServiceDataProvider';
   }>;
   /**
+   * Prefix on theme families that are specifically user-defined theme families that can be edited
+   * live instead of being provided by an extension
+   */
+  export const USER_THEME_FAMILY_PREFIX = 'user-';
+  /**
    * Object containing any/all of the identifying information for a theme.
    *
    * Use this when setting the current theme. Can set just theme family, just theme type, or both
@@ -6856,7 +6862,11 @@ declare module 'shared/services/theme.service-model' {
   export type ThemeDataTypes = {
     CurrentTheme: DataProviderDataType<undefined, ThemeDefinitionExpanded, CurrentThemeSpecifier>;
     ShouldMatchSystem: DataProviderDataType<undefined, boolean, boolean>;
-    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
+    AllThemes: DataProviderDataType<
+      undefined,
+      ThemeFamiliesByIdExpanded,
+      Partial<ThemeFamiliesById>
+    >;
   };
   module 'papi-shared-types' {
     interface DataProviders {
@@ -7012,12 +7022,34 @@ declare module 'shared/services/theme.service-model' {
      */
     getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
-     * provide themes in contributions
+     * Sets partial theme definition information (can only provide `cssVariables`). Only allowed to
+     * set user-defined themes (themes whose family id starts with {@link USER_THEME_FAMILY_PREFIX}).
+     * Extensions can provide their own themes in contributions
+     *
+     * @param updatedUserThemeFamilies Partial {@link ThemeFamiliesById} consisting of any desired
+     *   updates to user-defined themes.
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If theme families not starting with {@link USER_THEME_FAMILY_PREFIX} are passed in
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setAllThemes(
+      updatedUserThemeFamilies: Partial<ThemeFamiliesById>,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Sets partial theme definition information (can only provide `cssVariables`). Only allowed to
+     * set user-defined themes (themes whose family id starts with {@link USER_THEME_FAMILY_PREFIX}).
+     * Extensions can provide their own themes in contributions
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param updatedUserThemeFamilies Partial {@link ThemeFamiliesById} consisting of any desired
+     *   updates to user-defined themes.
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If theme families not starting with {@link USER_THEME_FAMILY_PREFIX} are passed in
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
      */
     setAllThemes(
       selector: undefined,
-      value: never,
+      updatedUserThemeFamilies: Partial<ThemeFamiliesById>,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     /**
      * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
@@ -8534,6 +8566,7 @@ declare module 'renderer/services/theme.service-host' {
     PlatformEvent,
     ThemeFamiliesByIdExpanded,
     ThemeDefinitionExpanded,
+    ThemeFamiliesById,
     PlatformEventAsync,
     PlatformError,
   } from 'platform-bible-utils';
@@ -8543,10 +8576,9 @@ declare module 'renderer/services/theme.service-host' {
   {
     #private;
     currentTheme: ThemeDefinitionExpanded;
-    saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void;
     shouldMatchSystem: boolean;
-    saveShouldMatchSystem: (shouldMatchSystem: boolean) => void;
     currentSystemTheme: 'light' | 'dark';
+    userThemes: ThemeFamiliesById;
     private unsubscribeEventListeners;
     constructor(
       currentTheme: ThemeDefinitionExpanded,
@@ -8556,6 +8588,8 @@ declare module 'renderer/services/theme.service-host' {
       onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
       currentSystemTheme: 'light' | 'dark',
       onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
+      userThemes: ThemeFamiliesById,
+      saveUserThemes: (userThemes: ThemeFamiliesById) => void,
     );
     getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
     setCurrentTheme(
@@ -8568,7 +8602,10 @@ declare module 'renderer/services/theme.service-host' {
       newShouldMatchSystemPossiblyNotProvided?: boolean,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
-    setAllThemes(): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    setAllThemes(
+      newUserThemesPossiblyUndefinedSelector: Partial<ThemeFamiliesById> | undefined,
+      newUserThemesPossiblyNotProvided?: Partial<ThemeFamiliesById>,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     dispose(): Promise<boolean>;
   }
   export function initialize(): Promise<void>;
@@ -8582,6 +8619,8 @@ declare module 'renderer/services/theme.service-host' {
       onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
       currentSystemTheme: 'light' | 'dark',
       onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
+      userThemes: ThemeFamiliesById,
+      saveUserThemes: (userThemes: ThemeFamiliesById) => void,
     ) => ThemeDataProviderEngine;
   };
   /**
