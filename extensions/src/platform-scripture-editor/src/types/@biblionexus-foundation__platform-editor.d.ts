@@ -63,3 +63,31 @@ declare module 'shared-react/nodes/scripture/usj/usj-node-options.model' {
     };
   }
 }
+
+declare module 'shared-react/views/view-mode.model' {
+  export const FORMATTED_VIEW_MODE = 'formatted';
+  export const UNFORMATTED_VIEW_MODE = 'unformatted';
+  export type ViewMode = typeof FORMATTED_VIEW_MODE | typeof UNFORMATTED_VIEW_MODE;
+}
+
+declare module 'shared-react/views/view-options.utils' {
+  // eslint-disable-next-line import/no-unresolved
+  import { ViewMode } from 'shared-react/views/view-mode.model';
+
+  export type ViewOptions = {
+    /** USFM markers are visible, editable or hidden */
+    markerMode: 'visible' | 'editable' | 'hidden';
+    /** Does the text have spacing including indenting */
+    hasSpacing: boolean;
+    /** Is the text in a formatted font */
+    isFormattedFont: boolean;
+  };
+
+  export type getDefaultViewMode = () => ViewMode;
+
+  export type getDefaultViewOptions = () => ViewOptions | undefined;
+
+  export type getViewOptions = (viewMode?: string | undefined) => ViewOptions | undefined;
+
+  export type getViewMode = (viewOptions: ViewOptions | undefined) => ViewMode | undefined;
+}
