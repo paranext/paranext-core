@@ -59,18 +59,72 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = 'TableFooter';
 
+// CUSTOM: Add onKeyDown and onSelect props to TableRow
 /** @inheritdoc Table */
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
-  ({ className, ...props }, ref) => (
-    <tr
-      ref={ref}
-      className={cn(
-        'tw-border-b tw-transition-colors hover:tw-bg-muted/50 data-[state=selected]:tw-bg-muted',
-        className,
-      )}
-      {...props}
-    />
-  ),
+  ({ className, onKeyDown, onSelect, ...props }, ref) => {
+    // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
+    // useRef uses null not undefined
+    // eslint-disable-next-line no-null/no-null
+    const rowRef = React.useRef<HTMLTableRowElement>(null);
+
+    // CUSTOM: Assign internal ref to external ref if provided
+    React.useEffect(() => {
+      if (typeof ref === 'function') {
+        ref(rowRef.current);
+      } else if (ref) {
+        if (ref && 'current' in ref) {
+          ref.current = rowRef.current;
+        }
+      }
+    }, [ref]);
+
+    // CUSTOM: Handle arrow key navigation and Enter key selection
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
+      const { current } = rowRef;
+      if (!current || !current.parentElement) return;
+
+      // Get all focusable rows to enable up/down navigation
+      const rows = Array.from(
+        current.parentElement.querySelectorAll<HTMLTableRowElement>('tr[tabindex="0"]'),
+      );
+      const currentIndex = rows.indexOf(current);
+
+      let nextRow: HTMLTableRowElement | undefined;
+
+      if (e.key === 'ArrowDown' && currentIndex < rows.length - 1) {
+        nextRow = rows[currentIndex + 1];
+      } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+        nextRow = rows[currentIndex - 1];
+      } else if (e.key === 'Enter' && onSelect) {
+        // Trigger selection handler on Enter key press, different than click handler
+        e.preventDefault();
+        onSelect(e);
+      }
+
+      if (nextRow) {
+        e.preventDefault();
+        nextRow.focus();
+      }
+
+      // Call user-defined onKeyDown handler if provided
+      onKeyDown?.(e);
+    };
+
+    return (
+      <tr
+        ref={rowRef}
+        tabIndex={0} // CUSTOM: Make row focusable
+        onKeyDown={handleKeyDown} // CUSTOM: Enable keyboard behavior
+        className={cn(
+          // CUSTOM: Add focus styles and add tw-outline-none so there isn't a duplicate outline
+          'tw-border-b tw-outline-none tw-transition-colors hover:tw-bg-muted/50 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-2 data-[state=selected]:tw-bg-muted',
+          className,
+        )}
+        {...props}
+      />
+    );
+  },
 );
 TableRow.displayName = 'TableRow';
 
