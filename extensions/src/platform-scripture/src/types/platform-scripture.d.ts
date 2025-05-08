@@ -11,6 +11,7 @@ declare module 'platform-scripture' {
   import type { IProjectDataProvider } from 'papi-shared-types';
   import { Dispose, LocalizeKey, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type { Usj } from '@biblionexus-foundation/scripture-utilities';
+  import { InventoryItem } from 'platform-bible-react';
 
   // #region Project Interface Data Types
 
@@ -719,13 +720,18 @@ declare module 'platform-scripture' {
     ) => Promise<boolean>;
   };
 
+  export type InventoryDataRetriever = {
+    retrieveInventoryData: (checkId: string, projectId: string) => Promise<InventoryItem[]>;
+  };
+
   /**
    * All processes that can run checks are expected to implement this type in a data provider
    * registered with object type 'checkRunner'
    */
   export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> &
     CheckEnablerDisabler &
-    CheckResultClassifier;
+    CheckResultClassifier &
+    InventoryDataRetriever;
 
   // #endregion
 
@@ -801,7 +807,8 @@ declare module 'platform-scripture' {
    */
   export type ICheckAggregatorService = IDataProvider<CheckAggregatorDataTypes> &
     CheckResultClassifier &
-    CheckSubscriptionManager & {
+    CheckSubscriptionManager &
+    InventoryDataRetriever & {
       dataProviderName: string;
     };
 

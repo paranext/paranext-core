@@ -1,11 +1,14 @@
 import papi, { DataProviderEngine, dataProviders, logger } from '@papi/backend';
-import { Mutex, MutexMap, UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
 import {
   DataProviderUpdateInstructions,
   ExtensionDataScope,
   IDataProviderEngine,
   IDisposableDataProvider,
 } from '@papi/core';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
+import { InventoryItem } from 'platform-bible-react';
+import { Mutex, MutexMap, UnsubscriberAsync, UnsubscriberAsyncList } from 'platform-bible-utils';
 import {
   Check,
   CheckCreatorFunction,
@@ -19,9 +22,8 @@ import {
   CheckRunnerDataTypes,
   ICheckHostingService,
   ICheckRunner,
+  InventoryDataRetriever,
 } from 'platform-scripture';
-import { SerializedVerseRef } from '@sillsdev/scripture';
-import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
 import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
 import { PersistedCheckRunResults } from './persisted-check-run-result.model';
 
@@ -52,7 +54,11 @@ const deniedDataScope: ExtensionDataScope = {
 
 class CheckRunnerEngine
   extends DataProviderEngine<CheckRunnerDataTypes>
-  implements IDataProviderEngine<CheckRunnerDataTypes>, CheckEnablerDisabler, CheckResultClassifier
+  implements
+    IDataProviderEngine<CheckRunnerDataTypes>,
+    CheckEnablerDisabler,
+    CheckResultClassifier,
+    InventoryDataRetriever
 {
   private activeRanges: CheckInputRange[] = [];
   private mutexesPerCheck = new MutexMap();
@@ -328,6 +334,22 @@ class CheckRunnerEngine
     // After all the promises are settled, every check's `latestResults` will be filled in
     await Promise.all(oneDimArray);
     this.notifyUpdate('CheckResults');
+  }
+
+  // #endregion
+
+  // #region Inventory data
+
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  async retrieveInventoryData(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _projectId: string,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    _checkId: string,
+  ): Promise<InventoryItem[]> {
+    logger.error(`retrieveInventoryData is not implemented for the extensionHostCheckRunner.
+        Did you mean to call the checkAggregator?`);
+    return [];
   }
 
   // #endregion
