@@ -5,6 +5,7 @@ using Paranext.DataProvider.Projects;
 using Paratext.Checks;
 using Paratext.Data;
 using Paratext.Data.Checking;
+using Paratext.PluginInterfaces;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
@@ -24,6 +25,21 @@ internal class CheckRunner(PapiClient papiClient)
         public ScriptureCheckBase Check { get; } = check;
         public CheckResultsRecorder ResultsRecorder { get; } = new(checkId, projectId);
         public object Lock = new();
+    }
+
+    private class InventoryItem(
+        string inventoryText,
+        string verse,
+        VerseRef verseRef,
+        int offset,
+        int length
+    )
+    {
+        public string InventoryText { get; set; } = inventoryText;
+        public string Verse { get; set; } = verse;
+        public VerseRef VerseRef { get; set; } = verseRef;
+        public int Offset { get; set; } = offset;
+        public int Length { get; set; } = length;
     }
 
     #endregion
@@ -83,6 +99,7 @@ internal class CheckRunner(PapiClient papiClient)
             ("getAvailableChecks", GetAvailableChecks),
             ("getCheckResults", GetCheckResults),
             ("setActiveRanges", SetActiveRanges),
+            ("retrieveInventoryData", RetrieveInventoryData),
         ];
     }
 
@@ -159,6 +176,59 @@ internal class CheckRunner(PapiClient papiClient)
 
         Console.WriteLine($"Returning {retVal.Count} check results");
         return retVal;
+    }
+
+    private List<InventoryItem> RetrieveInventoryData(string checkId, string projectId)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(checkId);
+        ArgumentException.ThrowIfNullOrEmpty(projectId);
+
+        var enabledProjectIds = _checkDetailsByCheckId[checkId].EnabledProjectIds;
+        var haveEnabledCheck = false;
+        if (!enabledProjectIds.Contains(projectId))
+        {
+            Console.WriteLine(
+                $"Check {checkId} for project {projectId} is not enabled. Enabling now."
+            );
+            EnableCheck(checkId, projectId);
+            RunChecksForProject(projectId);
+            haveEnabledCheck = true;
+        }
+
+        if (!_checksByIds.TryGetValue((checkId, projectId), out var check))
+            throw new Exception($"Check {checkId} is not enabled for project {projectId}");
+
+        var references = new List<TextTokenSubstring>();
+
+        lock (check.Lock)
+        {
+            if (check.Check is not ScriptureInventoryBase checkWithInventory)
+                throw new Exception($"Check {checkId} does not support inventory data.");
+
+            var dataSource = GetOrCreateDataSource(projectId);
+            var textTokens = dataSource.TextTokens;
+            var newReferences = checkWithInventory.GetReferences(textTokens, "");
+            references.AddRange(newReferences);
+        }
+
+        if (haveEnabledCheck)
+        {
+            Console.WriteLine(
+                $"Retrieving inventory data finished. Disabling {checkId} check for project {projectId}."
+            );
+            DisableCheck(checkId, projectId);
+        }
+
+        return
+        [
+            .. references.Select(reference => new InventoryItem(
+                reference.InventoryText,
+                reference.Token.Text,
+                reference.Token.VerseRef,
+                reference.Offset,
+                reference.Length
+            )),
+        ];
     }
 
     private void EnableCheck(string checkId, string projectId)
