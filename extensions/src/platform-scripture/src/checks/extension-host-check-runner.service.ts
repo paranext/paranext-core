@@ -19,6 +19,8 @@ import {
   CheckRunnerDataTypes,
   ICheckHostingService,
   ICheckRunner,
+  InventoryDataRetriever,
+  InventoryItem,
 } from 'platform-scripture';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import type { ProjectDataProviderInterfaces } from 'papi-shared-types';
@@ -52,7 +54,11 @@ const deniedDataScope: ExtensionDataScope = {
 
 class CheckRunnerEngine
   extends DataProviderEngine<CheckRunnerDataTypes>
-  implements IDataProviderEngine<CheckRunnerDataTypes>, CheckEnablerDisabler, CheckResultClassifier
+  implements
+    IDataProviderEngine<CheckRunnerDataTypes>,
+    CheckEnablerDisabler,
+    CheckResultClassifier,
+    InventoryDataRetriever
 {
   private activeRanges: CheckInputRange[] = [];
   private mutexesPerCheck = new MutexMap();
@@ -328,6 +334,16 @@ class CheckRunnerEngine
     // After all the promises are settled, every check's `latestResults` will be filled in
     await Promise.all(oneDimArray);
     this.notifyUpdate('CheckResults');
+  }
+
+  // #endregion
+
+  // #region Inventory data
+
+  async retrieveInventoryData(_projectId: string, _checkId: string): Promise<InventoryItem[]> {
+    logger.error(`retrieveInventoryData is not implemented for the extensionHostCheckRunner.
+        Did you mean to call the checkAggregator?`);
+    return [];
   }
 
   // #endregion

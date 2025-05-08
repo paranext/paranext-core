@@ -1,7 +1,7 @@
 import { WebViewProps } from '@papi/core';
-import { useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
+import { useDataProvider, useLocalizedStrings, useProjectSetting } from '@papi/frontend/react';
 import { Scope, usePromise, INVENTORY_STRING_KEYS } from 'platform-bible-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ProjectSettingTypes } from 'papi-shared-types';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import papi, { logger } from '@papi/frontend';
@@ -56,6 +56,23 @@ global.webViewComponent = function InventoryWebView({
   );
   const [webViewType] = useWebViewState('webViewType', '');
   const [verseRef, setVerseRef] = useWebViewScrollGroupScrRef();
+
+  const checkAggregator = useDataProvider('platformScripture.checkAggregator');
+  if (checkAggregator && projectId) {
+    const invItems = checkAggregator.retrieveInventoryData('RepeatedWord', projectId);
+    console.log('invItems', invItems);
+  }
+
+  useEffect(() => {
+    const retrieveInventoryData = async () => {
+      if (checkAggregator && projectId) {
+        const invItems = await checkAggregator.retrieveInventoryData('RepeatedWord', projectId);
+        console.log('invItems', invItems);
+      }
+    };
+
+    retrieveInventoryData();
+  }, [checkAggregator]);
 
   let InventoryVariant;
   let validItemsSetting: keyof ProjectSettingTypes;

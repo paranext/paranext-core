@@ -719,13 +719,26 @@ declare module 'platform-scripture' {
     ) => Promise<boolean>;
   };
 
+  export type InventoryItem = {
+    inventoryText: string;
+    verse: string;
+    verseRef: SerializedVerseRef;
+    offset: number;
+    length: number;
+  };
+
+  export type InventoryDataRetriever = {
+    retrieveInventoryData: (checkId: string, projectId: string) => Promise<InventoryItem[]>;
+  };
+
   /**
    * All processes that can run checks are expected to implement this type in a data provider
    * registered with object type 'checkRunner'
    */
   export type ICheckRunner = IDataProvider<CheckRunnerDataTypes> &
     CheckEnablerDisabler &
-    CheckResultClassifier;
+    CheckResultClassifier &
+    InventoryDataRetriever;
 
   // #endregion
 
@@ -801,7 +814,8 @@ declare module 'platform-scripture' {
    */
   export type ICheckAggregatorService = IDataProvider<CheckAggregatorDataTypes> &
     CheckResultClassifier &
-    CheckSubscriptionManager & {
+    CheckSubscriptionManager &
+    InventoryDataRetriever & {
       dataProviderName: string;
     };
 

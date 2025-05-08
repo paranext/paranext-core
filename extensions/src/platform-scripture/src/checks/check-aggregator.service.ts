@@ -15,6 +15,8 @@ import {
   CheckSubscriptionManager,
   ICheckAggregatorService,
   ICheckRunner,
+  InventoryDataRetriever,
+  InventoryItem,
   SettableCheckDetails,
 } from 'platform-scripture';
 import { SerializedVerseRef } from '@sillsdev/scripture';
@@ -31,7 +33,8 @@ class CheckAggregatorDataProviderEngine
   implements
     IDataProviderEngine<CheckAggregatorDataTypes>,
     CheckResultClassifier,
-    CheckSubscriptionManager
+    CheckSubscriptionManager,
+    InventoryDataRetriever
 {
   // Maps check runner IDs to their ICheckRunner objects
   checkRunners = new Map<string, ICheckRunner>();
@@ -281,6 +284,17 @@ class CheckAggregatorDataProviderEngine
   async validateSubscription(subscriptionId: CheckSubscriptionId): Promise<boolean> {
     const subscription = this.subscriptionsBySubscriptionId.get(subscriptionId);
     return !!subscription;
+  }
+
+  // #endregion
+
+  // #region Inventory Data
+
+  async retrieveInventoryData(checkId: string, projectId: string): Promise<InventoryItem[]> {
+    console.log('checkagg:', checkId, projectId);
+    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+    if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
+    return checkRunner.retrieveInventoryData(checkId, projectId);
   }
 
   // #endregion
