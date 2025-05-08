@@ -5,6 +5,7 @@ using Paranext.DataProvider.Projects;
 using Paratext.Checks;
 using Paratext.Data;
 using Paratext.Data.Checking;
+using Paratext.PluginInterfaces;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
@@ -24,6 +25,14 @@ internal class CheckRunner(PapiClient papiClient)
         public ScriptureCheckBase Check { get; } = check;
         public CheckResultsRecorder ResultsRecorder { get; } = new(checkId, projectId);
         public object Lock = new();
+    }
+
+    private class InventoryItem(string inventoryText, string verse, VerseRef verseRef, int offset)
+    {
+        public string InventoryText { get; set; } = inventoryText;
+        public string Verse { get; set; } = verse;
+        public VerseRef VerseRef { get; set; } = verseRef;
+        public int Offset { get; set; } = offset;
     }
 
     #endregion
@@ -83,6 +92,7 @@ internal class CheckRunner(PapiClient papiClient)
             ("getAvailableChecks", GetAvailableChecks),
             ("getCheckResults", GetCheckResults),
             ("setActiveRanges", SetActiveRanges),
+            ("retrieveInventoryData", RetrieveInventoryData),
         ];
     }
 
@@ -159,6 +169,60 @@ internal class CheckRunner(PapiClient papiClient)
 
         Console.WriteLine($"Returning {retVal.Count} check results");
         return retVal;
+    }
+
+    private List<InventoryItem> RetrieveInventoryData(
+        string checkId,
+        string projectId,
+        CheckInputRange checkInputRange
+    )
+    {
+        ArgumentException.ThrowIfNullOrEmpty(checkId);
+        ArgumentException.ThrowIfNullOrEmpty(projectId);
+        ArgumentNullException.ThrowIfNull(checkInputRange);
+
+        var dataSource = GetOrCreateDataSource(projectId);
+
+        // "GetText" will tokenize the text for checks to use
+        // "0" chapter number means all chapters
+        var chapterNum =
+            checkInputRange.Start.ChapterNum == checkInputRange.End?.ChapterNum
+                ? checkInputRange.Start.ChapterNum
+                : 0;
+        // TODO: Seems to produce the exact same results for chapterNum == 0 and chapterNum == non-zero
+        dataSource.GetText(checkInputRange.Start.BookNum, chapterNum, 0);
+
+        var check = CheckFactory.CreateCheck(checkId, dataSource);
+
+        if (check is not ScriptureInventoryBase checkWithInventory)
+        {
+            Console.WriteLine(
+                $"Check {checkId} does not support inventories. Cannot retrieve inventory data."
+            );
+            return [];
+        }
+
+        var scrText = LocalParatextProjects.GetParatextProject(projectId);
+        var indexer = new UsfmBookIndexer(scrText.GetText(checkInputRange.Start.BookNum));
+
+        RunCheck(checkId, check, checkInputRange, indexer);
+
+        // Todo: This returns old data (from the last run) for some reason...
+        var textTokens = dataSource.TextTokens;
+        var newReferences = checkWithInventory.GetReferences(textTokens, "");
+
+        var references = new List<TextTokenSubstring>();
+        references.AddRange(newReferences);
+
+        return
+        [
+            .. references.Select(reference => new InventoryItem(
+                reference.InventoryText,
+                reference.Token.Text,
+                reference.Token.VerseRef,
+                reference.Offset
+            )),
+        ];
     }
 
     private void EnableCheck(string checkId, string projectId)
