@@ -566,6 +566,13 @@ export declare const getBookIdFromUSFM: (text: string) => string;
  * @returns The status for the specified item
  */
 export declare const getStatusForItem: (item: string, approvedItems: string[], unapprovedItems: string[]) => Status;
+export type InventoryItem = {
+	inventoryText: string | string[];
+	verse: string;
+	verseRef: SerializedVerseRef;
+	offset: number;
+	length: number;
+};
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -594,8 +601,8 @@ type AdditionalItemsLabels = {
 	tableHeaders?: string[];
 };
 type InventoryProps = {
-	/** The scripture reference that the application is currently set to */
-	verseRef: SerializedVerseRef;
+	/** The inventory items that the inventory should be populated with */
+	inventoryItems: InventoryItem[];
 	/** Callback function that is executed when the scripture reference is changed */
 	setVerseRef: (scriptureReference: SerializedVerseRef) => void;
 	/**
@@ -606,15 +613,6 @@ type InventoryProps = {
 	 */
 	localizedStrings: InventoryLocalizedStrings;
 	/**
-	 * The logic that finds the desired items in the source text. This can either be a Regular
-	 * expression that captures one or multiple items (preferred), or a custom function that builds
-	 * and return an InventoryDataTable[] manually. Note: In case the logic captures more than one
-	 * item (i.e. InventoryTableData.items has a length greater than 1), you must provide text labels
-	 * for the related columns and control elements to show by setting the `additionalItemsLabels`
-	 * prop
-	 */
-	extractItems: RegExp | ((text: string | undefined, scriptureRef: SerializedVerseRef, approvedItems: string[], unapprovedItems: string[]) => InventoryTableData[]);
-	/**
 	 * Text labels for control elements and additional column headers in case your Inventory has more
 	 * than one item to show (e.g. The 'Preceding Marker' in the Markers Inventory)
 	 */
@@ -623,8 +621,6 @@ type InventoryProps = {
 	approvedItems: string[];
 	/** Array of unapproved items, typically as defined in `Settings.xml` */
 	unapprovedItems: string[];
-	/** The source scripture text that is searched for in inventory items */
-	text: string | undefined;
 	/** Scope of scripture that the inventory will operate on */
 	scope: Scope;
 	/** Callback function that is executed when the scope is changed from the Inventory */
@@ -638,7 +634,7 @@ type InventoryProps = {
 	columns: ColumnDef<InventoryTableData>[];
 };
 /** Inventory component that is used to view and control the status of provided project settings */
-export declare function Inventory({ verseRef, setVerseRef, localizedStrings, extractItems, additionalItemsLabels, approvedItems, unapprovedItems, text, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
+export declare function Inventory({ inventoryItems, setVerseRef, localizedStrings, additionalItemsLabels, approvedItems, unapprovedItems, scope, onScopeChange, columns, }: InventoryProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Function that creates the item column for inventories
  *

@@ -3,6 +3,7 @@ import {
   Button,
   ColumnDef,
   Inventory,
+  InventoryItem,
   InventoryTableData,
   Scope,
   inventoryCountColumn,
@@ -19,9 +20,6 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
-
-// Matches all characters
-const charactersRegex: RegExp = /./g;
 
 /**
  * Function that constructs the column for the inventory component
@@ -66,27 +64,25 @@ const createColumns = (
 ];
 
 type CharacterInventoryProps = {
-  verseRef: SerializedVerseRef;
+  inventoryItems: InventoryItem[];
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
-  text: string | undefined;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
 };
 
 export function CharacterInventory({
-  verseRef,
+  inventoryItems,
   setVerseRef,
   localizedStrings,
   approvedItems,
   onApprovedItemsChange,
   unapprovedItems,
   onUnapprovedItemsChange,
-  text,
   scope,
   onScopeChange,
 }: CharacterInventoryProps) {
@@ -134,13 +130,11 @@ export function CharacterInventory({
 
   return (
     <Inventory
-      verseRef={verseRef}
+      inventoryItems={inventoryItems}
       setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
-      extractItems={charactersRegex}
       approvedItems={approvedItems}
       unapprovedItems={unapprovedItems}
-      text={text}
       scope={scope}
       onScopeChange={onScopeChange}
       columns={columns}
