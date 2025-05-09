@@ -11,6 +11,7 @@ declare module 'platform-scripture' {
   import type { IProjectDataProvider } from 'papi-shared-types';
   import { Dispose, LocalizeKey, PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type { Usj } from '@biblionexus-foundation/scripture-utilities';
+  import { InventoryItem } from 'platform-bible-react';
 
   // #region Project Interface Data Types
 
@@ -717,14 +718,6 @@ declare module 'platform-scripture' {
       selectedText: string,
       checkResultUniqueId?: string,
     ) => Promise<boolean>;
-  };
-
-  export type InventoryItem = {
-    inventoryText: string;
-    verse: string;
-    verseRef: SerializedVerseRef;
-    offset: number;
-    length: number;
   };
 
   export type InventoryDataRetriever = {

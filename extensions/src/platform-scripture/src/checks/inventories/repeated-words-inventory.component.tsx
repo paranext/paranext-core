@@ -2,6 +2,7 @@ import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import {
   ColumnDef,
   Inventory,
+  InventoryItem,
   InventoryTableData,
   Scope,
   inventoryCountColumn,
@@ -17,10 +18,6 @@ const REPEATED_WORDS_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
-
-// Matches a sequence of letters surrounded by word boundaries followed by that exact same
-// sequence of letters surrounded by word boundaries
-const repeatedWordsRegex: RegExp = /\b(\p{L}+)\b(?=\s\b\1\b)/gu;
 
 /**
  * Function that constructs the column for the inventory component
@@ -55,27 +52,25 @@ const createColumns = (
 ];
 
 interface RepeatedWordsInventoryProps {
-  verseRef: SerializedVerseRef;
+  inventoryItems: InventoryItem[];
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
-  text: string | undefined;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
 }
 
 export function RepeatedWordsInventory({
-  verseRef,
+  inventoryItems,
   setVerseRef,
   localizedStrings,
   approvedItems,
   onApprovedItemsChange,
   unapprovedItems,
   onUnapprovedItemsChange,
-  text,
   scope,
   onScopeChange,
 }: RepeatedWordsInventoryProps) {
@@ -92,6 +87,8 @@ export function RepeatedWordsInventory({
     () => repeatedWordsInventoryStrings['%webView_inventory_table_header_status%'],
     [repeatedWordsInventoryStrings],
   );
+
+  console.log('inv items in rep w check:', inventoryItems);
 
   const columns = useMemo(
     () =>
@@ -117,13 +114,11 @@ export function RepeatedWordsInventory({
 
   return (
     <Inventory
-      verseRef={verseRef}
+      inventoryItems={inventoryItems}
       setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
-      extractItems={repeatedWordsRegex}
       approvedItems={approvedItems}
       unapprovedItems={unapprovedItems}
-      text={text}
       scope={scope}
       onScopeChange={onScopeChange}
       columns={columns}

@@ -5,6 +5,7 @@ using Paranext.DataProvider.Projects;
 using Paratext.Checks;
 using Paratext.Data;
 using Paratext.Data.Checking;
+using Paratext.PluginInterfaces;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
@@ -204,14 +205,13 @@ internal class CheckRunner(PapiClient papiClient)
 
         lock (check.Lock)
         {
-            if (!(check.Check is ScriptureInventoryBase checkWithInventory))
-                return [];
+            if (check.Check is not ScriptureInventoryBase checkWithInventory)
+                throw new Exception($"Check {checkId} does not support inventory data.");
 
-            Console.WriteLine(check.ToString());
-
-            references.AddRange(
-                checkWithInventory.GetReferences(GetOrCreateDataSource(projectId).TextTokens, "")
-            );
+            var dataSource = GetOrCreateDataSource(projectId);
+            var textTokens = dataSource.TextTokens;
+            var newReferences = checkWithInventory.GetReferences(textTokens, "");
+            references.AddRange(newReferences);
         }
 
         if (haveEnabledCheck)
