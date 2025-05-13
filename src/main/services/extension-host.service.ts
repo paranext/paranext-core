@@ -175,7 +175,6 @@ async function startExtensionHost() {
         // Provide the nodemon config paths and command-line argument extension paths as watch
         // directories for nodemon
         ...nodemonWatchPaths.flatMap((watchPath) => ['--watch', watchPath]),
-        '--transpile-only',
         './src/extension-host/extension-host.ts',
         '--',
         ...sharedArgs,

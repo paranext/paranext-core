@@ -33,6 +33,8 @@ import { DialogService } from '@shared/services/dialog.service-model';
 import { dialogService } from '@shared/services/dialog.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import { menuDataService } from '@shared/services/menu-data.service';
+import { IDatabaseService } from '@shared/services/database.service-model';
+import { databaseService } from '@shared/services/database.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
 import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
@@ -120,6 +122,8 @@ const papi = {
   themes: themeService as IThemeService,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
+  /** JSDOC DESTINATION databaseService */
+  database: databaseService as IDatabaseService,
   /** JSDOC DESTINATION scrollGroupService */
   scrollGroups: scrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
@@ -211,6 +215,9 @@ Object.freeze(papi.themes);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);
+/** JSDOC DESTINATION databaseService */
+export const { database } = papi;
+Object.freeze(papi.database);
 /** JSDOC DESTINATION scrollGroupService */
 export const { scrollGroups } = papi;
 Object.freeze(papi.scrollGroups);

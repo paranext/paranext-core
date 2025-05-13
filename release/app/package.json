@@ -15,7 +15,9 @@
     "postinstall": "npm run rebuild && npm run link-modules",
     "link-modules": "node -r ts-node/register ../../.erb/scripts/link-modules.ts"
   },
-  "dependencies": {},
+  "dependencies": {
+    "better-sqlite3": "^11.9.1"
+  },
   "volta": {
     "extends": "../../package.json"
   }

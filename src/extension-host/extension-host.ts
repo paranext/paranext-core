@@ -17,7 +17,8 @@ import { initialize as initializeThemeData } from '@extension-host/services/them
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
-import { killChildProcessesFromExtensions } from './services/create-process.service';
+import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
+import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
@@ -62,6 +63,7 @@ process.on('unhandledRejection', (reason) => {
       initializeThemeData(),
       initializeSettingsService(),
       startProjectSettingsService(),
+      initializeDatabaseService(),
     ]);
 
     // The extension service locks down importing other modules, so be careful what runs after it
