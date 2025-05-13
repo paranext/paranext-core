@@ -1,13 +1,15 @@
 import { HomeDialog } from '@/components/advanced/filterable-resource-list/home.component';
+import { LocalProjectInfo, SharedProjectsInfo } from 'platform-bible-utils';
+import { useState } from 'react';
 
-const projectsAndResources = [
+const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     id: '1',
     isEditable: false,
     fullName: 'Resource 1',
     name: 'Res1',
     language: 'myLanguage',
-    isResource: true,
+    type: 'resource',
   },
   {
     id: '2',
@@ -15,34 +17,94 @@ const projectsAndResources = [
     fullName: 'Resource 2',
     name: 'Res2',
     language: 'English',
-    isResource: true,
+    type: 'resource',
   },
   {
     id: '13',
     isEditable: true,
-    fullName: 'Project 4',
+    fullName: 'Project 4 - editable',
     name: 'Pr4',
     language: '2ndLanguage',
+    type: 'project',
   },
   {
     id: '14',
     isEditable: false,
-    fullName: 'Project 3',
+    fullName: 'Project 3 - read-only',
     name: 'Pr3',
     language: '2ndLanguage',
+    type: 'project',
   },
   {
     id: '25',
-    isEditable: false,
-    fullName: 'Project 5',
+    isEditable: true,
+    fullName: 'Project 5 - editable',
     name: 'Pr5',
     language: 'German',
-    isResource: true,
+    type: 'project',
+  },
+  {
+    id: '26',
+    isEditable: false,
+    fullName: 'SDBH/SDBG',
+    name: 'SdDict',
+    language: 'Hebrew/Greek',
+    type: 'dictionary',
   },
 ];
 
+const staticProjectsAndResources: SharedProjectsInfo = {
+  '13': {
+    id: '13',
+    name: 'Pr4-fromRemote',
+    fullName: 'Project 4 - fromRemote-wasEditable',
+    language: '2ndLanguage-fromRemote',
+    editedStatus: 'edited',
+    lastSendReceiveDate: '2023-10-01T12:00:00Z',
+  },
+  '17': {
+    id: '17',
+    name: 'Pr7-fromRemote',
+    fullName: 'Project 7 - fromRemote',
+    language: '2ndLanguage-fromRemote',
+    editedStatus: 'new',
+    lastSendReceiveDate: '',
+  },
+};
+
 export function HomeExample() {
-  return <HomeDialog staticProjectResourceList={projectsAndResources}></HomeDialog>;
+  const [localProjectsAndResources, setLocalProjectsAndResources] = useState<LocalProjectInfo[]>(
+    [],
+  );
+  const [isLoadingLocalProjects, setIsLoadingLocalProjects] = useState<boolean>(true);
+
+  setTimeout(() => {
+    setLocalProjectsAndResources(staticLocalProjectsAndResources);
+    setIsLoadingLocalProjects(false);
+  }, 500);
+
+  const [sharedProjectsAndResources, setSharedProjectsAndResources] = useState<SharedProjectsInfo>(
+    {},
+  );
+  const [isLoadingRemoteProjects, setIsLoadingRemoteProjects] = useState<boolean>(true);
+  setTimeout(() => {
+    setSharedProjectsAndResources(staticProjectsAndResources);
+    setIsLoadingRemoteProjects(false);
+  }, 2000);
+
+  return (
+    <HomeDialog
+      localizedStrings={{
+        '%resources_open%': 'Open',
+        '%resources_sync%': 'Sync',
+        '%resources_get%': 'Get',
+      }}
+      localProjectResourceInfo={localProjectsAndResources}
+      isLoadingLocalProjects={isLoadingLocalProjects}
+      sharedProjectsInfo={sharedProjectsAndResources}
+      isLoadingRemoteProjects={isLoadingRemoteProjects}
+    />
+  );
 }
 
 export default HomeExample;
