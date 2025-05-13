@@ -4,6 +4,7 @@
 /// <reference types="node" />
 /// <reference types="node" />
 /// <reference types="node" />
+/// <reference types="better-sqlite3" />
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**
@@ -4955,6 +4956,13 @@ declare module 'shared/data/file-system.model' {
    *
    * Note: projects are stored in the production version of `app://projects` regardless of whether you
    * are in production or development
+   *
+   * Note: This kind of Uris does not include extension Uris, which support an additional set of
+   * schemes and are only available for use in the extension host.
+   *
+   * You can convert from a `Uri` to a file path using `getPathFromUri`.
+   *
+   * You can convert from an Extension Uri to a Uri using `getUriFromExtensionUri`.
    */
   export type Uri = string;
 }
@@ -5189,8 +5197,8 @@ declare module 'extension-host/services/extension-storage.service' {
    * extension service or it causes a circular dependency.
    */
   export function setExtensionUris(urisPerExtension: Map<string, string>): void;
-  /** Return a path to the specified file within the extension's installation directory */
-  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
+  /** Return a URI to the specified file within the extension's installation directory */
+  export function buildExtensionUriFromName(extensionName: string, fileName: string): string;
   /**
    * Read a text file from the the extension's installation directory
    *
@@ -6796,6 +6804,141 @@ declare module 'shared/services/menu-data.service' {
   export const menuDataService: IMenuDataService;
   export default menuDataService;
 }
+declare module 'shared/services/database.service-model' {
+  import Sqlite3 from 'better-sqlite3';
+  import { OnDidDispose } from 'platform-bible-utils';
+  import { IDataProvider } from '@papi/core';
+  /**
+   *
+   * This name is used to register the database service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const databaseServiceProviderName = 'platform.databaseServiceDataProvider';
+  export const databaseServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the database service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.databaseServiceDataProvider';
+  }>;
+  export type DatabaseDataTypes = {};
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [databaseServiceProviderName]: IDatabaseService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
+   * database using `openDatabase`, and then run queries on it using `run` or `getAll`. You can also
+   * attach and detach databases to the current database instance using `attachDatabase` and
+   * `detachDatabase`.
+   *
+   * Make sure to call `closeDatabase` on any database you open with `openDatabase` to avoid memory
+   * leaks.
+   */
+  export type IDatabaseService = {
+    /**
+     * Open a database file into a new database instance. Only those who have the returned `nonce` can
+     * access this database, so only share it with those you trust.
+     *
+     * WARNING: You must call `closeDatabase` on any database you open with this method. If you do
+     * not, you will leak memory, and indeterminate behavior may occur. Read more from [SQLite
+     * documentation](https://www.sqlite.org/c3ref/close.html)
+     *
+     * @param extensionFileUri - The file URL of the SQLite database. This can only be an extension
+     *   asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
+     * @param options - Options to pass to the `better-sqlite3` Database constructor.
+     * @returns A nonce that must be used to access the database with other methods.
+     */
+    openDatabase(extensionFileUri: string, options?: Sqlite3.Options): Promise<string>;
+    /**
+     * Close a database instance.
+     *
+     * WARNING: You must call this method to close any database you open with `openDatabase`.
+     *
+     * @param databaseNonce - The nonce of the database to close. You get this nonce from
+     *   `openDatabase`.
+     */
+    closeDatabase(databaseNonce: string): Promise<void>;
+    /**
+     * Attach a database file to an existing open database instance.
+     *
+     * Runs the SQLite [`ATTACH DATABASE`](https://sqlite.org/lang_attach.html) command on the
+     * database associated with the provided nonce.
+     *
+     * WARNING: Each database instance can have at most 10 attached databases.
+     *
+     * @param databaseNonce - The nonce of the database to attach to. You get this nonce from
+     *   `openDatabase`.
+     * @param extensionFileUri - The file URI of the SQLite database to attach. This can only be an
+     *   extension asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
+     * @param schemaName - The schema name to associate with the attached database.
+     * @returns A promise that resolves when the database is successfully attached.
+     */
+    attachDatabase(
+      databaseNonce: string,
+      extensionFileUri: string,
+      schemaName: string,
+    ): Promise<void>;
+    /**
+     * Detach a database file from an existing open database instance.
+     *
+     * Runs the SQLite [`DETACH DATABASE`](https://sqlite.org/lang_detach.html) command on the
+     * database associated with the provided nonce.
+     *
+     * @param databaseNonce - The nonce of the database to detach from. You get this nonce from
+     *   `openDatabase`.
+     * @param schemaName - The schema name to associate with the attached database.
+     * @returns A promise that resolves when the database is successfully detached.
+     */
+    detachDatabase(databaseNonce: string, schemaName: string): Promise<void>;
+    /**
+     * Execute a query on a specific database instance and receive some information about changes you
+     * made.
+     *
+     * This method is used for queries that modify the database such as `INSERT`, `UPDATE`, `DELETE`,
+     * and some `PRAGMA` queries. For queries that return data like `SELECT`, use `select`.
+     *
+     * @param databaseNonce - The nonce of the database to query. You get this nonce from
+     *   `openDatabase`.
+     * @param query - The SQL query to execute.
+     * @param args - Optional arguments to pass into the query. See [`better-sqlite3` documentation on
+     *   binding
+     *   parameters](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md#binding-parameters)
+     *   for more information
+     * @returns A promise that resolves to the result of the query execution.
+     */
+    run(databaseNonce: string, query: string, ...args: unknown[]): Promise<Sqlite3.RunResult>;
+    /**
+     * Execute a query on a specific database instance and receive all rows returned from the query.
+     *
+     * This method is used for queries that return data like `SELECT` and some `PRAGMA` queries. For
+     * queries that modify the database such as `INSERT`, `UPDATE`, and `DELETE`, use `run`.
+     *
+     * Note: This method is not only for `SELECT` queries but is for any queries that return data. It
+     * is named `select` for ease of association.
+     *
+     * @param databaseNonce - The nonce of the database to query. You get this nonce from
+     *   `openDatabase`.
+     * @param query - The SQL query to execute.
+     * @param args - Optional arguments to pass into the query. See [`better-sqlite3` documentation on
+     *   binding
+     *   parameters](https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md#binding-parameters)
+     *   for more information
+     * @returns A promise that resolves to an array of rows retrieved by the query.
+     */
+    select(databaseNonce: string, query: string, ...args: unknown[]): Promise<unknown[]>;
+  } & OnDidDispose &
+    typeof databaseServiceObjectToProxy &
+    IDataProvider<DatabaseDataTypes>;
+}
+declare module 'shared/services/database.service' {
+  import { IDatabaseService } from 'shared/services/database.service-model';
+  export const databaseService: IDatabaseService;
+  export default databaseService;
+}
 declare module 'shared/services/scroll-group.service' {
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   /**
@@ -7244,6 +7387,7 @@ declare module '@papi/backend' {
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { IDatabaseService } from 'shared/services/database.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
   import { MinimalNetworkObjectService } from 'shared/services/network-object.service';
@@ -7474,6 +7618,17 @@ declare module '@papi/backend' {
      * Service that allows to get and store menu data
      */
     menuData: IMenuDataService;
+    /**
+     *
+     * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
+     * database using `openDatabase`, and then run queries on it using `run` or `getAll`. You can also
+     * attach and detach databases to the current database instance using `attachDatabase` and
+     * `detachDatabase`.
+     *
+     * Make sure to call `closeDatabase` on any database you open with `openDatabase` to avoid memory
+     * leaks.
+     */
+    database: IDatabaseService;
     /**
      *
      * Provides functions related to scroll groups and Scripture references at those scroll groups
@@ -7711,6 +7866,17 @@ declare module '@papi/backend' {
    * Service that allows to get and store menu data
    */
   export const menuData: IMenuDataService;
+  /**
+   *
+   * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
+   * database using `openDatabase`, and then run queries on it using `run` or `getAll`. You can also
+   * attach and detach databases to the current database instance using `attachDatabase` and
+   * `detachDatabase`.
+   *
+   * Make sure to call `closeDatabase` on any database you open with `openDatabase` to avoid memory
+   * leaks.
+   */
+  export const database: IDatabaseService;
   /**
    *
    * Provides functions related to scroll groups and Scripture references at those scroll groups
