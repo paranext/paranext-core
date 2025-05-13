@@ -64,7 +64,8 @@ export type IDatabaseService = {
    *
    * WARNING: You must call `closeDatabase` on any database you open with this method.
    *
-   * @param fileUri - The file URL of the SQLite database.
+   * @param fileUri - The file URL of the SQLite database. This can only be an extension asset URI
+   *   like `papi-extension://<extension-name>/assets/<path-to-asset>`.
    * @param options - Options to pass to the `better-sqlite3` Database constructor.
    * @returns A nonce that must be used to access the database with other methods.
    */
@@ -90,7 +91,8 @@ export type IDatabaseService = {
    *
    * @param databaseNonce - The nonce of the database to attach to. You get this nonce from
    *   `openDatabase`.
-   * @param fileUri - The file URI of the SQLite database to attach.
+   * @param fileUri - The file URI of the SQLite database to attach. This can only be an extension
+   *   asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
    * @param schemaName - The schema name to associate with the attached database.
    * @returns A promise that resolves when the database is successfully attached.
    */

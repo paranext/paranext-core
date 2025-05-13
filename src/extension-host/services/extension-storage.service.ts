@@ -39,13 +39,13 @@ function sanitizeDirectoryName(str: string): string {
 }
 
 /** Return a path to the specified file within the extension's installation directory */
-function buildExtensionPathFromToken(token: ExecutionToken, fileName: string): string {
+function buildExtensionUriFromToken(token: ExecutionToken, fileName: string): string {
   if (!executionTokenService.tokenIsValid(token)) throw new Error('Invalid token');
-  return buildExtensionPathFromName(token.name, fileName);
+  return buildExtensionUriFromName(token.name, fileName);
 }
 
-/** Return a path to the specified file within the extension's installation directory */
-export function buildExtensionPathFromName(extensionName: string, fileName: string): string {
+/** Return a URI to the specified file within the extension's installation directory */
+export function buildExtensionUriFromName(extensionName: string, fileName: string): string {
   const baseUri: string | undefined = registeredUrisPerExtension.get(extensionName);
   if (!baseUri) throw new Error(`Extension directory for ${extensionName} is not known`);
 
@@ -64,7 +64,7 @@ export function buildExtensionPathFromName(extensionName: string, fileName: stri
  * 2. The current user (as identified by the OS), and
  * 3. The key provided by the extension
  */
-function buildUserDataPath(token: ExecutionToken, key: string): string {
+function buildUserDataUri(token: ExecutionToken, key: string): string {
   if (!executionTokenService.tokenIsValid(token)) throw new Error('Invalid token');
   const subDir: string = sanitizeDirectoryName(token.name);
   if (!subDir || stringLength(subDir) === 0) throw new Error('Bad extension name');
@@ -93,7 +93,7 @@ async function readTextFileFromInstallDirectory(
   token: ExecutionToken,
   fileName: string,
 ): Promise<string> {
-  return readFileText(buildExtensionPathFromToken(token, fileName));
+  return readFileText(buildExtensionUriFromToken(token, fileName));
 }
 
 /**
@@ -107,7 +107,7 @@ async function readBinaryFileFromInstallDirectory(
   token: ExecutionToken,
   fileName: string,
 ): Promise<Buffer> {
-  return readFileBinary(buildExtensionPathFromToken(token, fileName));
+  return readFileBinary(buildExtensionUriFromToken(token, fileName));
 }
 
 /**
@@ -120,7 +120,7 @@ async function readBinaryFileFromInstallDirectory(
  */
 async function readUserData(token: ExecutionToken, key: string): Promise<string> {
   // This could be changed to some store other than the file system
-  return readFileText(buildUserDataPath(token, key));
+  return readFileText(buildUserDataUri(token, key));
 }
 
 /**
@@ -134,7 +134,7 @@ async function readUserData(token: ExecutionToken, key: string): Promise<string>
  */
 async function writeUserData(token: ExecutionToken, key: string, data: string): Promise<void> {
   // This could be changed to some store other than the file system
-  return writeFile(buildUserDataPath(token, key), data);
+  return writeFile(buildUserDataUri(token, key), data);
 }
 
 /**
@@ -146,7 +146,7 @@ async function writeUserData(token: ExecutionToken, key: string, data: string): 
  * @returns Promise that will resolve if the data is deleted successfully
  */
 async function deleteUserData(token: ExecutionToken, key: string): Promise<void> {
-  return deleteFile(buildUserDataPath(token, key));
+  return deleteFile(buildUserDataUri(token, key));
 }
 
 // #endregion

@@ -20,5 +20,12 @@
  *
  * Note: projects are stored in the production version of `app://projects` regardless of whether you
  * are in production or development
+ *
+ * Note: This kind of Uris does not include extension Uris, which support an additional set of
+ * schemes and are only available for use in the extension host.
+ *
+ * You can convert from a `Uri` to a file path using `getPathFromUri`.
+ *
+ * You can convert from an Extension Uri to a Uri using `getUriFromExtensionUri`.
  */
 export type Uri = string;

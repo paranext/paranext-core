@@ -12,8 +12,9 @@ import {
 } from '@shared/services/database.service-model';
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { newNonce } from '@shared/utils/util';
-import { getPathFromUri } from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
+import { getUriFromExtensionUri } from '@extension-host/services/asset-retrieval.service';
+import { getPathFromUri } from '@node/utils/util';
 
 // Need to make sure `bindings` gets loaded before replacing `require` so the excluded package
 // `better-sqlite3` can import it on the fly internally
@@ -35,7 +36,7 @@ class DatabaseDataProviderEngine
   }
 
   async openDatabase(fileUri: Uri, options?: Sqlite3.Options): Promise<string> {
-    const db = new Sqlite3(getPathFromUri(fileUri), options);
+    const db = new Sqlite3(getPathFromUri(getUriFromExtensionUri(fileUri)), options);
     const nonce = newNonce();
     this.#databases.set(nonce, db);
     return nonce;
@@ -51,7 +52,10 @@ class DatabaseDataProviderEngine
   async attachDatabase(databaseNonce: string, fileUri: Uri, schemaName: string): Promise<void> {
     const db = this.#getDatabase(databaseNonce);
 
-    db.prepare(`ATTACH DATABASE ? AS ?`).run(getPathFromUri(fileUri), schemaName);
+    db.prepare(`ATTACH DATABASE ? AS ?`).run(
+      getPathFromUri(getUriFromExtensionUri(fileUri)),
+      schemaName,
+    );
   }
 
   async detachDatabase(databaseNonce: string, name: string): Promise<void> {
