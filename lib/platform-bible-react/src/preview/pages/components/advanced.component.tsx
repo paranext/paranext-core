@@ -24,7 +24,7 @@ import { columns, data } from './data-sources/data-table-content';
 import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.component';
 import { SettingSidebarContentSearchExamples } from './advanced/settings-sidebar-content-search.example.component';
 import { PlatformMenubarExample } from './advanced/platform-menubar-example.component';
-import HomeExample from './advanced/home.example.component';
+import { HomeExample } from './advanced/home.example.component';
 import { ScopeSelectorExample } from './advanced/scope-selector-example.component';
 
 export function Compositions() {

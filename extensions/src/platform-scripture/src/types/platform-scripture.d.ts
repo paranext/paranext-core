@@ -1042,6 +1042,7 @@ declare module 'platform-scripture' {
 
   // #endregion
   // #region Send/Receive Types
+  //TODO: can we just remove them from here and use those from platform-bible-utils? Which extension uses them?
 
   /**
    * In what state the project to S/R is
