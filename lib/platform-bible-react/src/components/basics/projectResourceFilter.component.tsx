@@ -6,18 +6,21 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { cn } from '@/utils/shadcn-ui.util';
-import { BookOpen, ScrollText } from 'lucide-react';
+import { ProjectType, ProjectTypeKey } from 'platform-bible-utils';
 
+export type ProjectResourceFilterValue = ProjectTypeKey | 'all';
 export type ProjectResourceFilterProps = {
-  defaultValue?: 'projects' | 'resources' | 'all';
-  onChange: (value: string) => void;
+  defaultValue?: ProjectResourceFilterValue;
+  onChange: (value: ProjectResourceFilterValue) => void;
   variant?: 'default' | 'ghost';
+  types: ProjectType[];
 };
 
 export default function ProjectResourceFilter({
   defaultValue,
   onChange,
   variant,
+  types,
 }: ProjectResourceFilterProps) {
   return (
     <Select defaultValue={defaultValue ?? 'all'} onValueChange={onChange}>
@@ -31,22 +34,19 @@ export default function ProjectResourceFilter({
       </SelectTrigger>
       <SelectContent position="popper">
         <SelectItem value="all">All</SelectItem>
-        <SelectItem value="projects">
-          <div className="tw-align-center tw-flex tw-justify-start tw-gap-2">
-            <div>
-              <ScrollText className="tw-w-4" />
-            </div>
-            <div>Projects</div>
-          </div>
-        </SelectItem>
-        <SelectItem value="resources">
-          <div className="tw-align-center tw-flex tw-justify-start tw-gap-2">
-            <div>
-              <BookOpen className="tw-w-4" />
-            </div>
-            <div>Resources</div>
-          </div>
-        </SelectItem>
+        {types.map((type: ProjectType) => {
+          const Icon = type.icon;
+          return (
+            <SelectItem value={type.key} key={type.key}>
+              <div className="tw-align-center tw-flex tw-justify-start tw-gap-2">
+                <div>
+                  <Icon className="tw-h-4 tw-pr-0" />
+                </div>
+                <div>{type.localizedName}</div>
+              </div>
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );

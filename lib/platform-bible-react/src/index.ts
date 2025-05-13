@@ -162,6 +162,7 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
+export * from './components/advanced/filterable-resource-list/home.component';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

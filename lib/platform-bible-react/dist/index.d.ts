@@ -141,6 +141,36 @@ type LocalizedStringValue = string;
 interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
+type EditedStatus = undefined | "" | "edited" | "new" | "unregistered";
+type SharedProjectInfo = {
+	id: string;
+	name: string;
+	fullName: string;
+	language: string;
+	editedStatus: EditedStatus;
+	lastSendReceiveDate: string;
+	/** Names of admins on this project. Only filled if project is new */
+	adminNames?: string[];
+	warnings?: string[];
+};
+type SharedProjectsInfo = {
+	[projectId: string]: SharedProjectInfo;
+};
+type LocalProjectInfo = {
+	id: string;
+	isEditable: boolean;
+	fullName: string;
+	name: string;
+	language: string;
+	type: ProjectTypeKey;
+};
+declare const PROJECT_TYPE_KEYS: readonly [
+	"project",
+	"resource",
+	"dictionary",
+	"media"
+];
+type ProjectTypeKey = (typeof PROJECT_TYPE_KEYS)[number];
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -1627,6 +1657,21 @@ export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
 export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Tooltip */
 export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export type HomeDialogProps = {
+	localizedStrings?: LanguageStrings;
+	uiLocales?: Intl.LocalesArgument;
+	onOpenGetResources?: () => void;
+	onOpenResourceOrProject?: (projectId: string, isEditable: boolean) => void;
+	onSendReceiveProject?: (projectId: string) => void;
+	showGetResourcesButton?: boolean;
+	isSendReceiveInProgress?: boolean;
+	isLoadingLocalProjects?: boolean;
+	isLoadingRemoteProjects?: boolean;
+	localProjectResourceInfo?: LocalProjectInfo[];
+	sharedProjectsInfo?: SharedProjectsInfo;
+	activeSendReceiveProjects?: string[];
+};
+export declare function HomeDialog({ localizedStrings, uiLocales, onOpenGetResources, onOpenResourceOrProject, onSendReceiveProject, showGetResourcesButton, isSendReceiveInProgress, isLoadingLocalProjects, isLoadingRemoteProjects, localProjectResourceInfo, sharedProjectsInfo, activeSendReceiveProjects, }: HomeDialogProps): import("react/jsx-runtime").JSX.Element;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

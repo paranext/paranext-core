@@ -1,10 +1,33 @@
 import ProjectResourceFilter from '@/components/basics/projectResourceFilter.component';
+import { Ear, Earth, Rss } from 'lucide-react';
+import { ProjectType } from 'platform-bible-utils';
+
+const types: ProjectType[] = [
+  {
+    key: 'project',
+    localizedName: 'Earth',
+    icon: Earth,
+    actions: [],
+  },
+  {
+    key: 'resource',
+    localizedName: 'Radio-signal',
+    icon: Rss,
+    actions: [],
+  },
+  {
+    key: 'dictionary',
+    localizedName: 'Audio',
+    icon: Ear,
+    actions: [],
+  },
+];
 
 export function ProjectResourceFilterExamples() {
   return (
     <>
-      <ProjectResourceFilter onChange={() => {}} />
-      <ProjectResourceFilter onChange={() => {}} variant="ghost" />
+      <ProjectResourceFilter types={types} onChange={() => {}} />
+      <ProjectResourceFilter types={types} onChange={() => {}} variant="ghost" />
     </>
   );
 }
