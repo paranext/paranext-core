@@ -81,8 +81,8 @@
     --accent-foreground: 210 40% 98%; /* slate-50 */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%; /* slate-50 */
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 215.3 19.3% 34.5%; /* slate-600 */
+    --input: 215.3 19.3% 34.5%; /* slate-600 */
     --ring: 212.7 26.8% 83.9%;
 
     --sidebar-background: 222.2 84% 4.9%; /* black */
@@ -160,13 +160,14 @@
 }
 /* #endregion */
 
-/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css but with the difference of being scoped to .pr-twp here */
+/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css */
+/* copied from https://ui.shadcn.com/docs/installation/manual#configure-styles */
 @layer base {
-  .pr-twp {
-    @apply tw-border-border;
+  * {
+    @apply tw-border-border tw-outline-ring/50;
   }
 
-  body .pr-twp {
+  body {
     @apply tw-bg-background tw-text-foreground;
   }
 }

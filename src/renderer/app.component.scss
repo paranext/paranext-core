@@ -6,9 +6,8 @@
  */
 body {
   position: relative;
-  color: white;
   height: 100vh;
-  background: vars.$color--background;
+  background: hsl(var(--background));
   font-family: vars.$font-family;
   overflow-y: hidden;
   display: flex;
@@ -18,6 +17,7 @@ body {
 }
 
 #root {
+  background: vars.$color--background;
   width: 100%;
   height: 100%;
   display: flex;
