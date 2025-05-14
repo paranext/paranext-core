@@ -229,7 +229,7 @@ globalThis.webViewComponent = function HomeDialogWebView() {
           const isEditable = await pdp.getSetting('platform.isEditable');
           return {
             id: data.id,
-            isEditable: isEditable,
+            isEditable,
             fullName: await pdp.getSetting('platform.fullName'),
             name: await pdp.getSetting('platform.name'),
             language: await pdp.getSetting('platform.language'),
