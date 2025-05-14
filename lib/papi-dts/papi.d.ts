@@ -6806,32 +6806,12 @@ declare module 'shared/services/menu-data.service' {
 }
 declare module 'shared/services/database.service-model' {
   import Sqlite3 from 'better-sqlite3';
-  import { OnDidDispose } from 'platform-bible-utils';
-  import { IDataProvider } from '@papi/core';
-  /**
-   *
-   * This name is used to register the database service data provider on the papi. You can use this
-   * name to find the data provider when accessing it using the useData hook
-   */
-  export const databaseServiceProviderName = 'platform.databaseServiceDataProvider';
-  export const databaseServiceObjectToProxy: Readonly<{
-    /**
-     *
-     * This name is used to register the database service data provider on the papi. You can use this
-     * name to find the data provider when accessing it using the useData hook
-     */
-    dataProviderName: 'platform.databaseServiceDataProvider';
-  }>;
-  export type DatabaseDataTypes = {};
-  module 'papi-shared-types' {
-    interface DataProviders {
-      [databaseServiceProviderName]: IDatabaseService;
-    }
-  }
+  export const databaseServiceNetworkObjectName = 'DatabaseService';
+  export const databaseServiceObjectToProxy: Readonly<{}>;
   /**
    *
    * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
-   * database using `openDatabase`, and then run queries on it using `run` or `getAll`. You can also
+   * database using `openDatabase`, and then run queries on it using `run` or `select`. You can also
    * attach and detach databases to the current database instance using `attachDatabase` and
    * `detachDatabase`.
    *
@@ -6930,9 +6910,7 @@ declare module 'shared/services/database.service-model' {
      * @returns A promise that resolves to an array of rows retrieved by the query.
      */
     select(databaseNonce: string, query: string, ...args: unknown[]): Promise<unknown[]>;
-  } & OnDidDispose &
-    typeof databaseServiceObjectToProxy &
-    IDataProvider<DatabaseDataTypes>;
+  } & typeof databaseServiceObjectToProxy;
 }
 declare module 'shared/services/database.service' {
   import { IDatabaseService } from 'shared/services/database.service-model';
@@ -7621,7 +7599,7 @@ declare module '@papi/backend' {
     /**
      *
      * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
-     * database using `openDatabase`, and then run queries on it using `run` or `getAll`. You can also
+     * database using `openDatabase`, and then run queries on it using `run` or `select`. You can also
      * attach and detach databases to the current database instance using `attachDatabase` and
      * `detachDatabase`.
      *
@@ -7869,7 +7847,7 @@ declare module '@papi/backend' {
   /**
    *
    * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
-   * database using `openDatabase`, and then run queries on it using `run` or `getAll`. You can also
+   * database using `openDatabase`, and then run queries on it using `run` or `select`. You can also
    * attach and detach databases to the current database instance using `attachDatabase` and
    * `detachDatabase`.
    *

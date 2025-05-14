@@ -1,21 +1,26 @@
 import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
-import { dataProviderService } from '@shared/services/data-provider.service';
+import { networkObjectService } from '@shared/services/network-object.service';
 import {
   IDatabaseService,
   databaseServiceObjectToProxy,
-  databaseServiceProviderName,
+  databaseServiceNetworkObjectName,
 } from '@shared/services/database.service-model';
 
-let dataProvider: IDatabaseService;
+let networkObject: IDatabaseService;
 let initializationPromise: Promise<void>;
 async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          const provider = await dataProviderService.get(databaseServiceProviderName);
-          if (!provider) throw new Error('Database service undefined');
-          dataProvider = provider;
+          const localDatabaseService = await networkObjectService.get<IDatabaseService>(
+            databaseServiceNetworkObjectName,
+          );
+          if (!localDatabaseService)
+            throw new Error(
+              `${databaseServiceNetworkObjectName} is not available as a network object`,
+            );
+          networkObject = localDatabaseService;
           resolve();
         } catch (error) {
           reject(error);
@@ -29,7 +34,7 @@ async function initialize(): Promise<void> {
 
 export const databaseService = createSyncProxyForAsyncObject<IDatabaseService>(async () => {
   await initialize();
-  return dataProvider;
+  return networkObject;
 }, databaseServiceObjectToProxy);
 
 export default databaseService;

@@ -1,9 +1,6 @@
 import Sqlite3 from 'better-sqlite3';
-import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
-import { dataProviderService } from '@shared/services/data-provider.service';
 import {
-  DatabaseDataTypes,
-  databaseServiceProviderName,
+  databaseServiceNetworkObjectName,
   IDatabaseService,
   databaseServiceObjectToProxy,
 } from '@shared/services/database.service-model';
@@ -11,6 +8,7 @@ import { createSyncProxyForAsyncObject } from 'platform-bible-utils';
 import { newNonce } from '@shared/utils/util';
 import { getUriFromExtensionUri } from '@extension-host/services/asset-retrieval.service';
 import { getPathFromUri } from '@node/utils/util';
+import { networkObjectService } from '@shared/services/network-object.service';
 
 // Need to make sure `bindings` gets loaded before replacing `require` so the excluded package
 // `better-sqlite3` can import it on the fly internally
@@ -18,10 +16,7 @@ import { getPathFromUri } from '@node/utils/util';
 const tempDb = Sqlite3(':memory:');
 tempDb.close();
 
-class DatabaseDataProviderEngine
-  extends DataProviderEngine<DatabaseDataTypes>
-  implements IDataProviderEngine<DatabaseDataTypes>
-{
+class DatabaseService implements IDatabaseService {
   #databases: Map<string, Sqlite3.Database> = new Map();
 
   async openDatabase(extensionFileUri: string, options?: Sqlite3.Options): Promise<string> {
@@ -89,16 +84,15 @@ class DatabaseDataProviderEngine
 }
 
 let initializationPromise: Promise<void>;
-let dataProvider: IDatabaseService;
+let databaseServiceNetworkObject: IDatabaseService;
 export async function initialize(): Promise<void> {
   if (!initializationPromise) {
     initializationPromise = new Promise<void>((resolve, reject) => {
       const executor = async () => {
         try {
-          dataProvider = await dataProviderService.registerEngine(
-            databaseServiceProviderName,
-            // @ts-ignore
-            new DatabaseDataProviderEngine(),
+          databaseServiceNetworkObject = await networkObjectService.set<IDatabaseService>(
+            databaseServiceNetworkObjectName,
+            new DatabaseService(),
           );
           resolve();
         } catch (error) {
@@ -111,11 +105,11 @@ export async function initialize(): Promise<void> {
   return initializationPromise;
 }
 
-// This will be needed later for disposing of the data provider, choosing to ignore instead of
+// This will be needed later for disposing of the network object, choosing to ignore instead of
 // remove code that will be used later
 // @ts-ignore 6133
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const databaseService = createSyncProxyForAsyncObject<IDatabaseService>(async () => {
   await initialize();
-  return dataProvider;
+  return databaseServiceNetworkObject;
 }, databaseServiceObjectToProxy);
