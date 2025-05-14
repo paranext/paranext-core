@@ -1,5 +1,5 @@
-import { BookA, BookOpen, ImageIcon, ScrollText } from "lucide-react";
-import { ProjectType, ProjectTypeKey } from "project-type";
+import { BookA, BookOpen, ImageIcon, ScrollText } from 'lucide-react';
+import { ProjectType, ProjectTypeKey } from 'project-type';
 
 export const ProjectTypes: Record<ProjectTypeKey, ProjectType> = {
   project: {
