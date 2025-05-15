@@ -172,13 +172,16 @@
  */
 /* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css but with the difference of being scoped to .pr-twp here */
 
- @layer base {
+@layer base {
   .pr-twp {
     @apply tw-border-border tw-outline-ring/50;
   }
 
+  /**
+    * disabled because tslint does not like it, but it is the selector that's needed
+    */
+  /* stylelint-disable-next-line selector-no-qualifying-type */
   body.pr-twp {
     @apply tw-bg-background tw-text-foreground;
   }
 }
-
