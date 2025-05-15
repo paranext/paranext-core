@@ -1,5 +1,5 @@
 import React from 'react';
-
+import { getCurrentTableSection, getFocusableElements } from '@/utils/focus.util';
 import { cn } from '@/utils/shadcn-ui.util';
 
 /**
@@ -9,8 +9,8 @@ import { cn } from '@/utils/shadcn-ui.util';
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement> & { stickyHeader?: boolean }
->(({ className, stickyHeader, ...props }, ref) => (
-  <div className={cn('pr-twp tw-relative tw-w-full', { 'tw-overflow-auto': !stickyHeader })}>
+>(({ className, ...props }, ref) => (
+  <div className={cn('pr-twp tw-relative tw-w-full')}>
     <table
       ref={ref}
       className={cn('tw-w-full tw-caption-bottom tw-text-sm', className)}
@@ -64,7 +64,7 @@ TableFooter.displayName = 'TableFooter';
 const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
   ({ className, onKeyDown, onSelect, ...props }, ref) => {
     // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
-    // useRef uses null not undefined
+    // This ref gets passed into the table row ref property which expects null and not undefined
     // eslint-disable-next-line no-null/no-null
     const rowRef = React.useRef<HTMLTableRowElement>(null);
 
@@ -72,30 +72,71 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
     React.useEffect(() => {
       if (typeof ref === 'function') {
         ref(rowRef.current);
-      } else if (ref) {
-        if (ref && 'current' in ref) {
-          ref.current = rowRef.current;
-        }
+      } else if (ref && 'current' in ref) {
+        ref.current = rowRef.current;
       }
     }, [ref]);
 
-    // CUSTOM: Handle arrow key navigation and Enter key selection
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
-      const { current } = rowRef;
-      if (!current || !current.parentElement) return;
+      const { current: currentRow } = rowRef;
+      if (!currentRow || !currentRow.parentElement) return;
 
-      // Get all focusable rows to enable up/down navigation
-      const rows = Array.from(
-        current.parentElement.querySelectorAll<HTMLTableRowElement>('tr[tabindex="0"]'),
+      const rowsInTableSection = Array.from(
+        currentRow.parentElement.querySelectorAll<HTMLTableRowElement>('tr[tabindex="0"]'),
       );
-      const currentIndex = rows.indexOf(current);
+      const currentRowIndex = rowsInTableSection.indexOf(currentRow);
+
+      const allFocusableElements = getFocusableElements(document.body);
+      const focusablesInRow = getFocusableElements(currentRow);
+      const currentIndexOfFocusables = focusablesInRow.indexOf(
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        document.activeElement as HTMLElement,
+      );
+      const currentSection = getCurrentTableSection(currentRow);
 
       let nextRow: HTMLTableRowElement | undefined;
 
-      if (e.key === 'ArrowDown' && currentIndex < rows.length - 1) {
-        nextRow = rows[currentIndex + 1];
-      } else if (e.key === 'ArrowUp' && currentIndex > 0) {
-        nextRow = rows[currentIndex - 1];
+      if (e.key === 'Tab') {
+        if (currentSection === 'tbody') {
+          e.preventDefault();
+          // If there are no focusable elements or you're on the last focusable element in the row
+          if (
+            currentIndexOfFocusables === focusablesInRow.length - 1 ||
+            focusablesInRow.length === 0
+          ) {
+            // Move focus to the first row in the footer
+            const footer =
+              currentRow.parentElement?.parentElement?.querySelector('tfoot tr[tabindex="0"]');
+            if (footer) {
+              // eslint-disable-next-line no-type-assertion/no-type-assertion
+              (footer as HTMLElement).focus();
+            } else {
+              const table = currentRow.closest('table');
+              const currentIndex = allFocusableElements.indexOf(currentRow);
+
+              // Move focus to the next focusable element in the document
+              let foundNext = false;
+              for (let i = currentIndex + 1; i < allFocusableElements.length; i++) {
+                const el = allFocusableElements[i];
+                if (!table?.contains(el)) {
+                  el.focus();
+                  foundNext = true;
+                  break;
+                }
+              }
+              if (!foundNext) {
+                console.log('No focusable after table. Looping to top of document...');
+                allFocusableElements[0]?.focus();
+              }
+            }
+          }
+          // Else, move through focusable elements in the row
+          focusablesInRow[currentIndexOfFocusables + 1]?.focus();
+        }
+      } else if (e.key === 'ArrowDown' && currentRowIndex < rowsInTableSection.length - 1) {
+        nextRow = rowsInTableSection[currentRowIndex + 1];
+      } else if (e.key === 'ArrowUp' && currentRowIndex > 0) {
+        nextRow = rowsInTableSection[currentRowIndex - 1];
       } else if (e.key === 'Enter' && onSelect) {
         // Trigger selection handler on Enter key press, different than click handler
         e.preventDefault();
@@ -118,7 +159,9 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
         onKeyDown={handleKeyDown} // CUSTOM: Enable keyboard behavior
         className={cn(
           // CUSTOM: Add focus styles and add tw-outline-none so there isn't a duplicate outline
-          'tw-border-b tw-outline-none tw-transition-colors hover:tw-bg-muted/50 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-2 data-[state=selected]:tw-bg-muted',
+          'tw-border-b tw-outline-none tw-transition-colors hover:tw-bg-muted/50',
+          'focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+          'data-[state=selected]:tw-bg-muted',
           className,
         )}
         {...props}
