@@ -1042,7 +1042,6 @@ declare module 'platform-scripture' {
 
   // #endregion
   // #region Send/Receive Types
-  // TODO: can we just remove them from here and use those from platform-bible-utils? Which extension uses them?
 
   /**
    * In what state the project to S/R is
@@ -1051,27 +1050,17 @@ declare module 'platform-scripture' {
    * - `edited` = project has been edited
    * - `new` = project not present on the system and available for download
    */
-  export type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
+  export type { EditedStatus } from 'platform-bible-react';
 
   /** Information about a S/R-able project needed to display it in the S/R dialog */
-  export type SharedProjectInfo = {
-    id: string;
-    name: string;
-    fullName: string;
-    language: string;
-    editedStatus: EditedStatus;
-    lastSendReceiveDate: string;
-    /** Names of admins on this project. Only filled if project is new */
-    adminNames?: string[];
-    warnings?: string[];
-  };
+  export type { SharedProjectInfo } from 'platform-bible-react';
 
   /**
    * Map of projects that can be S/Red to display in the S/R dialog.
    *
    * Maps project id to {@link SharedProjectInfo} for that project id
    */
-  export type SharedProjectsInfo = { [projectId: string]: SharedProjectInfo };
+  export type { SharedProjectsInfo } from 'platform-bible-react';
 
   // #endregion
   // #region ChecksSetup Types

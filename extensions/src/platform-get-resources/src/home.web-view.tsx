@@ -1,6 +1,6 @@
 import papi, { logger } from '@papi/frontend';
 import { useData, useDataProvider, useLocalizedStrings, useSetting } from '@papi/frontend/react';
-import { HomeDialog, useEvent } from 'platform-bible-react';
+import { HomeDialog, useEvent, LocalProjectInfo, SharedProjectsInfo } from 'platform-bible-react';
 import {
   getErrorMessage,
   isErrorMessageAboutParatextBlockingInternetAccess,
@@ -8,8 +8,6 @@ import {
   isPlatformError,
   LocalizeKey,
   newGuid,
-  LocalProjectInfo,
-  SharedProjectsInfo,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
