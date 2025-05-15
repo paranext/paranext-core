@@ -20,7 +20,7 @@ body {
  */
 /*
  * The `body` selector above come from a specific place and should be preserved independent of this
- * selector, so disabling this rule here
+ * selector, so disabling this linting rule here
  */
 /* stylelint-disable-next-line no-duplicate-selectors */
 body {
