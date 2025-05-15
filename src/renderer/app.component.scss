@@ -35,6 +35,8 @@ body {
 }
 
 #root {
+  // if this color is transparent, the body background will shine through
+  background-color: hsl(var(--muted) / 0.5);
   width: 100%;
   height: 100%;
   display: flex;
