@@ -77,6 +77,82 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
       }
     }, [ref]);
 
+    // CUSTOM: Focus the next focusable element outside the table when tabbing out of the last row
+    const focusNextOutsideTable = (
+      currentRow: HTMLTableRowElement,
+      allFocusableElements: HTMLElement[],
+    ) => {
+      const table = currentRow.closest('table');
+      const currentIndex = allFocusableElements.indexOf(currentRow);
+
+      // Move focus to the next focusable element in the document
+      let foundNext = false;
+      for (let i = currentIndex + 1; i < allFocusableElements.length; i++) {
+        const el = allFocusableElements[i];
+        if (!table?.contains(el)) {
+          el.focus();
+          foundNext = true;
+          break;
+        }
+      }
+      if (!foundNext) {
+        // No focusable element after the table, loop to the top of the document
+        allFocusableElements[0]?.focus();
+      }
+    };
+
+    // CUSTOM: Move focus up or down to adjacent rows in the same table section
+    const focusAdjacentRow = (
+      rowsInTableSection: HTMLTableRowElement[],
+      currentRowIndex: number,
+      direction: 'up' | 'down',
+    ) => {
+      let nextRow: HTMLTableRowElement | undefined;
+      if (direction === 'down' && currentRowIndex < rowsInTableSection.length - 1) {
+        nextRow = rowsInTableSection[currentRowIndex + 1];
+      } else if (direction === 'up' && currentRowIndex > 0) {
+        nextRow = rowsInTableSection[currentRowIndex - 1];
+      }
+      if (nextRow) {
+        nextRow.focus();
+        return true;
+      }
+      return false;
+    };
+
+    // CUSTOM: Handle Tab key within a row, moving focus to footer or outside table as needed
+    const handleTabKey = (
+      e: React.KeyboardEvent<HTMLTableRowElement>,
+      currentRow: HTMLTableRowElement,
+      focusablesInRow: HTMLElement[],
+      currentIndexOfFocusables: number,
+      allFocusableElements: HTMLElement[],
+    ) => {
+      const currentSection = getCurrentTableSection(currentRow);
+      if (currentSection === 'tbody') {
+        e.preventDefault();
+        // If there are no focusable elements or you're on the last focusable element in the row
+        if (
+          currentIndexOfFocusables === focusablesInRow.length - 1 ||
+          focusablesInRow.length === 0
+        ) {
+          // Move focus to the first row in the footer
+          const footer =
+            currentRow.parentElement?.parentElement?.querySelector('tfoot tr[tabindex="0"]');
+          if (footer) {
+            // querySelector returns an Element, so we need to cast it to HTMLElement
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            (footer as HTMLElement).focus();
+          } else {
+            focusNextOutsideTable(currentRow, allFocusableElements);
+          }
+        }
+        // Else, move through focusable elements in the row
+        focusablesInRow[currentIndexOfFocusables + 1]?.focus();
+      }
+    };
+
+    // CUSTOM: Handle keydown events for keyboard navigation and Enter key selection, delegating to user handler
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
       const { current: currentRow } = rowRef;
       if (!currentRow || !currentRow.parentElement) return;
@@ -92,60 +168,27 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         document.activeElement as HTMLElement,
       );
-      const currentSection = getCurrentTableSection(currentRow);
-
-      let nextRow: HTMLTableRowElement | undefined;
 
       if (e.key === 'Tab') {
-        if (currentSection === 'tbody') {
+        handleTabKey(
+          e,
+          currentRow,
+          focusablesInRow,
+          currentIndexOfFocusables,
+          allFocusableElements,
+        );
+      } else if (e.key === 'ArrowDown') {
+        if (focusAdjacentRow(rowsInTableSection, currentRowIndex, 'down')) {
           e.preventDefault();
-          // If there are no focusable elements or you're on the last focusable element in the row
-          if (
-            currentIndexOfFocusables === focusablesInRow.length - 1 ||
-            focusablesInRow.length === 0
-          ) {
-            // Move focus to the first row in the footer
-            const footer =
-              currentRow.parentElement?.parentElement?.querySelector('tfoot tr[tabindex="0"]');
-            if (footer) {
-              // eslint-disable-next-line no-type-assertion/no-type-assertion
-              (footer as HTMLElement).focus();
-            } else {
-              const table = currentRow.closest('table');
-              const currentIndex = allFocusableElements.indexOf(currentRow);
-
-              // Move focus to the next focusable element in the document
-              let foundNext = false;
-              for (let i = currentIndex + 1; i < allFocusableElements.length; i++) {
-                const el = allFocusableElements[i];
-                if (!table?.contains(el)) {
-                  el.focus();
-                  foundNext = true;
-                  break;
-                }
-              }
-              if (!foundNext) {
-                console.log('No focusable after table. Looping to top of document...');
-                allFocusableElements[0]?.focus();
-              }
-            }
-          }
-          // Else, move through focusable elements in the row
-          focusablesInRow[currentIndexOfFocusables + 1]?.focus();
         }
-      } else if (e.key === 'ArrowDown' && currentRowIndex < rowsInTableSection.length - 1) {
-        nextRow = rowsInTableSection[currentRowIndex + 1];
-      } else if (e.key === 'ArrowUp' && currentRowIndex > 0) {
-        nextRow = rowsInTableSection[currentRowIndex - 1];
+      } else if (e.key === 'ArrowUp') {
+        if (focusAdjacentRow(rowsInTableSection, currentRowIndex, 'up')) {
+          e.preventDefault();
+        }
       } else if (e.key === 'Enter' && onSelect) {
         // Trigger selection handler on Enter key press, different than click handler
         e.preventDefault();
         onSelect(e);
-      }
-
-      if (nextRow) {
-        e.preventDefault();
-        nextRow.focus();
       }
 
       // Call user-defined onKeyDown handler if provided
