@@ -5,7 +5,7 @@ import { ComponentType, SVGProps } from 'react';
  * Home and Get Resources. Project means any of these, including resources.
  */
 
-// #region Send/Receive Types -- copied from 'platform-scripture';
+// #region Send/Receive Types -- moved here from 'platform-scripture';
 
 /**
  * In what state the project to S/R is

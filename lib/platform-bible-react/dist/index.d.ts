@@ -19,7 +19,7 @@ import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirectio
 import { ClassValue } from 'clsx';
 import { LucideProps } from 'lucide-react';
 import React$1 from 'react';
-import { ChangeEventHandler, ComponentProps, FocusEventHandler, PropsWithChildren, ReactNode } from 'react';
+import { ChangeEventHandler, ComponentProps, ComponentType, FocusEventHandler, PropsWithChildren, ReactNode, SVGProps } from 'react';
 import { Toaster, toast as sonner } from 'sonner';
 
 export type BookChapterControlProps = {
@@ -141,36 +141,6 @@ type LocalizedStringValue = string;
 interface LanguageStrings {
 	[k: LocalizeKey]: LocalizedStringValue;
 }
-type EditedStatus = undefined | "" | "edited" | "new" | "unregistered";
-type SharedProjectInfo = {
-	id: string;
-	name: string;
-	fullName: string;
-	language: string;
-	editedStatus: EditedStatus;
-	lastSendReceiveDate: string;
-	/** Names of admins on this project. Only filled if project is new */
-	adminNames?: string[];
-	warnings?: string[];
-};
-type SharedProjectsInfo = {
-	[projectId: string]: SharedProjectInfo;
-};
-type LocalProjectInfo = {
-	id: string;
-	isEditable: boolean;
-	fullName: string;
-	name: string;
-	language: string;
-	type: ProjectTypeKey;
-};
-declare const PROJECT_TYPE_KEYS: readonly [
-	"project",
-	"resource",
-	"dictionary",
-	"media"
-];
-type ProjectTypeKey = (typeof PROJECT_TYPE_KEYS)[number];
 export type ChapterRangeSelectorProps = {
 	/** The selected start chapter */
 	startChapter: number;
@@ -1657,6 +1627,79 @@ export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
 export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Tooltip */
 export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * This file contains types and constants used for translation projects and other resources, e.g. in
+ * Home and Get Resources. Project means any of these, including resources.
+ */
+// #region Send/Receive Types -- moved here from 'platform-scripture';
+/**
+ * In what state the project to S/R is
+ *
+ * - `undefined` or `''` = project has not been edited
+ * - `edited` = project has been edited
+ * - `new` = project not present on the system and available for download
+ */
+export type EditedStatus = undefined | "" | "edited" | "new" | "unregistered";
+/** Information about a S/R-able project needed to display it in the S/R dialog */
+export type SharedProjectInfo = {
+	id: string;
+	name: string;
+	fullName: string;
+	language: string;
+	editedStatus: EditedStatus;
+	lastSendReceiveDate: string;
+	/** Names of admins on this project. Only filled if project is new */
+	adminNames?: string[];
+	warnings?: string[];
+};
+/**
+ * Map of projects that can be S/Red to display in the S/R dialog.
+ *
+ * Maps project id to {@link SharedProjectInfo} for that project id
+ */
+export type SharedProjectsInfo = {
+	[projectId: string]: SharedProjectInfo;
+};
+// #endregion
+export type LocalProjectInfo = {
+	id: string;
+	isEditable: boolean;
+	fullName: string;
+	name: string;
+	language: string;
+	type: ProjectTypeKey;
+};
+export type MergedProjectInfo = {
+	id: string;
+	name: string;
+	fullName: string;
+	language: string;
+	isEditable: boolean;
+	isSendReceivable: boolean;
+	isLocallyAvailable?: boolean;
+	editedStatus?: EditedStatus;
+	lastSendReceiveDate?: string;
+	type: ProjectTypeKey;
+};
+export const PROJECT_TYPE_KEYS: readonly [
+	"project",
+	"resource",
+	"dictionary",
+	"media"
+];
+export type ProjectTypeKey = (typeof PROJECT_TYPE_KEYS)[number];
+export type TypeAction = {
+	buttonLabel: string;
+	action: () => void;
+	condition: () => boolean;
+	default?: () => boolean;
+};
+export type ProjectType = {
+	key: ProjectTypeKey;
+	localizedName: string;
+	icon: React$1.ComponentType<React$1.SVGProps<SVGSVGElement>>;
+	actions: TypeAction[];
+};
 export type HomeDialogProps = {
 	localizedStrings?: LanguageStrings;
 	uiLocales?: Intl.LocalesArgument;
@@ -1672,6 +1715,7 @@ export type HomeDialogProps = {
 	activeSendReceiveProjects?: string[];
 };
 export declare function HomeDialog({ localizedStrings, uiLocales, onOpenGetResources, onOpenResourceOrProject, onSendReceiveProject, showGetResourcesButton, isSendReceiveInProgress, isLoadingLocalProjects, isLoadingRemoteProjects, localProjectResourceInfo, sharedProjectsInfo, activeSendReceiveProjects, }: HomeDialogProps): import("react/jsx-runtime").JSX.Element;
+export declare const ProjectTypes: Record<ProjectTypeKey, ProjectType>;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.

@@ -6,7 +6,10 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { cn } from '@/utils/shadcn-ui.util';
-import { ProjectType, ProjectTypeKey } from 'platform-bible-utils';
+import {
+  ProjectType,
+  ProjectTypeKey,
+} from '@/components/advanced/filterable-resource-list/project-type';
 
 export type ProjectResourceFilterValue = ProjectTypeKey | 'all';
 export type ProjectResourceFilterProps = {

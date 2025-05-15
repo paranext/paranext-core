@@ -21,16 +21,10 @@ import {
   TableRow,
 } from '@/components/shadcn-ui/table';
 import { ChevronDown, ChevronsUpDown, ChevronUp, Ellipsis, Home } from 'lucide-react';
-import {
-  formatTimeSpan,
-  LanguageStrings,
-  LocalizeKey,
-  LocalProjectInfo,
-  MergedProjectInfo,
-  ProjectTypes,
-  SharedProjectsInfo,
-} from 'platform-bible-utils';
+import { formatTimeSpan, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
+import { LocalProjectInfo, MergedProjectInfo, SharedProjectsInfo } from './project-type';
+import { ProjectTypes } from './project-types';
 
 type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';

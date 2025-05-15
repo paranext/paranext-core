@@ -1,5 +1,8 @@
 import { HomeDialog } from '@/components/advanced/filterable-resource-list/home.component';
-import { LocalProjectInfo, SharedProjectsInfo } from 'platform-bible-utils';
+import {
+  LocalProjectInfo,
+  SharedProjectsInfo,
+} from '@/components/advanced/filterable-resource-list/project-type';
 import { useState } from 'react';
 
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [

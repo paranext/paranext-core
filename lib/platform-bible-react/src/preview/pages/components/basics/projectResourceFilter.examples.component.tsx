@@ -1,6 +1,6 @@
 import ProjectResourceFilter from '@/components/basics/projectResourceFilter.component';
 import { Ear, Earth, Rss } from 'lucide-react';
-import { ProjectType } from 'platform-bible-utils';
+import { ProjectType } from '@/components/advanced/filterable-resource-list/project-type';
 
 const types: ProjectType[] = [
   {
