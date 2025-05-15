@@ -160,15 +160,25 @@
 }
 /* #endregion */
 
-/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css */
-/* copied from https://ui.shadcn.com/docs/installation/manual#configure-styles */
-@layer base {
-  * {
+/* Note that the following region is from shadcn/ui's styles
+ * https://ui.shadcn.com/docs/installation/manual#configure-styles but is scoped down to .pr-twp
+ * because this is just a component library and should not apply its styles to the entire page.
+ *
+ * There is now a section in this library's README.md that explains how to apply these styles to the
+ * entire page if desired.
+ *
+ * The template has the original shadcn/ui styles because it intentionally applies the styles to the
+ * entire page. The same is true for Platform.Bible - see `app.component.scss`
+ */
+/* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css but with the difference of being scoped to .pr-twp here */
+
+ @layer base {
+  .pr-twp {
     @apply tw-border-border tw-outline-ring/50;
   }
 
-  body {
+  body.pr-twp {
     @apply tw-bg-background tw-text-foreground;
   }
 }
-/* #endregion */
+
