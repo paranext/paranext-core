@@ -50,13 +50,39 @@ TableBody.displayName = 'TableBody';
 const TableFooter = React.forwardRef<
   HTMLTableSectionElement,
   React.HTMLAttributes<HTMLTableSectionElement>
->(({ className, ...props }, ref) => (
-  <tfoot
-    ref={ref}
-    className={cn('tw-border-t tw-bg-muted/50 tw-font-medium [&>tr]:last:tw-border-b-0', className)}
-    {...props}
-  />
-));
+>(({ className, ...props }, ref) => {
+  // CUSTOM: Enable Shift+Tab from footer to focus the last row of the table body instead of an inner cell
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTableSectionElement>) => {
+    if (e.key === 'Tab' && e.shiftKey) {
+      const active = document.activeElement;
+      const table = active?.closest('table');
+      if (!table) return;
+
+      const footer = table.querySelector('tfoot');
+      if (!footer?.contains(active)) return;
+
+      e.preventDefault();
+      const lastRow = table.querySelector('tbody tr[tabindex="0"]:last-of-type');
+      if (lastRow instanceof HTMLElement) {
+        lastRow.focus();
+      }
+    }
+  };
+
+  return (
+    <tfoot
+      ref={ref}
+      tabIndex={-1} // CUSTOM: Needed to satisfy a11y rule for key event listener
+      role="presentation" // CUSTOM: Declares tfoot as a passive container for keyboard events
+      onKeyDown={handleKeyDown}
+      className={cn(
+        'tw-border-t tw-bg-muted/50 tw-font-medium [&>tr]:last:tw-border-b-0',
+        className,
+      )}
+      {...props}
+    />
+  );
+});
 TableFooter.displayName = 'TableFooter';
 
 // CUSTOM: Add onKeyDown and onSelect props to TableRow
