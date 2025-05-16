@@ -10,7 +10,7 @@ import {
   StdioPipe,
 } from 'child_process';
 import { Readable, Writable } from 'stream';
-import { buildExtensionPathFromName } from '@extension-host/services/extension-storage.service';
+import { buildExtensionUriFromName } from '@extension-host/services/extension-storage.service';
 import { getPathFromUri } from '@node/utils/util';
 import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
 import { executionTokenService } from '@node/services/execution-token.service';
@@ -28,7 +28,7 @@ export const wrappedSpawn: PlatformSpawn = (
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   if (!executionTokenService.tokenIsValid(executionToken as ExecutionToken))
     throw new Error('Invalid execution token');
-  const extensionRootUri = buildExtensionPathFromName(executionToken.name, '/');
+  const extensionRootUri = buildExtensionUriFromName(executionToken.name, '/');
   const extensionRootPath = getPathFromUri(extensionRootUri);
   options.cwd = extensionRootPath;
   const childProcess = spawn(command, args, options);
@@ -46,7 +46,7 @@ export const wrappedFork: PlatformFork = (
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   if (!executionTokenService.tokenIsValid(executionToken as ExecutionToken))
     throw new Error('Invalid execution token');
-  const extensionRootUri = buildExtensionPathFromName(executionToken.name, '/');
+  const extensionRootUri = buildExtensionUriFromName(executionToken.name, '/');
   const extensionRootPath = getPathFromUri(extensionRootUri);
   if (options) options.cwd = extensionRootPath;
   const childProcess = fork(modulePath, args, options ?? { cwd: extensionRootPath });
