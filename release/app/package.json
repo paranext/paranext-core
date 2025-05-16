@@ -16,7 +16,7 @@
     "link-modules": "node -r ts-node/register ../../.erb/scripts/link-modules.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^11.9.1"
+    "sqlite3": "^5.1.7"
   },
   "volta": {
     "extends": "../../package.json"
