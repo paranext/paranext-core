@@ -11,6 +11,8 @@ import { DirToggle, Direction } from './preview-components/direction-toggle.comp
 import { ThemeProvider } from './preview-components/theme-provider.component';
 import { ThemeButton } from './preview-components/theme-toggle.component';
 
+import './app.component.css';
+
 const initialDirection: Direction = 'ltr';
 
 export function App() {

@@ -12,8 +12,17 @@
   color: hsl(var(--popover-foreground));
 }
 
+.dock-dropdown-menu {
+  border: 1px solid hsl(var(--border));
+  border-radius: calc(var(--radius) - 2px); // tw-rounded-md
+}
+
 .dock-dropdown-menu-item:hover {
   background-color: hsl(var(--accent));
+}
+// reduce background color when hovering over the close button
+.dock-dropdown-menu-item:hover:has(.dock-tab-close-btn:hover) {
+  background-color: hsl(var(--accent) / 0.3);
 }
 
 // #region GENERAL //////////////////////////////////////////////
@@ -66,6 +75,10 @@
 }
 
 /* overriding default style for the shadow indicating that not all tabs are shown */
+.dock-nav-more {
+  color: hsl(var(--foreground));
+}
+
 .dock-nav-more::after {
   box-shadow: inset -10px 0 8px -8px vars.$color--shadow;
 }
@@ -123,6 +136,7 @@
 
 .dock-dropdown-menu-item .title {
   padding-inline-end: 12px;
+  pointer-events: none; // disable pointer events on the title so that the menu cannot be clicked in the dropdown
 }
 
 .title span {
@@ -194,20 +208,24 @@ $tab-bottom-rounding: vars.$space--s;
   display: block;
   width: 16px;
   height: 16px;
-  /* X icon from https://lucide.dev/icons/x */
-  background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLXgtaWNvbiBsdWNpZGUteCI+PHBhdGggZD0iTTE4IDYgNiAxOCIvPjxwYXRoIGQ9Im02IDYgMTIgMTIiLz48L3N2Zz4=');
+  /* X icon from https://lucide.dev/icons/x TODO: papi-extension://platformIcons/assets/semantic/close.svg once this extension exists */
+  mask: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLXgtaWNvbiBsdWNpZGUteCI+PHBhdGggZD0iTTE4IDYgNiAxOCIvPjxwYXRoIGQ9Im02IDYgMTIgMTIiLz48L3N2Zz4=');
+  mask-size: contain;
+  mask-position: center;
+  background-color: currentColor;
   background-size: 100%;
   background-position: center;
   background-repeat: no-repeat;
 }
 
-.dock-panel.dock-style-card .dock-tab-close-btn {
+.dock-panel.dock-style-card .dock-tab-close-btn,
+.dock-tab-close-btn {
   border-radius: vars.$space--l;
   height: 16px;
   padding: 2px;
   top: 5px;
   right: 5px;
-  color: hsl(var(--foreground));
+  color: hsl(var(--muted-foreground));
   visibility: hidden;
 }
 
@@ -216,15 +234,17 @@ $tab-bottom-rounding: vars.$space--s;
   visibility: visible;
 }
 
-.dock-tab-close-btn:hover,
-.dock-tab-close-btn:focus {
-  background-color: hsl(var(--secondary));
+.dock-tab .dock-tab-close-btn:hover,
+.dock-tab .dock-tab-close-btn:focus,
+.dock-dropdown-menu-item .dock-tab-close-btn:hover {
+  color: hsl(var(--accent-foreground));
+  background-color: hsl(var(--accent));
   transform: none;
 }
 
 .dock-dropdown-menu-item .dock-tab-close-btn {
-  right: vars.$space--xs;
-  top: 8px;
+  right: 2px;
+  top: 6px;
   visibility: hidden;
 }
 
@@ -232,26 +252,58 @@ $tab-bottom-rounding: vars.$space--s;
   visibility: visible;
 }
 
-.dock-dropdown-menu-item .dock-tab-close-btn:hover {
-  background-color: hsl(var(--background));
-  border-radius: vars.$space--l;
-}
-
 /* maximize - minimize control */
 .dock-panel.dock-style-card .dock-extra-content {
   height: 0; // absolutely positioned with 0 height, to avoid influencing anything else
 }
 
-.dock-panel-max-btn::before {
-  border: 2px solid vars.$color--border;
+.dock-panel.dock-style-card .dock-panel-min-btn,
+.dock-panel.dock-style-card .dock-panel-max-btn {
+  padding: 4px;
+  height: 16px;
+  width: 16px;
+  border-radius: 4px;
+  margin: 2px 2px 2px 0;
+  color: hsl(var(--muted-foreground));
 }
 
 .dock-panel-min-btn::before {
-  color: vars.$color--border;
+  /* https://lucide.dev/icons/minimize-2 TODO: papi-extension://platformIcons/assets/semantic/minimize.svg once this extension exists */
+  mask: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLW1pbmltaXplMi1pY29uIGx1Y2lkZS1taW5pbWl6ZS0yIj48cG9seWxpbmUgcG9pbnRzPSI0IDE0IDEwIDE0IDEwIDIwIi8+PHBvbHlsaW5lIHBvaW50cz0iMjAgMTAgMTQgMTAgMTQgNCIvPjxsaW5lIHgxPSIxNCIgeDI9IjIxIiB5MT0iMTAiIHkyPSIzIi8+PGxpbmUgeDE9IjMiIHgyPSIxMCIgeTE9IjIxIiB5Mj0iMTQiLz48L3N2Zz4=');
 }
 
-.dock-panel.dock-style-card .dock-panel-max-btn,
-.dock-panel.dock-style-card .dock-panel-min-btn {
-  margin-top: 2px;
+.dock-panel-max-btn::before {
+  /* https://lucide.dev/icons/maximize-2 TODO: papi-extension://platformIcons/assets/semantic/maximize.svg once this extension exists */
+  mask: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLW1heGltaXplMi1pY29uIGx1Y2lkZS1tYXhpbWl6ZS0yIj48cG9seWxpbmUgcG9pbnRzPSIxNSAzIDIxIDMgMjEgOSIvPjxwb2x5bGluZSBwb2ludHM9IjkgMjEgMyAyMSAzIDE1Ii8+PGxpbmUgeDE9IjIxIiB4Mj0iMTQiIHkxPSIzIiB5Mj0iMTAiLz48bGluZSB4MT0iMyIgeDI9IjEwIiB5MT0iMjEiIHkyPSIxNCIvPjwvc3ZnPg==');
+}
+
+.dock-panel-min-btn::before,
+.dock-panel-max-btn::before {
+  content: '';
+  mask-size: contain;
+  mask-position: center;
+  background-size: 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: currentColor;
+  width: 16px;
+  height: 16px;
+  border: 0;
+}
+
+.dock-panel.dock-style-card .dock-panel-min-btn:hover,
+.dock-panel.dock-style-card .dock-panel-max-btn:hover,
+.dock-panel.dock-style-card .dock-panel-min-btn:focus,
+.dock-panel.dock-style-card .dock-panel-max-btn:focus {
+  transform: none;
+  background-color: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.dock-panel-min-btn:hover::before,
+.dock-panel-max-btn:hover::before,
+.dock-panel-min-btn:focus::before,
+.dock-panel-max-btn:focus::before {
+  color: inherit;
 }
 // #endregion

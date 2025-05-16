@@ -2,7 +2,6 @@
 $color--text: hsl(var(--foreground));
 $color--shadow: var(--divider, rgba(0, 0, 0, 0.5));
 
-$color--background: hsl(var(--muted) / 0.5);
 $color--active-tab: hsl(var(--background));
 $color--inactive-tab: hsl(var(--muted));
 
