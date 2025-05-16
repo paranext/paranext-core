@@ -596,8 +596,8 @@ declare module 'shared/models/web-view.model' {
      */
     updateWebViewDefinition: UpdateWebViewDefinition;
   };
-  /** Options that affect what `webViews.getWebView` does */
-  export type GetWebViewOptions = {
+  /** Options that affect what `webViews.openWebView` does */
+  export type OpenWebViewOptions = {
     /**
      * If provided and if a web view with this ID exists, requests from the web view provider an
      * existing WebView with this ID if one exists. The web view provider can deny the request if it
@@ -620,6 +620,8 @@ declare module 'shared/models/web-view.model' {
      */
     createNewIfNotFound?: boolean;
   };
+  /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
+  export type GetWebViewOptions = OpenWebViewOptions;
 }
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
@@ -2482,9 +2484,9 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
 }
 declare module 'shared/models/web-view-provider.model' {
   import {
-    GetWebViewOptions,
     WebViewDefinition,
     SavedWebViewDefinition,
+    OpenWebViewOptions,
   } from 'shared/models/web-view.model';
   import {
     DisposableNetworkObject,
@@ -2520,7 +2522,7 @@ declare module 'shared/models/web-view-provider.model' {
      *   web view if an existing webview is being called for (matched by ID). Just provides the
      *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
      *   the web view with the existing ID was not found.
-     * @param getWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+     * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
      *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
      *   on the options, then those options are passed directly through to this method. That way, if
      *   you want to adjust what this method does based on the contents of the options passed to
@@ -2538,7 +2540,7 @@ declare module 'shared/models/web-view-provider.model' {
      */
     getWebView(
       savedWebViewDefinition: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
+      openWebViewOptions: OpenWebViewOptions,
       webViewNonce: string,
     ): Promise<WebViewDefinition | undefined>;
   }
@@ -2797,6 +2799,7 @@ declare module 'shared/models/docking-framework.model' {
 declare module 'shared/services/web-view.service-model' {
   import {
     GetWebViewOptions,
+    OpenWebViewOptions,
     SavedWebViewDefinition,
     WebViewId,
     WebViewType,
@@ -2842,7 +2845,7 @@ declare module 'shared/services/web-view.service-model' {
     openWebView: (
       webViewType: WebViewType,
       layout?: Layout,
-      options?: GetWebViewOptions,
+      options?: OpenWebViewOptions,
     ) => Promise<WebViewId | undefined>;
     /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
     getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
@@ -3047,8 +3050,8 @@ declare module 'shared/models/web-view-factory.model' {
   import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
   import {
     SavedWebViewDefinition,
-    GetWebViewOptions,
     WebViewDefinition,
+    OpenWebViewOptions,
   } from 'shared/models/web-view.model';
   /**
    *
@@ -3092,7 +3095,7 @@ declare module 'shared/models/web-view-factory.model' {
      */
     getWebView(
       savedWebViewDefinition: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
+      openWebViewOptions: OpenWebViewOptions,
       webViewNonce: string,
     ): Promise<WebViewDefinition | undefined>;
     /** Disposes of all WVCs that were created by this provider */
@@ -3113,7 +3116,7 @@ declare module 'shared/models/web-view-factory.model' {
      *   web view if an existing webview is being called for (matched by ID). Just provides the
      *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
      *   the web view with the existing ID was not found.
-     * @param getWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+     * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
      *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
      *   on the options, then those options are passed directly through to this method. That way, if
      *   you want to adjust what this method does based on the contents of the options passed to
@@ -3131,7 +3134,7 @@ declare module 'shared/models/web-view-factory.model' {
      */
     abstract getWebViewDefinition(
       savedWebViewDefinition: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
+      openWebViewOptions: OpenWebViewOptions,
       webViewNonce: string,
     ): Promise<WebViewDefinition | undefined>;
     /**
@@ -6613,6 +6616,7 @@ declare module '@papi/core' {
   export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
   export type {
     GetWebViewOptions,
+    OpenWebViewOptions,
     SavedWebViewDefinition,
     UseWebViewStateHook,
     UseWebViewScrollGroupScrRefHook,

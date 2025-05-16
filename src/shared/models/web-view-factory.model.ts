@@ -2,8 +2,8 @@ import { WebViewControllers, WebViewControllerTypes } from 'papi-shared-types';
 import type { IWebViewProvider } from '@shared/models/web-view-provider.model';
 import {
   SavedWebViewDefinition,
-  GetWebViewOptions,
   WebViewDefinition,
+  OpenWebViewOptions,
 } from '@shared/models/web-view.model';
 import { MutexMap, UnsubscriberAsyncList } from 'platform-bible-utils';
 import { DisposableNetworkObject } from '@shared/models/network-object.model';
@@ -62,7 +62,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
    */
   async getWebView(
     savedWebViewDefinition: SavedWebViewDefinition,
-    getWebViewOptions: GetWebViewOptions,
+    openWebViewOptions: OpenWebViewOptions,
     webViewNonce: string,
   ): Promise<WebViewDefinition | undefined> {
     const webViewId = savedWebViewDefinition.id;
@@ -78,7 +78,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
 
       const webViewDefinition = await this.getWebViewDefinition(
         savedWebViewDefinition,
-        getWebViewOptions,
+        openWebViewOptions,
         webViewNonce,
       );
 
@@ -147,7 +147,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
    *   web view if an existing webview is being called for (matched by ID). Just provides the
    *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
    *   the web view with the existing ID was not found.
-   * @param getWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+   * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
    *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
    *   on the options, then those options are passed directly through to this method. That way, if
    *   you want to adjust what this method does based on the contents of the options passed to
@@ -165,7 +165,7 @@ export abstract class WebViewFactory<WebViewType extends WebViewControllerTypes>
    */
   abstract getWebViewDefinition(
     savedWebViewDefinition: SavedWebViewDefinition,
-    getWebViewOptions: GetWebViewOptions,
+    openWebViewOptions: OpenWebViewOptions,
     webViewNonce: string,
   ): Promise<WebViewDefinition | undefined>;
 

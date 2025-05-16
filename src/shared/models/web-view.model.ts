@@ -459,9 +459,8 @@ export type WebViewProps = SavedWebViewDefinition & {
   updateWebViewDefinition: UpdateWebViewDefinition;
 };
 
-/** Options that affect what `webViews.getWebView` does */
-// This can't live in web-view.service-model.ts because extensions can see it
-export type GetWebViewOptions = {
+/** Options that affect what `webViews.openWebView` does */
+export type OpenWebViewOptions = {
   /**
    * If provided and if a web view with this ID exists, requests from the web view provider an
    * existing WebView with this ID if one exists. The web view provider can deny the request if it
@@ -484,3 +483,7 @@ export type GetWebViewOptions = {
    */
   createNewIfNotFound?: boolean;
 };
+
+/** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
+// This can't live in web-view.service-model.ts because extensions can see it
+export type GetWebViewOptions = OpenWebViewOptions;
