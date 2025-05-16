@@ -17,18 +17,36 @@ import {
   SelectValue,
 } from '@/components/shadcn-ui/select';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { deepEqual, LocalizedStringValue, substring } from 'platform-bible-utils';
+import { deepEqual, isString, LocalizedStringValue } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
 import { inventoryAdditionalItemColumn } from './inventory-columns';
 import {
-  getBookIdFromUSFM,
-  getLinesFromUSFM,
-  getNumberFromUSFM,
   getStatusForItem,
   InventoryItemOccurrence,
   InventoryTableData,
   Status,
 } from './inventory-utils';
+
+/** Represents an item in the inventory with associated text and verse reference. */
+export type InventoryItem = {
+  /**
+   * The label by which the item is shown in the inventory (e.g. the word that is repeated in case
+   * of the Repeated Words check). It serves as a unique identifier for the item. It usually is a
+   * string, but can be a string[] when there are multiple defining attributes (e.g. when 'show
+   * preceding marker' is enabled for the Markers Inventory, the preceding marker will be stored as
+   * the second item in the array)
+   */
+  inventoryText: string | string[];
+  /** The snippet of scripture where this occurrence of the `inventoryItem` is found */
+  verse: string;
+  /** The reference to the location where the `verse` can be found in scripture */
+  verseRef: SerializedVerseRef;
+  /**
+   * Offset used to locate the `inventoryText` (or inventoryText[0] in case of an array) in the
+   * `verse` string
+   */
+  offset: number;
+};
 
 /**
  * Object containing all keys used for localization in this component. If you're using this
@@ -54,7 +72,7 @@ export type InventoryLocalizedStrings = {
 };
 
 /** Scope of scripture that the inventory can operate on */
-export type Scope = 'book' | 'chapter' | 'verse';
+export type Scope = 'book' | 'chapter';
 
 /** Status values that the status filter can select from */
 type StatusFilter = Status | 'all';
@@ -98,78 +116,53 @@ const filterItemData = (
 };
 
 /**
- * Turns array of strings into array of inventory items, along with their count and status
+ * Turns array of strings into array of inventory items, along with their count and status. The
+ * approvedItems and unapprovedItems arrays are used to determine the status of each item, by
+ * matching them to the `inventoryText` of the InventoryItem.
  *
- * @param text The source scripture text that is searched for inventory items
- * @param scriptureRef The scripture reference that the application is currently set to
+ * @param inventoryItems Detailed information on the items that are to be shown in the inventory
  * @param approvedItems Array of approved items, typically as defined in `Settings.xml`
  * @param unapprovedItems Array of unapproved items, typically as defined in `Settings.xml`
- * @param itemRegex Regular expression that describes what items this Inventory should extract from
- *   the provided scripture text
  * @returns Array of inventory items, along with their count and status
  */
-const createTableData = (
-  text: string | undefined,
-  scriptureRef: SerializedVerseRef,
+const processInventoryItems = (
+  inventoryItems: InventoryItem[],
   approvedItems: string[],
   unapprovedItems: string[],
-  itemRegex: RegExp,
 ): InventoryTableData[] => {
-  if (!text) return [];
-
   const tableData: InventoryTableData[] = [];
 
-  let currentBook: string | undefined = scriptureRef.book;
-  let currentChapter: number | undefined = scriptureRef.chapterNum;
-  let currentVerse: number | undefined = scriptureRef.verseNum;
+  inventoryItems.forEach((item) => {
+    const existingItem = tableData.find((tableEntry) =>
+      deepEqual(
+        tableEntry.items,
+        isString(item.inventoryText) ? [item.inventoryText] : item.inventoryText,
+      ),
+    );
 
-  const lines = getLinesFromUSFM(text);
-
-  lines.forEach((line: string) => {
-    if (line.startsWith('\\id')) {
-      currentBook = getBookIdFromUSFM(line);
-      currentChapter = 0;
-      currentVerse = 0;
-    }
-    if (line.startsWith('\\c')) {
-      currentChapter = getNumberFromUSFM(line);
-      currentVerse = 0;
-    }
-    if (line.startsWith('\\v')) {
-      currentVerse = getNumberFromUSFM(line);
-      if (currentChapter === 0) {
-        currentChapter = scriptureRef.chapterNum;
-      }
-    }
-
-    let match: RegExpExecArray | undefined = itemRegex.exec(line) ?? undefined;
-    while (match) {
-      const items: string[] = [];
-      match.forEach((item) => items.push(item));
-      const itemIndex = match.index;
-      const existingItem = tableData.find((tableEntry) => deepEqual(tableEntry.items, items));
-      const newReference: InventoryItemOccurrence = {
-        reference: {
-          book: currentBook !== undefined ? currentBook : '',
-          chapterNum: currentChapter !== undefined ? currentChapter : -1,
-          verseNum: currentVerse !== undefined ? currentVerse : -1,
-        },
-        text: substring(line, Math.max(0, itemIndex - 25), Math.min(itemIndex + 25, line.length)),
+    if (existingItem) {
+      existingItem.count += 1;
+      existingItem.occurrences.push({
+        reference: item.verseRef,
+        text: item.verse,
+      });
+    } else {
+      const newItem: InventoryTableData = {
+        items: isString(item.inventoryText) ? [item.inventoryText] : item.inventoryText,
+        count: 1,
+        status: getStatusForItem(
+          isString(item.inventoryText) ? item.inventoryText : item.inventoryText[0],
+          approvedItems,
+          unapprovedItems,
+        ),
+        occurrences: [
+          {
+            reference: item.verseRef,
+            text: item.verse,
+          },
+        ],
       };
-      if (existingItem) {
-        existingItem.count += 1;
-        existingItem.occurrences.push(newReference);
-      } else {
-        const newItem: InventoryTableData = {
-          items,
-          count: 1,
-          status: getStatusForItem(items[0], approvedItems, unapprovedItems),
-          occurrences: [newReference],
-        };
-        tableData.push(newItem);
-      }
-
-      match = itemRegex.exec(line) ?? undefined;
+      tableData.push(newItem);
     }
   });
 
@@ -193,8 +186,8 @@ const localizeString = (
 
 /** Props for the Inventory component */
 type InventoryProps = {
-  /** The scripture reference that the application is currently set to */
-  verseRef: SerializedVerseRef;
+  /** The inventory items that the inventory should be populated with */
+  inventoryItems: InventoryItem[];
   /** Callback function that is executed when the scripture reference is changed */
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   /**
@@ -205,22 +198,6 @@ type InventoryProps = {
    */
   localizedStrings: InventoryLocalizedStrings;
   /**
-   * The logic that finds the desired items in the source text. This can either be a Regular
-   * expression that captures one or multiple items (preferred), or a custom function that builds
-   * and return an InventoryDataTable[] manually. Note: In case the logic captures more than one
-   * item (i.e. InventoryTableData.items has a length greater than 1), you must provide text labels
-   * for the related columns and control elements to show by setting the `additionalItemsLabels`
-   * prop
-   */
-  extractItems:
-    | RegExp
-    | ((
-        text: string | undefined,
-        scriptureRef: SerializedVerseRef,
-        approvedItems: string[],
-        unapprovedItems: string[],
-      ) => InventoryTableData[]);
-  /**
    * Text labels for control elements and additional column headers in case your Inventory has more
    * than one item to show (e.g. The 'Preceding Marker' in the Markers Inventory)
    */
@@ -229,8 +206,6 @@ type InventoryProps = {
   approvedItems: string[];
   /** Array of unapproved items, typically as defined in `Settings.xml` */
   unapprovedItems: string[];
-  /** The source scripture text that is searched for in inventory items */
-  text: string | undefined;
   /** Scope of scripture that the inventory will operate on */
   scope: Scope;
   /** Callback function that is executed when the scope is changed from the Inventory */
@@ -246,14 +221,12 @@ type InventoryProps = {
 
 /** Inventory component that is used to view and control the status of provided project settings */
 export function Inventory({
-  verseRef,
+  inventoryItems,
   setVerseRef,
   localizedStrings,
-  extractItems,
   additionalItemsLabels,
   approvedItems,
   unapprovedItems,
-  text,
   scope,
   onScopeChange,
   columns,
@@ -264,7 +237,6 @@ export function Inventory({
   const unknownItemsText = localizeString(localizedStrings, '%webView_inventory_unknown%');
   const scopeBookText = localizeString(localizedStrings, '%webView_inventory_scope_currentBook%');
   const scopeChapterText = localizeString(localizedStrings, '%webView_inventory_scope_chapter%');
-  const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
   const showAdditionalItemsText = localizeString(
     localizedStrings,
@@ -277,11 +249,9 @@ export function Inventory({
   const [selectedItem, setSelectedItem] = useState<string[]>([]);
 
   const tableData: InventoryTableData[] = useMemo(() => {
-    if (!text) return [];
-    if (extractItems instanceof RegExp)
-      return createTableData(text, verseRef, approvedItems, unapprovedItems, extractItems);
-    return extractItems(text, verseRef, approvedItems, unapprovedItems);
-  }, [text, extractItems, verseRef, approvedItems, unapprovedItems]);
+    if (inventoryItems.length === 0) return [];
+    return processInventoryItems(inventoryItems, approvedItems, unapprovedItems);
+  }, [inventoryItems, approvedItems, unapprovedItems]);
 
   const reducedTableData: InventoryTableData[] = useMemo(() => {
     if (showAdditionalItems) return tableData;
@@ -357,7 +327,7 @@ export function Inventory({
   };
 
   const handleScopeChange = (value: string) => {
-    if (value === 'book' || value === 'chapter' || value === 'verse') {
+    if (value === 'book' || value === 'chapter') {
       onScopeChange(value);
     } else {
       throw new Error(`Invalid scope value: ${value}`);
@@ -409,7 +379,6 @@ export function Inventory({
           <SelectContent>
             <SelectItem value="book">{scopeBookText}</SelectItem>
             <SelectItem value="chapter">{scopeChapterText}</SelectItem>
-            <SelectItem value="verse">{scopeVerseText}</SelectItem>
           </SelectContent>
         </Select>
         <Input

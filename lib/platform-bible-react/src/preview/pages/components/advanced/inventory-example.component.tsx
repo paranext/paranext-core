@@ -5,10 +5,13 @@ import {
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
 import { InventoryTableData } from '@/components/advanced/inventory/inventory-utils';
-import { Inventory, Scope } from '@/components/advanced/inventory/inventory.component';
+import {
+  Inventory,
+  InventoryItem,
+  Scope,
+} from '@/components/advanced/inventory/inventory.component';
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
-import { scriptureSnippet } from './scripture-snippet';
 
 const localizedStrings = {
   '%webView_inventory_all%': 'All items',
@@ -23,6 +26,41 @@ const localizedStrings = {
   '%webView_inventory_unapproved%': 'Unapproved items',
   '%webView_inventory_unknown%': 'Unknown items',
 };
+
+const sampleInventoryItems: InventoryItem[] = [
+  {
+    inventoryText: 'well',
+    verse: 'In the beginning God created the heavens and the earth.',
+    verseRef: { book: 'GEN', chapterNum: 1, verseNum: 1 },
+    offset: 0,
+  },
+  {
+    inventoryText: 'he',
+    verse:
+      'Now the earth was formless and empty, darkness was over the surface of the deep, and the Spirit of God was hovering over the waters.',
+    verseRef: { book: 'GEN', chapterNum: 1, verseNum: 2 },
+    offset: 4,
+  },
+  {
+    inventoryText: 'for',
+    verse: 'And God said, "Let there be light," and there was light.',
+    verseRef: { book: 'GEN', chapterNum: 1, verseNum: 3 },
+    offset: 8,
+  },
+  {
+    inventoryText: 'of',
+    verse: 'God saw that the light was good, and he separated the light from the darkness.',
+    verseRef: { book: 'GEN', chapterNum: 1, verseNum: 4 },
+    offset: 12,
+  },
+  {
+    inventoryText: 'the',
+    verse:
+      'God called the light "day," and the darkness he called "night." And there was evening, and there was morning—the first day.',
+    verseRef: { book: 'GEN', chapterNum: 1, verseNum: 5 },
+    offset: 0,
+  },
+];
 
 const createColumns = (
   approvedItems: string[],
@@ -42,7 +80,7 @@ const createColumns = (
 ];
 
 export function InventoryExample() {
-  const [scrRef, setScrRef] = useState(defaultScrRef);
+  const [, setScrRef] = useState(defaultScrRef);
   const [approvedItems, setApprovedItems] = useState<string[]>(['well', 'he']);
   const [unapprovedItems, setUnapprovedItems] = useState<string[]>(['for', 'of']);
   const [scope, setScope] = useState<Scope>('book');
@@ -50,23 +88,19 @@ export function InventoryExample() {
   return (
     <div>
       <Inventory
-        verseRef={scrRef}
+        inventoryItems={sampleInventoryItems}
         setVerseRef={setScrRef}
         localizedStrings={localizedStrings}
         approvedItems={approvedItems}
         unapprovedItems={unapprovedItems}
         scope={scope}
         onScopeChange={setScope}
-        text={scriptureSnippet}
         columns={createColumns(
           approvedItems,
           setApprovedItems,
           unapprovedItems,
           setUnapprovedItems,
         )}
-        // Matches a sequence of letters surrounded by word boundaries followed by that exact same
-        // sequence of letters surrounded by word boundaries
-        extractItems={/\b(\p{L}+)\b(?=\s\b\1\b)/gu}
         additionalItemsLabels={{
           checkboxText: 'additional header',
           tableHeaders: ['additional header'],

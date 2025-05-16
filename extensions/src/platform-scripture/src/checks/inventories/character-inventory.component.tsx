@@ -1,17 +1,18 @@
-import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { useLocalizedStrings } from '@papi/frontend/react';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
   ColumnDef,
   Inventory,
+  InventoryItem,
   InventoryTableData,
   Scope,
   inventoryCountColumn,
   inventoryItemColumn,
   inventoryStatusColumn,
 } from 'platform-bible-react';
-import { useLocalizedStrings } from '@papi/frontend/react';
+import { LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo } from 'react';
-import { SerializedVerseRef } from '@sillsdev/scripture';
 
 const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_character%',
@@ -19,9 +20,6 @@ const CHARACTER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
   '%webView_inventory_table_header_count%',
   '%webView_inventory_table_header_status%',
 ];
-
-// Matches all characters
-const charactersRegex: RegExp = /./g;
 
 /**
  * Function that constructs the column for the inventory component
@@ -66,27 +64,25 @@ const createColumns = (
 ];
 
 type CharacterInventoryProps = {
-  verseRef: SerializedVerseRef;
+  inventoryItems: InventoryItem[];
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
   approvedItems: string[];
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
-  text: string | undefined;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
 };
 
 export function CharacterInventory({
-  verseRef,
+  inventoryItems,
   setVerseRef,
   localizedStrings,
   approvedItems,
   onApprovedItemsChange,
   unapprovedItems,
   onUnapprovedItemsChange,
-  text,
   scope,
   onScopeChange,
 }: CharacterInventoryProps) {
@@ -134,13 +130,11 @@ export function CharacterInventory({
 
   return (
     <Inventory
-      verseRef={verseRef}
+      inventoryItems={inventoryItems}
       setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
-      extractItems={charactersRegex}
       approvedItems={approvedItems}
       unapprovedItems={unapprovedItems}
-      text={text}
       scope={scope}
       onScopeChange={onScopeChange}
       columns={columns}
