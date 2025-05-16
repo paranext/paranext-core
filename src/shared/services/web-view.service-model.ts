@@ -1,5 +1,6 @@
 import {
   GetWebViewOptions,
+  OpenWebViewOptions,
   SavedWebViewDefinition,
   WebViewId,
   WebViewType,
@@ -56,7 +57,7 @@ export interface WebViewServiceType {
   openWebView: (
     webViewType: WebViewType,
     layout?: Layout,
-    options?: GetWebViewOptions,
+    options?: OpenWebViewOptions,
   ) => Promise<WebViewId | undefined>;
 
   /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */

@@ -22,7 +22,7 @@ import {
 import { newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
-  GetWebViewOptions,
+  OpenWebViewOptions,
   SavedWebViewDefinition,
   WebViewDefinition,
   WebViewDefinitionReact,
@@ -810,7 +810,7 @@ export function getSavedWebViewDefinitionSync(
 // #region Web view options
 
 /** Set up defaults for options for getting a web view */
-function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOptions {
+function getWebViewOptionsDefaults(options: OpenWebViewOptions): OpenWebViewOptions {
   const optionsDefaulted = cloneDeep(options);
   if ('existingId' in optionsDefaulted && !('createNewIfNotFound' in optionsDefaulted))
     optionsDefaulted.createNewIfNotFound = true;
@@ -905,7 +905,7 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
-  options: GetWebViewOptions = {},
+  options: OpenWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
   const optionsDefaulted = getWebViewOptionsDefaults(options);
   // ENHANCEMENT: If they aren't looking for an existingId, we could get the webview without

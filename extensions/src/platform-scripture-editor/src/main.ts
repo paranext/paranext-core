@@ -1,8 +1,8 @@
 ﻿import papi, { logger, WebViewFactory } from '@papi/backend';
 import type {
   ExecutionActivationContext,
-  GetWebViewOptions,
   IWebViewProvider,
+  OpenWebViewOptions,
   SavedWebViewDefinition,
   WebViewDefinition,
 } from '@papi/core';
@@ -33,7 +33,7 @@ const EDITABLE_KEY = '%webView_platformScriptureEditor_title_editable_indicator%
 const RESOURCE_VIEWER_KEY = '%webView_platformScriptureEditor_title_readonly_no_project%';
 const SCRIPTURE_EDITOR_KEY = '%webView_platformScriptureEditor_title_editable_no_project%';
 
-interface PlatformScriptureEditorOptions extends GetWebViewOptions {
+interface PlatformScriptureEditorOptions extends OpenWebViewOptions {
   projectId: string | undefined;
   isReadOnly: boolean;
   options?: OpenEditorOptions;
