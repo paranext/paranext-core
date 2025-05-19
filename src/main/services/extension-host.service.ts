@@ -181,7 +181,12 @@ async function startExtensionHost() {
       ],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-        env: { ...process.env, NODE_ENV: 'development' },
+        env: {
+          ...process.env,
+          NODE_ENV: 'development',
+          // Make sure the extension host can find native modules since it doesn't use webpack in dev
+          NODE_PATH: path.join(globalThis.resourcesPath, 'release', 'app', 'node_modules'),
+        },
       },
     );
   }

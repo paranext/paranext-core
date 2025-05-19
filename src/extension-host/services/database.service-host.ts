@@ -14,6 +14,10 @@ import { getPathFromUri } from '@node/utils/util';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { EXTENSION_ASSET_PROTOCOL_NAME } from '@shared/utils/extension-asset.utils';
 
+// FYI sqlite3 5.1.7 has a bug that prevents building properly in some cases:
+// https://github.com/TryGhost/node-sqlite3/issues/1748#issuecomment-1880671655
+// As such, we are fixed to 5.1.6 for now as of 19 May 2025.
+
 class DatabaseService implements IDatabaseService {
   #databases: Map<string, AsyncDatabase> = new Map();
 
