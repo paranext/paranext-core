@@ -147,6 +147,7 @@
     "@storybook/react-webpack5": "^8.6.4",
     "@storybook/test": "^8.6.4",
     "@svgr/webpack": "^8.1.0",
+    "@swc/core": "1.10.18",
     "@teamsupercell/typings-for-css-modules-loader": "^2.5.2",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
