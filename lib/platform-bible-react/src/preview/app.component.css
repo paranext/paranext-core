@@ -1,0 +1,10 @@
+/* #region Styles from `platform-bible-react`'s `README.md` to apply its styles to the whole page */
+
+* {
+  @apply tw-border-border tw-outline-ring/50;
+}
+body {
+  @apply tw-bg-background tw-text-foreground;
+}
+
+/* #endregion */

@@ -1,14 +1,31 @@
 @use 'styles/vars';
 
+/* #region Styles from `platform-bible-react`'s `README.md` to apply its styles to the whole page */
+
+* {
+  border-color: hsl(var(--border));
+  outline-color: hsl(var(--ring) / 0.5);
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+/* #endregion */
+
 /*
  * @NOTE: Prepend a `~` to css file paths that are in your node_modules
  *        See https://github.com/webpack-contrib/sass-loader#imports
  */
+/*
+ * The `body` selector above come from a specific place and should be preserved independent of this
+ * selector, so disabling this linting rule here
+ */
+/* stylelint-disable-next-line no-duplicate-selectors */
 body {
   position: relative;
-  color: white;
   height: 100vh;
-  background: vars.$color--background;
   font-family: vars.$font-family;
   overflow-y: hidden;
   display: flex;
@@ -18,6 +35,8 @@ body {
 }
 
 #root {
+  // if this color is transparent, the body background will shine through
+  background-color: hsl(var(--muted) / 0.5);
   width: 100%;
   height: 100%;
   display: flex;
