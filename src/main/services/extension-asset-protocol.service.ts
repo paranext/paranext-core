@@ -70,12 +70,12 @@ const initialize = () => {
       // 2) Use request headers to pass along the extension name so extension code doesn't have to embed its name in URLs.
 
       try {
-        const { extensionName, assetName } = getAssetPathInfoFromExtensionUri(request.url);
+        const { extensionName, assetPath } = getAssetPathInfoFromExtensionUri(request.url);
 
         // Actually get the data
         const base64Data: string | undefined = await extensionAssetService.getExtensionAsset(
           extensionName,
-          assetName,
+          assetPath,
         );
         if (!base64Data) {
           return errorResponse(request.url, StatusCodes.NOT_FOUND);
@@ -86,7 +86,7 @@ const initialize = () => {
           return new Response(Buffer.from(base64Data, 'base64'), {
             status: StatusCodes.OK,
             headers: {
-              'Content-Type': getMimeTypeForFileName(assetName),
+              'Content-Type': getMimeTypeForFileName(assetPath),
             },
           });
         } catch (e) {

@@ -1,16 +1,16 @@
 import { readFileBinary } from '@node/services/node-file-system.service';
-import { buildExtensionUriFromName } from '@extension-host/services/extension-storage.service';
+import { buildExtensionUriFromPath } from '@extension-host/services/extension-storage.service';
 import { startsWith } from 'platform-bible-utils';
 import { Uri } from '@shared/data/file-system.model';
 import { getAssetPathInfoFromExtensionUri } from '@shared/utils/extension-asset.utils';
 
 export type GetAsset = typeof getAsset;
 
-export async function getAsset(extensionName: string, assetName: string): Promise<Buffer> {
-  if (!startsWith(assetName, 'assets/') && !startsWith(assetName, 'assets\\')) {
+export async function getAsset(extensionName: string, assetPath: string): Promise<Buffer> {
+  if (!startsWith(assetPath, 'assets/') && !startsWith(assetPath, 'assets\\')) {
     throw Error('Requests are limited to files in the "assets" directory');
   }
-  const uriToAsset = buildExtensionUriFromName(extensionName, assetName);
+  const uriToAsset = buildExtensionUriFromPath(extensionName, assetPath);
   return readFileBinary(uriToAsset);
 }
 
@@ -21,14 +21,22 @@ export async function getAsset(extensionName: string, assetName: string): Promis
  * with Uris provided by extensions as it will not allow them to escape their area other than if
  * they somehow use symlinks.
  *
+ * @example
+ *
+ * - Extension asset uri: `papi-extension://my-extension/assets/notes.txt`
+ * - Resulting uri: `app://installed-extensions/my-extension/assets/notes.txt`
+ *
+ * Note: The resulting Uri is not necessarily relative to the `app://` scheme. It points to the
+ * extension folder wherever it is
+ *
  * @param uri The uri to resolve
  * @returns Real path to the uri supplied or the original uri if it is not an extension uri
  * @throws Error if the uri is not a valid extension asset uri
  */
 export function getUriFromExtensionUri(uri: string): Uri {
-  const { extensionName, assetName } = getAssetPathInfoFromExtensionUri(uri);
+  const { extensionName, assetPath } = getAssetPathInfoFromExtensionUri(uri);
 
-  return buildExtensionUriFromName(extensionName, assetName);
+  return buildExtensionUriFromPath(extensionName, assetPath);
 }
 
 export default getAsset;

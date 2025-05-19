@@ -38,23 +38,23 @@ function sanitizeDirectoryName(str: string): string {
   return str.replace(/[^\w\d-_.()]/g, '-').trim();
 }
 
-/** Return a path to the specified file within the extension's installation directory */
-function buildExtensionUriFromToken(token: ExecutionToken, fileName: string): string {
+/** Return a path to the specified file or directory within the extension's installation directory */
+function buildExtensionUriFromToken(token: ExecutionToken, filePath: string): string {
   if (!executionTokenService.tokenIsValid(token)) throw new Error('Invalid token');
-  return buildExtensionUriFromName(token.name, fileName);
+  return buildExtensionUriFromPath(token.name, filePath);
 }
 
-/** Return a URI to the specified file within the extension's installation directory */
-export function buildExtensionUriFromName(extensionName: string, fileName: string): string {
+/** Return a URI to the specified file or directory within the extension's installation directory */
+export function buildExtensionUriFromPath(extensionName: string, filePath: string): string {
   const baseUri: string | undefined = registeredUrisPerExtension.get(extensionName);
   if (!baseUri) throw new Error(`Extension directory for ${extensionName} is not known`);
 
   // TODO: If we really care about the potential to jump into other directories, this probably
   // needs some work. For example, this doesn't detect symlinks. There might be many other holes.
-  if (!isValidFileOrDirectoryName(fileName)) throw new Error(`Invalid file name: ${fileName}`);
-  if (includes(fileName, '..')) throw new Error('Cannot include ".." in the file name');
+  if (!isValidFileOrDirectoryName(filePath)) throw new Error(`Invalid file name: ${filePath}`);
+  if (includes(filePath, '..')) throw new Error('Cannot include ".." in the file name');
 
-  return joinUriPaths(baseUri, fileName);
+  return joinUriPaths(baseUri, filePath);
 }
 
 /**
@@ -86,28 +86,28 @@ function buildUserDataUri(token: ExecutionToken, key: string): string {
  * Read a text file from the the extension's installation directory
  *
  * @param token ExecutionToken provided to the extension when `activate()` was called
- * @param fileName Name of the file to be read
+ * @param filePath Path to the file or directory to be read
  * @returns Promise for a string with the contents of the file
  */
 async function readTextFileFromInstallDirectory(
   token: ExecutionToken,
-  fileName: string,
+  filePath: string,
 ): Promise<string> {
-  return readFileText(buildExtensionUriFromToken(token, fileName));
+  return readFileText(buildExtensionUriFromToken(token, filePath));
 }
 
 /**
  * Read a binary file from the the extension's installation directory
  *
  * @param token ExecutionToken provided to the extension when `activate()` was called
- * @param fileName Name of the file to be read
+ * @param filePath Path to the file or directory to be read
  * @returns Promise for a Buffer with the contents of the file
  */
 async function readBinaryFileFromInstallDirectory(
   token: ExecutionToken,
-  fileName: string,
+  filePath: string,
 ): Promise<Buffer> {
-  return readFileBinary(buildExtensionUriFromToken(token, fileName));
+  return readFileBinary(buildExtensionUriFromToken(token, filePath));
 }
 
 /**

@@ -4956,8 +4956,12 @@ declare module 'shared/data/file-system.model' {
    * Note: projects are stored in the production version of `app://projects` regardless of whether you
    * are in production or development
    *
-   * Note: This kind of Uris does not include extension Uris, which support an additional set of
+   * @example This kind of Uri could look like `app://projects/1234/notes.txt`
+   *
+   * Note: This kind of Uri does not include extension Uris, which support an additional set of
    * schemes and are only available for use in the extension host.
+   *
+   * @example An extension Uri might look like `papi-extension://my-extension/assets/notes.txt`
    *
    * You can convert from a `Uri` to a file path using `getPathFromUri`.
    *
@@ -5196,29 +5200,29 @@ declare module 'extension-host/services/extension-storage.service' {
    * extension service or it causes a circular dependency.
    */
   export function setExtensionUris(urisPerExtension: Map<string, string>): void;
-  /** Return a URI to the specified file within the extension's installation directory */
-  export function buildExtensionUriFromName(extensionName: string, fileName: string): string;
+  /** Return a URI to the specified file or directory within the extension's installation directory */
+  export function buildExtensionUriFromPath(extensionName: string, filePath: string): string;
   /**
    * Read a text file from the the extension's installation directory
    *
    * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param fileName Name of the file to be read
+   * @param filePath Path to the file or directory to be read
    * @returns Promise for a string with the contents of the file
    */
   function readTextFileFromInstallDirectory(
     token: ExecutionToken,
-    fileName: string,
+    filePath: string,
   ): Promise<string>;
   /**
    * Read a binary file from the the extension's installation directory
    *
    * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param fileName Name of the file to be read
+   * @param filePath Path to the file or directory to be read
    * @returns Promise for a Buffer with the contents of the file
    */
   function readBinaryFileFromInstallDirectory(
     token: ExecutionToken,
-    fileName: string,
+    filePath: string,
   ): Promise<Buffer>;
   /**
    * Read data specific to the user (as identified by the OS) and extension (as identified by the
