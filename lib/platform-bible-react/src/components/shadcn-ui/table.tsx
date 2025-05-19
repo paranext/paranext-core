@@ -9,8 +9,8 @@ import { cn } from '@/utils/shadcn-ui.util';
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement> & { stickyHeader?: boolean }
->(({ className, ...props }, ref) => (
-  <div className={cn('pr-twp tw-relative tw-w-full')}>
+>(({ className, stickyHeader, ...props }, ref) => (
+  <div className={cn('pr-twp tw-relative tw-w-full', { 'tw-p-1': stickyHeader })}>
     <table
       ref={ref}
       className={cn('tw-w-full tw-caption-bottom tw-text-sm', className)}
@@ -155,6 +155,31 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
       allFocusableElements: HTMLElement[],
     ) => {
       const currentSection = getCurrentTableSection(currentRow);
+      const table = currentRow.closest('table');
+
+      if (e.shiftKey) {
+        e.preventDefault();
+
+        // Shift+Tab in table footer, go to last row in table body
+        if (currentSection === 'tfoot') {
+          const lastRow = table?.querySelector('tbody tr[tabindex="0"]:last-of-type');
+          if (lastRow instanceof HTMLElement) {
+            lastRow.focus();
+          }
+          return;
+        }
+
+        // Shift+Tab in table body, go to table header
+        if (currentSection === 'tbody') {
+          const header = table?.querySelector('thead tr[tabindex="0"]');
+          if (header instanceof HTMLElement) {
+            header.focus();
+          }
+          return;
+        }
+        return;
+      }
+
       if (currentSection === 'tbody') {
         e.preventDefault();
         // If there are no focusable elements or you're on the last focusable element in the row
@@ -229,7 +254,7 @@ const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTML
         className={cn(
           // CUSTOM: Add focus styles and add tw-outline-none so there isn't a duplicate outline
           'tw-border-b tw-outline-none tw-transition-colors hover:tw-bg-muted/50',
-          'focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+          'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
           'data-[state=selected]:tw-bg-muted',
           className,
         )}
