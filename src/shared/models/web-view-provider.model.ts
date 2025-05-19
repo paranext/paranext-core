@@ -1,7 +1,7 @@
 import {
-  GetWebViewOptions,
   WebViewDefinition,
   SavedWebViewDefinition,
+  OpenWebViewOptions,
 } from '@shared/models/web-view.model';
 import {
   DisposableNetworkObject,
@@ -44,7 +44,7 @@ export interface IWebViewProvider extends NetworkableObject {
    *   web view if an existing webview is being called for (matched by ID). Just provides the
    *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
    *   the web view with the existing ID was not found.
-   * @param getWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+   * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
    *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
    *   on the options, then those options are passed directly through to this method. That way, if
    *   you want to adjust what this method does based on the contents of the options passed to
@@ -62,7 +62,7 @@ export interface IWebViewProvider extends NetworkableObject {
    */
   getWebView(
     savedWebViewDefinition: SavedWebViewDefinition,
-    getWebViewOptions: GetWebViewOptions,
+    openWebViewOptions: OpenWebViewOptions,
     webViewNonce: string,
   ): Promise<WebViewDefinition | undefined>;
 }

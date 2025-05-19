@@ -88,6 +88,7 @@
     "start:data": "dotnet watch --project c-sharp/ParanextDataProvider.csproj",
     "stop": "tsx stop-processes.mjs",
     "storybook": "storybook dev -p 6006",
+    "storybook:platform-bible-react": "cd lib/platform-bible-react && npm run storybook",
     "storybook:build": "storybook build",
     "test": "npm run test:core -- --run && npm run test --workspaces --if-present -- --run",
     "test:core": "vitest",

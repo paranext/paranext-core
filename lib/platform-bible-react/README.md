@@ -52,3 +52,23 @@ npm run build:basic
 ```
 
 Do not commit changes after running this basic build. Before committing, always run a full build.
+
+### Using `platform-bible-react`
+
+To use `platform-bible-react`, simply import the components and use them like you would any React component library.
+
+If you want your whole app to match the styles of these components, you can apply the following styles to your app:
+
+<!-- This is the post-tailwind-conversion version of the @layer base styles at the bottom of the shadcn/ui styles file https://ui.shadcn.com/docs/installation/manual#configure-styles -->
+
+```css
+* {
+  border-color: hsl(var(--border));
+  outline-color: hsl(var(--ring) / 0.5);
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+```
