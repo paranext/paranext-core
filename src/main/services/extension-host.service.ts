@@ -175,14 +175,18 @@ async function startExtensionHost() {
         // Provide the nodemon config paths and command-line argument extension paths as watch
         // directories for nodemon
         ...nodemonWatchPaths.flatMap((watchPath) => ['--watch', watchPath]),
-        '--transpile-only',
         './src/extension-host/extension-host.ts',
         '--',
         ...sharedArgs,
       ],
       {
         stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-        env: { ...process.env, NODE_ENV: 'development' },
+        env: {
+          ...process.env,
+          NODE_ENV: 'development',
+          // Make sure the extension host can find native modules since it doesn't use webpack in dev
+          NODE_PATH: path.join(globalThis.resourcesPath, 'release', 'app', 'node_modules'),
+        },
       },
     );
   }
