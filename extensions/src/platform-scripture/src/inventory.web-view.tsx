@@ -15,6 +15,9 @@ import { RepeatedWordsInventory } from './checks/inventories/repeated-words-inve
 const VALID_ITEMS_DEFAULT = '';
 const INVALID_ITEMS_DEFAULT = '';
 
+// This set of check types is a subset of the CheckType enum in Paratext.Data.Checking
+type CheckType = 'Character' | 'RepeatedWord' | 'Marker' | 'Punctuation';
+
 global.webViewComponent = function InventoryWebView({
   projectId,
   useWebViewState,
@@ -31,7 +34,7 @@ global.webViewComponent = function InventoryWebView({
   let InventoryVariant;
   let validItemsSetting: keyof ProjectSettingTypes;
   let invalidItemsSetting: keyof ProjectSettingTypes;
-  let checkId: string;
+  let checkId: CheckType;
   switch (webViewType) {
     case 'platformScripture.characterInventory':
       InventoryVariant = CharacterInventory;
