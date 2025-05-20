@@ -855,6 +855,32 @@ type TabDropdownMenuProps = {
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
 export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+type TabToolbarProps = React$1.PropsWithChildren<{
+	/** The handler to use for toolbar item commands */
+	projectMenuCommandHandler: CommandHandler;
+	/** The handler to use for toolbar item commands */
+	viewInfoMenuCommandHandler: CommandHandler;
+	/** Menu data that is used to populate the Menubar component for the project menu. */
+	projectMenuData?: Localized<MultiColumnMenu>;
+	tabViewMenuData?: Localized<MultiColumnMenu>;
+	/** Optional unique identifier */
+	id?: string;
+	/** Additional css classes to help with unique styling of the extensible toolbar */
+	className?: string;
+	/**
+	 * Toolbar children to be put at the start of the the toolbar after the project menu icon (left
+	 * side in ltr, right side in rtl). Recommended for inner navigation.
+	 */
+	startAreaChildren?: React$1.ReactNode;
+	/** Toolbar children to be put in the center area of the the toolbar. Recommended for tools. */
+	centerAreaChildren?: React$1.ReactNode;
+	/**
+	 * Toolbar children to be put at the end of the the toolbar before the tab view menu icon (right
+	 * side in ltr, left side in rtl). Recommended for secondary tools and view options.
+	 */
+	endAreaChildren?: React$1.ReactNode;
+}>;
+export declare function TabToolbar({ projectMenuCommandHandler, viewInfoMenuCommandHandler, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1810,6 +1836,7 @@ export declare function cn(...inputs: ClassValue[]): string;
 
 export {
 	TabNavigationContentSearch as NavigationContentSearch,
+	TabToolbarProps as ExtensibleToolbarProps,
 	sonner,
 };
 
