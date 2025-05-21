@@ -1,5 +1,5 @@
 {
-  "name": "paranextExtensionTemplate",
+  "name": "platformLexicalTools",
   "version": "0.0.1",
   "publisher": "paranext",
   "displayData": "assets/displayData.json",
@@ -8,7 +8,7 @@
   "main": "src/main.ts",
   "extensionDependencies": {},
   "elevatedPrivileges": [],
-  "types": "src/types/paranext-extension-template.d.ts",
+  "types": "src/types/platform-lexical-tools.d.ts",
   "menus": "contributions/menus.json",
   "settings": "contributions/settings.json",
   "projectSettings": "contributions/projectSettings.json",

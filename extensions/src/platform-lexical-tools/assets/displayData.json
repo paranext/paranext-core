@@ -4,8 +4,8 @@
   "supportUrl": "",
   "localizedDisplayInfo": {
     "en": {
-      "displayName": "Paranext Extension Template",
-      "shortSummary": "Base template for a Platform.Bible Extension",
+      "displayName": "Platform Lexical Tools",
+      "shortSummary": "Lexical tools integrated into Platform.Bible",
       "description": "assets/descriptions/description-en.md"
     }
   }
