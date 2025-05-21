@@ -142,7 +142,9 @@ const staticFiles: {
   { from: '<project_settings>', noErrorOnMissing: true },
   // Copy the localized strings JSON file into the output folder based on its listing in `manifest.localizedStrings`
   { from: '<localized_strings>', noErrorOnMissing: true },
-  // Copy the display data JSON file into the output folder based on its listing in `manifest.localizedStrings`
+  // Copy the themes JSON file into the output folder based on its listing in `manifest.themes`
+  { from: '<themes>', noErrorOnMissing: true },
+  // Copy the display data JSON file into the output folder based on its listing in `manifest.displayData`
   { from: '<display_data>', noErrorOnMissing: true },
 ];
 
@@ -155,6 +157,7 @@ function getStaticFileName(staticFile: string, extensionInfo: ExtensionInfo) {
     .replace(/<settings>/g, extensionInfo.settings ?? '')
     .replace(/<project_settings>/g, extensionInfo.projectSettings ?? '')
     .replace(/<localized_strings>/g, extensionInfo.localizedStrings ?? '')
+    .replace(/<themes>/g, extensionInfo.themes ?? '')
     .replace(/<display_data>/g, extensionInfo.displayData ?? '');
 }
 
@@ -301,6 +304,8 @@ type ExtensionManifest = {
   projectSettings?: string;
   /** Path to the JSON file that defines the localized strings this extension is adding. */
   localizedStrings?: string;
+  /** Path to the JSON file that defines the themes this extension is adding. */
+  themes?: string;
   /** Path to the JSON file that defines the localized display data this extension is adding. */
   displayData?: string;
   activationEvents: string[];
