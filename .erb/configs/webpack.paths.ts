@@ -1,9 +1,7 @@
 const path = require('path');
 
 const rootPath = path.join(__dirname, '../..');
-
-const erbPath = path.join(__dirname, '..');
-const erbNodeModulesPath = path.join(erbPath, 'node_modules');
+const rootNodeModulesPath = path.join(rootPath, 'node_modules');
 
 const dllPath = path.join(__dirname, '../dll');
 
@@ -18,7 +16,6 @@ const releasePath = path.join(rootPath, 'release');
 const appPath = path.join(releasePath, 'app');
 const appPackagePath = path.join(appPath, 'package.json');
 const appNodeModulesPath = path.join(appPath, 'node_modules');
-const srcNodeModulesPath = path.join(srcPath, 'node_modules');
 
 const distPath = path.join(appPath, 'dist');
 const distMainPath = path.join(distPath, 'main');
@@ -33,7 +30,7 @@ const extensionsLibPath = path.join(extensionsPath, 'lib');
 
 const webpackPaths = {
   rootPath,
-  erbNodeModulesPath,
+  rootNodeModulesPath,
   dllPath,
   srcPath,
   srcMainPath,
@@ -45,7 +42,6 @@ const webpackPaths = {
   appPath,
   appPackagePath,
   appNodeModulesPath,
-  srcNodeModulesPath,
   distPath,
   distMainPath,
   distExtensionHostPath,

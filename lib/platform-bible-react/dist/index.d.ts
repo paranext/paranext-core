@@ -566,22 +566,24 @@ export declare const getBookIdFromUSFM: (text: string) => string;
  * @returns The status for the specified item
  */
 export declare const getStatusForItem: (item: string, approvedItems: string[], unapprovedItems: string[]) => Status;
-/**
- * Represents an item in the inventory with associated text and verse reference.
- */
+/** Represents an item in the inventory with associated text and verse reference. */
 export type InventoryItem = {
-	/** The label by which the item is shown in the inventory (e.g. the word that is repeated in case
+	/**
+	 * The label by which the item is shown in the inventory (e.g. the word that is repeated in case
 	 * of the Repeated Words check). It serves as a unique identifier for the item. It usually is a
 	 * string, but can be a string[] when there are multiple defining attributes (e.g. when 'show
 	 * preceding marker' is enabled for the Markers Inventory, the preceding marker will be stored as
-	 * the second item in the array) */
+	 * the second item in the array)
+	 */
 	inventoryText: string | string[];
 	/** The snippet of scripture where this occurrence of the `inventoryItem` is found */
 	verse: string;
 	/** The reference to the location where the `verse` can be found in scripture */
 	verseRef: SerializedVerseRef;
-	/** Offset used to locate the `inventoryText` (or inventoryText[0] in case of an array) in the
-	 * `verse` string */
+	/**
+	 * Offset used to locate the `inventoryText` (or inventoryText[0] in case of an array) in the
+	 * `verse` string
+	 */
 	offset: number;
 };
 /**
