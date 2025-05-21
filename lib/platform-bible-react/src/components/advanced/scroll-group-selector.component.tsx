@@ -45,8 +45,8 @@ const DEFAULT_SCROLL_GROUP_LOCALIZED_STRINGS = {
 
 export type ScrollGroupSelectorProps = {
   /**
-   * List of scroll group ids to show to the user. Either a {@link ScrollGroupId} or `undefined` for
-   * no scroll group
+   * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
+   * scroll group
    */
   availableScrollGroupIds: (ScrollGroupId | undefined)[];
   /** Currently selected scroll group id. `undefined` for no scroll group */
@@ -94,6 +94,9 @@ export type ScrollGroupSelectorProps = {
    */
   localizedStrings?: LanguageStrings;
 
+  /** Size of the scroll group dropdown button. Defaults to 'default' */
+  size?: 'default' | 'sm' | 'lg' | 'icon';
+
   /** Additional css classes to help with unique styling */
   className?: string;
 };
@@ -104,6 +107,7 @@ export function ScrollGroupSelector({
   scrollGroupId,
   onChangeScrollGroupId,
   localizedStrings = {},
+  size,
   className,
 }: ScrollGroupSelectorProps) {
   const localizedStringsDefaulted = {
@@ -132,7 +136,7 @@ export function ScrollGroupSelector({
         )
       }
     >
-      <SelectTrigger className={cn('pr-twp tw-w-auto', className)}>
+      <SelectTrigger size={size} className={cn('pr-twp tw-w-auto', className)}>
         <SelectValue
           placeholder={
             localizedStringsDefaulted[getLocalizeKeyForScrollGroupId(scrollGroupId)] ??

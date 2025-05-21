@@ -72,6 +72,13 @@ export function getToolbarOSReservedSpaceClassName(
   }
 }
 
+/**
+ * A customizable toolbar component with a menubar, content area, and configure area.
+ *
+ * This component is designed to be used in the window title bar of an electron application.
+ *
+ * @param {ToolbarProps} props - The props for the component.
+ */
 export function Toolbar({
   menuData,
   onOpenChange,

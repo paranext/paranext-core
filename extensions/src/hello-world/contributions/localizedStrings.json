@@ -47,6 +47,8 @@
       "%helloWorld_selectProjects_title%": "Select List of Hello World Projects",
       "%settings_hello_world_group1_label%": "Hello World Settings",
       "%settings_hello_world_personName_label%": "Selected Person's Name on Hello World Web View",
+      "%theme_label_helloWorld_light%": "Hello World Light",
+      "%theme_label_helloWorld_dark%": "Hello World Dark",
       "%project_settings_helloWorld_group1_label%": "Hello World Project Settings",
       "%project_settings_helloWorld_headerSize_label%": "Header Size",
       "%project_settings_helloWorld_headerSize_description%": "Size of the header font in `em`",
@@ -97,7 +99,7 @@
       "%project_settings_helloWorld_headerColor_description%": "Color de los encabezados (debe ser un válido [nombre de color HTML](https://htmlcolorcodes.com/color-names/))"
     },
     "de": {
-      "%submitButton%": "Submit in German"
+      "%test_deprecated_string%": "Test Deprecated String in German"
     }
   }
 }

@@ -33,6 +33,8 @@ import { DialogService } from '@shared/services/dialog.service-model';
 import { dialogService } from '@shared/services/dialog.service';
 import { IMenuDataService } from '@shared/services/menu-data.service-model';
 import { menuDataService } from '@shared/services/menu-data.service';
+import { IDatabaseService } from '@shared/services/database.service-model';
+import { databaseService } from '@shared/services/database.service';
 import { IScrollGroupService } from '@shared/services/scroll-group.service-model';
 import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
@@ -45,6 +47,8 @@ import { NetworkObjectStatusServiceType } from '@shared/models/network-object-st
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
 import { settingsService } from '@shared/services/settings.service';
+import { themeService } from '@shared/services/theme.service';
+import { IThemeService } from '@shared/services/theme.service-model';
 import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
 import { projectSettingsService } from '@shared/services/project-settings.service';
 import { WebViewFactory as PapiWebViewFactory } from '@shared/models/web-view-factory.model';
@@ -114,8 +118,12 @@ const papi = {
   storage: extensionStorageService as ExtensionStorageService,
   /** JSDOC DESTINATION settingsService */
   settings: settingsService as ISettingsService,
+  /** JSDOC DESTINATION themeService */
+  themes: themeService as IThemeService,
   /** JSDOC DESTINATION menuDataService */
   menuData: menuDataService as IMenuDataService,
+  /** JSDOC DESTINATION databaseService */
+  database: databaseService as IDatabaseService,
   /** JSDOC DESTINATION scrollGroupService */
   scrollGroups: scrollGroupService as IScrollGroupService,
   /** JSDOC DESTINATION localizationDataService */
@@ -201,9 +209,15 @@ Object.freeze(papi.storage);
 /** JSDOC DESTINATION settingsService */
 export const { settings } = papi;
 Object.freeze(papi.settings);
+/** JSDOC DESTINATION themeService */
+export const { themes } = papi;
+Object.freeze(papi.themes);
 /** JSDOC DESTINATION menuDataService */
 export const { menuData } = papi;
 Object.freeze(papi.menuData);
+/** JSDOC DESTINATION databaseService */
+export const { database } = papi;
+Object.freeze(papi.database);
 /** JSDOC DESTINATION scrollGroupService */
 export const { scrollGroups } = papi;
 Object.freeze(papi.scrollGroups);

@@ -596,8 +596,8 @@ declare module 'shared/models/web-view.model' {
      */
     updateWebViewDefinition: UpdateWebViewDefinition;
   };
-  /** Options that affect what `webViews.getWebView` does */
-  export type GetWebViewOptions = {
+  /** Options that affect what `webViews.openWebView` does */
+  export type OpenWebViewOptions = {
     /**
      * If provided and if a web view with this ID exists, requests from the web view provider an
      * existing WebView with this ID if one exists. The web view provider can deny the request if it
@@ -620,6 +620,8 @@ declare module 'shared/models/web-view.model' {
      */
     createNewIfNotFound?: boolean;
   };
+  /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
+  export type GetWebViewOptions = OpenWebViewOptions;
 }
 declare module 'shared/global-this.model' {
   import { LogLevel } from 'electron-log';
@@ -954,6 +956,83 @@ declare module 'shared/data/rpc.model' {
   export const GET_METHODS = 'rpc.discover';
   /** Prefix on requests that indicates that the request is a command */
   export const CATEGORY_COMMAND = 'command';
+}
+declare module 'shared/services/shared-store.service' {
+  type NetworkService = typeof import('shared/services/network.service');
+  /**
+   * Initialize the shared store service, setting up request handlers and event listeners. This
+   * function should be called by each of our JS processes early during start up.
+   *
+   * @param networkService The network service to use for communication between processes
+   * @returns A promise that resolves when the service is initialized
+   */
+  export function initialize(networkService: NetworkService): Promise<void>;
+  /**
+   * Reset the shared store service state for testing. This function is only exported for testing
+   * purposes and should not be used in production code.
+   */
+  export function resetForTesting(): void;
+  /**
+   * Get a value from the shared store with proper typing
+   *
+   * @param key The key of the value to retrieve
+   * @returns A cloned copy of the value associated with the key, or undefined if not found
+   */
+  function get<K extends SharedStoreKeys>(key: K): SharedStoreValues[K] | undefined;
+  /**
+   * Set a value in the shared store and notify other processes. Note that if a value with the given
+   * key already exists, it can only be set again by the process that created it. This is to prevent
+   * race conditions between processes setting values that don't incorporate each others' updates.
+   *
+   * @param key The key to set
+   * @param value The value to set. Note that the stored value is a cloned copy of the provided value,
+   *   so changes to the original value will not affect the stored value. Also, any non-serializable
+   *   data will removed from the value during the cloning process.
+   */
+  function set<K extends SharedStoreKeys>(key: K, value?: SharedStoreValues[K]): void;
+  /**
+   * Remove a value from the shared store and notify other processes of the change.
+   *
+   * Note that removing a key sets its value to undefined in the store. The key-value pair isn't
+   * actually deleted. This is done to avoid race conditions if a value for this key is set again
+   * quickly.
+   *
+   * @param key The key to remove
+   */
+  function remove<K extends SharedStoreKeys>(key: K): void;
+  /**
+   * Keys for timeout lengths for network requests. Keys are dynamically constructed by adding this
+   * prefix to the `requestType`.
+   */
+  export type RequestTimeoutSharedStoreKey = `platform.customNetworkTimeoutMs.${string}`;
+  /**
+   * Defines the keys and types of values held in key-value pairs within the shared store service.
+   * Since this service is not part of the public API, the keys and types are not included in
+   * `papi-shared-types.ts`. If the platform needs more key-value pairs, they should be added here.
+   */
+  export interface SharedStoreValues {
+    [timeoutKey: RequestTimeoutSharedStoreKey]: number | undefined;
+  }
+  export type SharedStoreKeys = keyof SharedStoreValues;
+  /**
+   * This provides an in-memory, key-value store that can be read without a network call but updates
+   * automatically in the background using network events. This allows synchronous reading of shared,
+   * non-persisted key-value pairs between processes. It can be thought of as a distributed key-value
+   * store. It relies only on the network service, not other services like network objects or
+   * settings.
+   *
+   * This uses {@link https://en.wikipedia.org/wiki/Lamport_timestamp | Lamport logical clocks} for
+   * conflict resolution to ensure consistency across processes.
+   *
+   * This service is not intended to be accessed directly by extensions. It was created as a utility
+   * for the platform and is not part of the public API. Extensions should use settings and other data
+   * providers for sharing data.
+   */
+  export const sharedStoreService: {
+    get: typeof get;
+    set: typeof set;
+    remove: typeof remove;
+  };
 }
 declare module 'shared/models/papi-network-event-emitter.model' {
   import { PlatformEventHandler, PlatformEventEmitter } from 'platform-bible-utils';
@@ -1487,6 +1566,16 @@ declare module 'shared/services/rpc-handler.factory' {
   /** Creates a server or client RPC handler depending on if we're in main or some other process */
   export const createRpcHandler: () => Promise<IRpcMethodRegistrar>;
 }
+declare module 'shared/models/network.model' {
+  /** Options related to calling a method over the network */
+  export type NetworkMethodHandlerOptions = {
+    /**
+     * Custom timeout to use for callers of a method instead of the platform-wide timeout value. Set
+     * to 0 to disable the timeout.
+     */
+    timeoutMilliseconds?: number;
+  };
+}
 declare module 'shared/services/network.service' {
   /**
    * Handles requests, responses, subscriptions, etc. to the backend. Likely shouldn't need/want to
@@ -1497,6 +1586,7 @@ declare module 'shared/services/network.service' {
   import { PlatformEvent, PlatformEventEmitter, UnsubscriberAsync } from 'platform-bible-utils';
   import { SerializedRequestType } from 'shared/utils/util';
   import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
   export function initialize(): Promise<void>;
   /** Closes the network services gracefully */
   export const shutdown: () => Promise<void>;
@@ -1517,7 +1607,9 @@ declare module 'shared/services/network.service' {
    * Register a local request handler to run on requests.
    *
    * @param requestType The type of request on which to register the handler
-   * @param handler Function to register to run on requests
+   * @param requestHandler Function to register to run on requests
+   * @param requestDocs Documentation for this requestType
+   * @param requestHandlerOptions Options to change the behavior of the request handler
    * @returns Promise that resolves if the request successfully registered and unsubscriber function
    *   to run to stop the passed-in function from handling requests
    */
@@ -1525,6 +1617,7 @@ declare module 'shared/services/network.service' {
     requestType: SerializedRequestType,
     requestHandler: InternalRequestHandler,
     requestDocs?: SingleMethodDocumentation,
+    requestHandlerOptions?: NetworkMethodHandlerOptions,
   ): Promise<UnsubscriberAsync>;
   /**
    * Creates a function that is a request function with a baked requestType. This is also nice because
@@ -2391,9 +2484,9 @@ declare module 'shared/models/extract-data-provider-data-types.model' {
 }
 declare module 'shared/models/web-view-provider.model' {
   import {
-    GetWebViewOptions,
     WebViewDefinition,
     SavedWebViewDefinition,
+    OpenWebViewOptions,
   } from 'shared/models/web-view.model';
   import {
     DisposableNetworkObject,
@@ -2429,7 +2522,7 @@ declare module 'shared/models/web-view-provider.model' {
      *   web view if an existing webview is being called for (matched by ID). Just provides the
      *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
      *   the web view with the existing ID was not found.
-     * @param getWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+     * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
      *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
      *   on the options, then those options are passed directly through to this method. That way, if
      *   you want to adjust what this method does based on the contents of the options passed to
@@ -2447,7 +2540,7 @@ declare module 'shared/models/web-view-provider.model' {
      */
     getWebView(
       savedWebViewDefinition: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
+      openWebViewOptions: OpenWebViewOptions,
       webViewNonce: string,
     ): Promise<WebViewDefinition | undefined>;
   }
@@ -2706,6 +2799,7 @@ declare module 'shared/models/docking-framework.model' {
 declare module 'shared/services/web-view.service-model' {
   import {
     GetWebViewOptions,
+    OpenWebViewOptions,
     SavedWebViewDefinition,
     WebViewId,
     WebViewType,
@@ -2751,7 +2845,7 @@ declare module 'shared/services/web-view.service-model' {
     openWebView: (
       webViewType: WebViewType,
       layout?: Layout,
-      options?: GetWebViewOptions,
+      options?: OpenWebViewOptions,
     ) => Promise<WebViewId | undefined>;
     /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
     getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
@@ -2956,8 +3050,8 @@ declare module 'shared/models/web-view-factory.model' {
   import type { IWebViewProvider } from 'shared/models/web-view-provider.model';
   import {
     SavedWebViewDefinition,
-    GetWebViewOptions,
     WebViewDefinition,
+    OpenWebViewOptions,
   } from 'shared/models/web-view.model';
   /**
    *
@@ -3001,7 +3095,7 @@ declare module 'shared/models/web-view-factory.model' {
      */
     getWebView(
       savedWebViewDefinition: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
+      openWebViewOptions: OpenWebViewOptions,
       webViewNonce: string,
     ): Promise<WebViewDefinition | undefined>;
     /** Disposes of all WVCs that were created by this provider */
@@ -3022,7 +3116,7 @@ declare module 'shared/models/web-view-factory.model' {
      *   web view if an existing webview is being called for (matched by ID). Just provides the
      *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
      *   the web view with the existing ID was not found.
-     * @param getWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
+     * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
      *   should do. When options are passed to `papi.webViews.openWebView`, some defaults are set up
      *   on the options, then those options are passed directly through to this method. That way, if
      *   you want to adjust what this method does based on the contents of the options passed to
@@ -3040,7 +3134,7 @@ declare module 'shared/models/web-view-factory.model' {
      */
     abstract getWebViewDefinition(
       savedWebViewDefinition: SavedWebViewDefinition,
-      getWebViewOptions: GetWebViewOptions,
+      openWebViewOptions: OpenWebViewOptions,
       webViewNonce: string,
     ): Promise<WebViewDefinition | undefined>;
     /**
@@ -3677,6 +3771,7 @@ declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
   import { CommandHandlers } from 'papi-shared-types';
   import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
+  import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
   /**
    * Register a command on the papi to be handled here
    *
@@ -3686,6 +3781,8 @@ declare module 'shared/services/command.service' {
    *       period and lower camel case in case we expand the api in the future to allow dot notation.
    *
    * @param handler Function to run when the command is invoked
+   * @param commandDocs Documentation for the command
+   * @param commandOptions Options for the command
    * @returns Promise that resolves if the command successfully registered and unsubscriber function
    *   to run to stop the passed-in function from handling commands
    */
@@ -3693,6 +3790,7 @@ declare module 'shared/services/command.service' {
     commandName: CommandName,
     handler: CommandHandlers[CommandName],
     commandDocs?: SingleMethodDocumentation,
+    commandOptions?: NetworkMethodHandlerOptions,
   ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
   export const sendCommand: <CommandName extends keyof CommandHandlers>(
@@ -4860,6 +4958,17 @@ declare module 'shared/data/file-system.model' {
    *
    * Note: projects are stored in the production version of `app://projects` regardless of whether you
    * are in production or development
+   *
+   * @example This kind of Uri could look like `app://projects/1234/notes.txt`
+   *
+   * Note: This kind of Uri does not include extension Uris, which support an additional set of
+   * schemes and are only available for use in the extension host.
+   *
+   * @example An extension Uri might look like `papi-extension://my-extension/assets/notes.txt`
+   *
+   * You can convert from a `Uri` to a file path using `getPathFromUri`.
+   *
+   * You can convert from an Extension Uri to a Uri using `getUriFromExtensionUri`.
    */
   export type Uri = string;
 }
@@ -5094,29 +5203,29 @@ declare module 'extension-host/services/extension-storage.service' {
    * extension service or it causes a circular dependency.
    */
   export function setExtensionUris(urisPerExtension: Map<string, string>): void;
-  /** Return a path to the specified file within the extension's installation directory */
-  export function buildExtensionPathFromName(extensionName: string, fileName: string): string;
+  /** Return a URI to the specified file or directory within the extension's installation directory */
+  export function buildExtensionUriFromPath(extensionName: string, filePath: string): string;
   /**
    * Read a text file from the the extension's installation directory
    *
    * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param fileName Name of the file to be read
+   * @param filePath Path to the file or directory to be read
    * @returns Promise for a string with the contents of the file
    */
   function readTextFileFromInstallDirectory(
     token: ExecutionToken,
-    fileName: string,
+    filePath: string,
   ): Promise<string>;
   /**
    * Read a binary file from the the extension's installation directory
    *
    * @param token ExecutionToken provided to the extension when `activate()` was called
-   * @param fileName Name of the file to be read
+   * @param filePath Path to the file or directory to be read
    * @returns Promise for a Buffer with the contents of the file
    */
   function readBinaryFileFromInstallDirectory(
     token: ExecutionToken,
-    fileName: string,
+    filePath: string,
   ): Promise<Buffer>;
   /**
    * Read data specific to the user (as identified by the OS) and extension (as identified by the
@@ -5946,21 +6055,18 @@ declare module 'shared/services/localization.service-model' {
      */
     retrieveCurrentLocalizedStringData: () => Promise<LocalizedStringDataContribution>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
      */
     setLocalizedString(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide localized strings in contributions
      */
     setLocalizedStrings(): Promise<DataProviderUpdateInstructions<LocalizationDataDataTypes>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide new interface languages in contributions
      */
     setAvailableInterfaceLanguages(): Promise<
       DataProviderUpdateInstructions<LocalizationDataDataTypes>
@@ -6030,6 +6136,10 @@ declare module 'shared/data/platform.data' {
   export const PLATFORM_NAMESPACE = 'platform';
   /** Query string passed to the renderer when starting if it should enable noisy dev mode */
   export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
+  /** ID of the default theme family for use in the application */
+  export const DEFAULT_THEME_FAMILY = '';
+  /** Type of the default theme for use in the application */
+  export const DEFAULT_THEME_TYPE = 'light';
 }
 declare module 'shared/log-error.model' {
   /** Error that force logs the error message before throwing. Useful for debugging in some situations. */
@@ -6517,6 +6627,7 @@ declare module '@papi/core' {
   export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
   export type {
     GetWebViewOptions,
+    OpenWebViewOptions,
     SavedWebViewDefinition,
     UseWebViewStateHook,
     UseWebViewScrollGroupScrRefHook,
@@ -6597,11 +6708,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getMainMenu(): Promise<Localized<MultiColumnMenu>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param mainMenuType Does not have to be defined
-     * @param value MultiColumnMenu object to set as the localized main menu
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setMainMenu(
       mainMenuType: undefined,
@@ -6640,11 +6748,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getUnlocalizedMainMenu(): Promise<MultiColumnMenu>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param mainMenuType Does not have to be defined
-     * @param value MultiColumnMenu object to set as the unlocalized main menu
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setUnlocalizedMainMenu(
       mainMenuType: undefined,
@@ -6674,11 +6779,8 @@ declare module 'shared/services/menu-data.service-model' {
      */
     getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
     /**
-     * This data cannot be changed. Trying to use this setter this will always throw
-     *
-     * @param webViewType The type of webview for which a menu should be set
-     * @param value Menu of specified webViewType
-     * @returns Unsubscriber function
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide menu items in contributions
      */
     setWebViewMenu(
       webViewType: ReferencedItem,
@@ -6709,6 +6811,168 @@ declare module 'shared/services/menu-data.service' {
   export const menuDataService: IMenuDataService;
   export default menuDataService;
 }
+declare module 'shared/services/database.service-model' {
+  export const databaseServiceNetworkObjectName = 'DatabaseService';
+  export const databaseServiceObjectToProxy: Readonly<{}>;
+  /**
+   * Options for opening a SQLite database connection. These options are passed to the SQLite `open`
+   * method.
+   *
+   * See more information about these options in [the SQLite
+   * documentation](https://www.sqlite.org/c3ref/open.html)
+   */
+  export interface OpenDatabaseOptions {
+    /**
+     * Whether the database connection should be read-only and prevent writing. Defaults to `false`
+     * for non-extension asset files. However, extension asset files are always read-only and cannot
+     * be edited.
+     */
+    readOnly?: boolean;
+    /**
+     * Whether the database should only allow one database connection to access it at one time.
+     * Defaults to `false`.
+     *
+     * See more information about this option in [the SQLite
+     * documentation](https://www.sqlite.org/c3ref/open.html)
+     */
+    fullMutex?: boolean;
+  }
+  /**
+   * Information about the result of a query execution. This is the result of a query that modifies
+   * the database such as `INSERT`, `UPDATE`, `DELETE`, and some `PRAGMA` queries.
+   */
+  export interface RunResult {
+    /** The last row id that was inserted by the query. This is only available for `INSERT` queries. */
+    lastId: number;
+    /**
+     * The number of rows that were changed or deleted by `UPDATE` or `DELETE` queries. This does not
+     * include inserted rows
+     */
+    changes: number;
+  }
+  /**
+   *
+   * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
+   * database connection using `openDatabase`, and then run queries on it using `run` or `select`. You
+   * can also attach and detach databases to the current database connection instance using
+   * `attachDatabase` and `detachDatabase`.
+   *
+   * [A database connection](https://www.sqlite.org/c3ref/open.html) is an instance of sqlite3 pointed
+   * to a database file. There may be multiple instances of database connections pointing to the same
+   * file, and one instance of a database connection may have additional database files attached to
+   * it.
+   *
+   * Make sure to call `closeDatabase` on any database connection you open with `openDatabase` to
+   * avoid memory leaks.
+   */
+  export type IDatabaseService = {
+    /**
+     * Open a database file into a new database connection instance. Only those who have the returned
+     * `nonce` can access this database connection, so only share it with those you trust.
+     *
+     * WARNING: You must call `closeDatabase` on any database you open with this method. If you do
+     * not, you will leak memory, and indeterminate behavior may occur. Read more from [SQLite
+     * documentation](https://www.sqlite.org/c3ref/close.html)
+     *
+     * @param extensionFileUri - The file URL of the SQLite database. This can only be an extension
+     *   asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
+     * @param options - Options for opening the database
+     * @returns A nonce that must be used to access this newly opened database connection with other
+     *   methods.
+     */
+    openDatabase(extensionFileUri: string, options?: OpenDatabaseOptions): Promise<string>;
+    /**
+     * Close an instance of a database connection.
+     *
+     * WARNING: You must call this method to close every instance of a database connection you open
+     * with `openDatabase`.
+     *
+     * @param databaseNonce - The nonce of the database connection to close. You get this nonce from
+     *   `openDatabase`.
+     */
+    closeDatabase(databaseNonce: string): Promise<void>;
+    /**
+     * Attach a database file to an existing open database connection instance.
+     *
+     * Runs the SQLite [`ATTACH DATABASE`](https://sqlite.org/lang_attach.html) command on the
+     * database connection associated with the provided nonce.
+     *
+     * WARNING: Each database connection instance can have at most 10 attached databases.
+     *
+     * @param databaseNonce - The nonce of the database connection to attach to. You get this nonce
+     *   from `openDatabase`.
+     * @param extensionFileUri - The file URI of the SQLite database to attach. This can only be an
+     *   extension asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`.
+     * @param schemaName - The schema name to associate with the attached database.
+     * @returns A promise that resolves when the database file is successfully attached.
+     */
+    attachDatabase(
+      databaseNonce: string,
+      extensionFileUri: string,
+      schemaName: string,
+    ): Promise<void>;
+    /**
+     * Detach a database file from an existing open database connection instance.
+     *
+     * Runs the SQLite [`DETACH DATABASE`](https://sqlite.org/lang_detach.html) command on the
+     * database associated with the provided nonce.
+     *
+     * @param databaseNonce - The nonce of the database connection to detach from. You get this nonce
+     *   from `openDatabase`.
+     * @param schemaName - The schema name to associate with the attached database.
+     * @returns A promise that resolves when the database file is successfully detached.
+     */
+    detachDatabase(databaseNonce: string, schemaName: string): Promise<void>;
+    /**
+     * Execute a query on a specific database connection instance and receive some information about
+     * changes you made.
+     *
+     * This method is used for queries that modify the database such as `INSERT`, `UPDATE`, `DELETE`,
+     * and some `PRAGMA` queries. For queries that return data like `SELECT`, use `select`.
+     *
+     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
+     *   `openDatabase`.
+     * @param query - The SQL query to execute.
+     * @param args - Optional arguments to pass into the query. You can use `?` in the query and
+     *   specify arguments to replace those `?`s in order, or you can use named parameters like `$id`
+     *   and pass in an object whose keys match the named parameters and whose values are the argument
+     *   values you would like to pass into the parameters. Parameters are not allowed to be used for
+     *   table or column names. See [`sqlite3`'s documentation on
+     *   `run`](https://github.com/TryGhost/node-sqlite3/wiki/API#runsql--param---callback) for more
+     *   information about various ways to pass in arguments.
+     * @returns A promise that resolves to the result of the query execution.
+     */
+    run(databaseNonce: string, query: string, ...args: unknown[]): Promise<RunResult>;
+    /**
+     * Execute a query on a specific database connection instance and receive all rows returned from
+     * the query.
+     *
+     * This method is used for queries that return data like `SELECT` and some `PRAGMA` queries. For
+     * queries that modify the database such as `INSERT`, `UPDATE`, and `DELETE`, use `run`.
+     *
+     * Note: This method is not only for `SELECT` queries but is for any queries that return data. It
+     * is named `select` for ease of association.
+     *
+     * @param databaseNonce - The nonce of the database connection to query. You get this nonce from
+     *   `openDatabase`.
+     * @param query - The SQL query to execute.
+     * @param args - Optional arguments to pass into the query. You can use `?` in the query and
+     *   specify arguments to replace those `?`s in order, or you can use named parameters like `$id`
+     *   and pass in an object whose keys match the named parameters and whose values are the argument
+     *   values you would like to pass into the parameters. Parameters are not allowed to be used for
+     *   table or column names. See [`sqlite3`'s documentation on
+     *   `run`](https://github.com/TryGhost/node-sqlite3/wiki/API#runsql--param---callback) for more
+     *   information about various ways to pass in arguments.
+     * @returns A promise that resolves to an array of rows retrieved by the query.
+     */
+    select(databaseNonce: string, query: string, ...args: unknown[]): Promise<unknown[]>;
+  } & typeof databaseServiceObjectToProxy;
+}
+declare module 'shared/services/database.service' {
+  import { IDatabaseService } from 'shared/services/database.service-model';
+  export const databaseService: IDatabaseService;
+  export default databaseService;
+}
 declare module 'shared/services/scroll-group.service' {
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   /**
@@ -6722,6 +6986,289 @@ declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   export const settingsService: ISettingsService;
   export default settingsService;
+}
+declare module 'shared/services/theme.service-model' {
+  import {
+    OnDidDispose,
+    PlatformError,
+    UnsubscriberAsync,
+    ThemeDefinitionExpanded,
+    ThemeFamiliesByIdExpanded,
+    ThemeFamiliesById,
+  } from 'platform-bible-utils';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  /**
+   *
+   * This name is used to register the theme service data provider on the papi. You can use this
+   * name to find the data provider when accessing it using the useData hook
+   */
+  export const themeServiceDataProviderName = 'platform.themeServiceDataProvider';
+  export const themeServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the theme service data provider on the papi. You can use this
+     * name to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.themeServiceDataProvider';
+  }>;
+  /**
+   * Prefix on theme families that are specifically user-defined theme families that can be edited
+   * live instead of being provided by an extension
+   */
+  export const USER_THEME_FAMILY_PREFIX = 'user-';
+  /**
+   * Object containing any/all of the identifying information for a theme.
+   *
+   * Use this when setting the current theme. Can set just theme family, just theme type, or both
+   */
+  export type CurrentThemeSpecifier = {
+    /** Which theme family to change to. Does not change `shouldMatchSystem` */
+    themeFamilyId?: string;
+    /**
+     * Which theme type to change to (e.g. 'light', 'dark'). If this does not match system theme, sets
+     * `shouldMatchSystem` to false
+     */
+    type?: string;
+  };
+  /** ThemeDataTypes handles getting and setting the application theme. */
+  export type ThemeDataTypes = {
+    CurrentTheme: DataProviderDataType<undefined, ThemeDefinitionExpanded, CurrentThemeSpecifier>;
+    ShouldMatchSystem: DataProviderDataType<undefined, boolean, boolean>;
+    AllThemes: DataProviderDataType<
+      undefined,
+      ThemeFamiliesByIdExpanded,
+      Partial<ThemeFamiliesById>
+    >;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [themeServiceDataProviderName]: IThemeService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export type IThemeService = {
+    /**
+     *
+     * Retrieves the current theme information
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getCurrentTheme(selector: undefined): Promise<ThemeDefinitionExpanded>;
+    /**
+     *
+     * Retrieves the current theme information
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
+    /**
+     * Sets the current theme family and/or type.
+     *
+     * @param newThemeSpecifier Which theme family and/or type to set to. See
+     *   {@link CurrentThemeSpecifier} for more info
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If `newThemeSpecifier` specified theme family or type that do not exist
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setCurrentTheme(
+      newThemeSpecifier: CurrentThemeSpecifier,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Sets the current theme family and/or type.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param newThemeSpecifier Which theme family and/or type to set to. See
+     *   {@link CurrentThemeSpecifier} for more info
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If `newThemeSpecifier` specified theme family or type that do not exist
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setCurrentTheme(
+      selector: undefined,
+      newThemeSpecifier: CurrentThemeSpecifier,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Subscribes to updates of the current theme. Whenever the current theme changes, the callback
+     * function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called whenever the current theme is updated. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeCurrentTheme(
+      selector: undefined,
+      callback: (currentTheme: ThemeDefinitionExpanded | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
+     * current theme will match the system-wide theme where possible.
+     *
+     * If the system theme changes, the current theme will automatically change to match it if there
+     * is a theme with the matching type in the currently selected theme family.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getShouldMatchSystem(selector: undefined): Promise<boolean>;
+    /**
+     *
+     * Retrieves whether the theme type should follow the system-wide theme (dark/light). If so, the
+     * current theme will match the system-wide theme where possible.
+     *
+     * If the system theme changes, the current theme will automatically change to match it if there
+     * is a theme with the matching type in the currently selected theme family.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getShouldMatchSystem(): Promise<boolean>;
+    /**
+     * Sets whether the theme type should follow the system-wide theme (dark/light).
+     *
+     * @param shouldMatchSystem Whether the theme type should follow the system-wide theme
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setShouldMatchSystem(
+      shouldMatchSystem: boolean,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Sets whether the theme type should follow the system-wide theme (dark/light).
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param shouldMatchSystem Whether the theme type should follow the system-wide theme
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setShouldMatchSystem(
+      selector: undefined,
+      shouldMatchSystem: boolean,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Subscribes to updates of whether the theme type should follow the system-wide theme
+     * (dark/light). Whenever `shouldMatchSystem` changes, the callback function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called whenever `shouldMatchSystem` is updated. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeShouldMatchSystem(
+      selector: undefined,
+      callback: (shouldMatchSystem: boolean | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     * Sets partial theme definition information (can only provide `cssVariables`). Only allowed to
+     * set user-defined themes (themes whose family id starts with {@link USER_THEME_FAMILY_PREFIX}).
+     * Extensions can provide their own themes in contributions
+     *
+     * @param updatedUserThemeFamilies Partial {@link ThemeFamiliesById} consisting of any desired
+     *   updates to user-defined themes.
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If theme families not starting with {@link USER_THEME_FAMILY_PREFIX} are passed in
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setAllThemes(
+      updatedUserThemeFamilies: Partial<ThemeFamiliesById>,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Sets partial theme definition information (can only provide `cssVariables`). Only allowed to
+     * set user-defined themes (themes whose family id starts with {@link USER_THEME_FAMILY_PREFIX}).
+     * Extensions can provide their own themes in contributions
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param updatedUserThemeFamilies Partial {@link ThemeFamiliesById} consisting of any desired
+     *   updates to user-defined themes.
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @throws If theme families not starting with {@link USER_THEME_FAMILY_PREFIX} are passed in
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setAllThemes(
+      selector: undefined,
+      updatedUserThemeFamilies: Partial<ThemeFamiliesById>,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    /**
+     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
+     * callback function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called when a theme is added/updated/removed. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeAllThemes(
+      selector: undefined,
+      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    IDataProvider<ThemeDataTypes> &
+    typeof themeServiceObjectToProxy;
+  /**
+   *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export type IThemeServiceLocal = IThemeService & {
+    /**
+     *
+     * Retrieves the current theme information
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getCurrentThemeSync(): ThemeDefinitionExpanded;
+  };
+}
+declare module 'shared/services/theme.service' {
+  import { IThemeService } from 'shared/services/theme.service-model';
+  export const themeService: IThemeService;
 }
 declare module 'shared/services/project-settings.service' {
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
@@ -6874,11 +7421,13 @@ declare module '@papi/backend' {
   import { ProjectLookupServiceType } from 'shared/models/project-lookup.service-model';
   import { DialogService } from 'shared/services/dialog.service-model';
   import { IMenuDataService } from 'shared/services/menu-data.service-model';
+  import { IDatabaseService } from 'shared/services/database.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
   import { MinimalNetworkObjectService } from 'shared/services/network-object.service';
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
+  import { IThemeService } from 'shared/services/theme.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
   import { INotificationService } from 'shared/models/notification.service-model';
@@ -7092,9 +7641,33 @@ declare module '@papi/backend' {
     settings: ISettingsService;
     /**
      *
+     * Service that allows to interact with the application theme.
+     *
+     * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+     * {@link IThemeServiceLocal}
+     */
+    themes: IThemeService;
+    /**
+     *
      * Service that allows to get and store menu data
      */
     menuData: IMenuDataService;
+    /**
+     *
+     * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
+     * database connection using `openDatabase`, and then run queries on it using `run` or `select`. You
+     * can also attach and detach databases to the current database connection instance using
+     * `attachDatabase` and `detachDatabase`.
+     *
+     * [A database connection](https://www.sqlite.org/c3ref/open.html) is an instance of sqlite3 pointed
+     * to a database file. There may be multiple instances of database connections pointing to the same
+     * file, and one instance of a database connection may have additional database files attached to
+     * it.
+     *
+     * Make sure to call `closeDatabase` on any database connection you open with `openDatabase` to
+     * avoid memory leaks.
+     */
+    database: IDatabaseService;
     /**
      *
      * Provides functions related to scroll groups and Scripture references at those scroll groups
@@ -7321,9 +7894,33 @@ declare module '@papi/backend' {
   export const settings: ISettingsService;
   /**
    *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export const themes: IThemeService;
+  /**
+   *
    * Service that allows to get and store menu data
    */
   export const menuData: IMenuDataService;
+  /**
+   *
+   * Service that allows to interact with SQLite databases. You can create an instance of a SQLite
+   * database connection using `openDatabase`, and then run queries on it using `run` or `select`. You
+   * can also attach and detach databases to the current database connection instance using
+   * `attachDatabase` and `detachDatabase`.
+   *
+   * [A database connection](https://www.sqlite.org/c3ref/open.html) is an instance of sqlite3 pointed
+   * to a database file. There may be multiple instances of database connections pointing to the same
+   * file, and one instance of a database connection may have additional database files attached to
+   * it.
+   *
+   * Make sure to call `closeDatabase` on any database connection you open with `openDatabase` to
+   * avoid memory leaks.
+   */
+  export const database: IDatabaseService;
   /**
    *
    * Provides functions related to scroll groups and Scripture references at those scroll groups
@@ -7405,6 +8002,8 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
     projectSettings?: string;
     /** Path to the JSON file that defines the localized strings this extension is adding. */
     localizedStrings?: string;
+    /** Path to the JSON file that defines the themes this extension is adding. */
+    themes?: string;
     /**
      * List of events that occur that should cause this extension to be activated. Not yet
      * implemented.
@@ -8070,6 +8669,176 @@ declare module 'renderer/hooks/papi-hooks/index' {
 declare module '@papi/frontend/react' {
   export * from 'renderer/hooks/papi-hooks/index';
 }
+declare module 'shared/services/theme-data.service-model' {
+  import {
+    OnDidDispose,
+    UnsubscriberAsync,
+    PlatformError,
+    ThemeFamiliesByIdExpanded,
+  } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from '@papi/core';
+  /**
+   *
+   * This name is used to register the theme data data provider on the papi. You can use this name
+   * to find the data provider when accessing it using the useData hook
+   */
+  export const themeDataServiceProviderName = 'platform.themeDataServiceDataProvider';
+  export const themeDataServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the theme data data provider on the papi. You can use this name
+     * to find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.themeDataServiceDataProvider';
+  }>;
+  export type ThemeDataDataTypes = {
+    AllThemes: DataProviderDataType<undefined, ThemeFamiliesByIdExpanded, never>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [themeDataServiceProviderName]: IThemeDataService;
+    }
+  }
+  /**
+   * Service that provides aggregated theme contributions from the platform and extensions. Serves
+   * theme contribution info to the theme service
+   */
+  export type IThemeDataService = {
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(selector: undefined): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     *
+     * Retrieves information about all themes (including theme families) available in the app. These
+     * are provided by the platform and by extensions.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the currently selected theme
+     */
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
+    /**
+     * This data cannot be changed. Trying to use this setter this will always throw. Extensions can
+     * provide themes in contributions
+     */
+    setAllThemes(
+      selector: undefined,
+      value: never,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataDataTypes>>;
+    /**
+     * Subscribes to updates of all themes available in the app. Whenever any theme data changes, the
+     * callback function is executed.
+     *
+     * @param selector `undefined`
+     * @param callback The function that will be called when a theme is added/updated/removed. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber that should be called whenever the subscription should be deleted
+     */
+    subscribeAllThemes(
+      selector: undefined,
+      callback: (allThemes: ThemeFamiliesByIdExpanded | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof themeDataServiceObjectToProxy &
+    IDataProvider<ThemeDataDataTypes>;
+}
+declare module 'shared/services/theme-data.service' {
+  import { IThemeDataService } from 'shared/services/theme-data.service-model';
+  export const themeDataService: IThemeDataService;
+  export default themeDataService;
+}
+declare module 'renderer/services/theme.service-host' {
+  import {
+    ThemeDataTypes,
+    IThemeServiceLocal,
+    CurrentThemeSpecifier,
+  } from 'shared/services/theme.service-model';
+  import {
+    DataProviderEngine,
+    IDataProviderEngine,
+  } from 'shared/models/data-provider-engine.model';
+  import { DataProviderUpdateInstructions } from 'shared/models/data-provider.model';
+  import {
+    PlatformEvent,
+    ThemeFamiliesByIdExpanded,
+    ThemeDefinitionExpanded,
+    ThemeFamiliesById,
+    PlatformEventAsync,
+    PlatformError,
+  } from 'platform-bible-utils';
+  class ThemeDataProviderEngine
+    extends DataProviderEngine<ThemeDataTypes>
+    implements IDataProviderEngine<ThemeDataTypes>
+  {
+    #private;
+    currentTheme: ThemeDefinitionExpanded;
+    shouldMatchSystem: boolean;
+    currentSystemTheme: 'light' | 'dark';
+    userThemes: ThemeFamiliesById;
+    private unsubscribeEventListeners;
+    constructor(
+      currentTheme: ThemeDefinitionExpanded,
+      saveCurrentTheme: (currentTheme: ThemeDefinitionExpanded) => void,
+      shouldMatchSystem: boolean,
+      saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
+      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded | PlatformError>,
+      currentSystemTheme: 'light' | 'dark',
+      onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
+      userThemes: ThemeFamiliesById,
+      saveUserThemes: (userThemes: ThemeFamiliesById) => void,
+    );
+    getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
+    setCurrentTheme(
+      newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
+      newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    getShouldMatchSystem(): Promise<boolean>;
+    setShouldMatchSystem(
+      newShouldMatchSystemPossiblyUndefinedSelector: boolean | undefined,
+      newShouldMatchSystemPossiblyNotProvided?: boolean,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
+    setAllThemes(
+      newUserThemesPossiblyUndefinedSelector: Partial<ThemeFamiliesById> | undefined,
+      newUserThemesPossiblyNotProvided?: Partial<ThemeFamiliesById>,
+    ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
+    dispose(): Promise<boolean>;
+  }
+  export function initialize(): Promise<void>;
+  /** This is an internal-only export for testing purposes and should not be used in development */
+  export const testingThemeService: {
+    implementThemeDataProviderEngine: (
+      currentTheme: ThemeDefinitionExpanded,
+      saveCurrentTheme: () => void,
+      shouldMatchSystem: boolean,
+      saveShouldMatchSystem: (shouldMatchSystem: boolean) => void,
+      onDidUpdateAllThemes: PlatformEventAsync<ThemeFamiliesByIdExpanded>,
+      currentSystemTheme: 'light' | 'dark',
+      onDidChangeSystemTheme: PlatformEvent<'light' | 'dark'>,
+      userThemes: ThemeFamiliesById,
+      saveUserThemes: (userThemes: ThemeFamiliesById) => void,
+    ) => ThemeDataProviderEngine;
+  };
+  /**
+   * Theme service that is available locally in the renderer only and can perform synchronous
+   * operations
+   */
+  export const localThemeService: IThemeServiceLocal;
+}
 declare module 'renderer/services/renderer-xml-http-request.service' {
   /** This wraps the browser's XMLHttpRequest implementation to
    * provide better control over internet access. It is isomorphic with the standard XMLHttpRequest,
@@ -8150,6 +8919,7 @@ declare module '@papi/frontend' {
   import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
+  import { IThemeServiceLocal } from 'shared/services/theme.service-model';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
   const papi: {
@@ -8237,6 +9007,14 @@ declare module '@papi/frontend' {
     react: typeof papiReact;
     /** */
     settings: ISettingsService;
+    /**
+     *
+     * Service that allows to interact with the application theme.
+     *
+     * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+     * {@link IThemeServiceLocal}
+     */
+    themes: IThemeServiceLocal;
     /**
      *
      * Service that allows to get and store menu data
@@ -8343,6 +9121,14 @@ declare module '@papi/frontend' {
   export const react: typeof papiReact;
   /** */
   export const settings: ISettingsService;
+  /**
+   *
+   * Service that allows to interact with the application theme.
+   *
+   * When accessing `papi.themes` from a WebView, it will have additional functionality. See
+   * {@link IThemeServiceLocal}
+   */
+  export const themes: IThemeServiceLocal;
   /**
    *
    * Service that allows to get and store menu data

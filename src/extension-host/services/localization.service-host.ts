@@ -265,10 +265,10 @@ class LocalizationDataProviderEngine
   // This method legitimately does not need to call anything else in this class as of now
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getLocalizedString({ localizeKey, locales = [] }: LocalizationSelector) {
-    const deprecationMessage = localizedStringsDocumentCombiner.deprecatedStringsByKey[localizeKey];
-    if (deprecationMessage)
+    const deprecationInfo = localizedStringsDocumentCombiner.deprecatedStringsByKey[localizeKey];
+    if (deprecationInfo)
       logger.warn(
-        `Localization Service Host received getLocalizedString for deprecated LocalizeKey ${localizeKey}: ${deprecationMessage}`,
+        `Localization Service Host received getLocalizedString for LocalizeKey ${localizeKey} deprecated ${deprecationInfo.date}: ${deprecationInfo.message}`,
       );
 
     const languages = locales.length > 0 ? [...locales] : await getDefaultLanguages();
@@ -301,18 +301,6 @@ class LocalizationDataProviderEngine
   }
 
   async getLocalizedStrings({ localizeKeys, locales = [] }: LocalizationSelectors) {
-    const fullDeprecationMessage = localizeKeys.reduce((accumulatedMessage, localizeKey) => {
-      const deprecationMessage =
-        localizedStringsDocumentCombiner.deprecatedStringsByKey[localizeKey];
-      if (!deprecationMessage) return accumulatedMessage;
-
-      return `${accumulatedMessage}\n\tLocalization Service Host received getLocalizedString for deprecated LocalizeKey ${localizeKey}: ${deprecationMessage}`;
-    }, '');
-    if (fullDeprecationMessage)
-      logger.warn(
-        `Localization Service Host received getLocalizedStrings for deprecated LocalizeKeys:${fullDeprecationMessage}`,
-      );
-
     const languages =
       locales.length > 0 ? locales : await settingsService.get('platform.interfaceLanguage');
 

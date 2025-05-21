@@ -52,6 +52,12 @@ const DATA_PROVIDER_LABEL = 'data';
 const ON_DID_UPDATE = 'onDidUpdate';
 
 /**
+ * Time in ms to wait for a data provider's AsyncVariable to resolve before throwing during the
+ * registration process
+ */
+const REGISTER_DATA_PROVIDER_TIMEOUT_MS = 30000;
+
+/**
  * An object reference that is a placeholder for updates for data provider subscribers. We want to
  * make absolutely sure updates that come in are sent to subscribers, so we use this object
  * reference to tell if we have never had an update before.
@@ -741,6 +747,7 @@ async function registerEngine<DataProviderName extends DataProviderNames>(
    */
   const dataProviderVariable = new AsyncVariable<DataProviders[DataProviderName]>(
     `DataProvider-${providerName}`,
+    REGISTER_DATA_PROVIDER_TIMEOUT_MS,
   );
 
   // Create a networked update event

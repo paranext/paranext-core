@@ -24,6 +24,7 @@ const configuration: webpack.Configuration = {
     rules: [
       {
         test: /\.[jt]sx?$/,
+        resourceQuery: { not: [/raw/] },
         exclude: /node_modules/,
         use: {
           loader: 'ts-loader',
@@ -38,7 +39,15 @@ const configuration: webpack.Configuration = {
       },
       {
         test: /.node$/,
+        resourceQuery: { not: [/raw/] },
         loader: 'node-loader',
+      },
+      /** Import files with no transformation as strings with "./file?raw" */
+      // This must be the last rule in order to be applied before all other transformations
+      // https://webpack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
+      {
+        resourceQuery: /raw/,
+        type: 'asset/source',
       },
     ],
   },
@@ -54,7 +63,11 @@ const configuration: webpack.Configuration = {
   /** Determine the array of extensions that should be used to resolve modules. */
   resolve: {
     extensions: ['.js', '.jsx', '.json', '.ts', '.tsx'],
-    modules: [webpackPaths.srcPath, 'node_modules'],
+    modules: [
+      webpackPaths.srcPath,
+      webpackPaths.rootNodeModulesPath,
+      webpackPaths.appNodeModulesPath,
+    ],
     // There is no need to add aliases here, the paths in tsconfig get mirrored
     plugins: [new TsconfigPathsPlugins()],
     fallback: {

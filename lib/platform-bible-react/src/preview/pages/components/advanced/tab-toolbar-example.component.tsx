@@ -201,6 +201,7 @@ const startAreaChildren = (
       localizedStrings={myScrollGroupIdLocalizedStrings}
       scrollGroupId={0}
       onChangeScrollGroupId={setScrollGroupId}
+      size="sm"
     />
   </>
 );
@@ -222,6 +223,7 @@ const endAreaChildren = (
       localizedStrings={myScrollGroupIdLocalizedStrings}
       scrollGroupId={0}
       onChangeScrollGroupId={setScrollGroupId}
+      size="sm"
     />
   </>
 );

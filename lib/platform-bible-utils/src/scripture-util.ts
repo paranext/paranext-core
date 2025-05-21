@@ -92,21 +92,42 @@ const scrBookData: BookInfo[] = [
   { shortName: 'REV', fullNames: ['Revelation'], chapters: 22 },
 ];
 
+/** The first book number */
 export const FIRST_SCR_BOOK_NUM = 1;
+/** The last book number */
 export const LAST_SCR_BOOK_NUM = scrBookData.length - 1;
+/** The first chapter number */
 export const FIRST_SCR_CHAPTER_NUM = 1;
+/** The first verse number */
 export const FIRST_SCR_VERSE_NUM = 1;
 
+/** The default Scripture reference, representing the first chapter and verse of the first book. */
 export const defaultScrRef: SerializedVerseRef = {
   book: 'GEN',
   chapterNum: 1,
   verseNum: 1,
 };
 
+/**
+ * Retrieves the number of chapters for a given book number.
+ *
+ * @param bookNum The number representing the book.
+ * @returns The number of chapters in the book, or -1 if the book number is invalid.
+ */
 export const getChaptersForBook = (bookNum: number): number => {
   return scrBookData[bookNum]?.chapters ?? -1;
 };
 
+/**
+ * Adjusts the book of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose book is to be adjusted.
+ * @param offset The number of books to offset the current book by. Positive values move forward,
+ *   negative values move backward.
+ * @returns A new Scripture reference with the adjusted book. The chapter and verse numbers are
+ *   reset to 1. If the resulting book number exceeds the bounds of available books, it is clamped
+ *   to the nearest valid book.
+ */
 export const offsetBook = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   book: Canon.bookNumberToId(
     Math.max(
@@ -118,6 +139,15 @@ export const offsetBook = (scrRef: SerializedVerseRef, offset: number): Serializ
   verseNum: 1,
 });
 
+/**
+ * Adjusts the chapter of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose chapter is to be adjusted.
+ * @param offset The number of chapters to offset the current chapter by. Positive values move
+ *   forward, negative values move backward.
+ * @returns A new Scripture reference with the adjusted chapter. The verse number is reset to 1. The
+ *   chapter number is clamped to stay within valid bounds for the book.
+ */
 export const offsetChapter = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   ...scrRef,
   chapterNum: Math.min(
@@ -127,6 +157,15 @@ export const offsetChapter = (scrRef: SerializedVerseRef, offset: number): Seria
   verseNum: 1,
 });
 
+/**
+ * Adjusts the verse of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose verse is to be adjusted.
+ * @param offset The number of verses to offset the current verse by. Positive values move forward,
+ *   negative values move backward.
+ * @returns A new Scripture reference with the adjusted verse. The verse number is clamped to stay
+ *   within valid bounds for the chapter.
+ */
 export const offsetVerse = (scrRef: SerializedVerseRef, offset: number): SerializedVerseRef => ({
   ...scrRef,
   verseNum: Math.max(FIRST_SCR_VERSE_NUM, scrRef.verseNum + offset),

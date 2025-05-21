@@ -10,6 +10,10 @@ import {
 import { addTabToDock, addWebViewToDock, loadTab } from './platform-dock-layout-storage.util';
 
 vi.mock('../../../shared/services/logger.service');
+vi.mock('@renderer/services/theme.service-host', () => ({
+  __esModule: true,
+  localThemeService: {},
+}));
 
 describe('Dock Layout Component', () => {
   const mockDockLayout = mock(DockLayout);

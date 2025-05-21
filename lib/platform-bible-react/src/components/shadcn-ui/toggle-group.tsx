@@ -6,11 +6,7 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { toggleVariants } from '@/components/shadcn-ui/toggle';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
-/**
- * @inheritdoc ToggleGroup
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/toggle-group}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/toggle-group}
- */
+/** @inheritdoc ToggleGroup */
 const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariants>>({
   size: 'default',
   variant: 'default',
@@ -18,10 +14,9 @@ const ToggleGroupContext = React.createContext<VariantProps<typeof toggleVariant
 
 /**
  * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These
- * components are built on Radix UI primitives and styled with Shadcn UI.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/toggle-group}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/toggle-group}
+ * components are built on Radix UI primitives and styled with Shadcn UI. See Shadcn UI
+ * Documentation: https://ui.shadcn.com/docs/components/toggle-group See Radix UI Documentation:
+ * https://www.radix-ui.com/primitives/docs/components/toggle-group
  */
 const ToggleGroup = React.forwardRef<
   React.ElementRef<typeof ToggleGroupPrimitive.Root>,
@@ -49,11 +44,7 @@ const ToggleGroup = React.forwardRef<
 
 ToggleGroup.displayName = ToggleGroupPrimitive.Root.displayName;
 
-/**
- * @inheritdoc ToggleGroup
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/toggle-group}
- * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/toggle-group}
- */
+/** @inheritdoc ToggleGroup */
 const ToggleGroupItem = React.forwardRef<
   React.ElementRef<typeof ToggleGroupPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof ToggleGroupPrimitive.Item> &

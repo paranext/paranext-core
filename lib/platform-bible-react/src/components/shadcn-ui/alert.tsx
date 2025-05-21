@@ -31,8 +31,7 @@ const alertVariants = cva(
 
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
- *
- * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
+ * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
  */
 const Alert = React.forwardRef<
   HTMLDivElement,
@@ -42,10 +41,7 @@ const Alert = React.forwardRef<
 ));
 Alert.displayName = 'Alert';
 
-/**
- * @inheritdoc Alert
- * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
- */
+/** @inheritdoc Alert */
 const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
     <h5
@@ -60,10 +56,7 @@ const AlertTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<H
 );
 AlertTitle.displayName = 'AlertTitle';
 
-/**
- * @inheritdoc Alert
- * @see Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
- */
+/** @inheritdoc Alert */
 const AlertDescription = React.forwardRef<
   HTMLParagraphElement,
   React.HTMLAttributes<HTMLParagraphElement>

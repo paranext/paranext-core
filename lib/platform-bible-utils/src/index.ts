@@ -110,8 +110,10 @@ export type {
 export type { Unsubscriber, UnsubscriberAsync } from './unsubscriber';
 export type { DocumentCombinerOptions, JsonDocumentLike } from './document-combiner';
 export type {
+  DateYYYYMMDD,
   LanguageStrings,
   LocalizedStringDataContribution,
+  LocalizedStringDeprecationInfo,
   LocalizedStringValue,
   StringMetadata,
   StringsMetadata,
@@ -162,6 +164,8 @@ export type {
   UserStateContribution,
 } from './settings.model';
 export { projectSettingsDocumentSchema, settingsDocumentSchema } from './settings.model';
+export * from './theme.model';
+export * from './theme.util';
 export type {
   IUsjReaderWriter,
   UsjContentLocation,

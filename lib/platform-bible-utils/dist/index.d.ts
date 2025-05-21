@@ -350,6 +350,13 @@ export declare class Mutex extends AsyncMutex {
 /** Map of {@link Mutex}es that automatically (lazily) generates a new {@link Mutex} for any new key */
 export declare class MutexMap {
 	private mutexesByID;
+	/**
+	 * Retrieves the {@link Mutex} associated with the given ID. If no Mutex exists for the provided
+	 * ID, a new Mutex is created, stored, and returned.
+	 *
+	 * @param mutexID Unique identifier for the desired Mutex
+	 * @returns The Mutex associated with the provided ID
+	 */
 	get(mutexID: string): Mutex;
 }
 export declare class NonValidatingDocumentCombiner extends DocumentCombiner {
@@ -439,7 +446,6 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 * @param callback Function to run with the event when it is emitted
 	 * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
 	 *   emitted
-	 * @alias event
 	 */
 	subscribe: PlatformEvent<T>;
 	/** All callback functions that will run when this event is emitted. Lazy loaded */
@@ -452,7 +458,6 @@ export declare class PlatformEventEmitter<T> implements Dispose {
 	 * Event for listeners to subscribe to. Subscribes a function to run when this event is emitted.
 	 * Use like `const unsubscriber = event(callback)`
 	 *
-	 * @param callback Function to run with the event when it is emitted
 	 * @returns Unsubscriber function to run to stop calling the passed-in function when the event is
 	 *   emitted
 	 */
@@ -549,32 +554,33 @@ export declare class UnsubscriberAsyncList {
 	 */
 	runAllUnsubscribers(): Promise<boolean>;
 }
+/** The version of the PlatformError type */
 export declare const PLATFORM_ERROR_VERSION = 1;
 /**
- * PlatformError is an error type with stronger typing of properties than {@link Error}. It is used
- * to represent errors that are returned by the platform.
+ * PlatformError is an error type with stronger typing of properties than `Error`. It is used to
+ * represent errors that are returned by the platform.
  *
  * You can create a new PlatformError object using {@link newPlatformError}. You can check if a value
  * is a PlatformError object using {@link isPlatformError}.
  */
 export type PlatformError = {
 	/**
-	 * The underlying cause of the error, if any. Normally this will be copied from an {@link Error}
-	 * object passed to {@link newPlatformError}. If a non-Error object is passed to
-	 * {@link newPlatformError}, it will be stored here.
+	 * The underlying cause of the error, if any. Normally this will be copied from an `Error object
+	 * passed to {@link newPlatformError}. If a non-Error object is passed to {@link newPlatformError},
+	 * it will be stored here.
 	 */
 	cause?: unknown;
 	/**
-	 * A descriptive message explaining the error. Normally this will be copied from an {@link Error}
-	 * object passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it
-	 * will be stored here.
+	 * A descriptive message explaining the error. Normally this will be copied from an `Error` object
+	 * passed to {@link newPlatformError}. If a string is passed to {@link newPlatformError}, it will be
+	 * stored here.
 	 */
 	message: string;
 	/** The version of the PlatformError type. */
 	platformErrorVersion: number;
 	/**
-	 * The stack trace of the error, if available. Normally this will be copied from an {@link Error}
-	 * object passed to {@link newPlatformError}.
+	 * The stack trace of the error, if available. Normally this will be copied from an `Error` object
+	 * passed to {@link newPlatformError}.
 	 */
 	stack?: string;
 };
@@ -594,6 +600,10 @@ export declare function newPlatformError(error?: unknown): PlatformError;
  * @returns `true` if the value is a PlatformError object, otherwise `false`
  */
 export declare function isPlatformError(error: unknown): error is PlatformError;
+/**
+ * Represents a book, with its short name (e.g. "Gen") and full names (e.g. "Genesis"), and number
+ * of chapters.
+ */
 export interface BookInfo {
 	shortName: string;
 	fullNames: string[];
@@ -648,6 +658,8 @@ export declare function deepClone<T>(obj: T): T;
 /**
  * Get a function that reduces calls to the function passed in
  *
+ * @template T - A function type that takes any arguments and returns void. This is the type of the
+ *   function being debounced.
  * @param fn The function to debounce
  * @param delay How much delay in milliseconds after the most recent call to the debounced function
  *   to call the function
@@ -657,11 +669,19 @@ export declare function debounce<T extends (...args: any[]) => void>(fn: T, dela
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *
- * @param items Array of items to group by
- * @param keySelector Function to run on each item to get the key for the group to which it belongs
- * @param valueSelector Function to run on each item to get the value it should have in the group
- *   (like map function). If not provided, uses the item itself
- * @returns Map of keys to groups of values corresponding to each item
+ * There are two overloads:
+ *
+ * - `groupBy(items, keySelector)` – groups the original items using the key returned by
+ *   `keySelector`.
+ * - `groupBy(items, keySelector, valueSelector)` – groups transformed values using the key returned
+ *   by `keySelector` and the value returned by `valueSelector`.
+ *
+ * If `valueSelector` is not provided, the original item is used in the resulting groups.
+ *
+ * @param items - Array of items to group by.
+ * @param keySelector - Function to run on each item to get the key for the group to which it
+ *   belongs
+ * @returns Map of keys to groups of values corresponding to each item.
  */
 export declare function groupBy<T, K>(items: T[], keySelector: (item: T) => K): Map<K, Array<T>>;
 export declare function groupBy<T, K, V>(items: T[], keySelector: (item: T) => K, valueSelector: (item: T, key: K) => V): Map<K, Array<V>>;
@@ -1144,14 +1164,53 @@ export declare const menuDocumentSchema: {
 		};
 	};
 };
+/** The first book number */
 export declare const FIRST_SCR_BOOK_NUM = 1;
+/** The last book number */
 export declare const LAST_SCR_BOOK_NUM: number;
+/** The first chapter number */
 export declare const FIRST_SCR_CHAPTER_NUM = 1;
+/** The first verse number */
 export declare const FIRST_SCR_VERSE_NUM = 1;
+/** The default Scripture reference, representing the first chapter and verse of the first book. */
 export declare const defaultScrRef: SerializedVerseRef;
+/**
+ * Retrieves the number of chapters for a given book number.
+ *
+ * @param bookNum The number representing the book.
+ * @returns The number of chapters in the book, or -1 if the book number is invalid.
+ */
 export declare const getChaptersForBook: (bookNum: number) => number;
+/**
+ * Adjusts the book of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose book is to be adjusted.
+ * @param offset The number of books to offset the current book by. Positive values move forward,
+ *   negative values move backward.
+ * @returns A new Scripture reference with the adjusted book. The chapter and verse numbers are
+ *   reset to 1. If the resulting book number exceeds the bounds of available books, it is clamped
+ *   to the nearest valid book.
+ */
 export declare const offsetBook: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
+/**
+ * Adjusts the chapter of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose chapter is to be adjusted.
+ * @param offset The number of chapters to offset the current chapter by. Positive values move
+ *   forward, negative values move backward.
+ * @returns A new Scripture reference with the adjusted chapter. The verse number is reset to 1. The
+ *   chapter number is clamped to stay within valid bounds for the book.
+ */
 export declare const offsetChapter: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
+/**
+ * Adjusts the verse of a Scripture reference by a specified offset.
+ *
+ * @param scrRef The Scripture reference whose verse is to be adjusted.
+ * @param offset The number of verses to offset the current verse by. Positive values move forward,
+ *   negative values move backward.
+ * @returns A new Scripture reference with the adjusted verse. The verse number is clamped to stay
+ *   within valid bounds for the chapter.
+ */
 export declare const offsetVerse: (scrRef: SerializedVerseRef, offset: number) => SerializedVerseRef;
 /**
  * https://github.com/ubsicap/Paratext/blob/master/ParatextData/SILScriptureExtensions.cs#L72
@@ -1911,6 +1970,14 @@ export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
 export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeFormat, since: Date, to?: Date): string;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
+/**
+ * Date in YYYY-MM-DD format
+ *
+ * Use regex `^\d\d\d\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$` to test.
+ *
+ * Thanks to Vinod at https://stackoverflow.com/a/22061879 for the regex.
+ */
+export type DateYYYYMMDD = `${number}-${number}-${number}`;
 /** The data an extension provides to inform Platform.Bible of the localized strings it provides. */
 export interface LocalizedStringDataContribution {
 	[k: string]: unknown;
@@ -1944,12 +2011,31 @@ export interface StringMetadata {
 	 */
 	notes?: string;
 	/**
-	 * If this property is filled, the localized string is deprecated. This string should contain the
-	 * date of deprecation, the reason for deprecation, and what to use instead in what contexts.
-	 *
-	 * @example 13 November 2024. Reworded to clarify the meaning. Use %my_key_2% instead.
+	 * If this property is filled, the localized string is deprecated. Contains information about the
+	 * deprecation.
 	 */
-	deprecated?: string;
+	deprecationInfo?: LocalizedStringDeprecationInfo;
+}
+/**
+ * Contains information about the deprecation of a localized string key, including the date of
+ * deprecation and the reason.
+ */
+export interface LocalizedStringDeprecationInfo {
+	[k: string]: unknown;
+	/**
+	 * Date of deprecation. Must be in YYYY-MM-DD format e.g. 2024-11-13.
+	 *
+	 * Tested against regex `^\d\d\d\d-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])$`.
+	 *
+	 * Thanks to Vinod at https://stackoverflow.com/a/22061879 for the regex.
+	 */
+	date: DateYYYYMMDD;
+	/**
+	 * Should contain the reason for deprecation and what to use instead in what contexts.
+	 *
+	 * @example Reworded to clarify the meaning. Use %my_key_2% instead.
+	 */
+	message: string;
 }
 /**
  * Map whose keys are localized string keys and whose values provide information about how to
@@ -2014,11 +2100,28 @@ export declare const localizedStringsDocumentSchema: {
 					description: string;
 					type: string;
 				};
-				deprecated: {
+				deprecationInfo: {
+					description: string;
+					$ref: string;
+				};
+			};
+		};
+		localizedStringDeprecationInfo: {
+			description: string;
+			type: string;
+			properties: {
+				date: {
+					description: string;
+					type: string;
+					pattern: string;
+					tsType: string;
+				};
+				message: {
 					description: string;
 					type: string;
 				};
 			};
+			required: string[];
 		};
 		localizeKey: {
 			description: string;
@@ -2119,6 +2222,10 @@ export interface ProjectSettingsGroup {
 export interface ProjectSettingProperties {
 	[k: ReferencedItem]: ProjectSetting;
 }
+/**
+ * Defines a set of optional properties that can be used to filter projects based on their
+ * `projectInterface` and Project Data Provider Factory Ids.
+ */
 export interface ModifierProject {
 	/**
 	 * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
@@ -2139,7 +2246,7 @@ export interface ModifierProject {
 	 * In other words, each entry in the first-level array is `OR`'ed together. Each entry in
 	 * second-level arrays (arrays within the first-level array) are `AND`'ed together.
 	 *
-	 * Defaults to all {@link ProjectInterfaces}, so all projects that do not match
+	 * Defaults to all `ProjectInterfaces`, so all projects that do not match
 	 * `excludeProjectInterfaces` will be included
 	 *
 	 * @example
@@ -2175,8 +2282,8 @@ export interface ModifierProject {
 	 * In other words, each entry in the first-level array is `OR`'ed together. Each entry in
 	 * second-level arrays (arrays within the first-level array) are `AND`'ed together.
 	 *
-	 * Defaults to no {@link ProjectInterfaces}, so all projects that match `includeProjectInterfaces`
-	 * will be included
+	 * Defaults to no `ProjectInterfaces`, so all projects that match `includeProjectInterfaces` will
+	 * be included
 	 *
 	 * @example
 	 *
@@ -2812,6 +2919,313 @@ export declare const settingsDocumentSchema: {
 		};
 	};
 };
+/** The data an extension provides to inform Platform.Bible of the themes it provides. */
+export type ThemeContribution = ThemeFamiliesById;
+/** Object whose keys are theme family ids and whose values are {@link ThemeFamily}. */
+export interface ThemeFamiliesById {
+	[themeFamilyId: string]: ThemeFamily | undefined;
+}
+/**
+ * A group of related themes. Each key is a theme type, and each value is a {@link ThemeDefinition}.
+ *
+ * A theme type indicates the kind of theme (e.g. light, dark). Some UI elements use the theme type
+ * to determine how to look. Colors not present in the theme will fall back to the built-in colors
+ * for this type.
+ */
+export interface ThemeFamily {
+	[themeType: string]: ThemeDefinition | undefined;
+	light?: ThemeDefinition;
+	dark?: ThemeDefinition;
+}
+/**
+ * The data an extension provides for one individual theme. Each theme has a type (e.g. light, dark)
+ * and belongs to a theme family. An extension can provide multiple themes with
+ * {@link ThemeContribution}.
+ */
+export interface ThemeDefinition {
+	[k: string]: unknown;
+	/** LocalizeKey that is the display name for the theme */
+	label: LocalizeKey;
+	/**
+	 * Theme colors and other CSS variable properties that adjust the looks of the application. These
+	 * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
+	 * `tw-bg-primary`
+	 *
+	 * See the wiki's [Matching Application
+	 * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+	 * section for more information.
+	 */
+	cssVariables: ThemeCssVariables;
+}
+/**
+ * Theme colors and other CSS variable properties that adjust the looks of the application. These
+ * are applied in CSS properties using `hsl(var(--variableName))` or Tailwind classes like
+ * `tw-bg-primary`
+ *
+ * See the wiki's [Matching Application
+ * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+ * section for more information.
+ */
+export interface ThemeCssVariables {
+	[variableName: string]: string | undefined;
+	background?: string;
+	foreground?: string;
+	card?: string;
+	"card-foreground"?: string;
+	popover?: string;
+	"popover-foreground"?: string;
+	primary?: string;
+	"primary-foreground"?: string;
+	secondary?: string;
+	"secondary-foreground"?: string;
+	muted?: string;
+	"muted-foreground"?: string;
+	accent?: string;
+	"accent-foreground"?: string;
+	destructive?: string;
+	"destructive-foreground"?: string;
+	border?: string;
+	input?: string;
+	ring?: string;
+	"sidebar-background"?: string;
+	"sidebar-foreground"?: string;
+	"sidebar-primary"?: string;
+	"sidebar-primary-foreground"?: string;
+	"sidebar-accent"?: string;
+	"sidebar-accent-foreground"?: string;
+	"sidebar-border"?: string;
+	"sidebar-ring"?: string;
+	radius?: string;
+}
+export declare const themeDocumentSchema: {
+	$schema: string;
+	title: string;
+	description: string;
+	anyOf: {
+		$ref: string;
+	}[];
+	$defs: {
+		themeCssVariables: {
+			description: string;
+			type: string;
+			properties: {
+				background: {
+					type: string;
+				};
+				foreground: {
+					type: string;
+				};
+				card: {
+					type: string;
+				};
+				"card-foreground": {
+					type: string;
+				};
+				popover: {
+					type: string;
+				};
+				"popover-foreground": {
+					type: string;
+				};
+				primary: {
+					type: string;
+				};
+				"primary-foreground": {
+					type: string;
+				};
+				secondary: {
+					type: string;
+				};
+				"secondary-foreground": {
+					type: string;
+				};
+				muted: {
+					type: string;
+				};
+				"muted-foreground": {
+					type: string;
+				};
+				accent: {
+					type: string;
+				};
+				"accent-foreground": {
+					type: string;
+				};
+				destructive: {
+					type: string;
+				};
+				"destructive-foreground": {
+					type: string;
+				};
+				border: {
+					type: string;
+				};
+				input: {
+					type: string;
+				};
+				ring: {
+					type: string;
+				};
+				"sidebar-background": {
+					type: string;
+				};
+				"sidebar-foreground": {
+					type: string;
+				};
+				"sidebar-primary": {
+					type: string;
+				};
+				"sidebar-primary-foreground": {
+					type: string;
+				};
+				"sidebar-accent": {
+					type: string;
+				};
+				"sidebar-accent-foreground": {
+					type: string;
+				};
+				"sidebar-border": {
+					type: string;
+				};
+				"sidebar-ring": {
+					type: string;
+				};
+				radius: {
+					type: string;
+				};
+			};
+			additionalProperties: {
+				anyOf: {
+					type: string;
+				}[];
+			};
+		};
+		themeDefinition: {
+			description: string;
+			type: string;
+			properties: {
+				label: {
+					description: string;
+					type: string;
+					pattern: string;
+					tsType: string;
+				};
+				cssVariables: {
+					$ref: string;
+				};
+			};
+			required: string[];
+		};
+		themeFamily: {
+			description: string;
+			type: string;
+			properties: {
+				light: {
+					$ref: string;
+				};
+				dark: {
+					$ref: string;
+				};
+			};
+			additionalProperties: {
+				anyOf: ({
+					$ref: string;
+					type?: undefined;
+				} | {
+					type: string;
+					$ref?: undefined;
+				})[];
+			};
+		};
+		themeFamiliesById: {
+			description: string;
+			type: string;
+			additionalProperties: {
+				anyOf: ({
+					$ref: string;
+					type?: undefined;
+				} | {
+					type: string;
+					$ref?: undefined;
+				})[];
+			};
+		};
+	};
+};
+/**
+ * {@link ThemeDefinition} with some additional properties derived from the {@link ThemeFamiliesById}
+ * it comes from to help with managing the theme
+ */
+export type ThemeDefinitionExpanded = ThemeDefinition & {
+	/**
+	 * Unique identifier for the {@link ThemeFamily} this theme is in.
+	 *
+	 * This is derived from the key of the {@link ThemeFamiliesById} this theme is in
+	 */
+	themeFamilyId: string;
+	/**
+	 * The kind of theme (e.g. light, dark). Some UI elements use the theme type to determine how to
+	 * look. Colors not present in the theme will fall back to the built-in colors for this type.
+	 *
+	 * This is derived from the key of the {@link ThemeFamily} this theme is in
+	 */
+	type: string;
+	/**
+	 * Unique identifier for this theme.
+	 *
+	 * This is derived by combining the theme family and type
+	 */
+	id: string;
+};
+/**
+ * Replaces {@link ThemeDefinition} with {@link ThemeDefinitionExpanded} recursively in the provided
+ * type. Modifies the type to what is used in the theme service.
+ */
+export type ExpandThemeDefinition<T> = ReplaceType<T, ThemeDefinition, ThemeDefinitionExpanded>;
+/**
+ * {@link ThemeFamily} with all {@link ThemeDefinition} replaced by {@link ThemeDefinitionExpanded}.
+ * This is used in the theme service
+ */
+export type ThemeFamilyExpanded = ExpandThemeDefinition<ThemeFamily>;
+/**
+ * {@link ThemeFamiliesById} with all {@link ThemeDefinition} replaced by
+ * {@link ThemeDefinitionExpanded}. This is used in the theme service
+ */
+export type ThemeFamiliesByIdExpanded = ExpandThemeDefinition<ThemeFamiliesById>;
+/** ID for the style element the theme styles should go into */
+export declare const THEME_STYLE_ELEMENT_ID = "theme-styles";
+/**
+ * Add the derived properties in {@link ThemeDefinitionExpanded} to {@link ThemeDefinition}s in the
+ * given {@link ThemeFamiliesById} and fill in any missing `cssVariables` in the theme definitions
+ * with those from the default themes.
+ *
+ * Does not modify the input object.
+ *
+ * @param themeFamiliesById Theme families to expand with the additional derived properties
+ * @param defaultThemeFamily If provided, themes from this family are used to fill in missing
+ *   `cssVariables` in the theme definitions to make sure each theme definition has all necessary
+ *   `cssVariables`
+ * @returns The expanded theme families
+ */
+export declare function expandThemeContribution(themeFamiliesById: ThemeFamiliesById, defaultThemeFamily: ThemeFamily | undefined): ThemeFamiliesByIdExpanded;
+/** Gets the CSS stylesheet that should be applied for the given theme */
+export declare function getStylesheetForTheme(theme: ThemeDefinitionExpanded): string;
+/**
+ * Applies a CSS stylesheet for the provided theme to the current window
+ *
+ * WARNING: THIS MUST BE BOUND TO `window` IN ORDER TO USE!
+ *
+ * ```ts
+ * applyThemeStylesheet.bind(window)()`
+ * ```
+ *
+ * @param theme Theme to apply
+ * @param previousStyleElement Previous style element if applicable
+ * @param styleElementIdSuffix Suffix to apply to the ID of the new style element. Will be
+ *   {@link THEME_STYLE_ELEMENT_ID} with a dash and the suffix added to it
+ * @returns
+ */
+export declare function applyThemeStylesheet(this: Window, theme: ThemeDefinitionExpanded, previousStyleElement?: HTMLStyleElement, styleElementIdSuffix?: string): HTMLStyleElement;
 /** Represents USJ formatted scripture with helpful utilities for working with it */
 export declare class UsjReaderWriter implements IUsjReaderWriter {
 	private readonly usj;

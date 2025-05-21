@@ -10,6 +10,7 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { FilterButton } from './buttons/filter-button.component';
 
+/** The DropdownMenuItemType enum is used to determine the type of the dropdown item */
 export enum DropdownMenuItemType {
   Check,
   Radio,

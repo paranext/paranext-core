@@ -1,6 +1,7 @@
 import '@extension-host/global-this.model';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import * as extensionService from '@extension-host/services/extension.service';
 import { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
 import { logger } from '@shared/services/logger.service';
@@ -12,10 +13,12 @@ import { CommandNames } from 'papi-shared-types';
 import { registerCommand } from '@shared/services/command.service';
 import { initialize as initializeMenuData } from '@extension-host/services/menu-data.service-host';
 import { initialize as initializeSettingsService } from '@extension-host/services/settings.service-host';
+import { initialize as initializeThemeData } from '@extension-host/services/theme-data.service-host';
 import { startProjectSettingsService } from '@extension-host/services/project-settings.service-host';
 import { initialize as initializeLocalizationService } from '@extension-host/services/localization.service-host';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
-import { killChildProcessesFromExtensions } from './services/create-process.service';
+import { killChildProcessesFromExtensions } from '@extension-host/services/create-process.service';
+import { initialize as initializeDatabaseService } from '@extension-host/services/database.service-host';
 
 logger.info(
   `Starting extension-host${globalThis.isNoisyDevModeEnabled ? ' in noisy dev mode' : ''}`,
@@ -48,16 +51,19 @@ process.on('unhandledRejection', (reason) => {
 
 (async () => {
   try {
-    // The network service has to be running before anything else
+    // The network service has to start first, and it uses the shared store after initialization
     await networkService.initialize();
+    await initializeSharedStoreService(networkService);
 
     // Prepare all services that need to be running because extensions might rely on them
     await Promise.all([
       extensionAssetService.initialize(),
       initializeLocalizationService(),
       initializeMenuData(),
+      initializeThemeData(),
       initializeSettingsService(),
       startProjectSettingsService(),
+      initializeDatabaseService(),
     ]);
 
     // The extension service locks down importing other modules, so be careful what runs after it

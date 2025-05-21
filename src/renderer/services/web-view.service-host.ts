@@ -7,6 +7,7 @@
 import cloneDeep from 'lodash/cloneDeep';
 import {
   AsyncVariable,
+  getStylesheetForTheme,
   Unsubscriber,
   deserialize,
   serialize,
@@ -16,11 +17,12 @@ import {
   substring,
   startsWith,
   split,
+  THEME_STYLE_ELEMENT_ID,
 } from 'platform-bible-utils';
 import { newNonce } from '@shared/utils/util';
 import { createNetworkEventEmitter } from '@shared/services/network.service';
 import {
-  GetWebViewOptions,
+  OpenWebViewOptions,
   SavedWebViewDefinition,
   WebViewDefinition,
   WebViewDefinitionReact,
@@ -68,7 +70,8 @@ import {
   type SettingsTabData,
   TAB_TYPE_SETTINGS_TAB,
 } from '@renderer/components/settings-tabs/settings-tab.component';
-import { SCROLLBAR_STYLES, THEME } from '@renderer/theme';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { localThemeService } from '@renderer/services/theme.service-host';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -807,7 +810,7 @@ export function getSavedWebViewDefinitionSync(
 // #region Web view options
 
 /** Set up defaults for options for getting a web view */
-function getWebViewOptionsDefaults(options: GetWebViewOptions): GetWebViewOptions {
+function getWebViewOptionsDefaults(options: OpenWebViewOptions): OpenWebViewOptions {
   const optionsDefaulted = cloneDeep(options);
   if ('existingId' in optionsDefaulted && !('createNewIfNotFound' in optionsDefaulted))
     optionsDefaulted.createNewIfNotFound = true;
@@ -902,7 +905,7 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 export const openWebView = async (
   webViewType: WebViewType,
   layout: Layout = { type: 'tab' },
-  options: GetWebViewOptions = {},
+  options: OpenWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
   const optionsDefaulted = getWebViewOptionsDefaults(options);
   // ENHANCEMENT: If they aren't looking for an existingId, we could get the webview without
@@ -1004,6 +1007,9 @@ export const openWebView = async (
     // The web view provider might have updated the web view state, so save it
     setFullWebViewStateById(webView.id, webView.state);
 
+  // Get theme styles
+  const theme = localThemeService.getCurrentThemeSync();
+
   // `webViewRequire`, `getWebViewStateById`, `setWebViewStateById` and `resetWebViewStateById` below are defined in `src\renderer\global-this.model.ts`
   // `useWebViewState` below is defined in `src\shared\global-this.model.ts`
   // We have to bind `useWebViewState` to the current `window` context because calls within PAPI don't have access to a webview's `window` context
@@ -1017,6 +1023,7 @@ export const openWebView = async (
    * properly delete `window.top`
    */
   const imports = `
+  // Set up WebView imports
   window.papi = window.parent.papi;
   window.React = window.parent.React;
   window.ReactJsxRuntime = window.parent.ReactJsxRuntime;
@@ -1044,6 +1051,39 @@ export const openWebView = async (
   delete window.parent;
   delete window.top;
   delete window.frameElement;
+
+  // IIFE so we don't pollute the WebView's scope
+  (() => {
+    const { applyThemeStylesheet, getErrorMessage, isPlatformError } = require('platform-bible-utils');
+    const applyThemeStylesheetWebView = applyThemeStylesheet.bind(window);
+
+    // Set up theme and subscribe to theme changes
+    function setUpThemeStylesheet() {
+      window.document.body.classList.add('${theme.id}');
+      let currentThemeElement = document.getElementById('${THEME_STYLE_ELEMENT_ID}');
+
+      (async () => {
+        try {
+          const unsubTheme = await window.papi.themes.subscribeCurrentTheme(undefined, (newTheme) => {
+            if (isPlatformError(newTheme)) {
+              window.papi.logger.warn(\`Error while getting new current theme in WebView import script for WebView ${webView.id}: \${getErrorMessage(newTheme)}\`);
+              return;
+            }
+            currentThemeElement = applyThemeStylesheetWebView(newTheme, currentThemeElement);
+          });
+          window.addEventListener('unload', () => {
+            unsubTheme();
+          });
+        } catch (e) {
+          window.papi.logger.warn(\`Error while subscribing to current theme in WebView import script for WebView ${webView.id}: \${getErrorMessage(e)}\`);
+        }
+      })();
+    }
+
+    if (document.readyState === 'loading')
+      document.addEventListener('DOMContentLoaded', setUpThemeStylesheet);
+    else setUpThemeStylesheet();
+  })();
   `;
 
   /** Nonce used to allow scripts and styles to run */
@@ -1062,7 +1102,7 @@ export const openWebView = async (
       // Add wrapping to turn a plain string into an iframe
       webViewContent = webView.content.includes('<html')
         ? webView.content
-        : `<html><head><style>${SCROLLBAR_STYLES}</style></head><body>${webView.content}</body></html>`;
+        : `<html><head></head><body>${webView.content}</body></html>`;
       // TODO: Please combine our CSP with HTML-provided CSP so we can add the import nonce and they can add nonces and stuff instead of allowing 'unsafe-inline'
       specificSrcPolicy = "'unsafe-inline'";
       break;
@@ -1091,11 +1131,8 @@ export const openWebView = async (
             </style>`
                 : ''
             }
-            <style>
-              ${SCROLLBAR_STYLES}
-            </style>
           </head>
-          <body class="${THEME}">
+          <body>
             <div id="root">
             </div>
             <script nonce="${srcNonce}">${reactWebView.content}
@@ -1231,17 +1268,24 @@ export const openWebView = async (
       navigate-to 'none';
     ">`;
 
-  // Add a script at the start of the head to give access to papi
+  // Add some elements at the start of the head to give access to papi, CSP, styles, etc.
   const headStart = indexOf(webViewContent, '<head');
   const headEnd = indexOf(webViewContent, '>', headStart);
 
-  // Inject the CSP and import scripts into the html if it is not a URL iframe
-  if (contentType !== WEB_VIEW_CONTENT_TYPE.URL)
+  // Inject the CSP, styles, and import scripts into the html if it is not a URL iframe
+  if (contentType !== WEB_VIEW_CONTENT_TYPE.URL) {
+    const themeStylesheet = `<style nonce="${srcNonce}" id="${THEME_STYLE_ELEMENT_ID}" data-theme-id="${theme.id}">${getStylesheetForTheme(theme)}</style>`;
+
     webViewContent = `${substring(webViewContent, 0, headEnd + 1)}
     ${contentSecurityPolicy}
     <script nonce="${srcNonce}">
     ${imports}
-    </script>${substring(webViewContent, headEnd + 1)}`;
+    </script>
+    <style nonce="${srcNonce}">
+      ${SCROLLBAR_STYLES_RAW}
+    </style>
+    ${themeStylesheet}${substring(webViewContent, headEnd + 1)}`;
+  }
 
   const finalWebView: WebViewTabProps = {
     ...webView,

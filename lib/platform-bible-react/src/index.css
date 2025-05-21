@@ -10,6 +10,10 @@
   }
 }
 
+/*
+ * WARNING: These themes are also represented in paranext-core/src/shared/data/themes.data.json!
+ * Please update in both locations
+*/
 /* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css */
 
 @layer base {
@@ -19,12 +23,12 @@
     src: url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
   }
 
-  /*
-   * Theme colors in Platform.Bible. These are applied in CSS properties using `hsl(var(--varName))`
-   * or Tailwind classes like `tw-bg-primary`
+  /**
+   * Theme colors and other CSS variable properties in Platform.Bible. These are applied in CSS
+   * properties using `hsl(var(--variableName))` or Tailwind classes like `tw-bg-primary`
    *
-   * See the wiki's
-   * [Matching Application Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
+   * See the wiki's [Matching Application
+   * Theme](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#matching-application-theme)
    * section for more information
    */
   :root {
@@ -77,8 +81,8 @@
     --accent-foreground: 210 40% 98%; /* slate-50 */
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%; /* slate-50 */
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 215.3 19.3% 34.5%; /* slate-600 */
+    --input: 215.3 19.3% 34.5%; /* slate-600 */
     --ring: 212.7 26.8% 83.9%;
 
     --sidebar-background: 222.2 84% 4.9%; /* black */
@@ -156,14 +160,29 @@
 }
 /* #endregion */
 
+/* Note that the following region is from shadcn/ui's styles
+ * https://ui.shadcn.com/docs/installation/manual#configure-styles but is scoped down to .pr-twp
+ * because this is just a component library and should not apply its styles to the entire page.
+ *
+ * There is now a section in this library's README.md that explains how to apply these styles to the
+ * entire page if desired.
+ *
+ * The template has the original shadcn/ui styles because it intentionally applies the styles to the
+ * entire page. The same is true for Platform.Bible - see `app.component.scss`
+ */
 /* #region shared with https://github.com/paranext/paranext-extension-template/blob/main/src/tailwind.css but with the difference of being scoped to .pr-twp here */
+
 @layer base {
-  .pr-twp {
-    @apply tw-border-border;
+  .pr-twp,
+  .pr-twp * {
+    @apply tw-border-border tw-outline-ring/50;
   }
 
-  body .pr-twp {
+  /**
+    * disabled because tslint does not like it, but it is the selector that's needed
+    */
+  /* stylelint-disable-next-line selector-no-qualifying-type */
+  body.pr-twp {
     @apply tw-bg-background tw-text-foreground;
   }
 }
-/* #endregion */

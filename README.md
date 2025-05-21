@@ -62,6 +62,18 @@ Set up pre-requisites for building:
 
 Add the system libraries needed for Electron, [Build Instructions (Linux)](https://www.electronjs.org/docs/latest/development/build-instructions-linux).
 
+If you are developing on Ubuntu 24.04 with AppArmor, you will need to modify `package.json` locally to add the `--no-sandbox` flag to `electronmon`. For example:
+
+```json
+{
+  "scripts": {
+    "start:main": "concurrently -k -P \"cross-env NODE_ENV=development TS_NODE_TRANSPILE_ONLY=true webpack --watch --config ./.erb/configs/webpack.config.main.dev.ts\" \"electronmon --no-sandbox . {@}\" --"
+  }
+}
+```
+
+This should be a temporary workaround until we update to newer versions of `electron` and `electron-builder`.
+
 ### macOS Development Pre-requisites
 
 macOS doesn't come preinstalled with all the
@@ -88,7 +100,7 @@ your `.zprofile` so you don't have to remember to do it manually.
 
 ### All Platforms Development Pre-requisites
 
-Install [`Node.js` version >=18.0.0](https://nodejs.org/) (18.0.0 or greater is required for using `fetch`). We recommend using [Volta](#javascript-tool-manager).
+Install the version of [`Node.js`](https://nodejs.org/) that matches the version specified in [`package.json`](https://github.com/paranext/paranext-core/blob/main/package.json#L249) at `volta.node`. We recommend using [Volta](#javascript-tool-manager).
 
 Install `dotnet` [.NET 8 SDK from here](https://learn.microsoft.com/en-us/dotnet/core/install/).
 

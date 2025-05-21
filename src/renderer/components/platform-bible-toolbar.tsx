@@ -1,9 +1,14 @@
 import logo from '@assets/icon.png';
-import { useLocalizedStrings, useScrollGroupScrRef } from '@renderer/hooks/papi-hooks';
+import {
+  useData,
+  useDataProvider,
+  useLocalizedStrings,
+  useScrollGroupScrRef,
+} from '@renderer/hooks/papi-hooks';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { HomeIcon, User } from 'lucide-react';
+import { HomeIcon, Moon, Sun, User } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -18,15 +23,36 @@ import {
   TooltipTrigger,
   usePromise,
 } from 'platform-bible-react';
-import { getLocalizeKeysForScrollGroupIds, LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
-import { useCallback, useState } from 'react';
+import {
+  getErrorMessage,
+  getLocalizeKeysForScrollGroupIds,
+  isPlatformError,
+  LocalizeKey,
+  ScrollGroupId,
+  ThemeDefinitionExpanded,
+} from 'platform-bible-utils';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { app } from '@renderer/services/papi-frontend.service';
-import { provideMenuData } from './platform-bible-menu.data';
+import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
+import { logger } from '@shared/services/logger.service';
+import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
+import { localThemeService } from '@renderer/services/theme.service-host';
+
+const TOOLTIP_DELAY = 300;
+
+/** Placeholder theme to detect when we are loading */
+const DEFAULT_THEME_VALUE: ThemeDefinitionExpanded = {
+  themeFamilyId: '',
+  type: 'light',
+  id: 'light',
+  label: '%unused%',
+  cssVariables: {},
+};
 
 const scrollGroupIdLocalStorageKey = 'platform-bible-toolbar.scrollGroupId';
 
-// Exclude no scroll group in the top selector because it would be pointless otherwise
+// Exclude no scroll group in the top selector because it would be pointless
 const availableScrollGroupIdsTop = availableScrollGroupIds.filter(
   (scrollGroupId) => scrollGroupId !== undefined,
 );
@@ -36,6 +62,10 @@ const scrollGroupLocalizedStringKeys = getLocalizeKeysForScrollGroupIds(availabl
 const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%mainMenu_openParatextRegistration%',
   '%mainMenu_openHome%',
+  '%toolbar_theme_change_to_light%',
+  '%toolbar_theme_change_to_dark%',
+  '%toolbar_theme_loading%',
+  '%toolbar_theme_loading_error%',
 ];
 
 export function PlatformBibleToolbar() {
@@ -111,6 +141,35 @@ export function PlatformBibleToolbar() {
     'Marketing Version',
   );
 
+  const themeDataProvider = useDataProvider(themeServiceDataProviderName);
+
+  /** Get the theme on first load so we can show the right symbol on the toolbar */
+  const themeOnFirstLoad = useMemo(() => localThemeService.getCurrentThemeSync(), []);
+
+  const [theme, setTheme] = useData<typeof themeServiceDataProviderName>(
+    themeDataProvider,
+  ).CurrentTheme(undefined, DEFAULT_THEME_VALUE);
+
+  // Warn if the theme came back as a PlatformError. Will handle the PlatformError in the jsx too
+  useEffect(() => {
+    if (isPlatformError(theme))
+      logger.warn(`Error getting theme for toolbar button. ${getErrorMessage(theme)}`);
+  }, [theme]);
+
+  const isThemeLoadedNotError = theme !== DEFAULT_THEME_VALUE && !isPlatformError(theme);
+
+  let themeButtonTooltip = localizedStrings['%toolbar_theme_loading%'];
+  if (!isThemeLoadedNotError)
+    themeButtonTooltip = localizedStrings['%tooltip_theme_loading_error%'];
+  else if (theme.type === 'dark') {
+    themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_light%'];
+  } else {
+    themeButtonTooltip = localizedStrings['%toolbar_theme_change_to_dark%'];
+  }
+
+  // Get the theme type from the first theme load or the current theme data, whichever is available
+  const themeTypeEffective = isThemeLoadedNotError ? theme.type : themeOnFirstLoad.type;
+
   return (
     <Toolbar
       menuData={menuData}
@@ -128,7 +187,7 @@ export function PlatformBibleToolbar() {
       configAreaChildren={
         <>
           {marketingVersion !== '' && (
-            <TooltipProvider delayDuration={300}>
+            <TooltipProvider delayDuration={TOOLTIP_DELAY}>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Badge
@@ -144,8 +203,37 @@ export function PlatformBibleToolbar() {
               </Tooltip>
             </TooltipProvider>
           )}
+          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  onClick={() => {
+                    if (!isThemeLoadedNotError) return;
+
+                    const newThemeType = theme.type === 'dark' ? 'light' : 'dark';
+                    try {
+                      setTheme?.({ type: newThemeType });
+                    } catch (e) {
+                      logger.warn(
+                        `Toolbar caught an error while trying to set theme to ${newThemeType}: ${getErrorMessage(e)}`,
+                      );
+                    }
+                  }}
+                  disabled={!isThemeLoadedNotError}
+                >
+                  {themeTypeEffective === 'dark' ? <Moon /> : <Sun />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p className="tw-font-light">{themeButtonTooltip}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           {/* This is a placeholder for the actual user menu */}
-          <TooltipProvider delayDuration={300}>
+          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -169,7 +257,7 @@ export function PlatformBibleToolbar() {
         </>
       }
     >
-      <TooltipProvider delayDuration={300}>
+      <TooltipProvider delayDuration={TOOLTIP_DELAY}>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button

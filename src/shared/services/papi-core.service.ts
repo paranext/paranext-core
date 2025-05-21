@@ -65,6 +65,7 @@ export type { SettingValidator } from '@shared/services/settings.service-model';
 export type { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
 export type {
   GetWebViewOptions,
+  OpenWebViewOptions,
   SavedWebViewDefinition,
   UseWebViewStateHook,
   UseWebViewScrollGroupScrRefHook,

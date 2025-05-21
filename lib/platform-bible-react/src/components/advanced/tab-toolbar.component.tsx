@@ -53,7 +53,7 @@ export function TabToolbar({
   return (
     <div
       className={cn(
-        'tw-flex tw-w-full tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-hidden tw-border tw-px-4 tw-py-2 tw-text-foreground',
+        'tw-box-border tw-flex tw-w-full tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-hidden tw-border tw-px-4 tw-py-2 tw-text-foreground',
         className,
       )}
       id={id}
@@ -71,13 +71,13 @@ export function TabToolbar({
           />
         )}
       </div>
-      <div className="tw-flex tw-flex-shrink-0 tw-flex-row tw-items-center tw-justify-start tw-gap-2 tw-overflow-hidden">
+      <div className="xs:tw-gap-0.5 tw-flex tw-min-w-0 tw-flex-shrink tw-flex-row tw-items-center tw-justify-start tw-gap-2 tw-overflow-hidden sm:tw-gap-1">
         {startAreaChildren}
       </div>
-      <div className="tw-flex tw-flex-shrink tw-flex-grow tw-flex-row tw-items-center tw-justify-center tw-gap-2 tw-overflow-hidden">
+      <div className="xs:tw-gap-0.5 tw-flex tw-min-w-0 tw-flex-shrink tw-flex-grow tw-flex-row tw-items-center tw-justify-center tw-gap-2 tw-overflow-hidden sm:tw-gap-1">
         {centerAreaChildren}
       </div>
-      <div className="tw-flex tw-min-w-0 tw-flex-shrink tw-flex-row tw-flex-nowrap tw-items-center tw-justify-end tw-gap-2 tw-overflow-hidden tw-whitespace-nowrap">
+      <div className="xs:tw-gap-0.5 tw-flex tw-min-w-0 tw-flex-shrink tw-flex-row tw-flex-nowrap tw-items-center tw-justify-end tw-gap-2 tw-overflow-hidden tw-whitespace-nowrap sm:tw-gap-1">
         {endAreaChildren}
       </div>
       <div className="tw-flex-shrink-0">

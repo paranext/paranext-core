@@ -1612,6 +1612,14 @@
   font-size: 100%;
 }
 
+/* TextNode in NoteNode */
+
+.marker-hidden .usfm_f span[data-lexical-text='true'],
+.marker-hidden .usfm_fe span[data-lexical-text='true'],
+.marker-hidden .usfm_x span[data-lexical-text='true'] {
+  display: none;
+}
+
 /* periph */
 
 .formatted-font .usfm_periph {

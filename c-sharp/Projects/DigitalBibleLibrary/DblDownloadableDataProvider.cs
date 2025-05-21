@@ -44,6 +44,8 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
 
     #region Consts and member variables
 
+    private const int DBL_NETWORK_TIMEOUT = 0; // Don't timeout DBL network requests
+
     public const string DBL_RESOURCES = "DblResources";
 
     private List<InstallableResource> _resources = [];
@@ -116,6 +118,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// A list with some information about all available resources on the DBL, for the purpose of
     /// presenting the resources and their installation status on the front-end
     /// </returns>
+    [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
     private List<DblResourceData> GetDblResources(JsonElement _ignore)
     {
         // The text of this exception message is searched for by our Node.js services, so if you
@@ -170,6 +173,7 @@ internal class DblResourcesDataProvider(PapiClient papiClient)
     /// <summary>
     /// Try to install DBL resource with specified DBL id
     /// </summary>
+    [NetworkTimeout(DBL_NETWORK_TIMEOUT)]
     private void InstallDblResource(string DBLEntryUid)
     {
         FindResource(

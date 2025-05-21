@@ -20,5 +20,16 @@
  *
  * Note: projects are stored in the production version of `app://projects` regardless of whether you
  * are in production or development
+ *
+ * @example This kind of Uri could look like `app://projects/1234/notes.txt`
+ *
+ * Note: This kind of Uri does not include extension Uris, which support an additional set of
+ * schemes and are only available for use in the extension host.
+ *
+ * @example An extension Uri might look like `papi-extension://my-extension/assets/notes.txt`
+ *
+ * You can convert from a `Uri` to a file path using `getPathFromUri`.
+ *
+ * You can convert from an Extension Uri to a Uri using `getUriFromExtensionUri`.
  */
 export type Uri = string;
