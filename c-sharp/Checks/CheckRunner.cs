@@ -5,6 +5,7 @@ using Paranext.DataProvider.Projects;
 using Paratext.Checks;
 using Paratext.Data;
 using Paratext.Data.Checking;
+using Paratext.Data.ProjectFileAccess;
 using SIL.Scripture;
 
 namespace Paranext.DataProvider.Checks;
@@ -14,8 +15,7 @@ namespace Paranext.DataProvider.Checks;
 /// The data provider implements the ICheckRunner interface that is defined in TypeScript. See the
 /// definition of ICheckRunner and its related types in TypeScript for more details.
 /// </summary>
-internal class CheckRunner(PapiClient papiClient)
-    : NetworkObjects.DataProvider("dotNetCheckRunner", papiClient, "checkRunner")
+internal class CheckRunner : NetworkObjects.DataProvider
 {
     #region Internal classes
 
@@ -23,7 +23,16 @@ internal class CheckRunner(PapiClient papiClient)
     {
         public ScriptureCheckBase Check { get; } = check;
         public CheckResultsRecorder ResultsRecorder { get; } = new(checkId, projectId);
+        public bool SettingsChanged { get; set; } = false;
         public object Lock = new();
+    }
+
+    private class InventoryItem(string inventoryText, string verse, VerseRef verseRef, int offset)
+    {
+        public string InventoryText { get; set; } = inventoryText;
+        public string Verse { get; set; } = verse;
+        public VerseRef VerseRef { get; set; } = verseRef;
+        public int Offset { get; set; } = offset;
     }
 
     #endregion
@@ -68,6 +77,30 @@ internal class CheckRunner(PapiClient papiClient)
 
     #endregion
 
+    #region Constructor
+    public CheckRunner(PapiClient papiClient)
+        : base("dotNetCheckRunner", papiClient, "checkRunner")
+    {
+        // When inventory data is changed, there is no way from the ScrText or Settings objects
+        // to be notified of the change. So we have to listen for file changes in the project
+        // directory and rerun checks for the project if the inventory data changes.
+        ProjectFileManager.FileChanged += (scrText, relFilePath, changeType) =>
+        {
+            if (relFilePath.Contains("SETTINGS.XML", StringComparison.InvariantCultureIgnoreCase))
+            {
+                var projectId = scrText.GetProjectDetails().Metadata.Id;
+                _checksByIds
+                    .Where((kvp) => kvp.Key.projectId == projectId)
+                    .Select((kvp) => kvp.Value)
+                    .ToList()
+                    .ForEach((check) => check.SettingsChanged = true);
+                RunChecksForProject(projectId);
+            }
+        };
+    }
+
+    #endregion
+
     #region DataProvider methods
 
     // Must provide all functions that are part of ICheckRunner in TS
@@ -83,6 +116,7 @@ internal class CheckRunner(PapiClient papiClient)
             ("getAvailableChecks", GetAvailableChecks),
             ("getCheckResults", GetCheckResults),
             ("setActiveRanges", SetActiveRanges),
+            ("retrieveInventoryData", RetrieveInventoryData),
         ];
     }
 
@@ -159,6 +193,51 @@ internal class CheckRunner(PapiClient papiClient)
 
         Console.WriteLine($"Returning {retVal.Count} check results");
         return retVal;
+    }
+
+    private List<InventoryItem> RetrieveInventoryData(
+        string checkId,
+        string projectId,
+        CheckInputRange checkInputRange
+    )
+    {
+        ArgumentException.ThrowIfNullOrEmpty(checkId);
+        ArgumentException.ThrowIfNullOrEmpty(projectId);
+        ArgumentNullException.ThrowIfNull(checkInputRange);
+
+        var dataSource = GetOrCreateDataSource(projectId);
+        var check = CheckFactory.CreateCheck(checkId, dataSource);
+        if (check is not ScriptureInventoryBase checkWithInventory)
+        {
+            Console.WriteLine(
+                $"Check {checkId} does not support inventories. Cannot retrieve inventory data."
+            );
+            return [];
+        }
+
+        // "GetText" will tokenize the text for checks to use
+        // "0" chapter number means all chapters
+        var chapterNum =
+            checkInputRange.Start.ChapterNum == checkInputRange.End?.ChapterNum
+                ? checkInputRange.Start.ChapterNum
+                : 0;
+        dataSource.GetText(checkInputRange.Start.BookNum, chapterNum, check.NeededFormat);
+
+        var textTokens = dataSource.TextTokens;
+        var newReferences = checkWithInventory.GetReferences(textTokens, "");
+
+        var references = new List<TextTokenSubstring>();
+        references.AddRange(newReferences);
+
+        return
+        [
+            .. references.Select(reference => new InventoryItem(
+                reference.InventoryText,
+                reference.Token.Text,
+                reference.Token.VerseRef,
+                reference.Offset
+            )),
+        ];
     }
 
     private void EnableCheck(string checkId, string projectId)
@@ -326,6 +405,13 @@ internal class CheckRunner(PapiClient papiClient)
                 {
                     if (_checksByIds.TryGetValue((checkId, projectId), out var x))
                     {
+                        // Checks have to be reinitialized to pick up changes to inventories
+                        // Inventories are stored in the project settings file
+                        if (x.SettingsChanged)
+                        {
+                            x.SettingsChanged = false;
+                            x.Check.Initialize(_dataSourcesByProjectId[projectId]);
+                        }
                         bool newResultsReturned = RunCheck(checkId, x.Check, range, indexer);
                         signalUpdatedData |= newResultsReturned;
                     }
