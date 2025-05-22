@@ -1,37 +1,40 @@
-import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
+import papi, { DataProviderEngine, logger } from '@papi/backend';
 import {
   DataProviderUpdateInstructions,
   IDataProviderEngine,
   IDisposableDataProvider,
 } from '@papi/core';
-import papi, { DataProviderEngine, logger } from '@papi/backend';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { InventoryItem } from 'platform-bible-react';
+import { createSyncProxyForAsyncObject, newGuid } from 'platform-bible-utils';
 import {
   CheckAggregatorDataTypes,
   CheckInputRange,
   CheckResultClassifier,
-  CheckRunResult,
   CheckRunnerCheckDetails,
+  CheckRunResult,
   CheckSubscriptionId,
   CheckSubscriptionManager,
   ICheckAggregatorService,
   ICheckRunner,
+  InventoryDataRetriever,
   SettableCheckDetails,
 } from 'platform-scripture';
-import { SerializedVerseRef } from '@sillsdev/scripture';
-import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
 import {
   aggregateProjectIdsByCheckId,
   aggregateRanges,
   isWithinRange,
   SubscriptionData,
 } from './check-aggregator.utils';
+import { CHECK_RUNNER_NETWORK_OBJECT_TYPE } from './check.model';
 
 class CheckAggregatorDataProviderEngine
   extends DataProviderEngine<CheckAggregatorDataTypes>
   implements
     IDataProviderEngine<CheckAggregatorDataTypes>,
     CheckResultClassifier,
-    CheckSubscriptionManager
+    CheckSubscriptionManager,
+    InventoryDataRetriever
 {
   // Maps check runner IDs to their ICheckRunner objects
   checkRunners = new Map<string, ICheckRunner>();
@@ -281,6 +284,20 @@ class CheckAggregatorDataProviderEngine
   async validateSubscription(subscriptionId: CheckSubscriptionId): Promise<boolean> {
     const subscription = this.subscriptionsBySubscriptionId.get(subscriptionId);
     return !!subscription;
+  }
+
+  // #endregion
+
+  // #region Inventory Data
+
+  async retrieveInventoryData(
+    checkId: string,
+    projectId: string,
+    checkInputRange: CheckInputRange,
+  ): Promise<InventoryItem[]> {
+    const checkRunner = await this.findCheckRunnerForCheckId(checkId);
+    if (!checkRunner) throw new Error(`Check runner not found for check ID: ${checkId}`);
+    return checkRunner.retrieveInventoryData(checkId, projectId, checkInputRange);
   }
 
   // #endregion

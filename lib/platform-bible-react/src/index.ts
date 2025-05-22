@@ -38,7 +38,10 @@ export {
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 
 export { default as Filter } from './components/advanced/filter.component';
-export { default as Inventory } from './components/advanced/inventory/inventory.component';
+export {
+  default as Inventory,
+  type InventoryItem,
+} from './components/advanced/inventory/inventory.component';
 export { INVENTORY_STRING_KEYS } from './components/advanced/inventory/inventory.component';
 export type {
   InventoryLocalizedStrings,
