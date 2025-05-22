@@ -41,6 +41,11 @@ export const platformSettings: SettingsContribution = [
         description: '%settings_platform_requestTimeout_description%',
         default: 30,
       },
+      'platform.zoomFactor': {
+        label: '%settings_platform_zoomFactor_label%',
+        description: '%settings_platform_zoomFactor_description%',
+        default: 1.0,
+      },
     },
   },
 ];
@@ -97,6 +102,12 @@ const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = asy
 };
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
+const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  return typeof newValue === 'number' && newValue >= 0.5 && newValue <= 3.0;
+};
+
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
@@ -104,4 +115,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
   'platform.commentsEnabled': booleanValidator,
   'platform.requestTimeout': requestTimeoutValidator,
+  'platform.zoomFactor': zoomFactorValidator,
 };

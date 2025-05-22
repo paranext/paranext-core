@@ -8,7 +8,14 @@
 
 import os from 'os';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, RenderProcessGoneDetails } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  shell,
+  ipcMain,
+  RenderProcessGoneDetails,
+  globalShortcut,
+} from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -41,6 +48,95 @@ import {
   startAppService,
 } from '@main/services/app.service-host';
 import { settingsService } from '@shared/services/settings.service';
+
+// #region Helper functions
+
+const DEFAULT_ZOOM_FACTOR = 1.0;
+
+/**
+ * Get the zoom factor from settings or return the default value
+ *
+ * @returns The stored zoom factor or the default value
+ */
+const getStoredZoomFactor = async (): Promise<number> => {
+  try {
+    const zoom = await settingsService.get('platform.zoomFactor');
+    return typeof zoom === 'number' ? zoom : DEFAULT_ZOOM_FACTOR;
+  } catch (e) {
+    logger.warn(`Failed to get zoom factor from settings: ${getErrorMessage(e)}`);
+    return DEFAULT_ZOOM_FACTOR;
+  }
+};
+
+/**
+ * Save the zoom factor to settings
+ *
+ * @param factor The zoom factor to save
+ */
+const saveZoomFactor = async (factor: number): Promise<void> => {
+  try {
+    await settingsService.set('platform.zoomFactor', factor);
+  } catch (e) {
+    logger.warn(`Failed to save zoom factor to settings: ${getErrorMessage(e)}`);
+  }
+};
+
+/**
+ * Get the zoom factor of the Electron app's main window
+ *
+ * @param mainWindow The main BrowserWindow instance
+ * @returns The zoom factor of the main window, or -1 if the window is undefined
+ */
+const getZoom = (mainWindow: BrowserWindow | undefined): number => {
+  if (mainWindow) return mainWindow.webContents.getZoomFactor();
+  return -1;
+};
+
+/**
+ * Increase the zoom factor of the Electron app's main window by 0.1, up to a maximum of 3.0
+ *
+ * @param mainWindow The main BrowserWindow instance
+ */
+const zoomIn = async (mainWindow: BrowserWindow | undefined) => {
+  if (mainWindow) {
+    const currentZoom = getZoom(mainWindow);
+    if (currentZoom < 3.0) {
+      const newZoom = currentZoom + 0.1;
+      mainWindow.webContents.setZoomFactor(newZoom);
+      await saveZoomFactor(newZoom);
+    }
+  }
+};
+
+/**
+ * Decrease the zoom factor of the Electron app's main window by 0.1, down to a minimum of 0.5
+ *
+ * @param mainWindow The main BrowserWindow instance
+ */
+const zoomOut = async (mainWindow: BrowserWindow | undefined) => {
+  if (mainWindow) {
+    const currentZoom = getZoom(mainWindow);
+    if (currentZoom > 0.5) {
+      const newZoom = currentZoom - 0.1;
+      mainWindow.webContents.setZoomFactor(newZoom);
+      await saveZoomFactor(newZoom);
+    }
+  }
+};
+
+/**
+ * Reset the zoom factor of the Electron app's main window to 1.0 (100%)
+ *
+ * @param mainWindow The main BrowserWindow instance
+ */
+const resetZoom = async (mainWindow: BrowserWindow | undefined) => {
+  if (mainWindow) {
+    mainWindow.webContents.setZoomFactor(1.0);
+    await saveZoomFactor(1.0);
+  }
+};
+
+// #endregion
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -345,6 +441,18 @@ async function main() {
       logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
+    // Set initial zoom factor from settings
+    mainWindow.webContents.on('did-finish-load', async () => {
+      if (mainWindow && mainWindow.webContents) {
+        try {
+          const zoom = await getStoredZoomFactor();
+          mainWindow.webContents.setZoomFactor(zoom);
+        } catch (e) {
+          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
+        }
+      }
+    });
+
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -394,6 +502,22 @@ async function main() {
         'electronAPI:env.test',
         (_event, message: string) => `From main.ts: test ${message}`,
       );
+
+      // Register zoom keyboard shortcuts
+      // Zoom in: Ctrl++ or Ctrl+=
+      globalShortcut.register('CommandOrControl+=', () => zoomIn(mainWindow));
+      globalShortcut.register('CommandOrControl+Plus', () => zoomIn(mainWindow));
+
+      // Zoom out: Ctrl+-
+      globalShortcut.register('CommandOrControl+-', () => zoomOut(mainWindow));
+
+      // Reset zoom: Ctrl+0
+      globalShortcut.register('CommandOrControl+0', () => resetZoom(mainWindow));
+
+      // Unregister shortcuts when app is quitting
+      app.on('will-quit', () => {
+        globalShortcut.unregisterAll();
+      });
 
       createWindow();
       app.on('activate', () => {
@@ -551,6 +675,74 @@ async function main() {
             schema: { type: 'string' },
           },
         ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.zoomIn',
+    async () => {
+      zoomIn(mainWindow);
+    },
+    {
+      method: {
+        summary: 'Increase the zoom factor of the main window by 10%',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.zoomOut',
+    async () => {
+      zoomOut(mainWindow);
+    },
+    {
+      method: {
+        summary: 'Decrease the zoom factor of the main window by 10%',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.resetZoom',
+    async () => {
+      resetZoom(mainWindow);
+    },
+    {
+      method: {
+        summary: 'Reset the zoom factor of the main window to 100%',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.getZoom',
+    async (): Promise<number> => {
+      return getZoom(mainWindow);
+    },
+    {
+      method: {
+        summary: 'Get the zoom factor of the main window',
+        params: [],
         result: {
           name: 'return value',
           schema: { type: 'null' },

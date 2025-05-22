@@ -3220,6 +3220,14 @@ declare module 'papi-shared-types' {
     'platform.getOSPlatform': () => Promise<string | undefined>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /** Increase the zoom level of the electron app */
+    'platform.zoomIn': () => Promise<void>;
+    /** Decrease the zoom level of the electron app */
+    'platform.zoomOut': () => Promise<void>;
+    /** Reset the zoom level of the electron app */
+    'platform.resetZoom': () => Promise<void>;
+    /** Get the zoom level of the electron app */
+    'platform.getZoom': () => Promise<number>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -3311,6 +3319,11 @@ declare module 'papi-shared-types' {
      * If the timeout is set to 0, then requests will never timeout.
      */
     'platform.requestTimeout': number;
+    /**
+     * The zoom factor of the Electron app. 1.0 is the default. Values between 0.5 and 3.0 are
+     * allowed.
+     */
+    'platform.zoomFactor': number;
   }
   /**
    * Names for each user setting available on the papi.
