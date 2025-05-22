@@ -42,6 +42,77 @@ import {
 } from '@main/services/app.service-host';
 import { settingsService } from '@shared/services/settings.service';
 
+// #region Constants
+
+const DEFAULT_ZOOM_FACTOR = 1.0;
+export const MAX_ZOOM_FACTOR = 3.0;
+export const MIN_ZOOM_FACTOR = 0.5;
+
+// #endregion
+
+// #region Helper functions
+
+/**
+ * Get the zoom factor from settings or return the default value
+ *
+ * @returns The stored zoom factor or the default value
+ */
+const getZoomFactor = async (): Promise<number> => {
+  try {
+    return await settingsService.get('platform.zoomFactor');
+  } catch (e) {
+    logger.warn(`Failed to get zoom factor from settings: ${getErrorMessage(e)}`);
+    return DEFAULT_ZOOM_FACTOR;
+  }
+};
+
+/**
+ * Save the zoom factor to settings
+ *
+ * @param factor The zoom factor to save
+ */
+const setZoomFactor = async (factor: number): Promise<void> => {
+  try {
+    await settingsService.set('platform.zoomFactor', factor);
+  } catch (e) {
+    logger.warn(`Failed to save zoom factor to settings: ${getErrorMessage(e)}`);
+  }
+};
+
+/**
+ * Reset the zoom factor of the app's main window to 1.0 (100%)
+ *
+ * @param mainWindow The main BrowserWindow instance
+ */
+const resetZoomFactor = async () => {
+  try {
+    return await settingsService.reset('platform.zoomFactor');
+  } catch (e) {
+    logger.warn(`Failed to reset zoom factor from settings: ${getErrorMessage(e)}`);
+    return DEFAULT_ZOOM_FACTOR;
+  }
+};
+
+/** Increase the zoom factor of the app's main window by 0.1, up to a maximum of 3.0 */
+const zoomIn = async () => {
+  const currentZoom = await getZoomFactor();
+  if (currentZoom < MAX_ZOOM_FACTOR) {
+    const newZoom = currentZoom + 0.1;
+    await setZoomFactor(newZoom);
+  }
+};
+
+/** Decrease the zoom factor of the app's main window by 0.1, down to a minimum of 0.5 */
+const zoomOut = async () => {
+  const currentZoom = await getZoomFactor();
+  if (currentZoom > MIN_ZOOM_FACTOR) {
+    const newZoom = currentZoom - 0.1;
+    await setZoomFactor(newZoom);
+  }
+};
+
+// #endregion
+
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
 // Prevent multiple instances because an instance launched after the first is likely a URL redirect
@@ -345,6 +416,18 @@ async function main() {
       logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
+    // Set initial zoom factor from settings
+    mainWindow.webContents.on('did-finish-load', async () => {
+      if (mainWindow && mainWindow.webContents) {
+        try {
+          const zoom = await getZoomFactor();
+          mainWindow.webContents.setZoomFactor(zoom);
+        } catch (e) {
+          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
+        }
+      }
+    });
+
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -396,6 +479,28 @@ async function main() {
       );
 
       createWindow();
+
+      // Register zoom keyboard shortcuts. MacOS already supports this natively
+      if (process.platform !== 'darwin') {
+        mainWindow?.webContents.on('before-input-event', (event, input) => {
+          // Zoom in: Ctrl++ or Ctrl+=
+          if (input.control && (input.key === '=' || input.key === '+')) {
+            event.preventDefault();
+            zoomIn();
+          }
+          // Zoom out: Ctrl+-
+          else if (input.control && input.key === '-') {
+            event.preventDefault();
+            zoomOut();
+          }
+          // Reset zoom: Ctrl+0
+          else if (input.control && input.key === '0') {
+            event.preventDefault();
+            resetZoomFactor();
+          }
+        });
+      }
+
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
@@ -551,6 +656,40 @@ async function main() {
             schema: { type: 'string' },
           },
         ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.zoomIn',
+    async () => {
+      await zoomIn();
+    },
+    {
+      method: {
+        summary: 'Increase the zoom factor of the main window by 10%',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.zoomOut',
+    async () => {
+      await zoomOut();
+    },
+    {
+      method: {
+        summary: 'Decrease the zoom factor of the main window by 10%',
+        params: [],
         result: {
           name: 'return value',
           schema: { type: 'null' },
