@@ -55,6 +55,9 @@ vi.mock('@node/services/node-file-system.service', () => ({
 
 vi.mock('@shared/services/logger.service', () => ({
   __esModule: true,
+  default: {
+    warn: vi.fn(() => {}),
+  },
   logger: {
     warn: vi.fn(() => {}),
   },
