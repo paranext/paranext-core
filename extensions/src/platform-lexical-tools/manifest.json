@@ -1,0 +1,18 @@
+{
+  "name": "platformLexicalTools",
+  "version": "0.0.1",
+  "publisher": "paranext",
+  "displayData": "assets/displayData.json",
+  "author": "Paranext",
+  "license": "MIT",
+  "main": "src/main.ts",
+  "extensionDependencies": {},
+  "elevatedPrivileges": [],
+  "types": "src/types/platform-lexical-tools.d.ts",
+  "menus": "contributions/menus.json",
+  "settings": "contributions/settings.json",
+  "projectSettings": "contributions/projectSettings.json",
+  "localizedStrings": "contributions/localizedStrings.json",
+  "themes": "contributions/themes.json",
+  "activationEvents": []
+}

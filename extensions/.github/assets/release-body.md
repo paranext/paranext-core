@@ -2,7 +2,7 @@ Includes:
 
 - Extensions
 
-Tested on Platform.Bible vY.Z.X. Expected to be compatible with at least vY.Z.x.
+Tested on Platform.Bible vX.Y.Z. Expected to be compatible with at least vX.Y.\*.
 
 Install instructions:
 

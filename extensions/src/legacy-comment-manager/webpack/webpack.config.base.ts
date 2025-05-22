@@ -58,7 +58,9 @@ const configBase: webpack.Configuration = {
       // This must be the first rule in order to be applied after all other transformations
       // https://webpack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
       {
-        resourceQuery: /inline/,
+        resourceQuery: {
+          and: [/inline/, { not: [/raw/] }],
+        },
         type: 'asset/source',
       },
       // Load TypeScript with SWC https://swc.rs/docs/usage/swc-loader
@@ -66,6 +68,7 @@ const configBase: webpack.Configuration = {
       // https://github.com/TypeStrong/ts-loader#options
       {
         test: /\.tsx?$/,
+        resourceQuery: { not: [/raw/] },
         use: {
           loader: 'swc-loader',
           options: {
@@ -88,6 +91,7 @@ const configBase: webpack.Configuration = {
       // https://webpack.js.org/loaders/sass-loader/#getting-started
       {
         test: /\.(sa|sc|c)ss$/,
+        resourceQuery: { not: [/raw/] },
         use: [
           // We are not using style-loader since we are passing styles to papi, not inserting them
           // into dom. style-loader would add html style elements for our styles if we used it
@@ -107,6 +111,7 @@ const configBase: webpack.Configuration = {
       // https://webpack.js.org/guides/asset-management/#loading-images
       {
         test: /\.(png|svg|jpg|jpeg|gif)$/i,
+        resourceQuery: { not: [/raw/] },
         type: 'asset/inline',
       },
       /**
@@ -117,6 +122,7 @@ const configBase: webpack.Configuration = {
       // https://webpack.js.org/guides/asset-management/#loading-fonts
       {
         test: /\.(woff|woff2|eot|ttf|otf)$/i,
+        resourceQuery: { not: [/raw/] },
         type: 'asset/inline',
       },
       /** Import files with no transformation as strings with "./file?raw" */
