@@ -8,7 +8,14 @@
 
 import os from 'os';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, RenderProcessGoneDetails } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  shell,
+  ipcMain,
+  RenderProcessGoneDetails,
+  globalShortcut,
+} from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import windowStateKeeper from 'electron-window-state';
@@ -345,6 +352,38 @@ async function main() {
       logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
+    // Set zoom factor after the page has finished loading to ensure it takes effect
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.on('did-finish-load', () => {
+        if (mainWindow && mainWindow.webContents) {
+          logger.info('Page finished loading, setting zoom factor');
+          /**
+           * Set the zoom factor of the mainWindow's webContents. Electron's setZoomFactor is
+           * available on the WebContents instance. Example:
+           * mainWindow.webContents.setZoomFactor(1.25) for 125% zoom. You can also get the current
+           * zoom factor with getZoomFactor().
+           */
+          mainWindow.webContents.setZoomFactor(2.0);
+          const currentZoom = mainWindow.webContents.getZoomFactor();
+          logger.info(`Zoom factor is now set to: ${currentZoom}`);
+        }
+      });
+    }
+
+    // // Optionally, expose zoom controls via IPC or commands:
+    // ipcMain.handle('mainWindow:setZoomFactor', (_event, zoom: number) => {
+    //   if (mainWindow && mainWindow.webContents) {
+    //     mainWindow.webContents.setZoomFactor(zoom);
+    //   }
+    // });
+
+    // ipcMain.handle('mainWindow:getZoomFactor', () => {
+    //   if (mainWindow && mainWindow.webContents) {
+    //     return mainWindow.webContents.getZoomFactor();
+    //   }
+    //   return 1.0;
+    // });
+
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -394,6 +433,47 @@ async function main() {
         'electronAPI:env.test',
         (_event, message: string) => `From main.ts: test ${message}`,
       );
+
+      ipcMain.handle('electronAPI:env.zoomIn', () => {
+        if (mainWindow)
+          mainWindow.webContents.setZoomFactor(mainWindow.webContents.getZoomFactor() + 0.1);
+      });
+
+      ipcMain.handle('electronAPI:env.zoomOut', () => {
+        if (mainWindow)
+          mainWindow.webContents.setZoomFactor(mainWindow.webContents.getZoomFactor() - 0.1);
+      });
+
+      ipcMain.handle('electronAPI:env.zoomReset', () => {
+        if (mainWindow) mainWindow.webContents.setZoomFactor(1.0);
+      });
+
+      // Register zoom keyboard shortcuts
+      // Zoom in: Ctrl++ or Ctrl+=
+      globalShortcut.register('CommandOrControl+=', () => {
+        if (mainWindow) {
+          mainWindow.webContents.setZoomFactor(mainWindow.webContents.getZoomFactor() + 0.1);
+        }
+      });
+
+      // Zoom out: Ctrl+-
+      globalShortcut.register('CommandOrControl+-', () => {
+        if (mainWindow) {
+          mainWindow.webContents.setZoomFactor(mainWindow.webContents.getZoomFactor() - 0.1);
+        }
+      });
+
+      // Reset zoom: Ctrl+0
+      globalShortcut.register('CommandOrControl+0', () => {
+        if (mainWindow) {
+          mainWindow.webContents.setZoomFactor(1.0);
+        }
+      });
+
+      // Unregister shortcuts when app is quitting
+      app.on('will-quit', () => {
+        globalShortcut.unregisterAll();
+      });
 
       createWindow();
       app.on('activate', () => {
