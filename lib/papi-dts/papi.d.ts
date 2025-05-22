@@ -3220,6 +3220,10 @@ declare module 'papi-shared-types' {
     'platform.getOSPlatform': () => Promise<string | undefined>;
     /** If the browser window is in full screen */
     'platform.isFullScreen': () => Promise<boolean>;
+    /** Increase the zoom level of the entire UI */
+    'platform.zoomIn': () => Promise<void>;
+    /** Decrease the zoom level of the entire UI */
+    'platform.zoomOut': () => Promise<void>;
     /** Open a browser to the platform's OpenRPC documentation */
     'platform.openDeveloperDocumentationUrl': () => Promise<void>;
     /**
@@ -3311,6 +3315,11 @@ declare module 'papi-shared-types' {
      * If the timeout is set to 0, then requests will never timeout.
      */
     'platform.requestTimeout': number;
+    /**
+     * The zoom factor that applies to the entire application. 1.0 is the default. Allowed range is
+     * 0.5 to 3.0.
+     */
+    'platform.zoomFactor': number;
   }
   /**
    * Names for each user setting available on the papi.

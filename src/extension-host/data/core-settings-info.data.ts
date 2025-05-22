@@ -3,6 +3,9 @@ import { AllSettingsValidators, SettingValidator } from '@shared/services/settin
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { isString, SettingsContribution } from 'platform-bible-utils';
 
+const MAX_ZOOM_FACTOR = 3.0;
+const MIN_ZOOM_FACTOR = 0.5;
+
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = [
   {
@@ -40,6 +43,11 @@ export const platformSettings: SettingsContribution = [
         label: '%settings_platform_requestTimeout_label%',
         description: '%settings_platform_requestTimeout_description%',
         default: 30,
+      },
+      'platform.zoomFactor': {
+        label: '%settings_platform_zoomFactor_label%',
+        description: '%settings_platform_zoomFactor_description%',
+        default: 1.0,
       },
     },
   },
@@ -97,6 +105,12 @@ const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = asy
 };
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
+const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  return typeof newValue === 'number' && newValue >= MIN_ZOOM_FACTOR && newValue <= MAX_ZOOM_FACTOR;
+};
+
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
@@ -104,4 +118,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
   'platform.commentsEnabled': booleanValidator,
   'platform.requestTimeout': requestTimeoutValidator,
+  'platform.zoomFactor': zoomFactorValidator,
 };
