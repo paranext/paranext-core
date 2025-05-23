@@ -2,7 +2,7 @@ import papi, { DataProviderEngine } from '@papi/backend';
 import { DataProviderUpdateInstructions, IDataProviderEngine } from '@papi/core';
 import { Canon } from '@sillsdev/scripture';
 import { newGuid } from 'platform-bible-utils';
-import {
+import type {
   LexicalEntriesById,
   LexicalEntriesByOccurrence,
   LexicalReferenceSelector,
@@ -11,6 +11,28 @@ import {
   LexicalReferenceDataTypes,
   Sense,
 } from 'platform-lexical-tools';
+
+/** Indicates an entry or sense that has occurrence data */
+type WithOccurrence = {
+  // Entry with occurrence
+  SourceTextId: string;
+  BookNum: number;
+  ChapterNum: number;
+  VerseNum: number;
+  WordNum: string;
+};
+
+/**
+ * Indicates an entry or sense that doesn't have any occurrences - all occurrence-related fields are
+ * undefined
+ */
+type WithoutOccurrence = {
+  SourceTextId: undefined;
+  BookNum: undefined;
+  ChapterNum: undefined;
+  VerseNum: undefined;
+  WordNum: undefined;
+};
 
 export class LexicalReferenceService
   extends DataProviderEngine<LexicalReferenceDataTypes>
@@ -47,9 +69,9 @@ export class LexicalReferenceService
       async (databaseNonce) => {
         // Build matching entry/sense information from this database
 
-        // TODO: Parallelize these db calls
+        // ENHANCEMENT: Parallelize these db calls
 
-        // Gather senses and their occurrences
+        // Gather matching senses and their occurrences
         // We know the database schema, so we know this is the right type
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         const senseOccurrenceRows = (await papi.database.select(
@@ -58,16 +80,16 @@ export class LexicalReferenceService
                 SenseKey,
                 SenseId,
                 LexiconId,
-                SourceTextId,
                 Lemma,
                 EntryId,
                 EntryKey,
                 Definition,
+                BCP47Code,
+                SourceTextId,
                 BookNum,
                 ChapterNum,
                 VerseNum,
-                WordNum,
-                BCP47Code
+                WordNum
               FROM SenseOccurrenceView
               WHERE
                 ($lexicalReferenceTextId IS NULL OR LexiconId = $lexicalReferenceTextId) AND
@@ -100,25 +122,9 @@ export class LexicalReferenceService
           EntryKey: number;
           Definition?: string;
           BCP47Code: string;
-        } & (
-          | {
-              // Sense with occurrence
-              SourceTextId: string;
-              BookNum: number;
-              ChapterNum: number;
-              VerseNum: number;
-              WordNum: string;
-            }
-          | {
-              // Sense that doesn't have any occurrences - all occurrence-related fields are undefined
-              SourceTextId: undefined;
-              BookNum: undefined;
-              ChapterNum: undefined;
-              VerseNum: undefined;
-              WordNum: undefined;
-            }
-        ))[];
+        } & (WithOccurrence | WithoutOccurrence))[];
 
+        // Gather all sense keys for getting additional information about them
         const senseKeys = [...new Set(senseOccurrenceRows.map((row) => row.SenseKey))];
         const senseKeysSqlArray = `(${senseKeys.join(',')})`;
 
@@ -130,10 +136,10 @@ export class LexicalReferenceService
           `SELECT SenseKey, Gloss FROM Glosses WHERE SenseKey IN ${senseKeysSqlArray};`,
         )) as Array<{ SenseKey: number; Gloss: string }>;
 
-        // Gather domains
+        // Gather sense domains
         // We know the database schema, so we know this is the right type
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const domainRows = (await papi.database.select(
+        const senseDomainRows = (await papi.database.select(
           databaseNonce,
           `SELECT DISTINCT
               sd.SenseKey,
@@ -159,15 +165,15 @@ export class LexicalReferenceService
           Label: string | undefined;
         }>;
 
-        // Gather strongs codes
+        // Gather sense strongs codes
         // We know the database schema, so we know this is the right type
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const strongsCodeRows = (await papi.database.select(
+        const senseStrongsCodeRows = (await papi.database.select(
           databaseNonce,
           `SELECT SenseKey, StrongsCode FROM SenseStrongsCodes WHERE SenseKey IN ${senseKeysSqlArray};`,
         )) as Array<{ SenseKey: number; StrongsCode: string }>;
 
-        // Transform all this sense data into full senses and entries
+        // Transform all this matching sense data into full senses and associated entries
         const sensesByKey = new Map<number, Sense>();
         const entriesByKey = new Map<number, Entry>();
         // Set up the senses and add occurrences
@@ -176,6 +182,7 @@ export class LexicalReferenceService
           const senseFromMap = sensesByKey.get(row.SenseKey);
           const sense = senseFromMap ?? {
             id: row.SenseId,
+            entryId: row.EntryId,
             lexicalReferenceTextId: row.LexiconId,
             bcp47Code: row.BCP47Code,
             definition: row.Definition,
@@ -188,33 +195,14 @@ export class LexicalReferenceService
 
           // Get or create the entry for this sense/occurrence row
           const entryFromMap = entriesByKey.get(row.EntryKey);
-          const entry = entryFromMap ?? {
-            id: row.EntryId,
-            lexicalReferenceTextId: row.LexiconId,
-            lemma: row.Lemma,
-            senses: {},
-            strongsCodes: [],
-            occurrences: {},
-            domains: [],
-          };
+          const entry = entryFromMap ?? createEmptyEntry(row);
           if (!entryFromMap) entriesByKey.set(row.EntryKey, entry);
 
           // Add this sense to the entry if it's not already there
           if (!entry.senses[row.SenseId]) entry.senses[row.SenseId] = sense;
 
           // If this sense/occurrence row has an occurrence, add it
-          if (!row.SourceTextId) return;
-
-          // Get or set the occurrences for this source text
-          const occurrencesFromSense = sense.occurrences[row.SourceTextId];
-          const occurrences = occurrencesFromSense ?? [];
-          if (!occurrencesFromSense) sense.occurrences[row.SourceTextId] = occurrences;
-
-          // Create a U23003 verse location and add it to the list of occurrences
-          occurrences.push({
-            type: 'U23003',
-            location: `${Canon.bookNumberToId(row.BookNum)} ${row.ChapterNum}:${row.VerseNum}!${row.WordNum}`,
-          });
+          addOccurrence(sense, row);
         });
 
         // Add glosses to the senses
@@ -229,7 +217,7 @@ export class LexicalReferenceService
         });
 
         // Add domains to the senses
-        domainRows.forEach(({ SenseKey, TaxonomyId, DomainCode, Label }) => {
+        senseDomainRows.forEach(({ SenseKey, TaxonomyId, DomainCode, Label }) => {
           const sense = sensesByKey.get(SenseKey);
           if (!sense)
             throw new Error(
@@ -240,7 +228,7 @@ export class LexicalReferenceService
         });
 
         // Add Strongs Codes to the senses
-        strongsCodeRows.forEach(({ SenseKey, StrongsCode }) => {
+        senseStrongsCodeRows.forEach(({ SenseKey, StrongsCode }) => {
           const sense = sensesByKey.get(SenseKey);
           if (!sense)
             throw new Error(
@@ -250,7 +238,130 @@ export class LexicalReferenceService
           sense.strongsCodes.push(StrongsCode);
         });
 
-        // TODO: get relevant entries that don't have relevant senses
+        // Gather matching entries and their occurrences
+        // We know the database schema, so we know this is the right type
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const entryOccurrenceRows = (await papi.database.select(
+          databaseNonce,
+          `SELECT
+                EntryKey,
+                EntryId,
+                LexiconId,
+                Lemma,
+                SourceTextId,
+                BookNum,
+                ChapterNum,
+                VerseNum,
+                WordNum
+              FROM EntryOccurrenceView
+              WHERE
+                ($lexicalReferenceTextId IS NULL OR LexiconId = $lexicalReferenceTextId) AND
+                ($sourceTextId IS NULL OR SourceTextId = $sourceTextId) AND
+                ($bookNum IS NULL OR BookNum = $bookNum) AND
+                ($chapterNum IS NULL OR ChapterNum = $chapterNum) AND
+                ($verseNum IS NULL OR VerseNum = $verseNum) AND
+                ($lemma IS NULL OR Lemma = $lemma) AND
+                ($itemId IS NULL OR EntryId = $itemId) AND
+                ($wordNum IS NULL OR WordNum = $wordNum);`,
+          {
+            // Using || instead of ?? so falsy values like empty string are not used
+            $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
+            $sourceTextId: selector.sourceTextId || undefined,
+            $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
+            $chapterNum: selector.chapterNum || undefined,
+            $verseNum: selector.verseNum || undefined,
+            $lemma: selector.lemma || undefined,
+            $itemId: selector.itemId || undefined,
+            $wordNum: selector.wordNum || undefined,
+          },
+        )) as ({
+          EntryKey: number;
+          EntryId: string;
+          LexiconId: string;
+          Lemma: string;
+        } & (WithOccurrence | WithoutOccurrence))[];
+
+        // Gather all entry keys for getting additional information about them
+        const entryKeys = [
+          ...new Set(
+            entryOccurrenceRows
+              .map((row) => row.EntryKey)
+              // Get entry information for the entries containing senses that match
+              .concat(senseOccurrenceRows.map((row) => row.EntryKey)),
+          ),
+        ];
+        const entryKeysSqlArray = `(${entryKeys.join(',')})`;
+
+        // Gather entry domains
+        // We know the database schema, so we know this is the right type
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const entryDomainRows = (await papi.database.select(
+          databaseNonce,
+          `SELECT DISTINCT
+              ed.EntryKey,
+              t.Id AS TaxonomyId,
+              ed.DomainCode,
+              tdl.Label
+            FROM
+              EntryDomains ed
+              JOIN Taxonomies t ON ed.TaxonomyKey = t.TaxonomyKey
+              LEFT JOIN TaxonomyDomains td ON ed.DomainCode = td.DomainCode AND ed.TaxonomyKey = td.TaxonomyKey
+              LEFT JOIN TaxonomyDomainLabels tdl ON td.TaxonomyDomainKey = tdl.TaxonomyDomainKey
+              LEFT JOIN Languages l ON tdl.LanguageKey = l.LanguageKey
+            WHERE
+              EntryKey IN ${entryKeysSqlArray} AND
+              l.BCP47Code = $bcp47Code;`,
+          {
+            $bcp47Code: bcp47Code,
+          },
+        )) as Array<{
+          EntryKey: number;
+          TaxonomyId: string;
+          DomainCode: string;
+          Label: string | undefined;
+        }>;
+
+        // Gather entry strongs codes
+        // We know the database schema, so we know this is the right type
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const entryStrongsCodeRows = (await papi.database.select(
+          databaseNonce,
+          `SELECT EntryKey, StrongsCode FROM EntryStrongsCodes WHERE EntryKey IN ${entryKeysSqlArray};`,
+        )) as Array<{ EntryKey: number; StrongsCode: string }>;
+
+        // Transform all this matching entry data into full entries
+        // Set up the entries and add occurrences
+        entryOccurrenceRows.forEach((row) => {
+          // Get or create the entry for this sense/occurrence row
+          const entryFromMap = entriesByKey.get(row.EntryKey);
+          const entry = entryFromMap ?? createEmptyEntry(row);
+          if (!entryFromMap) entriesByKey.set(row.EntryKey, entry);
+
+          // If this entry/occurrence row has an occurrence, add it
+          addOccurrence(entry, row);
+        });
+
+        // Add domains to the entries
+        entryDomainRows.forEach(({ EntryKey, TaxonomyId, DomainCode, Label }) => {
+          const entry = entriesByKey.get(EntryKey);
+          if (!entry)
+            throw new Error(
+              `Somehow retrieved domain code ${DomainCode} for entry key ${EntryKey} but the entry was not retrieved! This should not happen`,
+            );
+
+          entry.domains.push({ taxonomy: TaxonomyId, code: DomainCode, label: Label });
+        });
+
+        // Add Strongs Codes to the entries
+        entryStrongsCodeRows.forEach(({ EntryKey, StrongsCode }) => {
+          const entry = entriesByKey.get(EntryKey);
+          if (!entry)
+            throw new Error(
+              `Somehow retrieved Strongs Code ${StrongsCode} for entry key ${EntryKey} but the entry was not retrieved! This should not happen`,
+            );
+
+          entry.strongsCodes.push(StrongsCode);
+        });
 
         return Array.from(entriesByKey.values());
       },
@@ -286,6 +397,7 @@ export class LexicalReferenceService
     return entriesByIdAggregated;
   }
 
+  // TODO: what to do with this
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   async getEntriesByOccurrence(/* selector: LexicalReferenceSelector, */): Promise<LexicalEntriesByOccurrence> {
     throw new Error('I dunno if we want this');
@@ -456,5 +568,38 @@ function mergeEntrySenseProperties<T extends Entry | Sense>(a: T, b: T): void {
       )
         existingOccurrences.push(occurrence);
     });
+  });
+}
+
+/**
+ * Create an empty entry with the simple properties but with nothing in any of its array/object
+ * properties
+ */
+function createEmptyEntry(row: { EntryId: string; LexiconId: string; Lemma: string }): Entry {
+  return {
+    id: row.EntryId,
+    lexicalReferenceTextId: row.LexiconId,
+    lemma: row.Lemma,
+    senses: {},
+    strongsCodes: [],
+    occurrences: {},
+    domains: [],
+  };
+}
+
+/** Add an occurrence to an Entry/Sense from its occurrence row */
+function addOccurrence(item: Entry | Sense, row: WithOccurrence | WithoutOccurrence) {
+  // If this sense/entry occurrence row doesn't have an occurrence, skip it
+  if (!row.SourceTextId) return;
+
+  // Get or set the occurrences for this source text
+  const occurrencesFromSense = item.occurrences[row.SourceTextId];
+  const occurrences = occurrencesFromSense ?? [];
+  if (!occurrencesFromSense) item.occurrences[row.SourceTextId] = occurrences;
+
+  // Create a U23003 verse location and add it to the list of occurrences
+  occurrences.push({
+    type: 'U23003',
+    location: `${Canon.bookNumberToId(row.BookNum)} ${row.ChapterNum}:${row.VerseNum}!${row.WordNum}`,
   });
 }

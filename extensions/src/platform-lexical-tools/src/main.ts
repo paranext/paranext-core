@@ -12,7 +12,7 @@ export async function activate(context: ExecutionActivationContext) {
 
   const lexicalReferenceService = await lexicalReferenceServicePromise;
   await lexicalReferenceService.registerLexicalReferenceText(
-    'papi-extension://platformLexicalTools/assets/sdbhg-en_fr.db',
+    'papi-extension://platformLexicalTools/assets/lexical-db/lexical.db',
   );
 
   context.registrations.add(lexicalReferenceService);
