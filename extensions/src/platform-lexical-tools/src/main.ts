@@ -1,7 +1,21 @@
-import { logger } from '@papi/backend';
+import papi, { logger } from '@papi/backend';
+import { ExecutionActivationContext } from '@papi/core';
+import { LexicalReferenceService } from './lexical-reference.service';
 
-export async function activate() {
+export async function activate(context: ExecutionActivationContext) {
   logger.info('Platform Lexical Tools is activating!');
+
+  const lexicalReferenceServicePromise = papi.dataProviders.registerEngine(
+    'platformLexicalTools.lexicalReferenceService',
+    new LexicalReferenceService(),
+  );
+
+  const lexicalReferenceService = await lexicalReferenceServicePromise;
+  await lexicalReferenceService.registerLexicalReferenceText(
+    'papi-extension://platformLexicalTools/assets/sdbhg-en_fr.db',
+  );
+
+  context.registrations.add(lexicalReferenceService);
 }
 
 export async function deactivate() {

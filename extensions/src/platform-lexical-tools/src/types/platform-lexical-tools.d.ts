@@ -1,4 +1,212 @@
 declare module 'platform-lexical-tools' {
-  // Add extension types exposed on the papi for other extensions to use here
-  // More instructions can be found in the README
+  import { DataProviderDataType, IDataProvider } from '@papi/core';
+  import type { IProjectDataProvider } from 'papi-shared-types';
+
+  // #region Lexical Reference Text types loosely following the LexicalReferenceText Relax NG Compact schema converted to lowerCamelCase https://github.com/paranext/marble-tools/blob/85a376dc024cf1d2c9eff9a5166825edbf9a03f1/xml/output.rnc
+
+  // Currently unused, but we may need this when we want to show information about the lexical reference text
+  export interface LexicalReferenceText {
+    schemaVersion: string;
+    id: string;
+    title: string;
+    dataVersion: string;
+    language: string;
+    entries?: Entry[];
+    taxonomies?: Taxonomy[];
+  }
+
+  // Currently unused, but we will probably need this when we want to show Taxonomies
+  export interface Taxonomy {
+    id: string;
+    title: string;
+    subDomains: SubDomain[];
+  }
+
+  // Currently unused, but we will probably need this when we want to show Taxonomies
+  export interface SubDomain {
+    code: string;
+    name?: string;
+    subDomains?: SubDomain[];
+  }
+
+  /** Senses mapped by IDs */
+  export type SensesById = {
+    [senseId: string]: Sense | undefined;
+  };
+
+  export interface Entry {
+    id: string;
+    lexicalReferenceTextId: string;
+    lemma: string;
+    senses: SensesById;
+    strongsCodes: string[];
+    occurrences: OccurrencesBySourceTextId;
+    domains: Domain[];
+  }
+
+  export interface Sense {
+    id: string;
+    lexicalReferenceTextId: string;
+    bcp47Code: string;
+    definition?: string;
+    glosses: string[];
+    strongsCodes: string[];
+    occurrences: OccurrencesBySourceTextId;
+    domains: Domain[];
+  }
+
+  export interface OccurrencesBySourceTextId {
+    [sourceTextId: string]: Occurrence[] | undefined;
+  }
+
+  export interface Occurrence {
+    type: string;
+    location: string;
+  }
+
+  export interface Domain {
+    taxonomy: string;
+    code: string;
+    label?: string;
+  }
+
+  // #endregion
+
+  // #region Lexical Reference Project Data Provider Types
+
+  // TODO: Expand this with TSDocs
+  export type ILexicalReferenceProjectDataProvider = IProjectDataProvider<{}>;
+
+  // #endregion
+
+  // #region Lexical Reference Data Provider Types
+
+  /**
+   * Selector to specify which lexical data to retrieve. This essentially acts as a filter; every
+   * property supplied is ANDed together to filter all entries/senses and return only those matching
+   * all conditions. It will return partial data if only part of an entry/sense matches.
+   *
+   * @example If you specify `entryId` as an entry's id and `book` as `GEN`, and there is an entry
+   * with two senses but only one of those senses occurs in Genesis, only the sense that occurs in
+   * Genesis will be returned. If you instead specify only `itemId` as that entry's id, it will
+   * return the whole entry with all its contents.
+   */
+  export type LexicalReferenceSelector = {
+    /**
+     * ID of the Scripture text for which to match occurrences. This does nothing if you do not
+     * specify an occurrence-related property like `book` or `wordNum`
+     */
+    sourceTextId?: string;
+    book?: string;
+    chapterNum?: number;
+    verseNum?: number;
+    /** U23003-defined word number */
+    wordNum?: string;
+    lexicalReferenceTextId?: string;
+    /**
+     * BCP-47 language code to get language-specific info for e.g. definition. Will use `en` if not
+     * specified
+     */
+    bcp47Code?: string;
+    lemma?: string;
+    /** Entry or sense id */
+    itemId?: string;
+  };
+
+  /**
+   * Entries mapped by IDs. There may be multiple entries for one ID if there are multiple lexical
+   * reference texts that provide an entry with the same ID.
+   */
+  export type LexicalEntriesById = {
+    [entryId: string]: Entry[] | undefined;
+  };
+
+  /**
+   * Entries mapped by their location in Scripture. There may be multiple entries for one location
+   * from the same lexical reference text.
+   */
+  export type LexicalEntriesByOccurrence = {
+    [book: string]:
+      | {
+          [chapterNum: number]:
+            | {
+                [verseNum: number]:
+                  | {
+                      /** U23003-defined word number */
+                      [wordNum: string]: Entry[] | undefined;
+                    }
+                  | undefined;
+              }
+            | undefined;
+        }
+      | undefined;
+  };
+
+  /** Provides lexical reference text data across all included lexical reference projects */
+  export type LexicalReferenceDataTypes = {
+    /**
+     * Gets/sets lexical reference text entries mapped by their IDs. This is how the data is
+     * organized in the lexical reference text data format
+     */
+    EntriesById: DataProviderDataType<
+      LexicalReferenceSelector,
+      LexicalEntriesById,
+      LexicalEntriesById
+    >;
+    /** Gets/sets lexical reference text entries mapped by their location in Scripture */
+    EntriesByOccurrence: DataProviderDataType<
+      LexicalReferenceSelector,
+      LexicalEntriesByOccurrence,
+      LexicalEntriesByOccurrence
+    >;
+  };
+
+  export type LexicalReferenceTextRegistrar = {
+    /**
+     * Registers a lexical reference text to be used with lexical tools.
+     *
+     * Note: you do not have to run `unregisterLexicalReferenceText` unless you want to remove the
+     * data from the lexical service. The lexical service will automatically unregister everything
+     * on shutdown.
+     *
+     * Note: the guid returned is not cryptographically secure. It may be changed to be secure in
+     * the future.
+     *
+     * @param extensionFileUri - The file URL of the SQLite database. This can only be an extension
+     *   asset URI like `papi-extension://<extension-name>/assets/<path-to-asset>`. The SQLite
+     *   database must follow [the Lexical Reference Text SQL
+     *   schema](https://github.com/paranext/marble-tools/blob/main/sql/schema.sql)
+     * @returns A guid that can be used to unregister this lexical reference text
+     */
+    registerLexicalReferenceText(extensionFileUri: string): Promise<string>;
+    /**
+     * Unregisters a lexical reference text that was previously registered with
+     * `registerLexicalReferenceText`, removing its data from the lexical service.
+     *
+     * @param guid - The guid of the lexical reference text to close. Returned from
+     *   `registerLexicalReferenceText`
+     */
+    unregisterLexicalReferenceText(guid: string): Promise<void>;
+  };
+
+  // TODO: expand this with TSDocs
+  export type ILexicalReferenceService = IDataProvider<LexicalReferenceDataTypes> &
+    LexicalReferenceTextRegistrar;
+
+  // #endregion
+}
+
+declare module 'papi-shared-types' {
+  import type {
+    ILexicalReferenceProjectDataProvider,
+    ILexicalReferenceService,
+  } from 'platform-lexical-tools';
+
+  export interface ProjectDataProviderInterfaces {
+    'platformLexicalTools.lexicalReference': ILexicalReferenceProjectDataProvider;
+  }
+
+  export interface DataProviders {
+    'platformLexicalTools.lexicalReferenceService': ILexicalReferenceService;
+  }
 }
