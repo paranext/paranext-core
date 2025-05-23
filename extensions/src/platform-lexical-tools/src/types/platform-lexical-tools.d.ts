@@ -46,6 +46,8 @@ declare module 'platform-lexical-tools' {
 
   export interface Sense {
     id: string;
+    /** ID of the entry that contains this sense */
+    entryId: string;
     lexicalReferenceTextId: string;
     bcp47Code: string;
     definition?: string;
