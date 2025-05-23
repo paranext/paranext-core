@@ -128,27 +128,27 @@ const meta: Meta<TabToolbarProps> = {
     ),
     centerAreaChildren: (
       <>
-      <ScrollGroupSelector
-        availableScrollGroupIds={[0, 1, 2, 3, 4]}
-        localizedStrings={myScrollGroupIdLocalizedStrings}
-        scrollGroupId={0}
-        onChangeScrollGroupId={setScrollGroupId}
-        size="sm"
-      />
-            <ScrollGroupSelector
-        availableScrollGroupIds={[0, 1, 2, 3, 4]}
-        localizedStrings={myScrollGroupIdLocalizedStrings}
-        scrollGroupId={0}
-        onChangeScrollGroupId={setScrollGroupId}
-        size="sm"
-      />
-            <ScrollGroupSelector
-        availableScrollGroupIds={[0, 1, 2, 3, 4]}
-        localizedStrings={myScrollGroupIdLocalizedStrings}
-        scrollGroupId={0}
-        onChangeScrollGroupId={setScrollGroupId}
-        size="sm"
-      />
+        <ScrollGroupSelector
+          availableScrollGroupIds={[0, 1, 2, 3, 4]}
+          localizedStrings={myScrollGroupIdLocalizedStrings}
+          scrollGroupId={0}
+          onChangeScrollGroupId={setScrollGroupId}
+          size="sm"
+        />
+        <ScrollGroupSelector
+          availableScrollGroupIds={[0, 1, 2, 3, 4]}
+          localizedStrings={myScrollGroupIdLocalizedStrings}
+          scrollGroupId={0}
+          onChangeScrollGroupId={setScrollGroupId}
+          size="sm"
+        />
+        <ScrollGroupSelector
+          availableScrollGroupIds={[0, 1, 2, 3, 4]}
+          localizedStrings={myScrollGroupIdLocalizedStrings}
+          scrollGroupId={0}
+          onChangeScrollGroupId={setScrollGroupId}
+          size="sm"
+        />
       </>
     ),
     endAreaChildren: (

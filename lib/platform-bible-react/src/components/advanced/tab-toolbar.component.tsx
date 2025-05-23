@@ -1,7 +1,7 @@
 import { PropsWithChildren, ReactNode } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
-import { AlignJustify, EllipsisVertical } from 'lucide-react';
+import { Menu, EllipsisVertical } from 'lucide-react';
 import { CommandHandler } from './menus/platform-menubar.component';
 import TabDropdownMenu from './menus/tab-dropdown-menu.component';
 
@@ -53,40 +53,35 @@ export function TabToolbar({
   return (
     <div
       className={cn(
-        'tw-box-border tw-flex tw-w-full tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-hidden tw-border tw-px-4 tw-py-2 tw-text-foreground tw-h-12 tw-content-start',
+        'tw-box-border tw-flex tw-h-12 tw-w-full tw-columns-5 tw-flex-row tw-content-start tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-border tw-px-4 tw-py-2 tw-text-foreground',
         className,
       )}
       id={id}
     >
-      <div className="tw-flex-shrink-0">
-        {!projectMenuData ? (
-          <div>{}</div>
-        ) : (
+      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-bg-blue-500">
+        {projectMenuData && (
           <TabDropdownMenu
             commandHandler={projectMenuCommandHandler}
             menuData={projectMenuData}
             tabLabel="Project"
-            icon={<AlignJustify />}
-            className="tw-align-middle"
+            icon={<Menu />}
+            className="tw-h-full"
           />
         )}
-      </div>
-      <div className="tw-h-full xs:tw-gap-0.5 tw-flex tw-min-w-0 tw-flex-shrink tw-flex-row tw-items-start tw-justify-start tw-gap-2 tw-overflow-hidden sm:tw-gap-1 tw-flex-wrap *:min-width:fit-content ">
         {startAreaChildren}
       </div>
-      <div className="tw-h-full xs:tw-gap-0.5 tw-flex tw-min-w-0 tw-flex-shrink tw-flex-grow tw-flex-row tw-items-start tw-justify-center tw-gap-2 tw-overflow-hidden sm:tw-gap-1 tw-flex-wrap *:min-width:fit-content">
+      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-bg-lime-500">
         {centerAreaChildren}
       </div>
-      <div className="tw-h-full xs:tw-gap-0.5 tw-flex tw-min-w-0 tw-flex-shrink tw-flex-row tw-flex-wrap *:min-width:fit-content tw-items-start tw-justify-end tw-gap-2 tw-overflow-hidden  sm:tw-gap-1">
+      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-bg-rose-500">
         {endAreaChildren}
-      </div>
-      <div className="tw-flex-shrink-0">
         {tabViewMenuData && (
           <TabDropdownMenu
             commandHandler={viewInfoMenuCommandHandler}
             menuData={tabViewMenuData}
             tabLabel="View Info"
             icon={<EllipsisVertical />}
+            className="tw-h-full"
           />
         )}
       </div>
