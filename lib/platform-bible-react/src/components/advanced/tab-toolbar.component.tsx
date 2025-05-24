@@ -58,19 +58,19 @@ export function TabToolbar({
       )}
       id={id}
     >
+      {projectMenuData && (
+        <TabDropdownMenu
+          commandHandler={projectMenuCommandHandler}
+          menuData={projectMenuData}
+          tabLabel="Project"
+          icon={<Menu />}
+          className="tw-h-full tw-w-8"
+        />
+      )}
       <div
         id={{ id } + 'toolbarStartArea'}
-        className="tw-flex tw-h-full tw-min-w-0 tw-flex-1 tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-bg-green-500 tw-@container/toolbar-start @[17rem]:tw-bg-blue-500"
+        className="tw-flex tw-h-full tw-min-w-0 tw-flex-1 tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/toolbar-start @[17rem]:tw-bg-blue-500"
       >
-        {projectMenuData && (
-          <TabDropdownMenu
-            commandHandler={projectMenuCommandHandler}
-            menuData={projectMenuData}
-            tabLabel="Project"
-            icon={<Menu />}
-            className="tw-h-full"
-          />
-        )}
         {startAreaChildren}
       </div>
       <div className="*:min-width:fit-content tw-flex-0 tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/toolbar-center @[17rem]:tw-bg-blue-500 @sm:tw-flex-1">
