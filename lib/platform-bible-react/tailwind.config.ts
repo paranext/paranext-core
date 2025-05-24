@@ -5,6 +5,7 @@ import { scopedPreflightStyles } from 'tailwindcss-scoped-preflight';
 import { Config } from 'tailwindcss';
 import typography from '@tailwindcss/typography';
 import tailwindCssAnimate from 'tailwindcss-animate';
+import containerQueries from '@tailwindcss/container-queries';
 
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx}'],
@@ -101,6 +102,8 @@ const config: Config = {
     typography(),
     // Animations in tailwind style
     tailwindCssAnimate,
+    // Container queries first-party plugin
+    containerQueries,
 
     // #endregion
     // Restrict tailwind's preflight base css style modifications to within this component library
