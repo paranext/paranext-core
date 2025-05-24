@@ -33,7 +33,7 @@ export const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputPro
           {...props}
           type="text"
           className={cn(
-            'tw-box-border tw-w-[200px] tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pe-2 tw-ps-4 tw-font-medium tw-shadow-none tw-outline-none',
+            'tw-box-border tw-w-min tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pe-2 tw-ps-4 tw-font-medium tw-shadow-none tw-outline-none',
             className,
           )}
           onChange={(event) => handleSearch(event.target.value)}
