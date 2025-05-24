@@ -3,6 +3,7 @@ import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-ut
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { TabToolbar, TabToolbarProps } from '../../components/advanced/tab-toolbar.component';
+import React, { useEffect, useState } from 'react';
 
 const setScrollGroupId = (newScrollGroupId: number | undefined) => {
   console.log('New Scroll Group Id: ', newScrollGroupId);
@@ -171,3 +172,77 @@ export default meta;
 type Story = StoryObj<TabToolbarProps>;
 
 export const Default: Story = {};
+
+const AnimatedContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [width, setWidth] = useState(window.innerWidth); // Start at full viewport width
+  const [shrinking, setShrinking] = useState(true); // Direction of animation
+
+  useEffect(() => {
+    const minWidth = 300; // Minimum width for the container
+    const maxWidth = window.innerWidth; // Maximum width (viewport width)
+    const step = 5; // Pixels to change per frame
+    const interval = 16; // ~60fps
+
+    const animate = () => {
+      setWidth((currentWidth) => {
+        if (shrinking && currentWidth <= minWidth) {
+          setShrinking(false); // Switch to growing
+          return currentWidth;
+        } else if (!shrinking && currentWidth >= maxWidth) {
+          setShrinking(true); // Switch to shrinking
+          return currentWidth;
+        }
+        return shrinking ? currentWidth - step : currentWidth + step;
+      });
+    };
+
+    const intervalId = setInterval(animate, interval);
+
+    return () => clearInterval(intervalId); // Cleanup on unmount
+  }, [shrinking]);
+
+  return (
+    <div
+      style={{
+        width: `${width}px`,
+        maxWidth: '100%',
+        transition: 'box-shadow 0.3s',
+        border: '1px solid #ccc',
+        margin: '2rem auto',
+        minHeight: 80,
+        background: '#fff',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        overflow: 'hidden',
+      }}
+    >
+      {children}
+      <div
+        style={{
+          textAlign: 'center',
+          fontSize: 12,
+          color: '#888',
+          marginTop: 8,
+        }}
+      >
+        Container width: {Math.round(width)}px
+      </div>
+    </div>
+  );
+};
+
+export const AnimatedResponsive: Story = {
+  render: (args) => (
+    <AnimatedContainer>
+      <TabToolbar {...args} />
+    </AnimatedContainer>
+  ),
+  parameters: {
+    controls: { hideNoControlsWarning: true },
+    docs: {
+      description: {
+        story:
+          'Gradually animates the TabToolbar container width from the full viewport width down to 300px and back, allowing you to observe its responsive behavior.',
+      },
+    },
+  },
+};
