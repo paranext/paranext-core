@@ -53,12 +53,15 @@ export function TabToolbar({
   return (
     <div
       className={cn(
-        'tw-box-border tw-flex tw-h-12 tw-w-full tw-columns-5 tw-flex-row tw-content-start tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-border tw-px-4 tw-py-2 tw-text-foreground',
+        'tw-box-border tw-flex tw-h-12 tw-w-full tw-columns-5 tw-flex-row tw-content-start tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-border tw-px-4 tw-py-2 tw-text-foreground tw-@container/toolbar',
         className,
       )}
       id={id}
     >
-      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip">
+      <div
+        id={{ id } + 'toolbarStartArea'}
+        className="tw-flex tw-h-full tw-min-w-0 tw-flex-1 tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-bg-green-500 tw-@container/toolbar-start @[17rem]:tw-bg-blue-500"
+      >
         {projectMenuData && (
           <TabDropdownMenu
             commandHandler={projectMenuCommandHandler}
@@ -70,11 +73,10 @@ export function TabToolbar({
         )}
         {startAreaChildren}
       </div>
-      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip">
+      <div className="*:min-width:fit-content tw-flex-0 tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/toolbar-center @[17rem]:tw-bg-blue-500 @sm:tw-flex-1">
         {centerAreaChildren}
       </div>
-      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip">
-        {endAreaChildren}
+      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-1 tw-flex-row tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/toolbar-end @[17rem]:tw-bg-blue-500">
         {tabViewMenuData && (
           <TabDropdownMenu
             commandHandler={viewInfoMenuCommandHandler}
@@ -84,6 +86,7 @@ export function TabToolbar({
             className="tw-h-full"
           />
         )}
+        {endAreaChildren}
       </div>
     </div>
   );
