@@ -173,75 +173,72 @@ type Story = StoryObj<TabToolbarProps>;
 
 export const Default: Story = {};
 
-const AnimatedContainer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [width, setWidth] = useState(window.innerWidth); // Start at full viewport width
-  const [shrinking, setShrinking] = useState(true); // Direction of animation
-
-  useEffect(() => {
-    const minWidth = 300; // Minimum width for the container
-    const maxWidth = window.innerWidth; // Maximum width (viewport width)
-    const step = 5; // Pixels to change per frame
-    const interval = 16; // ~60fps
-
-    const animate = () => {
-      setWidth((currentWidth) => {
-        if (shrinking && currentWidth <= minWidth) {
-          setShrinking(false); // Switch to growing
-          return currentWidth;
-        } else if (!shrinking && currentWidth >= maxWidth) {
-          setShrinking(true); // Switch to shrinking
-          return currentWidth;
-        }
-        return shrinking ? currentWidth - step : currentWidth + step;
-      });
-    };
-
-    const intervalId = setInterval(animate, interval);
-
-    return () => clearInterval(intervalId); // Cleanup on unmount
-  }, [shrinking]);
-
+const AnimatedContainer: React.FC<{ children: React.ReactNode; animationDelay?: string }> = ({
+  children,
+  animationDelay = '0s',
+}) => {
   return (
     <div
       style={{
-        width: `${width}px`,
-        maxWidth: '100%',
-        transition: 'box-shadow 0.3s',
-        border: '1px solid #ccc',
-        margin: '2rem auto',
+        animation: 'widthAnimation 6s infinite alternate ease-in-out',
+        animationDelay,
+        border: '4px solid #ccc',
+        borderRadius: '16px',
+        margin: '2rem',
         minHeight: 80,
         background: '#fff',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        boxShadow: '0 4px 8px rgba(0,0,0,0.04)',
         overflow: 'hidden',
+        maxWidth: '100%',
       }}
     >
       {children}
-      <div
-        style={{
-          textAlign: 'center',
-          fontSize: 12,
-          color: '#888',
-          marginTop: 8,
-        }}
-      >
-        Container width: {Math.round(width)}px
-      </div>
+
+      <style>
+        {`
+          @keyframes widthAnimation {
+            0% {
+              width: 300px;
+            }
+            100% {
+              width: calc(100vw - 4rem);
+            }
+          }
+        `}
+      </style>
     </div>
   );
 };
 
-export const AnimatedResponsive: Story = {
+export const AnimatedWidth: Story = {
   render: (args) => (
-    <AnimatedContainer>
-      <TabToolbar {...args} />
-    </AnimatedContainer>
+    <>
+      <AnimatedContainer>
+        <TabToolbar {...args} />
+      </AnimatedContainer>
+      <AnimatedContainer animationDelay="2s">
+        <TabToolbar {...args} />
+      </AnimatedContainer>
+      <AnimatedContainer animationDelay="4s">
+        <TabToolbar {...args} />
+      </AnimatedContainer>
+      <p
+        style={{
+          textAlign: 'center',
+          fontSize: 12,
+          color: '#888',
+        }}
+      >
+        Container widths are animated
+      </p>
+    </>
   ),
   parameters: {
     controls: { hideNoControlsWarning: true },
     docs: {
       description: {
         story:
-          'Gradually animates the TabToolbar container width from the full viewport width down to 300px and back, allowing you to observe its responsive behavior.',
+          'Uses CSS animations to smoothly animate the TabToolbar container width from 300px to the full viewport width and back, allowing you to observe its responsive behavior.',
       },
     },
   },
