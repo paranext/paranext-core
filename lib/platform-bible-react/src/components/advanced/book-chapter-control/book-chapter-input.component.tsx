@@ -28,25 +28,23 @@ export const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputPro
     ref,
   ) => {
     return (
-      <div className="tw-relative">
-        <Input
-          {...props}
-          type="text"
-          className={cn(
-            'tw-box-border tw-w-min tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 tw-pe-2 tw-ps-4 tw-font-medium tw-shadow-none tw-outline-none',
-            className,
-          )}
-          onChange={(event) => handleSearch(event.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              handleSubmit();
-              e.preventDefault();
-            } else handleKeyDown(e);
-          }}
-          onClick={handleOnClick}
-          ref={ref}
-        />
-      </div>
+      <Input
+        {...props}
+        type="text"
+        className={cn(
+          'tw-relative tw-box-border tw-flex-1 tw-gap-2.5 tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-bg-green-300 tw-py-2 tw-pe-2 tw-ps-4 tw-font-medium tw-shadow-none tw-outline-none',
+          className,
+        )}
+        onChange={(event) => handleSearch(event.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            handleSubmit();
+            e.preventDefault();
+          } else handleKeyDown(e);
+        }}
+        onClick={handleOnClick}
+        ref={ref}
+      />
     );
   },
 );
