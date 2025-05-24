@@ -58,7 +58,7 @@ export function TabToolbar({
       )}
       id={id}
     >
-      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-bg-blue-500">
+      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip">
         {projectMenuData && (
           <TabDropdownMenu
             commandHandler={projectMenuCommandHandler}
@@ -70,10 +70,10 @@ export function TabToolbar({
         )}
         {startAreaChildren}
       </div>
-      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-bg-lime-500">
+      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip">
         {centerAreaChildren}
       </div>
-      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-bg-rose-500">
+      <div className="*:min-width:fit-content tw-flex tw-h-full tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip">
         {endAreaChildren}
         {tabViewMenuData && (
           <TabDropdownMenu
