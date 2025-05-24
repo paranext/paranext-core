@@ -182,12 +182,11 @@ const AnimatedContainer: React.FC<{ children: React.ReactNode; animationDelay?: 
       style={{
         animation: 'widthAnimation 6s infinite alternate ease-in-out',
         animationDelay,
-        border: '4px solid #ccc',
+        border: '2px solid #ccc',
         borderRadius: '16px',
-        margin: '2rem',
-        minHeight: 80,
-        background: '#fff',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.04)',
+        marginBlock: '1rem',
+        background: '#fdfdfd',
+        boxShadow: '0 4px 8px rgba(0,0,0,0.08)',
         overflow: 'hidden',
         maxWidth: '100%',
       }}
