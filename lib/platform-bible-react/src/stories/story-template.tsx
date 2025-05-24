@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
-const ComponentName = () => {
+function ComponentName() {
   return <div>Story Template</div>;
-};
+}
 
 const meta: Meta<typeof ComponentName> = {
   title: 'ComponentCategory/ComponentName',
