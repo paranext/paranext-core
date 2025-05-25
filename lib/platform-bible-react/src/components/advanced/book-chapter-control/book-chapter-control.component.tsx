@@ -344,32 +344,30 @@ export function BookChapterControl({
   return (
     <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
       <DropdownMenuTrigger asChild>
-        <div className="tw-flex tw-min-w-0 tw-items-center tw-gap-2">
-          <BookChapterInput
-            ref={inputRef}
-            value={searchQuery}
-            handleSearch={handleSearchInput}
-            handleKeyDown={handleKeyDownInput}
-            handleOnClick={() => {
-              setSelectedBookId(scrRef.book);
-              setHighlightedBookId(scrRef.book);
-              setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
-              setIsContentOpen(true);
-              setSearchQuery(formatScrRef(scrRef, 'English'));
-              inputRef.current.focus();
-            }}
-            onFocus={() => {
-              // Radix thinks we want to close because the input is being focused. Prevent that
-              shouldPreventAutoClosing.current = true;
-            }}
-            onBlur={() => {
-              setSearchQuery('');
-            }}
-            handleSubmit={handleInputSubmit}
-            placeholder={formatScrRef(scrRef, 'English')}
-            className={className}
-          />
-        </div>
+        <BookChapterInput
+          ref={inputRef}
+          value={searchQuery}
+          handleSearch={handleSearchInput}
+          handleKeyDown={handleKeyDownInput}
+          handleOnClick={() => {
+            setSelectedBookId(scrRef.book);
+            setHighlightedBookId(scrRef.book);
+            setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
+            setIsContentOpen(true);
+            setSearchQuery(formatScrRef(scrRef, 'English'));
+            inputRef.current.focus();
+          }}
+          onFocus={() => {
+            // Radix thinks we want to close because the input is being focused. Prevent that
+            shouldPreventAutoClosing.current = true;
+          }}
+          onBlur={() => {
+            setSearchQuery('');
+          }}
+          handleSubmit={handleInputSubmit}
+          placeholder={formatScrRef(scrRef, 'English')}
+          className={className}
+        />
       </DropdownMenuTrigger>
       <DropdownMenuContent
         className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
