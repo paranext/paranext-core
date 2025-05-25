@@ -4,6 +4,7 @@ import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-ut
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { TabToolbar, TabToolbarProps } from '../../components/advanced/tab-toolbar.component';
+import { AnimatedContainer } from '../../storybook/decorators/animated-container';
 
 const setScrollGroupId = (newScrollGroupId: number | undefined) => {
   console.log('New Scroll Group Id: ', newScrollGroupId);
@@ -187,46 +188,6 @@ type Story = StoryObj<TabToolbarProps>;
 
 export const Default: Story = {};
 
-function AnimatedContainer({
-  children,
-  animationDelay = '0s',
-}: {
-  children: React.ReactNode;
-  animationDelay?: string;
-}) {
-  return (
-    <div
-      style={{
-        animation: 'widthAnimation 6s infinite alternate ease-in-out',
-        animationDelay,
-        border: '2px solid #ccc',
-        borderRadius: '16px',
-        marginBlock: '1rem',
-        background: '#fdfdfd',
-        boxShadow: '0 4px 8px rgba(0,0,0,0.08)',
-        overflow: 'hidden',
-        padding: '.5rem',
-        maxWidth: '100%',
-      }}
-    >
-      {children}
-
-      <style>
-        {`
-          @keyframes widthAnimation {
-            0% {
-              width: 300px;
-            }
-            100% {
-              width: calc(100vw - 4rem);
-            }
-          }
-        `}
-      </style>
-    </div>
-  );
-}
-
 export const AnimatedWidth: Story = {
   render: (args) => (
     <>
@@ -239,15 +200,6 @@ export const AnimatedWidth: Story = {
       <AnimatedContainer animationDelay="4s">
         <TabToolbar {...args} />
       </AnimatedContainer>
-      <p
-        style={{
-          textAlign: 'center',
-          fontSize: 12,
-          color: '#888',
-        }}
-      >
-        Container widths are animated
-      </p>
     </>
   ),
   parameters: {
