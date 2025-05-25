@@ -191,13 +191,13 @@ export const Default: Story = {};
 export const AnimatedWidth: Story = {
   render: (args) => (
     <>
-      <AnimatedContainer minWidth='0%' maxWidth='30vw'>
+      <AnimatedContainer minWidth="0%" maxWidth="30vw">
         <TabToolbar {...args} />
       </AnimatedContainer>
-      <AnimatedContainer minWidth='200px' maxWidth='60vw' skipAhead="2s">
+      <AnimatedContainer minWidth="200px" maxWidth="60vw" skipAhead="2s">
         <TabToolbar {...args} />
       </AnimatedContainer>
-      <AnimatedContainer minWidth='300px' skipAhead="4s">
+      <AnimatedContainer minWidth="300px" skipAhead="4s">
         <TabToolbar {...args} />
       </AnimatedContainer>
     </>

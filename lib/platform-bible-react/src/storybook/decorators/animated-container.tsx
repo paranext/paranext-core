@@ -12,7 +12,10 @@ export function AnimatedContainer({
   skipAhead?: string; // Percentage to skip ahead in the animation loop
 }) {
   // Generate a unique keyframes name for each instance
-  const animationName = useMemo(() => `widthAnimation-${Math.random().toString(36).substr(2, 9)}`, []);
+  const animationName = useMemo(
+    () => `widthAnimation-${Math.random().toString(36).substr(2, 9)}`,
+    [],
+  );
 
   return (
     <>
