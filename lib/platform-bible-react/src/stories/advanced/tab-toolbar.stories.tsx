@@ -1,9 +1,9 @@
+import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
 import { TabToolbar, TabToolbarProps } from '../../components/advanced/tab-toolbar.component';
-import React, { useEffect, useState } from 'react';
 
 const setScrollGroupId = (newScrollGroupId: number | undefined) => {
   console.log('New Scroll Group Id: ', newScrollGroupId);
@@ -187,10 +187,13 @@ type Story = StoryObj<TabToolbarProps>;
 
 export const Default: Story = {};
 
-const AnimatedContainer: React.FC<{ children: React.ReactNode; animationDelay?: string }> = ({
+function AnimatedContainer({
   children,
   animationDelay = '0s',
-}) => {
+}: {
+  children: React.ReactNode;
+  animationDelay?: string;
+}) {
   return (
     <div
       style={{
@@ -202,6 +205,7 @@ const AnimatedContainer: React.FC<{ children: React.ReactNode; animationDelay?: 
         background: '#fdfdfd',
         boxShadow: '0 4px 8px rgba(0,0,0,0.08)',
         overflow: 'hidden',
+        padding: '.5rem',
         maxWidth: '100%',
       }}
     >
@@ -221,7 +225,7 @@ const AnimatedContainer: React.FC<{ children: React.ReactNode; animationDelay?: 
       </style>
     </div>
   );
-};
+}
 
 export const AnimatedWidth: Story = {
   render: (args) => (

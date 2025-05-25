@@ -207,12 +207,22 @@ const startAreaChildren = (
 );
 
 const centerAreaChildren = (
-  <ScrollGroupSelector
-    availableScrollGroupIds={[0, 1, 2, 3, 4]}
-    localizedStrings={myScrollGroupIdLocalizedStrings}
-    scrollGroupId={0}
-    onChangeScrollGroupId={setScrollGroupId}
-  />
+  <>
+    <ScrollGroupSelector
+      availableScrollGroupIds={[0, 1, 2, 3, 4]}
+      localizedStrings={myScrollGroupIdLocalizedStrings}
+      scrollGroupId={0}
+      onChangeScrollGroupId={setScrollGroupId}
+      size="sm"
+    />
+    <ScrollGroupSelector
+      availableScrollGroupIds={[0, 1, 2, 3, 4]}
+      localizedStrings={myScrollGroupIdLocalizedStrings}
+      scrollGroupId={0}
+      onChangeScrollGroupId={setScrollGroupId}
+      size="sm"
+    />
+  </>
 );
 
 const endAreaChildren = (
