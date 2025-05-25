@@ -1,4 +1,3 @@
-import React from 'react';
 import type { Meta, StoryObj } from '@storybook/react';
 import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
