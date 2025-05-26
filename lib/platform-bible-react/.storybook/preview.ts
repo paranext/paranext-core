@@ -10,6 +10,13 @@ const preview: Preview = {
         date: /Date$/i,
       },
     },
+    docs: {
+      // Configure docs to handle MDX with GFM properly
+      toc: {
+        headingSelector: 'h1, h2, h3',
+        title: 'On this page',
+      },
+    },
   },
 };
 
