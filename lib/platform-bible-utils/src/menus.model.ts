@@ -64,12 +64,12 @@ export type MenuItemContainingCommand = MenuItemBase & {
   command: ReferencedItem;
   /**
    * Uri path to the icon to display after the menu text. Ex:
-   * `papi-extension://helloWorld/assets/icon.png`
+   * `papi-extension://helloRock3/assets/icon.png`
    */
   iconPathAfter?: string;
   /**
    * Uri path to the icon to display before the menu text. Ex:
-   * `papi-extension://helloWorld/assets/icon.png`
+   * `papi-extension://helloRock3/assets/icon.png`
    */
   iconPathBefore?: string;
 };
@@ -316,12 +316,12 @@ export const menuDocumentSchema = {
             },
             iconPathBefore: {
               description:
-                'Uri path to the icon to display before the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
+                'Uri path to the icon to display before the menu text. Ex: `papi-extension://helloRock3/assets/icon.png`',
               type: 'string',
             },
             iconPathAfter: {
               description:
-                'Uri path to the icon to display after the menu text. Ex: `papi-extension://helloWorld/assets/icon.png`',
+                'Uri path to the icon to display after the menu text. Ex: `papi-extension://helloRock3/assets/icon.png`',
               type: 'string',
             },
           },

@@ -1,0 +1,97 @@
+{
+  "mainMenu": {
+    "columns": {},
+    "groups": {
+      "helloRock3.helloRock3Projects": {
+        "order": 1.5,
+        "isExtensible": true,
+        "menuItem": "helloRock3.projectSubmenu"
+      }
+    },
+    "items": [
+      {
+        "id": "helloRock3.projectSubmenu",
+        "label": "%mainMenu_helloRock3Submenu%",
+        "localizeNotes": "Application main menu > Project > Hello Rock3 Projects",
+        "group": "platform.projectProjects",
+        "order": 1000.1
+      },
+      {
+        "label": "%mainMenu_openHelloRock3Project%",
+        "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Open Hello Rock3 Project",
+        "group": "helloRock3.helloRock3Projects",
+        "order": 1,
+        "command": "helloRock3.openProject"
+      },
+      {
+        "label": "%mainMenu_createNewHelloRock3Project%",
+        "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Create New Hello Rock3 Project",
+        "group": "helloRock3.helloRock3Projects",
+        "order": 2,
+        "command": "helloRock3.createNewProject"
+      },
+      {
+        "label": "%mainMenu_deleteHelloRock3Project%",
+        "localizeNotes": "Application main menu > Project > Hello Rock3 Projects > Delete Hello Rock3 Project",
+        "group": "helloRock3.helloRock3Projects",
+        "order": 3,
+        "command": "helloRock3.deleteProject"
+      }
+    ]
+  },
+  "defaultWebViewTopMenu": {
+    "columns": {},
+    "groups": {},
+    "items": []
+  },
+  "defaultWebViewContextMenu": {
+    "groups": {},
+    "items": []
+  },
+  "webViewMenus": {
+    "helloRock3.projectWebView": {
+      "topMenu": {
+        "columns": {
+          "helloRock3.project": {
+            "label": "%helloRock3_webViewMenu_project%",
+            "order": 1
+          },
+          "helloRock3.view": {
+            "label": "%helloRock3_webViewMenu_view%",
+            "order": 2
+          }
+        },
+        "groups": {
+          "helloRock3.projectGroup": {
+            "column": "helloRock3.project",
+            "order": 1
+          },
+          "helloRock3.viewGroup": {
+            "column": "helloRock3.view",
+            "order": 1
+          }
+        },
+        "items": [
+          {
+            "label": "%helloRock3_webViewMenu_deleteProject%",
+            "group": "helloRock3.projectGroup",
+            "order": 1,
+            "command": "helloRock3.deleteProjectByWebViewId"
+          },
+          {
+            "label": "%helloRock3_webViewMenu_openViewer%",
+            "group": "helloRock3.viewGroup",
+            "order": 1,
+            "command": "helloRock3.openViewerByWebViewId"
+          },
+          {
+            "label": "%webView_openProjectSettings%",
+            "group": "helloRock3.projectGroup",
+            "order": 3,
+            "command": "platform.openSettings"
+          }
+        ]
+      }
+    }
+  }
+}

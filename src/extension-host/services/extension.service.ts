@@ -84,7 +84,7 @@ const TEST_EXTENSION_NAMES = [
   'c-sharp-provider-test',
   'evil',
   'helloSomeone',
-  'helloWorld',
+  'helloRock3',
   'quickVerse',
 ];
 
