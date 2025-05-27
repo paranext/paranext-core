@@ -9,7 +9,7 @@ import { cva, VariantProps } from 'class-variance-authority';
 /**
  * Props for Select component
  *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
  */
 export interface SelectTriggerProps
   extends React.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>,
