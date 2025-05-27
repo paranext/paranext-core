@@ -64,6 +64,20 @@ export class LexicalReferenceService
     // Using || instead of ?? so falsy values like empty string are replaced with `en`
     const bcp47Code = selector.bcp47Code || 'en';
 
+    // Arguments to pass into the database queries to filter down to the data the selector indicates
+    const queryArguments = {
+      // Using || instead of ?? so falsy values like empty string are not used
+      $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
+      $bcp47Code: bcp47Code,
+      $sourceTextId: selector.sourceTextId || undefined,
+      $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
+      $chapterNum: selector.chapterNum || undefined,
+      $verseNum: selector.verseNum || undefined,
+      $lemma: selector.lemma || undefined,
+      $itemId: selector.itemId || undefined,
+      $wordNum: selector.wordNum || undefined,
+    };
+
     // Get matching entries from each database
     const entriesFromEachDatabasePromises = Array.from(this.databaseNoncesByTextGuid.values()).map(
       async (databaseNonce) => {
@@ -101,18 +115,7 @@ export class LexicalReferenceService
                 ($lemma IS NULL OR Lemma = $lemma) AND
                 ($itemId IS NULL OR EntryId = $itemId OR SenseId = $itemId) AND
                 ($wordNum IS NULL OR WordNum = $wordNum);`,
-          {
-            // Using || instead of ?? so falsy values like empty string are not used
-            $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
-            $bcp47Code: bcp47Code,
-            $sourceTextId: selector.sourceTextId || undefined,
-            $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
-            $chapterNum: selector.chapterNum || undefined,
-            $verseNum: selector.verseNum || undefined,
-            $lemma: selector.lemma || undefined,
-            $itemId: selector.itemId || undefined,
-            $wordNum: selector.wordNum || undefined,
-          },
+          queryArguments,
         )) as ({
           SenseKey: number;
           SenseId: string;
@@ -142,22 +145,16 @@ export class LexicalReferenceService
         const senseDomainRows = (await papi.database.select(
           databaseNonce,
           `SELECT DISTINCT
-              sd.SenseKey,
-              t.Id AS TaxonomyId,
-              sd.DomainCode,
-              tdl.Label
+              SenseKey,
+              TaxonomyId,
+              DomainCode,
+              Label
             FROM
-              SenseDomains sd
-              JOIN Taxonomies t ON sd.TaxonomyKey = t.TaxonomyKey
-              LEFT JOIN TaxonomyDomains td ON sd.DomainCode = td.DomainCode AND sd.TaxonomyKey = td.TaxonomyKey
-              LEFT JOIN TaxonomyDomainLabels tdl ON td.TaxonomyDomainKey = tdl.TaxonomyDomainKey
-              LEFT JOIN Languages l ON tdl.LanguageKey = l.LanguageKey
+              SenseDomainView
             WHERE
               SenseKey IN ${senseKeysSqlArray} AND
-              l.BCP47Code = $bcp47Code;`,
-          {
-            $bcp47Code: bcp47Code,
-          },
+              BCP47Code = $bcp47Code;`,
+          queryArguments,
         )) as Array<{
           SenseKey: number;
           TaxonomyId: string;
@@ -263,17 +260,7 @@ export class LexicalReferenceService
                 ($lemma IS NULL OR Lemma = $lemma) AND
                 ($itemId IS NULL OR EntryId = $itemId) AND
                 ($wordNum IS NULL OR WordNum = $wordNum);`,
-          {
-            // Using || instead of ?? so falsy values like empty string are not used
-            $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
-            $sourceTextId: selector.sourceTextId || undefined,
-            $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
-            $chapterNum: selector.chapterNum || undefined,
-            $verseNum: selector.verseNum || undefined,
-            $lemma: selector.lemma || undefined,
-            $itemId: selector.itemId || undefined,
-            $wordNum: selector.wordNum || undefined,
-          },
+          queryArguments,
         )) as ({
           EntryKey: number;
           EntryId: string;
@@ -298,22 +285,16 @@ export class LexicalReferenceService
         const entryDomainRows = (await papi.database.select(
           databaseNonce,
           `SELECT DISTINCT
-              ed.EntryKey,
-              t.Id AS TaxonomyId,
-              ed.DomainCode,
-              tdl.Label
+              EntryKey,
+              TaxonomyId,
+              DomainCode,
+              Label
             FROM
-              EntryDomains ed
-              JOIN Taxonomies t ON ed.TaxonomyKey = t.TaxonomyKey
-              LEFT JOIN TaxonomyDomains td ON ed.DomainCode = td.DomainCode AND ed.TaxonomyKey = td.TaxonomyKey
-              LEFT JOIN TaxonomyDomainLabels tdl ON td.TaxonomyDomainKey = tdl.TaxonomyDomainKey
-              LEFT JOIN Languages l ON tdl.LanguageKey = l.LanguageKey
+              EntryDomainView
             WHERE
               EntryKey IN ${entryKeysSqlArray} AND
-              l.BCP47Code = $bcp47Code;`,
-          {
-            $bcp47Code: bcp47Code,
-          },
+              BCP47Code = $bcp47Code;`,
+          queryArguments,
         )) as Array<{
           EntryKey: number;
           TaxonomyId: string;
