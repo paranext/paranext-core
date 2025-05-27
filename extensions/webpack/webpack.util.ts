@@ -154,7 +154,7 @@ const staticFiles: {
   { from: '<localized_strings>', noErrorOnMissing: true },
   // Copy the themes JSON file into the output folder based on its listing in `manifest.themes`
   { from: '<themes>', noErrorOnMissing: true },
-  // Copy the display data JSON file into the output folder based on its listing in `manifest.localizedStrings`
+  // Copy the display data JSON file into the output folder based on its listing in `manifest.displayData`
   { from: '<display_data>', noErrorOnMissing: true },
 ];
 

@@ -1,7 +1,9 @@
 import { protocol } from 'electron';
 import { StatusCodes } from 'http-status-codes';
 import { extensionAssetService } from '@shared/services/extension-asset.service';
-import { includes, indexOf, lastIndexOf, stringLength, substring } from 'platform-bible-utils';
+import { getErrorMessage, lastIndexOf, substring } from 'platform-bible-utils';
+import { getAssetPathInfoFromExtensionUri } from '@shared/utils/extension-asset.utils';
+import { logger } from '@shared/services/logger.service';
 
 /** Here some of the most common MIME types that we expect to handle */
 // https://developer.mozilla.org/en-US/docs/Web/HTTP/Basics_of_HTTP/MIME_types/Common_types
@@ -67,45 +69,34 @@ const initialize = () => {
       // 1) Check the referer for localhost to block arbitrary internet content from getting extension assets.
       // 2) Use request headers to pass along the extension name so extension code doesn't have to embed its name in URLs.
 
-      // Remove "papi-extension://" from the front of the URL
-      const uri: string = substring(request.url, stringLength(`${protocolName}://`));
+      try {
+        const { extensionName, assetPath } = getAssetPathInfoFromExtensionUri(request.url);
 
-      // There have to be at least 2 parts to the URI divided by a slash
-      if (!includes(uri, '/')) {
+        // Actually get the data
+        const base64Data: string | undefined = await extensionAssetService.getExtensionAsset(
+          extensionName,
+          assetPath,
+        );
+        if (!base64Data) {
+          return errorResponse(request.url, StatusCodes.NOT_FOUND);
+        }
+
+        try {
+          // Pass back the data to the renderer
+          return new Response(Buffer.from(base64Data, 'base64'), {
+            status: StatusCodes.OK,
+            headers: {
+              'Content-Type': getMimeTypeForFileName(assetPath),
+            },
+          });
+        } catch (e) {
+          logger.warn(`Error creating response for ${request.url}: ${getErrorMessage(e)}`);
+          return errorResponse(request.url, StatusCodes.INTERNAL_SERVER_ERROR);
+        }
+      } catch (e) {
+        logger.warn(`Error handling request for ${request.url}: ${getErrorMessage(e)}`);
         return errorResponse(request.url, StatusCodes.BAD_REQUEST);
       }
-
-      const slash = indexOf(uri, '/');
-      let extension = substring(uri, 0, slash);
-      let asset = substring(uri, slash + 1);
-      if (!extension || !asset) {
-        return errorResponse(request.url, StatusCodes.BAD_REQUEST);
-      }
-
-      // It's possible the extension and/or asset were encoded because they have characters not
-      // allowed in URLs. So let's decode both of them before passing them to the extension host.
-      extension = decodeURIComponent(extension);
-      asset = decodeURIComponent(asset);
-      if (stringLength(extension) > 100 || stringLength(asset) > 100) {
-        return errorResponse(request.url, StatusCodes.BAD_REQUEST);
-      }
-
-      // Actually get the data
-      const base64Data: string | undefined = await extensionAssetService.getExtensionAsset(
-        extension,
-        asset,
-      );
-      if (!base64Data) {
-        return errorResponse(request.url, StatusCodes.NOT_FOUND);
-      }
-
-      // Pass back the data to the renderer
-      return new Response(Buffer.from(base64Data, 'base64'), {
-        status: StatusCodes.OK,
-        headers: {
-          'Content-Type': getMimeTypeForFileName(asset),
-        },
-      });
     });
   })();
 
