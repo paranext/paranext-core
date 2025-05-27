@@ -17,25 +17,25 @@ const GET_EXTENSION_ASSET_REQUEST = 'getExtensionAsset';
  * Load an asset from the given extension's installation directory
  *
  * @param extensionName Name of the extension
- * @param assetName Name of the asset including any path information
+ * @param assetPath Path to the asset relative to the extension's assets directory
  * @returns Base 64 encoded value of the asset if it exists, otherwise undefined
  */
 const getExtensionAsset = async (
   extensionName: string,
-  assetName: string,
+  assetPath: string,
 ): Promise<string | undefined> => {
   if (isExtensionHost()) {
     try {
-      return (await getAsset(extensionName, assetName)).toString('base64');
+      return (await getAsset(extensionName, assetPath)).toString('base64');
     } catch (error) {
-      logger.error(`Could not get asset "${assetName}" from "${extensionName}": ${error}`);
+      logger.error(`Could not get asset "${assetPath}" from "${extensionName}": ${error}`);
       return undefined;
     }
   } else {
     return networkService.request(
       serializeRequestType(CATEGORY_EXTENSION_ASSET, GET_EXTENSION_ASSET_REQUEST),
       extensionName,
-      assetName,
+      assetPath,
     );
   }
 };
@@ -65,9 +65,9 @@ const initialize = async () => {
               schema: { type: 'string' },
             },
             {
-              name: 'assetName',
+              name: 'assetPath',
               required: true,
-              summary: 'Name of the asset to get',
+              summary: "Path to the asset relative to the extension's assets directory",
               schema: { type: 'string' },
             },
           ],

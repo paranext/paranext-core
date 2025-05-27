@@ -12,10 +12,11 @@
   "main": "./dist/main/main.js",
   "scripts": {
     "rebuild": "node -r ts-node/register ../../.erb/scripts/electron-rebuild.js",
-    "postinstall": "npm run rebuild && npm run link-modules",
-    "link-modules": "node -r ts-node/register ../../.erb/scripts/link-modules.ts"
+    "postinstall": "npm run rebuild"
   },
-  "dependencies": {},
+  "dependencies": {
+    "sqlite3": "5.1.6"
+  },
   "volta": {
     "extends": "../../package.json"
   }

@@ -150,7 +150,7 @@ These steps will walk you through releasing a version on GitHub and bumping the 
 
    - `version`: enter the version you intend to publish (e.g. 0.2.0). This is simply for verification to make sure you release the code that you intend to release. It is compared to the version in the code, and the workflow will fail if they do not match.
    - `newVersionAfterPublishing`: enter the version you want to bump to after releasing (e.g. 0.3.0-alpha.0). Future changes will apply to this new version instead of to the version that was already released. Leave blank if you don't want to bump
-   - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `main` onto `release-prep` when you are ready to start preparing the next stable release.
+   - `bumpRef`: enter the Git ref you want to create the bump versions branch from, e.g. `main`. Leave blank if you want to use the branch selected for the workflow run. For example, if you release from a stable branch named `release-prep`, you may want to bump the version on `main` so future development work happens on the new version, then you can rebase `release-prep` onto `main` when you are ready to start preparing the next stable release.
 
     <details>
         <summary>[Optional] Create a new pre-release and bump versions branch manually </summary>
@@ -162,9 +162,9 @@ These steps will walk you through releasing a version on GitHub and bumping the 
    ```bash
    npm run package
    # Create a new pre-release in GitHub on tag `v<version>`
-   # Copy `.github/assets/release-body.md` into the GitHub branch
-   # Generate changelog
-   # Attach contents of `release` folder
+   # Copy `.github/assets/release-body.md` into the release body
+   # Press the "Generate release notes" button in the release creation page to generate a changelog
+   # Attach contents of `release` folder to the release
    ```
 
    Then bump versions by running the following:

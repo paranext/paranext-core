@@ -12,8 +12,7 @@ on:
         required: false
       bumpRef:
         description: 'Git ref to create the new `bump-versions-<version>` branch from. If empty, will use the current branch.'
-        required: true
-        default: 'main'
+        required: false
       debug_enabled:
         type: boolean
         description: 'Run the build with tmate debugging enabled (https://github.com/marketplace/actions/debugging-with-tmate)'
