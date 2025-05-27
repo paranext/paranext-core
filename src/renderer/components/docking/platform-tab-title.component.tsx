@@ -50,7 +50,7 @@ export function PlatformTabTitle({ iconUrl, text, tooltip }: PlatformTabTitlePro
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <div ref={containerRef} className="title tw-gap-1" aria-label={tabLabel}>
+          <div ref={containerRef} className="title" aria-label={tabLabel}>
             <span>{icon}</span>
             <span>{title}</span>
           </div>

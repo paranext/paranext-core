@@ -3,6 +3,7 @@
 .title {
   display: flex;
   align-items: center;
+  gap: 0.25rem; // tw-gap-1
 }
 
 .tab-menu-icon {
