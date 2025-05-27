@@ -10,7 +10,19 @@ import type {
   LexicalReferenceTextRegistrar,
   LexicalReferenceDataTypes,
   Sense,
+  LexicalSensesByOccurrence,
+  LexicalSensesById,
 } from 'platform-lexical-tools';
+
+const LOCATION_TYPE_U23003 = 'U23003';
+
+/**
+ * Fake location used to put items that don't have occurrences somewhere in the
+ * `LexicalEntries/SensesByOccurrence` types
+ */
+const FAKE_LOCATION_U23003 = '*** 0:0!0';
+
+const U23003_REGEX = /^(?<book>\w\w\w|\*\*\*) (?<chapterNum>\d+):(?<verseNum>\d+)!(?<wordNum>\d+)$/;
 
 /** Indicates an entry or sense that has occurrence data */
 type WithOccurrence = {
@@ -64,20 +76,6 @@ export class LexicalReferenceService
     // Using || instead of ?? so falsy values like empty string are replaced with `en`
     const bcp47Code = selector.bcp47Code || 'en';
 
-    // Arguments to pass into the database queries to filter down to the data the selector indicates
-    const queryArguments = {
-      // Using || instead of ?? so falsy values like empty string are not used
-      $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
-      $bcp47Code: bcp47Code,
-      $sourceTextId: selector.sourceTextId || undefined,
-      $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
-      $chapterNum: selector.chapterNum || undefined,
-      $verseNum: selector.verseNum || undefined,
-      $lemma: selector.lemma || undefined,
-      $itemId: selector.itemId || undefined,
-      $wordNum: selector.wordNum || undefined,
-    };
-
     // Get matching entries from each database
     const entriesFromEachDatabasePromises = Array.from(this.databaseNoncesByTextGuid.values()).map(
       async (databaseNonce) => {
@@ -115,7 +113,18 @@ export class LexicalReferenceService
                 ($lemma IS NULL OR Lemma = $lemma) AND
                 ($itemId IS NULL OR EntryId = $itemId OR SenseId = $itemId) AND
                 ($wordNum IS NULL OR WordNum = $wordNum);`,
-          queryArguments,
+          {
+            // Using || instead of ?? so falsy values like empty string are not used
+            $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
+            $bcp47Code: bcp47Code,
+            $sourceTextId: selector.sourceTextId || undefined,
+            $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
+            $chapterNum: selector.chapterNum || undefined,
+            $verseNum: selector.verseNum || undefined,
+            $lemma: selector.lemma || undefined,
+            $itemId: selector.itemId || undefined,
+            $wordNum: selector.wordNum || undefined,
+          },
         )) as ({
           SenseKey: number;
           SenseId: string;
@@ -154,7 +163,9 @@ export class LexicalReferenceService
             WHERE
               SenseKey IN ${senseKeysSqlArray} AND
               BCP47Code = $bcp47Code;`,
-          queryArguments,
+          {
+            $bcp47Code: bcp47Code,
+          },
         )) as Array<{
           SenseKey: number;
           TaxonomyId: string;
@@ -260,7 +271,17 @@ export class LexicalReferenceService
                 ($lemma IS NULL OR Lemma = $lemma) AND
                 ($itemId IS NULL OR EntryId = $itemId) AND
                 ($wordNum IS NULL OR WordNum = $wordNum);`,
-          queryArguments,
+          {
+            // Using || instead of ?? so falsy values like empty string are not used
+            $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
+            $sourceTextId: selector.sourceTextId || undefined,
+            $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
+            $chapterNum: selector.chapterNum || undefined,
+            $verseNum: selector.verseNum || undefined,
+            $lemma: selector.lemma || undefined,
+            $itemId: selector.itemId || undefined,
+            $wordNum: selector.wordNum || undefined,
+          },
         )) as ({
           EntryKey: number;
           EntryId: string;
@@ -294,7 +315,9 @@ export class LexicalReferenceService
             WHERE
               EntryKey IN ${entryKeysSqlArray} AND
               BCP47Code = $bcp47Code;`,
-          queryArguments,
+          {
+            $bcp47Code: bcp47Code,
+          },
         )) as Array<{
           EntryKey: number;
           TaxonomyId: string;
@@ -378,51 +401,137 @@ export class LexicalReferenceService
     return entriesByIdAggregated;
   }
 
-  // TODO: what to do with this
-  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  async getEntriesByOccurrence(/* selector: LexicalReferenceSelector, */): Promise<LexicalEntriesByOccurrence> {
-    throw new Error('I dunno if we want this');
-    /* const promises = Array.from(this.databaseNoncesByTextGuid.values()).map(
-      async (databaseNonce) => {
-        // We know the database schema, so we know this is the right type
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const rows = (await papi.database.select(
-          databaseNonce,
-          `SELECT * FROM EntryOccurrences WHERE ($book IS NULL OR BookNum = $book) AND ($chapterNum IS NULL OR ChapterNum = $chapterNum)
-           AND ($verseNum IS NULL OR VerseNum = $verseNum) AND ($lemma IS NULL OR Lemma = $lemma);`,
-          {
-            // Using || instead of ?? so falsy values like empty string are not used
-            $book: selector.book || undefined,
-            $chapterNum: selector.chapterNum || undefined,
-            $verseNum: selector.verseNum || undefined,
-            $lemma: selector.lemma || undefined,
-          },
-        )) as EntryFromDb[];
-        return rows;
-      },
-    );
+  async getEntriesByOccurrence(
+    selector: LexicalReferenceSelector,
+  ): Promise<LexicalEntriesByOccurrence> {
+    const entriesById = await this.getEntriesById(selector);
 
-    const resultsArray = await Promise.all(promises);
-    const results: LexicalEntriesByOccurrence = {};
+    const entriesByOccurrence: LexicalEntriesByOccurrence = {};
 
-    resultsArray.flat().forEach((row) => {
-      const { BookNum, ChapterNum, VerseNum, WordNum } = row;
-      if (!results[BookNum]) {
-        results[BookNum] = {};
-      }
-      if (!results[BookNum][ChapterNum]) {
-        results[BookNum][ChapterNum] = {};
-      }
-      if (!results[BookNum][ChapterNum][VerseNum]) {
-        results[BookNum][ChapterNum][VerseNum] = {};
-      }
-      if (!results[BookNum][ChapterNum][VerseNum][WordNum]) {
-        results[BookNum][ChapterNum][VerseNum][WordNum] = [];
-      }
-      results[BookNum][ChapterNum][VerseNum][WordNum].push(row);
-    });
+    Object.values(entriesById)
+      .flat()
+      .forEach((entry) => {
+        // If there aren't entries for some id, it will come up here as `undefined`. Skip.
+        if (!entry) return;
 
-    return results; */
+        const occurrences = Object.values(entry.occurrences)
+          .flat()
+          .filter((occurrenceList) => !!occurrenceList);
+
+        if (occurrences.length === 0)
+          occurrences.push({ type: LOCATION_TYPE_U23003, location: FAKE_LOCATION_U23003 });
+
+        occurrences.forEach((occurrence) => {
+          // Put the entry in the appropriate place by occurrence
+          const { location, type } = occurrence;
+
+          if (type !== LOCATION_TYPE_U23003)
+            throw new Error(
+              `Location ${location} for occurrence in entry ${entry.id} was not of type ${LOCATION_TYPE_U23003}. Not currently supported`,
+            );
+
+          const { book, chapterNum, verseNum, wordNum } = parseU23003ToVerseRef(location);
+
+          if (!entriesByOccurrence[book]) entriesByOccurrence[book] = {};
+
+          if (!entriesByOccurrence[book][chapterNum]) entriesByOccurrence[book][chapterNum] = {};
+
+          if (!entriesByOccurrence[book][chapterNum][verseNum])
+            entriesByOccurrence[book][chapterNum][verseNum] = {};
+
+          if (!entriesByOccurrence[book][chapterNum][verseNum][wordNum])
+            entriesByOccurrence[book][chapterNum][verseNum][wordNum] = [];
+
+          entriesByOccurrence[book][chapterNum][verseNum][wordNum].push(entry);
+        });
+      });
+
+    return entriesByOccurrence;
+  }
+
+  async getSensesById(selector: LexicalReferenceSelector): Promise<LexicalSensesById> {
+    const entriesById = await this.getEntriesById(selector);
+
+    const sensesById: LexicalSensesById = {};
+
+    Object.values(entriesById)
+      .flat()
+      .forEach((entry) => {
+        // If there aren't entries for some id, it will come up here as `undefined`. Skip.
+        if (!entry) return;
+
+        const senses = Object.values(entry.senses);
+
+        senses.forEach((sense) => {
+          // If there isn't a sense for some id, it will come up here as `undefined`. Skip.
+          if (!sense) return;
+
+          // Put the sense in the appropriate place by id
+          const { id } = sense;
+
+          if (!sensesById[id]) sensesById[id] = [];
+
+          sensesById[id].push(sense);
+        });
+      });
+
+    return sensesById;
+  }
+
+  async getSensesByOccurrence(
+    selector: LexicalReferenceSelector,
+  ): Promise<LexicalSensesByOccurrence> {
+    const entriesById = await this.getEntriesById(selector);
+
+    const sensesByOccurrence: LexicalSensesByOccurrence = {};
+
+    Object.values(entriesById)
+      .flat()
+      .forEach((entry) => {
+        // If there aren't entries for some id, it will come up here as `undefined`. Skip.
+        if (!entry) return;
+
+        const senses = Object.values(entry.senses);
+
+        senses.forEach((sense) => {
+          // If there isn't a sense for some id, it will come up here as `undefined`. Skip.
+          if (!sense) return;
+
+          const occurrences = Object.values(sense.occurrences)
+            .flat()
+            .filter((occurrenceList) => !!occurrenceList);
+
+          if (occurrences.length === 0)
+            occurrences.push({ type: LOCATION_TYPE_U23003, location: FAKE_LOCATION_U23003 });
+
+          occurrences.forEach((occurrence) => {
+            // Put the sense in the appropriate place by occurrence
+            const { location, type } = occurrence;
+
+            if (type !== LOCATION_TYPE_U23003)
+              throw new Error(
+                `Location ${location} for occurrence in sense ${sense.id} was not of type ${LOCATION_TYPE_U23003}. Not currently supported`,
+              );
+
+            const { book, chapterNum, verseNum, wordNum } = parseU23003ToVerseRef(location);
+
+            if (!sensesByOccurrence[book]) sensesByOccurrence[book] = {};
+
+            if (!sensesByOccurrence[book][chapterNum]) sensesByOccurrence[book][chapterNum] = {};
+
+            if (!sensesByOccurrence[book][chapterNum][verseNum])
+              sensesByOccurrence[book][chapterNum][verseNum] = {};
+
+            if (!sensesByOccurrence[book][chapterNum][verseNum][wordNum])
+              sensesByOccurrence[book][chapterNum][verseNum][wordNum] = [];
+
+            // TODO: Should I narrow the occurrences to those that match this specific location?
+            sensesByOccurrence[book][chapterNum][verseNum][wordNum].push(sense);
+          });
+        });
+      });
+
+    return sensesByOccurrence;
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
@@ -435,6 +544,18 @@ export class LexicalReferenceService
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   setEntriesByOccurrence(): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>> {
     throw new Error('Databases are readonly. Cannot set entries by occurrence.');
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  setSensesById(): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>> {
+    throw new Error('Databases are readonly. Cannot set senses by ID.');
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  setSensesByOccurrence(): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>> {
+    throw new Error('Databases are readonly. Cannot set senses by occurrence.');
   }
 
   async dispose() {
@@ -580,7 +701,36 @@ function addOccurrence(item: Entry | Sense, row: WithOccurrence | WithoutOccurre
 
   // Create a U23003 verse location and add it to the list of occurrences
   occurrences.push({
-    type: 'U23003',
+    type: LOCATION_TYPE_U23003,
     location: `${Canon.bookNumberToId(row.BookNum)} ${row.ChapterNum}:${row.VerseNum}!${row.WordNum}`,
   });
+}
+
+/**
+ * Parse verse location information from a U23003 verse location
+ *
+ * @param locationU23003 Verse location in U23003
+ */
+function parseU23003ToVerseRef(locationU23003: string): {
+  book: string;
+  chapterNum: number;
+  verseNum: number;
+  wordNum: number;
+} {
+  const {
+    book,
+    chapterNum: chapterNumStr,
+    verseNum: verseNumStr,
+    wordNum: wordNumStr,
+  } = U23003_REGEX.exec(locationU23003)?.groups ?? {};
+
+  if (!book || !chapterNumStr || !verseNumStr || !wordNumStr)
+    throw new Error(`Failed to parse U23003 location ${locationU23003}`);
+
+  return {
+    book,
+    chapterNum: parseInt(chapterNumStr, 10),
+    verseNum: parseInt(verseNumStr, 10),
+    wordNum: parseInt(wordNumStr, 10),
+  };
 }

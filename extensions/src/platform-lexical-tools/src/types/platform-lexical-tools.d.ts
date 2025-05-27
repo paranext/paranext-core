@@ -29,8 +29,11 @@ declare module 'platform-lexical-tools' {
     subDomains?: SubDomain[];
   }
 
-  /** Senses mapped by IDs */
-  export type SensesById = {
+  /**
+   * Senses mapped by IDs. There may only be one sense per ID with this data structure because this
+   * is scoped to a specific lexical reference text
+   */
+  export type SensesByIdForSpecificText = {
     [senseId: string]: Sense | undefined;
   };
 
@@ -38,7 +41,7 @@ declare module 'platform-lexical-tools' {
     id: string;
     lexicalReferenceTextId: string;
     lemma: string;
-    senses: SensesById;
+    senses: SensesByIdForSpecificText;
     strongsCodes: string[];
     occurrences: OccurrencesBySourceTextId;
     domains: Domain[];
@@ -144,22 +147,77 @@ declare module 'platform-lexical-tools' {
       | undefined;
   };
 
+  /**
+   * Senses mapped by IDs. There may be multiple senses for one ID if there are multiple lexical
+   * reference texts that provide a sense with the same ID.
+   */
+  export type LexicalSensesById = {
+    [senseId: string]: Sense[] | undefined;
+  };
+
+  /**
+   * Senses mapped by their location in Scripture. There may be multiple senses for one location
+   * from the same lexical reference text.
+   */
+  export type LexicalSensesByOccurrence = {
+    [book: string]:
+      | {
+          [chapterNum: number]:
+            | {
+                [verseNum: number]:
+                  | {
+                      /** U23003-defined word number */
+                      [wordNum: string]: Sense[] | undefined;
+                    }
+                  | undefined;
+              }
+            | undefined;
+        }
+      | undefined;
+  };
+
   /** Provides lexical reference text data across all included lexical reference projects */
   export type LexicalReferenceDataTypes = {
     /**
-     * Gets/sets lexical reference text entries mapped by their IDs. This is how the data is
-     * organized in the lexical reference text data format
+     * Gets/sets lexical reference text entries mapped by their IDs. This is close to how the data
+     * is organized in the lexical reference text data format
      */
     EntriesById: DataProviderDataType<
       LexicalReferenceSelector,
       LexicalEntriesById,
       LexicalEntriesById
     >;
-    /** Gets/sets lexical reference text entries mapped by their location in Scripture */
+    /**
+     * Gets/sets lexical reference text entries mapped by their location in Scripture. The entries
+     * are divided into the occurrences by the entry occurrences, not the sense occurrences. If
+     * there are any entries that match the selector but do not have any occurrences that match the
+     * selector, they will be put in book `***` chapter 0 verse 0 word 0. This could happen, for
+     * example, if an entry has senses that match the selector but the entry itself doesn't have
+     * occurrences.
+     */
     EntriesByOccurrence: DataProviderDataType<
       LexicalReferenceSelector,
       LexicalEntriesByOccurrence,
       LexicalEntriesByOccurrence
+    >;
+    /** Gets/sets lexical reference text senses mapped by their IDs */
+    SensesById: DataProviderDataType<
+      LexicalReferenceSelector,
+      LexicalSensesById,
+      LexicalSensesById
+    >;
+    /**
+     * Gets/sets lexical reference text senses mapped by their location in Scripture. The senses are
+     * divided into the occurrences by the sense occurrences, not their parent entry occurrences. If
+     * there are any senses that match the selector but do not have any occurrences that match the
+     * selector, they will be put in book `***` chapter 0 verse 0 word 0. This could happen, for
+     * example, if an sense has senses that match the selector but the sense itself doesn't have
+     * occurrences.
+     */
+    SensesByOccurrence: DataProviderDataType<
+      LexicalReferenceSelector,
+      LexicalSensesByOccurrence,
+      LexicalSensesByOccurrence
     >;
   };
 
