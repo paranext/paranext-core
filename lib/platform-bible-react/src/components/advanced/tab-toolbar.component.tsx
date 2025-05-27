@@ -15,6 +15,7 @@ export type TabToolbarProps = PropsWithChildren<{
   /** Menu data that is used to populate the Menubar component for the project menu. */
   projectMenuData?: Localized<MultiColumnMenu>;
 
+  /** Menu data that is used to populate the Menubar component for the view info menu */
   tabViewMenuData?: Localized<MultiColumnMenu>;
 
   /** Optional unique identifier */

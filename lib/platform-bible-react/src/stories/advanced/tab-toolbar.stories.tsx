@@ -107,7 +107,7 @@ const myScrollGroupIdLocalizedStrings = {
 };
 
 const meta: Meta<TabToolbarProps> = {
-  title: 'Components/TabToolbar',
+  title: 'Advanced/TabToolbar',
   component: TabToolbar,
   tags: ['autodocs'],
   args: {

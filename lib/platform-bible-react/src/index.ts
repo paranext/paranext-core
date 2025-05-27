@@ -97,7 +97,7 @@ export {
 } from './components/advanced/settings-components/settings-list.component';
 export { default as TabDropdownMenu } from './components/advanced/menus/tab-dropdown-menu.component';
 export { default as TabToolbar } from './components/advanced/tab-toolbar.component';
-export type { TabToolbarProps as ExtensibleToolbarProps } from './components/advanced/tab-toolbar.component';
+export type { TabToolbarProps } from './components/advanced/tab-toolbar.component';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,

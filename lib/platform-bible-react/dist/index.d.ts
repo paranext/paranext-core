@@ -948,13 +948,14 @@ type TabDropdownMenuProps = {
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
 export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
-type TabToolbarProps = React$1.PropsWithChildren<{
+export type TabToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for toolbar item commands */
 	projectMenuCommandHandler: CommandHandler;
 	/** The handler to use for toolbar item commands */
 	viewInfoMenuCommandHandler: CommandHandler;
 	/** Menu data that is used to populate the Menubar component for the project menu. */
 	projectMenuData?: Localized<MultiColumnMenu>;
+	/** Menu data that is used to populate the Menubar component for the view info menu */
 	tabViewMenuData?: Localized<MultiColumnMenu>;
 	/** Optional unique identifier */
 	id?: string;
@@ -1511,7 +1512,7 @@ export declare const RadioGroupItem: React$1.ForwardRefExoticComponent<Omit<Radi
 /**
  * Props for Select component
  *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
  */
 export interface SelectTriggerProps extends React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>, VariantProps<typeof selectTriggerVariants> {
 	asChild?: boolean;
@@ -1809,7 +1810,6 @@ export declare function cn(...inputs: ClassValue[]): string;
 
 export {
 	TabNavigationContentSearch as NavigationContentSearch,
-	TabToolbarProps as ExtensibleToolbarProps,
 	sonner,
 };
 
