@@ -24,6 +24,7 @@ import { columns, data } from './data-sources/data-table-content';
 import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.component';
 import { SettingSidebarContentSearchExamples } from './advanced/settings-sidebar-content-search.example.component';
 import { PlatformMenubarExample } from './advanced/platform-menubar-example.component';
+import { DictionaryTableExample } from './advanced/dictionary-table-example.component';
 
 export function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -76,6 +77,7 @@ export function Compositions() {
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Dictionary Table">Dictionary Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
@@ -111,6 +113,10 @@ export function Compositions() {
 
         <VerticalTabsContent value="Data Table">
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Dictionary Table">
+          <DictionaryTableExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Filter">
