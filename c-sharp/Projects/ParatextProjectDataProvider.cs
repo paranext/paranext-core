@@ -299,10 +299,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
             // Paratext project setting value found, so return the value with the appropriate type
             if (ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName))
             {
-                return settingValue switch
+                return settingValue.ToUpperInvariant() switch
                 {
-                    "T" => true,
                     "F" => false,
+                    "FALSE" => false,
+                    "T" => true,
+                    "TRUE" => true,
                     _ => throw new InvalidDataException(
                         $"Failed to convert Paratext setting {settingName} to boolean. Value was not T or F"
                     ),
@@ -384,6 +386,20 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 {
                     try
                     {
+                        if (ProjectSettingsNames.IsParatextSettingABoolean(paratextSettingName))
+                        {
+                            var stringValue = value?.ToString() ?? "";
+                            value = stringValue.ToUpperInvariant() switch
+                            {
+                                "F" => "F",
+                                "FALSE" => "F",
+                                "T" => "T",
+                                "TRUE" => "T",
+                                _ => throw new InvalidDataException(
+                                    $"Failed to convert Paratext setting {settingName} to boolean. Value was \"{stringValue}\""
+                                ),
+                            };
+                        }
                         scrText.Settings.SetSetting(paratextSettingName, value!.ToString());
                         // We are notifying when we release our lock, so don't automatically
                         // notify in `Save`

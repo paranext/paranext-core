@@ -4,25 +4,19 @@ import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import {
   Button,
   ColumnDef,
-  getBookIdFromUSFM,
-  getLinesFromUSFM,
-  getNumberFromUSFM,
-  getStatusForItem,
   Inventory,
   inventoryCountColumn,
+  InventoryItem,
   inventoryItemColumn,
-  InventoryItemOccurrence,
   inventoryStatusColumn,
   InventoryTableData,
   Scope,
 } from 'platform-bible-react';
 import {
-  deepEqual,
   getErrorMessage,
   isPlatformError,
   LanguageStrings,
   LocalizeKey,
-  substring,
 } from 'platform-bible-utils';
 import { useMemo } from 'react';
 
@@ -38,90 +32,10 @@ const MARKER_INVENTORY_STRING_KEYS: LocalizeKey[] = [
 
 const MARKER_NAMES_DEFAULT: string[] = [];
 
-const extractMarkers = (
-  text: string | undefined,
-  scriptureRef: SerializedVerseRef,
-  approvedItems: string[],
-  unapprovedItems: string[],
-): InventoryTableData[] => {
-  if (!text) return [];
-
-  const tableData: InventoryTableData[] = [];
-
-  let currentBook: string = scriptureRef.book;
-  let currentChapter: number | undefined = scriptureRef.chapterNum;
-  let currentVerse: number | undefined = scriptureRef.verseNum;
-
-  // Matches a backslash followed by a sequence of letters (regular and capitals) and possibly
-  // a *-symbol
-  const markerRegex: RegExp = /\\[a-zA-Z0-9]+\*?/g;
-
-  let precedingMarker: string = '';
-
-  const lines = getLinesFromUSFM(text);
-
-  lines.forEach((line: string) => {
-    if (line.startsWith('\\id')) {
-      currentBook = getBookIdFromUSFM(line);
-      currentChapter = 0;
-      currentVerse = 0;
-    }
-    if (line.startsWith('\\c')) {
-      currentChapter = getNumberFromUSFM(line);
-      currentVerse = 0;
-    }
-    if (line.startsWith('\\v')) {
-      currentVerse = getNumberFromUSFM(line);
-      if (currentChapter === 0) {
-        currentChapter = scriptureRef.chapterNum;
-      }
-    }
-
-    let match: RegExpExecArray | undefined = markerRegex.exec(line) ?? undefined;
-    while (match) {
-      // For this code to work correctly we need our regular expression to match a single marker
-      // on each per match
-      if (match.length > 1) throw new Error('Multiple markers found in a single match');
-
-      const items = [match[0], precedingMarker];
-      [precedingMarker] = match;
-      const itemIndex = match.index;
-      const existingItem = tableData.find((tableEntry) => deepEqual(tableEntry.items, items));
-      const newReference: InventoryItemOccurrence = {
-        reference: {
-          book: currentBook !== undefined ? currentBook : '',
-          chapterNum: currentChapter !== undefined ? currentChapter : -1,
-          verseNum: currentVerse !== undefined ? currentVerse : -1,
-        },
-        text: substring(line, Math.max(0, itemIndex - 25), Math.min(itemIndex + 25, line.length)),
-      };
-      if (existingItem) {
-        existingItem.count += 1;
-        existingItem.occurrences.push(newReference);
-      } else {
-        const newItem: InventoryTableData = {
-          items,
-          count: 1,
-          status: getStatusForItem(items[0], approvedItems, unapprovedItems),
-          occurrences: [newReference],
-        };
-        tableData.push(newItem);
-      }
-
-      match = markerRegex.exec(line) ?? undefined;
-    }
-  });
-
-  return tableData;
-};
-
 function getDescription(markerDescriptions: string[], marker: string): string | undefined {
-  const markerWithoutBackslash = substring(marker, 1);
-  // Escape all characters that need escaping to be handled as plain text
-  const escapedMarker = markerWithoutBackslash.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   // Search for whole marker surrounded by whitespace or periods or at string boundaries (^ and $)
-  const findMarker = new RegExp(`(^|[\\s.])${escapedMarker}([\\s.]|$)`);
-  return markerDescriptions.find((markerNames) => findMarker.test(markerNames));
+  const findMarker = new RegExp(`(^|[\\s.])${marker}([\\s.]|$)`);
+  return markerDescriptions.find((markerDescription) => findMarker.test(markerDescription));
 }
 
 /**
@@ -171,6 +85,7 @@ const createColumns = (
 ];
 
 type MarkerInventoryProps = {
+  inventoryItems: InventoryItem[];
   verseRef: SerializedVerseRef;
   setVerseRef: (scriptureReference: SerializedVerseRef) => void;
   localizedStrings: LanguageStrings;
@@ -178,13 +93,13 @@ type MarkerInventoryProps = {
   onApprovedItemsChange: (items: string[]) => void;
   unapprovedItems: string[];
   onUnapprovedItemsChange: (items: string[]) => void;
-  text: string | undefined;
   scope: Scope;
   onScopeChange: (scope: Scope) => void;
   projectId?: string;
 };
 
 export function MarkerInventory({
+  inventoryItems,
   verseRef,
   setVerseRef,
   localizedStrings,
@@ -192,7 +107,6 @@ export function MarkerInventory({
   onApprovedItemsChange,
   unapprovedItems,
   onUnapprovedItemsChange,
-  text,
   scope,
   onScopeChange,
   projectId,
@@ -240,6 +154,16 @@ export function MarkerInventory({
     [markerInventoryStrings],
   );
 
+  const newInventoryItems: InventoryItem[] = useMemo(() => {
+    return inventoryItems.map((item, index) => ({
+      ...item,
+      inventoryText: [
+        String(item.inventoryText),
+        String(inventoryItems[Math.max(index - 1, 0)].inventoryText),
+      ],
+    }));
+  }, [inventoryItems]);
+
   const columns = useMemo(
     () =>
       createColumns(
@@ -270,13 +194,11 @@ export function MarkerInventory({
 
   return (
     <Inventory
-      verseRef={verseRef}
+      inventoryItems={newInventoryItems}
       setVerseRef={setVerseRef}
       localizedStrings={localizedStrings}
-      extractItems={extractMarkers}
       approvedItems={approvedItems}
       unapprovedItems={unapprovedItems}
-      text={text}
       scope={scope}
       onScopeChange={onScopeChange}
       columns={columns}

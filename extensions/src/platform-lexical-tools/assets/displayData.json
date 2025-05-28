@@ -1,0 +1,12 @@
+{
+  "icon": "",
+  "moreInfoUrl": "",
+  "supportUrl": "",
+  "localizedDisplayInfo": {
+    "en": {
+      "displayName": "Platform Lexical Tools",
+      "shortSummary": "Lexical tools integrated into Platform.Bible",
+      "description": "assets/descriptions/description-en.md"
+    }
+  }
+}
