@@ -1,0 +1,26 @@
+import{r as i,a as y}from"./index-D0Vjon0S.js";import{j as b}from"./jsx-runtime-COkDGzaA.js";import{r as g}from"./index-D7mW_kaG.js";import{c as P}from"./index-CxW8mOvc.js";function I(e,t,{checkForDefaultPrevented:o=!0}={}){return function(r){if(e==null||e(r),o===!1||!r.defaultPrevented)return t==null?void 0:t(r)}}function W(e,t=[]){let o=[];function u(n,s){const c=i.createContext(s),f=o.length;o=[...o,s];const d=l=>{var S;const{scope:m,children:h,...p}=l,v=((S=m==null?void 0:m[e])==null?void 0:S[f])||c,w=i.useMemo(()=>p,Object.values(p));return b.jsx(v.Provider,{value:w,children:h})};d.displayName=n+"Provider";function a(l,m){var v;const h=((v=m==null?void 0:m[e])==null?void 0:v[f])||c,p=i.useContext(h);if(p)return p;if(s!==void 0)return s;throw new Error(`\`${l}\` must be used within \`${n}\``)}return[d,a]}const r=()=>{const n=o.map(s=>i.createContext(s));return function(c){const f=(c==null?void 0:c[e])||n;return i.useMemo(()=>({[`__scope${e}`]:{...c,[e]:f}}),[c,f])}};return r.scopeName=e,[u,$(r,...t)]}function $(...e){const t=e[0];if(e.length===1)return t;const o=()=>{const u=e.map(r=>({useScope:r(),scopeName:r.scopeName}));return function(n){const s=u.reduce((c,{useScope:f,scopeName:d})=>{const l=f(n)[`__scope${d}`];return{...c,...l}},{});return i.useMemo(()=>({[`__scope${t.scopeName}`]:s}),[s])}};return o.scopeName=t.scopeName,o}var E=["a","button","div","form","h2","h3","img","input","label","li","nav","ol","p","select","span","svg","ul"],q=E.reduce((e,t)=>{const o=P(`Primitive.${t}`),u=i.forwardRef((r,n)=>{const{asChild:s,...c}=r,f=s?o:t;return typeof window<"u"&&(window[Symbol.for("radix-ui")]=!0),b.jsx(f,{...c,ref:n})});return u.displayName=`Primitive.${t}`,{...e,[t]:u}},{});function T(e,t){e&&g.flushSync(()=>e.dispatchEvent(t))}var x=globalThis!=null&&globalThis.document?i.useLayoutEffect:()=>{};function U(e){const[t,o]=i.useState(void 0);return x(()=>{if(e){o({width:e.offsetWidth,height:e.offsetHeight});const u=new ResizeObserver(r=>{if(!Array.isArray(r)||!r.length)return;const n=r[0];let s,c;if("borderBoxSize"in n){const f=n.borderBoxSize,d=Array.isArray(f)?f[0]:f;s=d.inlineSize,c=d.blockSize}else s=e.offsetWidth,c=e.offsetHeight;o({width:s,height:c})});return u.observe(e,{box:"border-box"}),()=>u.unobserve(e)}else o(void 0)},[e]),t}var k=y[" useInsertionEffect ".trim().toString()]||x;function F({prop:e,defaultProp:t,onChange:o=()=>{},caller:u}){const[r,n,s]=z({defaultProp:t,onChange:o}),c=e!==void 0,f=c?e:r;{const a=i.useRef(e!==void 0);i.useEffect(()=>{const l=a.current;l!==c&&console.warn(`${u} is changing from ${l?"controlled":"uncontrolled"} to ${c?"controlled":"uncontrolled"}. Components should not switch from controlled to uncontrolled (or vice versa). Decide between using a controlled or uncontrolled value for the lifetime of the component.`),a.current=c},[c,u])}const d=i.useCallback(a=>{var l;if(c){const m=R(a)?a(e):a;m!==e&&((l=s.current)==null||l.call(s,m))}else n(a)},[c,e,n,s]);return[f,d]}function z({defaultProp:e,onChange:t}){const[o,u]=i.useState(e),r=i.useRef(o),n=i.useRef(t);return k(()=>{n.current=t},[t]),i.useEffect(()=>{var s;r.current!==o&&((s=n.current)==null||s.call(n,o),r.current=o)},[o,r]),[o,u,n]}function R(e){return typeof e=="function"}function K(e){const t=i.useRef({value:e,previous:e});return i.useMemo(()=>(t.current.value!==e&&(t.current.previous=t.current.value,t.current.value=e),t.current.previous),[e])}/**
+ * @license lucide-react v0.475.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const j=e=>e.replace(/([a-z0-9])([A-Z])/g,"$1-$2").toLowerCase(),C=(...e)=>e.filter((t,o,u)=>!!t&&t.trim()!==""&&u.indexOf(t)===o).join(" ").trim();/**
+ * @license lucide-react v0.475.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */var A={xmlns:"http://www.w3.org/2000/svg",width:24,height:24,viewBox:"0 0 24 24",fill:"none",stroke:"currentColor",strokeWidth:2,strokeLinecap:"round",strokeLinejoin:"round"};/**
+ * @license lucide-react v0.475.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const N=i.forwardRef(({color:e="currentColor",size:t=24,strokeWidth:o=2,absoluteStrokeWidth:u,className:r="",children:n,iconNode:s,...c},f)=>i.createElement("svg",{ref:f,...A,width:t,height:t,stroke:e,strokeWidth:u?Number(o)*24/Number(t):o,className:C("lucide",r),...c},[...s.map(([d,a])=>i.createElement(d,a)),...Array.isArray(n)?n:[n]]));/**
+ * @license lucide-react v0.475.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const _=(e,t)=>{const o=i.forwardRef(({className:u,...r},n)=>i.createElement(N,{ref:n,iconNode:t,className:C(`lucide-${j(e)}`,u),...r}));return o.displayName=`${e}`,o};/**
+ * @license lucide-react v0.475.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const B=[["path",{d:"M20 6 9 17l-5-5",key:"1gmf2c"}]],Z=_("Check",B);export{Z as C,q as P,F as a,I as b,W as c,K as d,U as e,_ as f,T as g,x as u};
