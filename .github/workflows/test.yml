@@ -75,6 +75,18 @@ jobs:
             sudo install_name_tool -change "/opt/local/lib/libicu$2.$ICU_VERSION.dylib" "@loader_path/libicu$2.$ICU_VERSION.dylib" "/opt/local/lib/libicu$1.$ICU_VERSION.dylib"
           done <<< "$LIB_DEPENDENCIES"
 
+      - name: Ensure macports user exists
+        if: ${{ matrix.os == env.OS_MACOS }}
+        run: |
+          sudo dscl . -create /Users/macports
+          sudo dscl . -create /Users/macports UserShell /bin/bash
+          sudo dscl . -create /Users/macports RealName "MacPorts User"
+          sudo dscl . -create /Users/macports UniqueID 550
+          sudo dscl . -create /Users/macports PrimaryGroupID 20
+          sudo dscl . -create /Users/macports NFSHomeDirectory /opt/local/var/macports/home
+          sudo mkdir -p /opt/local/var/macports/home
+          sudo chown macports:staff /opt/local/var/macports/home
+
       - name: Install snap tools on Linux
         if: ${{ matrix.os == env.OS_LINUX }}
         run: |
