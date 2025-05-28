@@ -514,7 +514,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
       context.registrations.add(unsubGreetings);
     }
   } catch (e) {
-    logger.error(`Hello rock3 error! Could not get people data provider ${e}`);
+    logger.error(`Hello Rock3 error! Could not get people data provider ${e}`);
   }
 
   logger.info('Hello Rock3 is finished activating!');
