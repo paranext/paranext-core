@@ -1,7 +1,5 @@
-import papi, { DataProviderEngine } from '@papi/backend';
+import { DataProviderEngine } from '@papi/backend';
 import { DataProviderUpdateInstructions, IDataProviderEngine } from '@papi/core';
-import { Canon } from '@sillsdev/scripture';
-import { newGuid } from 'platform-bible-utils';
 import type {
   LexicalEntriesById,
   LexicalEntriesByOccurrence,
@@ -12,9 +10,13 @@ import type {
   Sense,
   LexicalSensesByOccurrence,
   LexicalSensesById,
+  Occurrence,
 } from 'platform-lexical-tools';
-
-const LOCATION_TYPE_U23003 = 'U23003';
+import { Unsubscriber } from 'platform-bible-utils';
+import {
+  LexicalReferenceTextManager,
+  LOCATION_TYPE_U23003,
+} from './lexical-reference-text-manager.model';
 
 /**
  * Fake location used to put items that don't have occurrences somewhere in the
@@ -22,383 +24,41 @@ const LOCATION_TYPE_U23003 = 'U23003';
  */
 const FAKE_LOCATION_U23003 = '*** 0:0!0';
 
-const U23003_REGEX = /^(?<book>\w\w\w|\*\*\*) (?<chapterNum>\d+):(?<verseNum>\d+)!(?<wordNum>\d+)$/;
-
-/** Indicates an entry or sense that has occurrence data */
-type WithOccurrence = {
-  // Entry with occurrence
-  SourceTextId: string;
-  BookNum: number;
-  ChapterNum: number;
-  VerseNum: number;
-  WordNum: string;
-};
-
 /**
- * Indicates an entry or sense that doesn't have any occurrences - all occurrence-related fields are
- * undefined
+ * Fake occurrence used to put items that don't have occurrences somewhere in the
+ * `LexicalEntries/SensesByOccurrence` types
  */
-type WithoutOccurrence = {
-  SourceTextId: undefined;
-  BookNum: undefined;
-  ChapterNum: undefined;
-  VerseNum: undefined;
-  WordNum: undefined;
-};
+const FAKE_OCCURRENCE: Occurrence = { type: LOCATION_TYPE_U23003, location: FAKE_LOCATION_U23003 };
+
+const U23003_REGEX = /^(?<book>\w\w\w|\*\*\*) (?<chapterNum>\d+):(?<verseNum>\d+)!(?<wordNum>\d+)$/;
 
 export class LexicalReferenceService
   extends DataProviderEngine<LexicalReferenceDataTypes>
   implements IDataProviderEngine<LexicalReferenceDataTypes>, LexicalReferenceTextRegistrar
 {
-  private databaseNoncesByTextGuid: Map<string, string> = new Map();
+  #changeLexicalReferenceTextsUnsubscriber: Unsubscriber;
 
-  // TODO: prevent the same file from being registered multiple times
-  // ENHANCE: Instead of making a new database connection for each database, you could attach
-  // up to 10 together. Might get some memory reduction that way
+  constructor(private lexicalReferenceTextManager: LexicalReferenceTextManager) {
+    super();
+
+    this.#changeLexicalReferenceTextsUnsubscriber =
+      this.lexicalReferenceTextManager.onDidChangeLexicalReferenceTexts(() =>
+        this.notifyUpdate('*'),
+      );
+  }
+
   async registerLexicalReferenceText(fileUri: string): Promise<string> {
-    const lexicalReferenceTextGuid = newGuid();
-    const databaseNonce = await papi.database.openDatabase(fileUri, { readOnly: true });
-    this.databaseNoncesByTextGuid.set(lexicalReferenceTextGuid, databaseNonce);
-    return lexicalReferenceTextGuid;
+    return this.lexicalReferenceTextManager.registerLexicalReferenceText(fileUri);
   }
 
   async unregisterLexicalReferenceText(lexicalReferenceTextGuid: string): Promise<void> {
-    const databaseNonce = this.databaseNoncesByTextGuid.get(lexicalReferenceTextGuid);
-    if (!databaseNonce)
-      throw new Error(
-        `No lexical reference text registered with guid: ${lexicalReferenceTextGuid}`,
-      );
-    await papi.database.closeDatabase(databaseNonce);
-    this.databaseNoncesByTextGuid.delete(lexicalReferenceTextGuid);
+    return this.lexicalReferenceTextManager.unregisterLexicalReferenceText(
+      lexicalReferenceTextGuid,
+    );
   }
 
   async getEntriesById(selector: LexicalReferenceSelector): Promise<LexicalEntriesById> {
-    // Using || instead of ?? so falsy values like empty string are replaced with `en`
-    const bcp47Code = selector.bcp47Code || 'en';
-
-    // Get matching entries from each database
-    const entriesFromEachDatabasePromises = Array.from(this.databaseNoncesByTextGuid.values()).map(
-      async (databaseNonce) => {
-        // Build matching entry/sense information from this database
-
-        // ENHANCEMENT: Parallelize these db calls
-
-        // Gather matching senses and their occurrences
-        // We know the database schema, so we know this is the right type
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const senseOccurrenceRows = (await papi.database.select(
-          databaseNonce,
-          `SELECT
-                SenseKey,
-                SenseId,
-                LexiconId,
-                Lemma,
-                EntryId,
-                EntryKey,
-                Definition,
-                BCP47Code,
-                SourceTextId,
-                BookNum,
-                ChapterNum,
-                VerseNum,
-                WordNum
-              FROM SenseOccurrenceView
-              WHERE
-                ($lexicalReferenceTextId IS NULL OR LexiconId = $lexicalReferenceTextId) AND
-                BCP47Code = $bcp47Code AND
-                ($sourceTextId IS NULL OR SourceTextId = $sourceTextId) AND
-                ($bookNum IS NULL OR BookNum = $bookNum) AND
-                ($chapterNum IS NULL OR ChapterNum = $chapterNum) AND
-                ($verseNum IS NULL OR VerseNum = $verseNum) AND
-                ($lemma IS NULL OR Lemma = $lemma) AND
-                ($itemId IS NULL OR EntryId = $itemId OR SenseId = $itemId) AND
-                ($wordNum IS NULL OR WordNum = $wordNum);`,
-          {
-            // Using || instead of ?? so falsy values like empty string are not used
-            $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
-            $bcp47Code: bcp47Code,
-            $sourceTextId: selector.sourceTextId || undefined,
-            $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
-            $chapterNum: selector.chapterNum || undefined,
-            $verseNum: selector.verseNum || undefined,
-            $lemma: selector.lemma || undefined,
-            $itemId: selector.itemId || undefined,
-            $wordNum: selector.wordNum || undefined,
-          },
-        )) as ({
-          SenseKey: number;
-          SenseId: string;
-          LexiconId: string;
-          Lemma: string;
-          EntryId: string;
-          EntryKey: number;
-          Definition?: string;
-          BCP47Code: string;
-        } & (WithOccurrence | WithoutOccurrence))[];
-
-        // Gather all sense keys for getting additional information about them
-        const senseKeys = [...new Set(senseOccurrenceRows.map((row) => row.SenseKey))];
-        const senseKeysSqlArray = `(${senseKeys.join(',')})`;
-
-        // Gather glosses
-        // We know the database schema, so we know this is the right type
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const glossRows = (await papi.database.select(
-          databaseNonce,
-          `SELECT SenseKey, Gloss FROM Glosses WHERE SenseKey IN ${senseKeysSqlArray};`,
-        )) as Array<{ SenseKey: number; Gloss: string }>;
-
-        // Gather sense domains
-        // We know the database schema, so we know this is the right type
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const senseDomainRows = (await papi.database.select(
-          databaseNonce,
-          `SELECT DISTINCT
-              SenseKey,
-              TaxonomyId,
-              DomainCode,
-              Label
-            FROM
-              SenseDomainView
-            WHERE
-              SenseKey IN ${senseKeysSqlArray} AND
-              BCP47Code = $bcp47Code;`,
-          {
-            $bcp47Code: bcp47Code,
-          },
-        )) as Array<{
-          SenseKey: number;
-          TaxonomyId: string;
-          DomainCode: string;
-          Label: string | undefined;
-        }>;
-
-        // Gather sense strongs codes
-        // We know the database schema, so we know this is the right type
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const senseStrongsCodeRows = (await papi.database.select(
-          databaseNonce,
-          `SELECT SenseKey, StrongsCode FROM SenseStrongsCodes WHERE SenseKey IN ${senseKeysSqlArray};`,
-        )) as Array<{ SenseKey: number; StrongsCode: string }>;
-
-        // Transform all this matching sense data into full senses and associated entries
-        const sensesByKey = new Map<number, Sense>();
-        const entriesByKey = new Map<number, Entry>();
-        // Set up the senses and add occurrences
-        senseOccurrenceRows.forEach((row) => {
-          // Get or create the sense for this sense/occurrence row
-          const senseFromMap = sensesByKey.get(row.SenseKey);
-          const sense = senseFromMap ?? {
-            id: row.SenseId,
-            entryId: row.EntryId,
-            lexicalReferenceTextId: row.LexiconId,
-            bcp47Code: row.BCP47Code,
-            definition: row.Definition,
-            glosses: [],
-            strongsCodes: [],
-            occurrences: {},
-            domains: [],
-          };
-          if (!senseFromMap) sensesByKey.set(row.SenseKey, sense);
-
-          // Get or create the entry for this sense/occurrence row
-          const entryFromMap = entriesByKey.get(row.EntryKey);
-          const entry = entryFromMap ?? createEmptyEntry(row);
-          if (!entryFromMap) entriesByKey.set(row.EntryKey, entry);
-
-          // Add this sense to the entry if it's not already there
-          if (!entry.senses[row.SenseId]) entry.senses[row.SenseId] = sense;
-
-          // If this sense/occurrence row has an occurrence, add it
-          addOccurrence(sense, row);
-        });
-
-        // Add glosses to the senses
-        glossRows.forEach(({ SenseKey, Gloss }) => {
-          const sense = sensesByKey.get(SenseKey);
-          if (!sense)
-            throw new Error(
-              `Somehow retrieved gloss ${Gloss} for sense key ${SenseKey} but the sense was not retrieved! This should not happen`,
-            );
-
-          sense.glosses.push(Gloss);
-        });
-
-        // Add domains to the senses
-        senseDomainRows.forEach(({ SenseKey, TaxonomyId, DomainCode, Label }) => {
-          const sense = sensesByKey.get(SenseKey);
-          if (!sense)
-            throw new Error(
-              `Somehow retrieved domain code ${DomainCode} for sense key ${SenseKey} but the sense was not retrieved! This should not happen`,
-            );
-
-          sense.domains.push({ taxonomy: TaxonomyId, code: DomainCode, label: Label });
-        });
-
-        // Add Strongs Codes to the senses
-        senseStrongsCodeRows.forEach(({ SenseKey, StrongsCode }) => {
-          const sense = sensesByKey.get(SenseKey);
-          if (!sense)
-            throw new Error(
-              `Somehow retrieved Strongs Code ${StrongsCode} for sense key ${SenseKey} but the sense was not retrieved! This should not happen`,
-            );
-
-          sense.strongsCodes.push(StrongsCode);
-        });
-
-        // Gather matching entries and their occurrences
-        // We know the database schema, so we know this is the right type
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const entryOccurrenceRows = (await papi.database.select(
-          databaseNonce,
-          `SELECT
-                EntryKey,
-                EntryId,
-                LexiconId,
-                Lemma,
-                SourceTextId,
-                BookNum,
-                ChapterNum,
-                VerseNum,
-                WordNum
-              FROM EntryOccurrenceView
-              WHERE
-                ($lexicalReferenceTextId IS NULL OR LexiconId = $lexicalReferenceTextId) AND
-                ($sourceTextId IS NULL OR SourceTextId = $sourceTextId) AND
-                ($bookNum IS NULL OR BookNum = $bookNum) AND
-                ($chapterNum IS NULL OR ChapterNum = $chapterNum) AND
-                ($verseNum IS NULL OR VerseNum = $verseNum) AND
-                ($lemma IS NULL OR Lemma = $lemma) AND
-                ($itemId IS NULL OR EntryId = $itemId) AND
-                ($wordNum IS NULL OR WordNum = $wordNum);`,
-          {
-            // Using || instead of ?? so falsy values like empty string are not used
-            $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
-            $sourceTextId: selector.sourceTextId || undefined,
-            $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
-            $chapterNum: selector.chapterNum || undefined,
-            $verseNum: selector.verseNum || undefined,
-            $lemma: selector.lemma || undefined,
-            $itemId: selector.itemId || undefined,
-            $wordNum: selector.wordNum || undefined,
-          },
-        )) as ({
-          EntryKey: number;
-          EntryId: string;
-          LexiconId: string;
-          Lemma: string;
-        } & (WithOccurrence | WithoutOccurrence))[];
-
-        // Gather all entry keys for getting additional information about them
-        const entryKeys = [
-          ...new Set(
-            entryOccurrenceRows
-              .map((row) => row.EntryKey)
-              // Get entry information for the entries containing senses that match
-              .concat(senseOccurrenceRows.map((row) => row.EntryKey)),
-          ),
-        ];
-        const entryKeysSqlArray = `(${entryKeys.join(',')})`;
-
-        // Gather entry domains
-        // We know the database schema, so we know this is the right type
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const entryDomainRows = (await papi.database.select(
-          databaseNonce,
-          `SELECT DISTINCT
-              EntryKey,
-              TaxonomyId,
-              DomainCode,
-              Label
-            FROM
-              EntryDomainView
-            WHERE
-              EntryKey IN ${entryKeysSqlArray} AND
-              BCP47Code = $bcp47Code;`,
-          {
-            $bcp47Code: bcp47Code,
-          },
-        )) as Array<{
-          EntryKey: number;
-          TaxonomyId: string;
-          DomainCode: string;
-          Label: string | undefined;
-        }>;
-
-        // Gather entry strongs codes
-        // We know the database schema, so we know this is the right type
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const entryStrongsCodeRows = (await papi.database.select(
-          databaseNonce,
-          `SELECT EntryKey, StrongsCode FROM EntryStrongsCodes WHERE EntryKey IN ${entryKeysSqlArray};`,
-        )) as Array<{ EntryKey: number; StrongsCode: string }>;
-
-        // Transform all this matching entry data into full entries
-        // Set up the entries and add occurrences
-        entryOccurrenceRows.forEach((row) => {
-          // Get or create the entry for this sense/occurrence row
-          const entryFromMap = entriesByKey.get(row.EntryKey);
-          const entry = entryFromMap ?? createEmptyEntry(row);
-          if (!entryFromMap) entriesByKey.set(row.EntryKey, entry);
-
-          // If this entry/occurrence row has an occurrence, add it
-          addOccurrence(entry, row);
-        });
-
-        // Add domains to the entries
-        entryDomainRows.forEach(({ EntryKey, TaxonomyId, DomainCode, Label }) => {
-          const entry = entriesByKey.get(EntryKey);
-          if (!entry)
-            throw new Error(
-              `Somehow retrieved domain code ${DomainCode} for entry key ${EntryKey} but the entry was not retrieved! This should not happen`,
-            );
-
-          entry.domains.push({ taxonomy: TaxonomyId, code: DomainCode, label: Label });
-        });
-
-        // Add Strongs Codes to the entries
-        entryStrongsCodeRows.forEach(({ EntryKey, StrongsCode }) => {
-          const entry = entriesByKey.get(EntryKey);
-          if (!entry)
-            throw new Error(
-              `Somehow retrieved Strongs Code ${StrongsCode} for entry key ${EntryKey} but the entry was not retrieved! This should not happen`,
-            );
-
-          entry.strongsCodes.push(StrongsCode);
-        });
-
-        return Array.from(entriesByKey.values());
-      },
-    );
-
-    const entriesFromEachDatabase = await Promise.all(entriesFromEachDatabasePromises);
-
-    // Aggregate entry and sense information from all database queries
-    const entriesByIdAggregated: LexicalEntriesById = {};
-    entriesFromEachDatabase.flat().forEach((entry) => {
-      const entriesFromAggregate = entriesByIdAggregated[entry.id];
-      const entries = entriesFromAggregate ?? [];
-      if (!entriesFromAggregate) entriesByIdAggregated[entry.id] = entries;
-
-      // Look for existing entry with same ID and from same Lexical Reference Text to merge with
-      const existingEntry = entries.find(
-        (existingEntryPossibleMatch) =>
-          existingEntryPossibleMatch.lexicalReferenceTextId === entry.lexicalReferenceTextId,
-      );
-      if (!existingEntry) {
-        // Add this entry to the list since there isn't an existing one to merge with
-        entries.push(entry);
-        return;
-      }
-
-      // Merge this entry into the existing entry that is already in the list
-      // Meeting the preconditions of `mergeEntries`:
-      // - Already checked that they have the same lexical reference text id
-      // - Limited our queries to only the same `bcp47Code`.
-      mergeEntries(existingEntry, entry);
-    });
-
-    return entriesByIdAggregated;
+    return this.lexicalReferenceTextManager.getEntriesById(selector);
   }
 
   async getEntriesByOccurrence(
@@ -414,36 +74,7 @@ export class LexicalReferenceService
         // If there aren't entries for some id, it will come up here as `undefined`. Skip.
         if (!entry) return;
 
-        const occurrences = Object.values(entry.occurrences)
-          .flat()
-          .filter((occurrenceList) => !!occurrenceList);
-
-        if (occurrences.length === 0)
-          occurrences.push({ type: LOCATION_TYPE_U23003, location: FAKE_LOCATION_U23003 });
-
-        occurrences.forEach((occurrence) => {
-          // Put the entry in the appropriate place by occurrence
-          const { location, type } = occurrence;
-
-          if (type !== LOCATION_TYPE_U23003)
-            throw new Error(
-              `Location ${location} for occurrence in entry ${entry.id} was not of type ${LOCATION_TYPE_U23003}. Not currently supported`,
-            );
-
-          const { book, chapterNum, verseNum, wordNum } = parseU23003ToVerseRef(location);
-
-          if (!entriesByOccurrence[book]) entriesByOccurrence[book] = {};
-
-          if (!entriesByOccurrence[book][chapterNum]) entriesByOccurrence[book][chapterNum] = {};
-
-          if (!entriesByOccurrence[book][chapterNum][verseNum])
-            entriesByOccurrence[book][chapterNum][verseNum] = {};
-
-          if (!entriesByOccurrence[book][chapterNum][verseNum][wordNum])
-            entriesByOccurrence[book][chapterNum][verseNum][wordNum] = [];
-
-          entriesByOccurrence[book][chapterNum][verseNum][wordNum].push(entry);
-        });
+        addItemToItemsByOccurrence(entry, entriesByOccurrence, 'entry');
       });
 
     return entriesByOccurrence;
@@ -497,37 +128,7 @@ export class LexicalReferenceService
           // If there isn't a sense for some id, it will come up here as `undefined`. Skip.
           if (!sense) return;
 
-          const occurrences = Object.values(sense.occurrences)
-            .flat()
-            .filter((occurrenceList) => !!occurrenceList);
-
-          if (occurrences.length === 0)
-            occurrences.push({ type: LOCATION_TYPE_U23003, location: FAKE_LOCATION_U23003 });
-
-          occurrences.forEach((occurrence) => {
-            // Put the sense in the appropriate place by occurrence
-            const { location, type } = occurrence;
-
-            if (type !== LOCATION_TYPE_U23003)
-              throw new Error(
-                `Location ${location} for occurrence in sense ${sense.id} was not of type ${LOCATION_TYPE_U23003}. Not currently supported`,
-              );
-
-            const { book, chapterNum, verseNum, wordNum } = parseU23003ToVerseRef(location);
-
-            if (!sensesByOccurrence[book]) sensesByOccurrence[book] = {};
-
-            if (!sensesByOccurrence[book][chapterNum]) sensesByOccurrence[book][chapterNum] = {};
-
-            if (!sensesByOccurrence[book][chapterNum][verseNum])
-              sensesByOccurrence[book][chapterNum][verseNum] = {};
-
-            if (!sensesByOccurrence[book][chapterNum][verseNum][wordNum])
-              sensesByOccurrence[book][chapterNum][verseNum][wordNum] = [];
-
-            // TODO: Should I narrow the occurrences to those that match this specific location?
-            sensesByOccurrence[book][chapterNum][verseNum][wordNum].push(sense);
-          });
+          addItemToItemsByOccurrence(sense, sensesByOccurrence, 'sense');
         });
       });
 
@@ -559,151 +160,8 @@ export class LexicalReferenceService
   }
 
   async dispose() {
-    const closePromises = this.databaseNoncesByTextGuid
-      .values()
-      .map((databaseNonce) => papi.database.closeDatabase(databaseNonce));
-
-    await Promise.all(closePromises);
-
-    this.databaseNoncesByTextGuid.clear();
-
-    return true;
+    return this.#changeLexicalReferenceTextsUnsubscriber();
   }
-}
-
-/**
- * Merges two entries by merging `b` into `a`.
- *
- * WARNING: Modifies `a`.
- *
- * Preconditions:
- *
- * - `lexicalReferenceTextId` is the same for both entries and all senses within those entries
- * - `bcp47Code` is the same for all senses within these entries
- */
-function mergeEntries(a: Entry, b: Entry): void {
-  // Merge common properties
-  mergeEntrySenseProperties(a, b);
-
-  // Merge senses
-  Object.entries(b.senses).forEach(([senseId, sense]) => {
-    if (!sense) return;
-
-    const existingSense = a.senses[senseId];
-    if (!existingSense) {
-      // Add this sense since there isn't an existing sense to merge with
-      a.senses[senseId] = sense;
-      return;
-    }
-
-    // Merge this sense into the existing sense that is already in the list
-    mergeSenses(existingSense, sense);
-  });
-}
-
-/**
- * Merges two senses by merging `b` into `a`.
- *
- * WARNING: Modifies `a`.
- *
- * Preconditions:
- *
- * - `lexicalReferenceTextId` is the same for both senses
- * - `bcp47Code` is the same for both senses
- */
-function mergeSenses(a: Sense, b: Sense): void {
-  // Merge common properties
-  mergeEntrySenseProperties(a, b);
-
-  // Merge glosses
-  b.glosses.forEach((gloss) => {
-    if (!a.glosses.includes(gloss)) a.glosses.push(gloss);
-  });
-}
-
-/**
- * Merges common entry/sense properties of two entries or senses by merging `b` into `a`.
- *
- * WARNING: Modifies `a`.
- *
- * Preconditions:
- *
- * - `lexicalReferenceTextId` is the same for both entries/senses
- * - `bcp47Code` is the same for both senses if they are senses
- */
-function mergeEntrySenseProperties<T extends Entry | Sense>(a: T, b: T): void {
-  // Merge strongs codes
-  b.strongsCodes.forEach((code) => {
-    if (!a.strongsCodes.includes(code)) a.strongsCodes.push(code);
-  });
-
-  // Merge domains
-  b.domains.forEach((domain) => {
-    if (
-      !a.domains.some(
-        (existingDomain) =>
-          existingDomain.taxonomy === domain.taxonomy && existingDomain.code === domain.code,
-      )
-    )
-      a.domains.push(domain);
-  });
-
-  // Merge occurrences
-  Object.entries(b.occurrences).forEach(([sourceTextId, occurrences]) => {
-    if (!occurrences) return;
-
-    const existingOccurrences = a.occurrences[sourceTextId];
-    if (!existingOccurrences) {
-      // Add this set of occurrences since there aren't existing occurrences to merge with
-      a.occurrences[sourceTextId] = [...occurrences];
-      return;
-    }
-
-    // Merge these occurrences into the existing occurrences
-    occurrences.forEach((occurrence) => {
-      if (
-        !existingOccurrences.some(
-          (existingOccurrence) =>
-            existingOccurrence.type === occurrence.type &&
-            existingOccurrence.location === occurrence.location,
-        )
-      )
-        existingOccurrences.push(occurrence);
-    });
-  });
-}
-
-/**
- * Create an empty entry with the simple properties but with nothing in any of its array/object
- * properties
- */
-function createEmptyEntry(row: { EntryId: string; LexiconId: string; Lemma: string }): Entry {
-  return {
-    id: row.EntryId,
-    lexicalReferenceTextId: row.LexiconId,
-    lemma: row.Lemma,
-    senses: {},
-    strongsCodes: [],
-    occurrences: {},
-    domains: [],
-  };
-}
-
-/** Add an occurrence to an Entry/Sense from its occurrence row */
-function addOccurrence(item: Entry | Sense, row: WithOccurrence | WithoutOccurrence) {
-  // If this sense/entry occurrence row doesn't have an occurrence, skip it
-  if (!row.SourceTextId) return;
-
-  // Get or set the occurrences for this source text
-  const occurrencesFromSense = item.occurrences[row.SourceTextId];
-  const occurrences = occurrencesFromSense ?? [];
-  if (!occurrencesFromSense) item.occurrences[row.SourceTextId] = occurrences;
-
-  // Create a U23003 verse location and add it to the list of occurrences
-  occurrences.push({
-    type: LOCATION_TYPE_U23003,
-    location: `${Canon.bookNumberToId(row.BookNum)} ${row.ChapterNum}:${row.VerseNum}!${row.WordNum}`,
-  });
 }
 
 /**
@@ -733,4 +191,54 @@ function parseU23003ToVerseRef(locationU23003: string): {
     verseNum: parseInt(verseNumStr, 10),
     wordNum: parseInt(wordNumStr, 10),
   };
+}
+
+/**
+ * Adds the given item to the given ItemsByOccurrence object in the appropriate spots based on the
+ * item's occurrences
+ *
+ * @param item The entry or sense to add
+ * @param itemsByOccurrence The object containing entries or senses addressed by Scripture location
+ * @param itemType String `entry` or `sense` used to log errors precisely
+ */
+function addItemToItemsByOccurrence<TItem extends Entry | Sense>(
+  item: TItem,
+  itemsByOccurrence: TItem extends Entry ? LexicalEntriesByOccurrence : LexicalSensesByOccurrence,
+  itemType: TItem extends Entry ? 'entry' : 'sense',
+) {
+  const occurrences = Object.values(item.occurrences)
+    .flat()
+    .filter((occurrenceList) => !!occurrenceList);
+
+  if (occurrences.length === 0) occurrences.push(FAKE_OCCURRENCE);
+
+  occurrences.forEach((occurrence) => {
+    // Put the item in the appropriate place by occurrence
+    const { location, type } = occurrence;
+
+    if (type !== LOCATION_TYPE_U23003)
+      throw new Error(
+        `Location ${location} for occurrence in ${itemType} ${item.id} was not of type ${LOCATION_TYPE_U23003}. Not currently supported`,
+      );
+
+    const { book, chapterNum, verseNum, wordNum } = parseU23003ToVerseRef(location);
+
+    if (!itemsByOccurrence[book]) itemsByOccurrence[book] = {};
+
+    if (!itemsByOccurrence[book][chapterNum]) itemsByOccurrence[book][chapterNum] = {};
+
+    if (!itemsByOccurrence[book][chapterNum][verseNum])
+      itemsByOccurrence[book][chapterNum][verseNum] = {};
+
+    if (!itemsByOccurrence[book][chapterNum][verseNum][wordNum])
+      itemsByOccurrence[book][chapterNum][verseNum][wordNum] = [];
+
+    // TODO: Should we narrow the occurrences to those that match this specific location?
+
+    // TypeScript seems to be unable to distinguish between types Sense and Entry (maybe because
+    // they don't have any mutually exclusive features), so it just combines them for some reason.
+    // So I did the best I could, and this is the part that has to suffer from TypeScript's choices.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    itemsByOccurrence[book][chapterNum][verseNum][wordNum].push(item as Entry & Sense);
+  });
 }
