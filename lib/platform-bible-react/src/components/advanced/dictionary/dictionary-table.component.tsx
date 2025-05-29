@@ -13,7 +13,11 @@ export function DictionaryTable({ dictionaryData, handleEntryClick }: Dictionary
     <Table stickyHeader>
       <TableBody>
         {dictionaryData.map((entry) => (
-          <DictionaryListItem dictionaryEntry={entry} handleEntryClick={handleEntryClick} />
+          <DictionaryListItem
+            key={entry.id}
+            dictionaryEntry={entry}
+            handleEntryClick={handleEntryClick}
+          />
         ))}
       </TableBody>
     </Table>

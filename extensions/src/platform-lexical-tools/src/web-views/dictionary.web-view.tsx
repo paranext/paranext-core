@@ -15,8 +15,8 @@ import {
 import { ArrowLeft } from 'lucide-react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@papi/frontend/react';
-// import { WebViewProps } from '@papi/core';
-// import { SerializedVerseRef } from '@sillsdev/scripture';
+import { SerializedVerseRef, Canon } from '@sillsdev/scripture';
+import { WebViewProps } from '@papi/core';
 
 const DICTIONARY_DATA: DictionaryEntry[] = [
   {
@@ -27,10 +27,10 @@ const DICTIONARY_DATA: DictionaryEntry[] = [
     partOfSpeech: 'verb',
     definition: 'to see, look, view, perceive',
     usage: [
-      { book: 'Exodus', chapterNum: 3, verseNum: 2 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 4 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 7 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 9 },
+      { book: 'EXO', chapterNum: 3, verseNum: 2 },
+      { book: 'EXO', chapterNum: 3, verseNum: 4 },
+      { book: 'EXO', chapterNum: 3, verseNum: 7 },
+      { book: 'EXO', chapterNum: 3, verseNum: 9 },
     ],
   },
   {
@@ -41,9 +41,9 @@ const DICTIONARY_DATA: DictionaryEntry[] = [
     partOfSpeech: 'verb',
     definition: 'to go up, ascend, climb',
     usage: [
-      { book: 'Exodus', chapterNum: 3, verseNum: 1 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 8 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 17 },
+      { book: 'EXO', chapterNum: 3, verseNum: 1 },
+      { book: 'EXO', chapterNum: 3, verseNum: 8 },
+      { book: 'EXO', chapterNum: 3, verseNum: 17 },
     ],
   },
   {
@@ -53,7 +53,7 @@ const DICTIONARY_DATA: DictionaryEntry[] = [
     strongsNumber: 'H784',
     partOfSpeech: 'noun feminine',
     definition: 'fire',
-    usage: [{ book: 'Exodus', chapterNum: 3, verseNum: 2 }],
+    usage: [{ book: 'EXO', chapterNum: 3, verseNum: 2 }],
   },
   {
     id: 'h5572',
@@ -63,9 +63,9 @@ const DICTIONARY_DATA: DictionaryEntry[] = [
     partOfSpeech: 'noun masculine',
     definition: 'bush, thorny bush',
     usage: [
-      { book: 'Exodus', chapterNum: 3, verseNum: 2 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 3 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 4 },
+      { book: 'EXO', chapterNum: 3, verseNum: 2 },
+      { book: 'EXO', chapterNum: 3, verseNum: 3 },
+      { book: 'EXO', chapterNum: 3, verseNum: 4 },
     ],
   },
   {
@@ -76,8 +76,8 @@ const DICTIONARY_DATA: DictionaryEntry[] = [
     partOfSpeech: 'verb',
     definition: 'to burn, consume, kindle',
     usage: [
-      { book: 'Exodus', chapterNum: 3, verseNum: 2 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 3 },
+      { book: 'EXO', chapterNum: 3, verseNum: 2 },
+      { book: 'EXO', chapterNum: 3, verseNum: 3 },
     ],
   },
   {
@@ -88,11 +88,11 @@ const DICTIONARY_DATA: DictionaryEntry[] = [
     partOfSpeech: 'noun masculine plural',
     definition: 'God, gods, judges, angels',
     usage: [
-      { book: 'Exodus', chapterNum: 3, verseNum: 1 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 4 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 6 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 11 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 13 },
+      { book: 'EXO', chapterNum: 3, verseNum: 1 },
+      { book: 'EXO', chapterNum: 3, verseNum: 4 },
+      { book: 'EXO', chapterNum: 3, verseNum: 6 },
+      { book: 'EXO', chapterNum: 3, verseNum: 11 },
+      { book: 'EXO', chapterNum: 3, verseNum: 13 },
     ],
   },
   {
@@ -103,11 +103,11 @@ const DICTIONARY_DATA: DictionaryEntry[] = [
     partOfSpeech: 'noun proper masculine',
     definition: 'Moses',
     usage: [
-      { book: 'Exodus', chapterNum: 3, verseNum: 1 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 4 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 6 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 11 },
-      { book: 'Exodus', chapterNum: 3, verseNum: 13 },
+      { book: 'EXO', chapterNum: 3, verseNum: 1 },
+      { book: 'EXO', chapterNum: 3, verseNum: 4 },
+      { book: 'EXO', chapterNum: 3, verseNum: 6 },
+      { book: 'EXO', chapterNum: 3, verseNum: 11 },
+      { book: 'EXO', chapterNum: 3, verseNum: 13 },
     ],
   },
   {
@@ -117,7 +117,7 @@ const DICTIONARY_DATA: DictionaryEntry[] = [
     strongsNumber: 'H6629',
     partOfSpeech: 'noun both',
     definition: 'small cattle, sheep, goats',
-    usage: [{ book: 'Exodus', chapterNum: 3, verseNum: 1 }],
+    usage: [{ book: 'EXO', chapterNum: 3, verseNum: 1 }],
   },
 ];
 
@@ -125,6 +125,7 @@ const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_backToList%',
   '%platformLexicalTools_dictionary_definitionLabel%',
   '%platformLexicalTools_dictionary_noResults%',
+  '%platformLexicalTools_dictionary_occurrencesInLabel%',
   '%platformLexicalTools_dictionary_searchDictionary%',
   '%platformLexicalTools_dictionary_scopeSelector_chapter%',
   '%platformLexicalTools_dictionary_scopeSelector_section%',
@@ -152,14 +153,13 @@ function BackToListButton({ handleClick, buttonText }: BackToListButtonProps) {
   );
 }
 
-globalThis.webViewComponent = function Dictionary() {
-  const [scope, setScope] = useState<'chapter' | 'section' | 'verse'>('chapter');
+globalThis.webViewComponent = function Dictionary({ useWebViewScrollGroupScrRef }: WebViewProps) {
+  const [scope, setScope] = useState<string>('chapter');
   const [selectedEntry, setSelectedEntry] = useState<DictionaryEntry | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
 
-  // { useWebViewScrollGroupScrRef }: WebViewProps
-  // const [scrRef] = useWebViewScrollGroupScrRef();
+  const [scrRef] = useWebViewScrollGroupScrRef();
 
   const dictionaryEntriesFilteredBySearchAndScope: DictionaryEntry[] = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -172,88 +172,92 @@ globalThis.webViewComponent = function Dictionary() {
             entry.transliteration.toLowerCase().includes(query) ||
             entry.definition.toLowerCase().includes(query),
         );
-    return filteredBySearch;
 
-    // Return the filtered array based on scope and scrRef
-    // return filteredBySearch.filter((entry) => {
-    //   return entry.usage.some((serializedScrReference: SerializedVerseRef) => {
-    //     if (serializedScrReference.book && serializedScrReference.chapterNum) {
-    //       if (serializedScrReference.book !== scrRef.book) return false;
-    //       if (scope === 'chapter') return serializedScrReference.chapterNum === scrRef.chapterNum;
-    //       if (scope === 'verse')
-    //         return (
-    //           serializedScrReference.chapterNum === scrRef.chapterNum &&
-    //           serializedScrReference.verseNum === scrRef.verseNum
-    //         );
-    //     }
-    //     // If usage is just a string (as in your data), skip scope filtering
-    //     return true;
-    //   });
-    // });
-  }, [searchQuery]);
+    // Return the filtered array based on scope and scrRef, section is not supported yet
+    return filteredBySearch.filter((entry) => {
+      return entry.usage.some((serializedScrReference: SerializedVerseRef) => {
+        if (serializedScrReference.book && serializedScrReference.chapterNum) {
+          if (serializedScrReference.book !== scrRef.book) return false;
+          if (scope === 'chapter') return serializedScrReference.chapterNum === scrRef.chapterNum;
+          if (scope === 'verse')
+            return (
+              serializedScrReference.chapterNum === scrRef.chapterNum &&
+              serializedScrReference.verseNum === scrRef.verseNum
+            );
+        }
+        // If usage is just a string (as in your data), skip scope filtering
+        return true;
+      });
+    });
+  }, [scope, scrRef.book, scrRef.chapterNum, scrRef.verseNum, searchQuery]);
 
   const handleEntryClick = (entry: DictionaryEntry) => {
     setSelectedEntry(entry);
   };
 
-  // Search zero state
-  if (dictionaryEntriesFilteredBySearchAndScope.length === 0)
-    return (
-      <div className="tw-m-4 tw-flex tw-justify-center">
-        <Label>{localizedStrings['%platformLexicalTools_dictionary_no_results%']}</Label>
-      </div>
-    );
+  const occurrencesLabel = useMemo(
+    () =>
+      formatReplacementString(
+        localizedStrings['%platformLexicalTools_dictionary_occurrencesInLabel%'],
+        { location: Canon.bookIdToEnglishName(scrRef.book), chapter: scrRef.chapterNum },
+      ),
+    [localizedStrings, scrRef],
+  );
 
   return (
     <div className="tw-flex tw-flex-col tw-h-full">
       <div className="tw-flex tw-items-center tw-gap-2 tw-p-2 tw-border-b">
-        <Select value={scope} onValueChange={() => setScope}>
-          <SelectTrigger className="w-36 h-8">
-            <SelectValue
-              placeholder={
-                localizedStrings['%platformLexicalTools_dictionary_scopeSelector_chapter%']
-              }
-            />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="chapter">
-              {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_chapter%']}
-            </SelectItem>
-            <SelectItem value="section">
-              {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_section%']}
-            </SelectItem>
-            <SelectItem value="verse">
-              {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_verse%']}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <SearchBar
-          value={searchQuery}
-          onSearch={setSearchQuery}
-          placeholder={localizedStrings['%platformLexicalTools_dictionary_searchDictionary%']}
-          isFullWidth={false}
-        />
+        <div className="tw-w-1/2">
+          <Select value={scope} onValueChange={setScope} disabled={!!selectedEntry}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="chapter">
+                {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_chapter%']}
+              </SelectItem>
+              <SelectItem value="section">
+                {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_section%']}
+              </SelectItem>
+              <SelectItem value="verse">
+                {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_verse%']}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="tw-w-1/2">
+          <SearchBar
+            value={searchQuery}
+            onSearch={setSearchQuery}
+            placeholder={localizedStrings['%platformLexicalTools_dictionary_searchDictionary%']}
+            isFullWidth={false}
+            isDisabled={!!selectedEntry}
+          />
+        </div>
       </div>
-      {selectedEntry ? (
-        <DictionaryEntryDisplay
-          definitionLabel={localizedStrings['%platformLexicalTools_dictionary_definitionLabel%']}
-          occurrencesLabel={formatReplacementString(
-            localizedStrings['%platformLexicalTools_dictionary_occurrencesInLabel%'],
-            { 0: selectedEntry.usage },
-          )}
-          dictionaryEntry={selectedEntry}
-          backToListButton={
-            <BackToListButton
-              handleClick={() => setSelectedEntry(undefined)}
-              buttonText={localizedStrings['%platformLexicalTools_dictionary_backToList%']}
-            />
-          }
-        />
+      {dictionaryEntriesFilteredBySearchAndScope.length === 0 ? (
+        <div className="tw-m-4 tw-flex tw-justify-center">
+          <Label>{localizedStrings['%platformLexicalTools_dictionary_noResults%']}</Label>
+        </div>
       ) : (
-        <DictionaryTable
-          dictionaryData={dictionaryEntriesFilteredBySearchAndScope}
-          handleEntryClick={handleEntryClick}
-        />
+        ((selectedEntry && (
+          <DictionaryEntryDisplay
+            definitionLabel={localizedStrings['%platformLexicalTools_dictionary_definitionLabel%']}
+            occurrencesLabel={occurrencesLabel}
+            dictionaryEntry={selectedEntry}
+            backToListButton={
+              <BackToListButton
+                handleClick={() => setSelectedEntry(undefined)}
+                buttonText={localizedStrings['%platformLexicalTools_dictionary_backToList%']}
+              />
+            }
+          />
+        )) ?? (
+          <DictionaryTable
+            dictionaryData={dictionaryEntriesFilteredBySearchAndScope}
+            handleEntryClick={handleEntryClick}
+          />
+        ))
       )}
     </div>
   );

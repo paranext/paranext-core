@@ -1,6 +1,6 @@
-import { Separator } from '@radix-ui/react-dropdown-menu';
+import { Separator } from '@/components/shadcn-ui/separator';
 import type React from 'react';
-import { formatScrRef, scrRefToBBBCCC } from 'platform-bible-utils';
+import { formatScrRef } from 'platform-bible-utils';
 import { DictionaryEntry } from './dictionary-list-item.component';
 
 /** Props for the DictionaryEntryDisplay component */
@@ -42,7 +42,7 @@ export function DictionaryEntryDisplay({
           <span className="tw-text-lg tw-text-muted-foreground">
             {dictionaryEntry.transliteration}
           </span>
-          <span className="tw-ml-auto tw-rounded tw-bg-blue-100 tw-px-2 tw-py-0.5 tw-text-sm">
+          <span className="tw-ml-auto tw-rounded tw-bg-accent tw-px-2 tw-py-0.5 tw-text-sm tw-accent-foreground">
             {dictionaryEntry.strongsNumber}
           </span>
         </div>
@@ -62,7 +62,10 @@ export function DictionaryEntryDisplay({
         <h3 className="tw-mb-1 tw-font-semibold">{occurrencesLabel}</h3>
         <ul className="tw-list-inside tw-list-disc">
           {dictionaryEntry.usage.map((serializedVerseReference) => (
-            <li key={scrRefToBBBCCC(serializedVerseReference)} className="tw-py-0.5 tw-text-sm">
+            <li
+              key={`${dictionaryEntry.id}-${formatScrRef(serializedVerseReference, 'English')}`}
+              className="tw-py-0.5 tw-text-sm"
+            >
               {formatScrRef(serializedVerseReference, 'English')}
             </li>
           ))}

@@ -5,7 +5,7 @@
       "%platformLexicalTools_dictionary_backToList%": "Back to List",
       "%platformLexicalTools_dictionary_definitionLabel%": "Definition",
       "%platformLexicalTools_dictionary_noResults%": "No results",
-      "%platformLexicalTools_dictionary_occurrencesInLabel%": "Occurrences in {0}",
+      "%platformLexicalTools_dictionary_occurrencesInLabel%": "Occurrences in {location} {chapter}",
       "%platformLexicalTools_dictionary_searchDictionary%": "Search Dictionary...",
       "%platformLexicalTools_dictionary_scopeSelector_chapter%": "Current Chapter",
       "%platformLexicalTools_dictionary_scopeSelector_section%": "Current Section",
