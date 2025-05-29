@@ -933,11 +933,13 @@ export type ScrollGroupSelectorProps = {
 	 * ```
 	 */
 	localizedStrings?: LanguageStrings;
+	/** Size of the scroll group dropdown button. Defaults to 'default' */
+	size?: "default" | "sm" | "lg" | "icon";
 	/** Additional css classes to help with unique styling */
 	className?: string;
 };
 /** Selector component for choosing a scroll group */
-export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScrollGroupSelector({ availableScrollGroupIds, scrollGroupId, onChangeScrollGroupId, localizedStrings, size, className, }: ScrollGroupSelectorProps): import("react/jsx-runtime").JSX.Element;
 type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
@@ -1002,6 +1004,33 @@ type TabDropdownMenuProps = {
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
 export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export type TabToolbarProps = React$1.PropsWithChildren<{
+	/** The handler to use for toolbar item commands */
+	projectMenuCommandHandler: CommandHandler;
+	/** The handler to use for toolbar item commands */
+	viewInfoMenuCommandHandler: CommandHandler;
+	/** Menu data that is used to populate the Menubar component for the project menu. */
+	projectMenuData?: Localized<MultiColumnMenu>;
+	/** Menu data that is used to populate the Menubar component for the view info menu */
+	tabViewMenuData?: Localized<MultiColumnMenu>;
+	/** Optional unique identifier */
+	id?: string;
+	/** Additional css classes to help with unique styling of the extensible toolbar */
+	className?: string;
+	/**
+	 * Toolbar children to be put at the start of the the toolbar after the project menu icon (left
+	 * side in ltr, right side in rtl). Recommended for inner navigation.
+	 */
+	startAreaChildren?: React$1.ReactNode;
+	/** Toolbar children to be put in the center area of the the toolbar. Recommended for tools. */
+	centerAreaChildren?: React$1.ReactNode;
+	/**
+	 * Toolbar children to be put at the end of the the toolbar before the tab view menu icon (right
+	 * side in ltr, left side in rtl). Recommended for secondary tools and view options.
+	 */
+	endAreaChildren?: React$1.ReactNode;
+}>;
+export declare function TabToolbar({ projectMenuCommandHandler, viewInfoMenuCommandHandler, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1540,6 +1569,14 @@ export declare const RadioGroup: React$1.ForwardRefExoticComponent<Omit<RadioGro
 /** @inheritdoc RadioGroup */
 export declare const RadioGroupItem: React$1.ForwardRefExoticComponent<Omit<RadioGroupPrimitive.RadioGroupItemProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 /**
+ * Props for Select component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/select}
+ */
+export interface SelectTriggerProps extends React$1.ComponentPropsWithoutRef<typeof SelectPrimitive.Trigger>, VariantProps<typeof selectTriggerVariants> {
+	asChild?: boolean;
+}
+/**
  * Select components display a list of options for the user to pick from—triggered by a button.
  * These components are built on Radix UI primitives and styled with Shadcn UI.
  *
@@ -1551,8 +1588,16 @@ export declare const Select: React$1.FC<SelectPrimitive.SelectProps>;
 export declare const SelectGroup: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectGroupProps & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Select */
 export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimitive.SelectValueProps & React$1.RefAttributes<HTMLSpanElement>>;
+/**
+ * Style variants for the Select Trigger component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const selectTriggerVariants: (props?: ({
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & ClassProp) | undefined) => string;
 /** @inheritdoc Select */
-export declare const SelectTrigger: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const SelectTrigger: React$1.ForwardRefExoticComponent<SelectTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Select */
 export declare const SelectScrollUpButton: React$1.ForwardRefExoticComponent<Omit<SelectPrimitive.SelectScrollUpButtonProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Select */
