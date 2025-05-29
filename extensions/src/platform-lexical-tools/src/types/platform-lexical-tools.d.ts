@@ -5,6 +5,7 @@ declare module 'platform-lexical-tools' {
     DataProviderSubscriberOptions,
     DataProviderUpdateInstructions,
     IDataProvider,
+    // @ts-ignore: TS2307 - Cannot find module '@papi/core' or its corresponding type declarations
   } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
 
