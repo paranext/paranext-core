@@ -1,6 +1,16 @@
 {
   "metadata": {},
   "localizedStrings": {
-    "en": {}
+    "en": {
+      "%platformLexicalTools_dictionary_backToList%": "Back to List",
+      "%platformLexicalTools_dictionary_definitionLabel%": "Definition",
+      "%platformLexicalTools_dictionary_noResults%": "No results",
+      "%platformLexicalTools_dictionary_occurrencesInLabel%": "Occurrences in {location} {chapter}",
+      "%platformLexicalTools_dictionary_searchDictionary%": "Search Dictionary...",
+      "%platformLexicalTools_dictionary_scopeSelector_chapter%": "Current Chapter",
+      "%platformLexicalTools_dictionary_scopeSelector_section%": "Current Section",
+      "%platformLexicalTools_dictionary_scopeSelector_verse%": "Current Verse",
+      "%platformLexicalTools_mainMenu_openDictionary%": "Open Dictionary"
+    }
   }
 }

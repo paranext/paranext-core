@@ -2,7 +2,15 @@
   "mainMenu": {
     "columns": {},
     "groups": {},
-    "items": []
+    "items": [
+      {
+        "label": "%platformLexicalTools_mainMenu_openDictionary%",
+        "localizeNotes": "Scripture Editor top menu > Project > Dictionary",
+        "group": "platform.projectResources",
+        "order": 100,
+        "command": "platformLexicalTools.openDictionary"
+      }
+    ]
   },
   "defaultWebViewTopMenu": {
     "columns": {},
@@ -13,5 +21,7 @@
     "groups": {},
     "items": []
   },
-  "webViewMenus": {}
+  "webViewMenus": {
+    "platformLexicalTools.dictionary": {}
+  }
 }
