@@ -1,18 +1,33 @@
 declare module 'platform-lexical-tools' {
-  import { DataProviderDataType, IDataProvider } from '@papi/core';
+  import type { DataProviderDataType, IDataProvider } from '@papi/core';
   import type { IProjectDataProvider } from 'papi-shared-types';
 
   // #region Lexical Reference Text types loosely following the LexicalReferenceText Relax NG Compact schema converted to lowerCamelCase https://github.com/paranext/marble-tools/blob/85a376dc024cf1d2c9eff9a5166825edbf9a03f1/xml/output.rnc
 
-  // Currently unused, but we may need this when we want to show information about the lexical reference text
+  /** Localized information about a lexical reference text */
+  export interface LexicalReferenceTextLocalizedInfo {
+    // ENHANCE: add titles into the database and provide titles here
+    /* title: string; */
+  }
+
+  /** Information about a lexical reference text */
   export interface LexicalReferenceText {
-    schemaVersion: string;
     id: string;
-    title: string;
-    dataVersion: string;
-    language: string;
-    entries?: Entry[];
-    taxonomies?: Taxonomy[];
+    /**
+     * Localized information about the lexical reference text in each language the lexical reference
+     * text is supplied in. Each key is a BCP-47 language code for which the lexical reference text
+     * has some information, and each value is the localized information about that lexical
+     * reference text.
+     *
+     * Note: the localized information may be full of empty strings, which means the lexical
+     * reference text supplies some data in that language but does not provide localized info about
+     * itself in that language
+     */
+    localizedInfoByBCP47Code: {
+      [bcp47Code: string]: LexicalReferenceTextLocalizedInfo | undefined;
+    };
+    /** The versions of the data content in the lexical reference text that are currently available */
+    versions: string[];
   }
 
   // Currently unused, but we will probably need this when we want to show Taxonomies
