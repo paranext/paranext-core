@@ -1,9 +1,9 @@
 {
-  "name": "paranext-extension-template",
-  "private": true,
-  "version": "0.0.1",
+  "name": "hello-rock3",
+  "version": "0.5.0-alpha.0",
+  "description": "Simple demo extension for Platform.Bible",
   "main": "src/main.js",
-  "types": "src/types/paranext-extension-template.d.ts",
+  "types": "src/types/hello-rock3.d.ts",
   "author": "Paranext",
   "license": "MIT",
   "scripts": {
@@ -26,7 +26,8 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
-    "bump-versions": "ts-node ./lib/bump-versions.ts"
+    "bump-versions": "ts-node ./lib/bump-versions.ts",
+    "typecheck": "tsc -p ./tsconfig.json"
   },
   "browserslist": [],
   "peerDependencies": {
@@ -91,6 +92,6 @@
     "zip-build": "^1.8.0"
   },
   "volta": {
-    "node": "20.18.0"
+    "extends": "../../package.json"
   }
 }

@@ -1,8 +1,8 @@
-# paranext-extension-template
+# hello-rock3
 
-Basic extension template for Platform.Bible
+Simple demo extension for Platform.Bible
 
-<!-- <!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info). -->
+<!-- Opening comment tag for Template Info Section. Ignore this for now. More info in [Hide Template Info](#hide-template-info).
 
 ## Template Info
 

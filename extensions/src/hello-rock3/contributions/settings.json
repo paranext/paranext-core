@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "label": "%settings_hello_rock3_group1_label%",
+    "properties": {
+      "helloRock3.personName": {
+        "label": "%settings_hello_rock3_personName_label%",
+        "default": "Bill"
+      }
+    }
+  }
+]
