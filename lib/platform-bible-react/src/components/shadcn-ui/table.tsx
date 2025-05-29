@@ -1,5 +1,5 @@
 import React from 'react';
-import { getFocusableElements } from '@/utils/focus.util';
+
 import { cn } from '@/utils/shadcn-ui.util';
 
 /**
@@ -9,92 +9,15 @@ import { cn } from '@/utils/shadcn-ui.util';
 const Table = React.forwardRef<
   HTMLTableElement,
   React.HTMLAttributes<HTMLTableElement> & { stickyHeader?: boolean }
->(({ className, stickyHeader, ...props }, ref) => {
-  // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
-  // This ref gets passed into the table row ref property which expects null and not undefined
-  // eslint-disable-next-line no-null/no-null
-  const tableRef = React.useRef<HTMLTableElement>(null);
-
-  // CUSTOM: Assign internal ref to external ref if provided
-  React.useEffect(() => {
-    if (typeof ref === 'function') {
-      ref(tableRef.current);
-    } else if (ref && 'current' in ref) {
-      ref.current = tableRef.current;
-    }
-  }, [ref]);
-
-  // CUSTOM: Force tabindex -1 on all focusable elements within the table to prevent tab navigation
-  React.useEffect(() => {
-    const currentTable = tableRef.current;
-    if (!currentTable) return;
-
-    const setTabIndexes = () => {
-      const focusables = getFocusableElements(currentTable);
-      focusables.forEach((el) => {
-        el.setAttribute('tabindex', '-1');
-      });
-    };
-
-    // Initial run
-    setTabIndexes();
-
-    // Observe future changes
-    const observer = new MutationObserver(() => {
-      setTabIndexes();
-    });
-
-    observer.observe(currentTable, {
-      childList: true, // Watch for added/removed elements
-      subtree: true, // Include descendants
-      // attributes: true, // Watch for attribute changes too
-      // attributeFilter: ['tabindex'], // Only watch tabindex changes
-    });
-
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
-  // CUSTOM: Handle keydown events for the table
-  const handleKeyDownInTable = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    const { current: currentTable } = tableRef;
-    if (!currentTable) return;
-
-    if (e.key === 'ArrowDown') {
-      // Move focus to the first row in the table (header or body)
-      e.preventDefault();
-      const firstRow = getFocusableElements(currentTable)[0];
-      firstRow.focus();
-      return;
-    }
-    if (e.key === ' ' && document.activeElement === currentTable) {
-      e.preventDefault(); // Prevent scrolling
-    }
-  };
-
-  return (
-    <div className={cn('pr-twp tw-relative tw-w-full', { 'tw-p-1': stickyHeader })}>
-      {/* Table element is not interactive by default but we need to add a keydown handler */}
-      {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}
-      <table
-        // Need to add a keydown handler to the table to prevent default behavior of space, enter, and arrow down keys
-        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-        tabIndex={0} // CUSTOM: Make table tabbable
-        onKeyDown={handleKeyDownInTable} // CUSTOM: Enable keyboard behavior
-        ref={tableRef} // CUSTOM: Use internal ref to manage keyboard navigation
-        className={cn(
-          'tw-w-full tw-caption-bottom tw-text-sm tw-outline-none', // CUSTOM: Add outline-none to remove duplicate outline
-          'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background', // CUSTOM: Add focus styles
-          className,
-        )}
-        aria-label="Table" // CUSTOM: Add aria-label for accessibility
-        aria-labelledby="table-label" // CUSTOM: Add aria-labelledby for accessibility
-        {...props}
-      />
-    </div>
-  );
-});
+>(({ className, stickyHeader, ...props }, ref) => (
+  <div className={cn('pr-twp tw-relative tw-w-full', { 'tw-overflow-auto': !stickyHeader })}>
+    <table
+      ref={ref}
+      className={cn('tw-w-full tw-caption-bottom tw-text-sm', className)}
+      {...props}
+    />
+  </div>
+));
 Table.displayName = 'Table';
 
 /** @inheritdoc Table */
@@ -136,180 +59,19 @@ const TableFooter = React.forwardRef<
 ));
 TableFooter.displayName = 'TableFooter';
 
-// CUSTOM: Add onKeyDown and onSelect props to TableRow
-function useRowKeyboardNavigation(rowRef: React.RefObject<HTMLTableRowElement>) {
-  React.useEffect(() => {
-    const row = rowRef.current;
-    if (!row) return;
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!row.contains(document.activeElement)) return;
-
-      if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-        e.preventDefault();
-        e.stopPropagation(); // Helps override internal widget handlers
-        const focusables = rowRef.current ? getFocusableElements(rowRef.current) : [];
-        // activeElement is generic Element, so we need to cast it to HTMLElement
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const index = focusables.indexOf(document.activeElement as HTMLElement);
-        const nextIndex = e.key === 'ArrowRight' ? index + 1 : index - 1;
-        if (nextIndex >= 0 && nextIndex < focusables.length) {
-          focusables[nextIndex].focus();
-        }
-      }
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        row.focus();
-      }
-
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'Tab') {
-        e.preventDefault();
-      }
-    };
-
-    row.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      row.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [rowRef]);
-}
-
 /** @inheritdoc Table */
-const TableRow = React.forwardRef<
-  HTMLTableRowElement,
-  React.HTMLAttributes<HTMLTableRowElement> & { setFocusAlsoRunsSelect?: boolean }
->(({ className, onKeyDown, onSelect, setFocusAlsoRunsSelect, ...props }, ref) => {
-  // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
-  // This ref gets passed into the table row ref property which expects null and not undefined
-  // eslint-disable-next-line no-null/no-null
-  const rowRef = React.useRef<HTMLTableRowElement>(null);
-
-  // CUSTOM: Assign internal ref to external ref if provided
-  React.useEffect(() => {
-    if (typeof ref === 'function') {
-      ref(rowRef.current);
-    } else if (ref && 'current' in ref) {
-      ref.current = rowRef.current;
-    }
-  }, [ref]);
-
-  // CUSTOM: Use internal ref to manage keyboard navigation and Enter key behavior
-  useRowKeyboardNavigation(rowRef);
-
-  // CUSTOM: Move focus up or down to adjacent rows in the same table
-  const focusAdjacentRow = (
-    rowsInTable: HTMLTableRowElement[],
-    currentRowIndex: number,
-    direction: 'ArrowDown' | 'ArrowUp',
-  ) => {
-    let nextRow: HTMLTableRowElement | undefined;
-    if (direction === 'ArrowDown' && currentRowIndex < rowsInTable.length - 1) {
-      nextRow = rowsInTable[currentRowIndex + 1];
-    } else if (direction === 'ArrowUp' && currentRowIndex > 0) {
-      nextRow = rowsInTable[currentRowIndex - 1];
-    }
-    if (nextRow) {
-      requestAnimationFrame(() => nextRow.focus());
-      return true;
-    }
-    return false;
-  };
-
-  // CUSTOM: Move focus left or right to adjacent focusable items in the same row
-  const focusAdjacentFocusableElementInRow = (
-    focusablesInRow: HTMLElement[],
-    currentIndexOfFocusables: number,
-    direction: 'ArrowLeft' | 'ArrowRight',
-  ) => {
-    let nextFocusable: HTMLElement | undefined;
-    if (direction === 'ArrowLeft' && currentIndexOfFocusables > 0) {
-      nextFocusable = focusablesInRow[currentIndexOfFocusables - 1];
-    } else if (
-      direction === 'ArrowRight' &&
-      currentIndexOfFocusables < focusablesInRow.length - 1
-    ) {
-      nextFocusable = focusablesInRow[currentIndexOfFocusables + 1];
-    }
-    if (nextFocusable) {
-      requestAnimationFrame(() => nextFocusable.focus());
-      return true;
-    }
-    return false;
-  };
-
-  // CUSTOM: Get all focusable elements in the current row
-  const focusablesInRow = React.useMemo(
-    () => (rowRef.current ? getFocusableElements(rowRef.current) : []),
-    [rowRef],
-  );
-
-  // CUSTOM: Handle keydown events for keyboard navigation
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTableRowElement>) => {
-    const { current: currentRow } = rowRef;
-    if (!currentRow || !currentRow.parentElement) return;
-
-    const closestTable = currentRow.closest('table');
-    const rowsInTable = closestTable
-      ? // getFocusableElements returns an HTMLElement[] but we are filtering for HTMLTableRowElements
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        (getFocusableElements(closestTable) as HTMLTableRowElement[]).filter(
-          (element) => element.tagName === 'TR',
-        )
-      : [];
-    const currentRowIndex = rowsInTable.indexOf(currentRow);
-    const currentIndexOfFocusables = focusablesInRow.indexOf(
-      // activeElement is generic Element, so we need to cast it to HTMLElement
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      document.activeElement as HTMLElement,
-    );
-
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      focusAdjacentRow(rowsInTable, currentRowIndex, e.key);
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      e.preventDefault();
-      focusAdjacentFocusableElementInRow(focusablesInRow, currentIndexOfFocusables, e.key);
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      const table = currentRow.closest('table');
-      if (table) {
-        table.focus();
-      }
-    } else if (e.key === 'Tab') {
-      e.preventDefault();
-      return;
-    }
-
-    // Call user-defined onKeyDown handler if provided
-    onKeyDown?.(e);
-  };
-
-  const handleFocus = React.useCallback(
-    (e: React.FocusEvent<HTMLTableRowElement>) => {
-      if (setFocusAlsoRunsSelect) onSelect?.(e);
-    },
-    [setFocusAlsoRunsSelect, onSelect],
-  );
-
-  return (
+const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
+  ({ className, ...props }, ref) => (
     <tr
-      ref={rowRef}
-      tabIndex={-1} // CUSTOM: Make row not tabbable
-      onKeyDown={handleKeyDown} // CUSTOM: Enable keyboard behavior
-      onFocus={handleFocus} // CUSTOM: Handle focus event
+      ref={ref}
       className={cn(
-        // CUSTOM: Add focus styles and add tw-outline-none so there isn't a duplicate outline
-        'tw-border-b tw-outline-none tw-transition-colors hover:tw-bg-muted/50',
-        'focus:tw-relative focus:tw-z-10 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
-        'data-[state=selected]:tw-bg-muted',
+        'tw-border-b tw-transition-colors hover:tw-bg-muted/50 data-[state=selected]:tw-bg-muted',
         className,
       )}
       {...props}
     />
-  );
-});
+  ),
+);
 TableRow.displayName = 'TableRow';
 
 /** @inheritdoc Table */
