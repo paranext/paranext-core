@@ -5,7 +5,16 @@ import {
   MandatoryProjectDataTypes,
 } from '@papi/core';
 import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
-import type { LexicalReferenceText } from 'platform-lexical-tools';
+import type {
+  LexicalEntriesById,
+  LexicalEntriesByOccurrence,
+  LexicalReferenceProjectDataTypes,
+  LexicalReferenceProjectSelector,
+  LexicalReferenceSelector,
+  LexicalReferenceText,
+  LexicalSensesById,
+  LexicalSensesByOccurrence,
+} from 'platform-lexical-tools';
 import { deepEqual, Unsubscriber } from 'platform-bible-utils';
 import { LexicalReferenceTextManager } from './lexical-reference-text-manager.model';
 
@@ -56,6 +65,62 @@ export class LexicalReferenceProjectDataProviderEngine
         // The lexical reference text changed in some way, so announce the change
         this.notifyUpdate('*');
       });
+  }
+
+  async getEntriesById(selector: LexicalReferenceProjectSelector): Promise<LexicalEntriesById> {
+    return this.lexicalReferenceTextManager.getEntriesById(
+      this.#transformProjectSelectorToSelector(selector),
+    );
+  }
+
+  async getEntriesByOccurrence(
+    selector: LexicalReferenceProjectSelector,
+  ): Promise<LexicalEntriesByOccurrence> {
+    return this.lexicalReferenceTextManager.getEntriesByOccurrence(
+      this.#transformProjectSelectorToSelector(selector),
+    );
+  }
+
+  async getSensesById(selector: LexicalReferenceProjectSelector): Promise<LexicalSensesById> {
+    return this.lexicalReferenceTextManager.getSensesById(
+      this.#transformProjectSelectorToSelector(selector),
+    );
+  }
+
+  async getSensesByOccurrence(
+    selector: LexicalReferenceProjectSelector,
+  ): Promise<LexicalSensesByOccurrence> {
+    return this.lexicalReferenceTextManager.getSensesByOccurrence(
+      this.#transformProjectSelectorToSelector(selector),
+    );
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  setEntriesById(): Promise<DataProviderUpdateInstructions<LexicalReferenceProjectDataTypes>> {
+    throw new Error('This lexical reference text is readonly. Cannot set entries by ID.');
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  setEntriesByOccurrence(): Promise<
+    DataProviderUpdateInstructions<LexicalReferenceProjectDataTypes>
+  > {
+    throw new Error('This lexical reference text is readonly. Cannot set entries by occurrence.');
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  setSensesById(): Promise<DataProviderUpdateInstructions<LexicalReferenceProjectDataTypes>> {
+    throw new Error('This lexical reference text is readonly. Cannot set senses by ID.');
+  }
+
+  // Because this is a data provider, we have to provide this method even though it always throws
+  // eslint-disable-next-line @typescript-eslint/class-methods-use-this
+  setSensesByOccurrence(): Promise<
+    DataProviderUpdateInstructions<LexicalReferenceProjectDataTypes>
+  > {
+    throw new Error('This lexical reference text is readonly. Cannot set senses by occurrence.');
   }
 
   // Because this is a base project data provider, we have to provide this method even though it always throws
@@ -114,5 +179,18 @@ export class LexicalReferenceProjectDataProviderEngine
 
   async dispose() {
     return this.#changeLexicalReferenceTextsUnsubscriber();
+  }
+
+  /**
+   * Transforms the project-specific selector into its equivalent general lexical reference
+   * selector. Returns a new object; does not mutate the original selector
+   */
+  #transformProjectSelectorToSelector(
+    selector: LexicalReferenceProjectSelector,
+  ): LexicalReferenceSelector {
+    return {
+      ...selector,
+      lexicalReferenceTextId: this.lexicalReferenceText.id,
+    };
   }
 }

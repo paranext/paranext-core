@@ -7,13 +7,31 @@ import type {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   ILexicalReferenceService,
   LexicalEntriesById,
+  LexicalEntriesByOccurrence,
   LexicalReferenceSelector,
   LexicalReferenceText,
   LexicalReferenceTextRegistrar,
+  LexicalSensesById,
+  LexicalSensesByOccurrence,
+  Occurrence,
   Sense,
 } from 'platform-lexical-tools';
 
 export const LOCATION_TYPE_U23003 = 'U23003';
+
+/**
+ * Fake location used to put items that don't have occurrences somewhere in the
+ * `LexicalEntries/SensesByOccurrence` types
+ */
+const FAKE_LOCATION_U23003 = '*** 0:0!0';
+
+/**
+ * Fake occurrence used to put items that don't have occurrences somewhere in the
+ * `LexicalEntries/SensesByOccurrence` types
+ */
+const FAKE_OCCURRENCE: Occurrence = { type: LOCATION_TYPE_U23003, location: FAKE_LOCATION_U23003 };
+
+const U23003_REGEX = /^(?<book>\w\w\w|\*\*\*) (?<chapterNum>\d+):(?<verseNum>\d+)!(?<wordNum>\d+)$/;
 
 /** Map of lexical reference texts keyed by their id */
 export type LexicalReferenceTextsById = {
@@ -48,7 +66,9 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
 
   private lexicalReferenceTextsByIdCached: LexicalReferenceTextsById | undefined;
 
-  private databaseNoncesByTextGuid: Map<string, string> = new Map();
+  private databaseInfoByTextGuid: Map<string, { fileUri: string; databaseNonce: string }> =
+    new Map();
+
   #onDidChangeLexicalReferenceTextsEmitter: PlatformEventEmitter<void>;
 
   constructor() {
@@ -61,26 +81,92 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
     });
   }
 
-  // TODO: prevent the same file from being registered multiple times
   // ENHANCE: Instead of making a new database connection for each database, you could attach
-  // up to 10 together. Might get some memory reduction that way
+  // up to 10 together. Might save some memory that way
   async registerLexicalReferenceText(fileUri: string): Promise<string> {
+    if (
+      this.databaseInfoByTextGuid
+        .values()
+        .some(({ fileUri: existingFileUri }) => fileUri === existingFileUri)
+    )
+      throw new Error(`Lexical Reference Text at ${fileUri} is already registered`);
+
     const lexicalReferenceTextGuid = newGuid();
     const databaseNonce = await papi.database.openDatabase(fileUri, { readOnly: true });
-    this.databaseNoncesByTextGuid.set(lexicalReferenceTextGuid, databaseNonce);
+    this.databaseInfoByTextGuid.set(lexicalReferenceTextGuid, { fileUri, databaseNonce });
     this.#onDidChangeLexicalReferenceTextsEmitter.emit(undefined);
     return lexicalReferenceTextGuid;
   }
 
   async unregisterLexicalReferenceText(lexicalReferenceTextGuid: string): Promise<void> {
-    const databaseNonce = this.databaseNoncesByTextGuid.get(lexicalReferenceTextGuid);
-    if (!databaseNonce)
+    const databaseInfo = this.databaseInfoByTextGuid.get(lexicalReferenceTextGuid);
+    if (!databaseInfo)
       throw new Error(
         `No lexical reference text registered with guid: ${lexicalReferenceTextGuid}`,
       );
-    await papi.database.closeDatabase(databaseNonce);
-    this.databaseNoncesByTextGuid.delete(lexicalReferenceTextGuid);
+    await papi.database.closeDatabase(databaseInfo.databaseNonce);
+    this.databaseInfoByTextGuid.delete(lexicalReferenceTextGuid);
     this.#onDidChangeLexicalReferenceTextsEmitter.emit(undefined);
+  }
+
+  /** Gets information about all lexical reference texts available in this manager */
+  async getLexicalReferenceTextsById(): Promise<LexicalReferenceTextsById> {
+    // ENHANCE: Make it so multiple calls to this at the same time won't all call to the db but will
+    // wait on one and return the same thing every time
+    if (this.lexicalReferenceTextsByIdCached) return this.lexicalReferenceTextsByIdCached;
+
+    const lexicalReferenceTextRowsFromEachDatabasePromises = Array.from(
+      this.databaseInfoByTextGuid.values(),
+    ).map(async ({ databaseNonce }) => {
+      // Build lexical reference text information from this database
+
+      // Gather lexical reference text info
+      // We know the database schema, so we know this is the right type
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      const lexicalReferenceTextRows = (await papi.database.select(
+        databaseNonce,
+        `SELECT DISTINCT
+            LexiconId,
+            LexiconVersion,
+            BCP47Code
+          FROM
+	          SenseOccurrenceView;`,
+      )) as {
+        LexiconId: string;
+        LexiconVersion: string;
+        BCP47Code: string;
+      }[];
+
+      return lexicalReferenceTextRows;
+    });
+
+    const lexicalReferenceTextRowsFromEachDatabase = await Promise.all(
+      lexicalReferenceTextRowsFromEachDatabasePromises,
+    );
+
+    // Aggregate lexical reference text information from all database queries
+    const lexicalReferenceTextsById: LexicalReferenceTextsById = {};
+    lexicalReferenceTextRowsFromEachDatabase.flat().forEach((row) => {
+      const existingLexicalReferenceText = lexicalReferenceTextsById[row.LexiconId];
+      const lexicalReferenceText: LexicalReferenceText = existingLexicalReferenceText ?? {
+        id: row.LexiconId,
+        versions: [],
+        localizedInfoByBCP47Code: {},
+      };
+      if (!existingLexicalReferenceText)
+        lexicalReferenceTextsById[row.LexiconId] = lexicalReferenceText;
+
+      if (!lexicalReferenceText.versions.includes(row.LexiconVersion))
+        lexicalReferenceText.versions.push(row.LexiconVersion);
+      if (!Object.keys(lexicalReferenceText.localizedInfoByBCP47Code).includes(row.BCP47Code))
+        // ENHANCE: add titles into the database and provide titles here
+        lexicalReferenceText.localizedInfoByBCP47Code[row.BCP47Code] = {};
+    });
+
+    // Cache the result so we don't have to run this somewhat slow call so much
+    this.lexicalReferenceTextsByIdCached = lexicalReferenceTextsById;
+
+    return lexicalReferenceTextsById;
   }
 
   /** See {@link ILexicalReferenceService.getEntriesById} for information */
@@ -89,8 +175,8 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
     const bcp47Code = selector.bcp47Code || 'en';
 
     // Get matching entries from each database
-    const entriesFromEachDatabasePromises = Array.from(this.databaseNoncesByTextGuid.values()).map(
-      async (databaseNonce) => {
+    const entriesFromEachDatabasePromises = Array.from(this.databaseInfoByTextGuid.values()).map(
+      async ({ databaseNonce }) => {
         // Build matching entry/sense information from this database
 
         // ENHANCEMENT: Parallelize these db calls
@@ -413,77 +499,173 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
     return entriesByIdAggregated;
   }
 
-  /** Gets information about all lexical reference texts available in this manager */
-  async getLexicalReferenceTextsById(): Promise<LexicalReferenceTextsById> {
-    // ENHANCE: Make it so multiple calls to this at the same time won't all call to the db but will
-    // wait on one and return the same thing every time
-    if (this.lexicalReferenceTextsByIdCached) return this.lexicalReferenceTextsByIdCached;
+  /** See {@link ILexicalReferenceService.getEntriesByOccurrence} for information */
+  async getEntriesByOccurrence(
+    selector: LexicalReferenceSelector,
+  ): Promise<LexicalEntriesByOccurrence> {
+    const entriesById = await this.getEntriesById(selector);
 
-    const lexicalReferenceTextRowsFromEachDatabasePromises = Array.from(
-      this.databaseNoncesByTextGuid.values(),
-    ).map(async (databaseNonce) => {
-      // Build lexical reference text information from this database
+    const entriesByOccurrence: LexicalEntriesByOccurrence = {};
 
-      // Gather lexical reference text info
-      // We know the database schema, so we know this is the right type
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const lexicalReferenceTextRows = (await papi.database.select(
-        databaseNonce,
-        `SELECT DISTINCT
-            LexiconId,
-            LexiconVersion,
-            BCP47Code
-          FROM
-	          SenseOccurrenceView;`,
-      )) as {
-        LexiconId: string;
-        LexiconVersion: string;
-        BCP47Code: string;
-      }[];
+    Object.values(entriesById)
+      .flat()
+      .forEach((entry) => {
+        // If there aren't entries for some id, it will come up here as `undefined`. Skip.
+        if (!entry) return;
 
-      return lexicalReferenceTextRows;
-    });
+        addItemToItemsByOccurrence(entry, entriesByOccurrence, 'entry');
+      });
 
-    const lexicalReferenceTextRowsFromEachDatabase = await Promise.all(
-      lexicalReferenceTextRowsFromEachDatabasePromises,
-    );
+    return entriesByOccurrence;
+  }
 
-    // Aggregate lexical reference text information from all database queries
-    const lexicalReferenceTextsById: LexicalReferenceTextsById = {};
-    lexicalReferenceTextRowsFromEachDatabase.flat().forEach((row) => {
-      const existingLexicalReferenceText = lexicalReferenceTextsById[row.LexiconId];
-      const lexicalReferenceText: LexicalReferenceText = existingLexicalReferenceText ?? {
-        id: row.LexiconId,
-        versions: [],
-        localizedInfoByBCP47Code: {},
-      };
-      if (!existingLexicalReferenceText)
-        lexicalReferenceTextsById[row.LexiconId] = lexicalReferenceText;
+  /** See {@link ILexicalReferenceService.getSensesById} for information */
+  async getSensesById(selector: LexicalReferenceSelector): Promise<LexicalSensesById> {
+    const entriesById = await this.getEntriesById(selector);
 
-      if (!lexicalReferenceText.versions.includes(row.LexiconVersion))
-        lexicalReferenceText.versions.push(row.LexiconVersion);
-      if (!Object.keys(lexicalReferenceText.localizedInfoByBCP47Code).includes(row.BCP47Code))
-        // ENHANCE: add titles into the database and provide titles here
-        lexicalReferenceText.localizedInfoByBCP47Code[row.BCP47Code] = {};
-    });
+    const sensesById: LexicalSensesById = {};
 
-    // Cache the result so we don't have to run this somewhat slow call so much
-    this.lexicalReferenceTextsByIdCached = lexicalReferenceTextsById;
+    Object.values(entriesById)
+      .flat()
+      .forEach((entry) => {
+        // If there aren't entries for some id, it will come up here as `undefined`. Skip.
+        if (!entry) return;
 
-    return lexicalReferenceTextsById;
+        const senses = Object.values(entry.senses);
+
+        senses.forEach((sense) => {
+          // If there isn't a sense for some id, it will come up here as `undefined`. Skip.
+          if (!sense) return;
+
+          // Put the sense in the appropriate place by id
+          const { id } = sense;
+
+          if (!sensesById[id]) sensesById[id] = [];
+
+          sensesById[id].push(sense);
+        });
+      });
+
+    return sensesById;
+  }
+
+  /** See {@link ILexicalReferenceService.geSensesByOccurrence} for information */
+  async getSensesByOccurrence(
+    selector: LexicalReferenceSelector,
+  ): Promise<LexicalSensesByOccurrence> {
+    const entriesById = await this.getEntriesById(selector);
+
+    const sensesByOccurrence: LexicalSensesByOccurrence = {};
+
+    Object.values(entriesById)
+      .flat()
+      .forEach((entry) => {
+        // If there aren't entries for some id, it will come up here as `undefined`. Skip.
+        if (!entry) return;
+
+        const senses = Object.values(entry.senses);
+
+        senses.forEach((sense) => {
+          // If there isn't a sense for some id, it will come up here as `undefined`. Skip.
+          if (!sense) return;
+
+          addItemToItemsByOccurrence(sense, sensesByOccurrence, 'sense');
+        });
+      });
+
+    return sensesByOccurrence;
   }
 
   async dispose() {
-    const closePromises = this.databaseNoncesByTextGuid
+    const closePromises = this.databaseInfoByTextGuid
       .values()
-      .map((databaseNonce) => papi.database.closeDatabase(databaseNonce));
+      .map(({ databaseNonce }) => papi.database.closeDatabase(databaseNonce));
 
     await Promise.all(closePromises);
 
-    this.databaseNoncesByTextGuid.clear();
+    this.databaseInfoByTextGuid.clear();
 
     return true;
   }
+}
+
+/**
+ * Parse verse location information from a U23003 verse location
+ *
+ * @param locationU23003 Verse location in U23003
+ */
+function parseU23003ToVerseRef(locationU23003: string): {
+  book: string;
+  chapterNum: number;
+  verseNum: number;
+  wordNum: number;
+} {
+  const {
+    book,
+    chapterNum: chapterNumStr,
+    verseNum: verseNumStr,
+    wordNum: wordNumStr,
+  } = U23003_REGEX.exec(locationU23003)?.groups ?? {};
+
+  if (!book || !chapterNumStr || !verseNumStr || !wordNumStr)
+    throw new Error(`Failed to parse U23003 location ${locationU23003}`);
+
+  return {
+    book,
+    chapterNum: parseInt(chapterNumStr, 10),
+    verseNum: parseInt(verseNumStr, 10),
+    wordNum: parseInt(wordNumStr, 10),
+  };
+}
+
+/**
+ * Adds the given item to the given ItemsByOccurrence object in the appropriate spots based on the
+ * item's occurrences
+ *
+ * @param item The entry or sense to add
+ * @param itemsByOccurrence The object containing entries or senses addressed by Scripture location
+ * @param itemType String `entry` or `sense` used to log errors precisely
+ */
+function addItemToItemsByOccurrence<TItem extends Entry | Sense>(
+  item: TItem,
+  itemsByOccurrence: TItem extends Entry ? LexicalEntriesByOccurrence : LexicalSensesByOccurrence,
+  itemType: TItem extends Entry ? 'entry' : 'sense',
+) {
+  const occurrences = Object.values(item.occurrences)
+    .flat()
+    .filter((occurrenceList) => !!occurrenceList);
+
+  if (occurrences.length === 0) occurrences.push(FAKE_OCCURRENCE);
+
+  occurrences.forEach((occurrence) => {
+    // Put the item in the appropriate place by occurrence
+    const { location, type } = occurrence;
+
+    if (type !== LOCATION_TYPE_U23003)
+      throw new Error(
+        `Location ${location} for occurrence in ${itemType} ${item.id} was not of type ${LOCATION_TYPE_U23003}. Not currently supported`,
+      );
+
+    const { book, chapterNum, verseNum, wordNum } = parseU23003ToVerseRef(location);
+
+    if (!itemsByOccurrence[book]) itemsByOccurrence[book] = {};
+
+    if (!itemsByOccurrence[book][chapterNum]) itemsByOccurrence[book][chapterNum] = {};
+
+    if (!itemsByOccurrence[book][chapterNum][verseNum])
+      itemsByOccurrence[book][chapterNum][verseNum] = {};
+
+    if (!itemsByOccurrence[book][chapterNum][verseNum][wordNum])
+      itemsByOccurrence[book][chapterNum][verseNum][wordNum] = [];
+
+    // Potential future optimization: Should we narrow the occurrences to those that match this specific location?
+
+    // TypeScript seems to be unable to distinguish between types Sense and Entry (maybe because
+    // they don't have any mutually exclusive features), so it just combines them for some reason.
+    // So I did the best I could, and this is the part that has to suffer from TypeScript's choices.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    itemsByOccurrence[book][chapterNum][verseNum][wordNum].push(item as Entry & Sense);
+  });
 }
 
 /**
