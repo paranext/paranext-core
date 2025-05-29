@@ -1012,3 +1012,117 @@ test('Correct USJ details are found using findNextLocationOfMatchingText', () =>
   expect(result4.jsonPath).toBe('$.content[10].content[21]');
   expect(result4.offset).toBe(0);
 });
+
+test('Correct USJ details are found using search', () => {
+  const usjDoc = new UsjReaderWriter(usj);
+
+  // Test 1: Find all occurrences of "father" with global regex
+  const fatherRegex = /father/g;
+  const fatherMatches = usjDoc.search(fatherRegex);
+  expect(fatherMatches.length).toBe(40);
+
+  // Verify that all matches contain the text "father"
+  fatherMatches.forEach((match) => {
+    expect(match.text).toBe('father');
+    expect(typeof match.location.node).toBe('string');
+    expect(match.location.offset).toBeGreaterThanOrEqual(0);
+    expect(match.location.jsonPath).toMatch(/^\$\.content\[\d+\]\.content\[\d+\]$/);
+  });
+
+  // Test 2: Find all occurrences of "became" with case-insensitive global regex
+  const becameRegex = /became/gi;
+  const becameMatches = usjDoc.search(becameRegex);
+  expect(becameMatches.length).toBe(39);
+
+  // Verify that all matches contain "became" (case-insensitive)
+  becameMatches.forEach((match) => {
+    expect(match.text.toLowerCase()).toBe('became');
+    expect(typeof match.location.node).toBe('string');
+    expect(match.location.offset).toBeGreaterThanOrEqual(0);
+  });
+
+  // Test 3: Search for a pattern that should not exist
+  const nonExistentRegex = /xyz123notfound/g;
+  const noMatches = usjDoc.search(nonExistentRegex);
+  expect(noMatches).toEqual([]);
+
+  // Test 4: Find all occurrences of numbers with regex
+  const numberRegex = /\d+/g;
+  const numberMatches = usjDoc.search(numberRegex);
+  expect(numberMatches.length).toBeGreaterThan(0);
+
+  // Verify that all matches are numbers
+  numberMatches.forEach((match) => {
+    expect(match.text).toMatch(/^\d+$/);
+    expect(typeof match.location.node).toBe('string');
+  });
+
+  // Test 5: Test word boundaries
+  const theWordRegex = /\bthe\b/g;
+  const theWordMatches = usjDoc.search(theWordRegex);
+  expect(theWordMatches.length).toBeGreaterThan(0);
+
+  // Verify that matches are exactly "the" (not part of other words)
+  theWordMatches.forEach((match) => {
+    expect(match.text).toBe('the');
+  });
+
+  // Test 6: Test complex regex pattern
+  const namePatternRegex = /[A-Z][a-z]+(?:\s[A-Z][a-z]+)*/g;
+  const nameMatches = usjDoc.search(namePatternRegex);
+  expect(nameMatches.length).toBeGreaterThan(0);
+
+  // Verify that matches are capitalized names/phrases
+  nameMatches.forEach((match) => {
+    expect(match.text).toMatch(/^[A-Z]/);
+    expect(typeof match.location.node).toBe('string');
+  });
+
+  // Test 7: Regex without global flag should only return 1 match
+  const nonGlobalRegex = /father/;
+  const singleMatch = usjDoc.search(nonGlobalRegex);
+  expect(singleMatch.length).toBe(1);
+
+  // Test 8: Verify ordering of matches (should be in document order)
+  const davidRegex = /David/g;
+  const davidMatches = usjDoc.search(davidRegex);
+
+  // Compare JSON paths to ensure they're in document order
+  const firstPath = davidMatches[0].location.jsonPath;
+  const secondPath = davidMatches[1].location.jsonPath;
+
+  // Extract content indices for comparison
+  const firstPathMatch = firstPath.match(/content\[(\d+)\]\.content\[(\d+)\]/);
+  const secondPathMatch = secondPath.match(/content\[(\d+)\]\.content\[(\d+)\]/);
+
+  expect(firstPathMatch).toBeTruthy();
+  expect(secondPathMatch).toBeTruthy();
+
+  if (!firstPathMatch || !secondPathMatch)
+    throw new Error('Failed to match content indices in JSON paths');
+
+  const firstOuter = parseInt(firstPathMatch[1], 10);
+  const firstInner = parseInt(firstPathMatch[2], 10);
+  const secondOuter = parseInt(secondPathMatch[1], 10);
+  const secondInner = parseInt(secondPathMatch[2], 10);
+
+  // First match should come before second match in document order
+  expect(firstOuter <= secondOuter).toBe(true);
+  expect(firstInner <= secondInner).toBe(true);
+
+  // Test 9: Test with capturing groups
+  const captureRegex = /(father)\s+of\s+(\w+)/g;
+  const captureMatches = usjDoc.search(captureRegex);
+  expect(captureMatches.length).toBeGreaterThan(0);
+
+  // Verify that match.text contains the full match (not just capture groups)
+  captureMatches.forEach((match) => {
+    expect(match.text).toMatch(/father\s+of\s+\w+/);
+    expect(typeof match.location.node).toBe('string');
+  });
+
+  // Test 10: Search finds text within a note
+  const textWithinNoteRegex = /NU omits /g;
+  const noteMatches = usjDoc.search(textWithinNoteRegex);
+  expect(noteMatches.length).toBeGreaterThan(0);
+});
