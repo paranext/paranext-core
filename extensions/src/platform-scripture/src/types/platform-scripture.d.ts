@@ -99,6 +99,9 @@ declare module 'platform-scripture' {
     MarkerNames: DataProviderDataType<number, string[], string[]>;
   };
 
+  /** Provides information about running "Find" on scripture projects (intentionally empty) */
+  export type FindInScriptureProjectInterfaceDataTypes = {};
+
   /**
    * Provides project data for Scripture projects.
    *
@@ -530,6 +533,112 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
     };
 
+  export type IFindInScriptureProjectDataProvider =
+    IProjectDataProvider<FindInScriptureProjectInterfaceDataTypes> & {
+      /**
+       * Starts a find job with the given options
+       *
+       * @param options Options to use for the find job
+       * @returns ID of the started job
+       */
+      beginFindJob(options: FindOptions): Promise<string>;
+      /**
+       * Stops a find job with the given ID
+       *
+       * @param jobId ID of the job to stop
+       */
+      stopFindJob(jobId: string, timeoutMs?: number): Promise<boolean>;
+      /**
+       * Clean up a find operation, removing it from tracking
+       *
+       * @param jobId The ID of the find job to clean up
+       */
+      cleanUpFindJob(jobId: string): Promise<void>;
+      /**
+       * Retrieve the status of the given job and the next set of results if available
+       *
+       * @param jobId The ID of the find job to retrieve results for
+       * @param maxResultsToInclude The maximum number of results to include in the response
+       */
+      retrieveFindJobUpdate(
+        jobId: string,
+        maxResultsToInclude: number,
+      ): Promise<FindJobStatusReport>;
+    };
+
+  // #endregion
+
+  // #region Find Types
+
+  /**
+   * Defines the scope of a find operation. A scope is a book and optionally a chapter within that
+   * book. If no chapter is provided, then the find operation should search across all chapters.
+   */
+  export type FindScope = {
+    bookId: string;
+    chapter?: number;
+  };
+
+  /**
+   * Options to use when performing a find operation.
+   *
+   * @property searchString The string to search for in the project
+   * @property scope The scope of the find operation (which books and chapters to search)
+   * @property useRegex If true, then the search string is treated as a regular expression
+   * @property caseInsensitive If true, then the search is case insensitive
+   */
+  export type FindOptions = {
+    searchString: string;
+    scope: FindScope[];
+    useRegex?: boolean;
+    caseInsensitive?: boolean;
+  };
+
+  /**
+   * Represents a single result from a find operation.
+   *
+   * @property verseRef The verse reference where the text was found
+   * @property text The text that matched the find operation
+   */
+  export type FindResult = {
+    verseRef: SerializedVerseRef;
+    /** The text that matched the find operation */
+    text: string;
+  };
+
+  /**
+   * The status of a find job.
+   *
+   * - `running`: The job is currently running
+   * - `stopped`: The job was stopped by the user
+   * - `errored`: The job encountered an error and is no longer running
+   * - `exceeded`: The job was stopped because it generated too many results
+   * - `completed`: The job completed successfully
+   */
+  export type FindJobStatus = 'running' | 'stopped' | 'errored' | 'exceeded' | 'completed';
+
+  /**
+   * Represents the status of a find job, including the results found so far and any errors that
+   * occurred.
+   *
+   * @property jobId The ID of the find job
+   * @property status The current status of the find job
+   * @property percentComplete The percentage of the job that is complete (0-100)
+   * @property totalResultsCount The total number of results found so far
+   * @property nextResults The next set of results found so far, if any
+   * @property error Any error that occurred during the find operation
+   * @property totalExecutionTimeMs Total time in milliseconds that the find operation took to run
+   */
+  export type FindJobStatusReport = {
+    jobId: string;
+    status: FindJobStatus;
+    percentComplete: number;
+    totalResultsCount: number;
+    nextResults?: FindResult[];
+    error?: string;
+    totalExecutionTimeMs: number;
+  };
+
   // #endregion
 
   // #region Check Types
@@ -883,6 +992,7 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IFindInScriptureProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     CheckDetails,
@@ -901,6 +1011,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    'platformScripture.FindInScripture': IFindInScriptureProjectDataProvider;
   }
 
   export interface DataProviders {
