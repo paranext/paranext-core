@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Input } from '../../components/shadcn-ui/input';
-import { ThemeProvider } from '../../preview/preview-components/theme-provider.component';
+import { Input } from '@/components/shadcn-ui/input';
+import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 
 const meta: Meta<typeof Input> = {
   title: 'Shadcn/Input',

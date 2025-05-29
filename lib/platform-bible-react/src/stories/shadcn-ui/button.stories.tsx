@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { Button } from '../../components/shadcn-ui/button';
-import { ThemeProvider } from '../../preview/preview-components/theme-provider.component';
+import { Button } from '@/components/shadcn-ui/button';
+import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
