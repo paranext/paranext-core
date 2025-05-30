@@ -62,6 +62,7 @@ declare module 'platform-lexical-tools' {
   export interface Entry {
     id: string;
     lexicalReferenceTextId: string;
+    lexicalReferenceTextVersion: string;
     lemma: string;
     senses: SensesByIdForSpecificText;
     strongsCodes: string[];
@@ -74,6 +75,7 @@ declare module 'platform-lexical-tools' {
     /** ID of the entry that contains this sense */
     entryId: string;
     lexicalReferenceTextId: string;
+    lexicalReferenceTextVersion: string;
     bcp47Code: string;
     definition?: string;
     glosses: string[];
@@ -176,6 +178,8 @@ declare module 'platform-lexical-tools' {
    * will return the whole entry with all its contents.
    */
   export type LexicalReferenceProjectSelector = {
+    /** Which version of a lexical reference text to filter by */
+    lexicalReferenceTextVersion?: string;
     /**
      * ID of the Scripture text for which to match occurrences. This does nothing if you do not
      * specify an occurrence-related property like `book` or `wordNum`
