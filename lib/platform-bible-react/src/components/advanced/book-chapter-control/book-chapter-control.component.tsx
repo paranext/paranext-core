@@ -342,90 +342,88 @@ export function BookChapterControl({
   }, [isContentOpenDelayed, searchQuery]);
 
   return (
-    <div className="pr-twp tw-flex tw-bg-transparent">
-      <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
-        <DropdownMenuTrigger asChild>
-          <BookChapterInput
-            ref={inputRef}
-            value={searchQuery}
-            handleSearch={handleSearchInput}
-            handleKeyDown={handleKeyDownInput}
-            handleOnClick={() => {
-              setSelectedBookId(scrRef.book);
-              setHighlightedBookId(scrRef.book);
-              setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
-              setIsContentOpen(true);
-              setSearchQuery(formatScrRef(scrRef, 'English'));
-              inputRef.current.focus();
-            }}
-            onFocus={() => {
-              // Radix thinks we want to close because the input is being focused. Prevent that
-              shouldPreventAutoClosing.current = true;
-            }}
-            onBlur={() => {
-              setSearchQuery('');
-            }}
-            handleSubmit={handleInputSubmit}
-            placeholder={formatScrRef(scrRef, 'English')}
-            className={className}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
-          // Need to get over the floating window z-index 200
-          style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
-          onKeyDown={handleKeyDownContent}
-          align={dir === 'ltr' ? 'start' : 'end'}
-          ref={contentRef}
-        >
-          {/* work around until DropdownMenuContent supports a dir prop */}
-          <div className="rtl:tw-ps-2">
-            {BOOK_TYPE_ARRAY.map((bookType, bookTypeIndex) => {
-              const filteredBooks = fetchFilteredBooks(bookType);
-              return (
-                filteredBooks.length > 0 && (
-                  <div key={bookType}>
-                    <DropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
-                      {BOOK_TYPE_LABELS[bookType]}
-                    </DropdownMenuLabel>
+    <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
+      <DropdownMenuTrigger asChild>
+        <BookChapterInput
+          ref={inputRef}
+          value={searchQuery}
+          handleSearch={handleSearchInput}
+          handleKeyDown={handleKeyDownInput}
+          handleOnClick={() => {
+            setSelectedBookId(scrRef.book);
+            setHighlightedBookId(scrRef.book);
+            setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
+            setIsContentOpen(true);
+            setSearchQuery(formatScrRef(scrRef, 'English'));
+            inputRef.current.focus();
+          }}
+          onFocus={() => {
+            // Radix thinks we want to close because the input is being focused. Prevent that
+            shouldPreventAutoClosing.current = true;
+          }}
+          onBlur={() => {
+            setSearchQuery('');
+          }}
+          handleSubmit={handleInputSubmit}
+          placeholder={formatScrRef(scrRef, 'English')}
+          className={className}
+        />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
+        // Need to get over the floating window z-index 200
+        style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
+        onKeyDown={handleKeyDownContent}
+        align={dir === 'ltr' ? 'start' : 'end'}
+        ref={contentRef}
+      >
+        {/* work around until DropdownMenuContent supports a dir prop */}
+        <div className="rtl:tw-ps-2">
+          {BOOK_TYPE_ARRAY.map((bookType, bookTypeIndex) => {
+            const filteredBooks = fetchFilteredBooks(bookType);
+            return (
+              filteredBooks.length > 0 && (
+                <div key={bookType}>
+                  <DropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
+                    {BOOK_TYPE_LABELS[bookType]}
+                  </DropdownMenuLabel>
 
-                    {filteredBooks.map((bookId) => (
-                      <div key={bookId}>
-                        <BookMenuItem
-                          bookId={bookId}
-                          handleSelectBook={() => updateReference(bookId, false)}
-                          isSelected={selectedBookId === bookId}
-                          handleHighlightBook={() => setHighlightedBookId(bookId)}
-                          handleKeyDown={handleKeyDownMenuItem}
-                          bookType={bookType}
-                          ref={(element: HTMLDivElement) => {
-                            if (selectedBookId === bookId) menuItemRef.current = element;
+                  {filteredBooks.map((bookId) => (
+                    <div key={bookId}>
+                      <BookMenuItem
+                        bookId={bookId}
+                        handleSelectBook={() => updateReference(bookId, false)}
+                        isSelected={selectedBookId === bookId}
+                        handleHighlightBook={() => setHighlightedBookId(bookId)}
+                        handleKeyDown={handleKeyDownMenuItem}
+                        bookType={bookType}
+                        ref={(element: HTMLDivElement) => {
+                          if (selectedBookId === bookId) menuItemRef.current = element;
+                        }}
+                      >
+                        <ChapterSelect
+                          handleSelectChapter={handleSelectChapter}
+                          endChapter={fetchEndChapter(bookId)}
+                          // Without this condition- will highlight that chapterNum in every book- not just the selected book
+                          activeChapter={scrRef.book === bookId ? scrRef.chapterNum : 0}
+                          highlightedChapter={highlightedChapter}
+                          handleHighlightedChapter={(chapterNumber: number): void => {
+                            setHighlightedChapter(chapterNumber);
                           }}
-                        >
-                          <ChapterSelect
-                            handleSelectChapter={handleSelectChapter}
-                            endChapter={fetchEndChapter(bookId)}
-                            // Without this condition- will highlight that chapterNum in every book- not just the selected book
-                            activeChapter={scrRef.book === bookId ? scrRef.chapterNum : 0}
-                            highlightedChapter={highlightedChapter}
-                            handleHighlightedChapter={(chapterNumber: number): void => {
-                              setHighlightedChapter(chapterNumber);
-                            }}
-                          />
-                        </BookMenuItem>
-                      </div>
-                    ))}
-                    {BOOK_TYPE_ARRAY.length - 1 !== bookTypeIndex ? (
-                      <DropdownMenuSeparator />
-                    ) : undefined}
-                  </div>
-                )
-              );
-            })}
-          </div>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </div>
+                        />
+                      </BookMenuItem>
+                    </div>
+                  ))}
+                  {BOOK_TYPE_ARRAY.length - 1 !== bookTypeIndex ? (
+                    <DropdownMenuSeparator />
+                  ) : undefined}
+                </div>
+              )
+            );
+          })}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

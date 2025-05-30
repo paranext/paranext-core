@@ -19,6 +19,7 @@ import { MarketplaceExamples } from './advanced/marketplace.example.component';
 import { MultiSelectComboBoxExample } from './advanced/multi-select-combo-box-example';
 import { ScriptureResultsViewerExample } from './advanced/scripture-results-viewer.examples.component';
 import { SettingsListExamples } from './advanced/settings-list.examples.component';
+import { TabToolbarExample } from './advanced/tab-toolbar-example.component';
 import { UiLanguageSelectorExample } from './advanced/ui-language-selector-example.component';
 import { columns, data } from './data-sources/data-table-content';
 import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.component';
@@ -96,6 +97,7 @@ export function Compositions() {
             Settings Sidebar Content Search
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Tab Dropdown Menu">Tab Dropdown Menu</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Tab Toolbar">Tab Toolbar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="UI Language Selector">
             UI Language Selector
           </VerticalTabsTrigger>
@@ -111,6 +113,10 @@ export function Compositions() {
 
         <VerticalTabsContent value="Data Table">
           <DataTable enablePagination showPaginationControls columns={columns} data={data} />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Tab Toolbar">
+          <TabToolbarExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Filter">

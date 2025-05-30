@@ -16,7 +16,6 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
-
 export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
 export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
 export { default as DisableButton } from './components/advanced/extension-marketplace/buttons/disable-button.component';
@@ -97,6 +96,8 @@ export {
   SettingsListItem,
 } from './components/advanced/settings-components/settings-list.component';
 export { default as TabDropdownMenu } from './components/advanced/menus/tab-dropdown-menu.component';
+export { default as TabToolbar } from './components/advanced/tab-toolbar.component';
+export type { TabToolbarProps } from './components/advanced/tab-toolbar.component';
 export {
   default as NavigationContentSearch,
   type TabKeyValueContent,

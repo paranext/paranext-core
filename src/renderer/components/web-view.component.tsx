@@ -24,9 +24,16 @@ import {
   isPlatformError,
   getErrorMessage,
 } from 'platform-bible-utils';
-import { BookChapterControl, ScrollGroupSelector, useEvent } from 'platform-bible-react';
+import {
+  BookChapterControl,
+  CommandHandler,
+  ScrollGroupSelector,
+  TabToolbar,
+  useEvent,
+} from 'platform-bible-react';
 import './web-view.component.css';
 import {
+  useData,
   useLocalizedStrings,
   useProjectSetting,
   useScrollGroupScrRef,
@@ -38,6 +45,8 @@ import {
   WebViewMessageRequestHandler,
 } from '@shared/services/web-view.service-model';
 import { Canon } from '@sillsdev/scripture';
+import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
+import { menuDataService } from '@shared/services/menu-data.service';
 
 export const TAB_TYPE_WEBVIEW = 'webView';
 
@@ -243,22 +252,58 @@ export function WebView({
     }, []);
   };
 
+  const projectMenuCommandHandler = useCallback<CommandHandler>(
+    (projectMenuCommand) => {
+      handleMenuCommand(projectMenuCommand, id);
+    },
+    [id],
+  );
+
+  const viewInfoMenuCommandHandler = useCallback<CommandHandler>(
+    (viewInfoMenuCommand) => {
+      handleMenuCommand(viewInfoMenuCommand, id);
+    },
+    [id],
+  );
+
+  // Assume the webViewType is correctly formatted because it should have already been checked
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const menuSelector = (webViewType as `${string}.${string}`) ?? 'invalid.invalid';
+  const menuInfo = useData(webViewType ? menuDataService.dataProviderName : undefined).WebViewMenu(
+    menuSelector,
+    {
+      topMenu: undefined,
+      includeDefaults: true,
+      contextMenu: undefined,
+    },
+  );
+
+  const [webViewMenu, , isLoading] = menuInfo;
+
   return (
     <div className="web-view-parent">
-      {shouldShowToolbar && (
-        <div className="web-view-tab-nav">
-          <BookChapterControl
-            scrRef={scrRef}
-            handleSubmit={setScrRef}
-            getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
-          />
-          <ScrollGroupSelector
-            availableScrollGroupIds={availableScrollGroupIds}
-            scrollGroupId={scrollGroupId}
-            onChangeScrollGroupId={setScrollGroupId}
-            localizedStrings={scrollGroupLocalizedStrings}
-          />
-        </div>
+      {shouldShowToolbar && !isLoading && !isPlatformError(webViewMenu) && (
+        <TabToolbar
+          projectMenuCommandHandler={projectMenuCommandHandler}
+          viewInfoMenuCommandHandler={viewInfoMenuCommandHandler}
+          projectMenuData={webViewMenu.topMenu}
+          className="web-view-tab-nav"
+          startAreaChildren={
+            <BookChapterControl
+              scrRef={scrRef}
+              handleSubmit={setScrRef}
+              getActiveBookIds={booksPresent ? fetchActiveBooks : undefined}
+            />
+          }
+          endAreaChildren={
+            <ScrollGroupSelector
+              availableScrollGroupIds={availableScrollGroupIds}
+              scrollGroupId={scrollGroupId}
+              onChangeScrollGroupId={setScrollGroupId}
+              localizedStrings={scrollGroupLocalizedStrings}
+            />
+          }
+        />
       )}
       <iframe
         className="web-view"
