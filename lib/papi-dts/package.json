@@ -47,7 +47,7 @@
   },
   "devDependencies": {
     "escape-string-regexp": "^5.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.8.3"
   },
   "volta": {
     "extends": "../../package.json"

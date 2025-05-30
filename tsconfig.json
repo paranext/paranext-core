@@ -4,7 +4,7 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "jsx": "react-jsx",
-    "lib": ["dom", "es2022"],
+    "lib": ["dom", "es2023"],
     "strict": true,
     "sourceMap": true,
     "baseUrl": "./src",

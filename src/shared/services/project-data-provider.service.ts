@@ -76,7 +76,7 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
     return lock.runExclusive(async () => {
       let pdpId = this.pdpIds.get(key);
       if (!pdpId) {
-        pdpId = await this.registerProjectDataProvider(
+        pdpId = await this.#registerProjectDataProvider(
           await this.pdpEngineFactory.createProjectDataProviderEngine(projectId),
           projectId,
         );
@@ -88,7 +88,7 @@ class ProjectDataProviderFactory<SupportedProjectInterfaces extends ProjectInter
   }
 
   /** Convert the PDP engine into a PDP using the data provider service */
-  private async registerProjectDataProvider(
+  async #registerProjectDataProvider(
     projectDataProviderEngine: IProjectDataProviderEngine<SupportedProjectInterfaces>,
     projectId: string,
   ): Promise<string> {

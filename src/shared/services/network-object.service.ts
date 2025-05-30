@@ -241,7 +241,13 @@ const createLocalProxy = (
       // register functions to run when the object is going away
       if (isString(key) && startsWith(key, 'on') && key !== 'onDidDispose') return undefined;
 
-      return Reflect.get(target, key, objectBeingSet);
+      const property = Reflect.get(target, key, objectBeingSet);
+
+      // Bind function to the object being set so it calls the object's method on the object even
+      // when going through multiple proxies
+      if (typeof property === 'function') return property.bind(target);
+
+      return property;
     },
   });
 
