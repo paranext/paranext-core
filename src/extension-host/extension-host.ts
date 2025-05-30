@@ -3,12 +3,15 @@ import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
 import * as extensionService from '@extension-host/services/extension.service';
-import { fetch as papiFetch } from '@extension-host/services/papi-backend.service';
+import {
+  fetch as papiFetch,
+  projectDataProviders,
+} from '@extension-host/services/papi-backend.service';
 import { logger } from '@shared/services/logger.service';
 import { networkObjectService } from '@shared/services/network-object.service';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { extensionAssetService } from '@shared/services/extension-asset.service';
-import { getErrorMessage, isString, substring } from 'platform-bible-utils';
+import { getErrorMessage, isString, substring, wait } from 'platform-bible-utils';
 import { CommandNames } from 'papi-shared-types';
 import { registerCommand } from '@shared/services/command.service';
 import { initialize as initializeMenuData } from '@extension-host/services/menu-data.service-host';
@@ -76,6 +79,35 @@ process.on('unhandledRejection', (reason) => {
 // #endregion
 
 // #region Noisy dev tests
+
+(async () => {
+  await wait(10000);
+  try {
+    logger.info('Testing platformScripture.FindInScripture PDP by running a find job');
+    const foo = await projectDataProviders.get(
+      'platformScripture.FindInScripture',
+      '32664dc3288a28df2e2bb75ded887fc8f17a15fb',
+    );
+    const jobId = await foo.beginFindJob({
+      searchString: 'Blessed',
+      scope: [{ bookId: 'MAT' }, { bookId: 'PSA' }, { bookId: 'GEN' }, { bookId: 'JHN' }],
+      useRegex: true,
+      caseInsensitive: true,
+    });
+    setTimeout(async () => {
+      const statusUpdate = await foo.retrieveFindJobUpdate(jobId, 200);
+      logger.info(`Job ${jobId} status: ${JSON.stringify(statusUpdate)}`);
+      if (statusUpdate.status === 'running') {
+        await foo.stopFindJob(jobId);
+        logger.info(`Job ${jobId} stopped`);
+      }
+      await foo.cleanUpFindJob(jobId);
+      logger.info(`Job ${jobId} cleaned up`);
+    }, 200);
+  } catch (error) {
+    logger.error(`Error during test run: ${error instanceof Error ? error.message : error}`);
+  }
+})();
 
 if (globalThis.isNoisyDevModeEnabled) {
   logger.info(`Extension host is${isClient() ? '' : ' not'} client`);

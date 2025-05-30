@@ -26,9 +26,9 @@ export const SCRIPTURE_FINDER_PROJECT_INTERFACES = [
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
 // needs to be used in ProjectMetadata as not readonly :p
 export const SCRIPTURE_FINDER_OVERLAY_PROJECT_INTERFACES = [
-  'platformScripture.USX_Book',
-  'platformScripture.USX_Chapter',
-] as const satisfies ['platformScripture.USX_Book', 'platformScripture.USX_Chapter'];
+  'platformScripture.USJ_Book',
+  'platformScripture.USJ_Chapter',
+] as const satisfies ['platformScripture.USJ_Book', 'platformScripture.USJ_Chapter'];
 
 export type ScriptureFinderOverlayPDPs = {
   [ProjectInterface in (typeof SCRIPTURE_FINDER_OVERLAY_PROJECT_INTERFACES)[number]]: ProjectDataProviderInterfaces[ProjectInterface];
@@ -291,12 +291,11 @@ export class ScriptureFinderProjectDataProviderEngine
       chapterNum: scope.chapter ?? 1,
       verseNum: 0,
     };
-    const usx =
+    const scripture =
       scope.chapter !== undefined
-        ? await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
-        : await this.pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
-    if (!usx) throw new Error(`No scripture found for: ${JSON.stringify(scope)}`);
-    const scripture: Usj | undefined = usxStringToUsj(usx);
+        ? await this.pdps['platformScripture.USJ_Chapter'].getChapterUSJ(verseRef)
+        : await this.pdps['platformScripture.USJ_Book'].getBookUSJ(verseRef);
+    if (!scripture) throw new Error(`No scripture found for: ${JSON.stringify(scope)}`);
 
     const usj = new UsjReaderWriter(scripture);
     const regexString = job.options.useRegex
