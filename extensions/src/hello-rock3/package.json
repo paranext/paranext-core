@@ -1,9 +1,9 @@
 {
-  "name": "platform-lexical-tools",
-  "private": true,
-  "version": "0.0.1",
+  "name": "hello-rock3",
+  "version": "0.5.0-alpha.0",
+  "description": "Simple demo extension for Platform.Bible",
   "main": "src/main.js",
-  "types": "src/types/platform-lexical-tools.d.ts",
+  "types": "src/types/hello-rock3.d.ts",
   "author": "Paranext",
   "license": "MIT",
   "scripts": {
@@ -18,7 +18,6 @@
     "zip": "zip-build dist release --template '%NAME%_%VERSION%.%EXT%' --override",
     "package": "npm run build:production && npm run zip",
     "package:debug": "cross-env DEBUG_PROD=true npm run package",
-    "postinstall": "npx ts-node ./lib/download-db.ts",
     "start:core": "cd ../../.. && npm run start",
     "start": "cross-env MAIN_ARGS=\"--extensions $INIT_CWD/dist\" concurrently \"npm:watch\" \"npm:start:core\"",
     "start:production": "cross-env MAIN_ARGS=\"--extensions $INIT_CWD/dist\" concurrently \"npm:watch:production\" \"npm:start:core\"",
@@ -27,7 +26,8 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
-    "bump-versions": "ts-node ./lib/bump-versions.ts"
+    "bump-versions": "ts-node ./lib/bump-versions.ts",
+    "typecheck": "tsc -p ./tsconfig.json"
   },
   "browserslist": [],
   "peerDependencies": {
@@ -89,10 +89,9 @@
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4",
     "webpack-merge": "^6.0.1",
-    "xz-decompress": "^0.2.2",
     "zip-build": "^1.8.0"
   },
   "volta": {
-    "node": "20.18.0"
+    "extends": "../../package.json"
   }
 }

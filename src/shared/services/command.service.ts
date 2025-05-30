@@ -16,8 +16,9 @@ import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
  *
  * @param commandName Command name to register for handling here
  *
- *   - Note: Command names must consist of two string separated by at least one period. We recommend one
- *       period and lower camel case in case we expand the api in the future to allow dot notation.
+ *   - Note: Command names must consist of two strings separated by at least one period. We recommend
+ *       one period and lower camel case in case we expand the API in the future to allow dot
+ *       notation.
  *
  * @param handler Function to run when the command is invoked
  * @param commandDocs Documentation for the command

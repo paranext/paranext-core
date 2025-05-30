@@ -294,11 +294,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  // Create a webview or get the existing webview if ours already exists
+  // Create a webview or get the existing webview if ours already exists.
   // Note: here, we are storing a created webview's id when we create it, and using that id on
   // `existingId` to look specifically for the webview that we previously created if we have ever
   // created one in a previous session. This means that, if someone else creates a people web view,
-  // it will be distinct from this one. We are creating our own web view here. See `hello-world.ts`
+  // it will be distinct from this one. We are creating our own web view here. See `hello-rock3.ts`
   // for an example of getting any webview with the specified `webViewType`
 
   // Get existing webview id if we previously created a webview for this type
