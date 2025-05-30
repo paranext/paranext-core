@@ -190,6 +190,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
                 SenseKey,
                 SenseId,
                 LexiconId,
+                LexiconVersion,
                 Lemma,
                 EntryId,
                 EntryKey,
@@ -203,6 +204,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
               FROM SenseOccurrenceView
               WHERE
                 ($lexicalReferenceTextId IS NULL OR LexiconId = $lexicalReferenceTextId) AND
+                ($lexicalReferenceTextVersion IS NULL OR LexiconVersion = $lexicalReferenceTextVersion) AND
                 BCP47Code = $bcp47Code AND
                 ($sourceTextId IS NULL OR SourceTextId = $sourceTextId) AND
                 ($bookNum IS NULL OR BookNum = $bookNum) AND
@@ -214,6 +216,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
           {
             // Using || instead of ?? so falsy values like empty string are not used
             $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
+            $lexicalReferenceTextVersion: selector.lexicalReferenceTextVersion || undefined,
             $bcp47Code: bcp47Code,
             $sourceTextId: selector.sourceTextId || undefined,
             $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
@@ -227,6 +230,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
           SenseKey: number;
           SenseId: string;
           LexiconId: string;
+          LexiconVersion: string;
           Lemma: string;
           EntryId: string;
           EntryKey: number;
@@ -286,10 +290,11 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
         senseOccurrenceRows.forEach((row) => {
           // Get or create the sense for this sense/occurrence row
           const senseFromMap = sensesByKey.get(row.SenseKey);
-          const sense = senseFromMap ?? {
+          const sense: Sense = senseFromMap ?? {
             id: row.SenseId,
             entryId: row.EntryId,
             lexicalReferenceTextId: row.LexiconId,
+            lexicalReferenceTextVersion: row.LexiconVersion,
             bcp47Code: row.BCP47Code,
             definition: row.Definition,
             glosses: [],
@@ -301,7 +306,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
 
           // Get or create the entry for this sense/occurrence row
           const entryFromMap = entriesByKey.get(row.EntryKey);
-          const entry = entryFromMap ?? createEmptyEntry(row);
+          const entry: Entry = entryFromMap ?? createEmptyEntry(row);
           if (!entryFromMap) entriesByKey.set(row.EntryKey, entry);
 
           // Add this sense to the entry if it's not already there
@@ -353,6 +358,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
                 EntryKey,
                 EntryId,
                 LexiconId,
+                LexiconVersion,
                 Lemma,
                 SourceTextId,
                 BookNum,
@@ -362,6 +368,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
               FROM EntryOccurrenceView
               WHERE
                 ($lexicalReferenceTextId IS NULL OR LexiconId = $lexicalReferenceTextId) AND
+                ($lexicalReferenceTextVersion IS NULL OR LexiconVersion = $lexicalReferenceTextVersion) AND
                 ($sourceTextId IS NULL OR SourceTextId = $sourceTextId) AND
                 ($bookNum IS NULL OR BookNum = $bookNum) AND
                 ($chapterNum IS NULL OR ChapterNum = $chapterNum) AND
@@ -372,6 +379,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
           {
             // Using || instead of ?? so falsy values like empty string are not used
             $lexicalReferenceTextId: selector.lexicalReferenceTextId || undefined,
+            $lexicalReferenceTextVersion: selector.lexicalReferenceTextVersion || undefined,
             $sourceTextId: selector.sourceTextId || undefined,
             $bookNum: selector.book ? Canon.bookIdToNumber(selector.book) : undefined,
             $chapterNum: selector.chapterNum || undefined,
@@ -384,6 +392,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
           EntryKey: number;
           EntryId: string;
           LexiconId: string;
+          LexiconVersion: string;
           Lemma: string;
         } & (WithOccurrence | WithoutOccurrence))[];
 
@@ -436,7 +445,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
         entryOccurrenceRows.forEach((row) => {
           // Get or create the entry for this sense/occurrence row
           const entryFromMap = entriesByKey.get(row.EntryKey);
-          const entry = entryFromMap ?? createEmptyEntry(row);
+          const entry: Entry = entryFromMap ?? createEmptyEntry(row);
           if (!entryFromMap) entriesByKey.set(row.EntryKey, entry);
 
           // If this entry/occurrence row has an occurrence, add it
@@ -481,7 +490,9 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
       // Look for existing entry with same ID and from same Lexical Reference Text to merge with
       const existingEntry = entries.find(
         (existingEntryPossibleMatch) =>
-          existingEntryPossibleMatch.lexicalReferenceTextId === entry.lexicalReferenceTextId,
+          existingEntryPossibleMatch.lexicalReferenceTextId === entry.lexicalReferenceTextId &&
+          existingEntryPossibleMatch.lexicalReferenceTextVersion ===
+            entry.lexicalReferenceTextVersion,
       );
       if (!existingEntry) {
         // Add this entry to the list since there isn't an existing one to merge with
@@ -676,6 +687,7 @@ function addItemToItemsByOccurrence<TItem extends Entry | Sense>(
  * Preconditions:
  *
  * - `lexicalReferenceTextId` is the same for both entries and all senses within those entries
+ * - `lexicalReferenceTextVersion` is the same for both entries and all senses within those entries
  * - `bcp47Code` is the same for all senses within these entries
  */
 function mergeEntries(a: Entry, b: Entry): void {
@@ -706,6 +718,7 @@ function mergeEntries(a: Entry, b: Entry): void {
  * Preconditions:
  *
  * - `lexicalReferenceTextId` is the same for both senses
+ * - `lexicalReferenceTextVersion` is the same for both senses
  * - `bcp47Code` is the same for both senses
  */
 function mergeSenses(a: Sense, b: Sense): void {
@@ -726,6 +739,7 @@ function mergeSenses(a: Sense, b: Sense): void {
  * Preconditions:
  *
  * - `lexicalReferenceTextId` is the same for both entries/senses
+ * - `lexicalReferenceTextVersion` is the same for both entries/senses
  * - `bcp47Code` is the same for both senses if they are senses
  */
 function mergeEntrySenseProperties<T extends Entry | Sense>(a: T, b: T): void {
@@ -774,10 +788,16 @@ function mergeEntrySenseProperties<T extends Entry | Sense>(a: T, b: T): void {
  * Create an empty entry with the simple properties but with nothing in any of its array/object
  * properties
  */
-function createEmptyEntry(row: { EntryId: string; LexiconId: string; Lemma: string }): Entry {
+function createEmptyEntry(row: {
+  EntryId: string;
+  LexiconId: string;
+  LexiconVersion: string;
+  Lemma: string;
+}): Entry {
   return {
     id: row.EntryId,
     lexicalReferenceTextId: row.LexiconId,
+    lexicalReferenceTextVersion: row.LexiconVersion,
     lemma: row.Lemma,
     senses: {},
     strongsCodes: [],
