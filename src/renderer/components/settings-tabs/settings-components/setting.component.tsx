@@ -196,7 +196,7 @@ export function Setting({
       // This event came from an `Input` component
       const { value } = event.target;
       if (typeof setting === 'number') {
-        const numericValue = parseInt(value, 10);
+        const numericValue = parseFloat(value);
         if (Number.isNaN(numericValue)) {
           setErrorMessage(localizedStrings['%settings_errorMessages_invalidNumber%']);
           return;
