@@ -536,6 +536,89 @@ export declare class PromiseChainingMap<TKey = string> {
 	 */
 	private cleanupPromiseChain;
 }
+/**
+ * A map-like data structure that maintains numeric keys in sorted order and provides efficient
+ * operations for finding the closest key-value pair less than or equal to a target.
+ *
+ * This class combines the benefits of a Map (O(1) key-value lookups) with sorted key access (O(log
+ * n) binary search operations). It's particularly useful when you need to frequently find the
+ * "closest" entry to a given numeric key.
+ *
+ * @example
+ *
+ * ```typescript
+ * const versionMap = new SortedNumberMap<string>();
+ * versionMap.set(100, 'Version 1.0.0');
+ * versionMap.set(150, 'Version 1.5.0');
+ * versionMap.set(200, 'Version 2.0.0');
+ *
+ * // Find the highest version <= 175
+ * const result = versionMap.findClosestLessThanOrEqual(175);
+ * console.log(result); // { key: 150, value: 'Version 1.5.0' }
+ * ```
+ *
+ * @template T The type of values stored in the map
+ */
+export declare class SortedNumberMap<T> {
+	private map;
+	private sortedKeys;
+	/**
+	 * Sets a key-value pair in the map. If the key already exists, its value is updated. If the key
+	 * is new, it's inserted in the correct sorted position.
+	 *
+	 * Time complexity: O(log n) for new keys (due to binary search and array insertion), O(1) for
+	 * existing keys.
+	 *
+	 * @example
+	 *
+	 * ```typescript
+	 * const map = new SortedNumberMap<string>();
+	 * map.set(10, 'ten');
+	 * map.set(5, 'five');
+	 * map.set(15, 'fifteen');
+	 * // Keys are automatically maintained in sorted order: [5, 10, 15]
+	 * ```
+	 *
+	 * @param key - The numeric key to set
+	 * @param value - The value to associate with the key
+	 */
+	set(key: number, value: T): void;
+	/**
+	 * Finds the key-value pair with the largest key that is less than or equal to the target.
+	 *
+	 * This method uses binary search to efficiently locate the closest match. If no key is less than
+	 * or equal to the target, it returns undefined.
+	 *
+	 * Time complexity: O(log n)
+	 *
+	 * @example
+	 *
+	 * ```typescript
+	 * const map = new SortedNumberMap<string>();
+	 * map.set(10, 'ten');
+	 * map.set(20, 'twenty');
+	 * map.set(30, 'thirty');
+	 *
+	 * // Exact match
+	 * map.findClosestLessThanOrEqual(20); // { key: 20, value: 'twenty' }
+	 *
+	 * // Closest less than
+	 * map.findClosestLessThanOrEqual(25); // { key: 20, value: 'twenty' }
+	 *
+	 * // No match (target too small)
+	 * map.findClosestLessThanOrEqual(5); // undefined
+	 * ```
+	 *
+	 * @param target - The number to search for
+	 * @returns The key-value pair with the largest key ≤ target, or undefined if none exists
+	 */
+	findClosestLessThanOrEqual(target: number): {
+		key: number;
+		value: T;
+	} | undefined;
+	private binarySearchLessThanOrEqual;
+	private binarySearchInsertIndex;
+}
 /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
 export declare class UnsubscriberAsyncList {
 	private name;
@@ -1328,6 +1411,12 @@ export type UsjContentLocation = {
 	offset: number;
 	jsonPath: ContentJsonPath;
 };
+/** Result of a search for text within a USJ object */
+export type UsjSearchResult = {
+	location: UsjContentLocation;
+	/** The matching text that was found at the location */
+	text: string;
+};
 /** Utilities for reading from and writing to `Usj` objects */
 export interface IUsjReaderWriter {
 	/**
@@ -1399,6 +1488,13 @@ export interface IUsjReaderWriter {
 	 * @returns Number of nodes removed
 	 */
 	removeContentNodes(searchFunction: (potentiallyMatchingNode: MarkerContent) => boolean): number;
+	/**
+	 * Search for matches of a regular expression within this USJ's text data
+	 *
+	 * @param regex Regular expression to search for. Specify the global flag to find all matches.
+	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
+	 */
+	search(regex: RegExp): UsjSearchResult[];
 	/**
 	 * Inform this UsjReaderWriter that the underlying USJ object changed. This is needed to clear
 	 * caches used when querying.
@@ -3279,6 +3375,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset;
 	verseRefToUsjContentLocation(verseRef: SerializedVerseRef, verseRefOffset?: number): UsjContentLocation;
 	findNextLocationOfMatchingText(startingPoint: UsjContentLocation, text: string, maxTextLengthToSearch?: number): UsjContentLocation | undefined;
+	search(regex: RegExp): UsjSearchResult[];
 	extractText(start: UsjContentLocation, desiredLength: number): string;
 	extractTextBetweenPoints(start: UsjContentLocation, end: UsjContentLocation, maxLength?: number): string;
 	private static removeContentNodesFromArray;

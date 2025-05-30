@@ -10,6 +10,7 @@ export { NonValidatingDocumentCombiner } from './non-validating-document-combine
 export { NumberFormat } from './intl-number-format';
 export { PlatformEventEmitter } from './platform-event-emitter.model';
 export { PromiseChainingMap } from './promise-chaining-map';
+export { SortedNumberMap } from './sorted-number-map';
 export { UnsubscriberAsyncList } from './unsubscriber-async-list';
 
 // Consts
@@ -169,6 +170,7 @@ export * from './theme.util';
 export type {
   IUsjReaderWriter,
   UsjContentLocation,
+  UsjSearchResult,
   VerseRefOffset,
 } from './usj-reader-writer.model';
 export { default as UsjReaderWriter } from './usj-reader-writer';

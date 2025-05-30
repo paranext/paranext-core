@@ -13,9 +13,11 @@ import {
   ContentJsonPath,
   IUsjReaderWriter,
   UsjContentLocation,
+  UsjSearchResult,
   VERSE_TYPE,
   VerseRefOffset,
 } from './usj-reader-writer.model';
+import { SortedNumberMap } from './sorted-number-map';
 
 const NODE_TYPES_NOT_CONTAINING_VERSE_TEXT = ['figure', 'note', 'sidebar', 'table'];
 Object.freeze(NODE_TYPES_NOT_CONTAINING_VERSE_TEXT);
@@ -637,6 +639,77 @@ export class UsjReaderWriter implements IUsjReaderWriter {
       offset: finalOffset,
       jsonPath: UsjReaderWriter.convertWorkingStackToJsonPath(finalStack),
     };
+  }
+
+  search(regex: RegExp): UsjSearchResult[] {
+    const retVal: UsjSearchResult[] = [];
+    if (this.usj.content.length === 0) return retVal;
+
+    // Start searching from the first node in the USJ content tree
+    const startingPoint: UsjContentLocation = {
+      node: this.usj.content[0],
+      offset: 0,
+      jsonPath: `$.content[0]`,
+    };
+    // This will hold all of the text content from the USJ, so we can search it all at once
+    const textChunks: string[] = [];
+    // This will map the index of each text chunk in the full text, so we can find the location
+    const fullTextIndexMap = new SortedNumberMap<UsjContentLocation>();
+
+    // Variables to track our current position while walking through the USJ content tree
+    let currentIndex = 0;
+    let nextNode: MarkerContent | undefined = startingPoint.node;
+    while (nextNode !== undefined) {
+      nextNode = UsjReaderWriter.findNextMatchingNodeUsingWorkingStack(
+        startingPoint.node,
+        this.convertJsonPathToWorkingStack(startingPoint.jsonPath),
+        [],
+        // We need to use variables from outside the function to keep track of our current position
+        // eslint-disable-next-line no-loop-func
+        (node, workingStack) => {
+          if (typeof node !== 'string') return false;
+
+          textChunks.push(node);
+          fullTextIndexMap.set(currentIndex, {
+            node,
+            offset: 0,
+            jsonPath: UsjReaderWriter.convertWorkingStackToJsonPath(workingStack),
+          });
+          currentIndex += node.length;
+          return false;
+        },
+      );
+    }
+
+    // Connect all the text chunks together so we can search them all at once. Note that there are
+    // no spaces between the text chunks. If we need spaces inserted between verses, chapters, etc.
+    // then we should adjust how we walk through the tree to insert extra spaces at the right times.
+    const fullText = textChunks.join('');
+
+    // Lean on regular expressions to do the heavy lifting of finding matches
+    let match: RegExpExecArray | null = regex.exec(fullText);
+    while (match) {
+      // If the match is empty, then we don't want to include it in the results
+      if (match[0].length > 0) {
+        if (match.index < 0 || match.index >= fullText.length)
+          throw new Error(`Match index out of bounds: ${match.index}`);
+        const closestNode = fullTextIndexMap.findClosestLessThanOrEqual(match.index);
+        if (!closestNode)
+          throw new Error(`Internal error: no closest node found for index ${match.index}`);
+        const location: UsjContentLocation = {
+          node: closestNode.value.node,
+          offset: match.index - closestNode.key,
+          jsonPath: closestNode.value.jsonPath,
+        };
+        retVal.push({ text: match[0], location });
+      }
+
+      // If the regex is not global, then running `exec` again will return the same match
+      if (!regex.global) break;
+      match = regex.exec(fullText);
+    }
+
+    return retVal;
   }
 
   // #endregion
