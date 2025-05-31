@@ -1,6 +1,8 @@
 import type { StorybookConfig } from '@storybook/react-vite';
 import { join, dirname } from 'path';
 import remarkGfm from 'remark-gfm';
+import remarkGithubBlockquoteAlert from 'remark-github-blockquote-alert';
+import { mergeConfig } from 'vite';
 
 /**
  * This function is used to resolve the absolute path of a package. It is needed in projects that
@@ -24,7 +26,7 @@ const config: StorybookConfig = {
       options: {
         mdxPluginOptions: {
           mdxCompileOptions: {
-            remarkPlugins: [remarkGfm],
+            remarkPlugins: [remarkGfm, remarkGithubBlockquoteAlert],
           },
         },
       },
@@ -36,6 +38,18 @@ const config: StorybookConfig = {
   },
   docs: {
     autodocs: 'tag',
+  },
+  viteFinal: async (config) => {
+    console.log('viteFinal is being executed! Configuration is being applied...');
+    return mergeConfig(config, {
+      plugins: [],
+      optimizeDeps: {
+        include: ['remark-gfm', 'remark-github-blockquote-alert'],
+      },
+      resolve: {
+        dedupe: ['react', 'react-dom', 'remark-gfm', 'remark-github-blockquote-alert'],
+      },
+    });
   },
 };
 
