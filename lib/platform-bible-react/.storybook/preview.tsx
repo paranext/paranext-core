@@ -1,5 +1,6 @@
 import type { Preview } from '@storybook/react';
 import '../src/index.css';
+import './mdx.css';
 
 const preview: Preview = {
   parameters: {
@@ -8,6 +9,13 @@ const preview: Preview = {
       matchers: {
         color: /(background|color)$/i,
         date: /Date$/i,
+      },
+    },
+    docs: {
+      // Configure docs to handle MDX with GFM properly
+      toc: {
+        headingSelector: 'h1, h2, h3',
+        title: 'On this page',
       },
     },
   },
