@@ -23,10 +23,17 @@ function isVisible(el: HTMLElement): boolean {
  * that can receive keyboard focus, and are not disabled or hidden from screen readers.
  *
  * @param container The container element to search for focusable elements.
+ * @param uniqueQuerySelector An optional CSS selector to filter the focusable elements by.
  * @returns An array of focusable elements.
  */
-export function getFocusableElements(container: HTMLElement): HTMLElement[] {
-  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+export function getFocusableElements(
+  container: HTMLElement,
+  uniqueQuerySelector?: string,
+): HTMLElement[] {
+  const query = uniqueQuerySelector
+    ? `${FOCUSABLE_SELECTOR}, ${uniqueQuerySelector}`
+    : FOCUSABLE_SELECTOR;
+  return Array.from(container.querySelectorAll<HTMLElement>(query)).filter(
     (el) => !el.hasAttribute('disabled') && !el.getAttribute('aria-hidden') && isVisible(el),
   );
 }

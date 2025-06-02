@@ -30,16 +30,16 @@ const Table = React.forwardRef<
     if (!currentTable) return;
 
     const setTabIndexes = () => {
-      const focusables = getFocusableElements(currentTable);
-      focusables.forEach((el) => {
-        el.setAttribute('tabindex', '-1');
+      requestAnimationFrame(() => {
+        const focusables = getFocusableElements(currentTable, `[tabindex]:not([tabindex="-1"])`);
+        focusables.forEach((el) => {
+          el.setAttribute('tabindex', '-1');
+        });
       });
     };
 
-    // Initial run
     setTabIndexes();
 
-    // Observe future changes
     const observer = new MutationObserver(() => {
       setTabIndexes();
     });
@@ -47,8 +47,8 @@ const Table = React.forwardRef<
     observer.observe(currentTable, {
       childList: true, // Watch for added/removed elements
       subtree: true, // Include descendants
-      // attributes: true, // Watch for attribute changes too
-      // attributeFilter: ['tabindex'], // Only watch tabindex changes
+      attributes: true,
+      attributeFilter: ['tabindex'], // Watch for tabindex changes
     });
 
     return () => {
