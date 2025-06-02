@@ -558,13 +558,7 @@ declare module 'platform-scripture' {
        * });
        * ```
        *
-       * @param findOptions - Configuration for the find operation including:
-       *
-       *   - `searchString`: The text or regex pattern to search for (required, cannot be empty)
-       *   - `scope`: Array of scopes to search (required, cannot be empty)
-       *   - `useRegex`: Whether to treat searchString as a regular expression
-       *   - `caseInsensitive`: Whether to perform case-insensitive matching
-       *
+       * @param findOptions - Configuration for the find operation, see {@link FindOptions}
        * @returns Promise that resolves to a unique job ID that can be used to interact with the
        *   find operation (retrieve results, check status, stop, etc.)
        */
@@ -576,18 +570,25 @@ declare module 'platform-scripture' {
        * within the specified timeout period. If the job doesn't stop within the timeout, it will
        * continue running but this method will return false.
        *
-       * **Important:** All jobs should have {@link cleanUpFindJob} called after they finish to free
-       * resources and remove them from tracking. Not doing so will lead to memory leaks as jobs are
-       * not automatically cleaned up when they finish.
+       * **Important:** All jobs, even stopped jobs, should have {@link cleanUpFindJob} called after
+       * they finish to free resources and remove them from tracking. Not doing so will lead to
+       * memory leaks as jobs are not automatically cleaned up when they finish.
        *
        * @example
        *
        * ```typescript
-       * const stopped = await engine.stopFindJob(jobId, 2000);
-       * if (stopped) {
-       *   console.log('Job stopped successfully');
-       * } else {
-       *   console.log("Job didn't stop in time or doesn't exist");
+       * try {
+       *   const stopped = await engine.stopFindJob(jobId, 2000);
+       *   if (stopped) {
+       *     console.log('Job stopped successfully');
+       *     // Do something with the job, like call retrieveFindJobUpdate to get results
+       *     ...
+       *     // Clean up the job after we have all the results we need
+       *     cleanUpFindJob(jobId);
+       *   } else {
+       *     console.log("Job didn't stop in time");
+       *     // Decide what to do if the job didn't stop gracefully within the timeout period
+       *   }
        * }
        * ```
        *
@@ -595,7 +596,8 @@ declare module 'platform-scripture' {
        * @param timeoutMs - The maximum time in milliseconds to wait for the job to stop gracefully.
        *   Defaults to 1000ms (1 second).
        * @returns Promise that resolves to `true` if the job stopped gracefully within the timeout
-       *   period, `false` if the job doesn't exist or didn't stop in time
+       *   period, `false` if the job didn't stop in time
+       * @throws Error if the job ID doesn't exist
        */
       stopFindJob(jobId: string, timeoutMs?: number): Promise<boolean>;
       /**
@@ -619,10 +621,30 @@ declare module 'platform-scripture' {
        */
       cleanUpFindJob(jobId: string): Promise<void>;
       /**
+       * Abandons a find job, preventing any further interaction with it.
+       *
+       * This method prevents any further calls to retrieve results or interact with the job in any
+       * way. It is useful for jobs that are no longer needed and should not be tracked. Abandoned
+       * jobs will be cleaned up automatically once it is possible.
+       *
+       * @example
+       *
+       * ```typescript
+       * await engine.abandonFindJob(jobId);
+       * console.log('Job abandoned, no further interaction allowed');
+       * ```
+       *
+       * @param jobId - The unique identifier of the find job to abandon
+       * @throws Error if the job ID doesn't exist
+       */
+      abandonFindJob(jobId: string): Promise<void>;
+      /**
        * Retrieves the current status and results of a find job.
        *
        * Returns comprehensive information about the job's progress. This method can be called
-       * repeatedly to poll for updates and retrieve results incrementally.
+       * repeatedly to poll for updates and retrieve results incrementally. Once a set results have
+       * been retrieved, they cannot be retrieved again for this job ID. Subsequent calls to this
+       * method will return the next set of results found so far.
        *
        * @example
        *
@@ -640,16 +662,8 @@ declare module 'platform-scripture' {
        * @param maxResultsToInclude - The maximum number of results to include in the response. Use
        *   0 to get status without results, or a reasonable number to paginate through large result
        *   sets.
-       * @returns Promise that resolves to a {@link FindJobStatusReport} containing:
-       *
-       *   - `jobId`: The job identifier
-       *   - `status`: Current job status ('running', 'completed', 'stopped', 'errored', 'exceeded')
-       *   - `percentComplete`: Progress percentage (0-100)
-       *   - `totalResultsCount`: Total number of results found so far
-       *   - `nextResults`: Array of up to `maxResultsToInclude` results
-       *   - `error`: Error message if status is 'errored'
-       *   - `totalExecutionTimeMs`: Total time elapsed since job started
-       *
+       * @returns Promise that resolves to a {@link FindJobStatusReport}. It will contain at most
+       *   `maxResultsToInclude` results, or fewer if there are not enough results yet.
        * @throws Error if the job ID doesn't exist
        */
       retrieveFindJobUpdate(
@@ -671,28 +685,30 @@ declare module 'platform-scripture' {
     chapter?: number;
   };
 
-  /**
-   * Options to use when performing a find operation.
-   *
-   * @property searchString The string to search for in the project
-   * @property scope The scope of the find operation (which books and chapters to search)
-   * @property useRegex If true, then the search string is treated as a regular expression
-   * @property caseInsensitive If true, then the search is case insensitive
-   */
+  /** Options to use when performing a find operation. */
   export type FindOptions = {
+    /** The text or regex pattern to search for */
     searchString: string;
+    /**
+     * Array of {@link FindScope} values defining which books and chapters to search and in what
+     * order
+     */
     scope: FindScope[];
+    /**
+     * If true, then the search string is treated as a regular expression. If false or undefined,
+     * then it is treated as a plain text search.
+     */
     useRegex?: boolean;
+    /**
+     * If true, then the search is case insensitive. If false or undefined, then it is case
+     * sensitive.
+     */
     caseInsensitive?: boolean;
   };
 
-  /**
-   * Represents a single result from a find operation.
-   *
-   * @property verseRef The verse reference where the text was found
-   * @property text The text that matched the find operation
-   */
+  /** Represents a single result from a find operation. */
   export type FindResult = {
+    /** The verse reference where the text was found */
     verseRef: SerializedVerseRef;
     /** The text that matched the find operation */
     text: string;
@@ -712,22 +728,25 @@ declare module 'platform-scripture' {
   /**
    * Represents the status of a find job, including the results found so far and any errors that
    * occurred.
-   *
-   * @property jobId The ID of the find job
-   * @property status The current status of the find job
-   * @property percentComplete The percentage of the job that is complete (0-100)
-   * @property totalResultsCount The total number of results found so far
-   * @property nextResults The next set of results found so far, if any
-   * @property error Any error that occurred during the find operation
-   * @property totalExecutionTimeMs Total time in milliseconds that the find operation took to run
    */
   export type FindJobStatusReport = {
+    /** Unique ID of the find job */
     jobId: string;
+    /** Current status of the find job */
     status: FindJobStatus;
+    /** Percentage of the job that is complete (0-100) */
     percentComplete: number;
+    /** Total number of results found so far */
     totalResultsCount: number;
+    /** The next set of results found so far, if any. */
     nextResults?: FindResult[];
+    /** If the job encountered an error, this will contain the error message */
     error?: string;
+    /**
+     * Total time in milliseconds that the find operation has taken to run. This is the total time
+     * from when the job started until now if the job is still running. If the job is no longer
+     * running, then this is the total time it took to run the job until it finished.
+     */
     totalExecutionTimeMs: number;
   };
 
@@ -1103,7 +1122,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
-    'platformScripture.FindInScripture': IFindInScriptureProjectDataProvider;
+    'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
   }
 
   export interface DataProviders {

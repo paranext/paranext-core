@@ -19,8 +19,8 @@ import {
 
 // This interface doesn't provide any normal data types that PDPs use
 export const SCRIPTURE_FINDER_PROJECT_INTERFACES = [
-  'platformScripture.FindInScripture',
-] as const satisfies ['platformScripture.FindInScripture'];
+  'platformScripture.findInScripture',
+] as const satisfies ['platformScripture.findInScripture'];
 
 /** The project interfaces the Scripture Finder Layering PDPF requires */
 // TypeScript is upset without `satisfies` here because `as const` makes the array readonly but it
@@ -63,10 +63,10 @@ export class ScriptureFinderProjectDataProviderEngine
   implements IProjectDataProviderEngine<typeof SCRIPTURE_FINDER_PROJECT_INTERFACES>
 {
   /** The PDPs this layering PDP needs to function */
-  private readonly pdps: ScriptureFinderOverlayPDPs;
+  readonly #pdps: ScriptureFinderOverlayPDPs;
 
   // Track all running jobs
-  private readonly jobs = new Map<string, FindJob>();
+  readonly #jobs = new Map<string, FindJob>();
 
   /**
    * Creates a new ScriptureFinderProjectDataProviderEngine instance.
@@ -75,7 +75,7 @@ export class ScriptureFinderProjectDataProviderEngine
    */
   constructor(pdpsToOverlay: ScriptureFinderOverlayPDPs) {
     super();
-    this.pdps = pdpsToOverlay;
+    this.#pdps = pdpsToOverlay;
   }
 
   async beginFindJob(findOptions: FindOptions): Promise<string> {
@@ -97,14 +97,14 @@ export class ScriptureFinderProjectDataProviderEngine
       stopRequested: false,
       promise: Promise.resolve(),
     };
-    this.jobs.set(jobId, job);
+    this.#jobs.set(jobId, job);
     job.promise = this.#processFindJob(job);
     return jobId;
   }
 
   async stopFindJob(jobId: string, timeoutMs: number = 1000): Promise<boolean> {
-    const job = this.jobs.get(jobId);
-    if (!job) return false;
+    const job = this.#jobs.get(jobId);
+    if (!job) throw new Error(`Job with ID ${jobId} not found`);
     job.stopRequested = true;
     try {
       const timeoutPromise = new Promise((_resolve, reject) => {
@@ -119,18 +119,25 @@ export class ScriptureFinderProjectDataProviderEngine
   }
 
   async cleanUpFindJob(jobId: string): Promise<void> {
-    const job = this.jobs.get(jobId);
+    const job = this.#jobs.get(jobId);
     if (!job) throw new Error(`Job with ID ${jobId} not found`);
     if (job.status === 'running')
       throw new Error(`Job with ID ${jobId} is running. It must be stopped before completing.`);
-    this.jobs.delete(jobId);
+    this.#jobs.delete(jobId);
+  }
+
+  async abandonFindJob(jobId: string): Promise<void> {
+    const job = this.#jobs.get(jobId);
+    if (!job) throw new Error(`Job with ID ${jobId} not found`);
+    job.stopRequested = true;
+    this.#jobs.delete(jobId);
   }
 
   async retrieveFindJobUpdate(
     jobId: string,
     maxResultsToInclude: number,
   ): Promise<FindJobStatusReport> {
-    const job = this.jobs.get(jobId);
+    const job = this.#jobs.get(jobId);
     if (!job) throw new Error(`Job with ID ${jobId} not found`);
     return {
       jobId: job.jobId,
@@ -181,8 +188,8 @@ export class ScriptureFinderProjectDataProviderEngine
     };
     const usx =
       scope.chapter !== undefined
-        ? await this.pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
-        : await this.pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
+        ? await this.#pdps['platformScripture.USX_Chapter'].getChapterUSX(verseRef)
+        : await this.#pdps['platformScripture.USX_Book'].getBookUSX(verseRef);
     if (!usx) throw new Error(`No scripture found for: ${JSON.stringify(scope)}`);
     const scripture: Usj | undefined = usxStringToUsj(usx);
 
