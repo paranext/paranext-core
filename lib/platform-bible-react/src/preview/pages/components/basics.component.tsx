@@ -29,6 +29,7 @@ import { TabExamples } from './basics/tab.examples.component';
 import { TableExamples } from './basics/table.examples.component';
 import { ToggleGroupExamples } from './basics/toggle-group.examples.component';
 import { TooltipExamples } from './basics/tooltip.examples.component';
+import { ProgressExamples } from './basics/progress.examples.component';
 
 export function Basics() {
   return (
@@ -52,6 +53,7 @@ export function Basics() {
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Menubar">Menubar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Progress">Progress</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Sidebar">Sidebar</VerticalTabsTrigger>
@@ -115,6 +117,10 @@ export function Basics() {
 
         <VerticalTabsContent value="Radio Group">
           <RadioGroupExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Progress">
+          <ProgressExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Search Bar">

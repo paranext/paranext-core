@@ -10,6 +10,7 @@ import { Dashboard5Examples } from './layouts/dashboard5.layout.component';
 import { ToolbarExamples } from './layouts/toolbar.layout.component';
 import { DialogExamples } from './layouts/dialog.layout.component';
 import { GetResourcesExamples } from './layouts/get-resources.layout.component';
+import { FindExamples } from './layouts/find.layout.component';
 
 export function Layouts() {
   return (
@@ -23,6 +24,7 @@ export function Layouts() {
           <VerticalTabsTrigger value="Get Resources">Get Resources</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Shadcn Dashboard 5">Shadcn Dashboard 5</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dialog">Dialog</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Find">Find</VerticalTabsTrigger>
         </VerticalTabsList>
 
         <VerticalTabsContent value="Window">
@@ -51,6 +53,10 @@ export function Layouts() {
 
         <VerticalTabsContent value="Dialog">
           <DialogExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Find">
+          <FindExamples />
         </VerticalTabsContent>
       </VerticalTabs>
     </div>
