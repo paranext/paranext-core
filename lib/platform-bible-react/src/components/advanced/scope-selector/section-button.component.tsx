@@ -41,7 +41,7 @@ function SectionButton({
       className={cn(
         isSectionFullySelected(availableBookIds, section, selectedBookIds) &&
           !isDisabled &&
-          'tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/90',
+          'tw-bg-primary tw-text-primary-foreground hover:tw-bg-primary/70 hover:tw-text-primary-foreground',
       )}
       disabled={isDisabled}
     >

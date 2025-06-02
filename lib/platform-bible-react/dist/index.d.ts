@@ -6,6 +6,7 @@ import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import * as LabelPrimitive from '@radix-ui/react-label';
 import * as PopoverPrimitive from '@radix-ui/react-popover';
 import { PopoverProps } from '@radix-ui/react-popover';
+import * as ProgressPrimitive from '@radix-ui/react-progress';
 import * as RadioGroupPrimitive from '@radix-ui/react-radio-group';
 import * as SelectPrimitive from '@radix-ui/react-select';
 import * as SeparatorPrimitive from '@radix-ui/react-separator';
@@ -1628,6 +1629,7 @@ export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
 export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Popover */
 export declare const PopoverContent: React$1.ForwardRefExoticComponent<Omit<PopoverPrimitive.PopoverContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Progress: React$1.ForwardRefExoticComponent<Omit<ProgressPrimitive.ProgressProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Radio Group components providing a set of checkable buttons—known as radio buttons—where no more
  * than one of the buttons can be checked at a time. These components are built on Radix UI
@@ -1699,6 +1701,7 @@ type SonnerProps = React$1.ComponentProps<typeof Toaster>;
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
 export declare function Sonner({ ...props }: SonnerProps): import("react/jsx-runtime").JSX.Element;
+export declare function Skeleton({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
 /**
  * The Slider component is an input where the user selects a value from within a given range. This
  * component is built on Radix UI primitives and styled with Shadcn UI.
