@@ -510,6 +510,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * displayed if no items are selected,
  */
 export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -607,8 +608,6 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
-/** Scope of scripture that the inventory can operate on */
-export type Scope = "book" | "chapter";
 type AdditionalItemsLabels = {
 	checkboxText?: string;
 	tableHeaders?: string[];
@@ -827,6 +826,46 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * the source column showing).
  */
 export declare function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
+	"%webView_scope_selector_selected_text%",
+	"%webView_scope_selector_current_verse%",
+	"%webView_scope_selector_current_chapter%",
+	"%webView_scope_selector_current_book%",
+	"%webView_scope_selector_choose_books%",
+	"%webView_scope_selector_scope%",
+	"%webView_scope_selector_select_books%",
+	"%webView_book_selector_books_selected%",
+	"%webView_book_selector_select_books%",
+	"%webView_book_selector_search_books%",
+	"%webView_book_selector_select_all%",
+	"%webView_book_selector_clear_all%",
+	"%webView_book_selector_no_book_found%",
+	"%webView_book_selector_more%"
+];
+export type ScopeSelectorLocalizedStrings = {
+	[localizedInventoryKey in (typeof SCOPE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+interface ScopeSelectorProps {
+	scope: Scope;
+	availableScopes?: Scope[];
+	onSearchScopeChange: (scope: Scope) => void;
+	availableBookInfo: string;
+	selectedBookIds: string[];
+	onSelectedBookIdsChange: (books: string[]) => void;
+	/**
+	 * Object with all localized strings that the Inventory needs to work well across multiple
+	 * languages. When using this component with Platform.Bible, you can import
+	 * `SCOPE_SELECTOR_STRING_KEYS` from this library, pass it in to the Platform's localization hook,
+	 * and pass the localized keys that are returned by the hook into this prop.
+	 */
+	localizedStrings: ScopeSelectorLocalizedStrings;
+}
+export declare function ScopeSelector({ scope: searchScope, availableScopes, onSearchScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
