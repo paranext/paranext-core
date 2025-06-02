@@ -29,6 +29,8 @@ import { TabExamples } from './basics/tab.examples.component';
 import { TableExamples } from './basics/table.examples.component';
 import { ToggleGroupExamples } from './basics/toggle-group.examples.component';
 import { TooltipExamples } from './basics/tooltip.examples.component';
+import { ProgressExamples } from './basics/progress.examples.component';
+import { SkeletonExamples } from './basics/skeleton.examples.component';
 
 export function Basics() {
   return (
@@ -52,9 +54,11 @@ export function Basics() {
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Menubar">Menubar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Progress">Progress</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Sidebar">Sidebar</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Skeleton">Skeleton</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Sonner">Sonner</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Spinner">Spinner</VerticalTabsTrigger>
@@ -117,6 +121,10 @@ export function Basics() {
           <RadioGroupExamples />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Progress">
+          <ProgressExamples />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Search Bar">
           <SearchBarExamples />
         </VerticalTabsContent>
@@ -129,6 +137,10 @@ export function Basics() {
           <div className="tw-relative tw-overflow-hidden">
             <SidebarExamples />
           </div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Skeleton">
+          <SkeletonExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Slider">
