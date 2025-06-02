@@ -1176,6 +1176,8 @@ declare module 'papi-shared-types' {
     'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {

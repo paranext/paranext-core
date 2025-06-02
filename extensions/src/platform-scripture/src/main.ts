@@ -5,6 +5,7 @@ import {
   ChecksSidePanelWebViewProvider,
   checksSidePanelWebViewType,
 } from './checks-side-panel.web-view-provider';
+import { FindWebViewOptions, FindWebViewProvider, findWebViewType } from './find.web-view-provider';
 import { checkAggregatorService } from './checks/check-aggregator.service';
 import { checkHostingService } from './checks/extension-host-check-runner.service';
 import { InventoryWebViewOptions, InventoryWebViewProvider } from './inventory.web-view-provider';
@@ -136,6 +137,40 @@ async function openChecksSidePanel(
   return sidePanelWebViewId;
 }
 
+async function openFind(editorWebViewId: string | undefined): Promise<string | undefined> {
+  let projectId: FindWebViewOptions['projectId'];
+  let tabIdFromWebViewId: string | undefined;
+  let editorScrollGroupId: FindWebViewOptions['editorScrollGroupId'];
+
+  logger.debug('Opening find UI');
+
+  if (editorWebViewId) {
+    const webViewDefinition = await papi.webViews.getOpenWebViewDefinition(editorWebViewId);
+    projectId = webViewDefinition?.projectId;
+    tabIdFromWebViewId = webViewDefinition?.id;
+    editorScrollGroupId = webViewDefinition?.scrollGroupScrRef;
+  }
+
+  if (!projectId) {
+    logger.debug('No project!');
+    return undefined;
+  }
+
+  const options: FindWebViewOptions = {
+    projectId,
+    editorScrollGroupId,
+    existingId: '?',
+    bringToFront: true,
+  };
+  const findWebViewId = await papi.webViews.openWebView(
+    findWebViewType,
+    { type: 'panel', direction: 'right', targetTabId: tabIdFromWebViewId },
+    options,
+  );
+
+  return findWebViewId;
+}
+
 export async function activate(context: ExecutionActivationContext) {
   logger.info('platformScripture is activating!');
 
@@ -169,8 +204,9 @@ export async function activate(context: ExecutionActivationContext) {
     '%webView_punctuationInventory_title%',
     punctuationInventoryWebViewType,
   );
-
   const checksSidePanelWebViewProvider = new ChecksSidePanelWebViewProvider();
+  const findWebViewProvider = new FindWebViewProvider();
+
   const booksPresentPromise = papi.projectSettings.registerValidator(
     'platformScripture.booksPresent',
     booksPresentValidator,
@@ -324,6 +360,28 @@ export async function activate(context: ExecutionActivationContext) {
     checksSidePanelWebViewType,
     checksSidePanelWebViewProvider,
   );
+  const openFindPromise = papi.commands.registerCommand('platformScripture.openFind', openFind, {
+    method: {
+      summary: 'Open the find UI',
+      params: [
+        {
+          name: 'webViewId',
+          required: false,
+          summary: 'The ID of the web view tied to the project that we are searching in',
+          schema: { type: 'string' },
+        },
+      ],
+      result: {
+        name: 'return value',
+        summary: 'The ID of the new find web view',
+        schema: { type: 'string' },
+      },
+    },
+  });
+  const openFindWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
+    findWebViewType,
+    findWebViewProvider,
+  );
 
   await checkHostingService.initialize();
   await checkAggregatorService.initialize();
@@ -351,6 +409,8 @@ export async function activate(context: ExecutionActivationContext) {
     await punctuationInventoryWebViewProviderPromise,
     await showChecksSidePanelPromise,
     await showChecksSidePanelWebViewProviderPromise,
+    await openFindPromise,
+    await openFindWebViewProviderPromise,
     checkHostingService.dispose,
     checkAggregatorService.dispose,
   );
