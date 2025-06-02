@@ -548,6 +548,11 @@ declare module 'platform-lexical-tools' {
      * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
      * spans across all lexical reference texts registered with this service. You can filter by a
      * particular lexical reference text in the `selector` parameter if desired.
+     *
+     * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+     * read-only, in which case this will throw. In the future, if lexical reference texts are able
+     * to be provided from locations other than extensions' assets folders, we may add the ability
+     * to edit the lexical reference text.
      */
     setEntriesById(
       selector: LexicalReferenceSelector,
@@ -576,6 +581,11 @@ declare module 'platform-lexical-tools' {
      * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
      * spans across all lexical reference texts registered with this service. You can filter by a
      * particular lexical reference text in the `selector` parameter if desired.
+     *
+     * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+     * read-only, in which case this will throw. In the future, if lexical reference texts are able
+     * to be provided from locations other than extensions' assets folders, we may add the ability
+     * to edit the lexical reference text.
      */
     setEntriesByOccurrence(
       selector: LexicalReferenceSelector,
@@ -604,6 +614,11 @@ declare module 'platform-lexical-tools' {
      * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
      * spans across all lexical reference texts registered with this service. You can filter by a
      * particular lexical reference text in the `selector` parameter if desired.
+     *
+     * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+     * read-only, in which case this will throw. In the future, if lexical reference texts are able
+     * to be provided from locations other than extensions' assets folders, we may add the ability
+     * to edit the lexical reference text.
      */
     setSensesById(
       selector: LexicalReferenceSelector,
@@ -632,6 +647,11 @@ declare module 'platform-lexical-tools' {
      * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
      * spans across all lexical reference texts registered with this service. You can filter by a
      * particular lexical reference text in the `selector` parameter if desired.
+     *
+     * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+     * read-only, in which case this will throw. In the future, if lexical reference texts are able
+     * to be provided from locations other than extensions' assets folders, we may add the ability
+     * to edit the lexical reference text.
      */
     setSensesByOccurrence(
       selector: LexicalReferenceSelector,
