@@ -25,6 +25,7 @@ import { columns, data } from './data-sources/data-table-content';
 import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.component';
 import { SettingSidebarContentSearchExamples } from './advanced/settings-sidebar-content-search.example.component';
 import { PlatformMenubarExample } from './advanced/platform-menubar-example.component';
+import { ScopeSelectorExample } from './advanced/scope-selector-example.component';
 
 export function Compositions() {
   const [scrRef, setScrRef] = useState(defaultScrRef);
@@ -89,6 +90,7 @@ export function Compositions() {
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Platform Menubar">Platform Menubar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Result List">Result List</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Scope Selector">Scope Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Scroll Group Selector">
             Scroll Group Selector
           </VerticalTabsTrigger>
@@ -173,6 +175,10 @@ export function Compositions() {
 
         <VerticalTabsContent value="Result List">
           <ScriptureResultsViewerExample />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Scope Selector">
+          <ScopeSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Scroll Group Selector">

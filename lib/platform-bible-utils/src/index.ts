@@ -26,6 +26,7 @@ export {
   getLocalizeKeyForScrollGroupId,
   getLocalizeKeysForScrollGroupIds,
   defaultScrRef,
+  scrBookInfo,
 } from './scripture-util';
 export { aggregateUnsubscribers, aggregateUnsubscriberAsyncs } from './unsubscriber';
 export { CHAPTER_TYPE, VERSE_TYPE } from './usj-reader-writer.model';
@@ -100,6 +101,7 @@ export type {
 } from './disposal.model';
 export type { PlatformError } from './platform-error';
 export type { PlatformEventHandler, PlatformEvent, PlatformEventAsync } from './platform-event';
+export { Section } from './scripture.model';
 export type {
   BookInfo,
   ScrollGroupId,
