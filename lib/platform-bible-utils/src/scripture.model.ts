@@ -8,6 +8,14 @@ export interface BookInfo {
   shortName: string;
   fullNames: string[];
   chapters: number;
+  section: Section | undefined;
+}
+
+export enum Section {
+  OT = 'OT',
+  NT = 'NT',
+  DC = 'DC',
+  Extra = 'Extra',
 }
 
 /**

@@ -691,6 +691,13 @@ export interface BookInfo {
 	shortName: string;
 	fullNames: string[];
 	chapters: number;
+	section: Section | undefined;
+}
+export declare enum Section {
+	OT = "OT",
+	NT = "NT",
+	DC = "DC",
+	Extra = "Extra"
 }
 /**
  * Represents a "node" in the JSON used to present Scripture in the editor, with a path that is
@@ -1247,6 +1254,7 @@ export declare const menuDocumentSchema: {
 		};
 	};
 };
+export declare const scrBookInfo: BookInfo[];
 /** The first book number */
 export declare const FIRST_SCR_BOOK_NUM = 1;
 /** The last book number */

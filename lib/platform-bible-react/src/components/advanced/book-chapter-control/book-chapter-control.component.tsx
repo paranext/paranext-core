@@ -55,8 +55,7 @@ const SEARCH_QUERY_FORMATS = [
 ];
 
 const fetchEndChapter = (bookId: string) => {
-  // getChaptersForBook returns -1 if not found in scrBookData
-  // scrBookData only includes OT and NT, so all DC will return -1
+  // getChaptersForBook returns -1 if not found in scrBookInfo
   return getChaptersForBook(Canon.bookIdToNumber(bookId));
 };
 
