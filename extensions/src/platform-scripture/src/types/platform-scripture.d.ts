@@ -545,7 +545,9 @@ declare module 'platform-scripture' {
        *
        * **Important:** All jobs should have {@link cleanUpFindJob} called after they finish to free
        * resources and remove them from tracking. Not doing so will lead to memory leaks as jobs are
-       * not automatically cleaned up when they finish.
+       * not automatically cleaned up when they finish. If you no longer need a job that might be
+       * running, you can call {@link abandonFindJob} instead to have it automatically cleaned up
+       * once it finishes.
        *
        * @example
        *
@@ -572,7 +574,9 @@ declare module 'platform-scripture' {
        *
        * **Important:** All jobs, even stopped jobs, should have {@link cleanUpFindJob} called after
        * they finish to free resources and remove them from tracking. Not doing so will lead to
-       * memory leaks as jobs are not automatically cleaned up when they finish.
+       * memory leaks as jobs are not automatically cleaned up when they finish. If you no longer
+       * need a job that might be running, you can call {@link abandonFindJob} instead to have it
+       * automatically cleaned up once it finishes.
        *
        * @example
        *
