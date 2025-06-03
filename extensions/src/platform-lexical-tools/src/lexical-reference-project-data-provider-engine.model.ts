@@ -8,7 +8,7 @@ import type { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types
 import type {
   LexicalEntriesById,
   LexicalEntriesByOccurrence,
-  LexicalReferenceProjectDataTypes,
+  LexicalReferenceReadOnlyProjectDataTypes,
   LexicalReferenceProjectSelector,
   LexicalReferenceSelector,
   LexicalReferenceText,
@@ -23,8 +23,8 @@ import { LexicalReferenceTextManager } from './lexical-reference-text-manager.mo
 // needs to be used in ProjectMetadata as not readonly :p
 export const LEXICAL_REFERENCE_PROJECT_INTERFACES = [
   'platform.base',
-  'platformLexicalTools.lexicalReference',
-] as const satisfies ['platform.base', 'platformLexicalTools.lexicalReference'];
+  'platformLexicalTools.lexicalReferenceReadOnly',
+] as const satisfies ['platform.base', 'platformLexicalTools.lexicalReferenceReadOnly'];
 
 const ERROR_MESSAGE_NO_EXTENSION_DATA =
   'Extension data is not available on this readonly lexical reference text project.';
@@ -97,28 +97,32 @@ export class LexicalReferenceProjectDataProviderEngine
 
   // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  setEntriesById(): Promise<DataProviderUpdateInstructions<LexicalReferenceProjectDataTypes>> {
+  setEntriesById(): Promise<
+    DataProviderUpdateInstructions<LexicalReferenceReadOnlyProjectDataTypes>
+  > {
     throw new Error('This lexical reference text is readonly. Cannot set entries by ID.');
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   setEntriesByOccurrence(): Promise<
-    DataProviderUpdateInstructions<LexicalReferenceProjectDataTypes>
+    DataProviderUpdateInstructions<LexicalReferenceReadOnlyProjectDataTypes>
   > {
     throw new Error('This lexical reference text is readonly. Cannot set entries by occurrence.');
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
-  setSensesById(): Promise<DataProviderUpdateInstructions<LexicalReferenceProjectDataTypes>> {
+  setSensesById(): Promise<
+    DataProviderUpdateInstructions<LexicalReferenceReadOnlyProjectDataTypes>
+  > {
     throw new Error('This lexical reference text is readonly. Cannot set senses by ID.');
   }
 
   // Because this is a data provider, we have to provide this method even though it always throws
   // eslint-disable-next-line @typescript-eslint/class-methods-use-this
   setSensesByOccurrence(): Promise<
-    DataProviderUpdateInstructions<LexicalReferenceProjectDataTypes>
+    DataProviderUpdateInstructions<LexicalReferenceReadOnlyProjectDataTypes>
   > {
     throw new Error('This lexical reference text is readonly. Cannot set senses by occurrence.');
   }

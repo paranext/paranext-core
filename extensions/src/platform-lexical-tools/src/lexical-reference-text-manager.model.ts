@@ -1,6 +1,12 @@
 import papi from '@papi/backend';
 import { Canon } from '@sillsdev/scripture';
-import { Dispose, newGuid, PlatformEvent, PlatformEventEmitter } from 'platform-bible-utils';
+import {
+  compareScrRefs,
+  Dispose,
+  newGuid,
+  PlatformEvent,
+  PlatformEventEmitter,
+} from 'platform-bible-utils';
 import type {
   Entry,
   // Used in TSDoc
@@ -17,21 +23,14 @@ import type {
   Sense,
 } from 'platform-lexical-tools';
 
-export const LOCATION_TYPE_U23003 = 'U23003';
-
-/**
- * Fake location used to put items that don't have occurrences somewhere in the
- * `LexicalEntries/SensesByOccurrence` types
- */
-const FAKE_LOCATION_U23003 = '*** 0:0!0';
-
 /**
  * Fake occurrence used to put items that don't have occurrences somewhere in the
  * `LexicalEntries/SensesByOccurrence` types
  */
-const FAKE_OCCURRENCE: Occurrence = { type: LOCATION_TYPE_U23003, location: FAKE_LOCATION_U23003 };
-
-const U23003_REGEX = /^(?<book>\w\w\w|\*\*\*) (?<chapterNum>\d+):(?<verseNum>\d+)!(?<wordNum>\d+)$/;
+const FAKE_OCCURRENCE: Occurrence = {
+  verseRef: { book: '***', chapterNum: 0, verseNum: 0 },
+  wordNum: 0,
+};
 
 /** Map of lexical reference texts keyed by their id */
 export type LexicalReferenceTextsById = {
@@ -45,7 +44,7 @@ type WithOccurrence = {
   BookNum: number;
   ChapterNum: number;
   VerseNum: number;
-  WordNum: string;
+  WordNum: number;
 };
 
 /**
@@ -524,7 +523,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
         // If there aren't entries for some id, it will come up here as `undefined`. Skip.
         if (!entry) return;
 
-        addItemToItemsByOccurrence(entry, entriesByOccurrence, 'entry');
+        addItemToItemsByOccurrence(entry, entriesByOccurrence);
       });
 
     return entriesByOccurrence;
@@ -580,7 +579,7 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
           // If there isn't a sense for some id, it will come up here as `undefined`. Skip.
           if (!sense) return;
 
-          addItemToItemsByOccurrence(sense, sensesByOccurrence, 'sense');
+          addItemToItemsByOccurrence(sense, sensesByOccurrence);
         });
       });
 
@@ -601,35 +600,6 @@ export class LexicalReferenceTextManager implements LexicalReferenceTextRegistra
 }
 
 /**
- * Parse verse location information from a U23003 verse location
- *
- * @param locationU23003 Verse location in U23003
- */
-function parseU23003ToVerseRef(locationU23003: string): {
-  book: string;
-  chapterNum: number;
-  verseNum: number;
-  wordNum: number;
-} {
-  const {
-    book,
-    chapterNum: chapterNumStr,
-    verseNum: verseNumStr,
-    wordNum: wordNumStr,
-  } = U23003_REGEX.exec(locationU23003)?.groups ?? {};
-
-  if (!book || !chapterNumStr || !verseNumStr || !wordNumStr)
-    throw new Error(`Failed to parse U23003 location ${locationU23003}`);
-
-  return {
-    book,
-    chapterNum: parseInt(chapterNumStr, 10),
-    verseNum: parseInt(verseNumStr, 10),
-    wordNum: parseInt(wordNumStr, 10),
-  };
-}
-
-/**
  * Adds the given item to the given ItemsByOccurrence object in the appropriate spots based on the
  * item's occurrences
  *
@@ -640,7 +610,6 @@ function parseU23003ToVerseRef(locationU23003: string): {
 function addItemToItemsByOccurrence<TItem extends Entry | Sense>(
   item: TItem,
   itemsByOccurrence: TItem extends Entry ? LexicalEntriesByOccurrence : LexicalSensesByOccurrence,
-  itemType: TItem extends Entry ? 'entry' : 'sense',
 ) {
   const occurrences = Object.values(item.occurrences)
     .flat()
@@ -650,14 +619,10 @@ function addItemToItemsByOccurrence<TItem extends Entry | Sense>(
 
   occurrences.forEach((occurrence) => {
     // Put the item in the appropriate place by occurrence
-    const { location, type } = occurrence;
-
-    if (type !== LOCATION_TYPE_U23003)
-      throw new Error(
-        `Location ${location} for occurrence in ${itemType} ${item.id} was not of type ${LOCATION_TYPE_U23003}. Not currently supported`,
-      );
-
-    const { book, chapterNum, verseNum, wordNum } = parseU23003ToVerseRef(location);
+    const {
+      verseRef: { book, chapterNum, verseNum },
+      wordNum,
+    } = occurrence;
 
     if (!itemsByOccurrence[book]) itemsByOccurrence[book] = {};
 
@@ -775,8 +740,8 @@ function mergeEntrySenseProperties<T extends Entry | Sense>(a: T, b: T): void {
       if (
         !existingOccurrences.some(
           (existingOccurrence) =>
-            existingOccurrence.type === occurrence.type &&
-            existingOccurrence.location === occurrence.location,
+            compareScrRefs(existingOccurrence.verseRef, occurrence.verseRef) &&
+            existingOccurrence.wordNum === occurrence.wordNum,
         )
       )
         existingOccurrences.push(occurrence);
@@ -812,13 +777,17 @@ function addOccurrence(item: Entry | Sense, row: WithOccurrence | WithoutOccurre
   if (!row.SourceTextId) return;
 
   // Get or set the occurrences for this source text
-  const occurrencesFromSense = item.occurrences[row.SourceTextId];
-  const occurrences = occurrencesFromSense ?? [];
-  if (!occurrencesFromSense) item.occurrences[row.SourceTextId] = occurrences;
+  const occurrencesFromItem = item.occurrences[row.SourceTextId];
+  const occurrences = occurrencesFromItem ?? [];
+  if (!occurrencesFromItem) item.occurrences[row.SourceTextId] = occurrences;
 
   // Create a U23003 verse location and add it to the list of occurrences
   occurrences.push({
-    type: LOCATION_TYPE_U23003,
-    location: `${Canon.bookNumberToId(row.BookNum)} ${row.ChapterNum}:${row.VerseNum}!${row.WordNum}`,
+    verseRef: {
+      book: Canon.bookNumberToId(row.BookNum),
+      chapterNum: row.ChapterNum,
+      verseNum: row.VerseNum,
+    },
+    wordNum: row.WordNum,
   });
 }
