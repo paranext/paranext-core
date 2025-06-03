@@ -853,7 +853,7 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
         ? undefined
         : packagedId;
     })
-    .filter((identifier) => !!identifier) as ExtensionIdentifier[];
+    .filter((identifier) => !!identifier);
 
   return {
     enabled,

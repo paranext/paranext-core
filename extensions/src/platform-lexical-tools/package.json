@@ -27,7 +27,8 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "npm run format && npm run lint:scripts",
-    "bump-versions": "ts-node ./lib/bump-versions.ts"
+    "bump-versions": "ts-node ./lib/bump-versions.ts",
+    "typecheck": "tsc -p ./tsconfig.json"
   },
   "browserslist": [],
   "peerDependencies": {
@@ -85,7 +86,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsconfig-paths-webpack-plugin": "^4.2.0",
-    "typescript": "^5.4.5",
+    "typescript": "^5.8.3",
     "webpack": "^5.97.1",
     "webpack-cli": "^5.1.4",
     "webpack-merge": "^6.0.1",
