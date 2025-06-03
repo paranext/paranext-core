@@ -1,0 +1,97 @@
+/* GitHub-style blockquote alert styles */
+.markdown-alert {
+  padding: 0.75rem 1rem;
+  margin-bottom: 16px;
+  border-radius: 6px;
+  border-left: 4px solid;
+  font-size: 14px;
+  line-height: 1.5;
+  position: relative;
+}
+
+.markdown-alert > *:first-child {
+  margin-top: 0;
+}
+
+.markdown-alert > *:last-child {
+  margin-bottom: 0;
+}
+/* Style the title that contains the SVG icon */
+.markdown-alert .markdown-alert-title {
+  font-weight: 600;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+}
+
+/* Style the icon */
+.markdown-alert .octicon {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+/* Regular paragraphs inside alerts */
+.markdown-alert p {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+/* Remove left margin for the title paragraph */
+.markdown-alert .markdown-alert-title + p {
+  margin-left: 24px;
+}
+
+/* Note alert */
+.markdown-alert-note {
+  background-color: #f6f8fa;
+  border-left-color: #0969da;
+}
+
+/* Note alert: Style the SVG icon */
+.markdown-alert-note .octicon path {
+  fill: #0969da;
+}
+
+/* Warning alert */
+.markdown-alert-warning {
+  background-color: #fffbef;
+  border-left-color: #9a6700;
+}
+
+/* Warning alert: Style the SVG icon */
+.markdown-alert-warning .octicon path {
+  fill: #9a6700;
+}
+
+/* Important alert */
+.markdown-alert-important {
+  background-color: #fff0f3;
+  border-left-color: #cf222e;
+}
+
+/* Important alert: Style the SVG icon */
+.markdown-alert-important .octicon path {
+  fill: #cf222e;
+}
+
+/* Tip alert */
+.markdown-alert-tip {
+  background-color: #dafbe1;
+  border-left-color: #1a7f37;
+}
+
+/* Tip alert: Style the SVG icon */
+.markdown-alert-tip .octicon path {
+  fill: #1a7f37;
+}
+
+/* Caution alert */
+.markdown-alert-caution {
+  background-color: #fff8c5;
+  border-left-color: #9a6700;
+}
+
+/* Caution alert: Style the SVG icon */
+.markdown-alert-caution .octicon path {
+  fill: #9a6700;
+}
