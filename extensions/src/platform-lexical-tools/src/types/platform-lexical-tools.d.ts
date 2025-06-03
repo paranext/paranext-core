@@ -1,4 +1,5 @@
 declare module 'platform-lexical-tools' {
+  import { SerializedVerseRef } from '@sillsdev/scripture';
   import { PlatformError, UnsubscriberAsync } from 'platform-bible-utils';
   import type {
     DataProviderDataType,
@@ -89,8 +90,8 @@ declare module 'platform-lexical-tools' {
   }
 
   export interface Occurrence {
-    type: string;
-    location: string;
+    verseRef: SerializedVerseRef;
+    wordNum: number;
   }
 
   export interface Domain {
@@ -200,59 +201,79 @@ declare module 'platform-lexical-tools' {
     itemId?: string;
   };
 
-  /** Provides lexical reference text data for a lexical reference project */
-  export type LexicalReferenceProjectDataTypes = {
+  /**
+   * Provides lexical reference text data for a lexical reference project
+   *
+   * Setting is not allowed on this read-only project interface. If you think this data is
+   * changeable for a particular lexical reference project, look for other project interfaces that
+   * provide access to its data.
+   */
+  export type LexicalReferenceReadOnlyProjectDataTypes = {
     /**
-     * Gets/sets lexical reference text entries mapped by their IDs. This is close to how the data
-     * is organized in the lexical reference text data format
+     * Gets lexical reference text entries mapped by their IDs. This is close to how the data is
+     * organized in the lexical reference text data format
+     *
+     * Setting is not allowed on this read-only project interface. If you think this data is
+     * changeable for a particular lexical reference project, look for other project interfaces that
+     * provide access to its data.
      */
-    EntriesById: DataProviderDataType<
-      LexicalReferenceProjectSelector,
-      LexicalEntriesById,
-      LexicalEntriesById
-    >;
+    EntriesById: DataProviderDataType<LexicalReferenceProjectSelector, LexicalEntriesById, never>;
     /**
-     * Gets/sets lexical reference text entries mapped by their location in Scripture. The entries
-     * are divided into the occurrences by the entry occurrences, not the sense occurrences.
+     * Gets lexical reference text entries mapped by their location in Scripture. The entries are
+     * divided into the occurrences by the entry occurrences, not the sense occurrences.
      *
      * If there are any entries that match the selector but do not have any occurrences that match
      * the selector, they will be put in book `***` chapter 0 verse 0 word 0. This could happen, for
      * example, if an entry has senses that match the selector but the entry itself doesn't have
      * occurrences.
+     *
+     * Setting is not allowed on this read-only project interface. If you think this data is
+     * changeable for a particular lexical reference project, look for other project interfaces that
+     * provide access to its data.
      */
     EntriesByOccurrence: DataProviderDataType<
       LexicalReferenceProjectSelector,
       LexicalEntriesByOccurrence,
-      LexicalEntriesByOccurrence
-    >;
-    /** Gets/sets lexical reference text senses mapped by their IDs */
-    SensesById: DataProviderDataType<
-      LexicalReferenceProjectSelector,
-      LexicalSensesById,
-      LexicalSensesById
+      never
     >;
     /**
-     * Gets/sets lexical reference text senses mapped by their location in Scripture. The senses are
+     * Gets lexical reference text senses mapped by their IDs
+     *
+     * Setting is not allowed on this read-only project interface. If you think this data is
+     * changeable for a particular lexical reference project, look for other project interfaces that
+     * provide access to its data.
+     */
+    SensesById: DataProviderDataType<LexicalReferenceProjectSelector, LexicalSensesById, never>;
+    /**
+     * Gets lexical reference text senses mapped by their location in Scripture. The senses are
      * divided into the occurrences by the sense occurrences, not their parent entry occurrences.
      *
      * If there are any senses that match the selector but do not have any occurrences that match
      * the selector, they will be put in book `***` chapter 0 verse 0 word 0. This could happen, for
      * example, if an sense has senses that match the selector but the sense itself doesn't have
      * occurrences.
+     *
+     * Setting is not allowed on this read-only project interface. If you think this data is
+     * changeable for a particular lexical reference project, look for other project interfaces that
+     * provide access to its data.
      */
     SensesByOccurrence: DataProviderDataType<
       LexicalReferenceProjectSelector,
       LexicalSensesByOccurrence,
-      LexicalSensesByOccurrence
+      never
     >;
   };
 
   /**
    * Project data provider that provides lexical reference text data like dictionary, concordance,
-   * and lexicon information from a specific lexical reference text.
+   * and lexicon information from a specific lexical reference project.
+   *
+   * Setting is not allowed on this read-only project interface. If you think this data is
+   * changeable for a particular lexical reference project, look for other project interfaces that
+   * provide access to its data.
    */
-  export type ILexicalReferenceProjectDataProvider =
-    IProjectDataProvider<LexicalReferenceProjectDataTypes> & {
+  export type ILexicalReferenceReadOnlyProjectDataProvider =
+    IProjectDataProvider<LexicalReferenceReadOnlyProjectDataTypes> & {
       /**
        * Gets lexical reference text entries mapped by their IDs. This is close to how the data is
        * organized in the lexical reference text data format
@@ -261,15 +282,15 @@ declare module 'platform-lexical-tools' {
         selector: LexicalReferenceProjectSelector,
       ): Promise<LexicalEntriesById | undefined>;
       /**
-       * Sets lexical reference text entries mapped by their IDs. This is close to how the data is
-       * organized in the lexical reference text data format
+       * This data cannot be changed this way. Trying to use this setter will always throw.
        *
-       * Note: many (possibly all) lexical reference texts are read-only, in which case this will
-       * throw
+       * Note: many (possibly all) lexical reference projects are read-only. If you think this data
+       * is changeable for a particular lexical reference project, look for other project interfaces
+       * that provide access to its data.
        */
       setEntriesById(
         selector: LexicalReferenceProjectSelector,
-        entriesById: LexicalEntriesById,
+        value: never,
       ): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>>;
       /**
        * Subscribe to run a callback function when lexical reference text entries are changed. The
@@ -302,20 +323,15 @@ declare module 'platform-lexical-tools' {
         selector: LexicalReferenceProjectSelector,
       ): Promise<LexicalEntriesByOccurrence | undefined>;
       /**
-       * Sets lexical reference text entries mapped by their location in Scripture. The entries are
-       * divided into the occurrences by the entry occurrences, not the sense occurrences.
+       * This data cannot be changed this way. Trying to use this setter will always throw.
        *
-       * If there are any entries that match the selector but do not have any occurrences that match
-       * the selector, they will be put in book `***` chapter 0 verse 0 word 0. This could happen,
-       * for example, if an entry has senses that match the selector but the entry itself doesn't
-       * have occurrences.
-       *
-       * Note: many (possibly all) lexical reference texts are read-only, in which case this will
-       * throw
+       * Note: many (possibly all) lexical reference projects are read-only. If you think this data
+       * is changeable for a particular lexical reference project, look for other project interfaces
+       * that provide access to its data.
        */
       setEntriesByOccurrence(
         selector: LexicalReferenceProjectSelector,
-        entriesByOccurrence: LexicalEntriesByOccurrence,
+        value: never,
       ): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>>;
       /**
        * Subscribe to run a callback function when lexical reference text entries are changed. The
@@ -351,15 +367,15 @@ declare module 'platform-lexical-tools' {
         selector: LexicalReferenceProjectSelector,
       ): Promise<LexicalSensesById | undefined>;
       /**
-       * Sets lexical reference text senses mapped by their IDs. This is close to how the data is
-       * organized in the lexical reference text data format
+       * This data cannot be changed this way. Trying to use this setter will always throw.
        *
-       * Note: many (possibly all) lexical reference texts are read-only, in which case this will
-       * throw
+       * Note: many (possibly all) lexical reference projects are read-only. If you think this data
+       * is changeable for a particular lexical reference project, look for other project interfaces
+       * that provide access to its data.
        */
       setSensesById(
         selector: LexicalReferenceProjectSelector,
-        sensesById: LexicalSensesById,
+        value: never,
       ): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>>;
       /**
        * Subscribe to run a callback function when lexical reference text senses are changed. The
@@ -391,19 +407,15 @@ declare module 'platform-lexical-tools' {
         selector: LexicalReferenceProjectSelector,
       ): Promise<LexicalSensesByOccurrence | undefined>;
       /**
-       * Sets lexical reference text senses mapped by their location in Scripture. The senses are
-       * divided into the occurrences by the sense occurrences, not their parent entry occurrences.
+       * This data cannot be changed this way. Trying to use this setter will always throw.
        *
-       * If there are any senses that match the selector but do not have any occurrences that match
-       * the selector, they will be put in book `***` chapter 0 verse 0 word 0. This could happen,
-       * for example, if a sense matches the selector but doesn't have any occurrences.
-       *
-       * Note: many (possibly all) lexical reference texts are read-only, in which case this will
-       * throw
+       * Note: many (possibly all) lexical reference projects are read-only. If you think this data
+       * is changeable for a particular lexical reference project, look for other project interfaces
+       * that provide access to its data.
        */
       setSensesByOccurrence(
         selector: LexicalReferenceProjectSelector,
-        sensesByOccurrence: LexicalSensesByOccurrence,
+        value: never,
       ): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>>;
       /**
        * Subscribe to run a callback function when lexical reference text senses are changed. The
@@ -450,50 +462,71 @@ declare module 'platform-lexical-tools' {
     lexicalReferenceTextId?: string;
   };
 
-  /** Provides lexical reference text data across all included lexical reference projects */
+  /**
+   * Provides lexical reference text data across all included lexical reference projects
+   *
+   * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+   * read-only. In the future, if lexical reference texts are able to be provided from locations
+   * other than extensions' assets folders, we may add the ability to edit the lexical reference
+   * text.
+   */
   export type LexicalReferenceDataTypes = {
     /**
-     * Gets/sets lexical reference text entries mapped by their IDs. This is close to how the data
-     * is organized in the lexical reference text data format
+     * Gets lexical reference text entries mapped by their IDs. This is close to how the data is
+     * organized in the lexical reference text data format
+     *
+     * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+     * read-only. In the future, if lexical reference texts are able to be provided from locations
+     * other than extensions' assets folders, we may add the ability to edit the lexical reference
+     * text.
      */
-    EntriesById: DataProviderDataType<
-      LexicalReferenceSelector,
-      LexicalEntriesById,
-      LexicalEntriesById
-    >;
+    EntriesById: DataProviderDataType<LexicalReferenceSelector, LexicalEntriesById, never>;
     /**
-     * Gets/sets lexical reference text entries mapped by their location in Scripture. The entries
-     * are divided into the occurrences by the entry occurrences, not the sense occurrences.
+     * Gets lexical reference text entries mapped by their location in Scripture. The entries are
+     * divided into the occurrences by the entry occurrences, not the sense occurrences.
      *
      * If there are any entries that match the selector but do not have any occurrences that match
      * the selector, they will be put in book `***` chapter 0 verse 0 word 0. This could happen, for
      * example, if an entry has senses that match the selector but the entry itself doesn't have
      * occurrences.
+     *
+     * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+     * read-only. In the future, if lexical reference texts are able to be provided from locations
+     * other than extensions' assets folders, we may add the ability to edit the lexical reference
+     * text.
      */
     EntriesByOccurrence: DataProviderDataType<
       LexicalReferenceSelector,
       LexicalEntriesByOccurrence,
-      LexicalEntriesByOccurrence
-    >;
-    /** Gets/sets lexical reference text senses mapped by their IDs */
-    SensesById: DataProviderDataType<
-      LexicalReferenceSelector,
-      LexicalSensesById,
-      LexicalSensesById
+      never
     >;
     /**
-     * Gets/sets lexical reference text senses mapped by their location in Scripture. The senses are
+     * Gets lexical reference text senses mapped by their IDs
+     *
+     * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+     * read-only. In the future, if lexical reference texts are able to be provided from locations
+     * other than extensions' assets folders, we may add the ability to edit the lexical reference
+     * text.
+     */
+    SensesById: DataProviderDataType<LexicalReferenceSelector, LexicalSensesById, never>;
+    /**
+     * Gets lexical reference text senses mapped by their location in Scripture. The senses are
      * divided into the occurrences by the sense occurrences, not their parent entry occurrences.
      *
      * If there are any senses that match the selector but do not have any occurrences that match
      * the selector, they will be put in book `***` chapter 0 verse 0 word 0. This could happen, for
      * example, if an sense has senses that match the selector but the sense itself doesn't have
      * occurrences.
+     *
+     * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+     * read-only. In the future, if lexical reference texts are able to be provided from locations
+     * other than extensions' assets folders, we may add the ability to edit the lexical reference
+     * text.
      */
     SensesByOccurrence: DataProviderDataType<
       LexicalReferenceSelector,
       LexicalSensesByOccurrence,
-      LexicalSensesByOccurrence
+      never
     >;
   };
 
@@ -531,37 +564,40 @@ declare module 'platform-lexical-tools' {
    * etc.
    *
    * Accepts extension file URIs to lexical reference texts, and serves their data as well as
-   * creating {@link ILexicalReferenceProjectDataProvider}s for each text.
+   * creating {@link ILexicalReferenceReadOnlyProjectDataProvider}s for each text.
    *
    * Note: this service's data retrieval methods currently only retrieve information from lexical
    * reference texts registered with it. It does not retrieve data from
-   * {@link ILexicalReferenceProjectDataProvider}s created by others.
+   * {@link ILexicalReferenceReadOnlyProjectDataProvider}s created by others.
+   *
+   * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
+   * read-only. In the future, if lexical reference texts are able to be provided from locations
+   * other than extensions' assets folders, we may add the ability to edit the lexical reference
+   * text.
    */
   export type ILexicalReferenceService = IDataProvider<LexicalReferenceDataTypes> & {
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.getEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * See {@link ILexicalReferenceReadOnlyProjectDataProvider.getEntriesById} - This method is the
+     * same but spans across all lexical reference texts registered with this service. You can
+     * filter by a particular lexical reference text in the `selector` parameter if desired.
      */
     getEntriesById(selector: LexicalReferenceSelector): Promise<LexicalEntriesById | undefined>;
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * This data cannot be changed this way. Trying to use this setter will always throw.
      *
      * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
-     * read-only, in which case this will throw. In the future, if lexical reference texts are able
-     * to be provided from locations other than extensions' assets folders, we may add the ability
-     * to edit the lexical reference text.
+     * read-only. In the future, if lexical reference texts are able to be provided from locations
+     * other than extensions' assets folders, we may add the ability to edit the lexical reference
+     * text.
      */
     setEntriesById(
       selector: LexicalReferenceSelector,
-      entriesById: LexicalEntriesById,
+      value: never,
     ): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>>;
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * See {@link ILexicalReferenceReadOnlyProjectDataProvider.subscribeEntriesById} - This method is
+     * the same but spans across all lexical reference texts registered with this service. You can
+     * filter by a particular lexical reference text in the `selector` parameter if desired.
      */
     subscribeEntriesById(
       selector: LexicalReferenceSelector,
@@ -570,31 +606,30 @@ declare module 'platform-lexical-tools' {
     ): Promise<UnsubscriberAsync>;
 
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * See {@link ILexicalReferenceReadOnlyProjectDataProvider.getEntriesByOccurrence} - This method
+     * is the same but spans across all lexical reference texts registered with this service. You
+     * can filter by a particular lexical reference text in the `selector` parameter if desired.
      */
     getEntriesByOccurrence(
       selector: LexicalReferenceSelector,
     ): Promise<LexicalEntriesByOccurrence | undefined>;
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * This data cannot be changed this way. Trying to use this setter will always throw.
      *
      * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
-     * read-only, in which case this will throw. In the future, if lexical reference texts are able
-     * to be provided from locations other than extensions' assets folders, we may add the ability
-     * to edit the lexical reference text.
+     * read-only. In the future, if lexical reference texts are able to be provided from locations
+     * other than extensions' assets folders, we may add the ability to edit the lexical reference
+     * text.
      */
     setEntriesByOccurrence(
       selector: LexicalReferenceSelector,
-      entriesByOccurrence: LexicalEntriesByOccurrence,
+      value: never,
     ): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>>;
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * See {@link ILexicalReferenceReadOnlyProjectDataProvider.subscribeEntriesByOccurrence} - This
+     * method is the same but spans across all lexical reference texts registered with this service.
+     * You can filter by a particular lexical reference text in the `selector` parameter if
+     * desired.
      */
     subscribeEntriesByOccurrence(
       selector: LexicalReferenceSelector,
@@ -605,29 +640,27 @@ declare module 'platform-lexical-tools' {
     ): Promise<UnsubscriberAsync>;
 
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * See {@link ILexicalReferenceReadOnlyProjectDataProvider.getSensesById} - This method is the
+     * same but spans across all lexical reference texts registered with this service. You can
+     * filter by a particular lexical reference text in the `selector` parameter if desired.
      */
     getSensesById(selector: LexicalReferenceSelector): Promise<LexicalSensesById | undefined>;
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * This data cannot be changed this way. Trying to use this setter will always throw.
      *
      * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
-     * read-only, in which case this will throw. In the future, if lexical reference texts are able
-     * to be provided from locations other than extensions' assets folders, we may add the ability
-     * to edit the lexical reference text.
+     * read-only. In the future, if lexical reference texts are able to be provided from locations
+     * other than extensions' assets folders, we may add the ability to edit the lexical reference
+     * text.
      */
     setSensesById(
       selector: LexicalReferenceSelector,
-      sensesById: LexicalSensesById,
+      value: never,
     ): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>>;
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * See {@link ILexicalReferenceReadOnlyProjectDataProvider.subscribeSensesById} - This method is
+     * the same but spans across all lexical reference texts registered with this service. You can
+     * filter by a particular lexical reference text in the `selector` parameter if desired.
      */
     subscribeSensesById(
       selector: LexicalReferenceSelector,
@@ -636,31 +669,30 @@ declare module 'platform-lexical-tools' {
     ): Promise<UnsubscriberAsync>;
 
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * See {@link ILexicalReferenceReadOnlyProjectDataProvider.getSensesByOccurrence} - This method
+     * is the same but spans across all lexical reference texts registered with this service. You
+     * can filter by a particular lexical reference text in the `selector` parameter if desired.
      */
     getSensesByOccurrence(
       selector: LexicalReferenceSelector,
     ): Promise<LexicalSensesByOccurrence | undefined>;
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * This data cannot be changed this way. Trying to use this setter will always throw.
      *
      * Note: as of 2 June, 2025, all lexical reference texts registered with this service are
-     * read-only, in which case this will throw. In the future, if lexical reference texts are able
-     * to be provided from locations other than extensions' assets folders, we may add the ability
-     * to edit the lexical reference text.
+     * read-only. In the future, if lexical reference texts are able to be provided from locations
+     * other than extensions' assets folders, we may add the ability to edit the lexical reference
+     * text.
      */
     setSensesByOccurrence(
       selector: LexicalReferenceSelector,
-      sensesByOccurrence: LexicalSensesByOccurrence,
+      value: never,
     ): Promise<DataProviderUpdateInstructions<LexicalReferenceDataTypes>>;
     /**
-     * See {@link ILexicalReferenceProjectDataProvider.setEntriesById} - This method is the same but
-     * spans across all lexical reference texts registered with this service. You can filter by a
-     * particular lexical reference text in the `selector` parameter if desired.
+     * See {@link ILexicalReferenceReadOnlyProjectDataProvider.subscribeSensesByOccurrence} - This
+     * method is the same but spans across all lexical reference texts registered with this service.
+     * You can filter by a particular lexical reference text in the `selector` parameter if
+     * desired.
      */
     subscribeSensesByOccurrence(
       selector: LexicalReferenceSelector,
@@ -674,12 +706,12 @@ declare module 'platform-lexical-tools' {
 
 declare module 'papi-shared-types' {
   import type {
-    ILexicalReferenceProjectDataProvider,
+    ILexicalReferenceReadOnlyProjectDataProvider,
     ILexicalReferenceService,
   } from 'platform-lexical-tools';
 
   export interface ProjectDataProviderInterfaces {
-    'platformLexicalTools.lexicalReference': ILexicalReferenceProjectDataProvider;
+    'platformLexicalTools.lexicalReferenceReadOnly': ILexicalReferenceReadOnlyProjectDataProvider;
   }
 
   export interface DataProviders {
