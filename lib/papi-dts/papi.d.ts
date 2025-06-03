@@ -237,6 +237,8 @@ declare module 'shared/models/web-view.model' {
      * focusing independently of a scroll group
      */
     scrollGroupScrRef?: ScrollGroupScrRef;
+    /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+    flashTriggerTime?: number;
     /**
      * General object to store unique state for this webview.
      *
@@ -402,6 +404,7 @@ declare module 'shared/models/web-view.model' {
     'tooltip',
     'projectId',
     'scrollGroupScrRef',
+    'flashTriggerTime',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -608,17 +611,26 @@ declare module 'shared/models/web-view.model' {
      *
      * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
      * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
-     * `existingId` at all is the only way to specify we are not looking for an existing webView
+     * `existingId` at all is the only way to specify we are not looking for an existing WebView
      */
     existingId?: string | '?' | undefined;
     /**
-     * Whether to create a webview with a new ID and a webview with ID `existingId` was not found.
+     * Whether to create a WebView with a new ID and a WebView with ID `existingId` was not found.
      * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
      * ignored.
      *
      * Defaults to true
      */
     createNewIfNotFound?: boolean;
+    /**
+     * Whether to bring the WebView to the front if it already exists. Only relevant if `existingId`
+     * is provided. If `existingId` is not provided, this property is ignored.
+     *
+     * Defaults to true
+     *
+     * If a new WebView is created, it is always brought to the front, regardless of this option.
+     */
+    bringToFront?: boolean;
   };
   /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
   export type GetWebViewOptions = OpenWebViewOptions;
@@ -2646,6 +2658,8 @@ declare module 'shared/models/docking-framework.model' {
     tabTitle: string | LocalizeKey;
     /** Text to show when hovering over the title bar of the tab */
     tabTooltip?: string;
+    /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+    flashTriggerTime?: number;
     /** Content to show inside the tab. */
     content: ReactNode;
     /** (optional) Minimum width that the tab can become in CSS `px` units */
@@ -2785,6 +2799,20 @@ declare module 'shared/models/docking-framework.model' {
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
     ) => boolean;
+    /**
+     * Brings the floating tab group with the specified WebView ID to the front of the layout. If
+     * there is no floating tab group with the specified ID, this does nothing.
+     *
+     * @param webViewId The ID of the WebView whose floating tab group to bring to the front
+     */
+    bringFloatingTabGroupToFront: (webViewId: string) => void;
+    /**
+     * Unmaximizes any maximized tab group in the layout unless it contains the given WebView. If no
+     * tab groups are maximized, this does nothing.
+     *
+     * @param webViewId The ID of the WebView to search for in maximized tab groups
+     */
+    unmaximizeAnyMaximizedTabGroup: (webViewId?: string) => void;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
