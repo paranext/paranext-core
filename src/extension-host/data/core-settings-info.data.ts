@@ -1,7 +1,9 @@
+import { localization } from '@extension-host/services/papi-backend.service';
+import { DEFAULT_ZOOM_FACTOR, MAX_ZOOM_FACTOR, MIN_ZOOM_FACTOR } from '@shared/data/platform.data';
 import { localizationService } from '@shared/services/localization.service';
 import { AllSettingsValidators, SettingValidator } from '@shared/services/settings.service-model';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { isString, SettingsContribution } from 'platform-bible-utils';
+import { formatReplacementString, isString, SettingsContribution } from 'platform-bible-utils';
 
 /** Contribution of all settings built into core. Does not contain info for extensions' settings */
 export const platformSettings: SettingsContribution = [
@@ -40,6 +42,11 @@ export const platformSettings: SettingsContribution = [
         label: '%settings_platform_requestTimeout_label%',
         description: '%settings_platform_requestTimeout_description%',
         default: 30,
+      },
+      'platform.zoomFactor': {
+        label: '%settings_platform_zoomFactor_label%',
+        description: '%settings_platform_zoomFactor_description%',
+        default: DEFAULT_ZOOM_FACTOR,
       },
     },
   },
@@ -97,6 +104,26 @@ const requestTimeoutValidator: SettingValidator<'platform.requestTimeout'> = asy
 };
 
 /** Info about all settings built into core. Does not contain info for extensions' settings */
+const zoomFactorValidator: SettingValidator<'platform.zoomFactor'> = async (
+  newValue: number,
+): Promise<boolean> => {
+  const errorMessage = formatReplacementString(
+    await localization.getLocalizedString({
+      localizeKey: '%settings_platform_zoomFactor_errorMessage%',
+    }),
+    {
+      lowerLimit: MIN_ZOOM_FACTOR,
+      upperLimit: MAX_ZOOM_FACTOR,
+    },
+  );
+
+  if (typeof newValue !== 'number') return false;
+  if (newValue < MIN_ZOOM_FACTOR || newValue > MAX_ZOOM_FACTOR) {
+    throw new Error(errorMessage);
+  }
+  return true;
+};
+
 export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.verseRef': verseRefSettingsValidator,
   'platform.interfaceLanguage': interfaceLanguageValidator,
@@ -104,4 +131,5 @@ export const coreSettingsValidators: Partial<AllSettingsValidators> = {
   'platform.paratextDataLastRegistryDataCachedTimes': serializableStringDictionarySettingValidator,
   'platform.commentsEnabled': booleanValidator,
   'platform.requestTimeout': requestTimeoutValidator,
+  'platform.zoomFactor': zoomFactorValidator,
 };
