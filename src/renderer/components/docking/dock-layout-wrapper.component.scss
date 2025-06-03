@@ -167,6 +167,12 @@ $tab-top-rounding: vars.$space--xs;
   border-radius: $tab-top-rounding;
 }
 
+// TODO: UX should make this better
+.dock-tabpane.dock-tabpane-active-highlight {
+  outline: 2px solid red;
+  outline-offset: -2px;
+}
+
 .dock-nav-wrap,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
@@ -197,6 +203,42 @@ $tab-bottom-rounding: vars.$space--s;
   right: -$tab-bottom-rounding;
   border-bottom-left-radius: $tab-bottom-rounding - 2;
   box-shadow: -2px 2px 0 vars.$color--active-tab;
+}
+
+// TODO: UX should make this better
+.dock-tab.dock-tab-active.dock-tab-active-highlight {
+  outline: 2px solid red;
+  outline-offset: -2px;
+  animation: tabTitleBarFlash 1s ease-in-out 3;
+}
+
+// TODO: UX should make this better
+@keyframes tabTitleBarFlash {
+  0% {
+    background-color: transparent;
+  }
+
+  25% {
+    background-color: rgba(59, 130, 246, 0.3); // Blue flash with transparency
+  }
+
+  50% {
+    background-color: rgba(59, 130, 246, 0.5);
+  }
+
+  75% {
+    background-color: rgba(59, 130, 246, 0.3);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+// Hide the bottom corner rounding pseudo-elements when highlight is active
+.dock-tab.dock-tab-active.dock-tab-active-highlight::before,
+.dock-tab.dock-tab-active.dock-tab-active-highlight::after {
+  display: none;
 }
 
 // #endregion

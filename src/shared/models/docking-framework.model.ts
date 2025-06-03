@@ -41,6 +41,8 @@ export type TabInfo = SavedTabInfo & {
   tabTitle: string | LocalizeKey;
   /** Text to show when hovering over the title bar of the tab */
   tabTooltip?: string;
+  /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+  flashTriggerTime?: number;
   /** Content to show inside the tab. */
   content: ReactNode;
   /** (optional) Minimum width that the tab can become in CSS `px` units */
@@ -187,6 +189,20 @@ export type PapiDockLayout = {
    * @returns True if successfully found the WebView to update; false otherwise
    */
   updateWebViewDefinition: (webViewId: string, updateInfo: WebViewDefinitionUpdateInfo) => boolean;
+  /**
+   * Brings the floating tab group with the specified WebView ID to the front of the layout. If
+   * there is no floating tab group with the specified ID, this does nothing.
+   *
+   * @param webViewId The ID of the WebView whose floating tab group to bring to the front
+   */
+  bringFloatingTabGroupToFront: (webViewId: string) => void;
+  /**
+   * Unmaximizes any maximized tab group in the layout unless it contains the given WebView. If no
+   * tab groups are maximized, this does nothing.
+   *
+   * @param webViewId The ID of the WebView to search for in maximized tab groups
+   */
+  unmaximizeAnyMaximizedTabGroup: (webViewId?: string) => void;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *
