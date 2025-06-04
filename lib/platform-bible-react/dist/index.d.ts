@@ -1368,6 +1368,14 @@ export declare const Command: React$1.ForwardRefExoticComponent<Omit<{
 	disablePointerSelection?: boolean | undefined;
 	vimBindings?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandInput: React$1.ForwardRefExoticComponent<Omit<Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement>> & {
+	ref?: React$1.Ref<HTMLInputElement> | undefined;
+} & {
+	asChild?: boolean | undefined;
+}, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement> | "asChild">, "type" | "value" | "onChange"> & {
+	value?: string | undefined;
+	onValueChange?: ((search: string) => void) | undefined;
+} & React$1.RefAttributes<HTMLInputElement>, "ref"> & React$1.RefAttributes<HTMLInputElement>>;
 export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
@@ -1377,6 +1385,13 @@ export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
 }, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
 	label?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandEmpty: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement> | undefined;
+} & {
+	asChild?: boolean | undefined;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {

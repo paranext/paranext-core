@@ -138,14 +138,19 @@ export {
   CardContent,
 } from './components/shadcn-ui/card';
 export { default as Checkbox } from './components/shadcn-ui/checkbox';
-export {
-  Command,
+<<<<<<< Updated upstream
+export { Command, CommandGroup, CommandItem, CommandList } from './components/shadcn-ui/command';
+=======
+export { Command,
+  CommandDialog,
+  CommandInput,
+  CommandList,
   CommandEmpty,
   CommandGroup,
-  CommandInput,
   CommandItem,
-  CommandList,
-} from './components/shadcn-ui/command';
+  CommandShortcut,
+  CommandSeparator } from './components/shadcn-ui/command';
+>>>>>>> Stashed changes
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
