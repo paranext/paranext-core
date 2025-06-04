@@ -84,7 +84,7 @@ const TEST_EXTENSION_NAMES = [
   'c-sharp-provider-test',
   'evil',
   'helloSomeone',
-  'helloWorld',
+  'helloRock3',
   'quickVerse',
 ];
 
@@ -516,6 +516,11 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
     if (extB.name === 'platformScripture') return 1;
     if (extA.name === 'platformScriptureEditor') return -1;
     if (extB.name === 'platformScriptureEditor') return 1;
+
+    // TEMPORARY: Explicitly load helloRock3 after helloSomeone.
+    if (extA.name === 'helloRock3' && extB.name === 'helloSomeone') return 1;
+    if (extA.name === 'helloSomeone' && extB.name === 'helloRock3') return -1;
+
     const extAIsPlatform = extA.name.startsWith('platform');
     const extBIsPlatform = extB.name.startsWith('platform');
     if (extAIsPlatform && !extBIsPlatform) return -1;
@@ -853,7 +858,7 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
         ? undefined
         : packagedId;
     })
-    .filter((identifier) => !!identifier) as ExtensionIdentifier[];
+    .filter((identifier) => !!identifier);
 
   return {
     enabled,
