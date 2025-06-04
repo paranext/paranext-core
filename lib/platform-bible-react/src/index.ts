@@ -138,7 +138,14 @@ export {
   CardContent,
 } from './components/shadcn-ui/card';
 export { default as Checkbox } from './components/shadcn-ui/checkbox';
-export { Command, CommandGroup, CommandItem, CommandList } from './components/shadcn-ui/command';
+export {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from './components/shadcn-ui/command';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
