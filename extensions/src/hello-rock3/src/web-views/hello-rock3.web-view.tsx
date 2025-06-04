@@ -362,10 +362,32 @@ globalThis.webViewComponent = function HelloRock3({
     [localizedOption1, localizedOption2],
   );
 
-  const scrRefString = useMemo(
-    () => (scrRef ? `${scrRef.book} ${scrRef.chapterNum}:${scrRef.verseNum}` : ''),
-    [scrRef],
+  // #region Get the localized Scripture Reference in various formats
+
+  const scrRefBookIdLocalizeKey = `%LocalizedId.${scrRef.book}%` as const;
+  const scrRefBookNameLocalizeKey = `%Book.${scrRef.book}%` as const;
+
+  const [
+    {
+      [scrRefBookIdLocalizeKey]: scrRefBookIdLocalized,
+      [scrRefBookNameLocalizeKey]: scrRefBookNameLocalized,
+    },
+  ] = useLocalizedStrings(
+    useMemo(
+      () => [scrRefBookIdLocalizeKey, scrRefBookNameLocalizeKey],
+      [scrRefBookIdLocalizeKey, scrRefBookNameLocalizeKey],
+    ),
   );
+
+  const scrRefString = useMemo(
+    () =>
+      scrRef
+        ? `${scrRef.book} ${scrRefBookIdLocalized} ${scrRefBookNameLocalized} ${scrRef.chapterNum}:${scrRef.verseNum}`
+        : '',
+    [scrRef, scrRefBookIdLocalized, scrRefBookNameLocalized],
+  );
+
+  // #endregion
 
   return (
     <div>
