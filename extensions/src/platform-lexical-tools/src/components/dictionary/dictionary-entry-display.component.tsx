@@ -1,17 +1,42 @@
-import { Separator } from 'platform-bible-react';
+import { Button, Separator } from 'platform-bible-react';
 import { formatScrRef } from 'platform-bible-utils';
+import { ArrowLeft } from 'lucide-react';
 import { DictionaryEntry } from './dictionary-list-item.component';
+
+/** Props for the back to list button */
+type BackToListButtonProps = {
+  /** Callback function to handle button click */
+  handleClick: () => void;
+  /** Button text */
+  buttonText?: string;
+};
+
+function BackToListButton({ handleClick, buttonText }: BackToListButtonProps) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="tw-pl-0 hover:tw-bg-transparent hover:tw-underline"
+      onClick={handleClick}
+    >
+      <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+      {buttonText}
+    </Button>
+  );
+}
 
 /** Props for the DictionaryEntryDisplay component */
 export type DictionaryEntryDisplayProps = {
   /** Dictionary entry object to display */
   dictionaryEntry: DictionaryEntry;
-  /** JSX element representing the back button */
-  backToListButton: React.JSX.Element;
   /** Label for the definition */
   definitionLabel: string;
   /** Label for the occurrences */
   occurrencesLabel: string;
+  /** Callback function to handle back to list button click */
+  handleBackToListButtonClick: () => void;
+  /** Label for the back to list button */
+  backToListButtonText: string;
 };
 
 /**
@@ -21,13 +46,19 @@ export type DictionaryEntryDisplayProps = {
  */
 export function DictionaryEntryDisplay({
   dictionaryEntry,
-  backToListButton,
   definitionLabel,
   occurrencesLabel,
+  handleBackToListButtonClick,
+  backToListButtonText,
 }: DictionaryEntryDisplayProps) {
   return (
     <div className="tw-p-4">
-      <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">{backToListButton}</div>
+      <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">
+        <BackToListButton
+          handleClick={handleBackToListButtonClick}
+          buttonText={backToListButtonText}
+        />
+      </div>
 
       <div className="tw-mb-4">
         <div className="tw-flex tw-items-baseline tw-gap-2">

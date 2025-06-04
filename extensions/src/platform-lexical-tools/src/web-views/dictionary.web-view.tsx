@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import {
-  Button,
   Label,
   SearchBar,
   Select,
@@ -9,7 +8,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from 'platform-bible-react';
-import { ArrowLeft } from 'lucide-react';
 import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef, Canon } from '@sillsdev/scripture';
@@ -135,28 +133,6 @@ const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 /** Type for the dictionary scope */
 type DictionaryScope = 'chapter' | 'section' | 'verse';
 
-/** Props for the back to list button */
-type BackToListButtonProps = {
-  /** Callback function to handle button click */
-  handleClick: () => void;
-  /** Button text */
-  buttonText?: string;
-};
-
-function BackToListButton({ handleClick, buttonText }: BackToListButtonProps) {
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="tw-pl-0 hover:tw-bg-transparent hover:tw-underline"
-      onClick={handleClick}
-    >
-      <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-      {buttonText}
-    </Button>
-  );
-}
-
 globalThis.webViewComponent = function Dictionary({
   useWebViewScrollGroupScrRef,
   useWebViewState,
@@ -253,12 +229,8 @@ globalThis.webViewComponent = function Dictionary({
             definitionLabel={localizedStrings['%platformLexicalTools_dictionary_definitionLabel%']}
             occurrencesLabel={occurrencesLabel}
             dictionaryEntry={selectedEntry}
-            backToListButton={
-              <BackToListButton
-                handleClick={() => setSelectedEntry(undefined)}
-                buttonText={localizedStrings['%platformLexicalTools_dictionary_backToList%']}
-              />
-            }
+            handleBackToListButtonClick={() => setSelectedEntry(undefined)}
+            backToListButtonText={localizedStrings['%platformLexicalTools_dictionary_backToList%']}
           />
         )) ?? (
           <DictionaryTable
