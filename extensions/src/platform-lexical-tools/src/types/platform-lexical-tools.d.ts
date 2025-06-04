@@ -718,3 +718,14 @@ declare module 'papi-shared-types' {
     'platformLexicalTools.lexicalReferenceService': ILexicalReferenceService;
   }
 }
+
+declare module 'papi-shared-types' {
+  export interface CommandHandlers {
+    /**
+     * Opens the dictionary web view
+     *
+     * @returns WebView id for new Dictionary WebView or `undefined` if not created
+     */
+    'platformLexicalTools.openDictionary': () => Promise<string | undefined>;
+  }
+}
