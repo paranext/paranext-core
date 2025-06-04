@@ -66,10 +66,7 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
-export type {
-  Command,
-  CommandHandler,
-} from './components/advanced/menus/platform-menubar.component';
+export type { CommandHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,

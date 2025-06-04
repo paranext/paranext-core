@@ -102,6 +102,17 @@ module.exports = {
     'react/jsx-props-no-spreading': ['error', { custom: 'ignore' }],
     'react/require-default-props': 'off',
 
+    '@typescript-eslint/naming-convention': [
+      'error',
+      {
+        selector: 'variable',
+        format: ['PascalCase', 'camelCase'],
+        filter: {
+          regex: '^meta$',
+          match: false,
+        },
+      },
+    ],
     // #endregion
 
     // #endregion

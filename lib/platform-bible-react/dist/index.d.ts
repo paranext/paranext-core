@@ -676,23 +676,13 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  *   current status of the item is selected
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
-type MenuItemInfoBase = {
-	/** Text (displayable in the UI) as the name of the menu item */
-	label: string;
-	/** Text to display when the mouse hovers over the menu item */
-	tooltip?: string;
-};
-export type Command = MenuItemInfoBase & {
-	/** Command to execute (string.string) */
-	command: string;
-};
 /**
  * Defines a function that takes a `Command` object as an argument and returns `void`. Used to
  * define the shape of a function that can handle commands, but it does not provide an
  * implementation.
  */
 export interface CommandHandler {
-	(command: Command): void;
+	(command: MenuItemContainingCommand): void;
 }
 export type SelectedSettingsSidebarItem = {
 	label: string;
@@ -1361,6 +1351,56 @@ export declare const CardFooter: React$1.ForwardRefExoticComponent<React$1.HTMLA
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
  */
 export declare const Checkbox: React$1.ForwardRefExoticComponent<Omit<CheckboxPrimitive.CheckboxProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const Command: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement> | undefined;
+} & {
+	asChild?: boolean | undefined;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
+	label?: string | undefined;
+	shouldFilter?: boolean | undefined;
+	filter?: ((value: string, search: string, keywords?: string[] | undefined) => number) | undefined;
+	defaultValue?: string | undefined;
+	value?: string | undefined;
+	onValueChange?: ((value: string) => void) | undefined;
+	loop?: boolean | undefined;
+	disablePointerSelection?: boolean | undefined;
+	vimBindings?: boolean | undefined;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement> | undefined;
+} & {
+	asChild?: boolean | undefined;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
+	label?: string | undefined;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement> | undefined;
+} & {
+	asChild?: boolean | undefined;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "heading"> & {
+	heading?: React$1.ReactNode;
+	value?: string | undefined;
+	forceMount?: boolean | undefined;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement> | undefined;
+} & {
+	asChild?: boolean | undefined;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "disabled" | "onSelect"> & {
+	disabled?: boolean | undefined;
+	onSelect?: ((value: string) => void) | undefined;
+	value?: string | undefined;
+	keywords?: string[] | undefined;
+	forceMount?: boolean | undefined;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 type MenuContextProps = {
 	variant?: "default" | "muted";
 };

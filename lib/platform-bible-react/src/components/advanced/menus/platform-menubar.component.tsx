@@ -27,25 +27,13 @@ import { useHotkeys } from 'react-hotkeys-hook';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
 import MenuItemIcon from './menu-icon.component';
 
-export type MenuItemInfoBase = {
-  /** Text (displayable in the UI) as the name of the menu item */
-  label: string;
-  /** Text to display when the mouse hovers over the menu item */
-  tooltip?: string;
-};
-
-export type Command = MenuItemInfoBase & {
-  /** Command to execute (string.string) */
-  command: string;
-};
-
 /**
  * Defines a function that takes a `Command` object as an argument and returns `void`. Used to
  * define the shape of a function that can handle commands, but it does not provide an
  * implementation.
  */
 export interface CommandHandler {
-  (command: Command): void;
+  (command: MenuItemContainingCommand): void;
 }
 
 const simulateKeyPress = (ref: RefObject<HTMLButtonElement>, keys: KeyboardEventInit[]) => {
@@ -83,7 +71,9 @@ const getMenubarContent = (
                 <MenubarItem
                   key={`menubar-item-${item.label}-${item.command}`}
                   onClick={() => {
-                    commandHandler(item);
+                    // Since the item has a command, we know it is a MenuItemContainingCommand.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    commandHandler(item as MenuItemContainingCommand);
                   }}
                 >
                   {item.iconPathBefore && (

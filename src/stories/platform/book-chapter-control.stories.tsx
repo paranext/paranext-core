@@ -1,6 +1,6 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useArgs } from '@storybook/preview-api';
-import type { Meta as MetaBase, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { BookChapterControl, BookChapterControlProps } from 'platform-bible-react';
 import { ReactElement } from 'react';
 
@@ -23,14 +23,14 @@ function BookChapterControlDecorator(
   );
 }
 
-export const Meta: MetaBase<typeof BookChapterControl> = {
+const meta: Meta<typeof BookChapterControl> = {
   title: 'Platform/BookChapterControl',
   component: BookChapterControl,
   tags: ['autodocs'],
   argTypes: {},
   decorators: [BookChapterControlDecorator],
 };
-export default Meta;
+export default meta;
 
 type Story = StoryObj<typeof BookChapterControl>;
 

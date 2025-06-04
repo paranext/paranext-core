@@ -57,7 +57,9 @@ const getGroupContent = (
                 <DropdownMenuItem
                   key={`dropdown-menu-item-${item.label}-${item.command}`}
                   onClick={() => {
-                    commandHandler(item);
+                    // Since the item has a command, we know it is a MenuItemContainingCommand.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    commandHandler(item as MenuItemContainingCommand);
                   }}
                 >
                   {item.iconPathBefore && (

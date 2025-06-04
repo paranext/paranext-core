@@ -1,8 +1,9 @@
+import { MenuItemContainingCommand } from '@node_modules/platform-bible-utils/dist';
 import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
-import type { Meta as MetaBase, StoryObj } from '@storybook/react';
-import { Command, Label, Toolbar } from 'platform-bible-react';
+import type { Meta, StoryObj } from '@storybook/react';
+import { Label, Toolbar } from 'platform-bible-react';
 
-export const Meta: MetaBase<typeof Toolbar> = {
+const meta: Meta<typeof Toolbar> = {
   title: 'Basics/Toolbar',
   component: Toolbar,
   tags: ['autodocs'],
@@ -10,7 +11,7 @@ export const Meta: MetaBase<typeof Toolbar> = {
     className: { control: 'text' },
   },
 };
-export default Meta;
+export default meta;
 
 type LocalizedMainMenu = LocalizedMenus['mainMenu'];
 
@@ -83,7 +84,7 @@ export const ParatextBright: Story = {
   },
 };
 
-function HandleMenuCommand(command: Command) {
+function HandleMenuCommand(command: MenuItemContainingCommand) {
   if (command.command === 'storybookToolbar.log') {
     // eslint-disable-next-line no-console
     console.log(command.command);
