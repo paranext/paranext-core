@@ -29,9 +29,9 @@ const echoExtensionHost = commandService.createSendCommandFunction('test.echoExt
 
 const addMany = commandService.createSendCommandFunction('test.addMany');
 
-const helloWorld = commandService.createSendCommandFunction('helloWorld.helloWorld');
+const helloRock3 = commandService.createSendCommandFunction('helloRock3.helloRock3');
 
-const throwErrorHelloWorld = commandService.createSendCommandFunction('helloWorld.helloException');
+const throwErrorHelloRock3 = commandService.createSendCommandFunction('helloRock3.helloException');
 
 const helloSomeone = commandService.createSendCommandFunction('helloSomeone.helloSomeone');
 
@@ -232,17 +232,17 @@ export function TestButtonsPanel() {
           className="test-button"
           onClick={async () => {
             const start = performance.now();
-            const result = await runPromise(() => helloWorld());
+            const result = await runPromise(() => helloRock3());
             logger.debug(
-              `command:helloWorld.helloWorld ${result} took ${performance.now() - start} ms`,
+              `command:helloRock3.helloRock3 ${result} took ${performance.now() - start} ms`,
             );
           }}
           onContextMenu={(e) => {
             e.preventDefault();
-            executeMany(() => helloWorld());
+            executeMany(() => helloRock3());
           }}
         >
-          Hello World (Extension)
+          Hello Rock3 (Extension)
         </Button>
         <Button
           className="test-button"
@@ -271,9 +271,9 @@ export function TestButtonsPanel() {
         </Button>
         <Button
           className="test-button"
-          onClick={() => runPromise(() => throwErrorHelloWorld('Test error'))}
+          onClick={() => runPromise(() => throwErrorHelloRock3('Test error'))}
         >
-          Test Exception (Hello World)
+          Test Exception (Hello Rock3)
         </Button>
         <Button
           className="test-button"

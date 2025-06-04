@@ -366,7 +366,7 @@ describe('Metadata generation:', () => {
     'platform.placeholder',
     'platform.notesOnly',
     'platformScripture.USFM_Book',
-    'helloWorld',
+    'helloRock3',
   ];
   const expectedTest2ProjectInterfaces: ProjectInterfaces[] = [
     'platformScripture.USFM_Book',
@@ -399,7 +399,7 @@ describe('Metadata generation:', () => {
         return [
           {
             id: testProjectId,
-            projectInterfaces: ['platform.placeholder', 'platform.notesOnly', 'helloWorld'],
+            projectInterfaces: ['platform.placeholder', 'platform.notesOnly', 'helloRock3'],
           },
         ];
       },
@@ -490,7 +490,7 @@ describe('Metadata generation:', () => {
       expect(pdpfInfoValuesSorted[2].projectInterfaces).toEqual([
         'platform.placeholder',
         'platform.notesOnly',
-        'helloWorld',
+        'helloRock3',
       ]);
       expect(pdpfInfoValuesSorted[3].projectInterfaces).toEqual([
         'platform.placeholder',
@@ -647,7 +647,7 @@ describe('Metadata generation:', () => {
       // match
       expect(testProjectMetadata.pdpFactoryInfo).toEqual({
         'test-2': {
-          projectInterfaces: ['platform.placeholder', 'platform.notesOnly', 'helloWorld'],
+          projectInterfaces: ['platform.placeholder', 'platform.notesOnly', 'helloRock3'],
         },
         'test-1': { projectInterfaces: ['platform.placeholder', 'platform.notesOnly'] },
         'test-3': {
@@ -795,10 +795,10 @@ describe('filterProjectsMetadata', () => {
   const projectsMetadata: ProjectMetadata[] = [
     {
       id: 'asdf',
-      projectInterfaces: ['helloWorld', 'platform.notesOnly'],
+      projectInterfaces: ['helloRock3', 'platform.notesOnly'],
       pdpFactoryInfo: {
         test1: { projectInterfaces: ['platform.notesOnly'] },
-        test4: { projectInterfaces: ['helloWorld'] },
+        test4: { projectInterfaces: ['helloRock3'] },
       },
     },
     {
@@ -898,7 +898,7 @@ describe('filterProjectsMetadata', () => {
     // Single RegExp that exact matches one project
 
     let options: ProjectMetadataFilterOptions = {
-      excludeProjectInterfaces: '^helloWorld$',
+      excludeProjectInterfaces: '^helloRock3$',
     };
 
     let filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -918,7 +918,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple OR'ed RegExps that match two project interfaces
 
     options = {
-      excludeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_Book$'],
+      excludeProjectInterfaces: ['^helloRock3$', '^platformScripture\\.USFM_Book$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -938,7 +938,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple AND'ed RegExps
 
     options = {
-      excludeProjectInterfaces: [['helloWorld', 'platform.notesOnly']],
+      excludeProjectInterfaces: [['helloRock3', 'platform.notesOnly']],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -948,7 +948,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple OR'ed and AND'ed RegExps
 
     options = {
-      excludeProjectInterfaces: [['helloWorld', 'platform.notesOnly'], 'platform.placeholder'],
+      excludeProjectInterfaces: [['helloRock3', 'platform.notesOnly'], 'platform.placeholder'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -971,7 +971,7 @@ describe('filterProjectsMetadata', () => {
     // Single RegExp that exact matches one project
 
     let options: ProjectMetadataFilterOptions = {
-      includeProjectInterfaces: '^helloWorld$',
+      includeProjectInterfaces: '^helloRock3$',
     };
 
     let filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -991,7 +991,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple RegExps that match two project interfaces
 
     options = {
-      includeProjectInterfaces: ['^helloWorld$', '^platformScripture\\.USFM_Book$'],
+      includeProjectInterfaces: ['^helloRock3$', '^platformScripture\\.USFM_Book$'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -1011,7 +1011,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple AND'ed RegExps
 
     options = {
-      includeProjectInterfaces: [['helloWorld', 'platform.notesOnly']],
+      includeProjectInterfaces: [['helloRock3', 'platform.notesOnly']],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
@@ -1021,7 +1021,7 @@ describe('filterProjectsMetadata', () => {
     // Multiple OR'ed and AND'ed RegExps
 
     options = {
-      includeProjectInterfaces: [['helloWorld', 'platform.notesOnly'], 'platform.placeholder'],
+      includeProjectInterfaces: [['helloRock3', 'platform.notesOnly'], 'platform.placeholder'],
     };
 
     filteredMetadata = projectLookupService.filterProjectsMetadata(projectsMetadata, options);
