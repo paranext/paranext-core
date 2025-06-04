@@ -16,12 +16,6 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
-export { DictionaryEntryDisplay } from './components/advanced/dictionary/dictionary-entry-display.component';
-export {
-  DictionaryListItem,
-  type DictionaryEntry,
-} from './components/advanced/dictionary/dictionary-list-item.component';
-export { DictionaryTable } from './components/advanced/dictionary/dictionary-table.component';
 export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
 export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
 export { default as DisableButton } from './components/advanced/extension-marketplace/buttons/disable-button.component';

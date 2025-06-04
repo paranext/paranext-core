@@ -222,62 +222,6 @@ interface DataTableProps<TData, TValue> {
  * from TanStack's React Table library
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
-/** DictionaryEntry is a type that represents a dictionary entry. */
-export type DictionaryEntry = {
-	id: string;
-	hebrew: string;
-	transliteration: string;
-	strongsNumber: string;
-	partOfSpeech: string;
-	definition: string;
-	usage: SerializedVerseRef[];
-};
-type DictionaryListItemProps = {
-	/** The dictionary entry to render */
-	dictionaryEntry: DictionaryEntry;
-	/** Callback function to handle entry click */
-	handleEntryClick: (entry: DictionaryEntry) => void;
-};
-/**
- * Renders a list item for a dictionary entry.
- *
- * @property {DictionaryEntry} dictionaryEntry - The dictionary entry to render.
- * @param {DictionaryListItemProps} props
- * @returns {JSX.Element} The rendered list item.
- */
-export declare function DictionaryListItem({ dictionaryEntry, handleEntryClick }: DictionaryListItemProps): import("react/jsx-runtime").JSX.Element;
-export declare namespace DictionaryListItem {
-	var displayName: string;
-}
-type DictionaryEntryDisplayProps = {
-	/** Dictionary entry object to display */
-	dictionaryEntry: DictionaryEntry;
-	/** JSX element representing the back button */
-	backToListButton: React$1.JSX.Element;
-	/** Label for the definition */
-	definitionLabel: string;
-	/** Label for the occurrences */
-	occurrencesLabel: string;
-};
-/**
- * Renders a detailed view of a dictionary entry, displaying its key properties such as Hebrew text,
- * transliteration, Strong's number, part of speech, definition, and usage occurrences. Includes a
- * back button to navigate back to the list view.
- *
- * @param {DictionaryEntryDisplayProps} props - The props for the component.
- * @param {DictionaryEntry} props.dictionaryEntry - The dictionary entry object to display.
- * @param {JSX.Element} props.backToListButton - JSX element representing the back button. event.\
- * @param {string} props.definitionLabel - Label for the definition section.
- * @param {string} props.occurrencesLabel - Label for the occurrences section.
- */
-export declare function DictionaryEntryDisplay({ dictionaryEntry, backToListButton, definitionLabel, occurrencesLabel, }: DictionaryEntryDisplayProps): import("react/jsx-runtime").JSX.Element;
-type DictionaryTableProps = {
-	/** Array of dictionary entries */
-	dictionaryData: DictionaryEntry[];
-	/** Callback function to handle entry click */
-	handleEntryClick: (entry: DictionaryEntry) => void;
-};
-export declare function DictionaryTable({ dictionaryData, handleEntryClick }: DictionaryTableProps): import("react/jsx-runtime").JSX.Element;
 type ClassValue$1 = ClassValue;
 type ClassProp = {
 	class: ClassValue$1;
@@ -1660,9 +1604,7 @@ export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAt
 /** @inheritdoc Table */
 export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 /** @inheritdoc Table */
-export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & {
-	setFocusAlsoRunsSelect?: boolean | undefined;
-} & React$1.RefAttributes<HTMLTableRowElement>>;
+export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
 /** @inheritdoc Table */
 export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
 /** @inheritdoc Table */

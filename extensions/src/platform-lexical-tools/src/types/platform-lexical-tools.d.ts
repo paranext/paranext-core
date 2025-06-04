@@ -5,6 +5,7 @@ declare module 'platform-lexical-tools' {
 
 declare module 'papi-shared-types' {
   export interface CommandHandlers {
+    /** Opens the dictionary web view */
     'platformLexicalTools.openDictionary': () => Promise<string | undefined>;
   }
 }

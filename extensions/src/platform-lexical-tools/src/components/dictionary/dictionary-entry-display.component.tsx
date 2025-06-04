@@ -1,10 +1,9 @@
-import { Separator } from '@/components/shadcn-ui/separator';
-import type React from 'react';
+import { Separator } from 'platform-bible-react';
 import { formatScrRef } from 'platform-bible-utils';
 import { DictionaryEntry } from './dictionary-list-item.component';
 
 /** Props for the DictionaryEntryDisplay component */
-type DictionaryEntryDisplayProps = {
+export type DictionaryEntryDisplayProps = {
   /** Dictionary entry object to display */
   dictionaryEntry: DictionaryEntry;
   /** JSX element representing the back button */
@@ -19,12 +18,6 @@ type DictionaryEntryDisplayProps = {
  * Renders a detailed view of a dictionary entry, displaying its key properties such as Hebrew text,
  * transliteration, Strong's number, part of speech, definition, and usage occurrences. Includes a
  * back button to navigate back to the list view.
- *
- * @param {DictionaryEntryDisplayProps} props - The props for the component.
- * @param {DictionaryEntry} props.dictionaryEntry - The dictionary entry object to display.
- * @param {JSX.Element} props.backToListButton - JSX element representing the back button. event.\
- * @param {string} props.definitionLabel - Label for the definition section.
- * @param {string} props.occurrencesLabel - Label for the occurrences section.
  */
 export function DictionaryEntryDisplay({
   dictionaryEntry,

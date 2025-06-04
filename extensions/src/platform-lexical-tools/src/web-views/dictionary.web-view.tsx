@@ -1,9 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Button,
-  DictionaryEntry,
-  DictionaryEntryDisplay,
-  DictionaryTable,
   Label,
   SearchBar,
   Select,
@@ -17,6 +14,9 @@ import { formatReplacementString, LocalizeKey } from 'platform-bible-utils';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef, Canon } from '@sillsdev/scripture';
 import { WebViewProps } from '@papi/core';
+import { DictionaryEntry } from '../components/dictionary/dictionary-list-item.component';
+import { DictionaryEntryDisplay } from '../components/dictionary/dictionary-entry-display.component';
+import { DictionaryTable } from '../components/dictionary/dictionary-table.component';
 
 const DICTIONARY_DATA: DictionaryEntry[] = [
   {
@@ -132,6 +132,10 @@ const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_scopeSelector_verse%',
 ];
 
+/** Type for the dictionary scope */
+type DictionaryScope = 'chapter' | 'section' | 'verse';
+
+/** Props for the back to list button */
 type BackToListButtonProps = {
   /** Callback function to handle button click */
   handleClick: () => void;
@@ -153,12 +157,17 @@ function BackToListButton({ handleClick, buttonText }: BackToListButtonProps) {
   );
 }
 
-globalThis.webViewComponent = function Dictionary({ useWebViewScrollGroupScrRef }: WebViewProps) {
-  const [scope, setScope] = useState<string>('chapter');
-  const [selectedEntry, setSelectedEntry] = useState<DictionaryEntry | undefined>(undefined);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+globalThis.webViewComponent = function Dictionary({
+  useWebViewScrollGroupScrRef,
+  useWebViewState,
+}: WebViewProps) {
+  const [scope, setScope] = useWebViewState<DictionaryScope>('scope', 'chapter');
+  const [selectedEntry, setSelectedEntry] = useWebViewState<DictionaryEntry | undefined>(
+    'selectedEntry',
+    undefined,
+  );
+  const [searchQuery, setSearchQuery] = useWebViewState<string>('searchQuery', '');
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
-
   const [scrRef] = useWebViewScrollGroupScrRef();
 
   const dictionaryEntriesFilteredBySearchAndScope: DictionaryEntry[] = useMemo(() => {
@@ -185,8 +194,7 @@ globalThis.webViewComponent = function Dictionary({ useWebViewScrollGroupScrRef 
               serializedScrReference.verseNum === scrRef.verseNum
             );
         }
-        // If usage is just a string (as in your data), skip scope filtering
-        return true;
+        return false;
       });
     });
   }, [scope, scrRef.book, scrRef.chapterNum, scrRef.verseNum, searchQuery]);

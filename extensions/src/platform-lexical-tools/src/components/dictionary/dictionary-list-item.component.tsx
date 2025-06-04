@@ -1,4 +1,4 @@
-import { TableCell, TableRow } from '@/components/shadcn-ui/table';
+import { TableCell, TableRow } from 'platform-bible-react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 
 /** DictionaryEntry is a type that represents a dictionary entry. */
@@ -13,20 +13,14 @@ export type DictionaryEntry = {
 };
 
 /** Props for the DictionaryListItem component */
-type DictionaryListItemProps = {
+export type DictionaryListItemProps = {
   /** The dictionary entry to render */
   dictionaryEntry: DictionaryEntry;
   /** Callback function to handle entry click */
   handleEntryClick: (entry: DictionaryEntry) => void;
 };
 
-/**
- * Renders a list item for a dictionary entry.
- *
- * @property {DictionaryEntry} dictionaryEntry - The dictionary entry to render.
- * @param {DictionaryListItemProps} props
- * @returns {JSX.Element} The rendered list item.
- */
+/** Renders a list item for a dictionary entry */
 export function DictionaryListItem({ dictionaryEntry, handleEntryClick }: DictionaryListItemProps) {
   return (
     <TableRow
