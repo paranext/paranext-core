@@ -1431,40 +1431,40 @@ export type DropdownMenuShortcutProps = React$1.HTMLAttributes<HTMLSpanElement> 
 export declare function DropdownMenu({ variant, ...props }: DropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuSubTrigger: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubTriggerProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-	inset?: boolean;
+	className?: string | undefined;
+	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuSubContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-	sideOffset?: number;
+	className?: string | undefined;
+	sideOffset?: number | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-	inset?: boolean;
+	className?: string | undefined;
+	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-	checked?: boolean;
+	className?: string | undefined;
+	checked?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuLabel: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
-	inset?: boolean;
+	className?: string | undefined;
+	inset?: boolean | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuSeparator: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
@@ -1593,11 +1593,11 @@ export declare const Switch: React$1.ForwardRefExoticComponent<Omit<SwitchPrimit
  * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/table
  */
 export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & {
-	stickyHeader?: boolean;
+	stickyHeader?: boolean | undefined;
 } & React$1.RefAttributes<HTMLTableElement>>;
 /** @inheritdoc Table */
 export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & {
-	stickyHeader?: boolean;
+	stickyHeader?: boolean | undefined;
 } & React$1.RefAttributes<HTMLTableSectionElement>>;
 /** @inheritdoc Table */
 export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
@@ -1623,15 +1623,15 @@ type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Tr
 };
 /** @inheritdoc Tabs */
 export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Tabs */
 export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Tabs */
 export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 type LeftTabsTriggerProps = TabsTriggerProps & {
 	value: string;
@@ -1644,17 +1644,17 @@ type LeftTabsTriggerProps = TabsTriggerProps & {
  * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
  */
 export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc VerticalTabs */
 export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc VerticalTabs */
 export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc VerticalTabs */
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string;
+	className?: string | undefined;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These

@@ -77,7 +77,6 @@ export function Compositions() {
           </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Dictionary Table">Dictionary Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Markdown Renderer">Markdown Renderer</VerticalTabsTrigger>
