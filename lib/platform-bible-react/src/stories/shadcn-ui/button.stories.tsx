@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Button } from '@/components/shadcn-ui/button';
-import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
+// import { ThemeProvider } from '@/preview/preview-components/theme-provider.component'; // Temporarily disabled
 
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
@@ -21,9 +21,10 @@ const meta: Meta<typeof Button> = {
   },
   decorators: [
     (Story) => (
-      <ThemeProvider>
-        <Story />
-      </ThemeProvider>
+      // Temporarily removing ThemeProvider due to known issues
+      // <ThemeProvider>
+      <Story />
+      // </ThemeProvider>
     ),
   ],
 };
@@ -37,6 +38,50 @@ export const Default: Story = {
     children: 'Default Button',
     variant: 'default',
     size: 'default',
+  },
+};
+
+export const LiveEditable: Story = {
+  render: (args) => (
+    <div className="tw-space-y-4">
+      <Button {...args}>{args.children || 'Click me!'}</Button>
+      <p className="tw-text-sm tw-text-gray-600">
+        Use the Code Editor tab to modify this button in real-time!
+      </p>
+    </div>
+  ),
+  args: {
+    children: 'Editable Button',
+    variant: 'default',
+  },
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'This story allows live code editing. Try changing the variant, size, or adding click handlers in the Code Editor panel.',
+      },
+    },
+  },
+};
+
+export const VariantsDemo: Story = {
+  render: () => (
+    <div className="tw-flex tw-flex-wrap tw-gap-2">
+      <Button variant="default">Default</Button>
+      <Button variant="destructive">Destructive</Button>
+      <Button variant="outline">Outline</Button>
+      <Button variant="secondary">Secondary</Button>
+      <Button variant="ghost">Ghost</Button>
+      <Button variant="link">Link</Button>
+    </div>
+  ),
+  parameters: {
+    docs: {
+      description: {
+        story:
+          'All button variants displayed together. Try editing this code to add new variants or modify existing ones.',
+      },
+    },
   },
 };
 

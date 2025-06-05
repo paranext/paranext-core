@@ -131,6 +131,7 @@
     "remark-gfm": "^4.0.1",
     "remark-mdx": "^3.1.0",
     "storybook": "^9.0.6",
+    "storybook-addon-code-editor": "^5.0.0",
     "storybook-addon-rtl": "^2.0.0",
     "stylelint": "^16.11.0",
     "stylelint-config-recommended": "^14.0.1",
