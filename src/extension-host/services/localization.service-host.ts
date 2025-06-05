@@ -28,6 +28,13 @@ import {
   waitForResyncContributions,
 } from '@extension-host/services/contribution.service';
 import { LanguageInfo } from 'platform-bible-react';
+import { Canon } from '@sillsdev/scripture';
+
+/**
+ * The base language to get localized strings for if they are not present in other languages
+ * requested
+ */
+const BACKUP_LANGUAGE = 'en';
 
 const LOCALIZATION_ROOT_URI = joinUriPaths('resources://', 'assets', 'localization');
 // BCP 47 validation regex from https://stackoverflow.com/questions/7035825/regular-expression-for-a-language-tag-as-defined-by-bcp47
@@ -132,6 +139,20 @@ async function loadAllLocalizationData() {
       }
     }),
   );
+
+  // Programmatically add LocalizedId.CODE and Book.CODE for Scripture book names by code to the backup language
+  // We just made the `localizedStrings` property above
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  baseLocalizedStringsDoc.localizedStrings![BACKUP_LANGUAGE] = {
+    ...Canon.allBookIds.reduce<Record<string, string>>((idStrings, bookId) => {
+      idStrings[`%LocalizedId.${bookId}%`] = bookId;
+      idStrings[`%Book.${bookId}%`] = Canon.bookIdToEnglishName(bookId);
+      return idStrings;
+    }, {}),
+    // We just made the `localizedStrings` property above
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    ...baseLocalizedStringsDoc.localizedStrings![BACKUP_LANGUAGE],
+  };
 
   localizedStringsDocumentCombiner.updateBaseDocument(baseLocalizedStringsDoc);
 }
@@ -274,7 +295,7 @@ class LocalizationDataProviderEngine
     const languages = locales.length > 0 ? [...locales] : await getDefaultLanguages();
 
     // English is always a backup
-    addLanguageIfNotThere(languages, 'en', false);
+    addLanguageIfNotThere(languages, BACKUP_LANGUAGE, false);
 
     const initialLanguageData = await getNextDefinedLanguageData(languages);
     // Note: This should never happen, but if it does then there are no languages with data so just
