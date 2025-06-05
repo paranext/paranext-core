@@ -56,6 +56,7 @@
     ],
   },
   linux: {
+    executableName: 'platform-bible',
     target: ['snap'],
     category: 'Development',
     extraResources: [
