@@ -1,0 +1,76 @@
+import { Meta } from '@storybook/blocks';
+
+<Meta title="Demo/Live Edit/📖 Getting Started" />
+
+# Live Code Editing
+
+This Storybook includes live code editing capabilities powered by `storybook-addon-code-editor`. You can edit React/TypeScript code in real-time and see changes immediately in the preview.
+
+## How to Use
+
+1. **Navigate to any Live Edit story** in this section
+2. **Look for the code editor** - It will appear as an editor panel or section
+3. **Edit the code** directly in the Monaco editor (VS Code-like experience)
+4. **See changes instantly** reflected in the component preview
+
+## Features
+
+- ✅ **Monaco Editor** - VS Code's editor with familiar shortcuts
+- ✅ **TypeScript Support** - Full syntax highlighting and IntelliSense
+- ✅ **Real-time Updates** - Changes appear immediately
+- ✅ **React Hooks** - useState, useEffect, and other hooks work out of the box
+- ✅ **Component Library** - Your Button, Input, and other components are available
+
+## Examples to Try
+
+### Basic Examples (Start Here)
+
+- **BasicExample** - Simple HTML/React editing, perfect for getting started
+- **InteractiveCounter** - React hooks and state management
+
+### Advanced Examples
+
+- **Counter** - Complex example with Button + Input components
+- **InputWithState** - Input validation and state management
+
+## Quick Tips
+
+### Editing Code
+
+- Use **Ctrl/Cmd+Z** to undo changes
+- **Ctrl/Cmd+S** to format code
+- All standard VS Code shortcuts work
+
+### Common Patterns
+
+```tsx
+// Add state
+const [value, setValue] = useState('initial');
+
+// Add event handlers
+onClick={() => console.log('clicked')}
+
+// Use components
+<Button variant="destructive">Click me</Button>
+<Input placeholder="Type here..." />
+```
+
+### What's Available
+
+- **React** - Automatically imported (useState, useEffect, etc.)
+- **Button** - All variants: default, destructive, outline, secondary, ghost, link
+- **Input** - Text inputs with full event handling
+- **Standard HTML** - All HTML elements and inline styles
+
+## Best Practices
+
+✅ **Start simple** - Begin with BasicExample to get familiar
+✅ **Experiment freely** - Changes are temporary and won't affect the actual codebase
+✅ **Copy useful code** - When you create something useful, copy it for your projects
+✅ **Try different patterns** - Test controlled vs uncontrolled components, different event handlers, etc.
+
+❌ **Don't worry about breaking things** - The editor is safe to experiment in
+
+---
+
+**Ready to start?** Head to **BasicExample** to try your first live edit!
