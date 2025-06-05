@@ -23,6 +23,9 @@ type PlatformTabTitleProps = {
 const cssClassTabHeaderHighlight = 'dock-tab-active-highlight';
 const cssClassTabContentHighlight = 'dock-tabpane-active-highlight';
 
+// This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
+const cssHighlightDurationMilliseconds = 3000;
+
 /**
  * Custom tab title for all tabs in Platform
  *
@@ -74,7 +77,7 @@ export function PlatformTabTitle({
     const timer = setTimeout(() => {
       if (activeTabHeader) activeTabHeader.classList.remove(cssClassTabHeaderHighlight);
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentHighlight);
-    }, 3000); // Flash for 3 seconds, matching the length of the CSS animation
+    }, cssHighlightDurationMilliseconds);
 
     return () => {
       clearTimeout(timer);

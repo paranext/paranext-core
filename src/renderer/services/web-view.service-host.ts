@@ -946,7 +946,6 @@ export const openWebView = async (
         getDockLayoutSync().unmaximizeAnyMaximizedTabGroup(existingWebView.id);
         getDockLayoutSync().bringFloatingTabGroupToFront(existingWebView.id);
         updateWebViewDefinitionSync(existingWebView.id, { flashTriggerTime: Date.now() });
-        return existingWebView.id;
       }
     }
   }

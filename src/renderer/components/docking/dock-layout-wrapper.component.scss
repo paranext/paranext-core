@@ -209,6 +209,7 @@ $tab-bottom-rounding: vars.$space--s;
 .dock-tab.dock-tab-active.dock-tab-active-highlight {
   outline: 2px solid red;
   outline-offset: -2px;
+  // This duration must be ≤ "cssHighlightDurationMilliseconds" in platform-tab-title.component.tsx
   animation: tabTitleBarFlash 1s ease-in-out 3;
 }
 

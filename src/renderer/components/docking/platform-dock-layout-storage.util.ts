@@ -441,7 +441,7 @@ export function unmaximizeAnyMaximizedTabGroup(dockLayout: DockLayout, webViewId
     if (tabData?.parent === maximizedTabGroup) return;
   }
 
-  // Setting "maximize" as the "direction" of a maximized tab group that causes it to unmaximize
+  // Setting "maximize" as the "direction" of a maximized tab group causes it to unmaximize
   // Null is required by the API
   // eslint-disable-next-line no-null/no-null
   dockLayout.dockMove(maximizedTabGroup, null, 'maximize');
