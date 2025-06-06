@@ -187,6 +187,25 @@ type Story = StoryObj<TabToolbarProps>;
 
 export const Default: Story = {};
 
+export const MenuButtonVariant: Story = {
+  args: {
+    tabToolbarVariant: 'menuButton',
+    centerAreaChildren: undefined,
+    startAreaChildren: undefined,
+    endAreaChildren: undefined,
+    tabViewMenuData: undefined,
+  },
+  parameters: {
+    controls: { hideNoControlsWarning: true },
+    docs: {
+      description: {
+        story:
+          'Shows the TabToolbar in menuButton variant, which displays only the project menu as a floating button.',
+      },
+    },
+  },
+};
+
 export const AnimatedWidth: Story = {
   render: (args) => (
     <>

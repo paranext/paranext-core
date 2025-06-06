@@ -38,7 +38,70 @@ export type TabToolbarProps = PropsWithChildren<{
    * side in ltr, left side in rtl). Recommended for secondary tools and view options.
    */
   endAreaChildren?: ReactNode;
+
+  /**
+   * Variant of the tab toolbar. The menuButton option displays just the project menu as a floating
+   * action button that scrolls with the screen.
+   */
+  tabToolbarVariant?: 'default' | 'menuButton';
+
+  /** Icon that will be displayed on the Menu Button. Defaults to the hamburger menu icon. */
+  menuButtonIcon?: ReactNode;
 }>;
+
+/**
+ * Conditionally render children in start and middle areas of the toolbar based on whether the whole
+ * toolbar should be showing or whether just the project menu button should be showing.
+ *
+ * @param tabToolbarVariant Variant of the tab toolbar. The menuButton option displays just the
+ *   project menu as a floating action button that scrolls with the screen.
+ * @param className Tailwind CSS classes that should be applied to the container of the children.
+ * @param areaChildren Toolbar children to be put in this area of the the toolbar.
+ * @returns Nothing for the menuButton variant, otherwise a styled toolbar container with children.
+ */
+function ToolbarChildren(
+  tabToolbarVariant: TabToolbarProps['tabToolbarVariant'],
+  className: string,
+  areaChildren: ReactNode,
+) {
+  if (tabToolbarVariant === 'menuButton') return;
+  return <div className={className}>{areaChildren}</div>;
+}
+
+/**
+ * Conditionally render view menu (if it has menu item(s)) and end area children at the end of the
+ * toolbar based on whether the whole toolbar should be showing or whether just the project menu
+ * button should be showing.
+ *
+ * @param tabToolbarVariant
+ * @param className
+ * @param endAreaChildren
+ * @param tabViewMenuData
+ * @param viewInfoMenuCommandHandler
+ * @returns
+ */
+function ToolbarEnd(
+  tabToolbarVariant: TabToolbarProps['tabToolbarVariant'],
+  endAreaChildren: ReactNode,
+  tabViewMenuData: Localized<MultiColumnMenu> | undefined,
+  viewInfoMenuCommandHandler: CommandHandler,
+) {
+  if (tabToolbarVariant === 'menuButton') return;
+  return (
+    <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
+      {tabViewMenuData && (
+        <TabDropdownMenu
+          commandHandler={viewInfoMenuCommandHandler}
+          menuData={tabViewMenuData}
+          tabLabel="View Info"
+          icon={<EllipsisVertical />}
+          className="tw-h-full"
+        />
+      )}
+      {endAreaChildren}
+    </div>
+  );
+}
 
 export function TabToolbar({
   projectMenuCommandHandler,
@@ -50,11 +113,13 @@ export function TabToolbar({
   startAreaChildren,
   centerAreaChildren,
   endAreaChildren,
+  tabToolbarVariant,
+  menuButtonIcon,
 }: TabToolbarProps) {
   return (
     <div
       className={cn(
-        'tw-box-border tw-flex tw-h-12 tw-w-full tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-border tw-px-4 tw-py-2 tw-text-foreground tw-@container/toolbar',
+        `tw-sticky tw-top-0 tw-box-border tw-flex tw-h-14 tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-px-4 tw-py-2 tw-text-foreground tw-@container/toolbar ${tabToolbarVariant === 'menuButton' ? 'tw-pointer-events-none' : 'tw-w-full tw-border tw-bg-background'}`,
         className,
       )}
       id={id}
@@ -64,28 +129,24 @@ export function TabToolbar({
           commandHandler={projectMenuCommandHandler}
           menuData={projectMenuData}
           tabLabel="Project"
-          icon={<Menu />}
-          className="tw-h-full tw-w-8"
+          icon={menuButtonIcon ?? <Menu />}
+          className={
+            tabToolbarVariant === 'menuButton' ? 'tw-pointer-events-auto tw-shadow-lg' : ''
+          }
+          buttonVariant={tabToolbarVariant === 'menuButton' ? 'outline' : 'ghost'}
         />
       )}
-      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
-        {startAreaChildren}
-      </div>
-      <div className="tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
-        {centerAreaChildren}
-      </div>
-      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
-        {tabViewMenuData && (
-          <TabDropdownMenu
-            commandHandler={viewInfoMenuCommandHandler}
-            menuData={tabViewMenuData}
-            tabLabel="View Info"
-            icon={<EllipsisVertical />}
-            className="tw-h-full"
-          />
-        )}
-        {endAreaChildren}
-      </div>
+      {ToolbarChildren(
+        tabToolbarVariant,
+        'tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start',
+        startAreaChildren,
+      )}
+      {ToolbarChildren(
+        tabToolbarVariant,
+        'tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto',
+        centerAreaChildren,
+      )}
+      {ToolbarEnd(tabToolbarVariant, endAreaChildren, tabViewMenuData, viewInfoMenuCommandHandler)}
     </div>
   );
 }
