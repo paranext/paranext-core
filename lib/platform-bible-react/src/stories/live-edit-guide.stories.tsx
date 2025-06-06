@@ -156,12 +156,12 @@ onClick={() => console.log('clicked')}
 }
 
 const meta: Meta<typeof LiveEditGuide> = {
-  title: 'Demo/Live Edit/📖 Getting Started',
+  title: 'Demo/Live Edit',
   component: LiveEditGuide,
   parameters: {
     docs: {
       description: {
-        component: 'Complete guide to using the live code editor in Storybook.',
+        component: 'How to use the live code editor in Storybook.',
       },
     },
   },
