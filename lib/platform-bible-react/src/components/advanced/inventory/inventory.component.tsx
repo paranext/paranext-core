@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/shadcn-ui/select';
+import { Scope } from '@/components/utils/scripture.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { deepEqual, isString, LocalizedStringValue } from 'platform-bible-utils';
 import { useEffect, useMemo, useState } from 'react';
@@ -70,9 +71,6 @@ export const INVENTORY_STRING_KEYS = Object.freeze([
 export type InventoryLocalizedStrings = {
   [localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
-
-/** Scope of scripture that the inventory can operate on */
-export type Scope = 'book' | 'chapter';
 
 /** Status values that the status filter can select from */
 type StatusFilter = Status | 'all';

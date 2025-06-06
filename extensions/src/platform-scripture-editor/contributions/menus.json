@@ -42,6 +42,10 @@
           "platformScriptureEditor.checks": {
             "column": "platformScriptureEditor.tools",
             "order": 3
+          },
+          "platformScriptureEditor.find": {
+            "column": "platformScriptureEditor.tools",
+            "order": 4
           }
         },
         "items": [
@@ -74,6 +78,12 @@
             "group": "platformScriptureEditor.checks",
             "order": 3,
             "command": "platformScripture.openChecksSidePanel"
+          },
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "group": "platformScriptureEditor.find",
+            "order": 3,
+            "command": "platformScripture.openFind"
           }
         ]
       },
