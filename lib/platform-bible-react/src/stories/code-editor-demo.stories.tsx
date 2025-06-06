@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react';
 import { Button } from '@/components/shadcn-ui/button';
 import { Input } from '@/components/shadcn-ui/input';
 import { makeLiveEditStory } from 'storybook-addon-code-editor';
-import React, { useState } from 'react';
+import { useState } from 'react';
 
 // Simple interactive demo component
 function InteractiveDemo() {
