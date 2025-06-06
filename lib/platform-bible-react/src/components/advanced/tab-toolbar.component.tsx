@@ -54,7 +54,7 @@ export function TabToolbar({
   return (
     <div
       className={cn(
-        'tw-box-border tw-flex tw-h-12 tw-w-full tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-border tw-px-4 tw-py-2 tw-text-foreground tw-@container/toolbar',
+        'tw-box-border tw-flex tw-h-12 tw-w-full tw-flex-row tw-items-start tw-justify-between tw-gap-2 tw-overflow-clip tw-border-b tw-border-border tw-px-4 tw-pt-2 tw-text-foreground tw-@container/toolbar',
         className,
       )}
       id={id}
@@ -65,7 +65,7 @@ export function TabToolbar({
           menuData={projectMenuData}
           tabLabel="Project"
           icon={<Menu />}
-          className="tw-h-full tw-w-8"
+          className="tw-h-8 tw-w-8"
         />
       )}
       <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
@@ -81,7 +81,7 @@ export function TabToolbar({
             menuData={tabViewMenuData}
             tabLabel="View Info"
             icon={<EllipsisVertical />}
-            className="tw-h-full"
+            className="tw-h-8"
           />
         )}
         {endAreaChildren}
