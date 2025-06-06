@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 
 // Simple component to hold our documentation
 function LiveEditGuide() {
@@ -31,7 +31,7 @@ function LiveEditGuide() {
       <h2>✨ Features</h2>
       <ul>
         <li>
-          ✅ <strong>Monaco Editor</strong> - VS Code's editor with familiar shortcuts
+          ✅ <strong>Monaco Editor</strong> - VS Code&apos;s editor with familiar shortcuts
         </li>
         <li>
           ✅ <strong>TypeScript Support</strong> - Full syntax highlighting and IntelliSense
@@ -103,7 +103,7 @@ onClick={() => console.log('clicked')}
 <Input placeholder="Type here..." />`}
       </pre>
 
-      <h3>What's Available</h3>
+      <h3>What&apos;s Available</h3>
       <ul>
         <li>
           <strong>React</strong> - Automatically imported (useState, useEffect, etc.)
@@ -126,8 +126,8 @@ onClick={() => console.log('clicked')}
           ✅ <strong>Start simple</strong> - Begin with BasicExample to get familiar
         </li>
         <li>
-          ✅ <strong>Experiment freely</strong> - Changes are temporary and won't affect the actual
-          codebase
+          ✅ <strong>Experiment freely</strong> - Changes are temporary and won&apos;t affect the
+          actual codebase
         </li>
         <li>
           ✅ <strong>Copy useful code</strong> - When you create something useful, copy it for your

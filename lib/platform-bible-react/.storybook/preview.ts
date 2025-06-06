@@ -1,4 +1,4 @@
-import type { Preview } from '@storybook/react';
+import type { Preview } from '@storybook/react-vite';
 import { setupMonaco } from 'storybook-addon-code-editor';
 import { persistDirection, readDirection } from '../src/utils/dir-helper.util';
 import '../src/index.css';
