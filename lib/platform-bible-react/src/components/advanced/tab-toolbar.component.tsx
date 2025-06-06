@@ -49,6 +49,60 @@ export type TabToolbarProps = PropsWithChildren<{
   menuButtonIcon?: ReactNode;
 }>;
 
+ * Conditionally render children in start and middle areas of the toolbar based on whether the whole
+ * toolbar should be showing or whether just the project menu button should be showing.
+ *
+ * @param tabToolbarVariant Variant of the tab toolbar. The menuButton option displays just the
+ *   project menu as a floating action button that scrolls with the screen.
+ * @param className Tailwind CSS classes that should be applied to the container of the children.
+ * @param areaChildren Toolbar children to be put in this area of the the toolbar.
+ * @returns Nothing for the menuButton variant, otherwise a styled toolbar container with children.
+ */
+function ToolbarChildren(
+  tabToolbarVariant: TabToolbarProps['tabToolbarVariant'],
+  className: string,
+  areaChildren: ReactNode,
+) {
+  if (tabToolbarVariant === 'menuButton') return;
+  return <div className={className}>{areaChildren}</div>;
+}
+
+/**
+ * Conditionally render view menu (if it has menu item(s)) and end area children at the end of the
+ * toolbar based on whether the whole toolbar should be showing or whether just the project menu
+ * button should be showing.
+ *
+ * @param tabToolbarVariant
+ * @param className
+ * @param endAreaChildren
+ * @param tabViewMenuData
+ * @param viewInfoMenuCommandHandler
+ * @returns
+ */
+function ToolbarEnd(
+  tabToolbarVariant: TabToolbarProps['tabToolbarVariant'],
+  endAreaChildren: ReactNode,
+  tabViewMenuData: Localized<MultiColumnMenu> | undefined,
+  viewInfoMenuCommandHandler: CommandHandler,
+) {
+  if (tabToolbarVariant === 'menuButton') return;
+  return (
+    <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
+      {tabViewMenuData && (
+        <TabDropdownMenu
+          commandHandler={viewInfoMenuCommandHandler}
+          menuData={tabViewMenuData}
+          tabLabel="View Info"
+          icon={<EllipsisVertical />}
+          className="tw-h-full"
+        />
+      )}
+      {endAreaChildren}
+    </div>
+  );
+}
+
+/**
  * Component for rendering a customizable tab toolbar.
  *
  * The toolbar includes three main areas to place children components: start, center, and end. It
@@ -70,45 +124,35 @@ export function TabToolbar({
   return (
     <div
       className={cn(
-        'tw-box-border tw-flex tw-h-12 tw-w-full tw-flex-row tw-items-start tw-justify-between tw-overflow-clip tw-border-b tw-border-border tw-text-foreground tw-@container/toolbar *:tw-p-2',
+        'tw-box-border tw-flex tw-h-12 tw-w-full tw-flex-row tw-items-center tw-justify-between tw-gap-2 tw-overflow-clip tw-border tw-px-4 tw-py-2 tw-text-foreground tw-@container/toolbar',
         className,
       )}
       id={id}
     >
       {projectMenuData && (
-        // div wrapper gets padding instead of the button
-        <div>
-          <TabDropdownMenu
-            onSelectMenuItem={onSelectProjectMenuItem}
-            menuData={projectMenuData}
-            tabLabel="Project"
-            icon={<Menu />}
-            className="tw-h-8 tw-w-8"
-          />
-        </div>
+        <TabDropdownMenu
+          commandHandler={projectMenuCommandHandler}
+          menuData={projectMenuData}
+          tabLabel="Project"
+          icon={<Menu />}
+          className="tw-h-full tw-w-8"
+        />
       )}
-      {startAreaChildren && (
-        <div className="tw-flex tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
-          {startAreaChildren}
-        </div>
-      )}
-      {centerAreaChildren && (
-        <div className="tw-flex tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
-          {centerAreaChildren}
-        </div>
-      )}
-      <div className="tw-flex tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
+      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
+        {startAreaChildren}
+      </div>
+      <div className="tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
+        {centerAreaChildren}
+      </div>
+      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
         {tabViewMenuData && (
-          // div wrapper gets padding instead of the button
-          <div>
-            <TabDropdownMenu
-              onSelectMenuItem={onSelectViewInfoMenuItem}
-              menuData={tabViewMenuData}
-              tabLabel="View Info"
-              icon={<EllipsisVertical />}
-              className="tw-h-8"
-            />
-          </div>
+          <TabDropdownMenu
+            commandHandler={viewInfoMenuCommandHandler}
+            menuData={tabViewMenuData}
+            tabLabel="View Info"
+            icon={<EllipsisVertical />}
+            className="tw-h-full"
+          />
         )}
         {endAreaChildren}
       </div>

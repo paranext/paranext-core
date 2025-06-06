@@ -1,8 +1,11 @@
-import type { Meta, StoryObj } from '@storybook/react-vite';
+import type { Meta, StoryObj } from '@storybook/react';
 import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import { TabToolbar, TabToolbarProps } from '@/components/advanced/tab-toolbar.component';
+import {
+  TabToolbar,
+  TabToolbarProps,
+} from '@/components/advanced/tab-toolbar/tab-toolbar.component';
 import { AnimatedContainer } from '@/storybook/decorators/animated-container';
 
 const setScrollGroupId = (newScrollGroupId: number | undefined) => {
@@ -117,7 +120,7 @@ const meta: Meta<TabToolbarProps> = {
     tabViewMenuData,
     startAreaChildren: (
       <>
-        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} />
+        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} className="tw-h-8" />
         <ScrollGroupSelector
           availableScrollGroupIds={[0, 1, 2, 3, 4]}
           localizedStrings={myScrollGroupIdLocalizedStrings}
@@ -175,7 +178,7 @@ const meta: Meta<TabToolbarProps> = {
           onChangeScrollGroupId={setScrollGroupId}
           size="sm"
         />
-        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} />
+        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} className="tw-h-8" />
       </>
     ),
   },

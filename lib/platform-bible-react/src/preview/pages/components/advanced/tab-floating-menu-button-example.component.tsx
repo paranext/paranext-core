@@ -1,11 +1,4 @@
-import { BookChapterControl } from '@/components/advanced/book-chapter-control/book-chapter-control.component';
-import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
-import TabToolbar from '@/components/advanced/tab-toolbar/tab-toolbar.component';
-import { defaultScrRef, getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
-
-const setScrollGroupId = (newScrollGroupId: number | undefined) => {
-  console.log('New Scroll Group Id: ', newScrollGroupId);
-};
+import { TabFloatingMenuButton } from '@/components/advanced/tab-toolbar/tab-floating-menu-button.component';
 
 const projectMenuData = {
   columns: {
@@ -140,136 +133,13 @@ const projectMenuData = {
   ],
 };
 
-const tabMenuData = {
-  columns: {
-    'platformScriptureEditor.options': { label: 'Options', order: 3 },
-    'platformScriptureEditor.viewOptions': { label: 'View Options', order: 4 },
-  },
-  groups: {
-    'platformScriptureEditor.layout': {
-      column: 'platformScriptureEditor.options',
-      order: 1,
-    },
-    'platformScriptureEditor.colors': {
-      column: 'platformScriptureEditor.viewOptions',
-      order: 2,
-    },
-  },
-  items: [
-    {
-      label: 'Background Color',
-      localizeNotes: '',
-      group: 'platformScriptureEditor.colors',
-      order: 1,
-      command: 'platformScriptureEditor.changeBackgroundColor',
-      iconPathBefore:
-        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
-    },
-    {
-      label: 'Text Color',
-      localizeNotes: '',
-      group: 'platformScriptureEditor.colors',
-      order: 2,
-      command: 'platformScriptureEditor.changeTextColor',
-      iconPathAfter:
-        'https://raw.githubusercontent.com/Iconscout/unicons/refs/heads/master/svg/line/wifi.svg',
-    },
-    {
-      label: 'Thick Borders',
-      localizeNotes: '',
-      group: 'platformScriptureEditor.layout',
-      order: 1,
-      command: 'platformScriptureEditor.showThickBorders',
-    },
-  ],
-};
-
-const myScrollGroupIdLocalizedStrings = {
-  [getLocalizeKeyForScrollGroupId('undefined')]: 'Ø',
-  [getLocalizeKeyForScrollGroupId(0)]: 'A',
-  [getLocalizeKeyForScrollGroupId(1)]: 'B',
-  [getLocalizeKeyForScrollGroupId(2)]: 'C',
-  [getLocalizeKeyForScrollGroupId(3)]: 'D',
-  [getLocalizeKeyForScrollGroupId(4)]: 'E',
-};
-
-const startAreaChildren = (
-  <>
-    <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} className="tw-h-8" />
-    <ScrollGroupSelector
-      availableScrollGroupIds={[0, 1, 2, 3, 4]}
-      localizedStrings={myScrollGroupIdLocalizedStrings}
-      scrollGroupId={0}
-      onChangeScrollGroupId={setScrollGroupId}
-      size="sm"
-    />
-  </>
-);
-
-const centerAreaChildren = (
-  <>
-    <ScrollGroupSelector
-      availableScrollGroupIds={[0, 1, 2, 3, 4]}
-      localizedStrings={myScrollGroupIdLocalizedStrings}
-      scrollGroupId={0}
-      onChangeScrollGroupId={setScrollGroupId}
-      size="sm"
-    />
-    <ScrollGroupSelector
-      availableScrollGroupIds={[0, 1, 2, 3, 4]}
-      localizedStrings={myScrollGroupIdLocalizedStrings}
-      scrollGroupId={0}
-      onChangeScrollGroupId={setScrollGroupId}
-      size="sm"
-    />
-  </>
-);
-
-const endAreaChildren = (
-  <>
-    <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} className="tw-h-8" />
-    <ScrollGroupSelector
-      availableScrollGroupIds={[0, 1, 2, 3, 4]}
-      localizedStrings={myScrollGroupIdLocalizedStrings}
-      scrollGroupId={0}
-      onChangeScrollGroupId={setScrollGroupId}
-      size="sm"
-    />
-  </>
-);
-
-export function TabToolbarExample() {
+export function TabFloatingMenuButtonExample() {
   return (
-    <TabToolbar
+    <TabFloatingMenuButton
       onSelectProjectMenuItem={(command) => console.log('Project Menu Run command: ', command)}
-      onSelectViewInfoMenuItem={(command) => console.log('View Info Run command: ', command)}
       projectMenuData={projectMenuData}
-      tabViewMenuData={tabMenuData}
-      startAreaChildren={startAreaChildren}
-      centerAreaChildren={centerAreaChildren}
-      endAreaChildren={endAreaChildren}
     />
   );
 }
 
-export function MenuButtonTabToolbarExample() {
-  return (
-    <TabToolbar
-      projectMenuCommandHandler={(command) => console.log('Project Menu Run command: ', command)}
-      viewInfoMenuCommandHandler={(command) => console.log('View Info Run command: ', command)}
-      projectMenuData={projectMenuData}
-      tabToolbarVariant="menuButton"
-    />
-  );
-}
-
-export function TabToolbarExamples() {
-  return (
-    <>
-      {TabToolbarExample()}
-      {MenuButtonTabToolbarExample()}
-    </>
-  );
-}
-
-export default TabToolbarExamples;
+export default TabFloatingMenuButtonExample;
