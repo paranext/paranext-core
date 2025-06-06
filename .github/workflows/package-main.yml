@@ -117,12 +117,12 @@ jobs:
       - name: Publish releases - Windows
         if: ${{ matrix.os == env.OS_WINDOWS }}
         run: |
-          npm exec electron-builder -- build --publish never --win
+          npx electron-builder build --publish never --win
 
       - name: Publish releases - macOS
         if: ${{ matrix.os == env.OS_MACOS }}
         run: |
-          npm exec electron-builder -- build --publish never --mac
+          npx electron-builder build --publish never --mac
 
       - name: Publish releases - Linux
         if: ${{ matrix.os == env.OS_LINUX }}
@@ -130,7 +130,7 @@ jobs:
           # no hardlinks so dependencies are copied
           USE_HARD_LINKS: false
         run: |
-          npm exec electron-builder -- build --publish never --linux
+          npx electron-builder build --publish never --linux
 
       - name: Rename Windows exe to include GitHub Action Run ID
         if: ${{ matrix.os == env.OS_WINDOWS }}

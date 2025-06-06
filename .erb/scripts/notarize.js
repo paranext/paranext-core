@@ -1,4 +1,3 @@
-const { notarize } = require('@electron/notarize');
 const fs = require('fs');
 const JSON5 = require('json5');
 
@@ -29,6 +28,10 @@ exports.default = async function notarizeMacos(context) {
   }
 
   const appName = context.packager.appInfo.productFilename;
+
+  // Must dynamic import ESModule @electron/notarize. But electron-builder 26.0.16 uses CommonJS, so
+  // this file cannot be an ESModule yet.
+  const { notarize } = import('@electron/notarize');
 
   await notarize({
     tool: 'notarytool',
