@@ -812,8 +812,10 @@ export function getSavedWebViewDefinitionSync(
 /** Set up defaults for options for getting a web view */
 function getWebViewOptionsDefaults(options: OpenWebViewOptions): OpenWebViewOptions {
   const optionsDefaulted = cloneDeep(options);
-  if ('existingId' in optionsDefaulted && !('createNewIfNotFound' in optionsDefaulted))
-    optionsDefaulted.createNewIfNotFound = true;
+  if ('existingId' in optionsDefaulted) {
+    if (!('createNewIfNotFound' in optionsDefaulted)) optionsDefaulted.createNewIfNotFound = true;
+    if (!('bringToFront' in optionsDefaulted)) optionsDefaulted.bringToFront = true;
+  }
 
   return optionsDefaulted;
 }
@@ -908,15 +910,6 @@ export const openWebView = async (
   options: OpenWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
   const optionsDefaulted = getWebViewOptionsDefaults(options);
-  // ENHANCEMENT: If they aren't looking for an existingId, we could get the webview without
-  // searching for an existing webview and send it to the renderer, skipping the part where we send
-  // to the renderer, then search for an existing webview, then get the webview
-
-  // Get the webview definition from the webview provider
-  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
-
-  if (!webViewProvider)
-    throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
 
   // Find existing webView if one exists
   /** Either the existing webview with the specified ID or a placeholder webview if one was not found */
@@ -948,6 +941,12 @@ export const openWebView = async (
       );
       // Load the web view state since the web view provider doesn't have access to the data store
       existingSavedWebView.state = getFullWebViewStateById(existingWebView.id);
+
+      if (optionsDefaulted.bringToFront) {
+        getDockLayoutSync().unmaximizeAnyMaximizedTabGroup(existingWebView.id);
+        getDockLayoutSync().bringFloatingTabGroupToFront(existingWebView.id);
+        updateWebViewDefinitionSync(existingWebView.id, { flashTriggerTime: Date.now() });
+      }
     }
   }
 
@@ -958,6 +957,11 @@ export const openWebView = async (
     // If we want to create a new webview, set a placeholder with a new ID
     existingSavedWebView = { webViewType, id: newGuid() };
   }
+
+  // Get the webview definition from the webview provider
+  const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
+  if (!webViewProvider)
+    throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
 
   // Create the new webview or load if it already existed
   const webView = await webViewProvider.getWebView(

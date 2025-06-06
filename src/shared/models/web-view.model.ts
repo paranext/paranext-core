@@ -122,6 +122,8 @@ type WebViewDefinitionBase = {
    * focusing independently of a scroll group
    */
   scrollGroupScrRef?: ScrollGroupScrRef;
+  /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+  flashTriggerTime?: number;
   /**
    * General object to store unique state for this webview.
    *
@@ -307,6 +309,7 @@ export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'tooltip',
   'projectId',
   'scrollGroupScrRef',
+  'flashTriggerTime',
 ] as const;
 
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
@@ -471,17 +474,26 @@ export type OpenWebViewOptions = {
    *
    * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
    * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
-   * `existingId` at all is the only way to specify we are not looking for an existing webView
+   * `existingId` at all is the only way to specify we are not looking for an existing WebView
    */
   existingId?: string | '?' | undefined;
   /**
-   * Whether to create a webview with a new ID and a webview with ID `existingId` was not found.
+   * Whether to create a WebView with a new ID and a WebView with ID `existingId` was not found.
    * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
    * ignored.
    *
    * Defaults to true
    */
   createNewIfNotFound?: boolean;
+  /**
+   * Whether to bring the WebView to the front if it already exists. Only relevant if `existingId`
+   * is provided. If `existingId` is not provided, this property is ignored.
+   *
+   * Defaults to true
+   *
+   * If a new WebView is created, it is always brought to the front, regardless of this option.
+   */
+  bringToFront?: boolean;
 };
 
 /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
