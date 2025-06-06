@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Input } from '@/components/shadcn-ui/input';
-import { useState } from 'react';
+import React, { useState } from 'react';
 // import { ThemeProvider } from '@/preview/preview-components/theme-provider.component'; // Temporarily disabled
 
 const meta: Meta<typeof Input> = {
