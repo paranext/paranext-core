@@ -5,11 +5,8 @@ import {
   inventoryStatusColumn,
 } from '@/components/advanced/inventory/inventory-columns';
 import { InventoryTableData } from '@/components/advanced/inventory/inventory-utils';
-import {
-  Inventory,
-  InventoryItem,
-  Scope,
-} from '@/components/advanced/inventory/inventory.component';
+import { Inventory, InventoryItem } from '@/components/advanced/inventory/inventory.component';
+import { Scope } from '@/components/utils/scripture.util';
 import { defaultScrRef } from 'platform-bible-utils';
 import { useState } from 'react';
 

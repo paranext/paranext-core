@@ -94,7 +94,21 @@
       "%webView_inventory_show_preceding_marker%": "Show Preceding Marker",
       "%webView_inventory_unknown_marker%": "Unknown Marker",
       "%webView_inventory_occurrences_table_header_reference%": "Reference",
-      "%webView_inventory_occurrences_table_header_occurrence%": "Occurrence"
+      "%webView_inventory_occurrences_table_header_occurrence%": "Occurrence",
+      "%webView_scope_selector_selected_text%": "Selected text",
+      "%webView_scope_selector_current_verse%": "Current verse",
+      "%webView_scope_selector_current_chapter%": "Current chapter",
+      "%webView_scope_selector_current_book%": "Current book",
+      "%webView_scope_selector_choose_books%": "Choose books",
+      "%webView_scope_selector_scope%": "Scope",
+      "%webView_scope_selector_select_books%": "Select books",
+      "%webView_book_selector_books_selected%": "Books selected",
+      "%webView_book_selector_select_books%": "Select books...",
+      "%webView_book_selector_search_books%": "Search books...",
+      "%webView_book_selector_select_all%": "Select all",
+      "%webView_book_selector_clear_all%": "Clear all",
+      "%webView_book_selector_no_book_found%": "No book found.",
+      "%webView_book_selector_more%": "more"
     },
     "es": {
       "%settings_platformScripture_paratext_group_label%": "Configuraciones Relacionadas con Paratext 9",
