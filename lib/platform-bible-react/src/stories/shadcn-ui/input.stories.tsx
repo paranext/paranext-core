@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Input } from '@/components/shadcn-ui/input';
 import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 
