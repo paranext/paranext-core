@@ -1,6 +1,12 @@
 import { Button } from '@/components/shadcn-ui/button';
 import { cn } from '@/utils/shadcn-ui.util';
-import { getBooksForSection, isSectionFullySelected, Section } from './scope-selector-utils';
+import { LanguageStrings } from 'platform-bible-utils';
+import {
+  getBooksForSection,
+  getSectionShortName,
+  isSectionFullySelected,
+  Section,
+} from './scope-selector-utils';
 
 /**
  * A button component that represents a scripture section (testament) in the book selector. The
@@ -12,13 +18,20 @@ function SectionButton({
   availableBookIds,
   selectedBookIds,
   onToggle,
+  localizedStrings,
 }: {
   section: Section;
   availableBookIds: string[];
   selectedBookIds: string[];
   onToggle: (section: Section) => void;
+  localizedStrings: LanguageStrings;
 }) {
   const isDisabled = getBooksForSection(availableBookIds, section).length === 0;
+
+  const sectionOtShortText = localizedStrings['%scripture_section_ot_short%'];
+  const sectionNtShortText = localizedStrings['%scripture_section_nt_short%'];
+  const sectionDcShortText = localizedStrings['%scripture_section_dc_short%'];
+  const sectionExtraShortText = localizedStrings['%scripture_section_extra_short%'];
 
   return (
     <Button
@@ -32,7 +45,13 @@ function SectionButton({
       )}
       disabled={isDisabled}
     >
-      {section}
+      {getSectionShortName(
+        section,
+        sectionOtShortText,
+        sectionNtShortText,
+        sectionDcShortText,
+        sectionExtraShortText,
+      )}
     </Button>
   );
 }

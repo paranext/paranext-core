@@ -17,6 +17,14 @@ const localizedStrings = {
   '%webView_book_selector_clear_all%': 'Clear all',
   '%webView_book_selector_no_book_found%': 'No book found.',
   '%webView_book_selector_more%': 'more',
+  '%scripture_section_ot_long%': 'Oude Testament',
+  '%scripture_section_ot_short%': 'OT',
+  '%scripture_section_nt_long%': 'Nieuwe Testament',
+  '%scripture_section_nt_short%': 'NT',
+  '%scripture_section_dc_long%': 'Deuterocanoniek',
+  '%scripture_section_dc_short%': 'DC',
+  '%scripture_section_extra_long%': 'Extra materiaal',
+  '%scripture_section_extra_short%': 'Extra',
 };
 
 export function ScopeSelectorExample() {

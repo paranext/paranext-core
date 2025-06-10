@@ -14,15 +14,26 @@ type BookItemProps = {
   toggleBook: (bookId: string, shiftKey: boolean) => void;
   /** Reference to track if the last key event included the shift key */
   lastKeyEventShiftKey: MutableRefObject<boolean>;
+  /**
+   * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+   * value contains localized versions of the ID and full book name
+   */
+  localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
 };
 
 /**
  * A component that represents a single book item in the book selector. Handles both keyboard and
  * mouse interactions for book selection, including shift-click for range selection. The component
- * shows the book's English name, its ID, and visually indicates its testament (OT/NT/DC/Extra)
+ * shows the book's localized name, its ID, and visually indicates its testament (OT/NT/DC/Extra)
  * through color coding.
  */
-function BookItem({ bookId, selectedBookIds, toggleBook, lastKeyEventShiftKey }: BookItemProps) {
+function BookItem({
+  bookId,
+  selectedBookIds,
+  toggleBook,
+  lastKeyEventShiftKey,
+  localizedBookNames,
+}: BookItemProps) {
   const isMouseClick = useRef(false);
   const mouseClickTimer = useRef<ReturnType<typeof setTimeout>>();
   return (
@@ -69,11 +80,13 @@ function BookItem({ bookId, selectedBookIds, toggleBook, lastKeyEventShiftKey }:
           },
         )}
       >
-        {Canon.bookIdToEnglishName(bookId)}
+        {(localizedBookNames && localizedBookNames.get(bookId)?.localizedName) ||
+          Canon.bookIdToEnglishName(bookId)}
       </span>
 
       <span className="tw-ml-2 tw-text-xs tw-text-muted-foreground">
-        {bookId.toLocaleUpperCase()}
+        {(localizedBookNames && localizedBookNames.get(bookId)?.localizedId) ||
+          bookId.toLocaleUpperCase()}
       </span>
     </CommandItem>
   );

@@ -40,6 +40,11 @@ type BookSelectorProps = {
   onChangeSelectedBookIds: (books: string[]) => void;
   /** Object containing the localized strings for the component */
   localizedStrings: LanguageStrings;
+  /**
+   * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+   * value contains localized versions of the ID and full book name
+   */
+  localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
 };
 
 /**
@@ -55,6 +60,7 @@ export function BookSelector({
   selectedBookIds,
   onChangeSelectedBookIds,
   localizedStrings,
+  localizedBookNames,
 }: BookSelectorProps) {
   const booksSelectedText = localizedStrings['%webView_book_selector_books_selected%'];
   const selectBooksText = localizedStrings['%webView_book_selector_select_books%'];
@@ -63,6 +69,10 @@ export function BookSelector({
   const clearAllText = localizedStrings['%webView_book_selector_clear_all%'];
   const noBookFoundText = localizedStrings['%webView_book_selector_no_book_found%'];
   const moreText = localizedStrings['%webView_book_selector_more%'];
+  const sectionOtLongText = localizedStrings['%scripture_section_ot_long%'];
+  const sectionNtLongText = localizedStrings['%scripture_section_nt_long%'];
+  const sectionDcLongText = localizedStrings['%scripture_section_dc_long%'];
+  const sectionExtraLongText = localizedStrings['%scripture_section_extra_long%'];
 
   const [isBooksSelectorOpen, setIsBooksSelectorOpen] = useState(false);
   const lastSelectedBookRef = useRef<string | undefined>(undefined);
@@ -142,6 +152,7 @@ export function BookSelector({
               availableBookIds={availableBooksIds}
               selectedBookIds={selectedBookIds}
               onToggle={toggleSection}
+              localizedStrings={localizedStrings}
             />
           );
         })}
@@ -190,7 +201,16 @@ export function BookSelector({
 
                 return (
                   <Fragment key={section}>
-                    <CommandGroup heading={getSectionLongName(section)}>
+                    <CommandGroup
+                      heading={getSectionLongName(
+                        section,
+                        sectionOtLongText,
+                        sectionNtLongText,
+                        sectionDcLongText,
+                        sectionExtraLongText,
+                      )}
+                    >
+                      ,
                       {sectionBooks.map((bookId) => (
                         <BookItem
                           key={bookId}
@@ -198,6 +218,7 @@ export function BookSelector({
                           selectedBookIds={selectedBookIds}
                           toggleBook={toggleBook}
                           lastKeyEventShiftKey={lastKeyEventShiftKey}
+                          localizedBookNames={localizedBookNames}
                         />
                       ))}
                     </CommandGroup>

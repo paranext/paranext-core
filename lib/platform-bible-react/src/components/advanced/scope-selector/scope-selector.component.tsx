@@ -24,6 +24,14 @@ export const SCOPE_SELECTOR_STRING_KEYS = Object.freeze([
   '%webView_book_selector_clear_all%',
   '%webView_book_selector_no_book_found%',
   '%webView_book_selector_more%',
+  '%scripture_section_ot_long%',
+  '%scripture_section_ot_short%',
+  '%scripture_section_nt_long%',
+  '%scripture_section_nt_short%',
+  '%scripture_section_dc_long%',
+  '%scripture_section_dc_short%',
+  '%scripture_section_extra_long%',
+  '%scripture_section_extra_short%',
 ] as const);
 
 /** Type definition for the localized strings used in this component */
@@ -79,6 +87,11 @@ interface ScopeSelectorProps {
    * and pass the localized keys that are returned by the hook into this prop.
    */
   localizedStrings: ScopeSelectorLocalizedStrings;
+  /**
+   * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+   * value contains localized versions of the ID and full book name
+   */
+  localizedBookNames?: Map<string, { localizedId: string; localizedName: string }>;
 }
 
 /**
@@ -94,6 +107,7 @@ export function ScopeSelector({
   selectedBookIds,
   onSelectedBookIdsChange,
   localizedStrings,
+  localizedBookNames,
 }: ScopeSelectorProps) {
   const selectedTextText = localizeString(
     localizedStrings,
@@ -150,6 +164,7 @@ export function ScopeSelector({
             selectedBookIds={selectedBookIds}
             onChangeSelectedBookIds={onSelectedBookIdsChange}
             localizedStrings={localizedStrings}
+            localizedBookNames={localizedBookNames}
           />
         </div>
       )}
