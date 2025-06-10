@@ -1,0 +1,57 @@
+diff --git a/node_modules/ast-types/lib/main.d.ts b/node_modules/ast-types/lib/main.d.ts
+index 9b54fef..d62538b 100644
+--- a/node_modules/ast-types/lib/main.d.ts
++++ b/node_modules/ast-types/lib/main.d.ts
+@@ -1,28 +1,35 @@
+-import { ASTNode, Type, AnyType, Field } from "./types";
+-import { NodePath } from "./node-path";
++/** patch-package notes:
++ *
++ * This file was causing errors while typechecking `platform-bible-react`:
++ * https://github.com/paranext/paranext-core/actions/runs/15508380396/job/43666025803
++ *
++ * There were multiple instances of types that had the same name as declared varaibles. This is now
++ * fixed via assigning aliases to the types or removing unused types.
++ */
++import { ASTNode, Type as MetaType, AnyType, Field } from "./types";
+ import { namedTypes } from "./gen/namedTypes";
+-import { builders } from "./gen/builders";
++import { builders as Builders } from "./gen/builders";
+ import { Visitor } from "./gen/visitor";
+ declare const astNodesAreEquivalent: {
+     (a: any, b: any, problemPath?: any): boolean;
+     assert(a: any, b: any): void;
+-}, builders: builders, builtInTypes: {
+-    string: Type<string>;
+-    function: Type<Function>;
+-    array: Type<any[]>;
+-    object: Type<{
++}, builders: Builders, builtInTypes: {
++    string: MetaType<string>;
++    function: MetaType<Function>;
++    array: MetaType<any[]>;
++    object: MetaType<{
+         [key: string]: any;
+     }>;
+-    RegExp: Type<RegExp>;
+-    Date: Type<Date>;
+-    number: Type<number>;
+-    boolean: Type<boolean>;
+-    null: Type<null>;
+-    undefined: Type<undefined>;
+-    BigInt: Type<BigInt>;
++    RegExp: MetaType<RegExp>;
++    Date: MetaType<Date>;
++    number: MetaType<number>;
++    boolean: MetaType<boolean>;
++    null: MetaType<null>;
++    undefined: MetaType<undefined>;
++    BigInt: MetaType<BigInt>;
+ }, defineMethod: (name: any, func?: Function | undefined) => Function, eachField: (object: any, callback: (name: any, value: any) => any, context?: any) => void, finalize: () => void, getBuilderName: (typeName: any) => any, getFieldNames: (object: any) => string[], getFieldValue: (object: any, fieldName: any) => any, getSupertypeNames: (typeName: string) => string[], NodePath: import("./node-path").NodePathConstructor, Path: import("./path").PathConstructor, PathVisitor: import("./path-visitor").PathVisitorConstructor, someField: (object: any, callback: (name: any, value: any) => any, context?: any) => boolean, Type: {
+-    or(...types: any[]): Type<any>;
+-    from<T>(value: any, name?: string | undefined): Type<T>;
++    or(...types: any[]): MetaType<any>;
++    from<T>(value: any, name?: string | undefined): MetaType<T>;
+     def(typeName: string): import("./types").Def<any>;
+     hasDef(typeName: string): boolean;
+ }, use: <T>(plugin: import("./types").Plugin<T>) => T, visit: <M = {}>(node: ASTNode, methods?: Visitor<M> | undefined) => any;
