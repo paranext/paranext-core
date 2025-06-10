@@ -13,7 +13,7 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { formatScrRef, getChaptersForBook } from 'platform-bible-utils';
+import { formatScrRef, getChaptersForBook, MODIFIER_KEYS } from 'platform-bible-utils';
 import {
   FocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
@@ -57,24 +57,6 @@ const SEARCH_QUERY_FORMATS = [
   /^(\w+)(?:\s(\d+))$/i, // Matches a word followed by a chapter number
   /^(\w+)(?:\s(\d+):(\d+))$/i, // Matches a word followed by a chapter and verse number
 ];
-
-/** Modifier keys that don't constitute typed input */
-const MODIFIER_KEYS = new Set([
-  'Alt',
-  'AltGraph',
-  'CapsLock',
-  'Control',
-  'Fn',
-  'FnLock',
-  'Hyper',
-  'Meta',
-  'NumLock',
-  'ScrollLock',
-  'Shift',
-  'Super',
-  'Symbol',
-  'SymbolLock',
-]);
 
 /** Keys used for navigating around in the content menu */
 const CONTENT_NAVIGATION_KEYS = new Set([
@@ -165,10 +147,18 @@ export function BookChapterControl({
   );
   // Search query that is used to filter the book list. Set to the book chapter input value if it is modified
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // The book that is currently expanded in the dropdown to show its chapter selection controls
   const [selectedBookId, setSelectedBookId] = useState<string>(scrRef.book);
+  // Which chapter is highlighted (as if it were being hovered) in the chapter selection controls
   const [highlightedChapter, setHighlightedChapter] = useState<number>(scrRef.chapterNum ?? 0);
+  // Which book is highlighted (as if it were being hovered) in the book selection list
   const [highlightedBookId, setHighlightedBookId] = useState<string>(scrRef.book);
+  // Whether the dropdown content is showing
   const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
+  // `isContentOpen` but delayed by a `useLayoutEffect` cycle - used to delay the scroll to the
+  // selected book menu item until the refs are defined and available. This is necessary because the
+  // refs are not defined immediately after we set the content to opened, so we need to wait a bit
+  // before scrolling to the selected book menu item
   const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
 
   // This ref will always be defined
@@ -286,8 +276,10 @@ export function BookChapterControl({
       // If it's open and the user presses down, go into the dropdown
       // If it's open and the user presses escape, close it
       if (!isContentOpen) {
-        setIsContentOpen(true);
-      } else if (event.key === 'ArrowDown') {
+        // Just let Tab do its thing
+        if (event.key !== 'Tab') setIsContentOpen(true);
+      } else if (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) {
+        // If the user presses down or tab, focus the content
         if (menuItemRef?.current) {
           menuItemRef.current.focus();
         } else if (contentRef.current) {
