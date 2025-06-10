@@ -845,7 +845,15 @@ export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
 	"%webView_book_selector_select_all%",
 	"%webView_book_selector_clear_all%",
 	"%webView_book_selector_no_book_found%",
-	"%webView_book_selector_more%"
+	"%webView_book_selector_more%",
+	"%scripture_section_ot_long%",
+	"%scripture_section_ot_short%",
+	"%scripture_section_nt_long%",
+	"%scripture_section_nt_short%",
+	"%scripture_section_dc_long%",
+	"%scripture_section_dc_short%",
+	"%scripture_section_extra_long%",
+	"%scripture_section_extra_short%"
 ];
 /** Type definition for the localized strings used in this component */
 export type ScopeSelectorLocalizedStrings = {
@@ -877,13 +885,21 @@ interface ScopeSelectorProps {
 	 * and pass the localized keys that are returned by the hook into this prop.
 	 */
 	localizedStrings: ScopeSelectorLocalizedStrings;
+	/**
+	 * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+	 * value contains localized versions of the ID and full book name
+	 */
+	localizedBookNames?: Map<string, {
+		localizedId: string;
+		localizedName: string;
+	}>;
 }
 /**
  * A component that allows users to select the scope of their search or operation. Available scopes
  * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
  * component is displayed to allow users to choose specific books.
  */
-export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no

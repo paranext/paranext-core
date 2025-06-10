@@ -27,6 +27,22 @@ const localizedStrings = {
   '%scripture_section_extra_short%': 'Extra',
 };
 
+const dutchBookLocalizations = new Map<string, { localizedId: string; localizedName: string }>([
+  ['GEN', { localizedId: 'GEN', localizedName: 'Genesis' }],
+  ['NUM', { localizedId: 'NUM', localizedName: 'Numeri' }],
+  ['DEU', { localizedId: 'DEU', localizedName: 'Deutronomium' }],
+  ['JOS', { localizedId: 'JOZ', localizedName: 'Jozua' }],
+  ['PSA', { localizedId: 'PSA', localizedName: 'Psalmen' }],
+  ['PRO', { localizedId: 'SPR', localizedName: 'Spreuken' }],
+  ['DAN', { localizedId: 'DAN', localizedName: 'Daniël' }],
+  ['ZEC', { localizedId: 'ZAC', localizedName: 'Zacharia' }],
+  ['MAT', { localizedId: 'MAT', localizedName: 'Mattheüs' }],
+  ['MRK', { localizedId: 'MRK', localizedName: 'Markus' }],
+  ['LUK', { localizedId: 'LUK', localizedName: 'Lukas' }],
+  ['JHN', { localizedId: 'JOH', localizedName: 'Johannes' }],
+  ['ACT', { localizedId: 'HAN', localizedName: 'Handelingen' }],
+]);
+
 export function ScopeSelectorExample() {
   const [searchScope1, setSearchScope1] = useState<Scope>('book');
   const [searchScope2, setSearchScope2] = useState<Scope>('selectedBooks');
@@ -65,6 +81,7 @@ export function ScopeSelectorExample() {
         selectedBookIds={selectedBooks}
         onSelectedBookIdsChange={setSelectedBooks}
         localizedStrings={localizedStrings}
+        localizedBookNames={dutchBookLocalizations}
       />
     </div>
   );
