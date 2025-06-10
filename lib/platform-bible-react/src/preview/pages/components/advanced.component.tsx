@@ -19,7 +19,7 @@ import { MarketplaceExamples } from './advanced/marketplace.example.component';
 import { MultiSelectComboBoxExample } from './advanced/multi-select-combo-box-example';
 import { ScriptureResultsViewerExample } from './advanced/scripture-results-viewer.examples.component';
 import { SettingsListExamples } from './advanced/settings-list.examples.component';
-import { TabToolbarExample } from './advanced/tab-toolbar-example.component';
+import { TabToolbarExamples } from './advanced/tab-toolbar-example.component';
 import { UiLanguageSelectorExample } from './advanced/ui-language-selector-example.component';
 import { columns, data } from './data-sources/data-table-content';
 import { TabDropdownMenuExample } from './advanced/tab-dropdown-menu-example.component';
@@ -116,7 +116,7 @@ export function Compositions() {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Tab Toolbar">
-          <TabToolbarExample />
+          <TabToolbarExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Filter">

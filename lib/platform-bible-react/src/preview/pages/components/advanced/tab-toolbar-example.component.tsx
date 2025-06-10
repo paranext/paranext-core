@@ -252,4 +252,24 @@ export function TabToolbarExample() {
   );
 }
 
-export default TabToolbarExample;
+export function MenuButtonTabToolbarExample() {
+  return (
+    <TabToolbar
+      projectMenuCommandHandler={(command) => console.log('Project Menu Run command: ', command)}
+      viewInfoMenuCommandHandler={(command) => console.log('View Info Run command: ', command)}
+      projectMenuData={projectMenuData}
+      tabToolbarVariant="menuButton"
+    />
+  );
+}
+
+export function TabToolbarExamples() {
+  return (
+    <>
+      {TabToolbarExample()}
+      {MenuButtonTabToolbarExample()}
+    </>
+  );
+}
+
+export default TabToolbarExamples;
