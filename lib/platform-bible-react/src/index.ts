@@ -141,12 +141,14 @@ export {
   CardContent,
 } from './components/shadcn-ui/card';
 export { default as Checkbox } from './components/shadcn-ui/checkbox';
+export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
 export * from './components/shadcn-ui/popover';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
+export { ScrollArea } from './components/shadcn-ui/scroll-area';
 export { Separator } from './components/shadcn-ui/separator';
 export * from './components/shadcn-ui/sonner';
 export { Slider } from './components/shadcn-ui/slider';
