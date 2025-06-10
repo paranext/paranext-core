@@ -992,7 +992,10 @@ export const openWebView = async (
   let { allowedFrameSources } = webView;
   if (contentType !== WEB_VIEW_CONTENT_TYPE.URL && allowedFrameSources)
     allowedFrameSources = allowedFrameSources.filter(
-      (hostValue) => startsWith(hostValue, 'https:') || startsWith(hostValue, 'papi-extension:'),
+      (hostValue) =>
+        startsWith(hostValue, 'https:') ||
+        startsWith(hostValue, 'papi-extension:') ||
+        startsWith(hostValue, 'http://localhost:'),
     );
 
   // Validate the WebViewDefinition to make sure it is acceptable
