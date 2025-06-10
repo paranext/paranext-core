@@ -1,7 +1,7 @@
 import type { Meta as MetaBase, StoryObj } from '@storybook/react';
 import { TextField } from 'platform-bible-react';
 
-export const Meta: MetaBase<typeof TextField> = {
+const meta: MetaBase<typeof TextField> = {
   title: 'Basics/TextField',
   component: TextField,
   tags: ['autodocs'],
@@ -16,7 +16,7 @@ export const Meta: MetaBase<typeof TextField> = {
     className: { control: 'text' },
   },
 };
-export default Meta;
+export default meta;
 
 type Story = StoryObj<typeof TextField>;
 

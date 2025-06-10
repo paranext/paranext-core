@@ -1,8 +1,9 @@
 import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
 import type { Meta as MetaBase, StoryObj } from '@storybook/react';
-import { Command, Label, Toolbar } from 'platform-bible-react';
+import { Label, Toolbar } from 'platform-bible-react';
+import { MenuItemContainingCommand } from 'platform-bible-utils';
 
-export const Meta: MetaBase<typeof Toolbar> = {
+const meta: MetaBase<typeof Toolbar> = {
   title: 'Basics/Toolbar',
   component: Toolbar,
   tags: ['autodocs'],
@@ -10,7 +11,7 @@ export const Meta: MetaBase<typeof Toolbar> = {
     className: { control: 'text' },
   },
 };
-export default Meta;
+export default meta;
 
 type LocalizedMainMenu = LocalizedMenus['mainMenu'];
 
@@ -83,22 +84,22 @@ export const ParatextBright: Story = {
   },
 };
 
-function HandleMenuCommand(command: Command) {
-  if (command.command === 'storybookToolbar.log') {
+function HandleMenuCommand(selectedMenuItem: MenuItemContainingCommand) {
+  if (selectedMenuItem.command === 'storybookToolbar.log') {
     // eslint-disable-next-line no-console
-    console.log(command.command);
-  } else if (command.command === 'storybookToolbar.warn') {
+    console.log(selectedMenuItem.command);
+  } else if (selectedMenuItem.command === 'storybookToolbar.warn') {
     // eslint-disable-next-line no-console
-    console.warn(command.command);
+    console.warn(selectedMenuItem.command);
   } else {
     // eslint-disable-next-line no-console
-    console.error(`Unexpected command: ${command.command}`);
+    console.error(`Unexpected command: ${selectedMenuItem.command}`);
   }
 }
 
 export const WithMenuHoldShiftToSeeIcons: Story = {
   args: {
-    commandHandler: HandleMenuCommand,
+    onSelectMenuItem: HandleMenuCommand,
     menuData: menuLayoutWithIcons,
   },
 };

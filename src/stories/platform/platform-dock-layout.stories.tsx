@@ -81,9 +81,9 @@ export const Default: Story = {
   args: { defaultLayout, style, loadTab },
 };
 
-export const Meta: MetaBase<typeof DockLayoutWrapper> = {
+const meta: MetaBase<typeof DockLayoutWrapper> = {
   title: 'platform/DockLayout',
   component: DockLayoutWrapper,
   tags: ['autodocs'],
 };
-export default Meta;
+export default meta;

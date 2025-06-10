@@ -27,14 +27,14 @@ import {
 import { Fragment, ReactNode } from 'react';
 import { Button } from '@/components/shadcn-ui/button';
 import { getSubMenuGroupKeyForMenuItemId } from './menu.util';
-import { CommandHandler } from './platform-menubar.component';
+import { SelectMenuItemHandler } from './platform-menubar.component';
 import MenuItemIcon from './menu-icon.component';
 
 const getGroupContent = (
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
   columnOrSubMenuKey: string | undefined,
-  commandHandler: CommandHandler,
+  onSelectMenuItem: SelectMenuItemHandler,
 ) => {
   if (!columnOrSubMenuKey) return undefined;
 
@@ -57,7 +57,9 @@ const getGroupContent = (
                 <DropdownMenuItem
                   key={`dropdown-menu-item-${item.label}-${item.command}`}
                   onClick={() => {
-                    commandHandler(item);
+                    // Since this item contains a command, we can safely assert its type.
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    onSelectMenuItem(item as MenuItemContainingCommand);
                   }}
                 >
                   {item.iconPathBefore && (
@@ -78,7 +80,7 @@ const getGroupContent = (
                         groups,
                         items,
                         getSubMenuGroupKeyForMenuItemId(groups, item.id),
-                        commandHandler,
+                        onSelectMenuItem,
                       )}
                     </DropdownMenuSubContent>
                   </DropdownMenuPortal>
@@ -96,7 +98,7 @@ const getGroupContent = (
 
 export type TabDropdownMenuProps = {
   /** The handler to use for menu commands */
-  commandHandler: CommandHandler;
+  onSelectMenuItem: SelectMenuItemHandler;
 
   /** The menu data to show on the dropdown menu */
   menuData: Localized<MultiColumnMenu>;
@@ -125,7 +127,7 @@ export type TabDropdownMenuProps = {
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
 export default function TabDropdownMenu({
-  commandHandler,
+  onSelectMenuItem,
   menuData,
   tabLabel,
   icon,
@@ -151,7 +153,7 @@ export default function TabDropdownMenu({
             <Fragment key={columnKey}>
               <DropdownMenuGroup>
                 <TooltipProvider>
-                  {getGroupContent(menuData.groups, menuData.items, columnKey, commandHandler)}
+                  {getGroupContent(menuData.groups, menuData.items, columnKey, onSelectMenuItem)}
                 </TooltipProvider>
               </DropdownMenuGroup>
 
