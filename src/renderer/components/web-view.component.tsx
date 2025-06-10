@@ -66,6 +66,7 @@ async function retrieveWebViewContent(webViewType: string, id: string): Promise<
   const loadedId = await openWebView(webViewType, undefined, {
     existingId: id,
     createNewIfNotFound: false,
+    bringToFront: false,
   });
   if (loadedId !== id)
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
@@ -341,6 +342,7 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
   return {
     ...savedTabInfo,
     data,
+    flashTriggerTime: data.flashTriggerTime,
     tabIconUrl: data.iconUrl,
     tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',

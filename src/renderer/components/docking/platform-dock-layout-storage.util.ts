@@ -40,7 +40,7 @@ import {
   loadQuickVerseHeresyTab,
 } from '@renderer/testing/test-quick-verse-heresy-panel.component';
 
-import { RCDockTabInfo, TabType, isTab } from './docking-framework-internal.model';
+import { RCDockTabInfo, TabType, isPanel, isTab } from './docking-framework-internal.model';
 import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './error-tab.component';
 import { getFloatPosition, layoutDefaults } from './platform-dock-layout-positioning.util';
 import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
@@ -248,7 +248,7 @@ export function updateWebViewDefinition(
     updateWebViewTab(targetTabInfo, updatedWebViewData),
   );
   // Update existing tab
-  dockLayout.updateTab(webViewId, updatedTabData, false);
+  dockLayout.updateTab(webViewId, updatedTabData, !!updateInfo.flashTriggerTime);
   return true;
 }
 // #endregion
@@ -417,5 +417,49 @@ export function addWebViewToDock(
       `platform-dock-layout error: WebView of type ${webView.webViewType} has no id!`,
     );
   return addTabToDock({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView }, layout, dockLayout);
+}
+
+/**
+ * If any tab group is maximized, this unmaximizes it unless it contains the specified WebView.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param webViewId The ID of the WebView to search for as a child of the maximized panel.
+ */
+export function unmaximizeAnyMaximizedTabGroup(dockLayout: DockLayout, webViewId?: string): void {
+  // According to the docs, if there is a child of maxbox, then the type is always PanelData
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const maximizedTabGroup = dockLayout.getLayout().maxbox?.children?.[0] as PanelData | undefined;
+  if (!maximizedTabGroup) return;
+
+  // Look for the given WebView in the maximized tab group
+  if (webViewId) {
+    let tabData = dockLayout.find(webViewId);
+    while (tabData && tabData.parent !== maximizedTabGroup) {
+      tabData = tabData.parent;
+    }
+    if (tabData?.parent === maximizedTabGroup) return;
+  }
+
+  // Setting "maximize" as the "direction" of a maximized tab group causes it to unmaximize
+  // Null is required by the API
+  // eslint-disable-next-line no-null/no-null
+  dockLayout.dockMove(maximizedTabGroup, null, 'maximize');
+}
+
+export function bringFloatingTabGroupToFront(dockLayout: DockLayout, webViewId: string): void {
+  let tabData = dockLayout.find(webViewId);
+  let tabGroupData: PanelData | undefined;
+  while (!tabGroupData && tabData) {
+    // If the tab is a floating tab, we want to bring its group to the front
+    if (tabData.parent && isPanel(tabData.parent)) tabGroupData = tabData.parent;
+    // Otherwise, keep looking up the parent chain
+    else tabData = tabData.parent;
+  }
+
+  // Bring the floating tab group to the front
+  // Null is required by the API
+  // eslint-disable-next-line no-null/no-null
+  if (!!tabGroupData && tabGroupData.z) dockLayout.dockMove(tabGroupData, null, 'front');
 }
 // #endregion

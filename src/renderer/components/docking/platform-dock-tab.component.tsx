@@ -19,6 +19,7 @@ export function createRCDockTabFromTabInfo(tabInfo: TabInfo) {
         iconUrl={tabInfo.tabIconUrl}
         text={tabInfo.tabTitle}
         tooltip={tabInfo.tabTooltip}
+        flashTriggerTime={tabInfo.flashTriggerTime}
       />
     ),
     content: <PlatformPanel>{tabInfo.content}</PlatformPanel>,
