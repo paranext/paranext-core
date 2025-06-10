@@ -15,6 +15,8 @@ import { Readable, Writable } from 'stream';
 import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
 
 /**
+ * JSDOC SOURCE PlatformSpawn
+ *
  * Run {@link spawn} to create a child process. The platform will automatically kill all child
  * processes created this way in packaged builds. Child processes are not killed when running in
  * development.
@@ -62,6 +64,8 @@ export type PlatformSpawn = (
 ) => ChildProcessByStdio<Writable, Readable, Readable>;
 
 /**
+ * JSDOC SOURCE PlatformFork
+ *
  * Run {@link fork} to create a child process. The platform will automatically kill all child
  * processes created this way in packaged builds. Child processes are not killed when running in
  * development.
@@ -96,7 +100,7 @@ export type PlatformFork = (
   options?: ForkOptions,
 ) => ChildProcess;
 
-/** Data about the operating system on which this process is running */
+/** JSDOC SOURCE OperatingSystemData Data about the operating system on which this process is running */
 export type OperatingSystemData = {
   /** Value of `os.platform()` in Node */
   platform: string;
@@ -107,7 +111,10 @@ export type OperatingSystemData = {
 };
 
 export type CreateProcess = {
+  /** JSDOC DESTINATION PlatformSpawn */
   spawn: PlatformSpawn;
+  /** JSDOC DESTINATION PlatformFork */
   fork: PlatformFork;
+  /** JSDOC DESTINATION OperatingSystemData */
   osData: OperatingSystemData;
 };

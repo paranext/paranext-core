@@ -10,7 +10,7 @@ type BookMenuItemProps = PropsWithChildren<{
   bookId: string;
   /** Callback to run when a book menu item is selected */
   handleSelectBook: () => void;
-  /** Indicates if this menu item is currently selected */
+  /** Indicates if this menu item is currently selected and expanded to show its children */
   isSelected: boolean;
   /** Function that is called upon highlighting a book in the dropdown menu */
   handleHighlightBook: () => void;
