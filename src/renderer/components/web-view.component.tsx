@@ -26,7 +26,7 @@ import {
 } from 'platform-bible-utils';
 import {
   BookChapterControl,
-  CommandHandler,
+  SelectMenuItemHandler,
   ScrollGroupSelector,
   TabToolbar,
   useEvent,
@@ -253,14 +253,14 @@ export function WebView({
     }, []);
   };
 
-  const projectMenuCommandHandler = useCallback<CommandHandler>(
+  const projectMenuCommandHandler = useCallback<SelectMenuItemHandler>(
     (projectMenuCommand) => {
       handleMenuCommand(projectMenuCommand, id);
     },
     [id],
   );
 
-  const viewInfoMenuCommandHandler = useCallback<CommandHandler>(
+  const viewInfoMenuCommandHandler = useCallback<SelectMenuItemHandler>(
     (viewInfoMenuCommand) => {
       handleMenuCommand(viewInfoMenuCommand, id);
     },
@@ -285,8 +285,8 @@ export function WebView({
     <div className="web-view-parent">
       {shouldShowToolbar && !isLoading && !isPlatformError(webViewMenu) && (
         <TabToolbar
-          projectMenuCommandHandler={projectMenuCommandHandler}
-          viewInfoMenuCommandHandler={viewInfoMenuCommandHandler}
+          onSelectProjectMenuItem={projectMenuCommandHandler}
+          onSelectViewInfoMenuItem={viewInfoMenuCommandHandler}
           projectMenuData={webViewMenu.topMenu}
           className="web-view-tab-nav"
           startAreaChildren={

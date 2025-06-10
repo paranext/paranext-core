@@ -677,12 +677,11 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
 /**
- * Defines a function that takes a `Command` object as an argument and returns `void`. Used to
- * define the shape of a function that can handle commands, but it does not provide an
- * implementation.
+ * Callback function that is invoked when a user selects a menu item. Receives the full
+ * `MenuItemContainingCommand` object as an argument.
  */
-export interface CommandHandler {
-	(command: MenuItemContainingCommand): void;
+export interface SelectMenuItemHandler {
+	(selectedMenuItem: MenuItemContainingCommand): void;
 }
 export type SelectedSettingsSidebarItem = {
 	label: string;
@@ -916,7 +915,7 @@ type SettingsListHeaderProps = {
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
 type TabDropdownMenuProps = {
 	/** The handler to use for menu commands */
-	commandHandler: CommandHandler;
+	onSelectMenuItem: SelectMenuItemHandler;
 	/** The menu data to show on the dropdown menu */
 	menuData: Localized<MultiColumnMenu>;
 	/** Defines a string value that labels the current element */
@@ -937,12 +936,12 @@ type TabDropdownMenuProps = {
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 export type TabToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for toolbar item commands */
-	projectMenuCommandHandler: CommandHandler;
+	onSelectProjectMenuItem: SelectMenuItemHandler;
 	/** The handler to use for toolbar item commands */
-	viewInfoMenuCommandHandler: CommandHandler;
+	onSelectViewInfoMenuItem: SelectMenuItemHandler;
 	/** Menu data that is used to populate the Menubar component for the project menu. */
 	projectMenuData?: Localized<MultiColumnMenu>;
 	/** Menu data that is used to populate the Menubar component for the view info menu */
@@ -964,7 +963,7 @@ export type TabToolbarProps = React$1.PropsWithChildren<{
 	 */
 	endAreaChildren?: React$1.ReactNode;
 }>;
-export declare function TabToolbar({ projectMenuCommandHandler, viewInfoMenuCommandHandler, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1003,7 +1002,7 @@ type TabNavigationContentSearchProps = {
 declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
-	commandHandler: CommandHandler;
+	onSelectMenuItem: SelectMenuItemHandler;
 	/**
 	 * Menu data that is used to populate the Menubar component. If empty object, no menus will be
 	 * shown on the App Menubar
@@ -1053,7 +1052,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * @param {ToolbarProps} props - The props for the component.
  */
-export declare function Toolbar({ menuData, onOpenChange, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];

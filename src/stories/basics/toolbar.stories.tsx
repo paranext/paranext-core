@@ -99,7 +99,7 @@ function HandleMenuCommand(command: MenuItemContainingCommand) {
 
 export const WithMenuHoldShiftToSeeIcons: Story = {
   args: {
-    commandHandler: HandleMenuCommand,
+    onSelectMenuItem: HandleMenuCommand,
     menuData: menuLayoutWithIcons,
   },
 };

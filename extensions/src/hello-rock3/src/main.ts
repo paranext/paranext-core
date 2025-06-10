@@ -92,7 +92,7 @@ const reactWebView2Provider: IWebViewProviderWithType = {
 
 // #endregion
 
-// #region Extension-specific Project Web View, Command, etc.
+// #region Extension-specific Project Web View, commands, etc.
 
 interface HelloRock3ProjectOptions extends OpenWebViewOptions {
   /** The project ID this viewer should focus on */
