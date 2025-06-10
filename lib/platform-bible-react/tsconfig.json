@@ -15,9 +15,7 @@
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "forceConsistentCasingInFileNames": true,
     "incremental": false,
-    //"isolatedModules" was changed to false when StoryBook was updated to v9 because of a type
-    // checking issue with the "ast-types" package which is an indirect dependency of StoryBook.
-    "isolatedModules": false,
+    "isolatedModules": true,
     "noEmit": true,
     "noImplicitReturns": true,
     "skipLibCheck": false,
