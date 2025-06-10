@@ -13,6 +13,11 @@ import {
   SCRIPTURE_EXTENDER_PDPF_ID,
   ScriptureExtenderProjectDataProviderEngineFactory,
 } from './project-data-provider/platform-scripture-extender-pdpef.model';
+import {
+  SCRIPTURE_FINDER_PDPF_ID,
+  ScriptureFinderProjectDataProviderEngineFactory,
+} from './project-data-provider/platform-scripture-finder.pdpef.model';
+import { SCRIPTURE_FINDER_PROJECT_INTERFACES } from './project-data-provider/platform-scripture-finder-pdpe.model';
 
 const characterInventoryWebViewType = 'platformScripture.characterInventory';
 const repeatedWordsInventoryWebViewType = 'platformScripture.repeatedWordsInventory';
@@ -139,6 +144,13 @@ export async function activate(context: ExecutionActivationContext) {
       SCRIPTURE_EXTENDER_PDPF_ID,
       SCRIPTURE_EXTENDER_PROJECT_INTERFACES,
       new ScriptureExtenderProjectDataProviderEngineFactory(SCRIPTURE_EXTENDER_PDPF_ID),
+    );
+
+  const scriptureFinderPdpefPromise =
+    papi.projectDataProviders.registerProjectDataProviderEngineFactory(
+      SCRIPTURE_FINDER_PDPF_ID,
+      SCRIPTURE_FINDER_PROJECT_INTERFACES,
+      new ScriptureFinderProjectDataProviderEngineFactory(SCRIPTURE_FINDER_PDPF_ID),
     );
 
   const characterInventoryWebViewProvider = new InventoryWebViewProvider(
@@ -318,6 +330,7 @@ export async function activate(context: ExecutionActivationContext) {
 
   context.registrations.add(
     await scriptureExtenderPdpefPromise,
+    await scriptureFinderPdpefPromise,
     await booksPresentPromise,
     await versificationPromise,
     await validCharactersPromise,

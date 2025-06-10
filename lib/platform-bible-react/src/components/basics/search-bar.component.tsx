@@ -6,7 +6,7 @@ import { Search, X } from 'lucide-react';
 
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
-  /** Seach query for the search bar */
+  /** Search query for the search bar */
   value: string;
   /**
    * Callback fired to handle the search query is updated
@@ -23,6 +23,9 @@ export type SearchBarProps = {
 
   /** Additional css classes to help with unique styling of the search bar */
   className?: string;
+
+  /** Optional boolean to disable the search bar */
+  isDisabled?: boolean;
 };
 
 /**
@@ -37,6 +40,7 @@ export type SearchBarProps = {
  * @param {boolean} [props.isFullWidth] - Optional boolean to set the input base to full width
  * @param {string} [props.className] - Additional css classes to help with unique styling of the
  *   search bar
+ * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
  */
 export function SearchBar({
   value,
@@ -44,6 +48,7 @@ export function SearchBar({
   placeholder,
   isFullWidth,
   className,
+  isDisabled = false,
 }: SearchBarProps) {
   const dir: Direction = readDirection();
 
@@ -61,6 +66,7 @@ export function SearchBar({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onSearch(e.target.value)}
+        disabled={isDisabled}
       />
       {value && (
         <Button

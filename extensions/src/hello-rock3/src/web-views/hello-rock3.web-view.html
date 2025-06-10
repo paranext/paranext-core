@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+  <head>
+    <style>
+      .title {
+        color: darkgreen;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="title">Hello Third Rock!!</div>
+    <div><button id="hello-rock3" type="button">Hello Third Rock 0</button></div>
+    <div><button id="hello-someone" type="button">Hello Someone</button></div>
+    <div id="hello-someone-output"></div>
+    <div id="root"></div>
+    <!-- Test the papi-extension protocol in a webView -->
+    <img
+      src="papi-extension://quickVerse/assets/letter-q.png"
+      alt="Q icon"
+      style="max-height: 25px; max-width: 25px"
+    />
+    <script>
+      // Test React component to render in the root
+      const { createElement, useCallback, useState } = require('react');
+      const { usePromise, useEvent } = require('platform-bible-react');
+      const { htmlEncode } = require('platform-bible-utils');
+      const papi = require('@papi/frontend');
+      const { logger } = require('@papi/frontend');
+
+      const NAME = 'Hello Rock3 React WebView in HTML';
+
+      // Test fetching
+      papi
+        .fetch('https://www.example.com', { mode: 'no-cors' })
+        .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
+
+      function HelloRock3() {
+        const [clicks, setClicks] = useState(0);
+
+        // Update the clicks when we are informed helloRock3 has been run
+        useEvent(
+          papi.network.getNetworkEvent('helloRock3.onHelloRock3'),
+          useCallback(({ times }) => setClicks(times), []),
+        );
+
+        return createElement(
+          'div',
+          null,
+          createElement(
+            'div',
+            null,
+            createElement(
+              'button',
+              {
+                type: 'button',
+                onClick: () => {
+                  papi.commands.sendCommand('helloRock3.helloRock3');
+                  setClicks(clicks + 1);
+                },
+              },
+              'Hello Third Rock ',
+              clicks,
+            ),
+          ),
+        );
+      }
+
+      function print(input) {
+        papi.logger.debug(input);
+      }
+      document.addEventListener('DOMContentLoaded', function () {
+        // Keep track of the times helloRock3 has been run with the event
+        let helloRock3Clicks = 0;
+        function updateHelloRock3Clicks(clicks) {
+          helloRock3Clicks = clicks;
+          const helloRock3Button = document.getElementById('hello-rock3');
+          helloRock3Button.textContent = htmlEncode(`Hello Rock3 ${helloRock3Clicks}`);
+        }
+
+        // Update the clicks when we are informed helloRock3 has been run
+        const onHelloRock3Event = papi.network.getNetworkEvent('helloRock3.onHelloRock3');
+        onHelloRock3Event(({ times }) => {
+          updateHelloRock3Clicks(times);
+        });
+
+        // Attach handler for hello-rock3
+        const helloRock3Button = document.getElementById('hello-rock3');
+        helloRock3Button.addEventListener('click', () => {
+          papi.commands.sendCommand('helloRock3.helloRock3').then((message) => {
+            print(message);
+          });
+          updateHelloRock3Clicks(helloRock3Clicks + 1);
+        });
+
+        // Attach handler for hello-someone
+        const helloSomeoneButton = document.getElementById('hello-someone');
+        helloSomeoneButton.addEventListener('click', () =>
+          papi.commands
+            .sendCommand('helloSomeone.helloSomeone', "'Hello Rock3 WebView'")
+            .then((message) => {
+              const helloSomeoneOutput = document.getElementById('hello-someone-output');
+              helloSomeoneOutput.textContent = htmlEncode(message);
+              print(message);
+            }),
+        );
+        helloSomeoneButton.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          const promises = new Array(10000);
+          for (let i = 0; i < 10000; i += 1)
+            promises[i] = papi.commands.sendCommand(
+              'helloSomeone.helloSomeone',
+              "'Hello Rock3 WebView'",
+            );
+          Promise.all(promises).then(() => print('Done'));
+        });
+
+        // Initialize React
+        const container = document.getElementById('root');
+        const root = createRoot(container);
+        root.render(React.createElement(HelloRock3, null));
+
+        // Test fetching
+        papi
+          .fetch('https://www.example.com', { mode: 'no-cors' })
+          .catch((e) => logger.error(`Could not get data from example.com! Reason: ${e}`));
+      });
+
+      //# sourceURL=hello-rock3.web-view.html
+    </script>
+  </body>
+</html>

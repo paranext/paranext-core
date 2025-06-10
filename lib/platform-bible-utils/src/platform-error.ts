@@ -50,8 +50,12 @@ export function newPlatformError(error?: unknown): PlatformError {
     };
     Object.defineProperties(platformError, Object.getOwnPropertyDescriptors(error));
     Object.defineProperty(platformError, 'message', { enumerable: true });
-    if ('stack' in platformError)
-      Object.defineProperty(platformError, 'stack', { enumerable: true });
+    if ('stack' in error && isString(error.stack)) {
+      // stack is generated lazily, and it seems this is causing some troubles with copying it into
+      // another object via property descriptors as of Node 22.14.0 (no problems in 20.18.0).
+      // So we shall set the value directly on the object
+      Object.defineProperty(platformError, 'stack', { value: error.stack, enumerable: true });
+    }
     if ('cause' in platformError)
       Object.defineProperty(platformError, 'cause', { enumerable: true });
     return platformError;

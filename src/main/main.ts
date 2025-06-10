@@ -6,33 +6,12 @@
  * using webpack. This gives us some performance wins.
  */
 
+import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, shell } from 'electron';
 import os from 'os';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, RenderProcessGoneDetails } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
-import windowStateKeeper from 'electron-window-state';
 import '@main/global-this.model';
-import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
-import { logger } from '@shared/services/logger.service';
-import * as networkService from '@shared/services/network.service';
-import * as commandService from '@shared/services/command.service';
-import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { resolveHtmlPath } from '@node/utils/util';
-import { extensionHostService } from '@main/services/extension-host.service';
-import { networkObjectService } from '@shared/services/network-object.service';
-import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
-import { wait, serialize, getErrorMessage } from 'platform-bible-utils';
-import { CommandNames } from 'papi-shared-types';
-import { SerializedRequestType } from '@shared/utils/util';
-import { get } from '@shared/services/project-data-provider.service';
-import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
-import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
-import { startProjectLookupService } from '@main/services/project-lookup.service-host';
-import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
-import { GET_METHODS } from '@shared/data/rpc.model';
-import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
-import { startDataProtectionService } from '@main/services/data-protection.service-host';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import {
   APP_NAME,
@@ -40,7 +19,96 @@ import {
   APP_VERSION,
   startAppService,
 } from '@main/services/app.service-host';
+import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
+import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
+import { extensionHostService } from '@main/services/extension-host.service';
+import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
+import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+import { resolveHtmlPath } from '@node/utils/util';
+import {
+  DEFAULT_ZOOM_FACTOR,
+  DEV_MODE_RENDERER_INDICATOR,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+} from '@shared/data/platform.data';
+import { GET_METHODS } from '@shared/data/rpc.model';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import * as commandService from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import * as networkService from '@shared/services/network.service';
+import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { SerializedRequestType } from '@shared/utils/util';
+import windowStateKeeper from 'electron-window-state';
+import { CommandNames } from 'papi-shared-types';
+import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
+
+// #region Helper functions
+
+/**
+ * Get the zoom factor from settings or return the default value
+ *
+ * @returns The stored zoom factor or the default value
+ */
+const getZoomFactor = async (): Promise<number> => {
+  try {
+    return await settingsService.get('platform.zoomFactor');
+  } catch (e) {
+    logger.warn(`Failed to get zoom factor from settings: ${getErrorMessage(e)}`);
+    return DEFAULT_ZOOM_FACTOR;
+  }
+};
+
+/**
+ * Save the zoom factor to settings
+ *
+ * @param factor The zoom factor to save
+ */
+const setZoomFactor = async (factor: number): Promise<void> => {
+  try {
+    await settingsService.set('platform.zoomFactor', factor);
+  } catch (e) {
+    logger.warn(`Failed to save zoom factor to settings: ${getErrorMessage(e)}`);
+  }
+};
+
+/**
+ * Reset the zoom factor of the app's main window to 1.0 (100%)
+ *
+ * @param mainWindow The main BrowserWindow instance
+ */
+const resetZoomFactor = async () => {
+  try {
+    return await settingsService.reset('platform.zoomFactor');
+  } catch (e) {
+    logger.warn(`Failed to reset zoom factor from settings: ${getErrorMessage(e)}`);
+    return DEFAULT_ZOOM_FACTOR;
+  }
+};
+
+/** Increase the zoom factor of the app's main window by 0.1, up to a maximum of 3.0 */
+const zoomIn = async () => {
+  const currentZoom = await getZoomFactor();
+  if (currentZoom < MAX_ZOOM_FACTOR) {
+    const newZoom = currentZoom + 0.1;
+    await setZoomFactor(newZoom);
+  }
+};
+
+/** Decrease the zoom factor of the app's main window by 0.1, down to a minimum of 0.5 */
+const zoomOut = async () => {
+  const currentZoom = await getZoomFactor();
+  if (currentZoom > MIN_ZOOM_FACTOR) {
+    const newZoom = currentZoom - 0.1;
+    await setZoomFactor(newZoom);
+  }
+};
+
+// #endregion
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -345,6 +413,57 @@ async function main() {
       logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
+    // Register zoom keyboard shortcuts. MacOS already supports this natively
+    if (process.platform !== 'darwin') {
+      mainWindow.webContents.on('before-input-event', (event, input) => {
+        // Zoom in: Ctrl++ or Ctrl+=
+        if (input.control && (input.key === '=' || input.key === '+')) {
+          event.preventDefault();
+          zoomIn();
+        }
+        // Zoom out: Ctrl+-
+        else if (input.control && input.key === '-') {
+          event.preventDefault();
+          zoomOut();
+        }
+        // Reset zoom: Ctrl+0
+        else if (input.control && input.key === '0') {
+          event.preventDefault();
+          resetZoomFactor();
+        }
+      });
+    }
+
+    // Set initial zoom factor from settings
+    mainWindow.webContents.on('did-finish-load', async () => {
+      if (mainWindow && mainWindow.webContents) {
+        try {
+          const zoom = await getZoomFactor();
+          mainWindow.webContents.setZoomFactor(zoom);
+        } catch (e) {
+          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
+        }
+      }
+    });
+
+    // Update zoomfactor when the setting changes
+    settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
+      const zoomFactor = () => {
+        if (isPlatformError(newZoomFactor)) {
+          logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
+          return DEFAULT_ZOOM_FACTOR;
+        }
+        return newZoomFactor;
+      };
+      if (mainWindow && mainWindow.webContents) {
+        try {
+          mainWindow.webContents.setZoomFactor(zoomFactor());
+        } catch (e) {
+          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
+        }
+      }
+    });
+
     // Remove this if your app does not use auto updates
     // eslint-disable-next-line
     // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
@@ -396,6 +515,7 @@ async function main() {
       );
 
       createWindow();
+
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
@@ -551,6 +671,40 @@ async function main() {
             schema: { type: 'string' },
           },
         ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.zoomIn',
+    async () => {
+      await zoomIn();
+    },
+    {
+      method: {
+        summary: 'Increase the zoom factor of the main window by 10%',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.zoomOut',
+    async () => {
+      await zoomOut();
+    },
+    {
+      method: {
+        summary: 'Decrease the zoom factor of the main window by 10%',
+        params: [],
         result: {
           name: 'return value',
           schema: { type: 'null' },

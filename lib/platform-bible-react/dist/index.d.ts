@@ -1197,7 +1197,7 @@ export type ComboBoxProps<T> = {
 export declare function ComboBox<T extends ComboBoxOption = ComboBoxOption>({ id, options, className, buttonClassName, popoverContentClassName, value, onChange, getOptionLabel, icon, buttonPlaceholder, textPlaceholder, commandEmptyMessage, buttonVariant, alignDropDown, isDisabled, ...props }: ComboBoxProps<T>): import("react/jsx-runtime").JSX.Element;
 /** Props for the SearchBar component. */
 export type SearchBarProps = {
-	/** Seach query for the search bar */
+	/** Search query for the search bar */
 	value: string;
 	/**
 	 * Callback fired to handle the search query is updated
@@ -1211,6 +1211,8 @@ export type SearchBarProps = {
 	isFullWidth?: boolean;
 	/** Additional css classes to help with unique styling of the search bar */
 	className?: string;
+	/** Optional boolean to disable the search bar */
+	isDisabled?: boolean;
 };
 /**
  * A search bar component with a search icon and a clear button when the search query is not empty.
@@ -1224,8 +1226,9 @@ export type SearchBarProps = {
  * @param {boolean} [props.isFullWidth] - Optional boolean to set the input base to full width
  * @param {string} [props.className] - Additional css classes to help with unique styling of the
  *   search bar
+ * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
  */
-export declare function SearchBar({ value, onSearch, placeholder, isFullWidth, className, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export declare function SearchBar({ value, onSearch, placeholder, isFullWidth, className, isDisabled, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
 export type SpinnerProps = LucideProps;
 /**
  * A spinner component that uses the LoaderCircle icon from lucide-react to indicate loading states.

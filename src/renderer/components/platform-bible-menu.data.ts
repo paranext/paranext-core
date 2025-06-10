@@ -70,11 +70,11 @@ const supportAndDevelopmentMenuLayout: LocalizedMainMenu = {
       command: 'paratextBibleWordList.open',
     },
     {
-      label: 'Open Hello World Project...',
-      localizeNotes: 'Main application menu > Paratext column > Open Word List',
+      label: 'Open Hello Third Rock Project...',
+      localizeNotes: 'Main application menu > Paratext column > Open Hello Third Rock Project',
       group: 'paratext.resourceTools',
       order: 4,
-      command: 'helloWorld.openProject',
+      command: 'helloRock3.openProject',
     },
     {
       label: 'Settings',

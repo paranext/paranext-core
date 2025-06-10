@@ -104,9 +104,11 @@ module.exports = {
 
     '@typescript-eslint/naming-convention': [
       'error',
+
+      /* Allow META (Storybook) variables to break the rule */
       {
         selector: 'variable',
-        format: ['PascalCase', 'camelCase'],
+        format: ['PascalCase', 'camelCase', 'UPPER_CASE'],
         filter: {
           regex: '^meta$',
           match: false,
