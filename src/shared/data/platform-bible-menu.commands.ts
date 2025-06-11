@@ -1,8 +1,7 @@
 import * as commandService from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
-import { Command } from 'platform-bible-react';
 import { CommandNames } from 'papi-shared-types';
-import { getErrorMessage } from 'platform-bible-utils';
+import { getErrorMessage, MenuItemContainingCommand } from 'platform-bible-utils';
 
 /**
  * Run a command from a menu
@@ -11,7 +10,7 @@ import { getErrorMessage } from 'platform-bible-utils';
  * @param tabId The id of the dock layout tab on which the menu command is being run (if the tab is
  *   a web view, this is the same as the web view id) or `undefined` if run from the top menu
  */
-export function handleMenuCommand(command: Command, tabId?: string) {
+export function handleMenuCommand(command: MenuItemContainingCommand, tabId?: string) {
   switch (command.command) {
     case 'platform.openProjectDialog':
       logger.info(`Open Project Dialog. tabId: ${tabId}`);

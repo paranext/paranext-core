@@ -134,7 +134,7 @@ const menuData = {
 export function PlatformMenubarExample() {
   return (
     <PlatformMenubar
-      commandHandler={(command) => console.log('Run command: ', command)}
+      onSelectMenuItem={(command) => console.log('Run command: ', command)}
       menuData={menuData}
     />
   );

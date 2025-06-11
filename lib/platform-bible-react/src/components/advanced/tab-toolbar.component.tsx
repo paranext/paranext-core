@@ -2,15 +2,15 @@ import { PropsWithChildren, ReactNode } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { Menu, EllipsisVertical } from 'lucide-react';
-import { CommandHandler } from './menus/platform-menubar.component';
+import { SelectMenuItemHandler } from './menus/platform-menubar.component';
 import TabDropdownMenu from './menus/tab-dropdown-menu.component';
 
 export type TabToolbarProps = PropsWithChildren<{
   /** The handler to use for toolbar item commands */
-  projectMenuCommandHandler: CommandHandler;
+  onSelectProjectMenuItem: SelectMenuItemHandler;
 
   /** The handler to use for toolbar item commands */
-  viewInfoMenuCommandHandler: CommandHandler;
+  onSelectViewInfoMenuItem: SelectMenuItemHandler;
 
   /** Menu data that is used to populate the Menubar component for the project menu. */
   projectMenuData?: Localized<MultiColumnMenu>;
@@ -104,8 +104,8 @@ function ToolbarEnd(
 }
 
 export function TabToolbar({
-  projectMenuCommandHandler,
-  viewInfoMenuCommandHandler,
+  onSelectProjectMenuItem,
+  onSelectViewInfoMenuItem,
   projectMenuData,
   tabViewMenuData,
   id,
@@ -126,7 +126,7 @@ export function TabToolbar({
     >
       {projectMenuData && (
         <TabDropdownMenu
-          commandHandler={projectMenuCommandHandler}
+          onSelectMenuItem={onSelectProjectMenuItem}
           menuData={projectMenuData}
           tabLabel="Project"
           icon={menuButtonIcon ?? <Menu />}
@@ -136,17 +136,24 @@ export function TabToolbar({
           buttonVariant={tabToolbarVariant === 'menuButton' ? 'outline' : 'ghost'}
         />
       )}
-      {ToolbarChildren(
-        tabToolbarVariant,
-        'tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start',
-        startAreaChildren,
-      )}
-      {ToolbarChildren(
-        tabToolbarVariant,
-        'tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto',
-        centerAreaChildren,
-      )}
-      {ToolbarEnd(tabToolbarVariant, endAreaChildren, tabViewMenuData, viewInfoMenuCommandHandler)}
+      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-start">
+        {startAreaChildren}
+      </div>
+      <div className="tw-flex tw-h-full tw-shrink tw-basis-0 tw-flex-row tw-flex-wrap tw-items-start tw-justify-center tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-center @sm:tw-grow @sm:tw-basis-auto">
+        {centerAreaChildren}
+      </div>
+      <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
+        {tabViewMenuData && (
+          <TabDropdownMenu
+            onSelectMenuItem={onSelectViewInfoMenuItem}
+            menuData={tabViewMenuData}
+            tabLabel="View Info"
+            icon={<EllipsisVertical />}
+            className="tw-h-full"
+          />
+        )}
+        {endAreaChildren}
+      </div>
     </div>
   );
 }
