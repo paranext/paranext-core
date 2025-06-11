@@ -237,6 +237,8 @@ declare module 'shared/models/web-view.model' {
      * focusing independently of a scroll group
      */
     scrollGroupScrRef?: ScrollGroupScrRef;
+    /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+    flashTriggerTime?: number;
     /**
      * General object to store unique state for this webview.
      *
@@ -402,6 +404,7 @@ declare module 'shared/models/web-view.model' {
     'tooltip',
     'projectId',
     'scrollGroupScrRef',
+    'flashTriggerTime',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -608,17 +611,26 @@ declare module 'shared/models/web-view.model' {
      *
      * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
      * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
-     * `existingId` at all is the only way to specify we are not looking for an existing webView
+     * `existingId` at all is the only way to specify we are not looking for an existing WebView
      */
     existingId?: string | '?' | undefined;
     /**
-     * Whether to create a webview with a new ID and a webview with ID `existingId` was not found.
+     * Whether to create a WebView with a new ID and a WebView with ID `existingId` was not found.
      * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
      * ignored.
      *
      * Defaults to true
      */
     createNewIfNotFound?: boolean;
+    /**
+     * Whether to bring the WebView to the front if it already exists. Only relevant if `existingId`
+     * is provided. If `existingId` is not provided, this property is ignored.
+     *
+     * Defaults to true
+     *
+     * If a new WebView is created, it is always brought to the front, regardless of this option.
+     */
+    bringToFront?: boolean;
   };
   /** @deprecated 16 May 2025. Renamed to {@link OpenWebViewOptions}. */
   export type GetWebViewOptions = OpenWebViewOptions;
@@ -2646,6 +2658,8 @@ declare module 'shared/models/docking-framework.model' {
     tabTitle: string | LocalizeKey;
     /** Text to show when hovering over the title bar of the tab */
     tabTooltip?: string;
+    /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+    flashTriggerTime?: number;
     /** Content to show inside the tab. */
     content: ReactNode;
     /** (optional) Minimum width that the tab can become in CSS `px` units */
@@ -2785,6 +2799,20 @@ declare module 'shared/models/docking-framework.model' {
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
     ) => boolean;
+    /**
+     * Brings the floating tab group with the specified WebView ID to the front of the layout. If
+     * there is no floating tab group with the specified ID, this does nothing.
+     *
+     * @param webViewId The ID of the WebView whose floating tab group to bring to the front
+     */
+    bringFloatingTabGroupToFront: (webViewId: string) => void;
+    /**
+     * Unmaximizes any maximized tab group in the layout unless it contains the given WebView. If no
+     * tab groups are maximized, this does nothing.
+     *
+     * @param webViewId The ID of the WebView to search for in maximized tab groups
+     */
+    unmaximizeAnyMaximizedTabGroup: (webViewId?: string) => void;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
@@ -5531,6 +5559,7 @@ declare module 'shared/models/create-process-privilege.model' {
   import { Readable, Writable } from 'stream';
   import { ExtensionBasicData } from 'shared/models/extension-basic-data.model';
   /**
+   *
    * Run {@link spawn} to create a child process. The platform will automatically kill all child
    * processes created this way in packaged builds. Child processes are not killed when running in
    * development.
@@ -5577,6 +5606,7 @@ declare module 'shared/models/create-process-privilege.model' {
     options: SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>,
   ) => ChildProcessByStdio<Writable, Readable, Readable>;
   /**
+   *
    * Run {@link fork} to create a child process. The platform will automatically kill all child
    * processes created this way in packaged builds. Child processes are not killed when running in
    * development.
@@ -5620,8 +5650,79 @@ declare module 'shared/models/create-process-privilege.model' {
     release: string;
   };
   export type CreateProcess = {
+    /**
+     *
+     * Run {@link spawn} to create a child process. The platform will automatically kill all child
+     * processes created this way in packaged builds. Child processes are not killed when running in
+     * development.
+     *
+     * This method is essentially a layer over the [`spawn`
+     * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
+     * the Node `child_process` module. Please see its documentation for more information.
+     *
+     * @example The following example assumes there are subdirectories in the extension's files for
+     * win32, linux, and macOS that include appropriate executables.
+     *
+     * ```@typescript
+     * export async function activate(context: ExecutionActivationContext) {
+     *   const { executionToken } = context;
+     *   const { createProcess } = context.elevatedPrivileges;
+     *   if (!createProcess)
+     *     throw new Error('Forgot to add "createProcess" to "elevatedPrivileges" in manifest.json');
+     *   switch (createProcess.osData.platform) {
+     *     case 'win32':
+     *       createProcess.spawn(executionToken, 'win32/RunMe.exe', [], { stdio: [null, null, null] });
+     *       break;
+     *     case 'linux':
+     *       createProcess.spawn(executionToken, 'linux/runMe', [], { stdio: [null, null, null] });
+     *       break;
+     *     case 'darwin':
+     *       createProcess.spawn(executionToken, 'macOS/runMe', [], { stdio: [null, null, null] });
+     *       break;
+     *     default:
+     *       throw new Error(`Unsupported platform: ${createProcess.osData.platform}`);
+     *   }
+     * ```
+     *
+     * @param executionToken ExecutionToken object provided when an extension was activated
+     * @param command Command to run to start the process
+     * @param args Arguments to pass to the command
+     * @param options Options to pass to `spawn`. The `cwd` option will be overridden to the extension's
+     *   root directory.
+     * @returns A {@link ChildProcessByStdio} object representing the command
+     */
     spawn: PlatformSpawn;
+    /**
+     *
+     * Run {@link fork} to create a child process. The platform will automatically kill all child
+     * processes created this way in packaged builds. Child processes are not killed when running in
+     * development.
+     *
+     * This method is essentially a layer over the [`fork`
+     * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
+     * the Node `child_process` module. Please see its documentation for more information.
+     *
+     * @example The following example assumes there is a file named `childProcess.js` in the extension's
+     * `assets` subdirectory
+     *
+     * ```@typescript
+     * export async function activate(context: ExecutionActivationContext) {
+     *   const { executionToken } = context;
+     *   const { createProcess } = context.elevatedPrivileges;
+     *   if (!createProcess)
+     *     throw new Error('Forgot to add "createProcess" to "elevatedPrivileges" in manifest.json');
+     *   createProcess.fork(executionToken, 'assets/childProcess.js');
+     * ```
+     *
+     * @param executionToken ExecutionToken object provided when an extension was activated
+     * @param modulePath The module to run in the child
+     * @param args Arguments to pass when creating the node process
+     * @param options Options to pass to `fork`. The `cwd` option will be overridden to the extension's
+     *   root directory.
+     * @returns A {@link ChildProcess} object representing the process running the module
+     */
     fork: PlatformFork;
+    /** Data about the operating system on which this process is running */
     osData: OperatingSystemData;
   };
 }
@@ -7018,6 +7119,12 @@ declare module 'shared/services/theme.service-model' {
   } from 'shared/models/data-provider.model';
   /**
    *
+   * Prefix on theme families that are specifically user-defined theme families that can be edited
+   * live instead of being provided by an extension
+   */
+  export const USER_THEME_FAMILY_PREFIX = 'user-';
+  /**
+   *
    * This name is used to register the theme service data provider on the papi. You can use this
    * name to find the data provider when accessing it using the useData hook
    */
@@ -7029,12 +7136,13 @@ declare module 'shared/services/theme.service-model' {
      * name to find the data provider when accessing it using the useData hook
      */
     dataProviderName: 'platform.themeServiceDataProvider';
+    /**
+     *
+     * Prefix on theme families that are specifically user-defined theme families that can be edited
+     * live instead of being provided by an extension
+     */
+    USER_THEME_FAMILY_PREFIX: 'user-';
   }>;
-  /**
-   * Prefix on theme families that are specifically user-defined theme families that can be edited
-   * live instead of being provided by an extension
-   */
-  export const USER_THEME_FAMILY_PREFIX = 'user-';
   /**
    * Object containing any/all of the identifying information for a theme.
    *

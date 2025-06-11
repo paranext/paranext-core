@@ -2064,6 +2064,13 @@ export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
  * @returns Time span in words from `to` to `since`
  */
 export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeFormat, since: Date, to?: Date): string;
+/**
+ * Modifier keys that don't constitute typed input
+ *
+ * Sourced from
+ * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
+ */
+export declare const MODIFIER_KEYS: Set<string>;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**

@@ -1,4 +1,4 @@
-import type { Preview } from '@storybook/react';
+import type { Preview } from '@storybook/react-vite';
 import '../src/index.css';
 
 const preview: Preview = {
@@ -11,6 +11,8 @@ const preview: Preview = {
       },
     },
   },
+  // Enables auto-generated documentation for all stories
+  tags: ['autodocs'],
 };
 
 export default preview;

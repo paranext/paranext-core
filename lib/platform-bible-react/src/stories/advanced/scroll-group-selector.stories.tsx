@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getLocalizeKeyForScrollGroupId } from 'platform-bible-utils';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ScrollGroupSelector } from '@/components/advanced/scroll-group-selector.component';
 
 const availableScrollGroupIds = [undefined, 0, 1, 2, 3, 4];

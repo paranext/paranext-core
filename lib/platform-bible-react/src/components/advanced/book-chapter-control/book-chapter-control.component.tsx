@@ -13,8 +13,9 @@ import {
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { formatScrRef, getChaptersForBook } from 'platform-bible-utils';
+import { formatScrRef, getChaptersForBook, MODIFIER_KEYS } from 'platform-bible-utils';
 import {
+  FocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
@@ -38,6 +39,9 @@ export type BookChapterControlProps = {
   getActiveBookIds?: () => string[];
 };
 
+/** How many chapter buttons fit in each row in the chapter select */
+const CHAPTERS_PER_ROW = 6;
+
 const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
 const BOOK_TYPE_LABELS: BookTypeLabels = {
   OT: 'Old Testament',
@@ -53,6 +57,20 @@ const SEARCH_QUERY_FORMATS = [
   /^(\w+)(?:\s(\d+))$/i, // Matches a word followed by a chapter number
   /^(\w+)(?:\s(\d+):(\d+))$/i, // Matches a word followed by a chapter and verse number
 ];
+
+/** Keys used for navigating around in the content menu */
+const CONTENT_NAVIGATION_KEYS = new Set([
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+  'Enter',
+]);
+
+// Thanks to Mx. at https://stackoverflow.com/a/35173443
+/** Query selector for finding tab indexable elements */
+const TAB_INDEX_QUERY =
+  'a:not([disabled]), button:not([disabled]), input[type=text]:not([disabled]), [tabindex]:not([disabled]):not([tabindex="-1"])';
 
 const fetchEndChapter = (bookId: string) => {
   // getChaptersForBook returns -1 if not found in scrBookData
@@ -123,11 +141,24 @@ export function BookChapterControl({
   getActiveBookIds,
 }: BookChapterControlProps) {
   const dir: Direction = readDirection();
+  // Value displayed on the book chapter input
+  const [bookChapterInputValue, setBookChapterInputValue] = useState<string>(() =>
+    formatScrRef(scrRef, 'English'),
+  );
+  // Search query that is used to filter the book list. Set to the book chapter input value if it is modified
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // The book that is currently expanded in the dropdown to show its chapter selection controls
   const [selectedBookId, setSelectedBookId] = useState<string>(scrRef.book);
+  // Which chapter is highlighted (as if it were being hovered) in the chapter selection controls
   const [highlightedChapter, setHighlightedChapter] = useState<number>(scrRef.chapterNum ?? 0);
+  // Which book is highlighted (as if it were being hovered) in the book selection list
   const [highlightedBookId, setHighlightedBookId] = useState<string>(scrRef.book);
+  // Whether the dropdown content is showing
   const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
+  // `isContentOpen` but delayed by a `useLayoutEffect` cycle - used to delay the scroll to the
+  // selected book menu item until the refs are defined and available. This is necessary because the
+  // refs are not defined immediately after we set the content to opened, so we need to wait a bit
+  // before scrolling to the selected book menu item
   const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
 
   // This ref will always be defined
@@ -159,6 +190,7 @@ export function BookChapterControl({
   );
 
   const handleSearchInput = (searchString: string) => {
+    setBookChapterInputValue(searchString);
     setSearchQuery(searchString);
   };
 
@@ -169,6 +201,17 @@ export function BookChapterControl({
    * don't want to just keep it open if the input is focused
    */
   const shouldPreventAutoClosing = useRef(false);
+
+  /**
+   * Reset this component's internal state to match the scripture reference. For example, this
+   * resets the current input value to the scripture reference and removes the filter
+   */
+  const resetToScrRef = useCallback(() => {
+    setBookChapterInputValue(formatScrRef(scrRef, 'English'));
+    setSearchQuery('');
+    setSelectedBookId(scrRef.book);
+    setHighlightedBookId(scrRef.book);
+  }, [scrRef]);
 
   const controlMenuState = useCallback((open: boolean) => {
     if (shouldPreventAutoClosing.current) {
@@ -225,90 +268,198 @@ export function BookChapterControl({
         }
       }
     });
-    inputRef.current.blur();
   }, [updateReference, searchQuery]);
 
   const handleKeyDownInput = useCallback(
     (event: ReactKeyboardEvent) => {
+      // If the dropdown isn't open, open it for looking at what you're typing.
+      // If it's open and the user presses down, go into the dropdown
+      // If it's open and the user presses escape, close it
       if (!isContentOpen) {
-        setIsContentOpen(true);
-      } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        // Just let Tab do its thing
+        if (event.key !== 'Tab') setIsContentOpen(true);
+      } else if (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) {
+        // If the user presses down or tab, focus the content
         if (menuItemRef?.current) {
           menuItemRef.current.focus();
         } else if (contentRef.current) {
           contentRef.current.focus();
         }
         event.preventDefault();
+      } else if (event.key === 'Escape' && document.activeElement === inputRef.current) {
+        // If the input isn't focused, the menu dropdown automatically handles the escape key
+        setIsContentOpen(false);
+        event.preventDefault();
+        event.stopPropagation();
       }
     },
     [isContentOpen],
   );
 
-  const handleKeyDownContent = (event: ReactKeyboardEvent<HTMLInputElement>) => {
-    // When the dropdown menu has focus, key strokes should give focus to the input component,
-    // unless they're navigation keys (arrows and enter)
-    const { key } = event;
-    if (
-      key === 'ArrowRight' ||
-      key === 'ArrowLeft' ||
-      key === 'ArrowDown' ||
-      key === 'ArrowUp' ||
-      key === 'Enter'
-    ) {
+  /** Send keydown event to the book chapter input component. */
+  const passInputToBookChapterInput = useCallback((event: ReactKeyboardEvent) => {
+    // Wait to do anything if the user presses a modifier key since that doesn't constitute typing
+    if (MODIFIER_KEYS.has(event.key)) return;
+
+    // Tab sends you to next element outside this BC control, while Shift+tab should send you back to the input
+    if (event.key === 'Tab') {
+      if (event.shiftKey) {
+        inputRef.current.focus();
+      } else {
+        // We are checking in the filter that it is HTMLElement. TypeScript is getting thrown off
+        // by the additional checks for some reason
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        const focusableElementsOutsideThisComponent = [
+          ...document.querySelectorAll(TAB_INDEX_QUERY),
+        ].filter(
+          (element) =>
+            element instanceof HTMLElement &&
+            (((element.offsetWidth > 0 || element.offsetHeight > 0) &&
+              !contentRef.current?.contains(element) &&
+              !inputRef.current?.contains(element)) ||
+              element === event.target),
+        ) as HTMLElement[];
+        const currentFocusedIndex =
+          event.target instanceof HTMLElement
+            ? focusableElementsOutsideThisComponent.indexOf(event.target)
+            : -1;
+        if (currentFocusedIndex >= 0) {
+          // Focus the next element if there is one
+          const nextElement =
+            focusableElementsOutsideThisComponent[
+              (currentFocusedIndex + 1) % focusableElementsOutsideThisComponent.length
+            ];
+          nextElement.focus();
+        } else {
+          // If we didn't find any focusable elements, just focus the input
+          inputRef.current.focus();
+        }
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
       return;
     }
 
-    inputRef.current.dispatchEvent(new KeyboardEvent('keydown', { key }));
-  };
+    // This is some kind of keyboard input. Send it to the input component
+    event.stopPropagation();
+    inputRef.current.focus();
+    inputRef.current.dispatchEvent(new KeyboardEvent('keydown', { ...event, view: undefined }));
+  }, []);
 
-  const handleKeyDownMenuItem = (event: ReactKeyboardEvent) => {
-    const { key } = event;
-    if (highlightedBookId === selectedBookId) {
-      if (key === 'Enter') {
-        event.preventDefault();
-        updateReference(selectedBookId, true, highlightedChapter);
+  /**
+   * Handles keydown events for the content area of the dropdown menu.
+   *
+   * These occur when the user opens the dropdown, mouses over it, then mouses out of the dropdown
+   */
+  const handleKeyDownContent = useCallback(
+    (event: ReactKeyboardEvent) => {
+      const { key } = event;
+
+      if (CONTENT_NAVIGATION_KEYS.has(key)) {
+        // Built-in hover management works well in this case. Don't mess with it
         return;
       }
 
-      const upOneChapter =
-        (key === 'ArrowRight' && !dir) ||
-        (key === 'ArrowRight' && dir === 'ltr') ||
-        (key === 'ArrowLeft' && dir === 'rtl');
-      const downOneChapter =
-        (key === 'ArrowLeft' && !dir) ||
-        (key === 'ArrowLeft' && dir === 'ltr') ||
-        (key === 'ArrowRight' && dir === 'rtl');
-      let chapterOffSet = 0;
-      if (upOneChapter) {
-        if (highlightedChapter < fetchEndChapter(highlightedBookId)) {
-          chapterOffSet = 1;
-        } else {
+      // User is not navigating in the content. Other key strokes give focus back to the input
+      // component to type in the filter
+      passInputToBookChapterInput(event);
+      // Prevent from scrolling to the book whose name starts with the letter typed
+      // Unfortunately, this also prevents the character from going to the input for some reason
+      event.preventDefault();
+    },
+    [passInputToBookChapterInput],
+  );
+
+  /**
+   * Handles keydown events for individual book menu items.
+   *
+   * These occur when the user opens the dropdown and is focused on or hovering over a book menu
+   * item
+   *
+   * Navigate around in the book/chapter menu using arrow keys and enter.
+   *
+   * @param event Keydown event
+   * @param index Which book menu item is receiving the keydown event
+   */
+  const handleKeyDownMenuItem = useCallback(
+    (event: ReactKeyboardEvent, index: number) => {
+      const { key } = event;
+
+      if (CONTENT_NAVIGATION_KEYS.has(key)) {
+        // Navigate around in the book/chapter menu using arrow keys and submit with enter
+        // Opening the hovered book with enter is handled elsewhere
+        if (highlightedBookId === selectedBookId) {
+          if (key === 'Enter') {
+            event.preventDefault();
+            updateReference(selectedBookId, true, highlightedChapter);
+            return;
+          }
+
+          const upOneChapter =
+            (key === 'ArrowRight' && !dir) ||
+            (key === 'ArrowRight' && dir === 'ltr') ||
+            (key === 'ArrowLeft' && dir === 'rtl');
+          const downOneChapter =
+            (key === 'ArrowLeft' && !dir) ||
+            (key === 'ArrowLeft' && dir === 'ltr') ||
+            (key === 'ArrowRight' && dir === 'rtl');
+          let chapterOffSet = 0;
+          if (upOneChapter) {
+            if (highlightedChapter < fetchEndChapter(highlightedBookId)) {
+              chapterOffSet = 1;
+            } else {
+              event.preventDefault();
+              return;
+            }
+          } else if (downOneChapter) {
+            if (highlightedChapter > 1) {
+              chapterOffSet = -1;
+            } else {
+              event.preventDefault();
+              return;
+            }
+          } else if (key === 'ArrowDown') {
+            chapterOffSet = CHAPTERS_PER_ROW;
+          } else if (key === 'ArrowUp') {
+            chapterOffSet = -CHAPTERS_PER_ROW;
+          }
+          if (
+            highlightedChapter + chapterOffSet <= 0 ||
+            highlightedChapter + chapterOffSet > fetchEndChapter(highlightedBookId)
+          ) {
+            setHighlightedChapter(0);
+          } else if (chapterOffSet !== 0) {
+            setHighlightedChapter(highlightedChapter + chapterOffSet);
+            event.preventDefault();
+            return;
+          }
+        }
+
+        // If we're at the top of the menu and the user presses up, go to the input
+        if (index === 0 && key === 'ArrowUp') {
           event.preventDefault();
+          inputRef.current.focus();
           return;
         }
-      } else if (downOneChapter) {
-        if (highlightedChapter > 1) {
-          chapterOffSet = -1;
-        } else {
-          event.preventDefault();
-          return;
-        }
-      } else if (key === 'ArrowDown') {
-        chapterOffSet = 6;
-      } else if (key === 'ArrowUp') {
-        chapterOffSet = -6;
+
+        // Do not pass the key to the input component if the user is navigating in the chapter menu
+        return;
       }
-      if (
-        highlightedChapter + chapterOffSet <= 0 ||
-        highlightedChapter + chapterOffSet > fetchEndChapter(highlightedBookId)
-      ) {
-        setHighlightedChapter(0);
-      } else if (chapterOffSet !== 0) {
-        setHighlightedChapter(highlightedChapter + chapterOffSet);
-        event.preventDefault();
-      }
-    }
-  };
+
+      // User is not navigating in the content. Other key strokes give focus back to the input
+      // component to type in the filter
+      passInputToBookChapterInput(event);
+    },
+    [
+      dir,
+      highlightedBookId,
+      highlightedChapter,
+      passInputToBookChapterInput,
+      selectedBookId,
+      updateReference,
+    ],
+  );
 
   useEffect(() => {
     if (selectedBookId === highlightedBookId) {
@@ -322,6 +473,14 @@ export function BookChapterControl({
     }
   }, [highlightedBookId, scrRef.book, scrRef.chapterNum, selectedBookId]);
 
+  // When a new scrRef comes in, set the book chapter input value to the formatted scrRef and focus
+  // the new scrRef
+  useEffect(() => {
+    resetToScrRef();
+  }, [resetToScrRef]);
+
+  useEffect(() => {}, [isContentOpen, resetToScrRef]);
+
   // The purpose of these useLayoutEffects and timeout is to delay the scroll just
   // enough so that the refs are defined and available when they are used after the timeout
   useLayoutEffect(() => {
@@ -330,23 +489,38 @@ export function BookChapterControl({
 
   useLayoutEffect(() => {
     const scrollTimeout = setTimeout(() => {
-      if (isContentOpenDelayed && contentRef.current && menuItemRef.current && !searchQuery) {
+      if (isContentOpenDelayed && contentRef.current && menuItemRef.current) {
         const menuItemOffsetTop = menuItemRef.current.offsetTop;
         const scrollPosition = menuItemOffsetTop - SCROLL_OFFSET;
         contentRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
+
+        // Sometimes the input was losing focus because the radix dropdown logic would grab the focus.
+        // Work around this to make sure the input stays focused when the user clicks to open the dropdown
+        inputRef.current.focus();
+      }
+
+      // If the user clicks away, reset to the Scripture Reference
+      if (
+        !isContentOpenDelayed &&
+        document.activeElement !== inputRef.current &&
+        !inputRef.current?.contains(document.activeElement) &&
+        document.activeElement !== contentRef.current &&
+        !contentRef.current?.contains(document.activeElement)
+      ) {
+        resetToScrRef();
       }
     }, 10);
     return () => {
       clearTimeout(scrollTimeout);
     };
-  }, [isContentOpenDelayed, searchQuery]);
+  }, [isContentOpenDelayed, resetToScrRef]);
 
   return (
     <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
       <DropdownMenuTrigger asChild>
         <BookChapterInput
           ref={inputRef}
-          value={searchQuery}
+          value={bookChapterInputValue}
           handleSearch={handleSearchInput}
           handleKeyDown={handleKeyDownInput}
           handleOnClick={() => {
@@ -354,15 +528,11 @@ export function BookChapterControl({
             setHighlightedBookId(scrRef.book);
             setHighlightedChapter(scrRef.chapterNum > 0 ? scrRef.chapterNum : 0);
             setIsContentOpen(true);
-            setSearchQuery(formatScrRef(scrRef, 'English'));
             inputRef.current.focus();
           }}
           onFocus={() => {
             // Radix thinks we want to close because the input is being focused. Prevent that
             shouldPreventAutoClosing.current = true;
-          }}
-          onBlur={() => {
-            setSearchQuery('');
           }}
           handleSubmit={handleInputSubmit}
           placeholder={formatScrRef(scrRef, 'English')}
@@ -373,9 +543,18 @@ export function BookChapterControl({
         className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
         // Need to get over the floating window z-index 200
         style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
-        onKeyDown={handleKeyDownContent}
         align={dir === 'ltr' ? 'start' : 'end'}
         ref={contentRef}
+        onKeyDown={handleKeyDownContent}
+        onFocus={(event: FocusEvent) => {
+          // When you focus the input for the first time (no children lost focus), select the text
+          // so you overwrite what's there when you start typing
+          if (
+            !inputRef.current?.contains(event.relatedTarget) &&
+            !contentRef.current?.contains(event.relatedTarget)
+          )
+            inputRef.current.select();
+        }}
       >
         {/* work around until DropdownMenuContent supports a dir prop */}
         <div className="rtl:tw-ps-2">
@@ -388,14 +567,14 @@ export function BookChapterControl({
                     {BOOK_TYPE_LABELS[bookType]}
                   </DropdownMenuLabel>
 
-                  {filteredBooks.map((bookId) => (
+                  {filteredBooks.map((bookId, i) => (
                     <div key={bookId}>
                       <BookMenuItem
                         bookId={bookId}
                         handleSelectBook={() => updateReference(bookId, false)}
                         isSelected={selectedBookId === bookId}
                         handleHighlightBook={() => setHighlightedBookId(bookId)}
-                        handleKeyDown={handleKeyDownMenuItem}
+                        handleKeyDown={(event) => handleKeyDownMenuItem(event, i)}
                         bookType={bookType}
                         ref={(element: HTMLDivElement) => {
                           if (selectedBookId === bookId) menuItemRef.current = element;
