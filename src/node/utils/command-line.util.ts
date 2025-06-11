@@ -6,7 +6,7 @@ type CommandLineArgumentAliases = {
 };
 
 /**
- * Command Line Arguments
+ * Command-line arguments
  *
  * - Extensions - Command-line argument that specifies extra individual extension folders
  * - ExtensionsDir - Command-line argument that specifies extra extension directories in which to

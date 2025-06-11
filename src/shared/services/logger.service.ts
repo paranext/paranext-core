@@ -35,7 +35,7 @@ function parseErrorLine(errorLine: string): parsedErrorLine {
   // console.log(`**** LINE: ${errorLine}\nResulting filename: ${matches?.at(2)}`);
 
   if (matches && matches.length === 5) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
     const [_, functionName, fileName, lineNumber, columnNumber] = matches;
     return {
       functionName,
@@ -45,7 +45,7 @@ function parseErrorLine(errorLine: string): parsedErrorLine {
     };
   }
   if (matches && matches.length === 4) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
     const [_, fileName, lineNumber, columnNumber] = matches;
     return {
       functionName: '',

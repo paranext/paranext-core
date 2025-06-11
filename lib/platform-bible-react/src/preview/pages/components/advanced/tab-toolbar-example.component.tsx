@@ -241,8 +241,8 @@ const endAreaChildren = (
 export function TabToolbarExample() {
   return (
     <TabToolbar
-      projectMenuCommandHandler={(command) => console.log('Project Menu Run command: ', command)}
-      viewInfoMenuCommandHandler={(command) => console.log('View Info Run command: ', command)}
+      onSelectProjectMenuItem={(command) => console.log('Project Menu Run command: ', command)}
+      onSelectViewInfoMenuItem={(command) => console.log('View Info Run command: ', command)}
       projectMenuData={projectMenuData}
       tabViewMenuData={tabMenuData}
       startAreaChildren={startAreaChildren}

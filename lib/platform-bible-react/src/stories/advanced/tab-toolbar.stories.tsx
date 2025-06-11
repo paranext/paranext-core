@@ -111,8 +111,8 @@ const meta: Meta<TabToolbarProps> = {
   component: TabToolbar,
   tags: ['autodocs'],
   args: {
-    projectMenuCommandHandler: (command) => console.log('Project Menu Run command: ', command),
-    viewInfoMenuCommandHandler: (command) => console.log('View Info Run command: ', command),
+    onSelectProjectMenuItem: (command) => console.log('Project Menu Run command: ', command),
+    onSelectViewInfoMenuItem: (command) => console.log('View Info Run command: ', command),
     projectMenuData,
     tabViewMenuData,
     startAreaChildren: (
