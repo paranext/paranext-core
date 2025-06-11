@@ -251,6 +251,6 @@
   },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
-    "node": "22.14.0"
+    "node": "22.15.1"
   }
 }
