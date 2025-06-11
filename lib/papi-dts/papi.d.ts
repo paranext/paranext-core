@@ -7119,6 +7119,12 @@ declare module 'shared/services/theme.service-model' {
   } from 'shared/models/data-provider.model';
   /**
    *
+   * Prefix on theme families that are specifically user-defined theme families that can be edited
+   * live instead of being provided by an extension
+   */
+  export const USER_THEME_FAMILY_PREFIX = 'user-';
+  /**
+   *
    * This name is used to register the theme service data provider on the papi. You can use this
    * name to find the data provider when accessing it using the useData hook
    */
@@ -7130,12 +7136,13 @@ declare module 'shared/services/theme.service-model' {
      * name to find the data provider when accessing it using the useData hook
      */
     dataProviderName: 'platform.themeServiceDataProvider';
+    /**
+     *
+     * Prefix on theme families that are specifically user-defined theme families that can be edited
+     * live instead of being provided by an extension
+     */
+    USER_THEME_FAMILY_PREFIX: 'user-';
   }>;
-  /**
-   * Prefix on theme families that are specifically user-defined theme families that can be edited
-   * live instead of being provided by an extension
-   */
-  export const USER_THEME_FAMILY_PREFIX = 'user-';
   /**
    * Object containing any/all of the identifying information for a theme.
    *

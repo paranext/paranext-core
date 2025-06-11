@@ -13,6 +13,9 @@ import {
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
 
+/** JSDOC DESTINATION USER_THEME_FAMILY_PREFIX */
+export const USER_THEME_FAMILY_PREFIX = 'user-';
+
 /** JSDOC DESTINATION themeServiceDataProviderName */
 export const themeServiceDataProviderName = 'platform.themeServiceDataProvider';
 export const themeServiceObjectToProxy = Object.freeze({
@@ -23,13 +26,15 @@ export const themeServiceObjectToProxy = Object.freeze({
    * name to find the data provider when accessing it using the useData hook
    */
   dataProviderName: themeServiceDataProviderName,
-});
 
-/**
- * Prefix on theme families that are specifically user-defined theme families that can be edited
- * live instead of being provided by an extension
- */
-export const USER_THEME_FAMILY_PREFIX = 'user-';
+  /**
+   * JSDOC SOURCE USER_THEME_FAMILY_PREFIX
+   *
+   * Prefix on theme families that are specifically user-defined theme families that can be edited
+   * live instead of being provided by an extension
+   */
+  USER_THEME_FAMILY_PREFIX,
+});
 
 /**
  * Object containing any/all of the identifying information for a theme.
