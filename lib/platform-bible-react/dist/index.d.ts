@@ -510,6 +510,7 @@ interface FilterProps extends MultiSelectComboBoxProps {
  * displayed if no items are selected,
  */
 export declare function Filter({ entries, getEntriesCount, selected, onChange, placeholder, commandEmptyMessage, customSelectedText, isDisabled, sortSelected, icon, className, badgesPlaceholder, }: FilterProps): import("react/jsx-runtime").JSX.Element;
+export type Scope = "selectedText" | "verse" | "chapter" | "book" | "selectedBooks";
 type Status = "approved" | "unapproved" | "unknown";
 /** Occurrence of item in inventory. Primarily used by table that shows occurrences */
 export type InventoryItemOccurrence = {
@@ -607,8 +608,6 @@ export declare const INVENTORY_STRING_KEYS: readonly [
 export type InventoryLocalizedStrings = {
 	[localizedInventoryKey in (typeof INVENTORY_STRING_KEYS)[number]]?: LocalizedStringValue;
 };
-/** Scope of scripture that the inventory can operate on */
-export type Scope = "book" | "chapter";
 type AdditionalItemsLabels = {
 	checkboxText?: string;
 	tableHeaders?: string[];
@@ -816,6 +815,80 @@ export type ScriptureResultsViewerProps = ScriptureResultsViewerColumnInfo & {
  * the source column showing).
  */
 export declare function ScriptureResultsViewer({ sources, showColumnHeaders, showSourceColumn, scriptureReferenceColumnName, scriptureBookGroupName, typeColumnName, detailsColumnName, onRowSelected, }: ScriptureResultsViewerProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const SCOPE_SELECTOR_STRING_KEYS: readonly [
+	"%webView_scope_selector_selected_text%",
+	"%webView_scope_selector_current_verse%",
+	"%webView_scope_selector_current_chapter%",
+	"%webView_scope_selector_current_book%",
+	"%webView_scope_selector_choose_books%",
+	"%webView_scope_selector_scope%",
+	"%webView_scope_selector_select_books%",
+	"%webView_book_selector_books_selected%",
+	"%webView_book_selector_select_books%",
+	"%webView_book_selector_search_books%",
+	"%webView_book_selector_select_all%",
+	"%webView_book_selector_clear_all%",
+	"%webView_book_selector_no_book_found%",
+	"%webView_book_selector_more%",
+	"%scripture_section_ot_long%",
+	"%scripture_section_ot_short%",
+	"%scripture_section_nt_long%",
+	"%scripture_section_nt_short%",
+	"%scripture_section_dc_long%",
+	"%scripture_section_dc_short%",
+	"%scripture_section_extra_long%",
+	"%scripture_section_extra_short%"
+];
+/** Type definition for the localized strings used in this component */
+export type ScopeSelectorLocalizedStrings = {
+	[localizedInventoryKey in (typeof SCOPE_SELECTOR_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+interface ScopeSelectorProps {
+	/** The current scope selection */
+	scope: Scope;
+	/**
+	 * Optional array of scopes that should be available in the selector. If not provided, all scopes
+	 * will be shown as defined in the Scope type
+	 */
+	availableScopes?: Scope[];
+	/** Callback function that is executed when the user changes the scope selection */
+	onScopeChange: (scope: Scope) => void;
+	/**
+	 * Information about available books, formatted as a 123 character long string as defined in a
+	 * projects BooksPresent setting
+	 */
+	availableBookInfo: string;
+	/** Array of currently selected book IDs */
+	selectedBookIds: string[];
+	/** Callback function that is executed when the user changes the book selection */
+	onSelectedBookIdsChange: (books: string[]) => void;
+	/**
+	 * Object with all localized strings that the component needs to work well across multiple
+	 * languages. When using this component with Platform.Bible, you can import
+	 * `SCOPE_SELECTOR_STRING_KEYS` from this library, pass it in to the Platform's localization hook,
+	 * and pass the localized keys that are returned by the hook into this prop.
+	 */
+	localizedStrings: ScopeSelectorLocalizedStrings;
+	/**
+	 * Optional map of localized book IDs/short names and full names. Key is the (English) book ID,
+	 * value contains localized versions of the ID and full book name
+	 */
+	localizedBookNames?: Map<string, {
+		localizedId: string;
+		localizedName: string;
+	}>;
+}
+/**
+ * A component that allows users to select the scope of their search or operation. Available scopes
+ * are defined in the Scope type. When 'selectedBooks' is chosen as the scope, a BookSelector
+ * component is displayed to allow users to choose specific books.
+ */
+export declare function ScopeSelector({ scope, availableScopes, onScopeChange, availableBookInfo, selectedBookIds, onSelectedBookIdsChange, localizedStrings, localizedBookNames, }: ScopeSelectorProps): import("react/jsx-runtime").JSX.Element;
 export type ScrollGroupSelectorProps = {
 	/**
 	 * List of scroll group ids to show to the user. Either a `ScrollGroupId` or `undefined` for no
@@ -1356,67 +1429,67 @@ export declare const Checkbox: React$1.ForwardRefExoticComponent<Omit<CheckboxPr
 export declare const Command: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
-	ref?: React$1.Ref<HTMLDivElement> | undefined;
+	ref?: React$1.Ref<HTMLDivElement>;
 } & {
-	asChild?: boolean | undefined;
+	asChild?: boolean;
 }, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
-	label?: string | undefined;
-	shouldFilter?: boolean | undefined;
-	filter?: ((value: string, search: string, keywords?: string[] | undefined) => number) | undefined;
-	defaultValue?: string | undefined;
-	value?: string | undefined;
-	onValueChange?: ((value: string) => void) | undefined;
-	loop?: boolean | undefined;
-	disablePointerSelection?: boolean | undefined;
-	vimBindings?: boolean | undefined;
+	label?: string;
+	shouldFilter?: boolean;
+	filter?: (value: string, search: string, keywords?: string[]) => number;
+	defaultValue?: string;
+	value?: string;
+	onValueChange?: (value: string) => void;
+	loop?: boolean;
+	disablePointerSelection?: boolean;
+	vimBindings?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CommandInput: React$1.ForwardRefExoticComponent<Omit<Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement>> & {
-	ref?: React$1.Ref<HTMLInputElement> | undefined;
+	ref?: React$1.Ref<HTMLInputElement>;
 } & {
-	asChild?: boolean | undefined;
+	asChild?: boolean;
 }, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement> | "asChild">, "type" | "value" | "onChange"> & {
-	value?: string | undefined;
-	onValueChange?: ((search: string) => void) | undefined;
+	value?: string;
+	onValueChange?: (search: string) => void;
 } & React$1.RefAttributes<HTMLInputElement>, "ref"> & React$1.RefAttributes<HTMLInputElement>>;
 export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
-	ref?: React$1.Ref<HTMLDivElement> | undefined;
+	ref?: React$1.Ref<HTMLDivElement>;
 } & {
-	asChild?: boolean | undefined;
+	asChild?: boolean;
 }, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
-	label?: string | undefined;
+	label?: string;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CommandEmpty: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
-	ref?: React$1.Ref<HTMLDivElement> | undefined;
+	ref?: React$1.Ref<HTMLDivElement>;
 } & {
-	asChild?: boolean | undefined;
+	asChild?: boolean;
 }, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
-	ref?: React$1.Ref<HTMLDivElement> | undefined;
+	ref?: React$1.Ref<HTMLDivElement>;
 } & {
-	asChild?: boolean | undefined;
+	asChild?: boolean;
 }, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "heading"> & {
 	heading?: React$1.ReactNode;
-	value?: string | undefined;
-	forceMount?: boolean | undefined;
+	value?: string;
+	forceMount?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
-	ref?: React$1.Ref<HTMLDivElement> | undefined;
+	ref?: React$1.Ref<HTMLDivElement>;
 } & {
-	asChild?: boolean | undefined;
+	asChild?: boolean;
 }, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "disabled" | "onSelect"> & {
-	disabled?: boolean | undefined;
-	onSelect?: ((value: string) => void) | undefined;
-	value?: string | undefined;
-	keywords?: string[] | undefined;
-	forceMount?: boolean | undefined;
+	disabled?: boolean;
+	onSelect?: (value: string) => void;
+	value?: string;
+	keywords?: string[];
+	forceMount?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 type MenuContextProps = {
 	variant?: "default" | "muted";
@@ -1485,40 +1558,40 @@ export type DropdownMenuShortcutProps = React$1.HTMLAttributes<HTMLSpanElement> 
 export declare function DropdownMenu({ variant, ...props }: DropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuSubTrigger: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubTriggerProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	inset?: boolean | undefined;
+	className?: string;
+	inset?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuSubContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSubContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuContent: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	sideOffset?: number | undefined;
+	className?: string;
+	sideOffset?: number;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	inset?: boolean | undefined;
+	className?: string;
+	inset?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuCheckboxItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuCheckboxItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	checked?: boolean | undefined;
+	className?: string;
+	checked?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuRadioItem: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuRadioItemProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuLabel: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuLabelProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
-	inset?: boolean | undefined;
+	className?: string;
+	inset?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare const DropdownMenuSeparator: React$1.ForwardRefExoticComponent<Omit<DropdownMenuPrimitive.DropdownMenuSeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc DropdownMenuProps */
 export declare function DropdownMenuShortcut({ className, ...props }: DropdownMenuShortcutProps): import("react/jsx-runtime").JSX.Element;
@@ -1647,11 +1720,11 @@ export declare const Switch: React$1.ForwardRefExoticComponent<Omit<SwitchPrimit
  * UI. See Shadcn UI Documentation: https://ui.shadcn.com/docs/components/table
  */
 export declare const Table: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableElement> & {
-	stickyHeader?: boolean | undefined;
+	stickyHeader?: boolean;
 } & React$1.RefAttributes<HTMLTableElement>>;
 /** @inheritdoc Table */
 export declare const TableHeader: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & {
-	stickyHeader?: boolean | undefined;
+	stickyHeader?: boolean;
 } & React$1.RefAttributes<HTMLTableSectionElement>>;
 /** @inheritdoc Table */
 export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
@@ -1677,15 +1750,15 @@ type TabsTriggerProps = React$1.ComponentPropsWithoutRef<typeof TabsPrimitive.Tr
 };
 /** @inheritdoc Tabs */
 export declare const TabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Tabs */
 export declare const TabsTrigger: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsTriggerProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Tabs */
 export declare const TabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 type LeftTabsTriggerProps = TabsTriggerProps & {
 	value: string;
@@ -1698,17 +1771,17 @@ type LeftTabsTriggerProps = TabsTriggerProps & {
  * Documentation: https://www.radix-ui.com/primitives/docs/components/tabs
  */
 export declare const VerticalTabs: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc VerticalTabs */
 export declare const VerticalTabsList: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsListProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc VerticalTabs */
 export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit<LeftTabsTriggerProps, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc VerticalTabs */
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
-	className?: string | undefined;
+	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These
