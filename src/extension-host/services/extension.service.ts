@@ -76,7 +76,7 @@ import { AppInfo } from '@shared/services/app.service-model';
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
  * https://webpack.js.org/api/module-variables/#**non_webpack_require**-webpack-specific
  */
-// eslint-disable-next-line camelcase, no-underscore-dangle
+// eslint-disable-next-line camelcase, no-underscore-dangle, @typescript-eslint/naming-convention
 declare const __non_webpack_require__: typeof require;
 
 /** These are names of extensions that should only be loaded if "noisy dev mode" is enabled */
