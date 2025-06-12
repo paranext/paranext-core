@@ -462,8 +462,18 @@ export type WebViewProps = SavedWebViewDefinition & {
   updateWebViewDefinition: UpdateWebViewDefinition;
 };
 
+/** Options that affect what `papi.webViews.reloadWebView` does. */
+export type ReloadWebViewOptions = {
+  /**
+   * Whether to bring the reloaded WebView to the front.
+   *
+   * Defaults to `true`
+   */
+  bringToFront?: boolean;
+};
+
 /** Options that affect what `webViews.openWebView` does */
-export type OpenWebViewOptions = {
+export type OpenWebViewOptions = ReloadWebViewOptions & {
   /**
    * If provided and if a web view with this ID exists, requests from the web view provider an
    * existing WebView with this ID if one exists. The web view provider can deny the request if it
@@ -471,15 +481,11 @@ export type OpenWebViewOptions = {
    *
    * Alternatively, set this to '?' to attempt to find any existing web view with the specified
    * webViewType.
-   *
-   * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
-   * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
-   * `existingId` at all is the only way to specify we are not looking for an existing WebView
    */
-  existingId?: string | '?' | undefined;
+  existingId?: string | '?';
   /**
-   * Whether to create a WebView with a new ID and a WebView with ID `existingId` was not found.
-   * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
+   * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
+   * relevant if `existingId` is provided. If `existingId` is not provided, this property is
    * ignored.
    *
    * Defaults to true
@@ -489,7 +495,7 @@ export type OpenWebViewOptions = {
    * Whether to bring the WebView to the front if it already exists. Only relevant if `existingId`
    * is provided. If `existingId` is not provided, this property is ignored.
    *
-   * Defaults to true
+   * Defaults to `true`
    *
    * If a new WebView is created, it is always brought to the front, regardless of this option.
    */

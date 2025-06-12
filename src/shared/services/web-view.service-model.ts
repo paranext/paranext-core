@@ -43,12 +43,14 @@ export interface WebViewServiceType {
   ) => Promise<WebViewId | undefined>;
 
   /**
-   * Creates a new web view or gets an existing one depending on if you request an existing one and
-   * if the web view provider decides to give that existing one to you (it is up to the provider).
+   * Creates a new web view or gets an existing one depending on if you request an existing one. If
+   * you request an existing one, it will not reload the WebView. To reload an existing Webview, use
+   * {@link WebViewServiceType.reloadWebView}.
    *
    * @param webViewType Type of WebView to create
-   * @param layout Information about where you want the web view to go. Defaults to adding as a tab
-   * @param options Options that affect what this function does. For example, you can provide an
+   * @param layout Information about where you want the new web view to go. Defaults to adding as a
+   *   tab. Does nothing on an existing WebView
+   * @param options Options that affect what this method does. For example, you can provide an
    *   existing web view ID to request an existing web view with that ID.
    * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
    *   not create a WebView for this request.
@@ -60,17 +62,46 @@ export interface WebViewServiceType {
     options?: OpenWebViewOptions,
   ) => Promise<WebViewId | undefined>;
 
+  /**
+   * Attempts to reload an existing WebView with the specified ID. This method asks the
+   * WebViewProvider for the given `webViewType` to generate a new `WebViewDefinition` for the
+   * WebView with the specified `webViewId` using {@link IWebViewProvider.getWebView}. The
+   * `WebViewProvider` can technically return a new WebView or not give you one if it chooses not to
+   * reload the `WebView` with the `webViewId` provided.
+   *
+   * This is the only way to modify {@link WebViewDefinition} properties that are not
+   * {@link WebViewDefinitionUpdatableProperties} - the `WebViewProvider` must make the changes in
+   * its `getWebView` method. It is also the only way to modify
+   * {@link WebViewDefinitionUpdatableProperties} on the {@link WebViewServiceType}. However, WebViews
+   * can modify their own {@link WebViewDefinitionUpdatableProperties} with
+   * {@link WebViewProps.updateWebViewDefinition}.
+   *
+   * If the WebView is not found, it returns `undefined`.
+   *
+   * @param webViewType Type of WebView to create
+   * @param webViewId The ID of the WebView to reload
+   * @param options Options that affect what this method does
+   * @returns Promise that resolves to the ID of the reloaded WebView or `undefined` if the WebView
+   *   was not found or if the provider returned `undefined` for the reload request.
+   * @throws If something went wrong like the provider for the webViewType was not found
+   */
+  reloadWebView(
+    webViewType: WebViewType,
+    webViewId: WebViewId,
+    options?: OpenWebViewOptions,
+  ): Promise<WebViewId | undefined>;
+
   /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
   getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
 
   /**
    * Gets the saved properties on the WebView definition with the specified ID
    *
-   * Note: this only returns a representation of the current web view definition, not the actual web
+   * Note: this only returns a representation of the current WebView definition, not the actual web
    * view definition itself. Changing properties on the returned definition does not affect the
-   * actual web view definition. You can possibly change the actual web view definition by calling
-   * {@link WebViewServiceType.openWebView} with certain `options`, depending on what options the web
-   * view provider has made available.
+   * actual WebView definition. You can possibly change the actual WebView definition by calling
+   * {@link WebViewServiceType.reloadWebView} with certain `options`, depending on what options the
+   * WebView provider has made available.
    *
    * @param webViewId The ID of the WebView whose saved properties to get
    * @returns Saved properties of the WebView definition with the specified ID or undefined if not
@@ -132,7 +163,7 @@ export const getWebViewControllerObjectId = (webViewId: string) =>
 /** Network object type for web view controllers */
 export const WEB_VIEW_CONTROLLER_OBJECT_TYPE = 'webViewController';
 
-// See `WebViewServiceType` for explanation
+/** See {@link WebViewServiceType.getWebViewController} */
 export async function getWebViewController<WebViewType extends WebViewControllerTypes>(
   webViewType: WebViewType,
   webViewId: WebViewId,

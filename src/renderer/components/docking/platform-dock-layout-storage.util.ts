@@ -203,7 +203,7 @@ export function getWebViewDefinition(
   const [, targetTabWebViewData] = getWebViewTabInfoById(
     webViewId,
     dockLayout,
-    'getWebViewDefinitionUpdatableProperties',
+    'getWebViewDefinition',
   );
 
   return targetTabWebViewData;

@@ -778,14 +778,19 @@ export function convertWebViewDefinitionToSaved(
   return webViewDefinitionCloned;
 }
 
-/** Explanation in web-view.service-model.ts */
+/** See {@link WebViewServiceType.getOpenWebViewDefinition} */
 async function getOpenWebViewDefinition(
   webViewId: WebViewId,
 ): Promise<SavedWebViewDefinition | undefined> {
   const webViewDefinition = (await getDockLayout()).getWebViewDefinition(webViewId);
   if (webViewDefinition === undefined) return undefined;
 
-  return convertWebViewDefinitionToSaved(webViewDefinition);
+  const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewDefinition);
+
+  // Load the web view state since the web view provider doesn't have access to the data store
+  savedWebViewDefinition.state = getFullWebViewStateById(savedWebViewDefinition.id);
+
+  return savedWebViewDefinition;
 }
 
 /**
@@ -802,7 +807,12 @@ export function getSavedWebViewDefinitionSync(
   const webViewDefinition = getDockLayoutSync().getWebViewDefinition(webViewId);
   if (webViewDefinition === undefined) return undefined;
 
-  return convertWebViewDefinitionToSaved(webViewDefinition);
+  const savedWebViewDefinition = convertWebViewDefinitionToSaved(webViewDefinition);
+
+  // Load the web view state since the web view provider doesn't have access to the data store
+  savedWebViewDefinition.state = getFullWebViewStateById(savedWebViewDefinition.id);
+
+  return savedWebViewDefinition;
 }
 
 // #endregion
@@ -890,87 +900,43 @@ globalThis.updateWebViewDefinitionById = updateWebViewDefinitionSync;
 
 // #endregion
 
-// #region openWebView
+// #region openWebView and reloadWebView
 
 /**
- * Creates a new web view or gets an existing one depending on if you request an existing one and if
- * the web view provider decides to give that existing one to you (it is up to the provider).
+ * Creates a new WebView or reloads an existing one based on the saved WebView definition.
  *
- * @param webViewType Type of WebView to create
- * @param layout Information about where you want the web view to go. Defaults to adding as a tab
- * @param options Options that affect what this function does. For example, you can provide an
- *   existing web view ID to request an existing web view with that ID.
+ * @param savedWebViewDefinition Saved WebView definition to pass to
+ *   {@link IWebViewProvider.getWebView} to open or reload the WebView with
+ *   `savedWebViewDefinition.id`
+ * @param layout Information about where you want the new web view to go. Defaults to adding as a
+ *   tab. Does nothing on an existing WebView
+ * @param optionsDefaulted Options that affect what this method does. **YOU MUST RUN
+ *   {@link getWebViewOptionsDefaults} ON THIS OBJECT BEFORE PASSING IT IN!**
  * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
  *   not create a WebView for this request.
- * @throws If something went wrong like the provider for the webViewType was not found
  */
-export const openWebView = async (
-  webViewType: WebViewType,
+async function openOrReloadWebView(
+  savedWebViewDefinition: SavedWebViewDefinition,
   layout: Layout = { type: 'tab' },
-  options: OpenWebViewOptions = {},
-): Promise<WebViewId | undefined> => {
-  const optionsDefaulted = getWebViewOptionsDefaults(options);
+  optionsDefaulted: OpenWebViewOptions = {},
+): Promise<WebViewId | undefined> {
+  const { webViewType } = savedWebViewDefinition;
 
-  // Find existing webView if one exists
-  /** Either the existing webview with the specified ID or a placeholder webview if one was not found */
-  let existingSavedWebView: SavedWebViewDefinition | undefined;
-  // Look for existing webview
-  if (optionsDefaulted.existingId) {
-    // Expect this to be a tab.
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const existingWebView = (await getDockLayout()).dockLayout.find(
-      optionsDefaulted.existingId === '?'
-        ? // If they provided '?', that means look for any webview with a matching webViewType
-          (item) => {
-            // This is not a webview
-            if (!('data' in item)) return false;
-
-            // Find any webview with the specified webViewType. Type assert the unknown `data`.
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            return (item.data as WebViewDefinition).webViewType === webViewType;
-          }
-        : // If they provided any other string, look for a webview with that ID
-          optionsDefaulted.existingId,
-    ) as TabInfo | undefined;
-    if (existingWebView) {
-      // We found the webview! Save it to send to the web view provider
-      existingSavedWebView = convertWebViewDefinitionToSaved(
-        // Type assert the unknown `data`.
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        existingWebView.data as WebViewDefinition,
-      );
-      // Load the web view state since the web view provider doesn't have access to the data store
-      existingSavedWebView.state = getFullWebViewStateById(existingWebView.id);
-
-      // Indicate that the WebView should be brought to front if requested
-      if (optionsDefaulted.bringToFront) existingSavedWebView.flashTriggerTime = Date.now();
-    }
-  }
-
-  // We didn't find an existing web view with the ID
-  if (!existingSavedWebView) {
-    // If we are not looking to create a new webview, then don't.
-    if ('existingId' in optionsDefaulted && !optionsDefaulted.createNewIfNotFound) return undefined;
-    // If we want to create a new webview, set a placeholder with a new ID
-    // Always bring new WebViews to the front
-    existingSavedWebView = { webViewType, id: newGuid(), flashTriggerTime: Date.now() };
-  }
-
-  // Get the webview definition from the webview provider
+  // Get the WebView definition from the webview provider
   const webViewProvider = await webViewProviderService.getWebViewProvider(webViewType);
   if (!webViewProvider)
     throw new Error(`getWebView: Cannot find Web View Provider for webview type ${webViewType}`);
 
-  // Create the new webview or load if it already existed
+  // Create the new WebView or load if it already existed
   const webView = await webViewProvider.getWebView(
-    existingSavedWebView,
+    savedWebViewDefinition,
     optionsDefaulted,
-    getWebViewNonce(existingSavedWebView.id),
+    getWebViewNonce(savedWebViewDefinition.id),
   );
 
   // The web view provider didn't want to create this web view
   if (!webView) {
-    deleteWebViewNonce(existingSavedWebView.id);
+    deleteWebViewNonce(savedWebViewDefinition.id);
     return undefined;
   }
 
@@ -1316,7 +1282,76 @@ export const openWebView = async (
     });
 
   return webView.id;
+}
+
+/** See {@link WebViewServiceType.openWebView} */
+export const openWebView = async (
+  webViewType: WebViewType,
+  layout: Layout = { type: 'tab' },
+  options: OpenWebViewOptions = {},
+): Promise<WebViewId | undefined> => {
+  const optionsDefaulted = getWebViewOptionsDefaults(options);
+
+  // Find existing webView if one exists and handle it if it does
+  if (optionsDefaulted.existingId) {
+    // Expect this to be a tab.
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const existingWebView = (await getDockLayout()).dockLayout.find(
+      optionsDefaulted.existingId === '?'
+        ? // If they provided '?', that means look for any webview with a matching webViewType
+          (item) => {
+            // This is not a webview
+            if (!('data' in item)) return false;
+
+            // Find any webview with the specified webViewType. Type assert the unknown `data`.
+            // eslint-disable-next-line no-type-assertion/no-type-assertion
+            return (item.data as WebViewDefinition).webViewType === webViewType;
+          }
+        : // If they provided any other string, look for a webview with that ID
+          optionsDefaulted.existingId,
+    ) as TabInfo | undefined;
+
+    // If we found an existing WebView, handle it and return it
+    if (existingWebView) {
+      // We found an existing web view, so bring it to front
+      if (optionsDefaulted.bringToFront)
+        updateWebViewDefinitionSync(existingWebView.id, { flashTriggerTime: Date.now() });
+
+      // We found an existing WebView, so no need to do anything else
+      return existingWebView.id;
+    }
+
+    // We didn't find an existing WebView with the ID. If shouldn't create a new one, return undefined
+    if (!optionsDefaulted.createNewIfNotFound) return undefined;
+  }
+
+  // We didn't find an existing web view with the ID, so we need to create a new one.
+
+  // We want to create a new webview, so create a placeholder with a new ID to pass to the WebViewProvider
+  const newWebViewDefinition = {
+    webViewType,
+    id: newGuid(),
+    // Always bring new WebViews to the front
+    flashTriggerTime: Date.now(),
+  };
+
+  return openOrReloadWebView(newWebViewDefinition, layout, optionsDefaulted);
 };
+
+/** See {@link WebViewServiceType.reloadWebView} */
+export async function reloadWebView(
+  // Keeping this parameter for the likelihood that we will add options per WebViewType sometime
+  _webViewType: WebViewType,
+  webViewId: WebViewId,
+  options: OpenWebViewOptions = {},
+): Promise<WebViewId | undefined> {
+  const existingSavedWebView = await getOpenWebViewDefinition(webViewId);
+  // If the web view is not found, return undefined
+  if (!existingSavedWebView) return undefined;
+
+  // If the web view is found, open it again with the same ID
+  return openOrReloadWebView(existingSavedWebView, undefined, getWebViewOptionsDefaults(options));
+}
 
 // #endregion
 
@@ -1463,6 +1498,7 @@ const papiWebViewService: WebViewServiceType = {
   onDidCloseWebView,
   getWebView: openWebView,
   openWebView,
+  reloadWebView,
   getSavedWebViewDefinition: getOpenWebViewDefinition,
   getOpenWebViewDefinition,
   getWebViewController,

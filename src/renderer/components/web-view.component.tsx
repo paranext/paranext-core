@@ -3,7 +3,6 @@ import { WEB_VIEW_CONTENT_TYPE, WebViewDefinition } from '@shared/models/web-vie
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
-  openWebView,
   saveTabInfoBase,
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
   IFRAME_SANDBOX_ALLOW_SCRIPTS,
@@ -12,6 +11,7 @@ import {
   IFRAME_SANDBOX_ALLOW_POPUPS,
   updateWebViewDefinitionSync,
   isWebViewNonceCorrect,
+  reloadWebView,
 } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -63,9 +63,7 @@ const registrationPromises = new PromiseChainingMap<string>(logger);
  * @param data Web view definition to load
  */
 async function retrieveWebViewContent(webViewType: string, id: string): Promise<void> {
-  const loadedId = await openWebView(webViewType, undefined, {
-    existingId: id,
-    createNewIfNotFound: false,
+  const loadedId = await reloadWebView(webViewType, id, {
     bringToFront: false,
   });
   if (loadedId !== id)
