@@ -14,8 +14,8 @@ import * as platformBibleUtils from 'platform-bible-utils';
 import * as crypto from 'crypto';
 import { logger } from '@shared/services/logger.service';
 import {
-  getCommandLineArgumentsGroup,
   COMMAND_LINE_ARGS,
+  getCommandLineArgumentsGroup,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
@@ -28,14 +28,15 @@ import {
   deserialize,
   endsWith,
   formatReplacementString,
+  getErrorMessage,
   includes,
-  stringLength,
-  startsWith,
   slice,
+  SortedSet,
+  startsWith,
+  stringLength,
   toKebabCase,
   UnsubscriberAsync,
   UnsubscriberAsyncList,
-  getErrorMessage,
 } from 'platform-bible-utils';
 import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
@@ -50,6 +51,7 @@ import {
   HashValues,
   InstalledExtensions,
   ManageExtensions,
+  PublisherIdentifier,
 } from '@shared/models/manage-extensions-privilege.model';
 import { CreateProcess } from '@shared/models/create-process-privilege.model';
 import { wrappedFork, wrappedSpawn } from '@extension-host/services/create-process.service';
@@ -206,6 +208,9 @@ const uriHandlersByExtensionKey = new Map<ExtensionKey, UriHandler>();
 
 /** Regex matching to spaces */
 const spaceRegex = /\s/;
+
+/** String comparison function used to check for similarity of extension and publisher names */
+const nameComparator = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
 
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
@@ -496,41 +501,57 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
     })
     // Assert the fulfilled type since the unfulfilled ones have been filtered out.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value);
+    .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value)
+    // TODO: Properly sort the order of extensions for activation based on their stated dependencies
+    // All embedded extensions should probably also be given priority over others. If we want to be
+    // "fancy" we could use a tree instead of a list and activate functions all on the same level
+    // concurrently instead of sequentially. For now, manually prioritize some extensions.
+    .sort((extA, extB) => {
+      if (extA.name === 'platformScripture') return -1;
+      if (extB.name === 'platformScripture') return 1;
+      if (extA.name === 'platformScriptureEditor') return -1;
+      if (extB.name === 'platformScriptureEditor') return 1;
 
-  // Filter out duplicate extensions. Only the first extension encountered in order is used
+      // TEMPORARY: Explicitly load helloRock3 after helloSomeone.
+      if (extA.name === 'helloRock3' && extB.name === 'helloSomeone') return 1;
+      if (extA.name === 'helloSomeone' && extB.name === 'helloRock3') return -1;
+
+      const extAIsPlatform = extA.name.startsWith('platform');
+      const extBIsPlatform = extB.name.startsWith('platform');
+      if (extAIsPlatform && !extBIsPlatform) return -1;
+      if (extBIsPlatform && !extAIsPlatform) return 1;
+      if (extAIsPlatform && extBIsPlatform) return extA.name < extB.name ? -1 : 1;
+      const extAIsPT = extA.name.startsWith('paratext');
+      const extBIsPT = extB.name.startsWith('paratext');
+      if (extAIsPT && !extBIsPT) return -1;
+      if (extBIsPT && !extAIsPT) return 1;
+      return extA.name < extB.name ? -1 : 1;
+    });
+
+  // Now go through the ordered list of extensions and remove anything with a name or publisher
+  // that is too similar to another extension's name or publisher that is higher on the list
+  const extensionNames = new SortedSet(nameComparator);
+  const publisherNames = new SortedSet(nameComparator);
   const extensionInfos: ExtensionInfo[] = [];
   allExtensionInfos.forEach((extensionInfo) => {
-    if (
-      !extensionInfos.some((finalExtensionInfo) => finalExtensionInfo.name === extensionInfo.name)
-    )
-      extensionInfos.push(extensionInfo);
-  });
+    if (extensionNames.has(extensionInfo.name)) {
+      logger.warn(
+        `Skipping extension ${extensionInfo.name} because its name is too similar to another extension`,
+      );
+      return;
+    }
 
-  // TODO: Properly sort the order of extensions for activation based on their stated dependencies
-  // All embedded extensions should probably also be given priority over others. If we want to be
-  // "fancy" we could use a tree instead of a list and activate functions all on the same level
-  // concurrently instead of sequentially. For now, manually prioritize some extensions.
-  extensionInfos.sort((extA, extB) => {
-    if (extA.name === 'platformScripture') return -1;
-    if (extB.name === 'platformScripture') return 1;
-    if (extA.name === 'platformScriptureEditor') return -1;
-    if (extB.name === 'platformScriptureEditor') return 1;
+    const publisherIndex = publisherNames.findIndex(extensionInfo.publisher ?? '');
+    if (publisherIndex >= 0 && extensionInfo.publisher !== publisherNames.at(publisherIndex)) {
+      logger.warn(
+        `Skipping extension ${extensionInfo.name} because its publisher is too similar to another extension`,
+      );
+      return;
+    }
 
-    // TEMPORARY: Explicitly load helloRock3 after helloSomeone.
-    if (extA.name === 'helloRock3' && extB.name === 'helloSomeone') return 1;
-    if (extA.name === 'helloSomeone' && extB.name === 'helloRock3') return -1;
-
-    const extAIsPlatform = extA.name.startsWith('platform');
-    const extBIsPlatform = extB.name.startsWith('platform');
-    if (extAIsPlatform && !extBIsPlatform) return -1;
-    if (extBIsPlatform && !extAIsPlatform) return 1;
-    if (extAIsPlatform && extBIsPlatform) return extA.name < extB.name ? -1 : 1;
-    const extAIsPT = extA.name.startsWith('paratext');
-    const extBIsPT = extB.name.startsWith('paratext');
-    if (extAIsPT && !extBIsPT) return -1;
-    if (extBIsPT && !extAIsPT) return 1;
-    return extA.name < extB.name ? -1 : 1;
+    extensionInfos.push(extensionInfo);
+    extensionNames.insert(extensionInfo.name);
+    if (extensionInfo.publisher) publisherNames.insert(extensionInfo.publisher);
   });
 
   return extensionInfos;
@@ -713,14 +734,20 @@ function extractExtensionDetailsFromFileNames(fileUris: string[]): ExtensionIden
 }
 
 /** Extracts extension identifier information from a buffer containing an extension ZIP file */
-async function extractExtensionDetailsFromZip(zipData: Buffer): Promise<ExtensionIdentifier> {
+async function extractExtensionDetailsFromZip(
+  zipData: Buffer,
+): Promise<ExtensionIdentifier & PublisherIdentifier> {
   const zip: JSZip = await JSZip.loadAsync(zipData);
   const zippedManifest = zip.file(MANIFEST_FILE_NAME);
   if (!zippedManifest) throw new Error('no manifest file found in ZIP data');
   // Assert the extracted manifest.json data as the associated type
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const manifest = JSON.parse(await zippedManifest.async('string')) as ExtensionManifest;
-  return { extensionName: manifest.name, extensionVersion: manifest.version };
+  return {
+    extensionName: manifest.name,
+    extensionVersion: manifest.version,
+    publisherName: manifest.publisher,
+  };
 }
 
 /**
@@ -792,9 +819,26 @@ async function installExtension(
     throw new Error(`file hash mismatch, expected ${expectedHashValue}, actual ${hashValue}`);
 
   // Extract information needed from the extension
-  const { extensionName, extensionVersion } = await extractExtensionDetailsFromZip(extensionBuffer);
+  const { extensionName, extensionVersion, publisherName } =
+    await extractExtensionDetailsFromZip(extensionBuffer);
+
+  // Check if the extension's name is invalid or too similar to another extension's name
   if (FORBIDDEN_EXTENSION_NAMES.find((forbiddenName) => extensionName === forbiddenName))
     throw new Error(`Forbidden extension name: ${extensionName}`);
+
+  const extensionNames = new SortedSet(nameComparator);
+  const publisherNames = new SortedSet(nameComparator);
+  activeExtensions.forEach((active) => {
+    extensionNames.insert(active.info.name);
+    if (active.info.publisher) publisherNames.insert(active.info.publisher);
+  });
+  if (extensionNames.has(extensionName))
+    throw new Error(`Extension name '${extensionName}' is too similar to another extension's name`);
+  const publisherIndex = publisherNames.findIndex(publisherName ?? '');
+  if (publisherIndex >= 0 && publisherName !== publisherNames.at(publisherIndex))
+    throw new Error(
+      `Extension publisher '${publisherName}' is too similar to another extension's publisher`,
+    );
 
   // Save the extension file in a location where it will be automatically installed
   const extensionUri = getExtensionUri(installedExtensionsUri, extensionName, extensionVersion);
