@@ -942,11 +942,8 @@ export const openWebView = async (
       // Load the web view state since the web view provider doesn't have access to the data store
       existingSavedWebView.state = getFullWebViewStateById(existingWebView.id);
 
-      if (optionsDefaulted.bringToFront) {
-        getDockLayoutSync().unmaximizeAnyMaximizedTabGroup(existingWebView.id);
-        getDockLayoutSync().bringFloatingTabGroupToFront(existingWebView.id);
-        updateWebViewDefinitionSync(existingWebView.id, { flashTriggerTime: Date.now() });
-      }
+      // Indicate that the WebView should be brought to front if requested
+      if (optionsDefaulted.bringToFront) existingSavedWebView.flashTriggerTime = Date.now();
     }
   }
 
@@ -955,7 +952,8 @@ export const openWebView = async (
     // If we are not looking to create a new webview, then don't.
     if ('existingId' in optionsDefaulted && !optionsDefaulted.createNewIfNotFound) return undefined;
     // If we want to create a new webview, set a placeholder with a new ID
-    existingSavedWebView = { webViewType, id: newGuid() };
+    // Always bring new WebViews to the front
+    existingSavedWebView = { webViewType, id: newGuid(), flashTriggerTime: Date.now() };
   }
 
   // Get the webview definition from the webview provider

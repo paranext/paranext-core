@@ -41,7 +41,7 @@ export function PlatformTabTitle({
   tooltip,
   flashTriggerTime,
 }: PlatformTabTitleProps) {
-  const lastFlashTriggerTimeRef = useRef<number | undefined>(flashTriggerTime);
+  const lastFlashTriggerTimeRef = useRef<number | undefined>(undefined);
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion

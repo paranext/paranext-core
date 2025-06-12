@@ -248,7 +248,7 @@ export function updateWebViewDefinition(
     updateWebViewTab(targetTabInfo, updatedWebViewData),
   );
   // Update existing tab
-  dockLayout.updateTab(webViewId, updatedTabData, !!updateInfo.flashTriggerTime);
+  updateTab(updatedTabData, !!updateInfo.flashTriggerTime, dockLayout);
   return true;
 }
 // #endregion
@@ -272,6 +272,30 @@ export function findPreviousTab(dockLayout: DockLayout) {
 }
 
 /**
+ * Updates an existing tab, making sure it gets to the front and is unobscured by other tabs if
+ * indicated
+ *
+ * @param tabInfo Info for tab to update
+ * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+ *   tabs.
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ */
+function updateTab(
+  tabInfo: RCDockTabInfo,
+  shouldBringToFront: boolean,
+  dockLayout: DockLayout,
+): void {
+  // Make sure the tab is unobscured
+  if (shouldBringToFront) {
+    unmaximizeAnyMaximizedTabGroup(dockLayout, tabInfo.id);
+    bringFloatingTabGroupToFront(dockLayout, tabInfo.id);
+  }
+
+  dockLayout.updateTab(tabInfo.id, tabInfo, shouldBringToFront);
+}
+
+/**
  * Add or update a tab in the layout
  *
  * @param savedTabInfo Info for tab to add or update
@@ -291,8 +315,23 @@ export function addTabToDock(
 
   // Update existing tab
   if (targetTab) {
-    dockLayout.updateTab(tab.id, tab, false);
-    if (isTab(targetTab)) previousTabId = tab.id;
+    if (!isTab(targetTab))
+      throw new LogError(
+        `addTabToDock: target tab with id '${targetTab.id}' is not a tab. This should not happen.`,
+      );
+
+    // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    const targetTabInfo = targetTab as RCDockTabInfo;
+
+    const shouldBringToFront = targetTabInfo.flashTriggerTime !== tab.flashTriggerTime;
+
+    if (shouldBringToFront) {
+      unmaximizeAnyMaximizedTabGroup(dockLayout, tab.id);
+      bringFloatingTabGroupToFront(dockLayout, tab.id);
+    }
+    updateTab(tab, shouldBringToFront, dockLayout);
+    previousTabId = tab.id;
 
     // We did not add a tab, so return undefined to indicate that
     return undefined;
@@ -382,6 +421,12 @@ export function addTabToDock(
       throw new LogError(`Unknown layoutType: '${(updatedLayout as Layout).type}'`);
   }
 
+  // Bring the tab to the front if it has a flash trigger time
+  if (tab.flashTriggerTime) {
+    unmaximizeAnyMaximizedTabGroup(dockLayout, tab.id);
+    bringFloatingTabGroupToFront(dockLayout, tab.id);
+  }
+
   // If there was an error loading the tab, we create an error tab. But we also want to throw here
   // so people know there was a problem.
   // TODO: Do we really want to create an error tab in the first place? Or maybe that should only
@@ -416,7 +461,11 @@ export function addWebViewToDock(
     throw new Error(
       `platform-dock-layout error: WebView of type ${webView.webViewType} has no id!`,
     );
-  return addTabToDock({ id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView }, layout, dockLayout);
+  return addTabToDock(
+    updateWebViewTab({ id: tabId, tabType: TAB_TYPE_WEBVIEW }, webView),
+    layout,
+    dockLayout,
+  );
 }
 
 /**
