@@ -122,8 +122,6 @@ type WebViewDefinitionBase = {
    * focusing independently of a scroll group
    */
   scrollGroupScrRef?: ScrollGroupScrRef;
-  /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
-  flashTriggerTime?: number;
   /**
    * General object to store unique state for this webview.
    *
@@ -309,7 +307,6 @@ export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'tooltip',
   'projectId',
   'scrollGroupScrRef',
-  'flashTriggerTime',
 ] as const;
 
 /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
@@ -441,6 +438,9 @@ export type GetSavedWebViewDefinition = () => SavedWebViewDefinition | undefined
  * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
  * the same
  *
+ * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
+ * other tabs. Defaults to `false`
+ *
  * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
  * false otherwise
  *
@@ -450,7 +450,10 @@ export type GetSavedWebViewDefinition = () => SavedWebViewDefinition | undefined
  * updateWebViewDefinition({ title: `Hello ${name}` });
  * ```
  */
-export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
+export type UpdateWebViewDefinition = (
+  updateInfo: WebViewDefinitionUpdateInfo,
+  shouldBringToFront?: boolean,
+) => boolean;
 
 /** Props that are passed into the web view itself inside the iframe in the web view tab component */
 export type WebViewProps = SavedWebViewDefinition & {
@@ -473,6 +476,8 @@ export type ReloadWebViewOptions = {
 };
 
 /** Options that affect what `webViews.openWebView` does */
+// THIS CANNOT ADD ANY MANDATORY PROPERTIES THAT ARE NOT IN ReloadWebViewOptions BECAUSE
+// BOTH `reloadWebView` and `openWebView` PASS THEIR OPTIONS TO `IWebViewProvider.getWebView`
 export type OpenWebViewOptions = ReloadWebViewOptions & {
   /**
    * If provided and if a web view with this ID exists, requests from the web view provider an

@@ -66,6 +66,12 @@ async function retrieveWebViewContent(webViewType: string, id: string): Promise<
   const loadedId = await reloadWebView(webViewType, id, {
     bringToFront: false,
   });
+
+  if (!loadedId)
+    throw new Error(
+      `WebView with type ${webViewType} and id ${id} returned undefined when reloading!`,
+    );
+
   if (loadedId !== id)
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
 }
@@ -181,7 +187,7 @@ export function WebView({
         await retrieveWebViewContent(webViewType, id);
       } catch (e) {
         logger.error(
-          `web-view.component failed to reload web view content for webViewType ${webViewType} id ${id} when extensions reloaded: ${e}`,
+          `web-view.component failed to reload web view content for webViewType ${webViewType} id ${id} when extensions reloaded: ${getErrorMessage(e)}`,
         );
       }
     }, [webViewType, id]),
@@ -340,7 +346,6 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
   return {
     ...savedTabInfo,
     data,
-    flashTriggerTime: data.flashTriggerTime,
     tabIconUrl: data.iconUrl,
     tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',
@@ -370,7 +375,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
           logger.error(
             `web-view.component failed to retrieve web view content for ${serialize(
               savedTabInfo,
-            )}: ${e}`,
+            )}: ${getErrorMessage(e)}`,
           );
         }
       })();

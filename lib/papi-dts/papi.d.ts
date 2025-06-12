@@ -237,8 +237,6 @@ declare module 'shared/models/web-view.model' {
      * focusing independently of a scroll group
      */
     scrollGroupScrRef?: ScrollGroupScrRef;
-    /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
-    flashTriggerTime?: number;
     /**
      * General object to store unique state for this webview.
      *
@@ -404,7 +402,6 @@ declare module 'shared/models/web-view.model' {
     'tooltip',
     'projectId',
     'scrollGroupScrRef',
-    'flashTriggerTime',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -506,6 +503,9 @@ declare module 'shared/models/web-view.model' {
    * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
    * the same
    *
+   * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
+   * other tabs. Defaults to `false`
+   *
    * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
    * false otherwise
    *
@@ -515,7 +515,10 @@ declare module 'shared/models/web-view.model' {
    * updateWebViewDefinition({ title: `Hello ${name}` });
    * ```
    */
-  export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
+  export type UpdateWebViewDefinition = (
+    updateInfo: WebViewDefinitionUpdateInfo,
+    shouldBringToFront?: boolean,
+  ) => boolean;
   /** Props that are passed into the web view itself inside the iframe in the web view tab component */
   export type WebViewProps = SavedWebViewDefinition & {
     /**
@@ -587,6 +590,9 @@ declare module 'shared/models/web-view.model' {
      *
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
      * the same
+     *
+     * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
+     * other tabs. Defaults to `false`
      *
      * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
      * false otherwise
@@ -752,6 +758,7 @@ declare module 'shared/global-this.model' {
     var updateWebViewDefinitionById: (
       webViewId: string,
       webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+      shouldBringToFront?: boolean,
     ) => boolean;
     /**
      *
@@ -767,6 +774,9 @@ declare module 'shared/global-this.model' {
      *
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
      * the same
+     *
+     * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
+     * other tabs. Defaults to `false`
      *
      * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
      * false otherwise
@@ -2663,7 +2673,7 @@ declare module 'shared/models/docking-framework.model' {
     tabTitle: string | LocalizeKey;
     /** Text to show when hovering over the title bar of the tab */
     tabTooltip?: string;
-    /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+    /** The last time (`Date.now()`) the tab was instructed to flash its contents in the UI. */
     flashTriggerTime?: number;
     /** Content to show inside the tab. */
     content: ReactNode;
@@ -2766,19 +2776,31 @@ declare module 'shared/models/docking-framework.model' {
      *
      * @param savedTabInfo Info for tab to add or update
      * @param layout Information about where to put a new tab
+     * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+     *   tabs. Defaults to `true`
      * @returns If tab added, final layout used to display the new tab. If existing tab updated,
      *   `undefined`
      */
-    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
+    addTabToDock: (
+      savedTabInfo: SavedTabInfo,
+      layout: Layout,
+      shouldBringToFront?: boolean,
+    ) => Layout | undefined;
     /**
      * Add or update a webview in the layout
      *
      * @param webView Web view to add or update
      * @param layout Information about where to put a new webview
+     * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+     *   tabs. Defaults to `true`
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
      */
-    addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => Layout | undefined;
+    addWebViewToDock: (
+      webView: WebViewTabProps,
+      layout: Layout,
+      shouldBringToFront?: boolean,
+    ) => Layout | undefined;
     /**
      * Remove a tab in the layout
      *
@@ -2798,11 +2820,14 @@ declare module 'shared/models/docking-framework.model' {
      * @param webViewId The ID of the WebView to update
      * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
      *   same
+     * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+     *   tabs. Defaults to `false`
      * @returns True if successfully found the WebView to update; false otherwise
      */
     updateWebViewDefinition: (
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
+      shouldBringToFront?: boolean,
     ) => boolean;
     /**
      * Brings the floating tab group with the specified WebView ID to the front of the layout. If
@@ -2833,6 +2858,7 @@ declare module 'shared/services/web-view.service-model' {
   import {
     GetWebViewOptions,
     OpenWebViewOptions,
+    ReloadWebViewOptions,
     SavedWebViewDefinition,
     WebViewId,
     WebViewType,
@@ -2908,7 +2934,7 @@ declare module 'shared/services/web-view.service-model' {
     reloadWebView(
       webViewType: WebViewType,
       webViewId: WebViewId,
-      options?: OpenWebViewOptions,
+      options?: ReloadWebViewOptions,
     ): Promise<WebViewId | undefined>;
     /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
     getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;

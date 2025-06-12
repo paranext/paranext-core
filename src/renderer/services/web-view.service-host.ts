@@ -33,6 +33,7 @@ import {
   SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
   SavedWebViewDefinitionOmittedKeys,
   WEB_VIEW_CONTENT_TYPE,
+  ReloadWebViewOptions,
 } from '@shared/models/web-view.model';
 import {
   Layout,
@@ -655,14 +656,17 @@ export function registerDockLayout(dockLayout: PapiDockLayout): Unsubscriber {
  *
  * @param savedTabInfo Info for tab to add or update
  * @param layout Information about where to put a new tab
+ * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+ *   tabs. Defaults to `true`
  * @returns If tab added, final layout used to display the new tab. If existing tab updated,
  *   `undefined`
  */
 export const addTab = async <TData = unknown>(
   savedTabInfo: SavedTabInfo & { data?: TData },
   layout: Layout,
+  shouldBringToFront = true,
 ): Promise<Layout | undefined> => {
-  return (await getDockLayout()).addTabToDock(savedTabInfo, layout);
+  return (await getDockLayout()).addTabToDock(savedTabInfo, layout, shouldBringToFront);
 };
 
 /**
@@ -681,10 +685,19 @@ export const closeTab = async (tabId: string): Promise<boolean> => {
  * does not have a specific `TabSaver`
  */
 export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
-  // We don't need to use the other properties, but we need to remove them
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { tabTitle, tabTooltip, tabIconUrl, content, minWidth, minHeight, ...savedTabInfo } =
-    tabInfo;
+  const {
+    // We don't need to use the other properties, but we need to remove them
+    /* eslint-disable @typescript-eslint/no-unused-vars */
+    tabTitle,
+    tabTooltip,
+    tabIconUrl,
+    content,
+    minWidth,
+    minHeight,
+    flashTriggerTime,
+    /* eslint-enable @typescript-eslint/no-unused-vars */
+    ...savedTabInfo
+  } = tabInfo;
   return savedTabInfo;
 }
 
@@ -698,6 +711,8 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
  * @param webViewId The ID of the WebView to update
  * @param webViewDefinitionUpdateInfo Properties to update on the WebView. Any unspecified
  *   properties will stay the same
+ * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+ *   tabs. Defaults to `false`
  * @returns True if successfully found the WebView to update and actually updated any properties;
  *   false otherwise
  * @throws If the papi dock layout has not been registered
@@ -705,10 +720,12 @@ export function saveTabInfoBase(tabInfo: TabInfo): SavedTabInfo {
 export function updateWebViewDefinitionSync(
   webViewId: WebViewId,
   webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+  shouldBringToFront = false,
 ): boolean {
   const didUpdateWebView = getDockLayoutSync().updateWebViewDefinition(
     webViewId,
     webViewDefinitionUpdateInfo,
+    shouldBringToFront,
   );
   if (didUpdateWebView) {
     const webView = getSavedWebViewDefinitionSync(webViewId);
@@ -820,11 +837,15 @@ export function getSavedWebViewDefinitionSync(
 // #region Web view options
 
 /** Set up defaults for options for getting a web view */
-function getWebViewOptionsDefaults(options: OpenWebViewOptions): OpenWebViewOptions {
+function getWebViewOptionsDefaults<T extends OpenWebViewOptions | ReloadWebViewOptions>(
+  options: T,
+): T {
   const optionsDefaulted = cloneDeep(options);
-  if ('existingId' in optionsDefaulted) {
-    if (!('createNewIfNotFound' in optionsDefaulted)) optionsDefaulted.createNewIfNotFound = true;
-    if (!('bringToFront' in optionsDefaulted)) optionsDefaulted.bringToFront = true;
+
+  if (!('bringToFront' in optionsDefaulted)) optionsDefaulted.bringToFront = true;
+
+  if ('existingId' in optionsDefaulted && !('createNewIfNotFound' in optionsDefaulted)) {
+    optionsDefaulted.createNewIfNotFound = true;
   }
 
   return optionsDefaulted;
@@ -1015,7 +1036,7 @@ async function openOrReloadWebView(
   var getSavedWebViewDefinitionById = window.parent.getSavedWebViewDefinitionById;
   window.getSavedWebViewDefinition = () => { return getSavedWebViewDefinitionById('${webView.id}')};
   var updateWebViewDefinitionById = window.parent.updateWebViewDefinitionById;
-  window.updateWebViewDefinition = (webViewDefinitionUpdateInfo) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo)};
+  window.updateWebViewDefinition = (webViewDefinitionUpdateInfo, shouldBringToFront = false) => { return updateWebViewDefinitionById('${webView.id}', webViewDefinitionUpdateInfo, shouldBringToFront)};
   window.fetch = papi.fetch;
   window.WebSocket = papi.WebSocket;
   window.XMLHttpRequest = papi.XMLHttpRequest;
@@ -1267,7 +1288,11 @@ async function openOrReloadWebView(
     allowedFrameSources,
   };
 
-  const finalLayout = (await getDockLayout()).addWebViewToDock(finalWebView, layout);
+  const finalLayout = (await getDockLayout()).addWebViewToDock(
+    finalWebView,
+    layout,
+    optionsDefaulted.bringToFront,
+  );
 
   // If we received a layout (meaning it created a new webview instead of updating an existing one),
   // inform web view consumers that we added a new web view
@@ -1314,8 +1339,7 @@ export const openWebView = async (
     // If we found an existing WebView, handle it and return it
     if (existingWebView) {
       // We found an existing web view, so bring it to front
-      if (optionsDefaulted.bringToFront)
-        updateWebViewDefinitionSync(existingWebView.id, { flashTriggerTime: Date.now() });
+      if (optionsDefaulted.bringToFront) updateWebViewDefinitionSync(existingWebView.id, {}, true);
 
       // We found an existing WebView, so no need to do anything else
       return existingWebView.id;
@@ -1331,11 +1355,13 @@ export const openWebView = async (
   const newWebViewDefinition = {
     webViewType,
     id: newGuid(),
-    // Always bring new WebViews to the front
-    flashTriggerTime: Date.now(),
   };
 
-  return openOrReloadWebView(newWebViewDefinition, layout, optionsDefaulted);
+  return openOrReloadWebView(newWebViewDefinition, layout, {
+    ...optionsDefaulted,
+    // Always bring new WebViews to the front
+    bringToFront: true,
+  });
 };
 
 /** See {@link WebViewServiceType.reloadWebView} */
@@ -1343,7 +1369,7 @@ export async function reloadWebView(
   // Keeping this parameter for the likelihood that we will add options per WebViewType sometime
   _webViewType: WebViewType,
   webViewId: WebViewId,
-  options: OpenWebViewOptions = {},
+  options: ReloadWebViewOptions = {},
 ): Promise<WebViewId | undefined> {
   const existingSavedWebView = await getOpenWebViewDefinition(webViewId);
   // If the web view is not found, return undefined

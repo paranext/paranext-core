@@ -109,13 +109,15 @@ function loadSavedTabInfo(savedTabInfo: SavedTabInfo): TabInfo {
  * Loads tab data from the specified saved tab information into an actual dock layout tab
  *
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
+ * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+ *   tabs. Defaults to `false`
  * @returns Live dock layout tab ready to used
  */
-export function loadTab(savedTabInfo: SavedTabInfo): RCDockTabInfo {
+export function loadTab(savedTabInfo: SavedTabInfo, shouldBringToFront = false): RCDockTabInfo {
   if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
 
   // Load the tab from the saved tab info
-  const tabInfo = loadSavedTabInfo(savedTabInfo);
+  const tabInfo = updateFlashTriggerTime(loadSavedTabInfo(savedTabInfo), shouldBringToFront);
 
   return createRCDockTabFromTabInfo(tabInfo);
 }
@@ -215,6 +217,8 @@ export function getWebViewDefinition(
  * @param webViewId The id of the WebView to update
  * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
  *   same
+ * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+ *   tabs
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @returns True if successfully found the WebView to update and actually updated any properties;
@@ -223,6 +227,7 @@ export function getWebViewDefinition(
 export function updateWebViewDefinition(
   webViewId: string,
   updateInfo: WebViewDefinitionUpdateInfo,
+  shouldBringToFront: boolean,
   dockLayout: DockLayout,
 ): boolean {
   const [targetTabInfo, targetTabWebViewData] = getWebViewTabInfoById(
@@ -242,14 +247,19 @@ export function updateWebViewDefinition(
   );
 
   // If there were no property updates, return false
-  if (!updatedWebViewData) return false;
+  if (!updatedWebViewData && !shouldBringToFront) return false;
 
   const updatedTabData = createRCDockTabFromTabInfo(
-    updateWebViewTab(targetTabInfo, updatedWebViewData),
+    updateFlashTriggerTime(
+      updateWebViewTab(targetTabInfo, updatedWebViewData ?? targetTabWebViewData),
+      shouldBringToFront,
+    ),
   );
   // Update existing tab
-  updateTab(updatedTabData, !!updateInfo.flashTriggerTime, dockLayout);
-  return true;
+  updateTab(updatedTabData, shouldBringToFront, dockLayout);
+
+  // Only consider the WebView to have updated if its properties actually changed, not just if it was brought to front
+  return !!updatedWebViewData;
 }
 // #endregion
 
@@ -277,7 +287,8 @@ export function findPreviousTab(dockLayout: DockLayout) {
  *
  * @param tabInfo Info for tab to update
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
- *   tabs.
+ *   tabs. Note: you must update the `tabInfo.flashTriggerTime` property before calling this in
+ *   order to make the tab flash.
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  */
@@ -295,6 +306,15 @@ function updateTab(
   dockLayout.updateTab(tabInfo.id, tabInfo, shouldBringToFront);
 }
 
+function updateFlashTriggerTime(tabInfo: TabInfo, shouldBringToFront: boolean): TabInfo {
+  if (shouldBringToFront) {
+    // Update the flash trigger time if we are supposed to bring the tab to the front.
+    return { ...tabInfo, flashTriggerTime: Date.now() };
+  }
+  // Otherwise, just return the saved tab info as is
+  return tabInfo;
+}
+
 /**
  * Add or update a tab in the layout
  *
@@ -302,15 +322,18 @@ function updateTab(
  * @param layout Information about where to put a new tab
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
+ * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+ *   tabs
  * @returns If tab added, final layout used to display the new tab. If existing tab updated,
  *   `undefined`
  */
 export function addTabToDock(
   savedTabInfo: SavedTabInfo,
   layout: Layout,
+  shouldBringToFront: boolean,
   dockLayout: DockLayout,
 ): Layout | undefined {
-  const tab = loadTab(savedTabInfo);
+  const tab = loadTab(savedTabInfo, shouldBringToFront);
   let targetTab = dockLayout.find(tab.id);
 
   // Update existing tab
@@ -320,16 +343,6 @@ export function addTabToDock(
         `addTabToDock: target tab with id '${targetTab.id}' is not a tab. This should not happen.`,
       );
 
-    // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    const targetTabInfo = targetTab as RCDockTabInfo;
-
-    const shouldBringToFront = targetTabInfo.flashTriggerTime !== tab.flashTriggerTime;
-
-    if (shouldBringToFront) {
-      unmaximizeAnyMaximizedTabGroup(dockLayout, tab.id);
-      bringFloatingTabGroupToFront(dockLayout, tab.id);
-    }
     updateTab(tab, shouldBringToFront, dockLayout);
     previousTabId = tab.id;
 
@@ -421,8 +434,7 @@ export function addTabToDock(
       throw new LogError(`Unknown layoutType: '${(updatedLayout as Layout).type}'`);
   }
 
-  // Bring the tab to the front if it has a flash trigger time
-  if (tab.flashTriggerTime) {
+  if (shouldBringToFront) {
     unmaximizeAnyMaximizedTabGroup(dockLayout, tab.id);
     bringFloatingTabGroupToFront(dockLayout, tab.id);
   }
@@ -448,12 +460,15 @@ export function addTabToDock(
  * @param layout Information about where to put a new webview
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
+ * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+ *   tabs
  * @returns If WebView added, final layout used to display the new webView. If existing webView
  *   updated, `undefined`
  */
 export function addWebViewToDock(
   webView: WebViewTabProps,
   layout: Layout,
+  shouldBringToFront: boolean,
   dockLayout: DockLayout,
 ): Layout | undefined {
   const tabId = webView.id;
@@ -462,8 +477,9 @@ export function addWebViewToDock(
       `platform-dock-layout error: WebView of type ${webView.webViewType} has no id!`,
     );
   return addTabToDock(
-    updateWebViewTab({ id: tabId, tabType: TAB_TYPE_WEBVIEW }, webView),
+    { id: tabId, tabType: TAB_TYPE_WEBVIEW, data: webView },
     layout,
+    shouldBringToFront,
     dockLayout,
   );
 }

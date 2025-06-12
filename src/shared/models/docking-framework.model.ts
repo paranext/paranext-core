@@ -41,7 +41,7 @@ export type TabInfo = SavedTabInfo & {
   tabTitle: string | LocalizeKey;
   /** Text to show when hovering over the title bar of the tab */
   tabTooltip?: string;
-  /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+  /** The last time (`Date.now()`) the tab was instructed to flash its contents in the UI. */
   flashTriggerTime?: number;
   /** Content to show inside the tab. */
   content: ReactNode;
@@ -154,19 +154,31 @@ export type PapiDockLayout = {
    *
    * @param savedTabInfo Info for tab to add or update
    * @param layout Information about where to put a new tab
+   * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+   *   tabs. Defaults to `true`
    * @returns If tab added, final layout used to display the new tab. If existing tab updated,
    *   `undefined`
    */
-  addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
+  addTabToDock: (
+    savedTabInfo: SavedTabInfo,
+    layout: Layout,
+    shouldBringToFront?: boolean,
+  ) => Layout | undefined;
   /**
    * Add or update a webview in the layout
    *
    * @param webView Web view to add or update
    * @param layout Information about where to put a new webview
+   * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+   *   tabs. Defaults to `true`
    * @returns If WebView added, final layout used to display the new webView. If existing webView
    *   updated, `undefined`
    */
-  addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => Layout | undefined;
+  addWebViewToDock: (
+    webView: WebViewTabProps,
+    layout: Layout,
+    shouldBringToFront?: boolean,
+  ) => Layout | undefined;
   /**
    * Remove a tab in the layout
    *
@@ -186,9 +198,15 @@ export type PapiDockLayout = {
    * @param webViewId The ID of the WebView to update
    * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
    *   same
+   * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+   *   tabs. Defaults to `false`
    * @returns True if successfully found the WebView to update; false otherwise
    */
-  updateWebViewDefinition: (webViewId: string, updateInfo: WebViewDefinitionUpdateInfo) => boolean;
+  updateWebViewDefinition: (
+    webViewId: string,
+    updateInfo: WebViewDefinitionUpdateInfo,
+    shouldBringToFront?: boolean,
+  ) => boolean;
   /**
    * Brings the floating tab group with the specified WebView ID to the front of the layout. If
    * there is no floating tab group with the specified ID, this does nothing.
