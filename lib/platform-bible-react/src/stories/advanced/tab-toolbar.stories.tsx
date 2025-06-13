@@ -117,7 +117,7 @@ const meta: Meta<TabToolbarProps> = {
     tabViewMenuData,
     startAreaChildren: (
       <>
-        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} className="tw-h-8" />
+        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} />
         <ScrollGroupSelector
           availableScrollGroupIds={[0, 1, 2, 3, 4]}
           localizedStrings={myScrollGroupIdLocalizedStrings}
@@ -175,7 +175,7 @@ const meta: Meta<TabToolbarProps> = {
           onChangeScrollGroupId={setScrollGroupId}
           size="sm"
         />
-        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} className="tw-h-8" />
+        <BookChapterControl scrRef={defaultScrRef} handleSubmit={() => {}} />
       </>
     ),
   },
