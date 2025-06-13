@@ -1,4 +1,4 @@
-import type { Meta as MetaBase, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react';
 import { DockMode, LayoutBase } from 'rc-dock';
 import { CSSProperties } from 'react';
 
@@ -81,9 +81,9 @@ export const Default: Story = {
   args: { defaultLayout, style, loadTab },
 };
 
-export const Meta: MetaBase<typeof DockLayoutWrapper> = {
+const meta: Meta<typeof DockLayoutWrapper> = {
   title: 'platform/DockLayout',
   component: DockLayoutWrapper,
   tags: ['autodocs'],
 };
-export default Meta;
+export default meta;

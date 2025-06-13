@@ -60,7 +60,7 @@ export type PlatformSpawn = (
   executionToken: ExtensionBasicData,
   command: string,
   args: readonly string[],
-  options: SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>,
+  options: Omit<SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>, 'cwd'>,
 ) => ChildProcessByStdio<Writable, Readable, Readable>;
 
 /**
@@ -97,7 +97,7 @@ export type PlatformFork = (
   executionToken: ExtensionBasicData,
   modulePath: string,
   args?: readonly string[],
-  options?: ForkOptions,
+  options?: Omit<ForkOptions, 'cwd'>,
 ) => ChildProcess;
 
 /** JSDOC SOURCE OperatingSystemData Data about the operating system on which this process is running */

@@ -34,7 +34,7 @@ describe('Dock Layout Component', () => {
 
       expect(() =>
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        addTabToDock('this is wrong' as unknown as SavedTabInfo, layout, dockLayout),
+        addTabToDock('this is wrong' as unknown as SavedTabInfo, layout, false, dockLayout),
       ).toThrow();
     });
     // TODO: verify it adds an error tab if no/bad tab type provided
@@ -47,7 +47,7 @@ describe('Dock Layout Component', () => {
       const webView = {} as WebViewTabProps;
       const layout: Layout = { type: 'tab' };
 
-      expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
+      expect(() => addWebViewToDock(webView, layout, false, dockLayout)).toThrow();
     });
 
     it('should throw on unknown layout type', () => {
@@ -58,7 +58,7 @@ describe('Dock Layout Component', () => {
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       const layout = { type: 'wacked' } as unknown as FloatLayout;
 
-      expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
+      expect(() => addWebViewToDock(webView, layout, false, dockLayout)).toThrow();
 
       verify(mockDockLayout.find(anything())).once();
       verify(mockDockLayout.updateTab(anything(), anything())).never();
@@ -72,7 +72,7 @@ describe('Dock Layout Component', () => {
       const webView: WebViewTabProps = { id: 'myId', webViewType: 'test', content: '' };
       const layout: Layout = { type: 'panel', direction: 'top', targetTabId: 'unknownTabId' };
 
-      expect(() => addWebViewToDock(webView, layout, dockLayout)).toThrow();
+      expect(() => addWebViewToDock(webView, layout, false, dockLayout)).toThrow();
 
       verify(mockDockLayout.find(anything())).called();
       verify(mockDockLayout.updateTab(anything(), anything())).never();

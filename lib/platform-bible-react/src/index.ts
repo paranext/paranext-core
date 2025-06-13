@@ -63,10 +63,7 @@ export {
   default as MultiSelectComboBox,
   type MultiSelectComboBoxEntry,
 } from './components/advanced/multi-select-combo-box.component';
-export type {
-  Command,
-  CommandHandler,
-} from './components/advanced/menus/platform-menubar.component';
+export type { SelectMenuItemHandler } from './components/advanced/menus/platform-menubar.component';
 export {
   default as SettingsSidebar,
   type SettingsSidebarProps,
@@ -141,6 +138,14 @@ export {
   CardContent,
 } from './components/shadcn-ui/card';
 export { default as Checkbox } from './components/shadcn-ui/checkbox';
+export {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from './components/shadcn-ui/command';
 export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';

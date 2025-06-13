@@ -678,23 +678,12 @@ export declare const inventoryCountColumn: (countLabel: string) => ColumnDef<Inv
  *   current status of the item is selected
  */
 export declare const inventoryStatusColumn: (statusLabel: string, approvedItems: string[], onApprovedItemsChange: (items: string[]) => void, unapprovedItems: string[], onUnapprovedItemsChange: (items: string[]) => void) => ColumnDef<InventoryTableData>;
-type MenuItemInfoBase = {
-	/** Text (displayable in the UI) as the name of the menu item */
-	label: string;
-	/** Text to display when the mouse hovers over the menu item */
-	tooltip?: string;
-};
-export type Command = MenuItemInfoBase & {
-	/** Command to execute (string.string) */
-	command: string;
-};
 /**
- * Defines a function that takes a `Command` object as an argument and returns `void`. Used to
- * define the shape of a function that can handle commands, but it does not provide an
- * implementation.
+ * Callback function that is invoked when a user selects a menu item. Receives the full
+ * `MenuItemContainingCommand` object as an argument.
  */
-export interface CommandHandler {
-	(command: Command): void;
+export interface SelectMenuItemHandler {
+	(selectedMenuItem: MenuItemContainingCommand): void;
 }
 export type SelectedSettingsSidebarItem = {
 	label: string;
@@ -1002,7 +991,7 @@ type SettingsListHeaderProps = {
 export declare function SettingsListHeader({ primary, secondary, includeSeparator, }: SettingsListHeaderProps): import("react/jsx-runtime").JSX.Element;
 type TabDropdownMenuProps = {
 	/** The handler to use for menu commands */
-	commandHandler: CommandHandler;
+	onSelectMenuItem: SelectMenuItemHandler;
 	/** The menu data to show on the dropdown menu */
 	menuData: Localized<MultiColumnMenu>;
 	/** Defines a string value that labels the current element */
@@ -1023,12 +1012,12 @@ type TabDropdownMenuProps = {
  *
  * A child component can be passed in to show as an icon on the menu trigger button.
  */
-export function TabDropdownMenu({ commandHandler, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
+export function TabDropdownMenu({ onSelectMenuItem, menuData, tabLabel, icon, className, variant, id, }: TabDropdownMenuProps): import("react/jsx-runtime").JSX.Element;
 export type TabToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for toolbar item commands */
-	projectMenuCommandHandler: CommandHandler;
+	onSelectProjectMenuItem: SelectMenuItemHandler;
 	/** The handler to use for toolbar item commands */
-	viewInfoMenuCommandHandler: CommandHandler;
+	onSelectViewInfoMenuItem: SelectMenuItemHandler;
 	/** Menu data that is used to populate the Menubar component for the project menu. */
 	projectMenuData?: Localized<MultiColumnMenu>;
 	/** Menu data that is used to populate the Menubar component for the view info menu */
@@ -1050,7 +1039,7 @@ export type TabToolbarProps = React$1.PropsWithChildren<{
 	 */
 	endAreaChildren?: React$1.ReactNode;
 }>;
-export declare function TabToolbar({ projectMenuCommandHandler, viewInfoMenuCommandHandler, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
 	value: string;
@@ -1089,7 +1078,7 @@ type TabNavigationContentSearchProps = {
 declare function TabNavigationContentSearch({ tabList, searchValue, onSearch, searchPlaceholder, headerTitle, searchClassName, }: TabNavigationContentSearchProps): import("react/jsx-runtime").JSX.Element;
 export type ToolbarProps = React$1.PropsWithChildren<{
 	/** The handler to use for menu commands (and eventually toolbar commands). */
-	commandHandler: CommandHandler;
+	onSelectMenuItem: SelectMenuItemHandler;
 	/**
 	 * Menu data that is used to populate the Menubar component. If empty object, no menus will be
 	 * shown on the App Menubar
@@ -1139,7 +1128,7 @@ export declare function getToolbarOSReservedSpaceClassName(operatingSystem: stri
  *
  * @param {ToolbarProps} props - The props for the component.
  */
-export declare function Toolbar({ menuData, onOpenChange, commandHandler, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
+export declare function Toolbar({ menuData, onOpenChange, onSelectMenuItem, className, id, children, appMenuAreaChildren, configAreaChildren, shouldUseAsAppDragArea, menubarVariant, }: ToolbarProps): import("react/jsx-runtime").JSX.Element;
 declare const UI_LANGUAGE_SELECTOR_STRING_KEYS: readonly [
 	"%settings_uiLanguageSelector_selectFallbackLanguages%"
 ];
@@ -1440,6 +1429,7 @@ export declare const CardFooter: React$1.ForwardRefExoticComponent<React$1.HTMLA
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
  */
 export declare const Checkbox: React$1.ForwardRefExoticComponent<Omit<CheckboxPrimitive.CheckboxProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+<<<<<<< HEAD
 export declare function Drawer({ shouldScaleBackground, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 export declare namespace Drawer {
 	var displayName: string;
@@ -1459,6 +1449,73 @@ export declare namespace DrawerFooter {
 }
 export declare const DrawerTitle: React$1.ForwardRefExoticComponent<Omit<import("@radix-ui/react-dialog").DialogTitleProps & React$1.RefAttributes<HTMLHeadingElement>, "ref"> & React$1.RefAttributes<HTMLHeadingElement>>;
 export declare const DrawerDescription: React$1.ForwardRefExoticComponent<Omit<import("@radix-ui/react-dialog").DialogDescriptionProps & React$1.RefAttributes<HTMLParagraphElement>, "ref"> & React$1.RefAttributes<HTMLParagraphElement>>;
+=======
+export declare const Command: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
+	label?: string;
+	shouldFilter?: boolean;
+	filter?: (value: string, search: string, keywords?: string[]) => number;
+	defaultValue?: string;
+	value?: string;
+	onValueChange?: (value: string) => void;
+	loop?: boolean;
+	disablePointerSelection?: boolean;
+	vimBindings?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandInput: React$1.ForwardRefExoticComponent<Omit<Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement>> & {
+	ref?: React$1.Ref<HTMLInputElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement> | "asChild">, "type" | "value" | "onChange"> & {
+	value?: string;
+	onValueChange?: (search: string) => void;
+} & React$1.RefAttributes<HTMLInputElement>, "ref"> & React$1.RefAttributes<HTMLInputElement>>;
+export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
+	label?: string;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandEmpty: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "heading"> & {
+	heading?: React$1.ReactNode;
+	value?: string;
+	forceMount?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
+	children?: React$1.ReactNode;
+} & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
+	ref?: React$1.Ref<HTMLDivElement>;
+} & {
+	asChild?: boolean;
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "disabled" | "onSelect"> & {
+	disabled?: boolean;
+	onSelect?: (value: string) => void;
+	value?: string;
+	keywords?: string[];
+	forceMount?: boolean;
+} & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+>>>>>>> a5c80c00efd21055fe49a2ccae8da3922e707be9
 type MenuContextProps = {
 	variant?: "default" | "muted";
 };

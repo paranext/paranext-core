@@ -172,14 +172,14 @@ export function TabDropdownMenuExample() {
   return (
     <>
       <TabDropdownMenu
-        commandHandler={(command) => console.log('Run command: ', command)}
+        onSelectMenuItem={(command) => console.log('Run command: ', command)}
         menuData={menuData}
         icon={<BookIcon className="tw-h-4 tw-w-4" />}
         tabLabel="Tab Label"
       />
 
       <TabDropdownMenu
-        commandHandler={(command) => console.log('Run command: ', command)}
+        onSelectMenuItem={(command) => console.log('Run command: ', command)}
         menuData={menuData}
         icon={
           <div className="tw-h-4 tw-w-4">
@@ -192,7 +192,7 @@ export function TabDropdownMenuExample() {
       />
 
       <TabDropdownMenu
-        commandHandler={(command) => console.log('Run command: ', command)}
+        onSelectMenuItem={(command) => console.log('Run command: ', command)}
         menuData={menuData}
         icon={
           <div className="tw-flex">

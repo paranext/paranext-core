@@ -92,7 +92,7 @@ const reactWebView2Provider: IWebViewProviderWithType = {
 
 // #endregion
 
-// #region Extension-specific Project Web View, Command, etc.
+// #region Extension-specific Project Web View, commands, etc.
 
 interface HelloRock3ProjectOptions extends OpenWebViewOptions {
   /** The project ID this viewer should focus on */
@@ -493,9 +493,18 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // if one already exists. The webview that already exists could have been created by anyone
   // anywhere; it just has to match `webViewType`. See `hello-someone.ts` for an example of keeping
   // an existing webview that was specifically created by `hello-someone`.
-  papi.webViews.openWebView(htmlWebViewProvider.webViewType, undefined, { existingId: '?' });
-  papi.webViews.openWebView(reactWebViewProvider.webViewType, undefined, { existingId: '?' });
-  papi.webViews.openWebView(reactWebView2Provider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.openWebView(htmlWebViewProvider.webViewType, undefined, {
+    existingId: '?',
+    bringToFront: false,
+  });
+  papi.webViews.openWebView(reactWebViewProvider.webViewType, undefined, {
+    existingId: '?',
+    bringToFront: false,
+  });
+  papi.webViews.openWebView(reactWebView2Provider.webViewType, undefined, {
+    existingId: '?',
+    bringToFront: false,
+  });
 
   try {
     const peopleDataProvider = await papi.dataProviders.get('helloSomeone.people');
