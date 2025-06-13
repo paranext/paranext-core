@@ -9,18 +9,27 @@ import { RCDockTabInfo } from './docking-framework-internal.model';
  * Creates a tab ready to go into rc-dock from platform tab info
  *
  * @param tabInfo Data used to create the rc-dock tab
+ * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+ *   tabs. Defaults to `false`.
  * @returns Rc-dock tab created from `tabInfo`
  */
-export function createRCDockTabFromTabInfo(tabInfo: TabInfo): RCDockTabInfo {
+export function createRCDockTabFromTabInfo(
+  tabInfo: TabInfo,
+  shouldBringToFront = false,
+): RCDockTabInfo {
+  // Update the flash trigger time if we are supposed to bring the tab to the front
+  const flashTriggerTime = shouldBringToFront ? Date.now() : tabInfo.flashTriggerTime;
+
   // Translate the data from the loaded tab to be in the form needed by rc-dock
   return {
     ...tabInfo,
+    flashTriggerTime,
     title: (
       <PlatformTabTitle
         iconUrl={tabInfo.tabIconUrl}
         text={tabInfo.tabTitle}
         tooltip={tabInfo.tabTooltip}
-        flashTriggerTime={tabInfo.flashTriggerTime}
+        flashTriggerTime={flashTriggerTime}
       />
     ),
     content: <PlatformPanel>{tabInfo.content}</PlatformPanel>,

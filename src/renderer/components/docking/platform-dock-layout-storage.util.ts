@@ -117,9 +117,9 @@ export function loadTab(savedTabInfo: SavedTabInfo, shouldBringToFront = false):
   if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
 
   // Load the tab from the saved tab info
-  const tabInfo = updateFlashTriggerTime(loadSavedTabInfo(savedTabInfo), shouldBringToFront);
+  const tabInfo = loadSavedTabInfo(savedTabInfo);
 
-  return createRCDockTabFromTabInfo(tabInfo);
+  return createRCDockTabFromTabInfo(tabInfo, shouldBringToFront);
 }
 
 /**
@@ -250,11 +250,10 @@ export function updateWebViewDefinition(
   if (!updatedWebViewData && !shouldBringToFront) return false;
 
   const updatedTabData = createRCDockTabFromTabInfo(
-    updateFlashTriggerTime(
-      updateWebViewTab(targetTabInfo, updatedWebViewData ?? targetTabWebViewData),
-      shouldBringToFront,
-    ),
+    updateWebViewTab(targetTabInfo, updatedWebViewData ?? targetTabWebViewData),
+    shouldBringToFront,
   );
+
   // Update existing tab
   updateTab(updatedTabData, shouldBringToFront, dockLayout);
 
@@ -304,15 +303,6 @@ function updateTab(
   }
 
   dockLayout.updateTab(tabInfo.id, tabInfo, shouldBringToFront);
-}
-
-function updateFlashTriggerTime(tabInfo: TabInfo, shouldBringToFront: boolean): TabInfo {
-  if (shouldBringToFront) {
-    // Update the flash trigger time if we are supposed to bring the tab to the front.
-    return { ...tabInfo, flashTriggerTime: Date.now() };
-  }
-  // Otherwise, just return the saved tab info as is
-  return tabInfo;
 }
 
 /**
