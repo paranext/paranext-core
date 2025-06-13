@@ -144,7 +144,7 @@ export class ScriptureFinderProjectDataProviderEngine
       status: job.status,
       percentComplete: job.percentComplete,
       totalResultsCount: job.totalResultsCount,
-      nextResults: job.results.slice(0, maxResultsToInclude),
+      nextResults: job.results.splice(0, maxResultsToInclude),
       error: job.error,
       totalExecutionTimeMs: (job.endTime ?? performance.now()) - job.startTime,
     };
