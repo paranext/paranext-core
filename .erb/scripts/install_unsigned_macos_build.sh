@@ -44,7 +44,7 @@ elif [ -d "$SEARCH_PATH" ]; then
     # Path is a directory - search for app-macos*.zip files
     echo "Looking for app-macos*.zip files in $SEARCH_PATH..."
     ZIP_FILE=$(ls -t "$SEARCH_PATH/app-macos"*.zip 2>/dev/null | head -1)
-    
+
     if [ -z "$ZIP_FILE" ]; then
         echo "Error: No app-macos*.zip file found in $SEARCH_PATH!"
         echo "Available zip files in $SEARCH_PATH:"
@@ -66,12 +66,24 @@ echo "Created temporary directory: $TEMP_DIR"
 echo "Extracting zip file..."
 unzip -q "$ZIP_FILE" -d "$TEMP_DIR"
 
-# Find the arm64 DMG file
-DMG_FILE=$(find "$TEMP_DIR" -name "$DMG_PATTERN" -type f | head -1)
-if [ -z "$DMG_FILE" ]; then
+# Detect system architecture
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then
+  echo "Detected Apple Silicon (arm64). Looking for arm64 DMG..."
+  DMG_FILE=$(find "$TEMP_DIR" -name "*arm64*.dmg" -type f | head -1)
+  if [ -z "$DMG_FILE" ]; then
     echo "Error: No arm64 DMG file found in the zip!"
     rm -rf "$TEMP_DIR"
     exit 1
+  fi
+else
+  echo "Detected Intel (x86_64). Looking for non-arm64 DMG..."
+  DMG_FILE=$(find "$TEMP_DIR" -name "*.dmg" ! -name "*arm64*.dmg" -type f | head -1)
+  if [ -z "$DMG_FILE" ]; then
+    echo "Error: No non-arm64 DMG file found in the zip!"
+    rm -rf "$TEMP_DIR"
+    exit 1
+  fi
 fi
 
 echo "Found arm64 DMG: $(basename "$DMG_FILE")"
