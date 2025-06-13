@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to install arm64 app from app-macos*.zip file
+# Script to install Apple Silicone (arm64) or Intel (x86_64) app from app-macos*.zip file
 # Extract, install, codesign, and run the application
 # Supports both Paratext 10 Studio and Platform.Bible apps
 #
@@ -8,6 +8,10 @@
 #   ./install_unsigned_macos_build.sh                    # Use ~/Downloads (default)
 #   ./install_unsigned_macos_build.sh /path/to/folder    # Search for app-macos*.zip in folder
 #   ./install_unsigned_macos_build.sh /path/to/file.zip  # Use specific zip file
+#
+# Expected pathnames:
+# - For Apple Silicone (arm64) architecture: DMG files should include "arm64" in their names (e.g., app-arm64.dmg).
+# - For Intel (x86_64) architecture: DMG files should exclude "arm64" in their names (e.g., app.dmg).
 
 set -e  # Exit on any error
 
@@ -18,6 +22,10 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     echo "        If directory: searches for most recent app-macos*.zip"
     echo "        If file: uses that specific zip file"
     echo "        If not specified: defaults to ~/Downloads"
+    echo ""
+    echo "Expected pathnames:"
+    echo "  - For Apple Silicone (arm64) architecture: DMG files should include 'arm64' in their names (e.g., app-arm64.dmg)."
+    echo "  - For Intel (x86_64) architecture: DMG files should exclude 'arm64' in their names (e.g., app.dmg)."
     exit 0
 fi
 
@@ -25,7 +33,6 @@ echo "Starting app installation process..."
 
 # Define variables
 TEMP_DIR="/tmp/app_install_$$"
-DMG_PATTERN="*arm64*.dmg"
 
 # Find the zip file based on provided path or default
 SEARCH_PATH="${1:-$HOME/Downloads}"  # Use first argument or default to ~/Downloads
@@ -77,10 +84,10 @@ if [ "$ARCH" = "arm64" ]; then
     exit 1
   fi
 else
-  echo "Detected Intel (x86_64). Looking for non-arm64 DMG..."
+  echo "Detected Intel (x86_64). Looking for Intel (non-arm64) DMG..."
   DMG_FILE=$(find "$TEMP_DIR" -name "*.dmg" ! -name "*arm64*.dmg" -type f | head -1)
   if [ -z "$DMG_FILE" ]; then
-    echo "Error: No non-arm64 DMG file found in the zip!"
+    echo "Error: No Intel (non-arm64 DMG) file found in the zip!"
     rm -rf "$TEMP_DIR"
     exit 1
   fi
