@@ -10,6 +10,10 @@ export type ExtensionIdentifier = {
   extensionVersion: string;
 };
 
+export type PublisherIdentifier = {
+  publisherName?: string;
+};
+
 /**
  * Represents all extensions that are installed. Note that packaged extensions cannot be disabled,
  * so they are implied to always be enabled.
