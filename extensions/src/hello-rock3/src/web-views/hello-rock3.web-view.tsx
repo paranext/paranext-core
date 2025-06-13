@@ -516,6 +516,7 @@ globalThis.webViewComponent = function HelloRock3({
         <div>{localizedSubmit}</div>
         <div>{localizedTestDeprecatedString}</div>
       </div>
+      <Button onClick={() => updateWebViewDefinition({}, true)}>Make this WebView flash</Button>
     </div>
   );
 };

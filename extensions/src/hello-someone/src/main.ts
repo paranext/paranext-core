@@ -318,7 +318,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     const peopleWebViewId = await papi.webViews.openWebView(
       peopleWebViewType,
       { type: 'panel', direction: 'top' },
-      { existingId: existingPeopleWebViewId },
+      { existingId: existingPeopleWebViewId, bringToFront: false },
     );
 
     // Save newly acquired webview id
