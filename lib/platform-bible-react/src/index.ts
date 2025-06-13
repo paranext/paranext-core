@@ -169,6 +169,7 @@ export {
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
 export type { Scope } from './components/utils/scripture.util';
+export { default as VisuallyHidden } from './components/shadcn-ui/visually-hidden';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';

@@ -15,6 +15,7 @@ import * as SwitchPrimitives from '@radix-ui/react-switch';
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as ToggleGroupPrimitive from '@radix-ui/react-toggle-group';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
+import * as VisuallyHiddenPrimitive from '@radix-ui/react-visually-hidden';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { ColumnDef as TSColumnDef, Row as TSRow, SortDirection as TSSortDirection, Table as TSTable } from '@tanstack/react-table';
 import { ClassValue } from 'clsx';
@@ -1779,6 +1780,12 @@ export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
 export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Tooltip */
 export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Hides content from the screen but announces it by screen readers
+ *
+ * @see Radix UI Documentation {@link https://www.radix-ui.com/primitives/docs/utilities/visually-hidden/ }
+ */
+export declare const VisuallyHidden: import("react").ForwardRefExoticComponent<VisuallyHiddenPrimitive.VisuallyHiddenProps & import("react").RefAttributes<HTMLSpanElement>>;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
