@@ -702,6 +702,15 @@ declare module 'platform-lexical-tools' {
   } & LexicalReferenceTextRegistrar;
 
   // #endregion
+
+  /** Type for the dictionary scope */
+  export type DictionaryScope = 'chapter' | 'section' | 'verse';
+
+  /** Type for the occurrence view */
+  export type OccurrenceView = 'chapter' | 'all';
+
+  /** Type for the project options */
+  export type ProjectOption = { projectId: string | undefined; projectShortName: string };
 }
 
 declare module 'papi-shared-types' {
@@ -724,8 +733,11 @@ declare module 'papi-shared-types' {
     /**
      * Opens the dictionary web view
      *
+     * @param editorWebViewId - The id of the editor web view the user opened the dictionary from
      * @returns WebView id for new Dictionary WebView or `undefined` if not created
      */
-    'platformLexicalTools.openDictionary': () => Promise<string | undefined>;
+    'platformLexicalTools.openDictionary': (
+      editorWebViewId: string | undefined,
+    ) => Promise<string | undefined>;
   }
 }
