@@ -360,6 +360,22 @@ async function main() {
       },
     );
 
+    mainWindow.webContents.on('before-input-event', (_, event) => {
+      // Key up seems not to change focus
+      if (event.type !== 'keyUp') return;
+
+      // Announce a possible focus change
+      logger.info('TODO: Announce possible focus change');
+    });
+
+    mainWindow.webContents.on('before-mouse-event', (_, event) => {
+      // Mouse up and other events seem not to change focus
+      if (event.type !== 'mouseDown') return;
+
+      // Announce a possible focus change
+      logger.info('TODO: Announce possible focus change');
+    });
+
     mainWindow.on('ready-to-show', () => {
       logger.info('mainWindow is ready to show');
       if (!mainWindow) throw new Error('"mainWindow" is not defined');
