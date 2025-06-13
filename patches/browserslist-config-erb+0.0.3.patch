@@ -1,0 +1,14 @@
+diff --git a/node_modules/browserslist-config-erb/index.js b/node_modules/browserslist-config-erb/index.js
+index c1ef4a2..4247400 100644
+--- a/node_modules/browserslist-config-erb/index.js
++++ b/node_modules/browserslist-config-erb/index.js
+@@ -1 +1,8 @@
+-module.exports = [`electron ${require("electron/package.json").version}`];
++/**
++ * patch-package notes:
++ *
++ * This file tells browserslist which version of electron we use by looking at our package.json.
++ * However, browserslist does not support parsing beta versions of electron, so we need to strip the
++ * beta suffix.
++ */
++module.exports = [`electron ${require("electron/package.json").version.split("-")[0]}`];
