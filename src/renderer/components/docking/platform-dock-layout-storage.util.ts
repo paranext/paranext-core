@@ -109,17 +109,17 @@ function loadSavedTabInfo(savedTabInfo: SavedTabInfo): TabInfo {
  * Loads tab data from the specified saved tab information into an actual dock layout tab
  *
  * @param savedTabInfo Data that is to be used to create the new tab (comes from rc-dock)
- * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
- *   tabs. Defaults to `false`
+ * @param shouldFlash If true, the tab info will be adjusted to start flashing when next rendered.
+ *   Defaults to `false`
  * @returns Live dock layout tab ready to used
  */
-export function loadTab(savedTabInfo: SavedTabInfo, shouldBringToFront = false): RCDockTabInfo {
+export function loadTab(savedTabInfo: SavedTabInfo, shouldFlash = false): RCDockTabInfo {
   if (!savedTabInfo.id) throw new LogError('loadTab: "id" is missing.');
 
   // Load the tab from the saved tab info
   const tabInfo = loadSavedTabInfo(savedTabInfo);
 
-  return createRCDockTabFromTabInfo(tabInfo, shouldBringToFront);
+  return createRCDockTabFromTabInfo(tabInfo, shouldFlash);
 }
 
 /**
@@ -475,13 +475,14 @@ export function addWebViewToDock(
 }
 
 /**
- * If any tab group is maximized, this unmaximizes it unless it contains the specified WebView.
+ * Unmaximizes any maximized tab group in the layout unless it contains the given WebView. If no tab
+ * groups are maximized, this does nothing.
  *
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @param webViewId The ID of the WebView to search for as a child of the maximized panel.
  */
-export function unmaximizeAnyMaximizedTabGroup(dockLayout: DockLayout, webViewId?: string): void {
+function unmaximizeAnyMaximizedTabGroup(dockLayout: DockLayout, webViewId?: string): void {
   // According to the docs, if there is a child of maxbox, then the type is always PanelData
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const maximizedTabGroup = dockLayout.getLayout().maxbox?.children?.[0] as PanelData | undefined;
@@ -502,7 +503,15 @@ export function unmaximizeAnyMaximizedTabGroup(dockLayout: DockLayout, webViewId
   dockLayout.dockMove(maximizedTabGroup, null, 'maximize');
 }
 
-export function bringFloatingTabGroupToFront(dockLayout: DockLayout, webViewId: string): void {
+/**
+ * Brings the floating tab group with the specified WebView ID to the front of the layout. If there
+ * is no floating tab group with the specified ID, this does nothing.
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param webViewId The ID of the WebView whose floating tab group to bring to the front
+ */
+function bringFloatingTabGroupToFront(dockLayout: DockLayout, webViewId: string): void {
   let tabData = dockLayout.find(webViewId);
   let tabGroupData: PanelData | undefined;
   while (!tabGroupData && tabData) {

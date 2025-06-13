@@ -2830,20 +2830,6 @@ declare module 'shared/models/docking-framework.model' {
       shouldBringToFront?: boolean,
     ) => boolean;
     /**
-     * Brings the floating tab group with the specified WebView ID to the front of the layout. If
-     * there is no floating tab group with the specified ID, this does nothing.
-     *
-     * @param webViewId The ID of the WebView whose floating tab group to bring to the front
-     */
-    bringFloatingTabGroupToFront: (webViewId: string) => void;
-    /**
-     * Unmaximizes any maximized tab group in the layout unless it contains the given WebView. If no
-     * tab groups are maximized, this does nothing.
-     *
-     * @param webViewId The ID of the WebView to search for in maximized tab groups
-     */
-    unmaximizeAnyMaximizedTabGroup: (webViewId?: string) => void;
-    /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
      * TODO: This should be removed and the `testLayout` imported directly in this file once this

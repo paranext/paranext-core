@@ -23,11 +23,9 @@ import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrap
 import {
   addTabToDock,
   addWebViewToDock,
-  bringFloatingTabGroupToFront,
   getWebViewDefinition,
   loadTab,
   saveTab,
-  unmaximizeAnyMaximizedTabGroup,
   updateWebViewDefinition,
 } from '@renderer/components/docking/platform-dock-layout-storage.util';
 import {
@@ -73,10 +71,6 @@ export function PlatformDockLayout() {
         shouldBringToFront = false,
       ) =>
         updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
-      bringFloatingTabGroupToFront: (webViewId: string) =>
-        bringFloatingTabGroupToFront(dockLayoutRef.current, webViewId),
-      unmaximizeAnyMaximizedTabGroup: (webViewId?: string) =>
-        unmaximizeAnyMaximizedTabGroup(dockLayoutRef.current, webViewId),
       testLayout,
     });
     return () => {
