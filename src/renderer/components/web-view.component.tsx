@@ -3,7 +3,6 @@ import { WEB_VIEW_CONTENT_TYPE, WebViewDefinition } from '@shared/models/web-vie
 import { SavedTabInfo, TabInfo, WebViewTabProps } from '@shared/models/docking-framework.model';
 import {
   convertWebViewDefinitionToSaved,
-  openWebView,
   saveTabInfoBase,
   IFRAME_SANDBOX_ALLOW_SAME_ORIGIN,
   IFRAME_SANDBOX_ALLOW_SCRIPTS,
@@ -12,6 +11,7 @@ import {
   IFRAME_SANDBOX_ALLOW_POPUPS,
   updateWebViewDefinitionSync,
   isWebViewNonceCorrect,
+  reloadWebView,
 } from '@renderer/services/web-view.service-host';
 import { logger } from '@shared/services/logger.service';
 import {
@@ -63,11 +63,15 @@ const registrationPromises = new PromiseChainingMap<string>(logger);
  * @param data Web view definition to load
  */
 async function retrieveWebViewContent(webViewType: string, id: string): Promise<void> {
-  const loadedId = await openWebView(webViewType, undefined, {
-    existingId: id,
-    createNewIfNotFound: false,
+  const loadedId = await reloadWebView(webViewType, id, {
     bringToFront: false,
   });
+
+  if (!loadedId)
+    throw new Error(
+      `WebView with type ${webViewType} and id ${id} returned undefined when reloading!`,
+    );
+
   if (loadedId !== id)
     logger.error(`WebView with type ${webViewType} and id ${id} loaded into id ${loadedId}!`);
 }
@@ -183,7 +187,7 @@ export function WebView({
         await retrieveWebViewContent(webViewType, id);
       } catch (e) {
         logger.error(
-          `web-view.component failed to reload web view content for webViewType ${webViewType} id ${id} when extensions reloaded: ${e}`,
+          `web-view.component failed to reload web view content for webViewType ${webViewType} id ${id} when extensions reloaded: ${getErrorMessage(e)}`,
         );
       }
     }, [webViewType, id]),
@@ -342,7 +346,6 @@ export function updateWebViewTab(savedTabInfo: SavedTabInfo, data: WebViewDefini
   return {
     ...savedTabInfo,
     data,
-    flashTriggerTime: data.flashTriggerTime,
     tabIconUrl: data.iconUrl,
     tabTitle: data.title ?? '%tab_title_unknown%',
     tabTooltip: data.tooltip ?? '',
@@ -372,7 +375,7 @@ export function loadWebViewTab(savedTabInfo: SavedTabInfo): TabInfo {
           logger.error(
             `web-view.component failed to retrieve web view content for ${serialize(
               savedTabInfo,
-            )}: ${e}`,
+            )}: ${getErrorMessage(e)}`,
           );
         }
       })();

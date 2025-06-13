@@ -57,6 +57,7 @@ declare global {
   var updateWebViewDefinitionById: (
     webViewId: string,
     webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+    shouldBringToFront?: boolean,
   ) => boolean;
   /** JSDOC DESTINATION GetSavedWebViewDefinition */
   var getSavedWebViewDefinition: GetSavedWebViewDefinition;

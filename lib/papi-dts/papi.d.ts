@@ -237,8 +237,6 @@ declare module 'shared/models/web-view.model' {
      * focusing independently of a scroll group
      */
     scrollGroupScrRef?: ScrollGroupScrRef;
-    /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
-    flashTriggerTime?: number;
     /**
      * General object to store unique state for this webview.
      *
@@ -404,7 +402,6 @@ declare module 'shared/models/web-view.model' {
     'tooltip',
     'projectId',
     'scrollGroupScrRef',
-    'flashTriggerTime',
   ];
   /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
@@ -506,6 +503,9 @@ declare module 'shared/models/web-view.model' {
    * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
    * the same
    *
+   * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
+   * other tabs. Defaults to `false`
+   *
    * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
    * false otherwise
    *
@@ -515,7 +515,10 @@ declare module 'shared/models/web-view.model' {
    * updateWebViewDefinition({ title: `Hello ${name}` });
    * ```
    */
-  export type UpdateWebViewDefinition = (updateInfo: WebViewDefinitionUpdateInfo) => boolean;
+  export type UpdateWebViewDefinition = (
+    updateInfo: WebViewDefinitionUpdateInfo,
+    shouldBringToFront?: boolean,
+  ) => boolean;
   /** Props that are passed into the web view itself inside the iframe in the web view tab component */
   export type WebViewProps = SavedWebViewDefinition & {
     /**
@@ -588,6 +591,9 @@ declare module 'shared/models/web-view.model' {
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
      * the same
      *
+     * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
+     * other tabs. Defaults to `false`
+     *
      * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
      * false otherwise
      *
@@ -599,8 +605,17 @@ declare module 'shared/models/web-view.model' {
      */
     updateWebViewDefinition: UpdateWebViewDefinition;
   };
+  /** Options that affect what `papi.webViews.reloadWebView` does. */
+  export type ReloadWebViewOptions = {
+    /**
+     * Whether to bring the reloaded WebView to the front.
+     *
+     * Defaults to `true`
+     */
+    bringToFront?: boolean;
+  };
   /** Options that affect what `webViews.openWebView` does */
-  export type OpenWebViewOptions = {
+  export type OpenWebViewOptions = ReloadWebViewOptions & {
     /**
      * If provided and if a web view with this ID exists, requests from the web view provider an
      * existing WebView with this ID if one exists. The web view provider can deny the request if it
@@ -608,15 +623,11 @@ declare module 'shared/models/web-view.model' {
      *
      * Alternatively, set this to '?' to attempt to find any existing web view with the specified
      * webViewType.
-     *
-     * Note: setting `existingId` to `undefined` counts as providing in this case (providing is tested
-     * with `'existingId' in options`, not just testing if `existingId` is truthy). Not providing an
-     * `existingId` at all is the only way to specify we are not looking for an existing WebView
      */
-    existingId?: string | '?' | undefined;
+    existingId?: string | '?';
     /**
-     * Whether to create a WebView with a new ID and a WebView with ID `existingId` was not found.
-     * Only relevant if `existingId` is provided. If `existingId` is not provided, this property is
+     * Whether to create a WebView with a new ID if a WebView with ID `existingId` was not found. Only
+     * relevant if `existingId` is provided. If `existingId` is not provided, this property is
      * ignored.
      *
      * Defaults to true
@@ -626,7 +637,7 @@ declare module 'shared/models/web-view.model' {
      * Whether to bring the WebView to the front if it already exists. Only relevant if `existingId`
      * is provided. If `existingId` is not provided, this property is ignored.
      *
-     * Defaults to true
+     * Defaults to `true`
      *
      * If a new WebView is created, it is always brought to the front, regardless of this option.
      */
@@ -747,6 +758,7 @@ declare module 'shared/global-this.model' {
     var updateWebViewDefinitionById: (
       webViewId: string,
       webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+      shouldBringToFront?: boolean,
     ) => boolean;
     /**
      *
@@ -762,6 +774,9 @@ declare module 'shared/global-this.model' {
      *
      * _＠param_ `updateInfo` properties to update on the WebView. Any unspecified properties will stay
      * the same
+     *
+     * _＠param_ `shouldBringToFront` If true, the tab will be brought to the front and unobscured by
+     * other tabs. Defaults to `false`
      *
      * _＠returns_ true if successfully found the WebView to update and actually updated any properties;
      * false otherwise
@@ -2658,7 +2673,7 @@ declare module 'shared/models/docking-framework.model' {
     tabTitle: string | LocalizeKey;
     /** Text to show when hovering over the title bar of the tab */
     tabTooltip?: string;
-    /** The last time (`Date.now()`) the WebView tab was instructed to flash its contents in the UI. */
+    /** The last time (`Date.now()`) the tab was instructed to flash its contents in the UI. */
     flashTriggerTime?: number;
     /** Content to show inside the tab. */
     content: ReactNode;
@@ -2761,19 +2776,31 @@ declare module 'shared/models/docking-framework.model' {
      *
      * @param savedTabInfo Info for tab to add or update
      * @param layout Information about where to put a new tab
+     * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+     *   tabs. Defaults to `true`
      * @returns If tab added, final layout used to display the new tab. If existing tab updated,
      *   `undefined`
      */
-    addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) => Layout | undefined;
+    addTabToDock: (
+      savedTabInfo: SavedTabInfo,
+      layout: Layout,
+      shouldBringToFront?: boolean,
+    ) => Layout | undefined;
     /**
      * Add or update a webview in the layout
      *
      * @param webView Web view to add or update
      * @param layout Information about where to put a new webview
+     * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+     *   tabs. Defaults to `true`
      * @returns If WebView added, final layout used to display the new webView. If existing webView
      *   updated, `undefined`
      */
-    addWebViewToDock: (webView: WebViewTabProps, layout: Layout) => Layout | undefined;
+    addWebViewToDock: (
+      webView: WebViewTabProps,
+      layout: Layout,
+      shouldBringToFront?: boolean,
+    ) => Layout | undefined;
     /**
      * Remove a tab in the layout
      *
@@ -2793,26 +2820,15 @@ declare module 'shared/models/docking-framework.model' {
      * @param webViewId The ID of the WebView to update
      * @param updateInfo Properties to update on the WebView. Any unspecified properties will stay the
      *   same
+     * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
+     *   tabs. Defaults to `false`
      * @returns True if successfully found the WebView to update; false otherwise
      */
     updateWebViewDefinition: (
       webViewId: string,
       updateInfo: WebViewDefinitionUpdateInfo,
+      shouldBringToFront?: boolean,
     ) => boolean;
-    /**
-     * Brings the floating tab group with the specified WebView ID to the front of the layout. If
-     * there is no floating tab group with the specified ID, this does nothing.
-     *
-     * @param webViewId The ID of the WebView whose floating tab group to bring to the front
-     */
-    bringFloatingTabGroupToFront: (webViewId: string) => void;
-    /**
-     * Unmaximizes any maximized tab group in the layout unless it contains the given WebView. If no
-     * tab groups are maximized, this does nothing.
-     *
-     * @param webViewId The ID of the WebView to search for in maximized tab groups
-     */
-    unmaximizeAnyMaximizedTabGroup: (webViewId?: string) => void;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
@@ -2828,6 +2844,7 @@ declare module 'shared/services/web-view.service-model' {
   import {
     GetWebViewOptions,
     OpenWebViewOptions,
+    ReloadWebViewOptions,
     SavedWebViewDefinition,
     WebViewId,
     WebViewType,
@@ -2859,12 +2876,14 @@ declare module 'shared/services/web-view.service-model' {
       options?: GetWebViewOptions,
     ) => Promise<WebViewId | undefined>;
     /**
-     * Creates a new web view or gets an existing one depending on if you request an existing one and
-     * if the web view provider decides to give that existing one to you (it is up to the provider).
+     * Creates a new web view or gets an existing one depending on if you request an existing one. If
+     * you request an existing one, it will not reload the WebView. To reload an existing Webview, use
+     * {@link WebViewServiceType.reloadWebView}.
      *
      * @param webViewType Type of WebView to create
-     * @param layout Information about where you want the web view to go. Defaults to adding as a tab
-     * @param options Options that affect what this function does. For example, you can provide an
+     * @param layout Information about where you want the new web view to go. Defaults to adding as a
+     *   tab. Does nothing on an existing WebView
+     * @param options Options that affect what this method does. For example, you can provide an
      *   existing web view ID to request an existing web view with that ID.
      * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
      *   not create a WebView for this request.
@@ -2875,16 +2894,44 @@ declare module 'shared/services/web-view.service-model' {
       layout?: Layout,
       options?: OpenWebViewOptions,
     ) => Promise<WebViewId | undefined>;
+    /**
+     * Attempts to reload an existing WebView with the specified ID. This method asks the
+     * WebViewProvider for the given `webViewType` to generate a new `WebViewDefinition` for the
+     * WebView with the specified `webViewId` using {@link IWebViewProvider.getWebView}. The
+     * `WebViewProvider` can technically return a new WebView or not give you one if it chooses not to
+     * reload the `WebView` with the `webViewId` provided.
+     *
+     * This is the only way to modify {@link WebViewDefinition} properties that are not
+     * {@link WebViewDefinitionUpdatableProperties} - the `WebViewProvider` must make the changes in
+     * its `getWebView` method. It is also the only way to modify
+     * {@link WebViewDefinitionUpdatableProperties} on the {@link WebViewServiceType}. However, WebViews
+     * can modify their own {@link WebViewDefinitionUpdatableProperties} with
+     * {@link WebViewProps.updateWebViewDefinition}.
+     *
+     * If the WebView is not found, it returns `undefined`.
+     *
+     * @param webViewType Type of WebView to create
+     * @param webViewId The ID of the WebView to reload
+     * @param options Options that affect what this method does
+     * @returns Promise that resolves to the ID of the reloaded WebView or `undefined` if the WebView
+     *   was not found or if the provider returned `undefined` for the reload request.
+     * @throws If something went wrong like the provider for the webViewType was not found
+     */
+    reloadWebView(
+      webViewType: WebViewType,
+      webViewId: WebViewId,
+      options?: ReloadWebViewOptions,
+    ): Promise<WebViewId | undefined>;
     /** @deprecated 6 November 2024. Renamed to {@link getOpenWebViewDefinition} */
     getSavedWebViewDefinition(webViewId: string): Promise<SavedWebViewDefinition | undefined>;
     /**
      * Gets the saved properties on the WebView definition with the specified ID
      *
-     * Note: this only returns a representation of the current web view definition, not the actual web
+     * Note: this only returns a representation of the current WebView definition, not the actual web
      * view definition itself. Changing properties on the returned definition does not affect the
-     * actual web view definition. You can possibly change the actual web view definition by calling
-     * {@link WebViewServiceType.openWebView} with certain `options`, depending on what options the web
-     * view provider has made available.
+     * actual WebView definition. You can possibly change the actual WebView definition by calling
+     * {@link WebViewServiceType.reloadWebView} with certain `options`, depending on what options the
+     * WebView provider has made available.
      *
      * @param webViewId The ID of the WebView whose saved properties to get
      * @returns Saved properties of the WebView definition with the specified ID or undefined if not
@@ -2928,6 +2975,7 @@ declare module 'shared/services/web-view.service-model' {
   export const getWebViewControllerObjectId: (webViewId: string) => string;
   /** Network object type for web view controllers */
   export const WEB_VIEW_CONTROLLER_OBJECT_TYPE = 'webViewController';
+  /** See {@link WebViewServiceType.getWebViewController} */
   export function getWebViewController<WebViewType extends WebViewControllerTypes>(
     webViewType: WebViewType,
     webViewId: WebViewId,
