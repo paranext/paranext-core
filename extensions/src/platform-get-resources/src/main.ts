@@ -82,20 +82,30 @@ export async function activate(context: ExecutionActivationContext) {
   const openGetResourcesWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openGetResources',
     async () => {
-      return papi.webViews.openWebView(GET_RESOURCES_WEB_VIEW_TYPE, {
-        type: 'float',
-        floatSize: GET_RESOURCES_WEB_VIEW_SIZE,
-      });
+      return papi.webViews.openWebView(
+        GET_RESOURCES_WEB_VIEW_TYPE,
+        {
+          type: 'float',
+          floatSize: GET_RESOURCES_WEB_VIEW_SIZE,
+        },
+        // Focus existing one if one exists
+        { existingId: '?' },
+      );
     },
   );
 
   const openHomeWebViewCommandPromise = papi.commands.registerCommand(
     'platformGetResources.openHome',
     async () => {
-      return papi.webViews.openWebView(HOME_WEB_VIEW_TYPE, {
-        type: 'float',
-        floatSize: HOME_WEB_VIEW_SIZE,
-      });
+      return papi.webViews.openWebView(
+        HOME_WEB_VIEW_TYPE,
+        {
+          type: 'float',
+          floatSize: HOME_WEB_VIEW_SIZE,
+        },
+        // Focus existing one if one exists
+        { existingId: '?' },
+      );
     },
   );
 
