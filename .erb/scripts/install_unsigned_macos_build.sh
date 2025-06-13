@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to install Apple Silicone (arm64) or Intel (x86_64) app from app-macos*.zip file
+# Script to install Apple Silicon (arm64) or Intel (x86_64) app from app-macos*.zip file
 # Extract, install, codesign, and run the application
 # Supports both Paratext 10 Studio and Platform.Bible apps
 #
@@ -10,7 +10,7 @@
 #   ./install_unsigned_macos_build.sh /path/to/file.zip  # Use specific zip file
 #
 # Expected pathnames:
-# - For Apple Silicone (arm64) architecture: DMG files should include "arm64" in their names (e.g., app-arm64.dmg).
+# - For Apple Silicon (arm64) architecture: DMG files should include "arm64" in their names (e.g., app-arm64.dmg).
 # - For Intel (x86_64) architecture: DMG files should exclude "arm64" in their names (e.g., app.dmg).
 
 set -e  # Exit on any error
@@ -24,7 +24,7 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     echo "        If not specified: defaults to ~/Downloads"
     echo ""
     echo "Expected pathnames:"
-    echo "  - For Apple Silicone (arm64) architecture: DMG files should include 'arm64' in their names (e.g., app-arm64.dmg)."
+    echo "  - For Apple Silicon (arm64) architecture: DMG files should include 'arm64' in their names (e.g., app-arm64.dmg)."
     echo "  - For Intel (x86_64) architecture: DMG files should exclude 'arm64' in their names (e.g., app.dmg)."
     exit 0
 fi
