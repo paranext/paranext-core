@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { ScopeSelector } from '@/components/advanced/scope-selector/scope-selector.component';
 import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 import { ComponentProps, useCallback, useState } from 'react';

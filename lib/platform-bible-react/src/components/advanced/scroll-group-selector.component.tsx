@@ -94,7 +94,7 @@ export type ScrollGroupSelectorProps = {
    */
   localizedStrings?: LanguageStrings;
 
-  /** Size of the scroll group dropdown button. Defaults to 'default' */
+  /** Size of the scroll group dropdown button. Defaults to 'sm' */
   size?: 'default' | 'sm' | 'lg' | 'icon';
 
   /** Additional css classes to help with unique styling */
@@ -107,7 +107,7 @@ export function ScrollGroupSelector({
   scrollGroupId,
   onChangeScrollGroupId,
   localizedStrings = {},
-  size,
+  size = 'sm',
   className,
 }: ScrollGroupSelectorProps) {
   const localizedStringsDefaulted = {
