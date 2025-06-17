@@ -201,7 +201,7 @@ export class ScriptureFinderProjectDataProviderEngine
 
     return matches.map((match) => {
       return {
-        verseRef: usj.jsonPathToVerseRefAndOffset(match.location.jsonPath).verseRef,
+        verseRef: usj.jsonPathToVerseRefAndOffset(match.location.jsonPath, scope.bookId).verseRef,
         text: match.text,
       };
     });
