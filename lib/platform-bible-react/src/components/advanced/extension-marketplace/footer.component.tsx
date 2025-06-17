@@ -47,22 +47,21 @@ export function Footer({
   const languageNames = getLanguageNames(locales);
 
   return (
-    <div id={id} className="tw-border-t tw-pb-4 tw-pt-4">
-      <div className="tw-md:flex-row tw-md:space-x-8 tw-flex tw-flex-col tw-space-x-0">
+    <div id={id} className="tw-border-t tw-py-2">
+      <div className="tw-flex tw-flex-col tw-gap-2 tw-divide-y">
         <VersionHistory versionHistory={versionHistory} />
-        <div className="tw-md:border-t-0 tw-md:border-l tw-md-h-auto tw-md-ml-8 tw-mt-4 tw-border-t tw-border-gray-300" />
-        <div className="tw-md:mt-0 tw-mt-4 tw-flex-1 tw-space-y-3">
+        <div className="tw-flex tw-flex-col tw-gap-2 tw-py-2">
           <h2 className="tw-text-md tw-font-semibold">Information</h2>
-          <div className="tw-flex tw-items-start tw-justify-between tw-pr-4 tw-text-xs tw-text-gray-600">
-            <p className="tw-flex tw-flex-col tw-justify-start">
-              <span className="tw-mb-2">Publisher</span>
+          <div className="tw-flex tw-items-start tw-justify-between tw-text-xs tw-text-foreground">
+            <p className="tw-flex tw-flex-col tw-justify-start tw-gap-1">
+              <span>Publisher</span>
               <span className="tw-font-semibold">{publisherDisplayName}</span>
-              <span className="tw-mb-2 tw-mt-4">Size</span>
+              <span>Size</span>
               <span className="tw-font-semibold">{formattedFileSize}</span>
             </p>
-            <div className="tw-flex tw-w-3/4 tw-items-center tw-justify-between tw-text-xs tw-text-gray-600">
-              <p className="tw-flex tw-flex-col tw-justify-start">
-                <span className="tw-mb-2">Languages</span>
+            <div className="tw-flex tw-w-3/4 tw-items-center tw-justify-between tw-text-xs tw-text-foreground">
+              <p className="tw-flex tw-flex-col tw-justify-start tw-gap-1">
+                <span>Languages</span>
                 <span className="tw-font-semibold">{languageNames.join(', ')}</span>
               </p>
             </div>
