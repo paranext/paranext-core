@@ -146,12 +146,14 @@ export {
   CommandItem,
   CommandList,
 } from './components/shadcn-ui/command';
+export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
 export * from './components/shadcn-ui/popover';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
+export { ScrollArea } from './components/shadcn-ui/scroll-area';
 export { Separator } from './components/shadcn-ui/separator';
 export * from './components/shadcn-ui/sonner';
 export { Slider } from './components/shadcn-ui/slider';
@@ -172,6 +174,7 @@ export {
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
 export type { Scope } from './components/utils/scripture.util';
+export { default as VisuallyHidden } from './components/shadcn-ui/visually-hidden';
 
 // Hooks
 export { default as useEvent } from './hooks/use-event.hook';
