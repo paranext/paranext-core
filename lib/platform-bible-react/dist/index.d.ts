@@ -222,102 +222,6 @@ interface DataTableProps<TData, TValue> {
  * from TanStack's React Table library
  */
 export declare function DataTable<TData, TValue>({ columns, data, enablePagination, showPaginationControls, showColumnVisibilityControls, stickyHeader, onRowClickHandler, }: DataTableProps<TData, TValue>): import("react/jsx-runtime").JSX.Element;
-type ClassValue$1 = ClassValue;
-type ClassProp = {
-	class: ClassValue$1;
-	className?: never;
-} | {
-	class?: never;
-	className: ClassValue$1;
-} | {
-	class?: never;
-	className?: never;
-};
-type OmitUndefined<T> = T extends undefined ? never : T;
-type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
-/**
- * Style variants for the Button component.
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
-} & ClassProp) | undefined) => string;
-/**
- * Props for Button component
- *
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-	asChild?: boolean;
-}
-/**
- * The Button component displays a button or a component that looks like a button. The component is
- * built and styled by Shadcn UI.
- *
- * @param ButtonProps
- * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
- */
-export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
-type InstallButtonProps = {
-	/** The installing boolean value determines the state of the button. */
-	isInstalling: boolean;
-	/** The handleClick function is called when the button is clicked. */
-	handleClick: () => void;
-	/** Optional text for the button. */
-	buttonText?: string;
-} & ButtonProps;
-/**
- * The InstallButton component is a button designed for initiating installs. It includes visuals for
- * active installing and idle states.
- *
- * @param InstallButtonProps
- * @returns A install button.
- */
-export declare function InstallButton({ isInstalling, handleClick, buttonText, className, ...props }: InstallButtonProps): import("react/jsx-runtime").JSX.Element;
-type EnableButtonProps = {
-	/** The enabling boolean value determines the state of the button. */
-	isEnabling: boolean;
-	/** The handleClick function is called when the button is clicked. */
-	handleClick: () => void;
-} & ButtonProps;
-/**
- * The EnableButton component is a button designed for initiating enabling of downloads. It includes
- * visuals for active enabling and idle states.
- *
- * @param EnableButtonProps
- * @returns A button that can be used to enable.
- */
-export declare function EnableButton({ isEnabling, handleClick, className, ...props }: EnableButtonProps): import("react/jsx-runtime").JSX.Element;
-type DisableButtonProps = {
-	/** The disabling boolean value determines the state of the button. */
-	isDisabling: boolean;
-	/** The handleClick function is called when the button is clicked. */
-	handleClick: () => void;
-} & ButtonProps;
-/**
- * The DisableButton component is a button designed for initiating disabling of downloads. It
- * includes visuals for active disabling and idle states.
- *
- * @param DisableButtonProps
- * @returns A button that can be used to disable.
- */
-export declare function DisableButton({ isDisabling, handleClick, className, ...props }: DisableButtonProps): import("react/jsx-runtime").JSX.Element;
-type UpdateButtonProps = {
-	/** The updating boolean value determines the state of the button. */
-	isUpdating: boolean;
-	/** The handleClick function is called when the button is clicked. */
-	handleClick: () => void;
-} & ButtonProps;
-/**
- * The UpdateButton component is a button designed for initiating updates for downloaded extensions.
- * It includes visuals for active updating and idle states.
- *
- * @param UpdateButtonProps
- * @returns A button that can be used to update.
- */
-export declare function UpdateButton({ isUpdating, handleClick, className, ...props }: UpdateButtonProps): import("react/jsx-runtime").JSX.Element;
 interface MarkdownRendererProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -346,7 +250,7 @@ export declare enum DropdownMenuItemType {
 }
 export type DropdownItem = {
 	/** The label is the text that will be displayed on the dropdown item. */
-	label: string;
+	itemLabel: string;
 	/** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
 	itemType: DropdownMenuItemType;
 	/** The onClick function is called when the item is clicked. */
@@ -357,13 +261,15 @@ export type DropdownGroup = {
 	 * The label is the text that will be displayed on the dropdown group. It is used to categorize
 	 * the items in the group.
 	 */
-	label: string;
+	groupLabel: string;
 	/** The items array contains the items that will be displayed in the dropdown group */
 	items: DropdownItem[];
 };
 type FilterDropdownProps = {
 	/** Object unique identifier */
 	id?: string;
+	/** Label for the trigger button */
+	label: string;
 	/** The groups array contains the groups that will be displayed in the dropdown */
 	groups: DropdownGroup[];
 };
@@ -374,28 +280,7 @@ type FilterDropdownProps = {
  * @param FilterDropdownProps
  * @returns A filter dropdown.
  */
-export declare function FilterDropdown({ id, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
-/**
- * The FilterButton component is a button designed for initiating filtering of data. It is designed
- * to be used with the dropdown menu. It uses forwardRef to pass the button to the dropdown trigger
- * asChild.
- *
- * @returns A button that can be used to filter.
- */
-export declare const FilterButton: import("react").ForwardRefExoticComponent<import("react").RefAttributes<HTMLButtonElement>>;
-interface NoExtensionsFoundProps {
-	/** Optional unique identifier */
-	id?: string;
-	/** The message to display */
-	message: string;
-}
-/**
- * This component displays a message to the user when no extensions are found in the marketplace.
- *
- * @param NoExtensionsFoundProps
- * @returns {JSX.Element} - Returns the message component that displays the message to the user.
- */
-export declare function NoExtensionsFound({ id, message }: NoExtensionsFoundProps): import("react/jsx-runtime").JSX.Element;
+export declare function FilterDropdown({ id, label, groups }: FilterDropdownProps): import("react/jsx-runtime").JSX.Element;
 interface MoreInfoProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -417,28 +302,13 @@ interface MoreInfoProps {
  *   downloads, languages, and links to the website and support
  */
 export declare function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
-export type VersionInformation = {
+type VersionInformation = {
 	/** Date the version was published */
 	date: string;
 	/** Description of the changes in the version */
 	description: string;
 };
-/** Type to store the version history information */
-export type VersionHistoryType = Record<string, VersionInformation>;
-interface VersionHistoryProps {
-	/** Optional unique identifier */
-	id?: string;
-	/** Object containing the versions mapped with their information */
-	versionHistory: VersionHistoryType;
-}
-/**
- * Component to render the version history information shown in the footer component. Lists the 5
- * most recent versions, with the options to show all versions by pressing a button.
- *
- * @param VersionHistoryProps
- * @returns Rendered version history for the Footer component
- */
-export declare function VersionHistory({ id, versionHistory }: VersionHistoryProps): import("react/jsx-runtime").JSX.Element;
+type VersionHistoryType = Record<string, VersionInformation>;
 interface FooterProps {
 	/** Optional unique identifier */
 	id?: string;
@@ -1220,6 +1090,44 @@ export type ChecklistProps = {
 };
 /** Renders a list of checkboxes. Each checkbox corresponds to an item from the `listItems` array. */
 export declare function Checklist({ id, className, listItems, selectedListItems, handleSelectListItem, createLabel, createComplexLabel, }: ChecklistProps): import("react/jsx-runtime").JSX.Element;
+type ClassValue$1 = ClassValue;
+type ClassProp = {
+	class: ClassValue$1;
+	className?: never;
+} | {
+	class?: never;
+	className: ClassValue$1;
+} | {
+	class?: never;
+	className?: never;
+};
+type OmitUndefined<T> = T extends undefined ? never : T;
+type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<Parameters<Component>[0]>, "class" | "className">;
+/**
+ * Style variants for the Button component.
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const buttonVariants: (props?: ({
+	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
+	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+} & ClassProp) | undefined) => string;
+/**
+ * Props for Button component
+ *
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export interface ButtonProps extends React$1.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
+	asChild?: boolean;
+}
+/**
+ * The Button component displays a button or a component that looks like a button. The component is
+ * built and styled by Shadcn UI.
+ *
+ * @param ButtonProps
+ * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
+ */
+export declare const Button: React$1.ForwardRefExoticComponent<ButtonProps & React$1.RefAttributes<HTMLButtonElement>>;
 export type ComboBoxLabelOption = {
 	label: string;
 };
