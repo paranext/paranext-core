@@ -1351,10 +1351,17 @@ export const openWebView = async (
 
   // We didn't find an existing web view with the ID, so we need to create a new one.
 
-  // We want to create a new webview, so create a placeholder with a new ID to pass to the WebViewProvider
-  const newWebViewDefinition = {
+  // If a specific ID was provided, use that; otherwise, generate a new one
+  const webViewId =
+    !optionsDefaulted.existingId || optionsDefaulted.existingId === '?'
+      ? newGuid()
+      : optionsDefaulted.existingId;
+
+  // We want to create a new webview, so create a placeholder to pass to the WebViewProvider
+  const newWebViewDefinition: SavedWebViewDefinition = {
     webViewType,
-    id: newGuid(),
+    id: webViewId,
+    state: getFullWebViewStateById(webViewId),
   };
 
   return openOrReloadWebView(newWebViewDefinition, layout, {
