@@ -43,17 +43,37 @@ export function deepClone<T>(obj: T): T {
  *   to call the function
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms
  */
-// We don't know the parameter types since this function can be anything
+// We don't know the parameter types since this function can be anything and can return anything
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function debounce<T extends (...args: any[]) => void>(fn: T, delay = 300): T {
-  if (isString(fn)) throw new Error('Tried to debounce a string! Could be XSS');
+export function debounce<TFunc extends (...args: any[]) => any>(
+  fn: TFunc,
+  delay = 300,
+): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>> {
   let timeout: ReturnType<typeof setTimeout>;
-  // Ensure the right return type.
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  return ((...args) => {
+  let promise: Promise<ReturnType<TFunc>> | undefined;
+  let promiseResolve: (value: ReturnType<TFunc> | PromiseLike<ReturnType<TFunc>>) => void;
+  let promiseReject: (reason?: unknown) => void;
+
+  return (...args) => {
     clearTimeout(timeout);
-    timeout = setTimeout(() => fn(...args), delay);
-  }) as T;
+    if (!promise)
+      promise = new Promise((resolve, reject) => {
+        promiseResolve = resolve;
+        promiseReject = reject;
+      });
+
+    timeout = setTimeout(async () => {
+      try {
+        promiseResolve(await fn(...args));
+      } catch (e) {
+        promiseReject(e);
+      } finally {
+        promise = undefined;
+      }
+    }, delay);
+
+    return promise;
+  };
 }
 
 /**
