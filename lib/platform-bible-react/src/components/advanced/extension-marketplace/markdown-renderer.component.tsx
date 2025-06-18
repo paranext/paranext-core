@@ -37,7 +37,7 @@ export function MarkdownRenderer({ id, markdown, className, anchorTarget }: Mark
     [anchorTarget],
   );
   return (
-    <div id={id} className={cn('pr-twp tw-prose', className)}>
+    <div id={id} className={cn('pr-twp', className)}>
       <Markdown options={options}>{markdown}</Markdown>
     </div>
   );

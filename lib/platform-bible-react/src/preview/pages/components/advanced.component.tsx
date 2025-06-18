@@ -14,7 +14,6 @@ import { BookSelectorExample } from './advanced/book-selector-example.component'
 import { FilterExample } from './advanced/filter-example';
 import { InventoryExample } from './advanced/inventory-example.component';
 import { MarkdownRendererExample } from './advanced/markdown-renderer-example.component';
-import { MarketplaceButtonExamples } from './advanced/marketplace-buttons.example.component';
 import { MarketplaceExamples } from './advanced/marketplace.example.component';
 import { MultiSelectComboBoxExample } from './advanced/multi-select-combo-box-example';
 import { ScriptureResultsViewerExample } from './advanced/scripture-results-viewer.examples.component';
@@ -130,24 +129,7 @@ export function Compositions() {
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Marketplace">
-          <VerticalTabs>
-            <VerticalTabsList>
-              <VerticalTabsTrigger value="Marketplace Buttons">
-                Marketplace Buttons
-              </VerticalTabsTrigger>
-              <VerticalTabsTrigger value="Marketplace Components">
-                Marketplace Components
-              </VerticalTabsTrigger>
-            </VerticalTabsList>
-
-            <VerticalTabsContent value="Marketplace Buttons">
-              <MarketplaceButtonExamples />
-            </VerticalTabsContent>
-
-            <VerticalTabsContent value="Marketplace Components">
-              <MarketplaceExamples />
-            </VerticalTabsContent>
-          </VerticalTabs>
+          <MarketplaceExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Multi-select Combo Box">
