@@ -106,7 +106,7 @@
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
     "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
-  "browserslist": ["extends browserslist-config-erb"],
+  "browserslist": ["extends browserslist-config-detect-electron"],
   "dependencies": {
     "@sillsdev/scripture": "^2.0.2",
     "ajv": "^8.17.1",
@@ -166,7 +166,7 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "browserslist": "^4.25.0",
-    "browserslist-config-erb": "^0.0.3",
+    "browserslist-config-detect-electron": "file:./lib/browserslist-config-detect-electron",
     "concurrently": "^9.1.2",
     "core-js": "^3.40.0",
     "cross-env": "^7.0.3",
