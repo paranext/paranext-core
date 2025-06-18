@@ -31,7 +31,7 @@ class MenuDataDataProviderEngine
   constructor(unlocalizedMenuData: PlatformMenus) {
     super();
     this.#loadAllMenuData(unlocalizedMenuData, unlocalizedMenuData);
-    onDidResyncContributions(() => this.rebuildMenus());
+    this.unsubscribeOnDidResyncContributions = onDidResyncContributions(() => this.rebuildMenus());
   }
 
   async rebuildMenus(): Promise<void> {

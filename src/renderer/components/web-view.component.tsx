@@ -311,6 +311,7 @@ export function WebView({
         />
       )}
       <iframe
+        data-web-view-id={id}
         className="web-view"
         ref={iframeRef}
         title={localizedTitle}

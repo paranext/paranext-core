@@ -24,6 +24,6 @@ export function isTab(tab: PanelData | TabData | BoxData | undefined): tab is Ta
  * @param panel To check
  * @returns `true` if its a panel or `false` otherwise
  */
-export function isPanel(panel: PanelData | BoxData | undefined): panel is PanelData {
+export function isPanel(panel: PanelData | TabData | BoxData | undefined): panel is PanelData {
   return !!panel && 'tabs' in panel;
 }

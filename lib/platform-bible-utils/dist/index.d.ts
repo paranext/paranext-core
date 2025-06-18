@@ -813,7 +813,7 @@ export declare function deepClone<T>(obj: T): T;
  *   to call the function
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms
  */
-export declare function debounce<T extends (...args: any[]) => void>(fn: T, delay?: number): T;
+export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>;
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *

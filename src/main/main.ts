@@ -46,6 +46,7 @@ import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
+import windowService from '@shared/services/window.service';
 
 // #region Helper functions
 
@@ -360,20 +361,32 @@ async function main() {
       },
     );
 
-    mainWindow.webContents.on('before-input-event', (_, event) => {
-      // Key up seems not to change focus
+    mainWindow.webContents.on('before-input-event', async (_, event) => {
+      // Key up seems not to change focus in Windows, so we'll follow suit
       if (event.type !== 'keyUp') return;
 
       // Announce a possible focus change
-      logger.info('TODO: Announce possible focus change');
+      try {
+        await windowService.setFocus('detect');
+      } catch (e) {
+        logger.warn(
+          `Failed to instruct window service to detect focus on ${event.type} ${event.key}: ${getErrorMessage(e)}`,
+        );
+      }
     });
 
-    mainWindow.webContents.on('before-mouse-event', (_, event) => {
-      // Mouse up and other events seem not to change focus
+    mainWindow.webContents.on('before-mouse-event', async (_, event) => {
+      // Mouse up and other events seem not to change focus in Windows, so we'll follow suit
       if (event.type !== 'mouseDown') return;
 
       // Announce a possible focus change
-      logger.info('TODO: Announce possible focus change');
+      try {
+        await windowService.setFocus('detect');
+      } catch (e) {
+        logger.warn(
+          `Failed to instruct window service to detect focus on ${event.type} ${event.button}: ${getErrorMessage(e)}`,
+        );
+      }
     });
 
     mainWindow.on('ready-to-show', () => {

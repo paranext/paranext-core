@@ -29,7 +29,7 @@ export function createRCDockTabFromTabInfo(tabInfo: TabInfo, shouldFlash = false
         flashTriggerTime={flashTriggerTime}
       />
     ),
-    content: <PlatformPanel>{tabInfo.content}</PlatformPanel>,
+    content: <PlatformPanel id={tabInfo.id}>{tabInfo.content}</PlatformPanel>,
     group: TAB_GROUP,
     closable: true,
   };

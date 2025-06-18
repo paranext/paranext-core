@@ -208,6 +208,15 @@ export type PapiDockLayout = {
     shouldBringToFront?: boolean,
   ) => boolean;
   /**
+   * Gets info for the tab that contains the specified DOM element
+   *
+   * @param tabElement The DOM element in the tab whose info to get
+   * @returns Info for the tab in question or `undefined` if tab is not found
+   * @throws If found a tab id in the DOM but there was no corresponding tab info in the dock layout
+   *   or the item with the id found was not a tab
+   */
+  getTabInfoByElement: (tabElement: Element) => TabInfo | undefined;
+  /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *
    * TODO: This should be removed and the `testLayout` imported directly in this file once this
