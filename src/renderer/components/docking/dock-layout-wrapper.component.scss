@@ -236,6 +236,11 @@ $tab-bottom-rounding: vars.$space--s;
   }
 }
 
+// TODO: UX should make this better
+.dock-tab.dock-tab-active.dock-tab-window-focus {
+  background-color: blue;
+}
+
 // Hide the bottom corner rounding pseudo-elements when highlight is active
 .dock-tab.dock-tab-active.dock-tab-active-highlight::before,
 .dock-tab.dock-tab-active.dock-tab-active-highlight::after {
