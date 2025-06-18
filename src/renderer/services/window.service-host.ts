@@ -57,7 +57,7 @@ class WindowDataProviderEngine
 
     // Listen for window-wide focus/blur changes
     const handleChangeFocus = () => {
-      this.#setFocusInternal(detectFocus());
+      if (this.#setFocusInternal(detectFocus())) this.notifyUpdate('Focus');
     };
     window.addEventListener('focusin', handleChangeFocus);
     window.addEventListener('focusout', handleChangeFocus);
