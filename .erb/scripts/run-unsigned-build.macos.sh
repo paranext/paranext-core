@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# Script to install Apple Silicon (arm64) or Intel (x86_64) app from app-macos*.zip file
+# Script to install and run Apple Silicon (arm64) or Intel (x86_64) app from app-macos*.zip file
 # Extract, install, codesign, and run the application
 # Supports both Paratext 10 Studio and Platform.Bible apps
 #
 # Usage:
-#   ./install_unsigned_macos_build.sh                    # Use ~/Downloads (default)
-#   ./install_unsigned_macos_build.sh /path/to/folder    # Search for app-macos*.zip in folder
-#   ./install_unsigned_macos_build.sh /path/to/file.zip  # Use specific zip file
+#   ./run-unsigned-build.macos.sh                    # Use ~/Downloads (default)
+#   ./run-unsigned-build.macos.sh /path/to/folder    # Search for app-macos*.zip in folder
+#   ./run-unsigned-build.macos.sh /path/to/file.zip  # Use specific zip file
 #
 # Expected pathnames:
 # - For Apple Silicon (arm64) architecture: DMG files should include "arm64" in their names (e.g., app-arm64.dmg).
