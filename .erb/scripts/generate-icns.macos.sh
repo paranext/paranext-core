@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# Script to generate .icns files from icon exports for Electron app
-# 
+# Script to generate .icns files for Electron from Apple icon exports.
+# Runs on macOS only.
+#
 # MODES:
 # 1. FULL PADDING MODE (requires Python PIL): Creates proper transparent padding (85% icon + 15% padding)
 #    - Prevents "too large" appearance in macOS Dock
@@ -15,7 +16,7 @@
 #
 # This script automatically detects and processes icon files from different naming patterns:
 # - paratext-studio-v0-macOS-*.png (original pattern)
-# - platform-bible-macOS-*.png (new pattern) 
+# - platform-bible-macOS-*.png (new pattern)
 # - Generic *-macOS-*.png patterns
 # - Falls back to iOS patterns if no macOS icons found
 #
@@ -67,7 +68,7 @@ create_icon() {
     local source_file="$1"
     local target_size="$2"
     local output_file="$3"
-    
+
     # For very small sizes (32 and below), use full size to maintain crisp appearance
     # For larger sizes, use 85% to provide visual padding (closer to native macOS icons)
     if [ $target_size -le 32 ]; then
@@ -75,7 +76,7 @@ create_icon() {
     else
         local icon_size=$((target_size * 85 / 100))
     fi
-    
+
     # Use Python PIL for best results with transparent padding, fallback to simple resize
     if python3 -c "from PIL import Image" 2>/dev/null; then
         # Python PIL is available - create proper transparent padding
@@ -108,43 +109,43 @@ create_icns() {
     local source_file="$1"
     local output_name="$2"
     local iconset_dir="${output_name}.iconset"
-    
+
     echo "  📐 Creating iconset for $output_name with proper macOS padding..."
-    
+
     # Create iconset directory
     mkdir -p "$iconset_dir"
-    
+
     # Generate all required icon sizes with appropriate sizing for macOS
     echo "    🔹 Generating 16x16..."
     create_icon "$source_file" 16 "$iconset_dir/icon_16x16.png"
-    
+
     echo "    🔹 Generating 32x32 (16x16@2x)..."
     create_icon "$source_file" 32 "$iconset_dir/icon_16x16@2x.png"
-    
+
     echo "    🔹 Generating 32x32..."
     create_icon "$source_file" 32 "$iconset_dir/icon_32x32.png"
-    
+
     echo "    🔹 Generating 64x64 (32x32@2x)..."
     create_icon "$source_file" 64 "$iconset_dir/icon_32x32@2x.png"
-    
+
     echo "    🔹 Generating 128x128..."
     create_icon "$source_file" 128 "$iconset_dir/icon_128x128.png"
-    
+
     echo "    🔹 Generating 256x256 (128x128@2x)..."
     create_icon "$source_file" 256 "$iconset_dir/icon_128x128@2x.png"
-    
+
     echo "    🔹 Generating 256x256..."
     create_icon "$source_file" 256 "$iconset_dir/icon_256x256.png"
-    
+
     echo "    🔹 Generating 512x512 (256x256@2x)..."
     create_icon "$source_file" 512 "$iconset_dir/icon_256x256@2x.png"
-    
+
     echo "    🔹 Generating 512x512..."
     create_icon "$source_file" 512 "$iconset_dir/icon_512x512.png"
-    
+
     echo "    🔹 Generating 1024x1024 (512x512@2x)..."
     create_icon "$source_file" 1024 "$iconset_dir/icon_512x512@2x.png"
-    
+
     # Convert iconset to icns
     echo "    ⚡ Converting to .icns..."
     if iconutil -c icns "$iconset_dir"; then
@@ -158,7 +159,7 @@ create_icns() {
         ls -la "$iconset_dir/"
         return 1
     fi
-    
+
     echo "    ✅ Created $TARGET_DIR/${output_name}.icns"
 }
 
@@ -171,23 +172,23 @@ process_icons() {
     local platform="$1"
     local pattern="$2"
     local found_files=false
-    
+
     for file in "$SOURCE_DIR"/$pattern; do
         if [ -f "$file" ]; then
             found_files=true
             # Extract theme name from filename
             basename_file=$(basename "$file")
             theme=$(echo "$basename_file" | sed -E "s/.*-${platform}-([^-]+)-.*/\1/")
-            
+
             # Create output filename
             output_name="icon-$(echo "$theme" | tr '[:upper:]' '[:lower:]')"  # Convert to lowercase
-            
+
             echo "🎨 Processing theme: $theme"
             create_icns "$file" "$output_name"
             echo ""
         fi
     done
-    
+
     return $([ "$found_files" = "true" ] && echo 0 || echo 1)
 }
 
@@ -220,21 +221,21 @@ fi
 # If no macOS icons found, try iOS icons
 if [ "$macOS_found" = "false" ]; then
     echo "📱 No macOS icons found, processing iOS icons:"
-    
+
     iOS_found=false
-    
+
     # Pattern 1: paratext-studio-*-iOS-*.png
     echo "  Checking paratext-studio iOS pattern..."
     if process_icons "iOS" "paratext-studio-*-iOS-*.png"; then
         iOS_found=true
     fi
-    
+
     # Pattern 2: platform-bible-iOS-*.png
     echo "  Checking platform-bible iOS pattern..."
     if process_icons "iOS" "platform-bible-iOS-*.png"; then
         iOS_found=true
     fi
-    
+
     # Pattern 3: Generic *-iOS-*.png (for any other naming patterns that weren't caught above)
     if [ "$iOS_found" = "false" ]; then
         echo "  Checking generic iOS pattern..."
@@ -242,7 +243,7 @@ if [ "$macOS_found" = "false" ]; then
             iOS_found=true
         fi
     fi
-    
+
     if [ "$iOS_found" = "false" ]; then
         echo "❌ No suitable icon files found in $SOURCE_DIR"
         echo "💡 Expected patterns:"
