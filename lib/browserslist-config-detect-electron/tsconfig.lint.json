@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig",
+  "compilerOptions": {
+    "module": "ESNext",
+    "typeRoots": [],
+    "baseUrl": "./",
+    "noEmit": true
+  },
+  "include": ["index.js", ".eslintrc.cjs"],
+  "exclude": []
+}
