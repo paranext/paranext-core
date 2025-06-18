@@ -30,6 +30,8 @@
     entitlements: 'assets/entitlements.mac.plist',
     entitlementsInherit: 'assets/entitlements.mac.plist',
     gatekeeperAssess: false,
+    icon: 'assets/icon-default.icns',
+    darkModeSupport: true,
   },
   dmg: {
     sign: false,
