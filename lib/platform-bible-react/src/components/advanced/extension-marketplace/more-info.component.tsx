@@ -45,30 +45,25 @@ export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: Mo
   return (
     <div
       id={id}
-      className="tw-flex tw-flex-wrap tw-items-start tw-space-x-4 tw-border-b tw-border-t tw-bg-white tw-pb-4 tw-pt-4"
+      className="tw-flex tw-items-center tw-justify-center tw-gap-4 tw-divide-x tw-border-b tw-border-t tw-py-2 tw-text-center"
     >
-      <div className="tw-flex tw-flex-col tw-items-center">
-        <div className="tw-flex tw-items-center tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1">
-          <span className="tw-text-xs tw-font-semibold tw-text-gray-700">{category}</span>
+      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1">
+        <div className="tw-flex">
+          <span className="tw-text-xs tw-font-semibold tw-text-foreground">{category}</span>
         </div>
-        <span className="tw-text-xs tw-text-gray-500">CATEGORY</span>
+        <span className="tw-text-xs tw-text-foreground">CATEGORY</span>
       </div>
-      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
-      <div className="tw-flex tw-flex-col tw-items-center">
-        <div className="tw-flex tw-items-center tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1">
-          <User className="tw-mr-1 tw-h-4 tw-w-4" />
-          <span className="tw-text-xs tw-font-semibold tw-text-gray-700">{numberFormatted}</span>
+      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4">
+        <div className="tw-flex tw-gap-1">
+          <User className="tw-h-4 tw-w-4" />
+          <span className="tw-text-xs tw-font-semibold tw-text-foreground">{numberFormatted}</span>
         </div>
-        <span className="tw-text-xs tw-text-gray-500">USERS</span>
+        <span className="tw-text-xs tw-text-foreground">USERS</span>
       </div>
-      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
-      <div className="tw-flex tw-flex-col tw-items-center">
-        <div className="tw-flex tw-items-center">
+      <div className="tw-flex tw-flex-col tw-items-center tw-gap-1 tw-ps-4">
+        <div className="tw-flex tw-gap-2">
           {languages.slice(0, 3).map((locale) => (
-            <span
-              key={locale}
-              className="tw-ml-1 tw-rounded-md tw-bg-gray-100 tw-px-2 tw-py-1 tw-text-xs tw-font-semibold tw-text-gray-700"
-            >
+            <span key={locale} className="tw-text-xs tw-font-semibold tw-text-foreground">
               {locale.toUpperCase()}
             </span>
           ))}
@@ -77,32 +72,35 @@ export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: Mo
           <button
             type="button"
             onClick={() => handleScrollToBottom()}
-            className="tw-text-xs tw-text-gray-500 tw-underline"
+            className="tw-text-xs tw-text-foreground tw-underline"
           >
             +{languages.length - 3} more languages
           </button>
         )}
       </div>
-      <div className="tw-mx-2 tw-h-10 tw-border-l tw-border-gray-300" />
-      <div className="tw-ml-auto tw-flex tw-flex-col tw-space-y-2">
-        <a
-          href={moreInfoUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="tw-flex tw-items-center tw-text-xs tw-font-semibold tw-text-gray-500 tw-underline"
-        >
-          Website
-          <LucideLink className="tw-ml-1 tw-inline tw-h-4 tw-w-4" />
-        </a>
-        <a
-          href="https://example.com"
-          target="_blank"
-          rel="noreferrer"
-          className="tw-flex tw-items-center tw-text-xs tw-font-semibold tw-text-gray-500 tw-underline"
-        >
-          Support
-          <CircleHelp className="tw-ml-1 tw-inline tw-h-4 tw-w-4" />
-        </a>
+      <div className="tw-flex tw-flex-col tw-gap-1 tw-ps-4">
+        <div className="tw-flex tw-gap-1">
+          <a
+            href={moreInfoUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="tw-flex tw-text-xs tw-font-semibold tw-text-foreground tw-underline"
+          >
+            Website
+          </a>
+          <LucideLink className="tw-h-4 tw-w-4" />
+        </div>
+        <div className="tw-flex tw-gap-1">
+          <a
+            href="https://example.com"
+            target="_blank"
+            rel="noreferrer"
+            className="tw-flex tw-text-xs tw-font-semibold tw-text-foreground tw-underline"
+          >
+            Support
+          </a>
+          <CircleHelp className="tw-h-4 tw-w-4" />
+        </div>
       </div>
     </div>
   );
