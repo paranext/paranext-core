@@ -37,7 +37,7 @@ export type FocusSubjectTab = {
    * The type of tab. `webView` if it is a WebView tab. `undefined` if we were unable to determine
    * its type. If you need to get its type, try running `getFocus` again
    */
-  tabType?: 'webView' | string;
+  tabType: 'webView' | string;
   /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
   id: string;
 };
