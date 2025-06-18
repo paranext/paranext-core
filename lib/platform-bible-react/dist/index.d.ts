@@ -1492,7 +1492,7 @@ export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
 	keywords?: string[];
 	forceMount?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
-export declare function Drawer({ shouldScaleBackground, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
+export declare function Drawer({ shouldScaleBackground, direction, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 export declare namespace Drawer {
 	var displayName: string;
 }
