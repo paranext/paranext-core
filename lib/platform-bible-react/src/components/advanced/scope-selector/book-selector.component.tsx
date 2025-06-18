@@ -210,7 +210,6 @@ export function BookSelector({
                         sectionExtraLongText,
                       )}
                     >
-                      ,
                       {sectionBooks.map((bookId) => (
                         <BookItem
                           key={bookId}
@@ -242,7 +241,9 @@ export function BookSelector({
             )
             .map((bookId) => (
               <Badge key={bookId} variant="secondary">
-                {Canon.bookIdToEnglishName(bookId) || bookId}
+                {(localizedBookNames && localizedBookNames.get(bookId)?.localizedName) ||
+                  Canon.bookIdToEnglishName(bookId) ||
+                  bookId}
               </Badge>
             ))}
           {selectedBookIds.length > MAX_VISIBLE_BADGES && (
