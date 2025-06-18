@@ -14,6 +14,7 @@ import { CheckboxExamples } from './basics/checkbox.examples.component';
 import { ChecklistExamples } from './basics/checklist.examples.component';
 import { ComboBoxExamples } from './basics/combo-box.examples.component';
 import { DialogExamples } from './basics/dialog.examples.component';
+import { DrawerExamples } from './basics/drawer.examples.component';
 import { DropdownExamples } from './basics/dropdown.examples.component';
 import { InputExamples } from './basics/input.examples.component';
 import { MenubarExamples } from './basics/menubar.examples.component';
@@ -48,6 +49,7 @@ export function Basics() {
           <VerticalTabsTrigger value="Checklist">Checklist</VerticalTabsTrigger>
           <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dialog">Dialog</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Drawer">Drawer</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Menubar">Menubar</VerticalTabsTrigger>
@@ -103,6 +105,10 @@ export function Basics() {
 
         <VerticalTabsContent value="Dialog">
           <DialogExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Drawer">
+          <DrawerExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Input">

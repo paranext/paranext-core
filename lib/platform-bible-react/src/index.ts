@@ -146,6 +146,7 @@ export {
   CommandItem,
   CommandList,
 } from './components/shadcn-ui/command';
+export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
