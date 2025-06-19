@@ -51,13 +51,12 @@ class WindowDataProviderEngine
     super();
 
     this.focusSubject = detectFocus();
-    // TODO: remove this. Used console to see DOM  elements
-    // eslint-disable-next-line no-console
-    console.log(`Starting focusSubject:`, this.focusSubject);
 
     // Listen for window-wide focus/blur changes
-    const handleChangeFocus = () => {
-      if (this.#setFocusInternal(detectFocus())) this.notifyUpdate('Focus');
+    const handleChangeFocus = async () => {
+      // Run debounce, then make sure we haven't been disposed before sending update
+      if ((await this.#setDetectFocusInternalDebounced()) && this.unsubscribeOnDidFocus)
+        this.notifyUpdate('Focus');
     };
     window.addEventListener('focusin', handleChangeFocus);
     window.addEventListener('focusout', handleChangeFocus);
@@ -107,16 +106,9 @@ class WindowDataProviderEngine
   }
 
   #setFocusInternal(newFocusSubject: FocusSubject | FocusSubjectElement | undefined) {
-    // TODO: remove this. Used console to see DOM  elements
-    // eslint-disable-next-line no-console
-    console.log(`Possible newFocusSubject:`, newFocusSubject);
-
     if (deepEqual(this.focusSubject, newFocusSubject)) return false;
 
     this.focusSubject = newFocusSubject;
-    // TODO: remove this. Used console to see DOM  elements
-    // eslint-disable-next-line no-console
-    console.log(`newFocusSubject:`, this.focusSubject);
     return true;
   }
 }
