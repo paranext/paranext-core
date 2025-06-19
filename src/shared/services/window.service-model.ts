@@ -4,7 +4,7 @@ import {
   DataProviderSubscriberOptions,
   DataProviderUpdateInstructions,
 } from '@shared/models/data-provider.model';
-import { IDataProvider } from './papi-core.service';
+import { IDataProvider } from '@shared/models/data-provider.interface';
 
 /** JSDOC DESTINATION windowServiceProviderName */
 export const windowServiceProviderName = 'platform.windowServiceDataProvider';

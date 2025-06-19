@@ -237,7 +237,7 @@ $tab-bottom-rounding: vars.$space--s;
 }
 
 // TODO: UX should make this better
-.dock-tab.dock-tab-active.dock-tab-window-focus {
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active.dock-tab-window-focus {
   background-color: blue;
 }
 
