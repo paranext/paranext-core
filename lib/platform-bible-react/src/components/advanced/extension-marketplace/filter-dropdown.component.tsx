@@ -19,7 +19,7 @@ export enum DropdownMenuItemType {
 
 export type DropdownItem = {
   /** The label is the text that will be displayed on the dropdown item. */
-  itemLabel: string;
+  label: string;
   /** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
   itemType: DropdownMenuItemType;
   /** The onClick function is called when the item is clicked. */
@@ -31,7 +31,7 @@ export type DropdownGroup = {
    * The label is the text that will be displayed on the dropdown group. It is used to categorize
    * the items in the group.
    */
-  groupLabel: string;
+  label: string;
   /** The items array contains the items that will be displayed in the dropdown group */
   items: DropdownItem[];
 };
@@ -66,18 +66,18 @@ export function FilterDropdown({ id, label, groups }: FilterDropdownProps) {
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           {groups.map((group) => (
-            <div key={group.groupLabel}>
-              <DropdownMenuLabel>{group.groupLabel}</DropdownMenuLabel>
+            <div key={group.label}>
+              <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
               <DropdownMenuGroup>
                 {group.items.map((item) => (
-                  <div key={item.itemLabel}>
+                  <div key={item.label}>
                     {item.itemType === DropdownMenuItemType.Check ? (
                       <DropdownMenuCheckboxItem onClick={item.onClick}>
-                        {item.itemLabel}
+                        {item.label}
                       </DropdownMenuCheckboxItem>
                     ) : (
-                      <DropdownMenuRadioItem onClick={item.onClick} value={item.itemLabel}>
-                        {item.itemLabel}
+                      <DropdownMenuRadioItem onClick={item.onClick} value={item.label}>
+                        {item.label}
                       </DropdownMenuRadioItem>
                     )}
                   </div>
