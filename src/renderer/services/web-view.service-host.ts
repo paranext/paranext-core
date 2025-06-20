@@ -502,11 +502,11 @@ let papiDockLayoutVarSync: PapiDockLayout | undefined;
  * As such:
  *
  * ```typescript
- * await getDockLayoutSync().doSomething();
+ * await getDockLayout().doSomething();
  *
  * await someAsyncFunction();
  *
- * await getDockLayoutSync().doSomethingElse();
+ * await getDockLayout().doSomethingElse();
  * ```
  *
  * @returns Promise that resolves to the papi dock layout

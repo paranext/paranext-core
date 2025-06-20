@@ -2835,7 +2835,6 @@ declare module 'shared/models/docking-framework.model' {
      * @param tabElement The DOM element in the tab whose info to get
      * @returns Info for the tab in question or `undefined` if tab is not found
      * @throws If found a tab id in the DOM but there was no corresponding tab info in the dock layout
-     *   or the item with the id found was not a tab
      */
     getTabInfoByElement: (tabElement: Element) => TabInfo | undefined;
     /**
