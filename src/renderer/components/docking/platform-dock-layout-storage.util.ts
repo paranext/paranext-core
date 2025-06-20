@@ -154,7 +154,7 @@ export function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
  * @returns Info for the tab in question or `undefined` if tab is not found
  * @throws If the item found in the dock layout with the specified ID is not a tab
  */
-function getTabInfoById(
+export function getTabInfoById(
   dockLayout: DockLayout,
   tabId: string,
   methodName: string,
@@ -341,7 +341,7 @@ export function updateWebViewDefinition(
   );
 
   // Update existing tab
-  updateTab(updatedTabData, shouldBringToFront, dockLayout);
+  updateTab(dockLayout, updatedTabData, shouldBringToFront);
 
   // Only consider the WebView to have updated if its properties actually changed, not just if it was brought to front
   return !!updatedWebViewData;
@@ -378,9 +378,9 @@ export function findPreviousTab(dockLayout: DockLayout) {
  *   layout
  */
 function updateTab(
+  dockLayout: DockLayout,
   tabInfo: RCDockTabInfo,
   shouldBringToFront: boolean,
-  dockLayout: DockLayout,
 ): void {
   // Make sure the tab is unobscured
   if (shouldBringToFront) {
@@ -419,7 +419,7 @@ export function addTabToDock(
         `addTabToDock: target tab with id '${targetTab.id}' is not a tab. This should not happen.`,
       );
 
-    updateTab(tab, shouldBringToFront, dockLayout);
+    updateTab(dockLayout, tab, shouldBringToFront);
     previousTabId = tab.id;
 
     // We did not add a tab, so return undefined to indicate that

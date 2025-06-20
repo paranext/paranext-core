@@ -5,6 +5,7 @@ import {
   windowServiceProviderName,
   FocusSubject,
   FocusSubjectOther,
+  SetFocusSpecifier,
 } from '@shared/services/window.service-model';
 import { dataProviderService } from '@shared/services/data-provider.service';
 import { DataProviderEngine, IDataProviderEngine } from '@shared/models/data-provider-engine.model';
@@ -43,7 +44,7 @@ class WindowDataProviderEngine
   #unsubscribeOnDidFocus: Unsubscriber | undefined;
 
   #setDetectFocusInternalDebounced = debounce(
-    async () => this.#setFocusInternal(detectFocus()),
+    async () => this.#setFocusInternal(detectFocus(), false),
     250,
   );
 
@@ -82,20 +83,66 @@ class WindowDataProviderEngine
 
   // Can be called with or without a selector
   async setFocus(
-    newFocusSubjectPossiblyUndefinedSelector: FocusSubject | undefined,
-    newFocusSubjectPossiblyNotProvided?: FocusSubject | 'detect',
+    newSetFocusSpecifierPossiblyUndefinedSelector: SetFocusSpecifier | undefined,
+    newSetFocusSpecifierPossiblyNotProvided?: SetFocusSpecifier,
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
-    const newFocusSubject: FocusSubject | FocusSubjectElement | 'detect' | undefined =
-      newFocusSubjectPossiblyUndefinedSelector ?? newFocusSubjectPossiblyNotProvided;
+    const newSetFocusSpecifier: SetFocusSpecifier | FocusSubjectElement | 'detect' | undefined =
+      newSetFocusSpecifierPossiblyUndefinedSelector ?? newSetFocusSpecifierPossiblyNotProvided;
 
-    if (newFocusSubject === 'detect') {
+    // Update the tracked focus in this service based on what is actually focused
+    if (newSetFocusSpecifier === 'detect') {
       // Need to debounce because it takes a sec for the focus to change in the DOM
       return this.#setDetectFocusInternalDebounced();
     }
 
-    throw new Error('setFocus with anything other than `detect` is not yet supported');
+    // Figure out what we should be focusing
+    let newFocusSubject: FocusSubject | FocusSubjectElement | undefined;
+    let shouldUpdateDockLayout = true;
 
-    // return this.#setFocusInternal(newFocusSubject);
+    // If we should move focus relative to the currently selected tab, do so
+    if (
+      newSetFocusSpecifier === 'nextTab' ||
+      newSetFocusSpecifier === 'previousTab' ||
+      newSetFocusSpecifier === 'nextTabGroup' ||
+      newSetFocusSpecifier === 'previousTabGroup'
+    ) {
+      // If we don't have a tab selected, can't move relative to it. Return false
+      if (
+        !this.focusSubject ||
+        (this.focusSubject.focusType !== 'webView' && this.focusSubject.focusType !== 'tab')
+      )
+        return false;
+
+      if (newSetFocusSpecifier === 'nextTab' || newSetFocusSpecifier === 'previousTab') {
+        // Get next tab in group or across groups
+        newFocusSubject = getDockLayoutSync().getTabInfoByOffset(this.focusSubject.id);
+      } else {
+        // TODO: Do the tab group move - or set newFocusSubject and let flow continue? Tricky because navigateToPanel doesn't allow just returning the relevant tab
+        // navigateToPanelById (in the storage utils, translate id to element)
+        // getTabInfoByElement(document.activeElement) - this is the newly selected tab
+        // If it is a WebView, select the iframe
+
+        // Don't update the dock layout since we already changed it
+        shouldUpdateDockLayout = false;
+      }
+
+      // If we didn't find the tab to focus next, don't change focus
+      if (!newFocusSubject) return false;
+    }
+    // If we should select a specific tab, fill out the partial tab focus subject
+    else if (newSetFocusSpecifier?.focusType === 'tab') {
+      const tabInfo = getDockLayoutSync().getTabInfoById(newSetFocusSpecifier.id);
+
+      if (!tabInfo)
+        // We didn't find the tab they're looking for, so forget it
+        return false;
+
+      newFocusSubject = { ...newSetFocusSpecifier, tabType: tabInfo.tabType };
+    }
+    // If we should select a specific WebView or should deselect (undefined), go with that
+    else newFocusSubject = newSetFocusSpecifier;
+
+    return this.#setFocusInternal(newFocusSubject, shouldUpdateDockLayout);
   }
 
   async dispose(): Promise<boolean> {
@@ -107,8 +154,17 @@ class WindowDataProviderEngine
     return true;
   }
 
-  #setFocusInternal(newFocusSubject: FocusSubject | FocusSubjectElement | undefined) {
+  #setFocusInternal(
+    newFocusSubject: FocusSubject | FocusSubjectElement | undefined,
+    shouldUpdateDockLayout: boolean,
+  ) {
     if (deepEqual(this.#focusSubject, newFocusSubject)) return false;
+
+    if (shouldUpdateDockLayout) {
+      // TODO: Actually set the focus in the docking layout - maybe updateTab(id, null or undefined, true). Probably make setActiveTab or something based on updateTab in storageutil
+      // TODO: If it is a WebView, select the iframe
+      // TODO: deselect if undefined
+    }
 
     this.#focusSubject = newFocusSubject;
     return true;
