@@ -4,7 +4,7 @@ import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'pl
 import { useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
-import windowService from '@shared/services/window.service';
+import { windowService } from '@shared/services/window.service';
 import { logger } from '@shared/services/logger.service';
 
 type PlatformTabTitleProps = {

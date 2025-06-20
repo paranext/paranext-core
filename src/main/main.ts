@@ -46,7 +46,7 @@ import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
-import windowService from '@shared/services/window.service';
+import { windowService } from '@shared/services/window.service';
 
 // #region Helper functions
 

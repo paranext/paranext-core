@@ -31,5 +31,3 @@ export const windowService = createSyncProxyForAsyncObject<IWindowService>(async
   await initialize();
   return dataProvider;
 }, windowServiceObjectToProxy);
-
-export default windowService;
