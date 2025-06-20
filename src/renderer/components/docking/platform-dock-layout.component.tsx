@@ -23,6 +23,7 @@ import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrap
 import {
   addTabToDock,
   addWebViewToDock,
+  getTabInfoByElement,
   getWebViewDefinition,
   loadTab,
   saveTab,
@@ -71,6 +72,8 @@ export function PlatformDockLayout() {
         shouldBringToFront = false,
       ) =>
         updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
+      getTabInfoByElement: (tabElement: Element) =>
+        getTabInfoByElement(dockLayoutRef.current, tabElement),
       testLayout,
     });
     return () => {

@@ -106,7 +106,7 @@
     "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
     "*.{html,md,yml}": ["prettier --single-quote --write"]
   },
-  "browserslist": ["extends browserslist-config-erb"],
+  "browserslist": ["extends browserslist-config-detect-electron"],
   "dependencies": {
     "@sillsdev/scripture": "^2.0.2",
     "ajv": "^8.17.1",
@@ -166,16 +166,17 @@
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
     "browserslist": "^4.25.0",
-    "browserslist-config-erb": "^0.0.3",
+    "browserslist-config-detect-electron": "file:./lib/browserslist-config-detect-electron",
     "concurrently": "^9.1.2",
     "core-js": "^3.40.0",
     "cross-env": "^7.0.3",
     "css-loader": "^6.11.0",
     "css-minimizer-webpack-plugin": "^7.0.0",
     "detect-port": "^2.1.0",
-    "electron": "^36.4.0",
+    "electron": "^36.5.0",
     "electron-builder": "^26.0.16",
     "electron-devtools-installer": "^4.0.0",
+    "electron-to-chromium": "^1.5.171",
     "electronmon": "^2.0.3",
     "eslint": "^8.57.1",
     "eslint-config-airbnb-base": "^15.0.0",
@@ -251,6 +252,6 @@
   },
   "workspaces": ["lib/*", "extensions", "extensions/src/*"],
   "volta": {
-    "node": "22.15.1"
+    "node": "22.16.0"
   }
 }
