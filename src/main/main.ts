@@ -362,8 +362,8 @@ async function main() {
     );
 
     mainWindow.webContents.on('before-input-event', async (_, event) => {
-      // Key up seems not to change focus in Windows, so we'll follow suit
-      if (event.type !== 'keyUp') return;
+      // Key up seems not to change focus in Windows, so we will only change on keyDown
+      if (event.type !== 'keyDown') return;
 
       // Announce a possible focus change
       try {
@@ -376,7 +376,7 @@ async function main() {
     });
 
     mainWindow.webContents.on('before-mouse-event', async (_, event) => {
-      // Mouse up and other events seem not to change focus in Windows, so we'll follow suit
+      // Mouse up and other events seem not to change focus in Windows, so we will only change on mouseDown
       if (event.type !== 'mouseDown') return;
 
       // Announce a possible focus change

@@ -33,10 +33,7 @@ export type FocusSubjectWebView = {
  */
 export type FocusSubjectTab = {
   focusType: 'tab';
-  /**
-   * The type of tab. `webView` if it is a WebView tab. `undefined` if we were unable to determine
-   * its type. If you need to get its type, try running `getFocus` again
-   */
+  /** The type of tab. `webView` if it is a WebView tab. */
   tabType: 'webView' | string;
   /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
   id: string;
@@ -81,6 +78,10 @@ export type IWindowService = {
   /**
    * Sets the subject of focus in the main app window.
    *
+   * Note: until https://paratextstudio.atlassian.net/browse/PT-2202 is complete, this function does
+   * not actually provide the ability to set the focus but only provides the ability to detect what
+   * is currently focused. As such, this is relatively useless for extensions right now.
+   *
    * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
    *   the window to update the current focus based on what is actually focused in the window (only
    *   necessary when an action happens that changes the focus but the window service does not
@@ -93,6 +94,10 @@ export type IWindowService = {
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
   /**
    * Sets the subject of focus in the main app window.
+   *
+   * Note: until https://paratextstudio.atlassian.net/browse/PT-2202 is complete, this function does
+   * not actually provide the ability to set the focus but only provides the ability to detect what
+   * is currently focused. As such, this is relatively useless for extensions right now.
    *
    * @param selector `undefined`. Does not have to be provided
    * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct

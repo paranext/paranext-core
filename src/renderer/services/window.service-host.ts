@@ -39,8 +39,8 @@ class WindowDataProviderEngine
   implements IDataProviderEngine<WindowDataTypes>
 {
   /** The currently focused subject. Do NOT expose `FocusSubjectElement` outside this class */
-  private focusSubject: FocusSubject | FocusSubjectElement | undefined;
-  private unsubscribeOnDidFocus: Unsubscriber | undefined;
+  #focusSubject: FocusSubject | FocusSubjectElement | undefined;
+  #unsubscribeOnDidFocus: Unsubscriber | undefined;
 
   #setDetectFocusInternalDebounced = debounce(
     async () => this.#setFocusInternal(detectFocus()),
@@ -50,17 +50,17 @@ class WindowDataProviderEngine
   constructor() {
     super();
 
-    this.focusSubject = detectFocus();
+    this.#focusSubject = detectFocus();
 
     // Listen for window-wide focus/blur changes
     const handleChangeFocus = async () => {
       // Run debounce, then make sure we haven't been disposed before sending update
-      if ((await this.#setDetectFocusInternalDebounced()) && this.unsubscribeOnDidFocus)
+      if ((await this.#setDetectFocusInternalDebounced()) && this.#unsubscribeOnDidFocus)
         this.notifyUpdate('Focus');
     };
     window.addEventListener('focusin', handleChangeFocus);
     window.addEventListener('focusout', handleChangeFocus);
-    this.unsubscribeOnDidFocus = () => {
+    this.#unsubscribeOnDidFocus = () => {
       window.removeEventListener('focusin', handleChangeFocus);
       window.removeEventListener('focusout', handleChangeFocus);
       return true;
@@ -68,16 +68,16 @@ class WindowDataProviderEngine
   }
 
   async getFocus(): Promise<FocusSubject | undefined> {
-    if (!this.focusSubject) return undefined;
+    if (!this.#focusSubject) return undefined;
 
     // If the tabType was not determined last time the focus changed, try again
-    if (this.focusSubject.focusType === 'tab' && !this.focusSubject.tabType)
-      this.focusSubject = detectFocus();
+    if (this.#focusSubject.focusType === 'tab' && !this.#focusSubject.tabType)
+      this.#focusSubject = detectFocus();
 
     // Hide element focus type and just return other
-    if (this.focusSubject?.focusType === 'element') return FOCUS_SUBJECT_OTHER;
+    if (this.#focusSubject?.focusType === 'element') return FOCUS_SUBJECT_OTHER;
 
-    return this.focusSubject;
+    return this.#focusSubject;
   }
 
   // Can be called with or without a selector
@@ -93,22 +93,24 @@ class WindowDataProviderEngine
       return this.#setDetectFocusInternalDebounced();
     }
 
-    return this.#setFocusInternal(newFocusSubject);
+    throw new Error('setFocus with anything other than `detect` is not yet supported');
+
+    // return this.#setFocusInternal(newFocusSubject);
   }
 
   async dispose(): Promise<boolean> {
-    if (this.unsubscribeOnDidFocus) {
-      const success = this.unsubscribeOnDidFocus();
-      this.unsubscribeOnDidFocus = undefined;
+    if (this.#unsubscribeOnDidFocus) {
+      const success = this.#unsubscribeOnDidFocus();
+      this.#unsubscribeOnDidFocus = undefined;
       return success;
     }
     return true;
   }
 
   #setFocusInternal(newFocusSubject: FocusSubject | FocusSubjectElement | undefined) {
-    if (deepEqual(this.focusSubject, newFocusSubject)) return false;
+    if (deepEqual(this.#focusSubject, newFocusSubject)) return false;
 
-    this.focusSubject = newFocusSubject;
+    this.#focusSubject = newFocusSubject;
     return true;
   }
 }
