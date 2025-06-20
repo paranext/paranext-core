@@ -494,8 +494,20 @@ let papiDockLayoutVarSync: PapiDockLayout | undefined;
 /**
  * Get the papi dock layout promise. It will resolve to the papi dock layout when it is registered.
  *
- * Do not save the returned variable out anywhere because it can change, invalidating the old one
- * (see `registerDockLayout`)
+ * WARNING: Do not save the returned variable out anywhere because it can change, invalidating the
+ * old one (see `registerDockLayout`). This includes using the same variable after `await`.
+ * Preferably, just use this method directly every time you need to run something on the dock
+ * layout.
+ *
+ * As such:
+ *
+ * ```typescript
+ * await getDockLayoutSync().doSomething();
+ *
+ * await someAsyncFunction();
+ *
+ * await getDockLayoutSync().doSomethingElse();
+ * ```
  *
  * @returns Promise that resolves to the papi dock layout
  */
@@ -507,8 +519,20 @@ function getDockLayout(): Promise<PapiDockLayout> {
  * Get the papi dock layout synchronously _assuming_ it has been registered. This should be safe to
  * assume if you are accessing this from inside a tab's code
  *
- * Do not save the returned variable out anywhere because it can change, invalidating the old one
- * (see `registerDockLayout`)
+ * WARNING: Do not save the returned variable out anywhere because it can change, invalidating the
+ * old one (see `registerDockLayout`). This includes using the same variable after `await`.
+ * Preferably, just use this method directly every time you need to run something on the dock
+ * layout.
+ *
+ * As such:
+ *
+ * ```typescript
+ * getDockLayoutSync().doSomething();
+ *
+ * await someAsyncFunction();
+ *
+ * getDockLayoutSync().doSomethingElse();
+ * ```
  *
  * @returns The papi dock layout
  * @throws If the papi dock layout has not been registered
