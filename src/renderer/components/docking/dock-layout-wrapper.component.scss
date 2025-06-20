@@ -236,62 +236,9 @@ $tab-bottom-rounding: vars.$space--s;
   }
 }
 
-// TODO: UX should make this better (and remove the rainbow-bg keyframes)
+// TODO: UX should make this better
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active.dock-tab-window-focus {
-  animation: rainbow-bg 5s linear;
-  animation-iteration-count: infinite;
-}
-
-// Thanks to Zak at https://codepen.io/zak/pen/rWJzPy
-@keyframes rainbow-bg {
-  100%,
-  0% {
-    background-color: rgb(255, 0, 0);
-  }
-
-  8% {
-    background-color: rgb(255, 127, 0);
-  }
-
-  16% {
-    background-color: rgb(255, 255, 0);
-  }
-
-  25% {
-    background-color: rgb(127, 255, 0);
-  }
-
-  33% {
-    background-color: rgb(0, 255, 0);
-  }
-
-  41% {
-    background-color: rgb(0, 255, 127);
-  }
-
-  50% {
-    background-color: rgb(0, 255, 255);
-  }
-
-  58% {
-    background-color: rgb(0, 127, 255);
-  }
-
-  66% {
-    background-color: rgb(0, 0, 255);
-  }
-
-  75% {
-    background-color: rgb(127, 0, 255);
-  }
-
-  83% {
-    background-color: rgb(255, 0, 255);
-  }
-
-  91% {
-    background-color: rgb(255, 0, 127);
-  }
+  background-color: blue;
 }
 
 // Hide the bottom corner rounding pseudo-elements when highlight is active

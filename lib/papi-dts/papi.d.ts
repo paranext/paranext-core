@@ -7299,7 +7299,6 @@ declare module 'shared/services/settings.service' {
 declare module 'shared/services/window.service' {
   import { IWindowService } from 'shared/services/window.service-model';
   export const windowService: IWindowService;
-  export default windowService;
 }
 declare module 'shared/services/theme.service-model' {
   import {
