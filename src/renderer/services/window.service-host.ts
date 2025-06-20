@@ -16,7 +16,6 @@ import {
   getErrorMessage,
   debounce,
 } from 'platform-bible-utils';
-import { logger } from '@shared/services/logger.service';
 import { getDockLayout } from './web-view.service-host';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
@@ -146,8 +145,8 @@ async function detectFocus(): Promise<FocusSubject | FocusSubjectElement | undef
         tabType: tabInfo.tabType,
       };
   } catch (e) {
-    logger.debug(
-      `Could not get tabInfo while detecting focus on active element ${activeElement.tagName}. This may happen when the window is just starting up: ${getErrorMessage(e)}`,
+    throw new Error(
+      `Could not find tabInfo for existing tab while detecting focus on active element ${activeElement.tagName}: ${getErrorMessage(e)}`,
     );
   }
 
