@@ -6,6 +6,6 @@
     "baseUrl": "./",
     "noEmit": true
   },
-  "include": ["index.js", ".eslintrc.cjs"],
+  "include": ["index.js", ".eslintrc.cjs", "index.d.ts"],
   "exclude": []
 }
