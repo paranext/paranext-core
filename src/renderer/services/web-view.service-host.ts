@@ -511,7 +511,7 @@ let papiDockLayoutVarSync: PapiDockLayout | undefined;
  *
  * @returns Promise that resolves to the papi dock layout
  */
-function getDockLayout(): Promise<PapiDockLayout> {
+export function getDockLayout(): Promise<PapiDockLayout> {
   return papiDockLayoutVar.promise;
 }
 
@@ -537,7 +537,7 @@ function getDockLayout(): Promise<PapiDockLayout> {
  * @returns The papi dock layout
  * @throws If the papi dock layout has not been registered
  */
-export function getDockLayoutSync(): PapiDockLayout {
+function getDockLayoutSync(): PapiDockLayout {
   if (!papiDockLayoutVarSync)
     throw new Error(
       'WebView Service error: Dock layout was requested synchronously, but the dock layout has not been registered!',

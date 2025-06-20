@@ -17,7 +17,7 @@ import {
   debounce,
 } from 'platform-bible-utils';
 import { logger } from '@shared/services/logger.service';
-import { getDockLayoutSync } from './web-view.service-host';
+import { getDockLayout } from './web-view.service-host';
 
 const FOCUS_SUBJECT_OTHER: FocusSubjectOther = Object.freeze({
   focusType: 'other',
@@ -40,17 +40,25 @@ class WindowDataProviderEngine
 {
   /** The currently focused subject. Do NOT expose `FocusSubjectElement` outside this class */
   #focusSubject: FocusSubject | FocusSubjectElement | undefined;
+  /**
+   * Getting the focusSubject is async. We are firing off a promise to get it in the constructor,
+   * and this tracks that promise. If `undefined`, the work is finished, and #focusSubject can be
+   * used freely
+   */
+  #focusSubjectInitialPromise: Promise<void> | undefined;
   #unsubscribeOnDidFocus: Unsubscriber | undefined;
 
   #setDetectFocusInternalDebounced = debounce(
-    async () => this.#setFocusInternal(detectFocus()),
+    async () => this.#setFocusInternal(await detectFocus()),
     250,
   );
 
   constructor() {
     super();
 
-    this.#focusSubject = detectFocus();
+    this.#focusSubjectInitialPromise = (async () => {
+      this.#setFocusInternal(await detectFocus());
+    })();
 
     // Listen for window-wide focus/blur changes
     const handleChangeFocus = async () => {
@@ -68,11 +76,10 @@ class WindowDataProviderEngine
   }
 
   async getFocus(): Promise<FocusSubject | undefined> {
-    if (!this.#focusSubject) return undefined;
+    // Wait for first retrieval of #focusSubject
+    if (this.#focusSubjectInitialPromise) await this.#focusSubjectInitialPromise;
 
-    // If the tabType was not determined last time the focus changed, try again
-    if (this.#focusSubject.focusType === 'tab' && !this.#focusSubject.tabType)
-      this.#focusSubject = detectFocus();
+    if (!this.#focusSubject) return undefined;
 
     // Hide element focus type and just return other
     if (this.#focusSubject?.focusType === 'element') return FOCUS_SUBJECT_OTHER;
@@ -115,7 +122,7 @@ class WindowDataProviderEngine
   }
 }
 
-function detectFocus(): FocusSubject | FocusSubjectElement | undefined {
+async function detectFocus(): Promise<FocusSubject | FocusSubjectElement | undefined> {
   const { activeElement } = document;
 
   // No focus
@@ -130,7 +137,7 @@ function detectFocus(): FocusSubject | FocusSubjectElement | undefined {
     return { focusType: 'webView', id: activeElement.dataset.webViewId };
 
   try {
-    const tabInfo = getDockLayoutSync().getTabInfoByElement(activeElement);
+    const tabInfo = (await getDockLayout()).getTabInfoByElement(activeElement);
 
     if (tabInfo)
       return {
