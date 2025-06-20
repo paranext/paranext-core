@@ -45,6 +45,9 @@ import { ErrorTabData, TAB_TYPE_ERROR, createErrorTab, saveErrorTab } from './er
 import { getFloatPosition, layoutDefaults } from './platform-dock-layout-positioning.util';
 import { createRCDockTabFromTabInfo } from './platform-dock-tab.component';
 
+/** Regex on the tab id for tab header elements made by rc-dock */
+const TAB_HEADER_ID_REGEX = /rc-tabs-\d+-tab-(.+)/;
+
 /** Tab loader functions for each Platform tab type */
 let tabLoaderMap: Map<TabType, TabLoader>;
 if (globalThis.isNoisyDevModeEnabled) {
@@ -140,6 +143,98 @@ export function saveTab(dockTabInfo: RCDockTabInfo): SavedTabInfo | undefined {
 
   return tabSaver ? tabSaver(tabInfo) : saveTabInfoBase(tabInfo);
 }
+
+/**
+ * Gets info for the tab with the specified ID
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabId The ID of the tab whose info to get
+ * @param methodName Name of the method that is calling this - prints in thrown exceptions
+ * @returns Info for the tab in question or `undefined` if tab is not found
+ * @throws If the item found in the dock layout with the specified ID is not a tab
+ */
+function getTabInfoById(
+  dockLayout: DockLayout,
+  tabId: string,
+  methodName: string,
+): RCDockTabInfo | undefined {
+  const targetTab = dockLayout.find(tabId);
+
+  // If we didn't find the webview, return undefined
+  if (!targetTab) return undefined;
+
+  if (!isTab(targetTab))
+    throw new Error(
+      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTab.id}' is not a tab`,
+    );
+
+  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  return targetTab as RCDockTabInfo;
+}
+
+/**
+ * Gets info for the tab that contains the specified DOM element
+ *
+ * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
+ *   layout
+ * @param tabElement The DOM element in the tab whose info to get
+ * @returns Info for the tab in question or `undefined` if tab is not found
+ * @throws If found a tab id in the DOM but there was no corresponding tab info in the dock layout
+ *   or the item with the id found was not a tab
+ */
+export function getTabInfoByElement(
+  dockLayout: DockLayout,
+  tabElement: Element,
+): RCDockTabInfo | undefined {
+  // Need to use `null` because it is returned from `element.parentElement`
+  let currentElement: Element | null = tabElement;
+  // Look for Tab ID in parents of currently focused element
+  // Unfortunately, this is heavily dependent on internal details of rc-dock
+  // `dock-layout` class is on the highest div in the rc-dock dock layout component
+  while (currentElement && !currentElement.classList.contains('dock-layout')) {
+    let tabId: string | undefined;
+
+    // If we clicked on the PlatformPanel (directly inside the tab contents)
+    if (currentElement instanceof HTMLElement && currentElement.dataset.tabId)
+      tabId = currentElement.dataset.tabId;
+
+    // If clicked on tab header
+    // rc-tabs-#-tab-${id} is the id for tab headers in rc-dock
+    if (!tabId && TAB_HEADER_ID_REGEX.test(currentElement.id))
+      [, tabId] = TAB_HEADER_ID_REGEX.exec(currentElement.id) ?? [];
+
+    // If clicked in various misc places in the tab group area that don't get into a specific tab
+    // (like clicking empty space that doesn't capture focus, which goes up to the rc-dock dock-bar),
+    // see which tab is focused in the clicked tab group
+    // `dock-panel` class and data-dockid attribute are on the tab group (rc-dock calls it panel)
+    if (
+      !tabId &&
+      currentElement instanceof HTMLElement &&
+      currentElement.classList.contains('dock-panel') &&
+      currentElement.dataset.dockid
+    ) {
+      const panelData = dockLayout.find(currentElement.dataset.dockid);
+      if (isPanel(panelData)) tabId = panelData.activeId;
+    }
+
+    if (tabId) {
+      const tabInfo = getTabInfoById(dockLayout, tabId, 'getTabInfoByElement');
+      if (tabInfo) return tabInfo;
+      throw new Error(
+        `getTabInfoByElement: Found tab ID ${tabId} in DOM, but there was no tab info`,
+      );
+    }
+
+    // It's not this one. Go up
+    currentElement = currentElement.parentElement;
+  }
+
+  // Didn't find a tab
+  return undefined;
+}
+
 // #endregion
 
 // #region webview storage
@@ -164,23 +259,14 @@ function getWebViewTabInfoById(
   dockLayout: DockLayout,
   methodName: string,
 ): [RCDockTabInfo | undefined, WebViewDefinition | undefined] {
-  const targetTab = dockLayout.find(webViewId);
+  const targetTabInfo = getTabInfoById(dockLayout, webViewId, methodName);
 
-  // If we didn't find the webview, return false
-  if (!targetTab) return [undefined, undefined];
-
-  if (!isTab(targetTab))
-    throw new Error(
-      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTab.id}' is not a tab`,
-    );
-
-  // We know the tab in the dock layout is RCDockTabInfo because we set it to be that
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const targetTabInfo = targetTab as RCDockTabInfo;
+  // If we didn't find the webview, return nothing
+  if (!targetTabInfo) return [undefined, undefined];
 
   if (targetTabInfo.tabType !== TAB_TYPE_WEBVIEW)
     throw new Error(
-      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTab.id}' is not a WebView tab`,
+      `platform-dock-layout.component ${methodName} error: target tab with id '${targetTabInfo.id}' is not a WebView tab`,
     );
 
   // Type assert the webview data in the web view tab

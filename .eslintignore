@@ -45,6 +45,7 @@ storybook-static
 lib/platform-bible-react
 lib/platform-bible-utils
 lib/papi-dts
+lib/browserslist-config-detect-electron
 extensions
 
 # generated files
