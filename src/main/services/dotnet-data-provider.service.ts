@@ -15,7 +15,7 @@ const closePromise: Promise<void> = new Promise<void>((resolve) => {
 
 // log functions for inside the data provider process
 function logProcessError(message: unknown) {
-  logger.error(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME, 'error'));
+  logger.error(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));
 }
 function logProcessInfo(message: unknown) {
   logger.info(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));

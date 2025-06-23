@@ -1,7 +1,8 @@
 import chalk from 'chalk';
-import log, { LogLevel } from 'electron-log';
-import { getProcessType, isClient, isExtensionHost, isRenderer } from '@shared/utils/internal-util';
+import log from 'electron-log';
+import { getProcessType, isServer } from '@shared/utils/internal-util';
 import { includes, split } from 'platform-bible-utils';
+import { ProcessType } from '@shared/global-this.model';
 
 export const WARN_TAG = '<WARN>';
 
@@ -87,15 +88,14 @@ function identifyCaller(): string | undefined {
  *
  * @param message Message from the service
  * @param serviceName Name of the service to show in the log
- * @param tag Optional tag at the end of the service name
  * @returns Formatted string of a service message
  */
-export function formatLog(message: string, serviceName: string, tag = '') {
+export function formatLog(message: string, serviceName: string) {
   // Remove the new line at the end of every message coming from stdout from other processes
   const messageTrimmed = message.trimEnd();
-  const openTag = `[${serviceName}${tag ? ' ' : ''}${tag}]`;
+  const openTag = `[${serviceName}]`;
   if (includes(messageTrimmed, '\n')) {
-    const closeTag = `[/${serviceName}${tag ? ' ' : ''}${tag}]`;
+    const closeTag = `[/${serviceName}]`;
     // Multi-line
     return `\n${openTag}\n${messageTrimmed}\n${closeTag}`;
   }
@@ -104,72 +104,57 @@ export function formatLog(message: string, serviceName: string, tag = '') {
 
 /** Abstract and shim the logger */
 
-if (isClient()) {
-  log.transports.console.level = globalThis.logLevel;
-  if (isRenderer())
-    // On the renderer, insert formatting before sending
-    log.hooks.push((message) => {
-      const caller = identifyCaller();
-      return {
-        ...message,
-        data: message.data.map((logLine) =>
-          formatLog(
-            caller ? `${logLine} ${caller}` : `${logLine}`,
-            getProcessType(),
-            // Renderer sends back with log level of log. Not sure why it's not in the type
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            (message.level as LogLevel | 'log') === 'log' ? undefined : message.level,
-          ),
-        ),
-      };
-    });
-  else if (isExtensionHost())
-    // Add a tag for warnings so we can recognize them outside the process.
-    log.hooks.push((message) => {
-      const caller = identifyCaller();
-      const lineEnd = caller ? ` ${caller}` : '';
-      return {
-        ...message,
-        data: message.data.map((logLine) =>
-          message.level === 'warn' ? `${WARN_TAG}${logLine}${lineEnd}` : `${logLine}${lineEnd}`,
-        ),
-      };
-    });
-  else {
-    // eslint-disable-next-line no-console
-    console.warn(chalk.yellow(`Unexpected process type: ${globalThis.processType}`));
-  }
-} else {
-  log.initialize();
-  log.transports.console.level = globalThis.logLevel;
-  log.transports.console.format = '{h}:{i}:{s} {text}';
-  log.transports.console.writeFn = ({ message: msg }) => {
-    let message = `${msg.data}`;
-    // If we're piping through a log message from another service, don't add another file path
-    // Messages from other services all start with "[service name]"
-    if (!/\[[\w ]+\]/.test(message)) {
-      const caller = identifyCaller();
-      message = caller ? `${message} ${caller}` : `${message}`;
-    }
+// Make sure processType is loaded
+if (!Object.values(ProcessType).includes(getProcessType()))
+  // eslint-disable-next-line no-console
+  console.warn(chalk.yellow(`Unexpected process type: ${globalThis.processType}`));
 
-    /* eslint-disable no-console */
-    switch (msg.level) {
-      case 'info':
-        console.log(message);
-        break;
-      case 'warn':
-        console.log(chalk.yellow(message));
-        break;
-      case 'error':
-        console.log(chalk.red(message));
-        break;
-      default:
-        console.log(message);
-        break;
-    }
-    /* eslint-enable */
+// insert formatting before logging
+log.transports.console.level = globalThis.logLevel;
+// Match console format to default file format but without the date
+log.transports.console.format = '[{h}:{i}:{s}.{ms}] [{level}] {text}';
+if (log.transports.file) log.transports.file.level = globalThis.logLevel;
+log.hooks.push((message) => {
+  // If we're piping through a log message from another process, don't add another file path
+  // Messages from other processes all start with "[process name]"
+  if (message.data.some((logLine) => /^\s*\[[\w ]+\]/.test(logLine))) return message;
+
+  const caller = identifyCaller();
+  return {
+    ...message,
+    data: message.data.map((logLine) =>
+      formatLog(caller ? `${logLine} ${caller}` : `${logLine}`, getProcessType()),
+    ),
   };
-  log.transports.file.level = globalThis.logLevel;
+});
+log.transports.console.writeFn = ({ message: msg }) => {
+  const message = msg.data.join('\n');
+
+  /* eslint-disable no-console */
+  switch (msg.level) {
+    case 'info':
+      console.log(message);
+      break;
+    case 'warn':
+      console.log(chalk.yellow(message));
+      break;
+    case 'error':
+      console.log(chalk.red(message));
+      break;
+    case 'debug':
+      console.log(chalk.gray(message));
+      break;
+    default:
+      console.log(message);
+      break;
+  }
+  /* eslint-enable */
+};
+
+if (isServer()) {
+  log.initialize();
+
+  log.info('Done with editing logger');
 }
 
 /**

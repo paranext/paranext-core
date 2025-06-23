@@ -115,7 +115,7 @@ export function setRequestTimeout(timeoutSeconds: number) {
   if (timeoutSeconds < 0)
     throw new Error(`Invalid request timeout ${timeoutSeconds}: must be a non-negative number`);
   requestTimeoutMs = timeoutSeconds * 1000; // convert to milliseconds
-  logger.info(`[${globalThis.processType}] Request timeout set to ${requestTimeoutMs}ms`);
+  logger.info(`Request timeout set to ${requestTimeoutMs}ms`);
 }
 
 function sharedStoreKeyForRequestType(

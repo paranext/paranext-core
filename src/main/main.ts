@@ -29,7 +29,8 @@ import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model'
 import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
-  DEV_MODE_RENDERER_INDICATOR,
+  DEV_MODE_QUERY_PARAMETER,
+  LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
 } from '@shared/data/platform.data';
@@ -436,8 +437,15 @@ async function main() {
       return { action: 'deny' };
     });
 
+    // Built URL search parameters for use in `src/renderer/global-this.model.ts`
+    const searchParamsObject: Record<string, string> = {
+      [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+    };
+
+    if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
+
     // If the URL doesn't load, we might need to show something to the user
-    const urlToLoad = `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`;
+    const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
     mainWindow.loadURL(urlToLoad).catch((e) => {
       logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });

@@ -5,8 +5,8 @@ import {
   COMMAND_LINE_ARGS,
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
-import { formatLog, logger, WARN_TAG } from '@shared/services/logger.service';
-import { AsyncVariable, includes, split, waitForDuration } from 'platform-bible-utils';
+import { logger } from '@shared/services/logger.service';
+import { AsyncVariable, waitForDuration } from 'platform-bible-utils';
 import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
 import { app } from 'electron';
 import { PathLike } from 'fs';
@@ -14,9 +14,6 @@ import { FileHandle, readFile } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
-
-/** Pretty name for the process this service manages. Used in logs */
-const EXTENSION_HOST_NAME = 'extension host';
 
 let processInstanceCounter = 0;
 // Resolves to the current process instance counter value for debug logging purposes
@@ -40,19 +37,6 @@ function resolveProcessLifetimeVariable(): void {
 
   processLifetimeVariable.resolveToValue(processInstanceCounter);
   processLifetimeVariable = undefined;
-}
-
-// log functions for inside the extension host process
-function logProcessError(message: unknown) {
-  let msg = message?.toString() ?? '';
-  if (includes(msg, WARN_TAG)) {
-    msg = split(msg, WARN_TAG).join('');
-    logger.warn(formatLog(msg, EXTENSION_HOST_NAME, 'warning'));
-  } else logger.error(formatLog(msg, EXTENSION_HOST_NAME, 'error'));
-}
-
-function logProcessInfo(message: unknown) {
-  logger.info(formatLog(message?.toString() ?? '', EXTENSION_HOST_NAME));
 }
 
 async function waitForExtensionHost(maxWaitTimeInMS: number) {
@@ -100,8 +84,6 @@ function hardKillExtensionHost() {
   } else {
     logger.error('extension host process was not stopped! Investigate other .kill() options');
   }
-  extensionHost?.stderr?.removeListener('data', logProcessError);
-  extensionHost?.stdout?.removeListener('data', logProcessInfo);
   extensionHost = undefined;
 }
 
@@ -191,23 +173,12 @@ async function startExtensionHost() {
     );
   }
 
-  if (!extensionHost.stderr || !extensionHost.stdout)
-    logger.error(
-      "Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
-    );
-  else {
-    extensionHost.stderr.on('data', logProcessError);
-    extensionHost.stdout.on('data', logProcessInfo);
-  }
-
   extensionHost.once('exit', (code, signal) => {
     if (signal) {
       logger.info(`'exit' event: extension host process terminated with signal ${signal}`);
     } else {
       logger.info(`'exit' event: extension host process exited with code ${code}`);
     }
-    extensionHost?.stderr?.removeListener('data', logProcessError);
-    extensionHost?.stdout?.removeListener('data', logProcessInfo);
     extensionHost = undefined;
     resolveProcessLifetimeVariable();
   });
