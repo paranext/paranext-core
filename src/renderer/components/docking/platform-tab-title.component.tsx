@@ -1,9 +1,11 @@
-import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
+import { useData, useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from 'platform-bible-react';
-import { isLocalizeKey, LocalizeKey } from 'platform-bible-utils';
+import { getErrorMessage, isLocalizeKey, isPlatformError, LocalizeKey } from 'platform-bible-utils';
 import { useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import './platform-tab-title.component.scss';
+import { windowService } from '@shared/services/window.service';
+import { logger } from '@shared/services/logger.service';
 
 type PlatformTabTitleProps = {
   /** Url to image to show on the tab. Defaults to the software's standard logo. */
@@ -17,11 +19,16 @@ type PlatformTabTitleProps = {
    * a new flash animation. Generally pass in `Date.now()`.
    */
   flashTriggerTime?: number;
+  /** ID of the tab */
+  id: string;
 };
 
 // CSS classes for highlighting the active tab header and content
 const cssClassTabHeaderHighlight = 'dock-tab-active-highlight';
 const cssClassTabContentHighlight = 'dock-tabpane-active-highlight';
+
+/** CSS class for highlighting the focused tab header */
+const cssClassTabHeaderWindowFocus = 'dock-tab-window-focus';
 
 // This duration must be ≥ the tabTitleBarFlash animation duration in dock-layout-wrapper.component.scss
 const cssHighlightDurationMilliseconds = 3000;
@@ -40,6 +47,7 @@ export function PlatformTabTitle({
   text,
   tooltip,
   flashTriggerTime,
+  id,
 }: PlatformTabTitleProps) {
   const lastFlashTriggerTimeRef = useRef<number | undefined>(undefined);
 
@@ -85,6 +93,45 @@ export function PlatformTabTitle({
       if (activeTabContent) activeTabContent.classList.remove(cssClassTabContentHighlight);
     };
   }, [flashTriggerTime]);
+
+  const [focusSubjectPossiblyError] = useData(windowService.dataProviderName).Focus(
+    undefined,
+    undefined,
+  );
+
+  // Handle applying and removing the CSS styles for this tab being the window's focus
+  useEffect(() => {
+    if (isPlatformError(focusSubjectPossiblyError)) {
+      logger.warn(
+        `platform-tab-title window focus came back as error: ${getErrorMessage(focusSubjectPossiblyError)}`,
+      );
+      return;
+    }
+
+    // do nothing if this tab is not focused
+    if (
+      !focusSubjectPossiblyError ||
+      (focusSubjectPossiblyError.focusType !== 'tab' &&
+        focusSubjectPossiblyError.focusType !== 'webView') ||
+      id !== focusSubjectPossiblyError.id
+    )
+      return;
+
+    // We need to walk the DOM to find the header to apply window focus styles
+    const containerElement = containerRef.current;
+    if (!containerElement) return;
+
+    // Walk up the DOM to the active tab header
+    const activeTabHeader = containerElement.closest('.dock-tab-active');
+
+    if (!activeTabHeader) return;
+
+    activeTabHeader.classList.add(cssClassTabHeaderWindowFocus);
+
+    return () => {
+      activeTabHeader.classList.remove(cssClassTabHeaderWindowFocus);
+    };
+  }, [focusSubjectPossiblyError, id]);
 
   const icon = (
     <div

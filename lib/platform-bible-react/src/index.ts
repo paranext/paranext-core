@@ -16,10 +16,6 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
-export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
-export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
-export { default as DisableButton } from './components/advanced/extension-marketplace/buttons/disable-button.component';
-export { default as UpdateButton } from './components/advanced/extension-marketplace/buttons/update-button.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
 export {
   default as FilterDropdown,
@@ -27,14 +23,8 @@ export {
   type DropdownItem,
   type DropdownGroup,
 } from './components/advanced/extension-marketplace/filter-dropdown.component';
-export { default as FilterButton } from './components/advanced/extension-marketplace/buttons/filter-button.component';
-export { default as NoExtensionsFound } from './components/advanced/extension-marketplace/no-extensions-found.component';
 export { default as MoreInfo } from './components/advanced/extension-marketplace/more-info.component';
-export {
-  default as VersionHistory,
-  type VersionInformation,
-  type VersionHistoryType,
-} from './components/advanced/extension-marketplace/version-history.component';
+export type { VersionHistoryType } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 
 export { default as Filter } from './components/advanced/filter.component';
@@ -151,11 +141,13 @@ export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
 export * from './components/shadcn-ui/popover';
+export { Progress } from './components/shadcn-ui/progress';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
 export { ScrollArea } from './components/shadcn-ui/scroll-area';
 export { Separator } from './components/shadcn-ui/separator';
 export * from './components/shadcn-ui/sonner';
+export * from './components/shadcn-ui/skeleton';
 export { Slider } from './components/shadcn-ui/slider';
 export { Switch } from './components/shadcn-ui/switch';
 export * from './components/shadcn-ui/table';

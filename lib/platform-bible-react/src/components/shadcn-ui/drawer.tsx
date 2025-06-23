@@ -3,12 +3,29 @@ import { Drawer as DrawerPrimitive } from 'vaul';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
-// CUSTOM: Change from const to function component
+// CUSTOM: Added context to manage drawer direction
+const DrawerContext = React.createContext<{
+  direction?: 'top' | 'bottom' | 'left' | 'right';
+}>({
+  direction: 'bottom',
+});
+
 function Drawer({
   shouldScaleBackground = true,
+  direction = 'bottom',
   ...props
 }: React.ComponentProps<typeof DrawerPrimitive.Root>) {
-  return <DrawerPrimitive.Root shouldScaleBackground={shouldScaleBackground} {...props} />;
+  // CUSTOM: Use context to provide direction to child components
+  const contextValue = React.useMemo(() => ({ direction }), [direction]);
+  return (
+    <DrawerContext.Provider value={contextValue}>
+      <DrawerPrimitive.Root
+        shouldScaleBackground={shouldScaleBackground}
+        direction={direction}
+        {...props}
+      />
+    </DrawerContext.Provider>
+  );
 }
 Drawer.displayName = 'Drawer';
 
@@ -33,25 +50,55 @@ DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DrawerPortal>
-    <DrawerOverlay />
-    <DrawerPrimitive.Content
-      ref={ref}
-      className={cn(
-        'tw-fixed tw-inset-x-0 tw-bottom-0 tw-z-50 tw-mt-24 tw-flex tw-h-auto tw-flex-col tw-rounded-t-[10px] tw-border tw-bg-background',
-        className,
-      )}
-      {...props}
-    >
-      <div className="tw-mx-auto tw-mt-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted" />
-      {children}
-    </DrawerPrimitive.Content>
-  </DrawerPortal>
-));
+>(({ className, children, ...props }, ref) => {
+  // CUSTOM: Use context to provide direction to child components
+  const { direction = 'bottom' } = React.useContext(DrawerContext);
+
+  // CUSTOM: Define positioning and styling based on direction
+  const directionStyles = {
+    bottom: 'tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px]',
+    top: 'tw-inset-x-0 tw-top-0 tw-mb-24 tw-rounded-b-[10px]',
+    left: 'tw-inset-y-0 tw-left-0 tw-mr-24 tw-rounded-r-[10px] tw-w-auto tw-max-w-sm',
+    right: 'tw-inset-y-0 tw-right-0 tw-ml-24 tw-rounded-l-[10px] tw-w-auto tw-max-w-sm',
+  };
+
+  // CUSTOM: Define handle styles for each direction
+  const handleStyles = {
+    bottom: 'tw-mx-auto tw-mt-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted',
+    top: 'tw-mx-auto tw-mb-4 tw-h-2 tw-w-[100px] tw-rounded-full tw-bg-muted',
+    left: 'tw-my-auto tw-mr-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
+    right: 'tw-my-auto tw-ml-4 tw-w-2 tw-h-[100px] tw-rounded-full tw-bg-muted',
+  };
+
+  return (
+    <DrawerPortal>
+      <DrawerOverlay />
+      <DrawerPrimitive.Content
+        ref={ref}
+        className={cn(
+          // CUSTOM: Change Tailwind CSS classes for styling
+          // Removed tw-inset-x-0 tw-bottom-0 tw-mt-24 tw-rounded-t-[10px] tw-flex-col
+          'pr-twp tw-fixed tw-z-50 tw-flex tw-h-auto tw-border tw-bg-background',
+          direction === 'bottom' || direction === 'top' ? 'tw-flex-col' : 'tw-flex-row',
+          directionStyles[direction],
+          className,
+        )}
+        {...props}
+      >
+        {/* CUSTOM: Render handles and children based on direction */}
+        {(direction === 'bottom' || direction === 'right') && (
+          <div className={handleStyles[direction]} />
+        )}
+        <div className="tw-flex tw-flex-col">{children}</div>
+        {(direction === 'top' || direction === 'left') && (
+          <div className={handleStyles[direction]} />
+        )}
+      </DrawerPrimitive.Content>
+    </DrawerPortal>
+  );
+});
 DrawerContent.displayName = 'DrawerContent';
 
-// CUSTOM: Change from const to function component
 function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -62,7 +109,6 @@ function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DrawerHeader.displayName = 'DrawerHeader';
 
-// CUSTOM: Change from const to function component
 function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div className={cn('tw-mt-auto tw-flex tw-flex-col tw-gap-2 tw-p-4', className)} {...props} />

@@ -8,7 +8,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from '@/components/shadcn-ui/dropdown-menu';
-import { FilterButton } from './buttons/filter-button.component';
+import { Button } from '@/components/shadcn-ui/button';
+import { ChevronDown, Filter } from 'lucide-react';
 
 /** The DropdownMenuItemType enum is used to determine the type of the dropdown item */
 export enum DropdownMenuItemType {
@@ -38,6 +39,8 @@ export type DropdownGroup = {
 export type FilterDropdownProps = {
   /** Object unique identifier */
   id?: string;
+  /** Label for the trigger button */
+  label: string;
   /** The groups array contains the groups that will be displayed in the dropdown */
   groups: DropdownGroup[];
 }; // TODO: extend the props later
@@ -49,13 +52,17 @@ export type FilterDropdownProps = {
  * @param FilterDropdownProps
  * @returns A filter dropdown.
  */
-export function FilterDropdown({ id, groups }: FilterDropdownProps) {
+export function FilterDropdown({ id, label, groups }: FilterDropdownProps) {
   return (
     <div id={id}>
       {/* TODO: remove this once the DropDown Menu shadcn has an id prop */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <FilterButton />
+          <Button variant="default">
+            <Filter size={16} className="tw-mr-2 tw-h-4 tw-w-4" />
+            {label}
+            <ChevronDown size={16} className="tw-ml-2 tw-h-4 tw-w-4" />
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
           {groups.map((group) => (
