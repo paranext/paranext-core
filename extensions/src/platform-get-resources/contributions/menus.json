@@ -21,5 +21,7 @@
     "groups": {},
     "items": []
   },
-  "webViewMenus": {}
+  "webViewMenus": {
+    "platformGetResources.home": {}
+  }
 }
