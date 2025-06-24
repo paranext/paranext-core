@@ -3,24 +3,33 @@ import { useCallback, useRef, useState, KeyboardEvent } from 'react';
 // TODO: Generalize this to work with div and ul list boxes?
 // TODO: Move to PBR
 
+/** Properties of one option contained in a listbox */
 export interface ListboxOption {
+  /** Unique identifier for the option */
   id: string;
+  /** Display label for the option */
   label: string;
 }
 
+/** Props for the useListbox hook */
 export interface UseListboxProps {
+  /** Array of options for the listbox */
   options: ListboxOption[];
+  /** Callback when the focus changes to a different option */
   onFocusChange?: (option: ListboxOption) => void;
+  /** Callback to toggle selection of an option */
+  toggleSelect?: (id: string) => void;
 }
 
-export function useListbox({ options, onFocusChange }: UseListboxProps) {
+/** Hook for handling keyboard navigation of a listbox */
+export function useListbox({ options, onFocusChange, toggleSelect }: UseListboxProps) {
   // ul ref property expects null and not undefined
   // eslint-disable-next-line no-null/no-null
   const listboxRef = useRef<HTMLUListElement>(null);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
-  const [keysSoFar, setKeysSoFar] = useState('');
-  const keysTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // const [keysSoFar, setKeysSoFar] = useState('');
+  // const keysTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const focusOption = useCallback(
     (id: string) => {
@@ -33,16 +42,20 @@ export function useListbox({ options, onFocusChange }: UseListboxProps) {
     [onFocusChange, options],
   );
 
-  const toggleSelect = useCallback((id: string) => {
-    setSelectedId((prev) => (prev === id ? undefined : id));
-  }, []);
+  const toggleSelectInternal = useCallback(
+    (id: string) => {
+      setSelectedId((prev) => (prev === id ? undefined : id));
+      toggleSelect?.(id);
+    },
+    [toggleSelect],
+  );
 
-  const clearKeys = () => {
-    setKeysSoFar('');
-    keysTimeoutRef.current = undefined;
-  };
+  // const clearKeys = () => {
+  //   setKeysSoFar('');
+  //   keysTimeoutRef.current = undefined;
+  // };
 
-  // TODO: Fix space and enter key handling
+  // TODO: Fix focus ring and selected styles of list items
   // TODO: Tab into table makes it scroll down slightly (probably from custom onFocusChange that is passed in)
   // TODO: Type a character to go to the entry stating with that character
   const handleKeyDown = useCallback(
@@ -62,30 +75,30 @@ export function useListbox({ options, onFocusChange }: UseListboxProps) {
         case ' ':
         case 'Enter':
           if (activeId) {
-            toggleSelect(activeId);
+            toggleSelectInternal(activeId);
           }
           evt.preventDefault();
           return;
         default:
-          if (evt.key.length === 1) {
-            const searchChar = evt.key.toLowerCase();
-            const newKeys = keysSoFar + searchChar;
-            setKeysSoFar(newKeys);
-            if (keysTimeoutRef.current) clearTimeout(keysTimeoutRef.current);
-            keysTimeoutRef.current = setTimeout(clearKeys, 500);
+          // if (evt.key.length === 1) {
+          //   const searchChar = evt.key.toLowerCase();
+          //   const newKeys = keysSoFar + searchChar;
+          //   setKeysSoFar(newKeys);
+          //   if (keysTimeoutRef.current) clearTimeout(keysTimeoutRef.current);
+          //   keysTimeoutRef.current = setTimeout(clearKeys, 500);
 
-            const match = options.find((opt) => opt.label.toLowerCase().startsWith(newKeys));
-            if (match) {
-              focusOption(match.id);
-            }
-          }
+          //   const match = options.find((opt) => opt.label.toLowerCase().startsWith(newKeys));
+          //   if (match) {
+          //     focusOption(match.id);
+          //   }
+          // }
           return;
       }
 
       const nextOption = options[nextIndex];
       if (nextOption) focusOption(nextOption.id);
     },
-    [activeId, options, toggleSelect, focusOption, keysSoFar],
+    [options, focusOption, activeId, toggleSelectInternal],
   );
 
   return {

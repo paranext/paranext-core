@@ -6,7 +6,7 @@ import {
   SelectContent,
   SelectItem,
 } from 'platform-bible-react';
-import { ProjectOption } from 'platform-lexical-tools';
+import { DictionaryProjectOption } from 'platform-lexical-tools';
 import { useMemo } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../../utils/dictionary.util';
@@ -18,7 +18,7 @@ type TrackProjectDropdownProps = {
   /** Callback to handle project change */
   handleTrackProjectChange: (project: string) => void;
   /** Options for the track biblical terms dropdown */
-  projectOptions: ProjectOption[];
+  projectOptions: DictionaryProjectOption[];
 };
 
 /**
@@ -34,7 +34,7 @@ export function TrackProjectDropdown({
   projectOptions,
 }: TrackProjectDropdownProps) {
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
-  const projectOptionsEdited: ProjectOption[] = useMemo(
+  const projectOptionsEdited: DictionaryProjectOption[] = useMemo(
     () => [{ projectId: 'no-project', projectShortName: 'No Project' }, ...projectOptions],
     [projectOptions],
   );

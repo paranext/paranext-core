@@ -11,7 +11,7 @@ import {
 } from 'platform-bible-react';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
-import { DictionaryScope, Entry, ProjectOption } from 'platform-lexical-tools';
+import { DictionaryScope, Entry, DictionaryProjectOption } from 'platform-lexical-tools';
 import papi from '@papi/frontend';
 import { TrackProjectDropdown } from '../components/dictionary/track-project-dropdown.component';
 import { DictionaryEntryDisplay } from '../components/dictionary/dictionary-entry-display.component';
@@ -37,7 +37,7 @@ globalThis.webViewComponent = function Dictionary({
   // Gets the project IDs and names for all available, editable scripture projects
   const [projectIdsAndNames] = usePromise(
     useCallback(async () => {
-      const projectOptions: ProjectOption[] = [];
+      const projectOptions: DictionaryProjectOption[] = [];
 
       // Fetch projects metadata to get ids
       const allMetadata = await papi.projectLookup.getMetadataForAllProjects();

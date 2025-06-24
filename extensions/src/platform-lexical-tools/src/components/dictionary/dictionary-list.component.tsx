@@ -56,6 +56,12 @@ export function DictionaryList({ dictionaryData }: DictionaryListBoxProps) {
         }
       }
     },
+    toggleSelect: (id) => {
+      const activeElement = document.getElementById(id);
+      if (activeElement) {
+        activeElement.click();
+      }
+    },
   });
 
   return (

@@ -703,14 +703,18 @@ declare module 'platform-lexical-tools' {
 
   // #endregion
 
+  // #region Types relating to the dictionary web view
+
   /** Type for the dictionary scope */
   export type DictionaryScope = 'chapter' | 'section' | 'verse';
 
   /** Type for the occurrence view */
-  export type OccurrenceView = 'chapter' | 'all';
+  export type DictionaryOccurrenceView = 'chapter' | 'all';
 
   /** Type for the project options */
-  export type ProjectOption = { projectId: string | undefined; projectShortName: string };
+  export type DictionaryProjectOption = { projectId: string | undefined; projectShortName: string };
+
+  // #endregion
 }
 
 declare module 'papi-shared-types' {
