@@ -1,5 +1,6 @@
 import { MarkdownRenderer } from '@/components/advanced/extension-marketplace/markdown-renderer.component';
 import { Input } from '@/components/shadcn-ui/input';
+import { Textarea } from '@/components/shadcn-ui/textarea';
 import { useState } from 'react';
 
 export function MarkdownRendererExample() {
@@ -44,7 +45,7 @@ const doesSupportSyntaxHighlighting = false;
         />{' '}
         (Change this to _blank to make links open in a new tab)
       </div>
-      <textarea
+      <Textarea
         className="tw-resize"
         cols={60}
         rows={15}
