@@ -304,7 +304,8 @@ global.webViewComponent = function FindWebView({
         (verseRefSetting.book !== submittedVerseRef?.book ||
           verseRefSetting.chapterNum !== submittedVerseRef?.chapterNum)) ||
       (scope === 'book' && verseRefSetting.book !== submittedVerseRef?.book) ||
-      (scope === 'selectedBooks' && selectedBookIds.join(',') !== submittedBookIds.join(',')) ||
+      (scope === 'selectedBooks' &&
+        selectedBookIds.sort().join(',') !== submittedBookIds.sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
       isRegexAllowed !== submittedIsRegexAllowed
     );
@@ -417,7 +418,7 @@ global.webViewComponent = function FindWebView({
       case 'book':
         return localizedBookName;
       case 'selectedBooks':
-        return selectedBookIds
+        return submittedBookIds
           .map((bookId) => localizedBookData.get(bookId)?.localizedId)
           .join(' ');
       default:
