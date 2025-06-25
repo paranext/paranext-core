@@ -240,14 +240,17 @@ export function BookSelector({
                 : VISIBLE_BADGES_COUNT,
             )
             .map((bookId) => (
-              <Badge key={bookId} variant="secondary">
+              <Badge className="hover:tw-bg-secondary" key={bookId} variant="secondary">
                 {(localizedBookNames && localizedBookNames.get(bookId)?.localizedName) ||
                   Canon.bookIdToEnglishName(bookId) ||
                   bookId}
               </Badge>
             ))}
           {selectedBookIds.length > MAX_VISIBLE_BADGES && (
-            <Badge variant="secondary">{`+${selectedBookIds.length - VISIBLE_BADGES_COUNT} ${moreText}`}</Badge>
+            <Badge
+              className="hover:tw-bg-secondary"
+              variant="secondary"
+            >{`+${selectedBookIds.length - VISIBLE_BADGES_COUNT} ${moreText}`}</Badge>
           )}
         </div>
       )}
