@@ -479,7 +479,7 @@ global.webViewComponent = function FindWebView({
                   }
                 }}
                 placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className="tw-w-full tw-pr-10"
+                className={`tw-text-ellipsis tw-w-full ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
               />
               <RecentSearches recentSearches={recentSearches} onSearchTermSelect={setSearchTerm} />
             </div>
@@ -584,11 +584,13 @@ global.webViewComponent = function FindWebView({
       </Card>
 
       {/* Search Query Summary */}
-      {submittedScope && submittedSearchTerm && (
-        <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
-          {projectName} · {getScopeSummaryText()} · Find: {submittedSearchTerm}
-        </div>
-      )}
+      <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
+        {submittedScope && submittedSearchTerm
+          ? `${projectName} · ${getScopeSummaryText()} · Find: ${submittedSearchTerm}`
+          : formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
+              projectName,
+            })}
+      </div>
 
       {/* Search Results Placeholder */}
       {results && results.length === 0 && searchStatus === 'running' && (
@@ -610,7 +612,7 @@ global.webViewComponent = function FindWebView({
 
       {/* Search Results */}
       <div
-        className="tw-min-h-0 tw-flex-1 tw-space-y-2 tw-overflow-y-auto"
+        className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto"
         onScroll={handleResultsScroll}
       >
         {results &&
