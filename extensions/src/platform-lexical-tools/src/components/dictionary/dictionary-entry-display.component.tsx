@@ -68,17 +68,20 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
     });
   }, [dictionaryEntry.senses, selectedSenseId]);
 
-  // Automatically select the only sense if there is exactly one
+  // Automatically select the only sense if there is exactly one; otherwise clear selection
   useEffect(() => {
     const senses = Object.values(dictionaryEntry.senses).filter((sense) => sense !== undefined);
     if (senses.length === 1) {
       setSelectedSenseId(senses[0].id);
       setSelectedSenseIndex(1);
+    } else {
+      setSelectedSenseId(undefined);
+      setSelectedSenseIndex(undefined);
     }
   }, [dictionaryEntry.senses]);
 
   return (
-    <div className="tw-p-4">
+    <div className="tw-p-4 tw-w-full tw-overflow-y-auto tw-h-full">
       <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">
         <DrawerClose className="tw-flex tw-items-center">
           <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
@@ -113,7 +116,7 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
         </h3>
         <ToggleGroup
           type="single"
-          value={selectedSenseId}
+          value={selectedSenseId ?? ''}
           onValueChange={(value) => {
             setSelectedSenseId(value);
             const index = Object.values(dictionaryEntry.senses)
@@ -129,10 +132,10 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
               <ToggleGroupItem
                 key={sense.id}
                 value={sense.id}
-                className="tw-flex tw-w-full tw-h-fit tw-flex-col tw-items-start tw-border tw-rounded-lg tw-shadow-sm tw-p-4 tw-bg-white tw-cursor-pointer data-[state=on]:tw-border-blue-500 data-[state=on]:tw-shadow-md tw-transition-colors"
+                className="tw-flex tw-w-full tw-h-fit tw-flex-col tw-items-start tw-border tw-rounded-lg tw-shadow-sm tw-p-4 tw-bg-white tw-cursor-pointer data-[state=on]:tw-border-accent data-[state=on]:tw-shadow-md tw-transition-colors"
               >
                 <div className="tw-flex tw-items-baseline tw-gap-2">
-                  <span className="tw-font-bold tw-text-blue-600">{senseIndex + 1}</span>
+                  <span className="tw-font-bold tw-text-accent-foreground">{senseIndex + 1}</span>
                   <span className="tw-text-base">{sense.glosses.join(', ')}</span>
                 </div>
                 {sense.definition && (
@@ -165,6 +168,7 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
         </ul>
       </div>
 
+      {/* TODO: Localize book names */}
       {/* TODO: Show occurrences for chapter vs all with toggle */}
       {/* <div>
       <div className="tw-flex tw-items-center tw-justify-between tw-mb-2">

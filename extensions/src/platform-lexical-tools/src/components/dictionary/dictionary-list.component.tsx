@@ -46,20 +46,12 @@ export function DictionaryList({ dictionaryData }: DictionaryListBoxProps) {
     label: entry.lemma,
   }));
 
-  const { listboxRef, activeId, handleKeyDown, focusOption, selectedId } = useListbox({
+  const { listboxRef, activeId, handleKeyDown, selectedId } = useListbox({
     options,
-    onFocusChange: (option) => {
-      if (option?.id) {
-        const el = document.getElementById(option.id);
-        if (el) {
-          el.scrollIntoView({ block: 'nearest' });
-        }
-      }
-    },
-    toggleSelect: (id) => {
-      const activeElement = document.getElementById(id);
-      if (activeElement) {
-        activeElement.click();
+    onOptionSelect: (option) => {
+      const el = document.getElementById(option.id);
+      if (el) {
+        el.click();
       }
     },
   });
@@ -71,33 +63,23 @@ export function DictionaryList({ dictionaryData }: DictionaryListBoxProps) {
       tabIndex={0}
       ref={listboxRef}
       aria-activedescendant={activeId ?? undefined}
-      // TODO: Why no focus rings on ul?
       className="tw-p-2 tw-flex tw-flex-col tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
       onKeyDown={handleKeyDown}
     >
       {dictionaryData.map((entry) => {
         const entryId = `entry-${entry.id}`;
-        const isFocused = entryId === activeId;
         const isSelected = selectedId === entryId;
 
         return (
           <div key={entryId}>
+            {/* TODO: Drawer dismissible or not? */}
             <Drawer direction="right">
               <DrawerTrigger asChild>
                 <li
                   role="option"
                   aria-selected={isSelected}
                   id={entryId}
-                  className={`tw-flex tw-flex-col tw-p-2 tw-rounded-md tw-cursor-pointer hover:tw-bg-background ${
-                    isFocused ? 'tw-bg-muted' : ''
-                  }`}
-                  onClick={() => focusOption(entryId)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      focusOption(entryId);
-                    }
-                  }}
+                  className="tw-flex tw-flex-col tw-p-2 hover:tw-bg-muted tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
                   tabIndex={-1} // Removes ability to tab through each list item
                 >
                   <div className="tw-flex tw-items-baseline tw-gap-2">
@@ -149,11 +131,8 @@ export function DictionaryList({ dictionaryData }: DictionaryListBoxProps) {
                   </div>
                 </li>
               </DrawerTrigger>
-              <DrawerContent
-                // TODO: This is set to false but the drawer is still draggable. Makes it so you cannot highlight text in the drawer content.
-                draggable={false}
-                className="tw-h-screen tw-ml-0 md:tw-ml-6 lg:tw-ml-10 xl:tw-ml-14"
-              >
+              <DrawerContent className="tw-max-w-none tw-ml-0 md:tw-left-6 lg:tw-left-10 xl:tw-left-14">
+                {/* TODO: Fix text or turn lemma and glosses into title and description in DictionaryEntryDisplay */}
                 <VisuallyHidden>
                   <DrawerTitle>{`Dictionary Entry ${entry.lemma}`}</DrawerTitle>
                   <DrawerDescription>{`Dictionary Entry ${entry.lemma}`}</DrawerDescription>

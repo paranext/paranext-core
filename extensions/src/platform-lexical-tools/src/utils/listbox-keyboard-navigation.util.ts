@@ -17,12 +17,24 @@ export interface UseListboxProps {
   options: ListboxOption[];
   /** Callback when the focus changes to a different option */
   onFocusChange?: (option: ListboxOption) => void;
-  /** Callback to toggle selection of an option */
-  toggleSelect?: (id: string) => void;
+  /** Callback to toggle the selection of an option */
+  onOptionSelect?: (option: ListboxOption) => void;
 }
-
-/** Hook for handling keyboard navigation of a listbox */
-export function useListbox({ options, onFocusChange, toggleSelect }: UseListboxProps) {
+/**
+ * Hook for handling keyboard navigation of a listbox.
+ *
+ * @param UseListboxProps - The properties for configuring the listbox behavior.
+ * @returns An object containing:
+ *
+ *   - `listboxRef`: A ref to be attached to the listbox container element (e.g., `<ul>`), used for
+ *       focus management.
+ *   - `activeId`: The id of the currently focused (active) option, or `undefined` if none is focused.
+ *   - `selectedId`: The id of the currently selected option, or `undefined` if none is selected.
+ *   - `handleKeyDown`: A keyboard event handler to be attached to the listbox container for handling
+ *       navigation and selection.
+ *   - `focusOption`: A function to programmatically focus a specific option by id.
+ */
+export function useListbox({ options, onFocusChange, onOptionSelect }: UseListboxProps) {
   // ul ref property expects null and not undefined
   // eslint-disable-next-line no-null/no-null
   const listboxRef = useRef<HTMLUListElement>(null);
@@ -38,16 +50,30 @@ export function useListbox({ options, onFocusChange, toggleSelect }: UseListboxP
       if (option) {
         onFocusChange?.(option);
       }
+
+      const element = document.getElementById(id);
+      if (element) {
+        element.scrollIntoView({ block: 'center' });
+        element.focus();
+      }
+
+      // Ensure aria-activedescendant is set on the listbox container for internal focus tracking
+      if (listboxRef.current) {
+        listboxRef.current.setAttribute('aria-activedescendant', id);
+      }
     },
     [onFocusChange, options],
   );
 
   const toggleSelectInternal = useCallback(
     (id: string) => {
+      const option = options.find((opt) => opt.id === id);
+      if (!option) return;
+
       setSelectedId((prev) => (prev === id ? undefined : id));
-      toggleSelect?.(id);
+      onOptionSelect?.(option);
     },
-    [toggleSelect],
+    [onOptionSelect, options],
   );
 
   // const clearKeys = () => {
@@ -55,7 +81,8 @@ export function useListbox({ options, onFocusChange, toggleSelect }: UseListboxP
   //   keysTimeoutRef.current = undefined;
   // };
 
-  // TODO: Fix focus ring and selected styles of list items
+  // TODO: Fix focus ring goes away when closing the drawer then comes back
+  // TODO: Fix trap keyboard navigation in drawer content unless Esc, Enter, or Space (closes drawer)
   // TODO: Tab into table makes it scroll down slightly (probably from custom onFocusChange that is passed in)
   // TODO: Type a character to go to the entry stating with that character
   const handleKeyDown = useCallback(
@@ -72,6 +99,14 @@ export function useListbox({ options, onFocusChange, toggleSelect }: UseListboxP
           nextIndex = Math.max(currentIndex - 1, 0);
           evt.preventDefault();
           break;
+        case 'Home':
+          nextIndex = 0;
+          evt.preventDefault();
+          break;
+        case 'End':
+          nextIndex = options.length - 1;
+          evt.preventDefault();
+          break;
         case ' ':
         case 'Enter':
           if (activeId) {
@@ -81,17 +116,12 @@ export function useListbox({ options, onFocusChange, toggleSelect }: UseListboxP
           return;
         default:
           // if (evt.key.length === 1) {
-          //   const searchChar = evt.key.toLowerCase();
-          //   const newKeys = keysSoFar + searchChar;
-          //   setKeysSoFar(newKeys);
-          //   if (keysTimeoutRef.current) clearTimeout(keysTimeoutRef.current);
-          //   keysTimeoutRef.current = setTimeout(clearKeys, 500);
-
-          //   const match = options.find((opt) => opt.label.toLowerCase().startsWith(newKeys));
-          //   if (match) {
-          //     focusOption(match.id);
+          //   const itemToFocus = this.findItemToFocus(evt.key.toLowerCase());
+          //   if (itemToFocus) {
+          //     this.focusItem(itemToFocus);
           //   }
           // }
+          // break;
           return;
       }
 
