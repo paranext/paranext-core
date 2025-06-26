@@ -43,6 +43,10 @@ export type BookChapterControlProps = {
 const CHAPTERS_PER_ROW = 6;
 
 const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
+
+const ALL_ENGLISH_BOOK_NAMES = Object.fromEntries(
+  ALL_BOOK_IDS.map((bookId) => [bookId, Canon.bookIdToEnglishName(bookId)]),
+);
 const BOOK_TYPE_LABELS: BookTypeLabels = {
   OT: 'Old Testament',
   NT: 'New Testament',
@@ -53,9 +57,9 @@ const BOOK_TYPE_ARRAY: BookType[] = ['OT', 'NT', 'DC'];
 // If you use menuItemRef.clientHeight- includes height of chapter div which is too big
 const SCROLL_OFFSET = 32 + 32 + 32;
 const SEARCH_QUERY_FORMATS = [
-  /^(\w+)$/i, // Matches a single word (book name or id)
-  /^(\w+)(?:\s(\d+))$/i, // Matches a word followed by a chapter number
-  /^(\w+)(?:\s(\d+):(\d+))$/i, // Matches a word followed by a chapter and verse number
+  /^([^:\s]+(?:\s+[^:\s]+)*)$/i, // Matches book name or id - specific word boundaries
+  /^([^:\s]+(?:\s+[^:\s]+)*)\s+(\d+)$/i, // Matches book name followed by a chapter number
+  /^([^:\s]+(?:\s+[^:\s]+)*)\s+(\d+):(\d+)$/i, // Matches book name followed by a chapter and verse number
 ];
 
 /** Keys used for navigating around in the content menu */
@@ -79,41 +83,16 @@ const fetchEndChapter = (bookId: string) => {
 };
 
 /**
- * Gets all of the English names from book ids
- *
- * @returns String[]
- */
-function getAllEnglishNames(): string[] {
-  const allEnglishNames = ALL_BOOK_IDS.map((bookId) => {
-    return Canon.bookIdToEnglishName(bookId);
-  });
-  return allEnglishNames;
-}
-
-/**
- * Determines if bookName is in allEnglishNames
- *
- * @param bookName Book English name
- * @returns True if bookName is included, false otherwise
- */
-function isValidBookEnglishName(bookName: string): boolean {
-  return getAllEnglishNames().includes(bookName);
-}
-
-/**
  * Gets a bookId from given English name
  *
  * @param bookName Book English name
  * @returns BookId of provided bookName, undefined otherwise
  */
 function getBookIdFromEnglishName(bookName: string): string | undefined {
-  // Convert bookName to lowercase and then capitalize the first letter
-  const formattedBookName = bookName.toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
-
-  if (isValidBookEnglishName(formattedBookName)) {
-    const matchingBookId = ALL_BOOK_IDS.find((bookId) => {
-      return Canon.bookIdToEnglishName(bookId) === formattedBookName;
-    });
+  const matchingBookId = ALL_BOOK_IDS.find(
+    (bookId) => ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase() === bookName.toLowerCase(),
+  );
+  if (matchingBookId) {
     return matchingBookId;
   }
 
@@ -178,7 +157,7 @@ export function BookChapterControl({
         NT: newBookIds.filter((bookId) => Canon.isBookNT(bookId)),
         DC: newBookIds.filter((bookId) => Canon.isBookDC(bookId)),
       }[bookType].filter((bookId: string) => {
-        const englishNameLowerCase = Canon.bookIdToEnglishName(bookId).toLowerCase();
+        const englishNameLowerCase = ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase();
         const normalizedQuery = searchQuery.replace(/[^a-zA-Z]/g, '').toLowerCase();
         return (
           englishNameLowerCase.includes(normalizedQuery) || // Match book name
@@ -292,8 +271,42 @@ export function BookChapterControl({
         event.preventDefault();
         event.stopPropagation();
       }
+
+      // Special handling for smart chapter/verse editing
+      if (document.activeElement === inputRef.current) {
+        // Check if user is typing a digit as the first character - start new chapter number
+        if (/^\d$/.test(event.key)) {
+          const currentValue = bookChapterInputValue;
+          // Match pattern "Name of Book 0:0" to extract book name
+          const bookMatch = currentValue.match(/^([^:\s]+(?:\s+[^:\s]+)*)\s+\d+:\d+$/);
+          if (bookMatch) {
+            const bookName = bookMatch[1];
+            // Replace the input with book name + space + new digit
+            const newValue = `${bookName} ${event.key}`;
+            handleSearchInput(newValue);
+            event.preventDefault();
+          }
+        }
+
+        // Check if user is typing a colon as the first character - start new verse number
+        if (event.key === ':') {
+          const currentValue = bookChapterInputValue;
+          // Match pattern "Name of Book 0:0" to extract book name and chapter number
+          const bookAndChapterMatch = currentValue.match(/^([^:\s]+(?:\s+[^:\s]+)*\s+\d+):\d+$/);
+          if (bookAndChapterMatch) {
+            const bookAndChapter = bookAndChapterMatch[1];
+            // Replace the input with book name + chapter + colon, ready for verse input
+            // In some cases an extraneous colon was added here, so the colon is only added if needed
+            const newValue = bookAndChapter.endsWith(':')
+              ? `${bookAndChapter}`
+              : `${bookAndChapter}:`;
+            handleSearchInput(newValue);
+            event.preventDefault();
+          }
+        }
+      }
     },
-    [isContentOpen],
+    [isContentOpen, bookChapterInputValue],
   );
 
   /** Send keydown event to the book chapter input component. */
