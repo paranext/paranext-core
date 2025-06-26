@@ -23,15 +23,15 @@ export default function ErrorDump({ errorDetails, handleCopyNotify }: ErrorDumpP
   }
 
   return (
-    <div className="tw-inline-flex tw-flex-col tw-justify-start tw-items-start tw-gap-4 tw-w-full">
-      <div className="tw-self-stretch tw-inline-flex tw-justify-start tw-items-start tw-gap-4">
-        <div className="tw-flex-1 tw-inline-flex tw-flex-col tw-justify-start tw-items-start">
-          <div className="tw-text-center tw-justify-center tw-text-color-text tw-text-lg tw-font-semibold tw-leading-loose">
+    <div className="tw-inline-flex tw-w-full tw-flex-col tw-items-start tw-justify-start tw-gap-4">
+      <div className="tw-inline-flex tw-items-start tw-justify-start tw-gap-4 tw-self-stretch">
+        <div className="tw-inline-flex tw-flex-1 tw-flex-col tw-items-start tw-justify-start">
+          <div className="tw-text-color-text tw-justify-center tw-text-center tw-text-lg tw-font-semibold tw-leading-loose">
             Error details
           </div>
-          <div className="tw-self-stretch tw-justify-center tw-text-muted-foreground tw-text-sm tw-font-normal tw-leading-tight">
-            Need help? Share this stack trace with our tech support team so we can resolve your issue
-            quickly.
+          <div className="tw-justify-center tw-self-stretch tw-text-sm tw-font-normal tw-leading-tight tw-text-muted-foreground">
+            Need help? Share this stack trace with our tech support team so we can resolve your
+            issue quickly.
           </div>
         </div>
         <Button variant="secondary" size="icon" className="size-8" onClick={handleCopy}>
@@ -39,7 +39,7 @@ export default function ErrorDump({ errorDetails, handleCopyNotify }: ErrorDumpP
         </Button>
       </div>
       <div className="tw-prose tw-w-full">
-        <pre className='tw-text-xs'>{errorDetails}</pre>
+        <pre className="tw-text-xs">{errorDetails}</pre>
       </div>
     </div>
   );
