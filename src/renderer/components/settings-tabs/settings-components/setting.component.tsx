@@ -224,7 +224,8 @@ export function Setting({
         setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
       }
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      logger.error(`Error changing setting ${settingKey}:`, getErrorMessage(error));
+      setErrorMessage(`Unable to change setting`);
     }
   };
 
