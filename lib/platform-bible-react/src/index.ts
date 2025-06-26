@@ -114,6 +114,7 @@ export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
+export { default as ErrorDump } from './components/basics/error-dump.component';
 
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
 export { Avatar, AvatarFallback, AvatarImage } from './components/shadcn-ui/avatar';

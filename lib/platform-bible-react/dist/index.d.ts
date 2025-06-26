@@ -1271,6 +1271,18 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
+interface ErrorDumpProps {
+	errorDetails: string;
+	handleCopyNotify?: () => void;
+}
+/**
+ * Component to render an error dump
+ *
+ * @param errorDetails Error details string
+ * @param handleCopyNotify Handler function to add a notification to the UI to alert that the error
+ *   was copied
+ */
+export function ErrorDump({ errorDetails, handleCopyNotify }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
