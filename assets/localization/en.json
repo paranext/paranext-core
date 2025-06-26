@@ -145,6 +145,8 @@
   "%toolbar_theme_loading_error%": "There was a problem loading the theme",
   "%webView_defaultTitle_webView%": "Web View",
   "%webView_edit%": "Edit",
+  "%webView_error_dump_header%": "Error Details",
+  "%webView_error_dump_info_message%": "Need help? Share this with our tech support team to help resolve your issue.",
   "%webView_openProjectSettings%": "Open Project Settings...",
   "%webView_project%": "Project",
   "%webView_projectAssignmentsAndProgress%": "Assignments and Progress",
