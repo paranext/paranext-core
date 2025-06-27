@@ -7,7 +7,10 @@ const meta: Meta<typeof Button> = {
   tags: ['autodocs'],
   argTypes: {
     disabled: { control: 'boolean' },
-    variant: { string: 'boolean' },
+    variant: {
+      control: { type: 'select' },
+      options: ['default', 'secondary', 'destructive', 'outline', 'ghost', 'link'],
+    },
   },
 };
 export default meta;
