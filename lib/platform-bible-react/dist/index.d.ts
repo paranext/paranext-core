@@ -1272,6 +1272,34 @@ export type TextFieldProps = {
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
 /**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const ERROR_DUMP_STRING_KEYS: readonly [
+	"%webView_error_dump_header%",
+	"%webView_error_dump_info_message%"
+];
+export type ErrorDumpLocalizedStrings = {
+	[localizedInventoryKey in (typeof ERROR_DUMP_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+interface ErrorDumpProps {
+	/** String containing the error details to show */
+	errorDetails: string;
+	/** Handler function to notify the frontend when the error is copied */
+	handleCopyNotify?: () => void;
+	/** List of localized strings to localize the strings in this component */
+	localizedStrings: ErrorDumpLocalizedStrings;
+}
+/**
+ * Component to render an error dump
+ *
+ * @param errorDetails Error details string
+ * @param handleCopyNotify Handler function to add a notification to the UI to alert that the error
+ *   was copied
+ */
+export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
+/**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert
  */
