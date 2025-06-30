@@ -462,6 +462,11 @@ global.webViewComponent = function FindWebView({
     return occurrenceIndex;
   };
 
+  const canClearResults = useMemo(
+    () => !searchQueryChanged && searchStatus && searchStatus !== 'running',
+    [searchQueryChanged, searchStatus],
+  );
+
   return (
     <div className="tw-container tw-mx-auto tw-flex tw-max-h-screen tw-flex-col tw-gap-6 tw-p-4">
       {/* Header with searchbar and filters */}
@@ -495,7 +500,7 @@ global.webViewComponent = function FindWebView({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  {!searchQueryChanged && searchStatus && searchStatus !== 'running' ? (
+                  {canClearResults ? (
                     <Button onClick={() => clearSearchResults()}>
                       <SearchX />
                     </Button>
@@ -513,7 +518,7 @@ global.webViewComponent = function FindWebView({
                   )}
                 </TooltipTrigger>
                 <TooltipContent>
-                  {searchStatus && searchStatus !== 'running' ? (
+                  {canClearResults ? (
                     <p className="tw-font-light">
                       {localizedStrings['%webView_find_clearSearchResults%']}
                     </p>
