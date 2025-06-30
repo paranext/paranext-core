@@ -5,6 +5,7 @@ import {
   DropdownMenuItem,
   DropdownMenuPortal,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
@@ -69,6 +70,7 @@ const getGroupContent = (
                   {item.iconPathAfter && (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
+                  <DropdownMenuShortcut>{item.shortcut}</DropdownMenuShortcut>
                 </DropdownMenuItem>
               ) : (
                 <DropdownMenuSub key={`dropdown-menu-sub-${item.label}-${item.id}`}>
