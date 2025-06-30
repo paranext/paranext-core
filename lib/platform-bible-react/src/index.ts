@@ -160,6 +160,7 @@ export {
   VerticalTabsContent,
   VerticalTabsTrigger,
 } from './components/basics/tabs-vertical';
+export { Textarea } from './components/shadcn-ui/textarea';
 export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-group';
 export {
   Tooltip,
