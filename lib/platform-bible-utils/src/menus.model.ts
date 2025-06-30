@@ -50,6 +50,11 @@ export type MenuItemBase = OrderedItem & {
   tooltip?: LocalizeKey;
   /** Additional information provided by developers to help people who perform localization */
   localizeNotes: string;
+  /**
+   * Text description of keyboard shortcut for this menu item. Note that this is only used for
+   * displaying the intended shortcut on the menuitem, but does not actually implement the shortcut
+   */
+  shortcut?: string;
 };
 
 /** Menu item that hosts a submenu */
@@ -337,6 +342,10 @@ export const menuDocumentSchema = {
           description:
             'Key that represents the text to display if a mouse pointer hovers over the menu item',
           $ref: '#/$defs/localizeKey',
+        },
+        shortcut: {
+          description:
+            'Suggestion for key (combination) to trigger this item. Note: Does not actually implement said suggestion.',
         },
         searchTerms: {
           description:
