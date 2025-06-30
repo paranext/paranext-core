@@ -70,7 +70,7 @@ export function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: 
             {infoMessage}
           </div>
         </div>
-        <Button variant="secondary" size="icon" className="size-8" onClick={() => handleCopy}>
+        <Button variant="secondary" size="icon" className="size-8" onClick={() => handleCopy()}>
           <Copy />
         </Button>
       </div>
