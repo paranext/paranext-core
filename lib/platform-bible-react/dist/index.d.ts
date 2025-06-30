@@ -1743,6 +1743,7 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Textarea: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.TextareaHTMLAttributes<HTMLTextAreaElement>, HTMLTextAreaElement>, "ref"> & React$1.RefAttributes<HTMLTextAreaElement>>;
 /**
  * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These
  * components are built on Radix UI primitives and styled with Shadcn UI. See Shadcn UI
