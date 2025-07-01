@@ -58,6 +58,7 @@ import { dataProtectionService } from '@shared/services/data-protection.service'
 import { INotificationService } from '@shared/models/notification.service-model';
 import { notificationService } from '@shared/services/notification.service';
 import { appService } from '@shared/services/app.service';
+import { PapiNodeWebSocket } from '@node/services/node-web-socket.service';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-frontend.service.ts.
@@ -79,6 +80,8 @@ const papi = {
   LayeringProjectDataProviderEngineFactory: PapiLayeringProjectDataProviderEngineFactory,
   /** JSDOC DESTINATION WebViewFactory */
   WebViewFactory: PapiWebViewFactory,
+  /** JSDOC DESTINATION PapiNodeWebSocket */
+  WebSocket: PapiNodeWebSocket,
 
   // Functions
   /** This is just an alias for internet.fetch */
@@ -159,6 +162,9 @@ Object.freeze(papi.LayeringProjectDataProviderEngineFactory);
 /** JSDOC DESTINATION WebViewFactory */
 export const { WebViewFactory } = papi;
 Object.freeze(papi.WebViewFactory);
+/** JSDOC DESTINATION PapiNodeWebSocket */
+export const { WebSocket } = papi;
+Object.freeze(papi.WebSocket);
 /** This is just an alias for internet.fetch */
 export const { fetch } = papi;
 Object.freeze(papi.fetch);
