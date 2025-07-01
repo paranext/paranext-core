@@ -140,7 +140,11 @@ function FocusedCheckDropdown({
           </span>
         </DropdownMenuItem>
         <DropdownMenuItem
-          className="tw-flex tw-flex-row"
+          /**
+           * This menu item is hidden until https://paratextstudio.atlassian.net/browse/PT-3309 gets
+           * implemented
+           */
+          className="tw-hidden"
           onClick={(e) => {
             e.stopPropagation();
             handleOpenSettingsAndInventories();
