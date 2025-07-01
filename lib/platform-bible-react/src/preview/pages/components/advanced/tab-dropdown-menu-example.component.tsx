@@ -122,6 +122,7 @@ const menuData = {
       group: 'platformScriptureEditor.general',
       order: 2,
       command: 'platformScriptureEditor.showCopyrightInfo',
+      shortcut: '⌘+I',
     },
     {
       label: 'Assignments and Progress',
@@ -170,7 +171,7 @@ const menuData = {
 
 export function TabDropdownMenuExample() {
   return (
-    <>
+    <div className="tw-flex tw-flex-col tw-gap-4 tw-p-4">
       <TabDropdownMenu
         onSelectMenuItem={(command) => console.log('Run command: ', command)}
         menuData={menuData}
@@ -203,7 +204,7 @@ export function TabDropdownMenuExample() {
         tabLabel="Tab Label"
         variant="muted"
       />
-    </>
+    </div>
   );
 }
 

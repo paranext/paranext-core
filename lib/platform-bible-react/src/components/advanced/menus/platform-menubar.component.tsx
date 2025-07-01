@@ -4,6 +4,7 @@ import {
   MenubarItem,
   MenubarMenu,
   MenubarSeparator,
+  MenubarShortcut,
   MenubarSub,
   MenubarSubContent,
   MenubarSubTrigger,
@@ -82,6 +83,7 @@ const getMenubarContent = (
                   {item.iconPathAfter && (
                     <MenuItemIcon icon={item.iconPathAfter} menuLabel={item.label} />
                   )}
+                  <MenubarShortcut>{item.shortcut}</MenubarShortcut>
                 </MenubarItem>
               ) : (
                 <MenubarSub key={`menubar-sub-${item.label}-${item.id}`}>

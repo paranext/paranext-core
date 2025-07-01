@@ -101,6 +101,11 @@ type MenuItemBase = OrderedItem & {
 	tooltip?: LocalizeKey;
 	/** Additional information provided by developers to help people who perform localization */
 	localizeNotes: string;
+	/**
+	 * Text description of keyboard shortcut for this menu item. Note that this is only used for
+	 * displaying the intended shortcut on the menuitem, but does not actually implement the shortcut
+	 */
+	shortcut?: string;
 };
 type MenuItemContainingSubmenu = MenuItemBase & {
 	/** ID for this menu item that holds a submenu */

@@ -57,6 +57,7 @@
             "label": "%webView_platformScriptureEditor_openFind%",
             "group": "platformScriptureEditor.find",
             "order": 3,
+            "shortcut": "Ctrl+F",
             "command": "platformScripture.openFind"
           },
           {
