@@ -1237,8 +1237,8 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
   // @ts-expect-error we want to remove eval because it can create code from strings
   // eslint-disable-next-line no-eval
   delete globalThis.eval;
-  // @ts-expect-error we want to remove Function because it can create code from strings
-  delete globalThis.Function;
+  // !@ts-expect-error we want to remove Function because it can create code from strings
+  // delete globalThis.Function;
 
   // Replace fetch with papi.fetch.
   // eslint-disable-next-line no-global-assign

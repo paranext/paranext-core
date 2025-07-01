@@ -1,9 +1,3 @@
-/// <reference types="react" />
-/// <reference types="node" />
-/// <reference types="node" />
-/// <reference types="node" />
-/// <reference types="node" />
-/// <reference types="node" />
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**
@@ -1626,7 +1620,7 @@ declare module 'shared/services/network.service' {
    * @param args Arguments to send in the request (put in request.contents)
    * @returns Promise that resolves with the response message
    */
-  export const request: <TParam extends unknown[], TReturn>(
+  export const request: <TParam extends Array<unknown>, TReturn>(
     requestType: SerializedRequestType,
     ...args: TParam
   ) => Promise<TReturn>;
@@ -1654,7 +1648,7 @@ declare module 'shared/services/network.service' {
    * @returns Function to call with arguments of request that performs the request and resolves with
    *   the response contents
    */
-  export const createRequestFunction: <TParam extends unknown[], TReturn>(
+  export const createRequestFunction: <TParam extends Array<unknown>, TReturn>(
     requestType: SerializedRequestType,
   ) => (...args: TParam) => Promise<TReturn>;
   /**
@@ -3862,7 +3856,7 @@ declare module 'papi-shared-types' {
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
-  import { CommandHandlers } from 'papi-shared-types';
+  import { CommandHandlers, CommandNames } from 'papi-shared-types';
   import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
   /**
@@ -3880,14 +3874,14 @@ declare module 'shared/services/command.service' {
    * @returns Promise that resolves if the command successfully registered and unsubscriber function
    *   to run to stop the passed-in function from handling commands
    */
-  export const registerCommand: <CommandName extends keyof CommandHandlers>(
+  export const registerCommand: <CommandName extends CommandNames>(
     commandName: CommandName,
     handler: CommandHandlers[CommandName],
     commandDocs?: SingleMethodDocumentation,
     commandOptions?: NetworkMethodHandlerOptions,
   ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
-  export const sendCommand: <CommandName extends keyof CommandHandlers>(
+  export const sendCommand: <CommandName extends CommandNames>(
     commandName: CommandName,
     ...args: Parameters<CommandHandlers[CommandName]>
   ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
@@ -3899,7 +3893,7 @@ declare module 'shared/services/command.service' {
    * @returns Function to call with arguments of command that sends the command and resolves with the
    *   result of the command
    */
-  export const createSendCommandFunction: <CommandName extends keyof CommandHandlers>(
+  export const createSendCommandFunction: <CommandName extends CommandNames>(
     commandName: CommandName,
   ) => (
     ...args: Parameters<CommandHandlers[CommandName]>
@@ -6424,7 +6418,7 @@ declare module 'shared/services/settings.service-model' {
      * @param validator Function to call to validate the new setting value
      * @returns Unsubscriber that should be called whenever the providing extension is deactivated
      */
-    registerValidator: <SettingName extends keyof SettingTypes>(
+    registerValidator: <SettingName extends SettingNames>(
       key: SettingName,
       validator: SettingValidator<SettingName>,
     ) => Promise<UnsubscriberAsync>;
@@ -6767,7 +6761,7 @@ declare module 'shared/services/project-settings.service-model' {
      * @param validator Function to call to validate the new setting value
      * @returns Unsubscriber that should be called whenever the providing extension is deactivated
      */
-    registerValidator: <ProjectSettingName extends keyof ProjectSettingTypes>(
+    registerValidator: <ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
       validator: ProjectSettingValidator<ProjectSettingName>,
     ) => Promise<UnsubscriberAsync>;
@@ -7719,6 +7713,203 @@ declare module 'shared/services/app.service' {
    */
   export const appService: IAppService;
 }
+declare module 'node/services/node-web-socket.service' {
+  import { ClientRequest, ClientRequestArgs, IncomingMessage } from 'http';
+  import {
+    ClientOptions,
+    CloseEvent as WebSocketCloseEvent,
+    ErrorEvent as WebSocketErrorEvent,
+    Event as WebSocketEvent,
+    EventListenerOptions,
+    MessageEvent as WebSocketMessageEvent,
+    RawData,
+    WebSocket,
+    WebSocketEventMap,
+  } from 'ws';
+  type BufferLike =
+    | string
+    | Buffer
+    | DataView
+    | number
+    | ArrayBufferView
+    | Uint8Array
+    | ArrayBuffer
+    | SharedArrayBuffer
+    | readonly any[]
+    | readonly number[]
+    | {
+        valueOf(): ArrayBuffer;
+      }
+    | {
+        valueOf(): SharedArrayBuffer;
+      }
+    | {
+        valueOf(): Uint8Array;
+      }
+    | {
+        valueOf(): readonly number[];
+      }
+    | {
+        valueOf(): string;
+      }
+    | {
+        [Symbol.toPrimitive](hint: string): string;
+      };
+  /** This wraps Node's WebSocket implementation to provide better
+   * control over internet access. It is isomorphic with the Node WebSocket, so it should act as a
+   * drop-in replacement.
+   *
+   * Note that the browser WebSocket implementation is different and not wrapped here.
+   */
+  export class PapiNodeWebSocket implements WebSocket {
+    readonly CONNECTING: 0;
+    readonly OPEN: 1;
+    readonly CLOSING: 2;
+    readonly CLOSED: 3;
+    addEventListener: <K extends keyof WebSocketEventMap>(
+      type: K,
+      listener: (event: WebSocketEventMap[K]) => void,
+      options?: EventListenerOptions,
+    ) => void;
+    binaryType: 'nodebuffer' | 'arraybuffer' | 'fragments';
+    bufferedAmount: number;
+    close: (code?: number, data?: string | Buffer) => void;
+    emit: (eventName: string | symbol, ...args: unknown[]) => boolean;
+    eventNames: () => Array<string | symbol>;
+    extensions: string;
+    getMaxListeners: () => number;
+    isPaused: boolean;
+    listenerCount: (
+      eventName: string | symbol,
+      listener?: (event: unknown, data: unknown) => void,
+    ) => number;
+    listeners: (eventName: string) => Array<Function>;
+    onclose: ((event: WebSocketCloseEvent) => void) | null;
+    onerror: ((event: WebSocketErrorEvent) => void) | null;
+    onmessage: ((event: WebSocketMessageEvent) => void) | null;
+    onopen: ((event: WebSocketEvent) => void) | null;
+    pause: () => void;
+    ping: (data?: any, mask?: boolean, cb?: (err: Error) => void) => void;
+    pong: (data?: any, mask?: boolean, cb?: (err: Error) => void) => void;
+    prependListener: (
+      eventName: string | symbol,
+      listener: (event: unknown, data: unknown) => void,
+    ) => this;
+    prependOnceListener: (
+      eventName: string | symbol,
+      listener: (event: unknown, data: unknown) => void,
+    ) => this;
+    protocol: string;
+    rawListeners: (eventName: string) => Array<Function>;
+    readonly readyState:
+      | typeof WebSocket.CONNECTING
+      | typeof WebSocket.OPEN
+      | typeof WebSocket.CLOSING
+      | typeof WebSocket.CLOSED;
+    removeAllListeners: (eventName?: string | symbol) => this;
+    removeEventListener: <K extends keyof WebSocketEventMap>(
+      type: K,
+      listener: (event: WebSocketEventMap[K]) => void,
+    ) => void;
+    resume: () => void;
+    setMaxListeners: (n: number) => this;
+    terminate: () => void;
+    url: string;
+    constructor(
+      address: string | URL | null,
+      protocols?: string | string[],
+      options?: ClientOptions | ClientRequestArgs,
+    );
+    send(data: BufferLike, cb?: (err?: Error) => void): void;
+    send(
+      data: BufferLike,
+      options: {
+        mask?: boolean | undefined;
+        binary?: boolean | undefined;
+        compress?: boolean | undefined;
+        fin?: boolean | undefined;
+      },
+      cb?: (err?: Error) => void,
+    ): void;
+    addListener(event: 'close', listener: (code: number, reason: Buffer) => void): this;
+    addListener(event: 'error', listener: (error: Error) => void): this;
+    addListener(event: 'upgrade', listener: (request: IncomingMessage) => void): this;
+    addListener(event: 'message', listener: (data: RawData, isBinary: boolean) => void): this;
+    addListener(event: 'open', listener: () => void): this;
+    addListener(event: 'ping' | 'pong', listener: (data: Buffer) => void): this;
+    addListener(event: 'redirect', listener: (url: string, request: ClientRequest) => void): this;
+    addListener(
+      event: 'unexpected-response',
+      listener: (request: ClientRequest, response: IncomingMessage) => void,
+    ): this;
+    off(event: 'close', listener: (this: WebSocket, code: number, reason: Buffer) => void): this;
+    off(event: 'error', listener: (this: WebSocket, error: Error) => void): this;
+    off(event: 'upgrade', listener: (this: WebSocket, request: IncomingMessage) => void): this;
+    off(
+      event: 'message',
+      listener: (this: WebSocket, data: RawData, isBinary: boolean) => void,
+    ): this;
+    off(event: 'open', listener: (this: WebSocket) => void): this;
+    off(event: 'ping' | 'pong', listener: (this: WebSocket, data: Buffer) => void): this;
+    off(
+      event: 'redirect',
+      listener: (this: WebSocket, url: string, request: ClientRequest) => void,
+    ): this;
+    off(
+      event: 'unexpected-response',
+      listener: (this: WebSocket, request: ClientRequest, response: IncomingMessage) => void,
+    ): this;
+    on(event: 'close', listener: (this: WebSocket, code: number, reason: Buffer) => void): this;
+    on(event: 'error', listener: (this: WebSocket, error: Error) => void): this;
+    on(event: 'upgrade', listener: (this: WebSocket, request: IncomingMessage) => void): this;
+    on(
+      event: 'message',
+      listener: (this: WebSocket, data: RawData, isBinary: boolean) => void,
+    ): this;
+    on(event: 'open', listener: (this: WebSocket) => void): this;
+    on(event: 'ping' | 'pong', listener: (this: WebSocket, data: Buffer) => void): this;
+    on(
+      event: 'redirect',
+      listener: (this: WebSocket, url: string, request: ClientRequest) => void,
+    ): this;
+    on(
+      event: 'unexpected-response',
+      listener: (this: WebSocket, request: ClientRequest, response: IncomingMessage) => void,
+    ): this;
+    once(event: 'close', listener: (this: WebSocket, code: number, reason: Buffer) => void): this;
+    once(event: 'error', listener: (this: WebSocket, error: Error) => void): this;
+    once(event: 'upgrade', listener: (this: WebSocket, request: IncomingMessage) => void): this;
+    once(
+      event: 'message',
+      listener: (this: WebSocket, data: RawData, isBinary: boolean) => void,
+    ): this;
+    once(event: 'open', listener: (this: WebSocket) => void): this;
+    once(event: 'ping' | 'pong', listener: (this: WebSocket, data: Buffer) => void): this;
+    once(
+      event: 'redirect',
+      listener: (this: WebSocket, url: string, request: ClientRequest) => void,
+    ): this;
+    once(
+      event: 'unexpected-response',
+      listener: (this: WebSocket, request: ClientRequest, response: IncomingMessage) => void,
+    ): this;
+    removeListener(event: 'close', listener: (code: number, reason: Buffer) => void): this;
+    removeListener(event: 'error', listener: (error: Error) => void): this;
+    removeListener(event: 'upgrade', listener: (request: IncomingMessage) => void): this;
+    removeListener(event: 'message', listener: (data: RawData, isBinary: boolean) => void): this;
+    removeListener(event: 'open', listener: () => void): this;
+    removeListener(event: 'ping' | 'pong', listener: (data: Buffer) => void): this;
+    removeListener(
+      event: 'redirect',
+      listener: (url: string, request: ClientRequest) => void,
+    ): this;
+    removeListener(
+      event: 'unexpected-response',
+      listener: (request: ClientRequest, response: IncomingMessage) => void,
+    ): this;
+  }
+  export default PapiNodeWebSocket;
+}
 declare module '@papi/backend' {
   /**
    * Unified module for accessing API features in the extension host.
@@ -7751,6 +7942,7 @@ declare module '@papi/backend' {
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
   import { INotificationService } from 'shared/models/notification.service-model';
+  import { PapiNodeWebSocket } from 'node/services/node-web-socket.service';
   const papi: {
     /**
      *
@@ -7827,6 +8019,13 @@ declare module '@papi/backend' {
      * @see {@link IWebViewProvider} for more information on extending this class.
      */
     WebViewFactory: typeof PapiWebViewFactory;
+    /** This wraps Node's WebSocket implementation to provide better
+     * control over internet access. It is isomorphic with the Node WebSocket, so it should act as a
+     * drop-in replacement.
+     *
+     * Note that the browser WebSocket implementation is different and not wrapped here.
+     */
+    WebSocket: typeof PapiNodeWebSocket;
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
     /**
@@ -7918,8 +8117,8 @@ declare module '@papi/backend' {
      *
      * All extensions and services should use this logger to provide a unified output of logs
      */
-    logger: import('electron-log').MainLogger & {
-      default: import('electron-log').MainLogger;
+    logger: import('node_modules/electron-log/src').MainLogger & {
+      default: import('node_modules/electron-log/src').MainLogger;
     };
     /**
      *
@@ -8085,6 +8284,13 @@ declare module '@papi/backend' {
    * @see {@link IWebViewProvider} for more information on extending this class.
    */
   export const WebViewFactory: typeof PapiWebViewFactory;
+  /** This wraps Node's WebSocket implementation to provide better
+   * control over internet access. It is isomorphic with the Node WebSocket, so it should act as a
+   * drop-in replacement.
+   *
+   * Note that the browser WebSocket implementation is different and not wrapped here.
+   */
+  export const WebSocket: typeof PapiNodeWebSocket;
   /** This is just an alias for internet.fetch */
   export const fetch: typeof globalThis.fetch;
   /**
@@ -8176,8 +8382,8 @@ declare module '@papi/backend' {
    *
    * All extensions and services should use this logger to provide a unified output of logs
    */
-  export const logger: import('electron-log').MainLogger & {
-    default: import('electron-log').MainLogger;
+  export const logger: import('node_modules/electron-log/src').MainLogger & {
+    default: import('node_modules/electron-log/src').MainLogger;
   };
   /**
    *
@@ -8368,7 +8574,7 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
   export default createUseNetworkObjectHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import { DataProviders } from 'papi-shared-types';
+  import { DataProviderNames, DataProviders } from 'papi-shared-types';
   /**
    * Gets a data provider with specified provider name
    *
@@ -8379,7 +8585,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @returns Undefined if the data provider has not been retrieved, data provider if it has been
    *   retrieved and is not disposed, and undefined again if the data provider is disposed
    */
-  export const useDataProvider: <DataProviderName extends keyof DataProviders>(
+  export const useDataProvider: <DataProviderName extends DataProviderNames>(
     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
   ) => DataProviders[DataProviderName] | undefined;
   export default useDataProvider;
@@ -8636,7 +8842,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { SettingDataTypes } from 'shared/services/settings.service-model';
-  import { SettingTypes } from 'papi-shared-types';
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
    * and gets updated when the setting is changed by others.
@@ -8662,7 +8868,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  export const useSetting: <SettingName extends keyof SettingTypes>(
+  export const useSetting: <SettingName extends SettingNames>(
     key: SettingName,
     defaultState: SettingTypes[SettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
@@ -8677,7 +8883,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataProviderInterfaces } from 'papi-shared-types';
+  import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
    *
@@ -8695,9 +8901,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
    *   Data Provider is disposed
    */
-  export const useProjectDataProvider: <
-    ProjectInterface extends keyof ProjectDataProviderInterfaces,
-  >(
+  export const useProjectDataProvider: <ProjectInterface extends ProjectInterfaces>(
     projectInterface: ProjectInterface,
     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
     pdpFactoryId?: string,
@@ -8835,7 +9039,11 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
-  import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
+  import {
+    IBaseProjectDataProvider,
+    ProjectSettingNames,
+    ProjectSettingTypes,
+  } from 'papi-shared-types';
   /**
    * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
    * subscribers when the project setting changes and gets updated when the project setting is changed
@@ -8876,7 +9084,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  export const useProjectSetting: <ProjectSettingName extends keyof ProjectSettingTypes>(
+  export const useProjectSetting: <ProjectSettingName extends ProjectSettingNames>(
     projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
     key: ProjectSettingName,
     defaultValue: ProjectSettingTypes[ProjectSettingName],
@@ -8959,7 +9167,7 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
 declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
   import { NetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
-  import { WebViewControllers } from 'papi-shared-types';
+  import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
   /**
    * Gets a Web View Controller with specified provider name
    *
@@ -8977,7 +9185,7 @@ declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
    *   Controller if it has been retrieved and is not disposed, and undefined again if the Web View
    *   Controller is disposed
    */
-  export const useWebViewController: <WebViewType extends keyof WebViewControllers>(
+  export const useWebViewController: <WebViewType extends WebViewControllerTypes>(
     webViewType: WebViewType,
     webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
   ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
@@ -9304,8 +9512,8 @@ declare module '@papi/frontend' {
      *
      * All extensions and services should use this logger to provide a unified output of logs
      */
-    logger: import('electron-log').MainLogger & {
-      default: import('electron-log').MainLogger;
+    logger: import('node_modules/electron-log/src').MainLogger & {
+      default: import('node_modules/electron-log/src').MainLogger;
     };
     /**
      *
@@ -9423,8 +9631,8 @@ declare module '@papi/frontend' {
    *
    * All extensions and services should use this logger to provide a unified output of logs
    */
-  export const logger: import('electron-log').MainLogger & {
-    default: import('electron-log').MainLogger;
+  export const logger: import('node_modules/electron-log/src').MainLogger & {
+    default: import('node_modules/electron-log/src').MainLogger;
   };
   /**
    *
