@@ -985,9 +985,13 @@ function handleExtensionUri(uri: string) {
     return;
   }
   if (url.protocol !== `${appUriScheme}:`) {
-    logger.warn(
-      `Extension service received uri ${uri} but protocol does not match ${appUriScheme}`,
-    );
+    // If we're not in a proper production application, push "localhost" URIs to all extensions
+    if (!globalThis.isPackaged && url.hostname === 'localhost')
+      uriHandlersByExtensionKey.forEach((uriHandler) => uriHandler(uri));
+    else
+      logger.warn(
+        `Extension service received uri ${uri} but protocol does not match ${appUriScheme}`,
+      );
     return;
   }
 
