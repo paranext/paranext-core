@@ -29,3 +29,15 @@
   padding-right: 1rem;
   width: 50%;
 }
+
+.error-view-link {
+  text-decoration: underline;
+  cursor: pointer;
+  padding-top: 4px;
+}
+
+.error-popover-content {
+  min-width: 20rem; // (tw-min-w-80)
+  max-width: 24rem; // (tw-max-w-96)
+  z-index: 1000;
+}

@@ -304,7 +304,8 @@ global.webViewComponent = function FindWebView({
         (verseRefSetting.book !== submittedVerseRef?.book ||
           verseRefSetting.chapterNum !== submittedVerseRef?.chapterNum)) ||
       (scope === 'book' && verseRefSetting.book !== submittedVerseRef?.book) ||
-      (scope === 'selectedBooks' && selectedBookIds.join(',') !== submittedBookIds.join(',')) ||
+      (scope === 'selectedBooks' &&
+        selectedBookIds.sort().join(',') !== submittedBookIds.sort().join(',')) ||
       shouldMatchCase !== submittedShouldMatchCase ||
       isRegexAllowed !== submittedIsRegexAllowed
     );
@@ -417,7 +418,7 @@ global.webViewComponent = function FindWebView({
       case 'book':
         return localizedBookName;
       case 'selectedBooks':
-        return selectedBookIds
+        return submittedBookIds
           .map((bookId) => localizedBookData.get(bookId)?.localizedId)
           .join(' ');
       default:
@@ -461,6 +462,11 @@ global.webViewComponent = function FindWebView({
     return occurrenceIndex;
   };
 
+  const canClearResults = useMemo(
+    () => !searchQueryChanged && searchStatus && searchStatus !== 'running',
+    [searchQueryChanged, searchStatus],
+  );
+
   return (
     <div className="tw-container tw-mx-auto tw-flex tw-max-h-screen tw-flex-col tw-gap-6 tw-p-4">
       {/* Header with searchbar and filters */}
@@ -478,7 +484,7 @@ global.webViewComponent = function FindWebView({
                   }
                 }}
                 placeholder={localizedStrings['%webView_find_searchPlaceholder%']}
-                className="tw-w-full tw-pr-10"
+                className={`tw-text-ellipsis tw-w-full ${recentSearches.length > 0 ? '!tw-pr-10' : '!tw-pr-4'}`}
               />
               <RecentSearches recentSearches={recentSearches} onSearchTermSelect={setSearchTerm} />
             </div>
@@ -494,7 +500,7 @@ global.webViewComponent = function FindWebView({
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  {!searchQueryChanged && searchStatus && searchStatus !== 'running' ? (
+                  {canClearResults ? (
                     <Button onClick={() => clearSearchResults()}>
                       <SearchX />
                     </Button>
@@ -512,7 +518,7 @@ global.webViewComponent = function FindWebView({
                   )}
                 </TooltipTrigger>
                 <TooltipContent>
-                  {searchStatus && searchStatus !== 'running' ? (
+                  {canClearResults ? (
                     <p className="tw-font-light">
                       {localizedStrings['%webView_find_clearSearchResults%']}
                     </p>
@@ -583,11 +589,13 @@ global.webViewComponent = function FindWebView({
       </Card>
 
       {/* Search Query Summary */}
-      {submittedScope && submittedSearchTerm && (
-        <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
-          {projectName} · {getScopeSummaryText()} · Find: {submittedSearchTerm}
-        </div>
-      )}
+      <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
+        {submittedScope && submittedSearchTerm
+          ? `${projectName} · ${getScopeSummaryText()} · Find: ${submittedSearchTerm}`
+          : formatReplacementString(localizedStrings['%webView_find_findInProject%'], {
+              projectName,
+            })}
+      </div>
 
       {/* Search Results Placeholder */}
       {results && results.length === 0 && searchStatus === 'running' && (
@@ -609,7 +617,7 @@ global.webViewComponent = function FindWebView({
 
       {/* Search Results */}
       <div
-        className="tw-min-h-0 tw-flex-1 tw-space-y-2 tw-overflow-y-auto"
+        className="tw-min-h-48 tw-flex-1 tw-space-y-2 tw-overflow-y-auto"
         onScroll={handleResultsScroll}
       >
         {results &&
