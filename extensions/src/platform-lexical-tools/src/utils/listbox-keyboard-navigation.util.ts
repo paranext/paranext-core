@@ -7,8 +7,6 @@ import { useCallback, useRef, useState, KeyboardEvent } from 'react';
 export interface ListboxOption {
   /** Unique identifier for the option */
   id: string;
-  /** Display label for the option */
-  label: string;
 }
 
 /** Props for the useListbox hook */

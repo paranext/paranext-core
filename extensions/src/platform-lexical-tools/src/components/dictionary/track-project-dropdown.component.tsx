@@ -21,6 +21,8 @@ type TrackProjectDropdownProps = {
   projectOptions: DictionaryProjectOption[];
 };
 
+// TODO: Use this component in the dictionary web view when we have lexical data for scripture projects
+
 /**
  * A dropdown to select a project to track for dictionary entries.
  *

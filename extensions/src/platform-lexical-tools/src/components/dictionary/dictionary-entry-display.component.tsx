@@ -1,9 +1,18 @@
-import { DrawerClose, Separator, ToggleGroup, ToggleGroupItem } from 'platform-bible-react';
+import {
+  Button,
+  DrawerClose,
+  DrawerDescription,
+  DrawerTitle,
+  Separator,
+  ToggleGroup,
+  ToggleGroupItem,
+} from 'platform-bible-react';
 import { ArrowLeft } from 'lucide-react';
 import { Entry, Occurrence } from 'platform-lexical-tools';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
+import { ListboxOption } from 'src/utils/listbox-keyboard-navigation.util';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
   getFormatGlossesStringFromDictionaryEntrySenses,
@@ -14,6 +23,10 @@ import { DomainsDisplay } from './domains-display.component';
 export type DictionaryEntryDisplayProps = {
   /** Dictionary entry object to display */
   dictionaryEntry: Entry;
+  /** Whether the display is in a drawer or just next to the list */
+  isDrawer: boolean;
+  /** Callback function to handle back button click, returning to the list view */
+  handleBackToListButton?: (option: ListboxOption) => void;
 };
 
 /**
@@ -21,13 +34,17 @@ export type DictionaryEntryDisplayProps = {
  * transliteration, Strong's number, part of speech, definition, and usage occurrences. Includes a
  * back button to navigate back to the list view.
  */
-export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDisplayProps) {
+export function DictionaryEntryDisplay({
+  dictionaryEntry,
+  isDrawer,
+  handleBackToListButton,
+}: DictionaryEntryDisplayProps) {
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const [selectedSenseId, setSelectedSenseId] = useState<string | undefined>();
   const [selectedSenseIndex, setSelectedSenseIndex] = useState<number | undefined>();
 
   // TODO: Show occurrences for chapter vs all with toggle
-  // const [occurrenceView, setOccurrenceView] = useState<OccurrenceView>('chapter');
+  // const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
 
   const formattedGlosses = useMemo(
     () => getFormatGlossesStringFromDictionaryEntrySenses(dictionaryEntry),
@@ -44,6 +61,26 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
         : localizedStrings['%platformLexicalTools_dictionary_allOccurrencesLabel%'],
     [localizedStrings],
   );
+
+  // const getSenseOccurrences = useCallback(() => {
+  //   if (!selectedSenseId) return [];
+
+  //   const sense = dictionaryEntry.senses[selectedSenseId];
+  //   if (!sense) return [];
+
+  //   const occurrences = Object.values(sense.occurrences ?? {})
+  //     .flat()
+  //     .filter((occurrence): occurrence is Occurrence => occurrence !== undefined);
+
+  //   // De-duplicate by verseRef (assuming verseRef is unique per occurrence)
+  //   const seen = new Set<string>();
+  //   return occurrences.filter((occurrence) => {
+  //     const key = formatScrRef(occurrence.verseRef, 'English');
+  //     if (seen.has(key)) return false;
+  //     seen.add(key);
+  //     return true;
+  //   });
+  // }, []);
 
   const getEntryOrSenseOccurrences = useCallback(() => {
     const occurrences = selectedSenseId
@@ -68,6 +105,10 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
     });
   }, [dictionaryEntry.senses, selectedSenseId]);
 
+  // const getChapterOrAllOccurrencesForSense = useCallback(() => {
+  //   const occurrences = occurrenceView === 'chapter' ? getEntryOrSenseOccurrences()
+  // }, []);
+
   // Automatically select the only sense if there is exactly one; otherwise clear selection
   useEffect(() => {
     const senses = Object.values(dictionaryEntry.senses).filter((sense) => sense !== undefined);
@@ -80,20 +121,39 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
     }
   }, [dictionaryEntry.senses]);
 
+  const BackToListButton = isDrawer ? DrawerClose : Button;
+  const TitleComponent = isDrawer ? DrawerTitle : 'span';
+  const DescriptionComponent = isDrawer ? DrawerDescription : 'span';
+
   return (
-    <div className="tw-p-4 tw-w-full tw-overflow-y-auto tw-h-full">
+    <div className="tw-px-4 tw-pt-20 tw-pb-4 tw-w-full tw-h-full tw-flex tw-flex-col tw-overflow-y-auto">
       <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">
-        <DrawerClose className="tw-flex tw-items-center">
+        <BackToListButton
+          onClick={
+            handleBackToListButton
+              ? () =>
+                  handleBackToListButton({
+                    id: `${dictionaryEntry.lexicalReferenceTextId}-entry-${dictionaryEntry.id}`,
+                  })
+              : undefined
+          }
+          className="tw-flex tw-items-center"
+          variant="outline"
+        >
           <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
           {localizedStrings['%platformLexicalTools_dictionary_backToList%']}
-        </DrawerClose>
+        </BackToListButton>
       </div>
 
       <div className="tw-mb-4">
         <div className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
           <span className="tw-flex tw-flex-row tw-items-baseline tw-gap-2">
-            <span className="tw-text-2xl tw-font-bold">{dictionaryEntry.lemma}</span>
-            <span className="tw-text-lg tw-text-muted-foreground">{formattedGlosses}</span>
+            <TitleComponent className="tw-text-2xl tw-font-bold">
+              {dictionaryEntry.lemma}
+            </TitleComponent>
+            <DescriptionComponent className="tw-text-lg tw-text-muted-foreground">
+              {formattedGlosses}
+            </DescriptionComponent>
           </span>
           <ul className="tw-flex tw-flex-row tw-gap-1">
             {dictionaryEntry.strongsCodes.map((strongsCode) => (
@@ -159,7 +219,7 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
         <ul className="tw-list-inside tw-list-disc">
           {getEntryOrSenseOccurrences().map((occurrence: Occurrence) => (
             <li
-              key={`${dictionaryEntry.id}-${formatScrRef(occurrence.verseRef, 'English')}`}
+              key={`${dictionaryEntry.lexicalReferenceTextId}-entry-${dictionaryEntry.id}-${formatScrRef(occurrence.verseRef, 'English')}`}
               className="tw-py-0.5 tw-text-sm"
             >
               {formatScrRef(occurrence.verseRef, 'English')}
@@ -171,51 +231,50 @@ export function DictionaryEntryDisplay({ dictionaryEntry }: DictionaryEntryDispl
       {/* TODO: Localize book names */}
       {/* TODO: Show occurrences for chapter vs all with toggle */}
       {/* <div>
-      <div className="tw-flex tw-items-center tw-justify-between tw-mb-2">
-        <h3 className="tw-font-semibold">Occurrences:</h3>
-        <div className="tw-flex tw-items-center tw-gap-2 tw-border tw-rounded-md">
-        <button
-          className={cn('tw-text-xs tw-px-3 tw-py-1 tw-rounded-l-md hover:tw-bg-gray-100', {
-          'tw-bg-blue-100': occurrenceView === 'chapter',
-          })}
-          onClick={() => setOccurrenceView("chapter")}
-        >
-          chapter ({selectedEntry.usage.length})
-        </button>
-        <button
-          className={cn('tw-text-xs tw-px-3 tw-py-1 tw-rounded-r-md hover:tw-bg-gray-100', {
-          'tw-bg-blue-100': occurrenceView === "all"
-          })}
-          onClick={() => setOccurrenceView("all")}
-        >
-          all ({selectedEntry.allUsageCount})
-        </button>
+        <div className="tw-flex tw-items-center tw-justify-between tw-mb-2">
+          <h3 className="tw-font-semibold">Occurrences:</h3>
+          <div className="tw-flex tw-items-center tw-gap-2 tw-border tw-rounded-md">
+            <Button
+              className={cn('tw-text-xs tw-px-3 tw-py-1 tw-rounded-l-md hover:tw-bg-gray-100', {
+                'tw-bg-blue-100': occurrenceView === 'chapter',
+              })}
+              onClick={() => setOccurrenceView('chapter')}
+            >
+              chapter ({selectedEntry.usage.length})
+            </Button>
+            <Button
+              className={cn('tw-text-xs tw-px-3 tw-py-1 tw-rounded-r-md hover:tw-bg-gray-100', {
+                'tw-bg-blue-100': occurrenceView === 'all',
+              })}
+              onClick={() => setOccurrenceView('all')}
+            >
+              all ({selectedEntry.allUsageCount})
+            </Button>
+          </div>
         </div>
-      </div>
-      <ul className="tw-list-disc tw-list-inside">
-        {occurrenceView === "chapter" ? (
-        selectedEntry.usage.map((reference, index) => (
-          <li key={index} className="tw-text-sm tw-py-0.5">
-          {reference}
-          </li>
-        ))
-        ) : (
-        <>
-          {selectedEntry.allUsage.map((reference, index) => (
-          <li key={index} className="tw-text-sm tw-py-0.5">
-            {reference}
-          </li>
-          ))}
-          {selectedEntry.allUsageCount > 100 && (
-          <li className="tw-text-sm tw-py-2 tw-text-muted-foreground tw-italic">
-            Note: This prototype only shows the first 100 occurrences of a word.
-          </li>
+        <ul className="tw-list-disc tw-list-inside">
+          {occurrenceView === 'chapter' ? (
+            selectedEntry.usage.map((reference, index) => (
+              <li key={index} className="tw-text-sm tw-py-0.5">
+                {reference}
+              </li>
+            ))
+          ) : (
+            <>
+              {selectedEntry.allUsage.map((reference, index) => (
+                <li key={index} className="tw-text-sm tw-py-0.5">
+                  {reference}
+                </li>
+              ))}
+              {selectedEntry.allUsageCount > 100 && (
+                <li className="tw-text-sm tw-py-2 tw-text-muted-foreground tw-italic">
+                  Note: This prototype only shows the first 100 occurrences of a word.
+                </li>
+              )}
+            </>
           )}
-        </>
-        )}
-      </ul>
-      </div>
-    </div> */}
+        </ul>
+      </div> */}
     </div>
   );
 }

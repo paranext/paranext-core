@@ -1,6 +1,7 @@
 import { projectDataProviders } from '@papi/frontend';
 import { LocalizeKey } from 'platform-bible-utils';
 import { Entry, Occurrence } from 'platform-lexical-tools';
+import { useEffect, useState } from 'react';
 
 // Regex to remove any parenthetical statements (including nested)
 const REMOVE_PARENTHETICAL_STATEMENTS_REGEX = /\([^()]*\)/g;
@@ -21,6 +22,25 @@ export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_strongsCodeLabel%',
   '%platformLexicalTools_dictionary_trackProjectDropdownLabel%',
 ];
+
+export function useIsWideScreen() {
+  const [isWide, setIsWide] = useState(() => window.innerWidth >= 1024);
+
+  useEffect(() => {
+    // Matches Tailwind css lg breakpoint
+    const mediaQuery = window.matchMedia('(min-width: 1024px)');
+
+    const handler = (e: MediaQueryListEvent) => setIsWide(e.matches);
+    mediaQuery.addEventListener('change', handler);
+
+    // Set initial state
+    setIsWide(mediaQuery.matches);
+
+    return () => mediaQuery.removeEventListener('change', handler);
+  }, []);
+
+  return isWide;
+}
 
 /**
  * Takes a dictionary entry and returns an array of its glosses, with parenthetical statements
