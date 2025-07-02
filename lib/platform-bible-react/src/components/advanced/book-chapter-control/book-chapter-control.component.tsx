@@ -289,7 +289,7 @@ export function BookChapterControl({
   const handleSearchInput = useCallback(
     (searchString: string) => {
       setBookChapterInputValue(searchString);
-      setSearchQuery(searchString.trim());
+      setSearchQuery(searchString);
       setTopMatch(calculateTopMatch(searchString.trim()));
     },
     [calculateTopMatch],
@@ -406,11 +406,10 @@ export function BookChapterControl({
           event.preventDefault();
         }
 
-        if (!hasStartedTyping) {
-          // Only apply smart editing on the first keypress after focusing
+        if (/^\d$/.test(event.key)) {
+          const currentValue = bookChapterInputValue;
           // Check if user is typing a digit as the first character - start new chapter number
-          if (/^\d$/.test(event.key)) {
-            const currentValue = bookChapterInputValue;
+          if (!hasStartedTyping) {
             // Match pattern "Name of Book 0:0" to extract book name
             const bookMatch = currentValue.match(
               SCRIPTURE_REGEX_PATTERNS.EXTRACT_BOOK_FROM_REFERENCE,
@@ -421,10 +420,14 @@ export function BookChapterControl({
               const newValue = `${bookName} ${event.key}`;
               handleSearchInput(newValue);
               setHasStartedTyping(true);
-              event.preventDefault();
             }
+          } else {
+            handleSearchInput(searchQuery + event.key);
           }
+          event.preventDefault();
+        }
 
+        if (!hasStartedTyping) {
           // Check if user is typing a colon as the first character - start new verse number
           if (event.key === ':') {
             const currentValue = bookChapterInputValue;
@@ -444,9 +447,6 @@ export function BookChapterControl({
               event.preventDefault();
             }
           }
-        } else {
-          handleSearchInput(searchQuery + event.key);
-          event.preventDefault();
         }
 
         // Mark that the user has started typing on any non-modifier key
