@@ -18,6 +18,8 @@ type CommandLineArgumentAliases = {
  *   extension-host
  * - Portable - Command-line switch that specifies if the application is a windows portable app. Only
  *   on extension-host
+ * - DidRestart - Command-line switch that specifies that the extension host was restarted and should
+ *   act accordingly, e.g. it should announce that the extensions reloaded. Only on extension-host
  */
 export enum COMMAND_LINE_ARGS {
   Extensions = 'extensions',
@@ -26,6 +28,7 @@ export enum COMMAND_LINE_ARGS {
   ResourcesPath = 'resources_path',
   Packaged = 'packaged',
   Portable = 'portable',
+  DidRestart = 'didRestart',
 }
 
 /**
@@ -39,6 +42,7 @@ export const commandLineArgumentsAliases: CommandLineArgumentAliases = {
   [COMMAND_LINE_ARGS.ResourcesPath]: ['--resourcesPath', '--resourcePath', '-r'],
   [COMMAND_LINE_ARGS.Packaged]: ['--packaged', '--isPackaged', '-p'],
   [COMMAND_LINE_ARGS.Portable]: ['--portable'],
+  [COMMAND_LINE_ARGS.DidRestart]: ['--didRestart'],
 };
 
 /** Get the index of the next command-line argument after the startIndex */

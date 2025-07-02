@@ -647,7 +647,7 @@ declare module 'shared/models/web-view.model' {
   export type GetWebViewOptions = OpenWebViewOptions;
 }
 declare module 'shared/global-this.model' {
-  import { LogLevel } from 'electron-log';
+  import type { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
   import {
     GetSavedWebViewDefinition,
@@ -832,18 +832,21 @@ declare module 'shared/utils/internal-util' {
    */
   export const getProcessType: () => ProcessType;
 }
-declare module 'shared/services/logger.service' {
-  import log from 'electron-log';
-  export const WARN_TAG = '<WARN>';
+declare module 'shared/utils/logger.utils' {
+  import { MainLogger, RendererLogger } from 'electron-log';
   /**
    * Format a string of a service message
    *
    * @param message Message from the service
    * @param serviceName Name of the service to show in the log
-   * @param tag Optional tag at the end of the service name
    * @returns Formatted string of a service message
    */
-  export function formatLog(message: string, serviceName: string, tag?: string): string;
+  export function formatLog(message: string, serviceName: string): string;
+  /** Does shared setup on the logger in any process */
+  export function setUpLogger(log: MainLogger | RendererLogger): void;
+}
+declare module 'shared/services/logger.service' {
+  import log from 'electron-log';
   /**
    *
    * All extensions and services should use this logger to provide a unified output of logs
@@ -6301,8 +6304,10 @@ declare module 'shared/data/platform.data' {
    * Platform.Bible core
    */
   export const PLATFORM_NAMESPACE = 'platform';
-  /** Query string passed to the renderer when starting if it should enable noisy dev mode */
-  export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
+  /** Query parameter passed to the renderer when starting if it should enable noisy dev mode */
+  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
+  /** Query parameter passed to the renderer when starting if it should enable noisy dev mode */
+  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */

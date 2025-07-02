@@ -6,19 +6,22 @@ import {
   commandLineArgumentsAliases,
 } from '@node/utils/command-line.util';
 import { logger } from '@shared/services/logger.service';
-import { AsyncVariable, waitForDuration } from 'platform-bible-utils';
-import { ChildProcess, ChildProcessByStdio, fork, spawn } from 'child_process';
+import { AsyncVariable, debounce, waitForDuration } from 'platform-bible-utils';
+import { ChildProcess, ChildProcessByStdio, fork } from 'child_process';
 import { app } from 'electron';
 import { PathLike } from 'fs';
 import { FileHandle, readFile } from 'fs/promises';
 import path from 'path';
 import { Readable } from 'stream';
+import { watch as chokidarWatch, FSWatcher } from 'chokidar';
 import { gracefulShutdownMessage } from '@node/models/interprocess-messages.model';
 
 let processInstanceCounter = 0;
 // Resolves to the current process instance counter value for debug logging purposes
 let processLifetimeVariable: AsyncVariable<number> | undefined;
 let extensionHost: ChildProcess | ChildProcessByStdio<null, Readable, Readable> | undefined;
+/** The watcher that restarts the extension host when files change. Only relevant in dev */
+let extensionHostWatcher: FSWatcher | undefined;
 
 function createNewProcessLifetimeVariable(): void {
   if (processLifetimeVariable)
@@ -39,7 +42,31 @@ function resolveProcessLifetimeVariable(): void {
   processLifetimeVariable = undefined;
 }
 
-async function waitForExtensionHost(maxWaitTimeInMS: number) {
+// log functions for console logs inside the extension host process. We pipe logs through instead
+// of inheriting the stdio because it opens a new command prompt (at least on Windows) if we inherit
+function logProcessError(message: unknown) {
+  // Extension host puts its own logs to file, so we just need to put the logs in the console
+  // eslint-disable-next-line no-console
+  console.log(message?.toString());
+}
+
+function logProcessInfo(message: unknown) {
+  // Extension host puts its own logs to file, so we just need to put the logs in the console
+  // eslint-disable-next-line no-console
+  console.log(message?.toString());
+}
+
+/**
+ * @param maxWaitTimeInMS
+ * @param shouldCloseWatcher Whether to close the watcher and therefore not start the extension host
+ *   anymore without further intervention
+ */
+async function waitForExtensionHost(maxWaitTimeInMS: number, shouldCloseWatcher = true) {
+  if (shouldCloseWatcher) {
+    extensionHostWatcher?.close();
+    extensionHostWatcher = undefined;
+  }
+
   let didExit = await waitForDuration(async () => {
     if (!processLifetimeVariable) {
       logger.warn('Extension host process lifetime variable was not initialized');
@@ -65,16 +92,15 @@ async function waitForExtensionHost(maxWaitTimeInMS: number) {
 }
 
 async function restartExtensionHost(maxWaitTimeInMS: number) {
-  if (globalThis.isPackaged) {
-    await waitForExtensionHost(maxWaitTimeInMS);
-    logger.debug('Extension host closed, restarting now');
-    return startExtensionHost();
-  }
-  // Tells nodemon to restart the process https://github.com/remy/nodemon/blob/HEAD/doc/events.md#using-nodemon-as-child-process
-  extensionHost?.send('restart');
+  await waitForExtensionHost(maxWaitTimeInMS);
+  logger.debug('Extension host closed, restarting now');
+  return startExtensionHost(maxWaitTimeInMS, true);
 }
 
 function hardKillExtensionHost() {
+  extensionHostWatcher?.close();
+  extensionHostWatcher = undefined;
+
   if (!extensionHost) return;
 
   // On POSIX systems, SIGKILL should immediately terminate the process by the OS.
@@ -84,6 +110,8 @@ function hardKillExtensionHost() {
   } else {
     logger.error('extension host process was not stopped! Investigate other .kill() options');
   }
+  extensionHost?.stderr?.removeListener('data', logProcessError);
+  extensionHost?.stdout?.removeListener('data', logProcessInfo);
   extensionHost = undefined;
 }
 
@@ -112,11 +140,41 @@ async function readJsonFile(filePath: PathLike | FileHandle) {
   return JSON.parse(file);
 }
 
-/** Starts the extension host process if it isn't already running. */
-async function startExtensionHost() {
-  if (extensionHost) return;
+/** Set up event listeners and other things to the new extension host process once started */
+function connectToExtensionHostProcess() {
+  if (!extensionHost) throw new Error('Attempted to connect to extension host while not defined');
+  if (!extensionHost.stderr || !extensionHost.stdout)
+    logger.error(
+      "Could not connect to extension host's stderr or stdout! You will not see extension host console logs here.",
+    );
+  else {
+    extensionHost.stderr.on('data', logProcessError);
+    extensionHost.stdout.on('data', logProcessInfo);
+  }
 
-  createNewProcessLifetimeVariable();
+  extensionHost.once('exit', (code, signal) => {
+    if (signal) {
+      logger.info(`'exit' event: extension host process terminated with signal ${signal}`);
+    } else {
+      logger.info(`'exit' event: extension host process exited with code ${code}`);
+    }
+    extensionHost?.stderr?.removeListener('data', logProcessError);
+    extensionHost?.stdout?.removeListener('data', logProcessInfo);
+    extensionHost = undefined;
+    resolveProcessLifetimeVariable();
+  });
+}
+
+/**
+ * Starts the extension host process if it isn't already running.
+ *
+ * @param maxWaitTimeInMS How long to wait while closing the extension host after detecting source
+ *   file changes before starting it again. Only relevant when running in dev
+ * @param isRestarting Whether this run represents restarting the extension host or just starting
+ *   the first time
+ */
+async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false) {
+  if (extensionHost) return;
 
   // In production, fork a new process for the extension host
   // In development, spawn nodemon to watch the extension-host
@@ -128,59 +186,90 @@ async function startExtensionHost() {
     globalThis.logLevel,
     ...getCommandLineArgumentsToForward(),
   ];
+  if (isRestarting) sharedArgs.push(commandLineArgumentsAliases[COMMAND_LINE_ARGS.DidRestart][0]);
 
-  if (app.isPackaged) {
-    extensionHost = fork(
-      path.join(__dirname, '../extension-host/extension-host.js'),
-      [
-        commandLineArgumentsAliases[COMMAND_LINE_ARGS.Packaged][0],
-        ...(process.env.PORTABLE_EXECUTABLE_FILE
-          ? [commandLineArgumentsAliases[COMMAND_LINE_ARGS.Portable][0]]
-          : []),
-        ...sharedArgs,
-      ],
-      {
-        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-      },
-    );
-  } else {
-    // If we are in development, get the nodemon watch config so we can pass it in along with the
-    // external extension directories.
-    // For this dev-only code, it is useful to be able to get the nodemon.json file.
-    const nodemonConfig = await readJsonFile(path.join(globalThis.resourcesPath, 'nodemon.json'));
-    const nodemonWatchPaths: string[] = nodemonConfig?.watch ? nodemonConfig.watch : [];
+  function startExtensionHostInternal() {
+    createNewProcessLifetimeVariable();
 
-    extensionHost = spawn(
-      'node',
-      [
-        'node_modules/nodemon/bin/nodemon.js',
-        // Provide the nodemon config paths and command-line argument extension paths as watch
-        // directories for nodemon
-        ...nodemonWatchPaths.flatMap((watchPath) => ['--watch', watchPath]),
-        './src/extension-host/extension-host.ts',
-        '--',
-        ...sharedArgs,
-      ],
-      {
-        stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
-        env: {
+    const extensionHostEntryPath = app.isPackaged
+      ? path.join(__dirname, '../extension-host/extension-host.js')
+      : path.join(__dirname, '../../src/extension-host/extension-host.ts');
+
+    const extensionHostArgs = app.isPackaged
+      ? [
+          // Tell the extension host we're packaged
+          commandLineArgumentsAliases[COMMAND_LINE_ARGS.Packaged][0],
+          ...(process.env.PORTABLE_EXECUTABLE_FILE
+            ? // Tell the extension host we're portable
+              [commandLineArgumentsAliases[COMMAND_LINE_ARGS.Portable][0]]
+            : []),
+          ...sharedArgs,
+        ]
+      : sharedArgs;
+
+    const extensionHostExecArgv = app.isPackaged
+      ? process.execArgv
+      : // Set up ts-node in the extension host process so it can run un-bundled TypeScript source files in dev
+        [...process.execArgv, '-r', 'ts-node/register/transpile-only'];
+
+    const extensionHostEnv = app.isPackaged
+      ? process.env
+      : {
           ...process.env,
-          NODE_ENV: 'development',
           // Make sure the extension host can find native modules since it doesn't use webpack in dev
           NODE_PATH: path.join(globalThis.resourcesPath, 'release', 'app', 'node_modules'),
-        },
-      },
-    );
+        };
+
+    extensionHost = fork(extensionHostEntryPath, extensionHostArgs, {
+      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      env: extensionHostEnv,
+      execArgv: extensionHostExecArgv,
+    });
+    connectToExtensionHostProcess();
   }
 
-  extensionHost.once('exit', (code, signal) => {
-    if (signal) {
-      logger.info(`'exit' event: extension host process terminated with signal ${signal}`);
-    } else {
-      logger.info(`'exit' event: extension host process exited with code ${code}`);
-    }
-    extensionHost = undefined;
-    resolveProcessLifetimeVariable();
+  logger.info('Starting extension host from main!');
+  startExtensionHostInternal();
+
+  if (app.isPackaged) return;
+
+  // If we are in development, use chokidar to reload the extension host when its source files change
+  // (extension files are watched in extension.service.ts)
+
+  // We want to imitate nodemon as closely as possible to match `npm run start:extension-host`
+  // Get the nodemon watch config so we can watch files at the specified paths with the specified
+  // file extensions
+  const nodemonConfig = await readJsonFile(path.join(globalThis.resourcesPath, 'nodemon.json'));
+  const nodemonExtensions = nodemonConfig?.ext.split(',') ?? ['ts'];
+  const nodemonWatchPaths: string[] = nodemonConfig?.watch
+    ? nodemonConfig.watch.flatMap((pathFromResources: string) => {
+        const fullGlob = path.resolve(globalThis.resourcesPath, pathFromResources);
+        return [
+          nodemonExtensions.map((extension: string) => `${fullGlob}${path.sep}*.${extension}`),
+        ];
+      })
+    : [];
+
+  const restartExtensionHostInternalDevDebounced = debounce(async () => {
+    await waitForExtensionHost(maxWaitTimeInMS, false);
+
+    // If we didn't already set the restarting flag, set it now
+    if (!isRestarting)
+      sharedArgs.push(commandLineArgumentsAliases[COMMAND_LINE_ARGS.DidRestart][0]);
+
+    startExtensionHostInternal();
+    // Debounce by the nodemon-configured amount
+  }, nodemonConfig?.delay);
+
+  extensionHostWatcher = chokidarWatch(nodemonWatchPaths, {
+    ignoreInitial: true,
+    awaitWriteFinish: true,
+  }).on('all', async (eventType) => {
+    logger.info(
+      `Chokidar watch detected change type ${eventType}. Debouncing restarting extension host`,
+    );
+    await restartExtensionHostInternalDevDebounced();
+    logger.info(`Chokidar watch finished restarting extension host`);
   });
 }
 

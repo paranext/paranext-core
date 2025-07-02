@@ -31,7 +31,7 @@ import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
-import { JSONRPCResponse } from '@node_modules/json-rpc-2.0/dist';
+import { JSONRPCResponse } from 'json-rpc-2.0';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 
 // #region Local event handling

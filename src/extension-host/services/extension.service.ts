@@ -1,6 +1,6 @@
 /** Handles setting up activation of and running of extensions */
 
-import chokidar from 'chokidar';
+import { watch as chokidarWatch } from 'chokidar';
 import JSZip from 'jszip';
 import path from 'path';
 import { IExtension } from '@extension-host/extension-types/extension.interface';
@@ -404,7 +404,7 @@ async function unzipCompressedExtensionFiles(): Promise<void> {
 
 /** Unpack a single ZIP file into a known location so we can try to load an extension from it */
 async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
-  logger.info(`Unpacking zipped extension: ${zipUri}`);
+  logger.debug(`Unpacking zipped extension: ${zipUri}`);
   const parsedZipUri: path.ParsedPath = path.parse(zipUri);
   const zipData: Buffer = await nodeFS.readFileBinary(zipUri);
   const zip: JSZip = await JSZip.loadAsync(zipData);
@@ -686,25 +686,23 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
 function watchForExtensionChanges(): UnsubscriberAsync {
   const reloadExtensionsDebounced = debounce(async (shouldDeactivateExtensions) => {
     try {
-      logger.debug('Reload extensions from watching');
+      logger.info('Reload extensions from watching');
       await reloadExtensions(shouldDeactivateExtensions, true);
     } catch (e) {
       throw new LogError(`Reload extensions from watching failed. Investigate: ${e}`);
     }
   }, RESTART_DELAY_MS);
 
-  const watcher = chokidar
-    .watch(
-      extensionRootDirectoriesToWatch
-        .concat(commandLineExtensionDirectories)
-        .map((uri) => getPathFromUri(uri)),
-      { ignoreInitial: true, awaitWriteFinish: true },
-    )
-    .on('all', async (eventType) => {
-      let shouldDeactivateExtensions: boolean = true;
-      if (eventType === 'add' || eventType === 'addDir') shouldDeactivateExtensions = false;
-      reloadExtensionsDebounced(shouldDeactivateExtensions);
-    });
+  const watcher = chokidarWatch(
+    extensionRootDirectoriesToWatch
+      .concat(commandLineExtensionDirectories)
+      .map((uri) => getPathFromUri(uri)),
+    { ignoreInitial: true, awaitWriteFinish: true },
+  ).on('all', async (eventType) => {
+    let shouldDeactivateExtensions: boolean = true;
+    if (eventType === 'add' || eventType === 'addDir') shouldDeactivateExtensions = false;
+    reloadExtensionsDebounced(shouldDeactivateExtensions);
+  });
 
   return async () => {
     watcher.close();
@@ -1041,7 +1039,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
  * @returns Unsubscriber that deactivates the extension.
  */
 async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
-  logger.info(`extension.service: importing ${extension.name}`);
+  logger.debug(`extension.service: importing ${extension.name}`);
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
   // bundle and should not be looked up in the bundle. Assert a more ambiguous type.
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
@@ -1049,7 +1047,7 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   const extensionModuleAmbiguous = systemRequire(
     /* webpackIgnore: true */ getPathFromUri(extension.dirUri),
   ) as AmbiguousExtensionModule;
-  logger.info(`extension.service: finished importing ${extension.name}`);
+  logger.debug(`extension.service: finished importing ${extension.name}`);
   // Some modules import with their exports directly on the module object, while others put their
   // exports in a `default` member on the module. Let's use the module object itself if `activate`
   // is on it, and let's go into `default` otherwise.
@@ -1114,7 +1112,7 @@ async function callActivateOnExtension(
   context: ExecutionActivationContext,
   info: ExtensionInfo,
 ): Promise<void> {
-  logger.info(`extension.service: activating ${context.name}`);
+  logger.debug(`extension.service: activating ${context.name}`);
 
   let timeoutOccurred = false;
   let errorDuringActivation: unknown;
@@ -1170,7 +1168,7 @@ async function callActivateOnExtension(
   if (errorDuringActivation) throw errorDuringActivation;
   if (timeoutOccurred) throw new Error(`Activation of ${context.name} timed out`);
 
-  logger.info(`extension.service: finished activating ${context.name}`);
+  logger.debug(`extension.service: finished activating ${context.name}`);
 }
 
 /**
@@ -1256,6 +1254,10 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
     throw new Error('Cannot use WebSocket!');
   };
 
+  logger.info(
+    `Activating the following extensions: ${extensionsWithCheck.map(({ extension }) => extension.name).join(',')}`,
+  );
+
   // Import the extensions and run their activate() functions
   const extensionsActive: ActiveExtension[] = [];
   // This is a case where we want to run through the array in order sequentially
@@ -1316,9 +1318,13 @@ async function deactivateExtension(extension: ActiveExtension): Promise<boolean 
  * @returns An array of the deactivation results - `true`, `false`, or `undefined`.
  */
 async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> {
+  const extensionsToDeactivate = [...extensions].reverse();
+  logger.info(
+    `Deactivating the following extensions: ${extensionsToDeactivate.map(({ name }) => name).join(',')}`,
+  );
   // We want to deactivate extensions sequentially in opposite order of which they were activated
   // eslint-disable-next-line no-restricted-syntax
-  for (const extension of [...extensions].reverse()) {
+  for (const extension of extensionsToDeactivate) {
     try {
       const activeExtension = activeExtensions.get(extension.name);
       if (!activeExtension) {
@@ -1372,7 +1378,7 @@ async function reloadExtensions(
     const uriMap: Map<string, string> = new Map();
     availableExtensions.forEach((extensionInfo) => {
       uriMap.set(extensionInfo.name, extensionInfo.dirUri);
-      logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
+      logger.debug(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
     });
     setExtensionUris(uriMap);
 
@@ -1395,12 +1401,13 @@ async function reloadExtensions(
       try {
         await platformBibleUtils.wait(RESTART_DELAY_MS);
         shouldReload = false;
+        logger.info('Reloading extensions again immediately after previous reload');
         await reloadExtensions(shouldDeactivateExtensions, shouldEmitDidReloadEvent);
       } catch (e) {
         logger.error(`Subsequent reload after initial reload extensions failed! ${e}`);
       }
     })();
-  }
+  } else logger.info('Finished reloading extensions');
 
   if (errorMessage) throw new Error(errorMessage);
 }
@@ -1426,7 +1433,11 @@ export const initialize = () => {
 
     await normalizeExtensionFileNames();
 
-    await reloadExtensions(false, false);
+    const didRestart = getCommandLineSwitch(COMMAND_LINE_ARGS.DidRestart);
+    logger.info(
+      `Loading extensions on initializing extension service. didRestart: ${didRestart}. ${process.argv}`,
+    );
+    await reloadExtensions(false, didRestart);
 
     watchForExtensionChanges();
 

@@ -12,6 +12,7 @@ import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import '@main/global-this.model';
+import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import {
   APP_NAME,
@@ -48,6 +49,8 @@ import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
 import { windowService } from '@shared/services/window.service';
+
+console.log(`MAIN NODE_ENV=${process.env.NODE_ENV}`);
 
 // #region Helper functions
 
@@ -192,7 +195,7 @@ async function main() {
   // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
-  await extensionHostService.start();
+  await extensionHostService.start(PROCESS_CLOSE_TIME_OUT);
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host

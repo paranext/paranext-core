@@ -20,6 +20,7 @@ public static class Program
         var listener = new ConsoleTraceListener
         {
             TraceOutputOptions = TraceOptions.DateTime,
+            // Ignore trace for every S/R-able project https://github.com/ubsicap/Paratext/blob/master/ParatextData/Repository/SharingLogic.cs#L450
             Filter = new TraceExclusionFilter("CreateSharedProject for {0} ({1})"),
         };
         // Clear the default listeners to stop Debug.Assert from crashing the app

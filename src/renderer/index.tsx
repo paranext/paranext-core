@@ -24,9 +24,6 @@ import {
 import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
 import { App } from '@renderer/app.component';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
-/* import log from 'electron-log/renderer';
-
-log.info('This is the renderer'); */
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
