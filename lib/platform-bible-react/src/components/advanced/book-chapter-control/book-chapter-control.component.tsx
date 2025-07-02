@@ -7,6 +7,7 @@ import { ChapterSelect } from '@/components/advanced/book-chapter-control/chapte
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -15,11 +16,11 @@ import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { formatScrRef, getChaptersForBook, MODIFIER_KEYS } from 'platform-bible-utils';
 import {
-  FocusEvent,
   KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -37,6 +38,12 @@ export type BookChapterControlProps = {
   className?: string;
   /** Function to retrieve active book IDs */
   getActiveBookIds?: () => string[];
+};
+
+type BookWithOptionalChapterAndVerse = {
+  bookId: string;
+  chapterNum?: number;
+  verseNum?: number;
 };
 
 /** How many chapter buttons fit in each row in the chapter select */
@@ -62,8 +69,8 @@ const SCRIPTURE_REGEX_PATTERNS = {
   BOOK_ONLY: /^([^:\s]+(?:\s+[^:\s]+)*)$/i,
   // Same as above, but followed by space(s) and a chapter number (`\s+(\d+)`)
   BOOK_CHAPTER: /^([^:\s]+(?:\s+[^:\s]+)*)\s+(\d+)$/i,
-  // Same as above, but followed by a colon with a verse number (`:(\d+)`)
-  BOOK_CHAPTER_VERSE: /^([^:\s]+(?:\s+[^:\s]+)*)\s+(\d+):(\d+)$/i,
+  // Same as above, but followed by a colon and optionally a verse number (`:(\d*)`)
+  BOOK_CHAPTER_VERSE: /^([^:\s]+(?:\s+[^:\s]+)*)\s+(\d+):(\d*)$/i,
 
   // Same as BOOK_CHAPTER_VERSE, but extracts the book name/id from a reference
   EXTRACT_BOOK_FROM_REFERENCE: /^([^:\s]+(?:\s+[^:\s]+)*)\s+\d+:\d+$/,
@@ -156,6 +163,8 @@ export function BookChapterControl({
   const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
   // Track whether the user has started typing since the input was focused
   const [hasStartedTyping, setHasStartedTyping] = useState<boolean>(false);
+  // Store the top match result for display in dropdown
+  const [topMatch, setTopMatch] = useState<BookWithOptionalChapterAndVerse | undefined>(undefined);
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -164,6 +173,54 @@ export function BookChapterControl({
   const contentRef = useRef<HTMLDivElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuItemRef = useRef<HTMLDivElement>(undefined!);
+
+  /**
+   * Calculate the top match based on the current search query. Returns a formatted scripture
+   * reference if a valid match is found, undefined otherwise
+   */
+  const calculateTopMatch = useCallback(
+    (query: string): BookWithOptionalChapterAndVerse | undefined => {
+      if (!query.trim()) return undefined;
+
+      return SEARCH_QUERY_FORMATS.reduce(
+        (result: BookWithOptionalChapterAndVerse | undefined, format) => {
+          if (result) return result;
+
+          const matches = format.exec(query);
+          if (matches) {
+            const [book, chapter = undefined, verse = undefined] = matches.slice(1);
+            const englishName = getBookIdFromEnglishName(book);
+            const validBookId =
+              englishName ?? (Canon.isBookIdValid(book) ? book.toLocaleUpperCase() : undefined);
+
+            if (validBookId) {
+              const chapterNum = chapter ? parseInt(chapter, 10) : undefined;
+              const verseNum = verse ? parseInt(verse, 10) : undefined;
+
+              return {
+                bookId: validBookId,
+                chapterNum,
+                verseNum,
+              };
+            }
+          }
+
+          return undefined;
+        },
+        undefined,
+      );
+    },
+    [],
+  );
+
+  const topMatchChapters = useMemo(() => {
+    if (!topMatch || !topMatch.chapterNum) return undefined;
+    if (topMatch.verseNum) return [topMatch.chapterNum];
+    return Array.from({ length: fetchEndChapter(highlightedBookId) }, (_, i) => i + 1).filter(
+      (chapter) =>
+        topMatch?.chapterNum && chapter.toString().includes(topMatch?.chapterNum?.toString()),
+    );
+  }, [highlightedBookId, topMatch]);
 
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
@@ -185,10 +242,28 @@ export function BookChapterControl({
     [searchQuery, getActiveBookIds], // Only recompute when relevant values change
   );
 
-  const handleSearchInput = (searchString: string) => {
-    setBookChapterInputValue(searchString);
-    setSearchQuery(searchString);
-  };
+  const allFilteredBooksByType = useMemo(
+    () =>
+      BOOK_TYPE_ARRAY.map((bookType) => ({
+        bookType,
+        books: fetchFilteredBooks(bookType),
+      })).filter((section) => section.books.length > 0),
+    [fetchFilteredBooks],
+  );
+
+  const totalFilteredBooks = useMemo(
+    () => allFilteredBooksByType.reduce((total, section) => total + section.books.length, 0),
+    [allFilteredBooksByType],
+  );
+
+  const handleSearchInput = useCallback(
+    (searchString: string) => {
+      setBookChapterInputValue(searchString);
+      setSearchQuery(searchString.trim());
+      setTopMatch(calculateTopMatch(searchString.trim()));
+    },
+    [calculateTopMatch],
+  );
 
   /**
    * Whether to prevent radix's logic from closing the dropdown. This is important because radix
@@ -293,6 +368,13 @@ export function BookChapterControl({
       if (document.activeElement === inputRef.current) {
         // Only apply smart editing on the first keypress after focusing
         if (!hasStartedTyping) {
+          // Check if user is typing a letter as the first character - start new search query
+          if (/^[a-zA-Z]$/.test(event.key)) {
+            handleSearchInput(event.key);
+            setHasStartedTyping(true);
+            event.preventDefault();
+          }
+
           // Check if user is typing a digit as the first character - start new chapter number
           if (/^\d$/.test(event.key)) {
             const currentValue = bookChapterInputValue;
@@ -337,7 +419,7 @@ export function BookChapterControl({
         }
       }
     },
-    [isContentOpen, bookChapterInputValue, hasStartedTyping],
+    [isContentOpen, bookChapterInputValue, hasStartedTyping, handleSearchInput],
   );
 
   /** Send keydown event to the book chapter input component. */
@@ -433,10 +515,13 @@ export function BookChapterControl({
       if (CONTENT_NAVIGATION_KEYS.has(key)) {
         // Navigate around in the book/chapter menu using arrow keys and submit with enter
         // Opening the hovered book with enter is handled elsewhere
-        if (highlightedBookId === selectedBookId) {
+        const isNavigatingChapters =
+          highlightedBookId === selectedBookId || totalFilteredBooks === 1;
+        if (isNavigatingChapters) {
+          const activeBook = totalFilteredBooks === 1 ? highlightedBookId : selectedBookId;
           if (key === 'Enter') {
             event.preventDefault();
-            updateReference(selectedBookId, true, highlightedChapter);
+            updateReference(activeBook, true, highlightedChapter);
             return;
           }
 
@@ -448,33 +533,64 @@ export function BookChapterControl({
             (key === 'ArrowLeft' && !dir) ||
             (key === 'ArrowLeft' && dir === 'ltr') ||
             (key === 'ArrowRight' && dir === 'rtl');
-          let chapterOffSet = 0;
+
+          // Determine available chapters for navigation
+          const availableChapters =
+            selectedBookId !== highlightedBookId
+              ? (topMatchChapters ??
+                Array.from({ length: fetchEndChapter(highlightedBookId) }, (_, i) => i + 1))
+              : Array.from({ length: fetchEndChapter(highlightedBookId) }, (_, i) => i + 1);
+
+          console.log('availableChapters:', availableChapters);
+          const currentIndex = availableChapters.indexOf(highlightedChapter);
+
+          let newHighlightedChapter = highlightedChapter;
+
           if (upOneChapter) {
-            if (highlightedChapter < fetchEndChapter(highlightedBookId)) {
-              chapterOffSet = 1;
+            if (currentIndex >= 0 && currentIndex < availableChapters.length - 1) {
+              newHighlightedChapter = availableChapters[currentIndex + 1];
             } else {
               event.preventDefault();
               return;
             }
           } else if (downOneChapter) {
-            if (highlightedChapter > 1) {
-              chapterOffSet = -1;
+            if (currentIndex > 0) {
+              newHighlightedChapter = availableChapters[currentIndex - 1];
             } else {
               event.preventDefault();
               return;
             }
           } else if (key === 'ArrowDown') {
-            chapterOffSet = CHAPTERS_PER_ROW;
+            // Move down by CHAPTERS_PER_ROW in the available chapters
+            const targetChapter = availableChapters[currentIndex] + CHAPTERS_PER_ROW;
+            // Find the closest available chapter >= targetChapter
+            const foundChapter = availableChapters.find((chapter) => chapter >= targetChapter);
+            if (foundChapter !== undefined) {
+              newHighlightedChapter = foundChapter;
+            } else {
+              // If no chapter found, go to the last available chapter
+              const [lastChapter] = availableChapters.slice(-1);
+              newHighlightedChapter = lastChapter;
+            }
           } else if (key === 'ArrowUp') {
-            chapterOffSet = -CHAPTERS_PER_ROW;
+            // Move up by CHAPTERS_PER_ROW in the available chapters
+            const targetChapter = availableChapters[currentIndex] - CHAPTERS_PER_ROW;
+            // Find the closest available chapter <= targetChapter (searching backwards)
+            const foundChapter = availableChapters
+              .slice()
+              .reverse()
+              .find((chapter) => chapter <= targetChapter);
+            if (foundChapter !== undefined) {
+              newHighlightedChapter = foundChapter;
+            } else {
+              // If no chapter found, go to the first available chapter
+              const [firstChapter] = availableChapters;
+              newHighlightedChapter = firstChapter;
+            }
           }
-          if (
-            highlightedChapter + chapterOffSet <= 0 ||
-            highlightedChapter + chapterOffSet > fetchEndChapter(highlightedBookId)
-          ) {
-            setHighlightedChapter(0);
-          } else if (chapterOffSet !== 0) {
-            setHighlightedChapter(highlightedChapter + chapterOffSet);
+
+          if (newHighlightedChapter !== highlightedChapter) {
+            setHighlightedChapter(newHighlightedChapter);
             event.preventDefault();
             return;
           }
@@ -505,12 +621,16 @@ export function BookChapterControl({
       highlightedChapter,
       passInputToBookChapterInput,
       selectedBookId,
+      topMatchChapters,
+      totalFilteredBooks,
       updateReference,
     ],
   );
 
   useEffect(() => {
-    if (selectedBookId === highlightedBookId) {
+    if (totalFilteredBooks === 1) {
+      setHighlightedChapter(1);
+    } else if (selectedBookId === highlightedBookId) {
       if (selectedBookId === scrRef.book) {
         setHighlightedChapter(scrRef.chapterNum);
       } else {
@@ -519,7 +639,16 @@ export function BookChapterControl({
     } else {
       setHighlightedChapter(0);
     }
-  }, [highlightedBookId, scrRef.book, scrRef.chapterNum, selectedBookId]);
+  }, [highlightedBookId, scrRef.book, scrRef.chapterNum, selectedBookId, totalFilteredBooks]);
+
+  useEffect(() => {
+    if (!topMatchChapters || totalFilteredBooks > 1) return;
+    const currentIndex = topMatchChapters.indexOf(highlightedChapter);
+    // If highlighted chapter is not in available chapters, start from the first available chapter
+    if (currentIndex === -1) {
+      setHighlightedChapter(topMatchChapters[0]);
+    }
+  }, [highlightedBookId, highlightedChapter, selectedBookId, topMatchChapters, totalFilteredBooks]);
 
   // When a new scrRef comes in, set the book chapter input value to the formatted scrRef and focus
   // the new scrRef
@@ -563,6 +692,22 @@ export function BookChapterControl({
     };
   }, [isContentOpenDelayed, resetToScrRef]);
 
+  const isSearchDifferentFromScrRef = useMemo(() => {
+    const parsedRef = calculateTopMatch(bookChapterInputValue.trim());
+
+    if (!parsedRef) {
+      // If we can't parse it, consider it different from the current reference
+      return true;
+    }
+
+    // Compare the parsed reference with the current scripture reference
+    return (
+      parsedRef.bookId !== scrRef.book ||
+      (parsedRef.chapterNum ?? 0) !== scrRef.chapterNum ||
+      (parsedRef.verseNum ?? 0) !== scrRef.verseNum
+    );
+  }, [bookChapterInputValue, scrRef, calculateTopMatch]);
+
   return (
     <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
       <DropdownMenuTrigger asChild>
@@ -583,75 +728,88 @@ export function BookChapterControl({
             shouldPreventAutoClosing.current = true;
             // Reset typing state when input gains focus
             setHasStartedTyping(false);
+
+            setTopMatch(calculateTopMatch(bookChapterInputValue));
           }}
           handleSubmit={handleInputSubmit}
           placeholder={formatScrRef(scrRef, 'English')}
           className={className}
+          hasTopMatch={!!topMatch}
+          hasInputChanged={isSearchDifferentFromScrRef}
         />
       </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
-        // Need to get over the floating window z-index 200
-        style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
-        align={dir === 'ltr' ? 'start' : 'end'}
-        ref={contentRef}
-        onKeyDown={handleKeyDownContent}
-        onFocus={(event: FocusEvent) => {
-          // When you focus the input for the first time (no children lost focus), select the text
-          // so you overwrite what's there when you start typing
-          if (
-            !inputRef.current?.contains(event.relatedTarget) &&
-            !contentRef.current?.contains(event.relatedTarget)
-          )
-            inputRef.current.select();
-        }}
-      >
-        {/* work around until DropdownMenuContent supports a dir prop */}
-        <div className="rtl:tw-ps-2">
-          {BOOK_TYPE_ARRAY.map((bookType, bookTypeIndex) => {
-            const filteredBooks = fetchFilteredBooks(bookType);
-            return (
-              filteredBooks.length > 0 && (
-                <div key={bookType}>
-                  <DropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
-                    {BOOK_TYPE_LABELS[bookType]}
-                  </DropdownMenuLabel>
+      {totalFilteredBooks > 0 && (
+        <DropdownMenuContent
+          className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
+          // Need to get over the floating window z-index 200
+          style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
+          align={dir === 'ltr' ? 'start' : 'end'}
+          ref={contentRef}
+          onKeyDown={handleKeyDownContent}
+        >
+          {/* work around until DropdownMenuContent supports a dir prop */}
+          <div className="rtl:tw-ps-2">
+            {topMatch && isSearchDifferentFromScrRef && (
+              <>
+                <DropdownMenuItem
+                  className="tw-cursor-pointer tw-p-4 tw-font-semibold tw-text-foreground"
+                  onClick={handleInputSubmit}
+                >
+                  {formatScrRef({
+                    book: topMatch.bookId,
+                    chapterNum: topMatch.chapterNum ?? 1,
+                    verseNum: topMatch.verseNum ?? 1,
+                  })}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+              </>
+            )}
+            {allFilteredBooksByType.map((section, sectionIndex) => (
+              <div key={section.bookType}>
+                <DropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
+                  {BOOK_TYPE_LABELS[section.bookType]}
+                </DropdownMenuLabel>
 
-                  {filteredBooks.map((bookId, i) => (
-                    <div key={bookId}>
-                      <BookMenuItem
-                        bookId={bookId}
-                        handleSelectBook={() => updateReference(bookId, false)}
-                        isSelected={selectedBookId === bookId}
-                        handleHighlightBook={() => setHighlightedBookId(bookId)}
-                        handleKeyDown={(event) => handleKeyDownMenuItem(event, i)}
-                        bookType={bookType}
-                        ref={(element: HTMLDivElement) => {
-                          if (selectedBookId === bookId) menuItemRef.current = element;
+                {section.books.map((bookId, bookIndex) => (
+                  <div key={bookId}>
+                    <BookMenuItem
+                      bookId={bookId}
+                      handleSelectBook={() => updateReference(bookId, false)}
+                      shouldExpandChildren={
+                        selectedBookId.toLowerCase() === bookId.toLowerCase() ||
+                        totalFilteredBooks === 1
+                      }
+                      handleHighlightBook={() => setHighlightedBookId(bookId)}
+                      handleKeyDown={(event) => handleKeyDownMenuItem(event, bookIndex)}
+                      bookType={section.bookType}
+                      ref={(element: HTMLDivElement) => {
+                        if (selectedBookId === bookId) menuItemRef.current = element;
+                      }}
+                    >
+                      <ChapterSelect
+                        handleSelectChapter={handleSelectChapter}
+                        endChapter={fetchEndChapter(bookId)}
+                        // Without this condition- will highlight that chapterNum in every book- not just the selected book
+                        selectedChapter={selectedBookId === scrRef.book ? scrRef.chapterNum : 0}
+                        highlightedChapter={
+                          selectedBookId === highlightedBookId ? highlightedChapter : 0
+                        }
+                        handleHighlightedChapter={(chapterNumber: number): void => {
+                          setHighlightedChapter(chapterNumber);
                         }}
-                      >
-                        <ChapterSelect
-                          handleSelectChapter={handleSelectChapter}
-                          endChapter={fetchEndChapter(bookId)}
-                          // Without this condition- will highlight that chapterNum in every book- not just the selected book
-                          activeChapter={scrRef.book === bookId ? scrRef.chapterNum : 0}
-                          highlightedChapter={highlightedChapter}
-                          handleHighlightedChapter={(chapterNumber: number): void => {
-                            setHighlightedChapter(chapterNumber);
-                          }}
-                        />
-                      </BookMenuItem>
-                    </div>
-                  ))}
-                  {BOOK_TYPE_ARRAY.length - 1 !== bookTypeIndex ? (
-                    <DropdownMenuSeparator />
-                  ) : undefined}
-                </div>
-              )
-            );
-          })}
-        </div>
-      </DropdownMenuContent>
+                        matchingChapters={
+                          isSearchDifferentFromScrRef ? topMatchChapters : undefined
+                        }
+                      />
+                    </BookMenuItem>
+                  </div>
+                ))}
+                {sectionIndex < allFilteredBooksByType.length - 1 && <DropdownMenuSeparator />}
+              </div>
+            ))}
+          </div>
+        </DropdownMenuContent>
+      )}
     </DropdownMenu>
   );
 }
