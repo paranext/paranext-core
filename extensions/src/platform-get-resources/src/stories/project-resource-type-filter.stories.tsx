@@ -1,12 +1,11 @@
 import type { Meta, StoryObj } from '@storybook/react';
 
+import { ReactElement } from 'react';
 import { Ear, Earth, Rss } from 'lucide-react';
 import ProjectResourceFilter, {
   ProjectResourceFilterProps,
 } from '../projectResourceFilter.component';
 import { ProjectType } from '../types/project-type';
-
-import { ReactElement } from 'react';
 
 const types: ProjectType[] = [
   {
