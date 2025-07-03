@@ -26,6 +26,16 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
     echo "Expected pathnames:"
     echo "  - For Apple Silicon (arm64) architecture: DMG files should include 'arm64' in their names (e.g., app-arm64.dmg)."
     echo "  - For Intel (x86_64) architecture: DMG files should exclude 'arm64' in their names (e.g., app.dmg)."
+    echo ""
+    echo "Optional environment variables (set to 0 to disable, default is 1):"
+    echo "  SHOW_LOGS_IN_FINDER   Show logs in Finder after install (default: 1)"
+    echo "  RUN_APP               Launch the application after install (default: 1)"
+    echo "  CLEAR_LOGS            Clear logs before install/run (default: 1)"
+    echo ""
+    echo "Examples:"
+    echo "  SHOW_LOGS_IN_FINDER=0 $0"
+    echo "  RUN_APP=0 $0 /path/to/file.zip"
+    echo "  CLEAR_LOGS=0 SHOW_LOGS_IN_FINDER=0 $0 /path/to/folder"
     exit 0
 fi
 
@@ -93,7 +103,7 @@ else
   fi
 fi
 
-echo "Found arm64 DMG: $(basename "$DMG_FILE")"
+echo "Found DMG: $(basename "$DMG_FILE")"
 
 # Mount the DMG
 echo "Mounting DMG..."
@@ -126,6 +136,27 @@ if [ -d "/Applications/$APP_NAME" ]; then
     rm -rf "/Applications/$APP_NAME"
 fi
 
+# Option flags (set to 0 to disable)
+SHOW_LOGS_IN_FINDER=${SHOW_LOGS_IN_FINDER:-1}
+RUN_APP=${RUN_APP:-1}
+CLEAR_LOGS=${CLEAR_LOGS:-1}
+
+# Clear logs before installing/running the app
+if [[ "$CLEAR_LOGS" == "1" ]]; then
+    if [[ "$APP_NAME" == "Paratext 10 Studio.app" ]]; then
+        LOG_DIR="$HOME/Library/Logs/paratext-10-studio"
+        echo "Clearing logs in $LOG_DIR..."
+        mkdir -p "$LOG_DIR"
+        rm -rf "$LOG_DIR"/*
+        ls -l "$LOG_DIR"
+    elif [[ "$APP_NAME" == "Platform.Bible.app" ]]; then
+        LOG_DIR="$HOME/Library/Logs/platform-bible"
+        echo "Listing logs in $LOG_DIR..."
+        mkdir -p "$LOG_DIR"
+        ls -l "$LOG_DIR"
+    fi
+fi
+
 # Copy app to Applications
 echo "Installing app to /Applications..."
 cp -R "$APP_PATH" "/Applications/"
@@ -141,10 +172,9 @@ rm -rf "$TEMP_DIR"
 echo "Removing quarantine attribute..."
 xattr -dr com.apple.quarantine "/Applications/$APP_NAME" 2>/dev/null || true
 
-# Codesign the app
-echo "Code signing the application..."
+# Always re-sign the app to ensure all components have a matching signature
+echo "Code signing the application (force, deep)..."
 codesign --deep --force --sign - "/Applications/$APP_NAME"
-
 if [ $? -eq 0 ]; then
     echo "✅ Code signing successful!"
 else
@@ -152,28 +182,80 @@ else
     exit 1
 fi
 
+# Explicitly sign all .dylib and .so files in dotnet (sometimes --deep misses these)
+DOTNET_DIR="/Applications/$APP_NAME/Contents/Resources/dotnet"
+if [ -d "$DOTNET_DIR" ]; then
+    echo "Explicitly signing all binaries in $DOTNET_DIR..."
+    find "$DOTNET_DIR" -type f \( -name "*.dylib" -o -name "*.so" -o -perm +111 \) | while read BIN; do
+        echo "Signing $BIN"
+        if ! codesign --force --sign - "$BIN" 2>/dev/null; then
+            echo "Warning: Failed to sign $BIN (may already be properly signed)"
+        fi
+    done
+fi
+
+# Verify critical dotnet binaries are properly signed
+echo "Verifying critical dotnet binaries..."
+CRITICAL_LIBS=("libhostfxr.dylib" "libcoreclr.dylib" "libhostpolicy.dylib")
+for lib in "${CRITICAL_LIBS[@]}"; do
+    LIB_PATH="$DOTNET_DIR/$lib"
+    if [ -f "$LIB_PATH" ]; then
+        if codesign -v "$LIB_PATH" 2>/dev/null; then
+            echo "✅ $lib is properly signed"
+        else
+            echo "❌ Warning: $lib signature verification failed"
+        fi
+    fi
+done
+
+
 # Add to Gatekeeper approval (this will prompt for admin password if needed)
 echo "Adding app to Gatekeeper approval..."
 spctl --add "/Applications/$APP_NAME" 2>/dev/null || echo "Note: Could not add to spctl (may require admin privileges)"
 
-# Verify the app is properly installed
+# Verify the app is properly installed and signed
 if [ -d "/Applications/$APP_NAME" ]; then
     echo "✅ App successfully installed at /Applications/$APP_NAME"
+
+    # Verify main app signature
+    if codesign -v "/Applications/$APP_NAME" 2>/dev/null; then
+        echo "✅ Main app signature is valid"
+    else
+        echo "❌ Warning: Main app signature verification failed"
+    fi
 else
     echo "❌ App installation failed!"
     exit 1
 fi
 
 # Run the application
-echo "Launching the application..."
-open "/Applications/$APP_NAME"
+if [[ "$RUN_APP" == "1" ]]; then
+    echo "Launching the application..."
+    open "/Applications/$APP_NAME"
 
-if [ $? -eq 0 ]; then
-    echo "✅ Application launched successfully!"
+    if [ $? -eq 0 ]; then
+        echo "✅ Application launched successfully!"
+    else
+        echo "❌ Failed to launch application!"
+        exit 1
+    fi
 else
-    echo "❌ Failed to launch application!"
-    exit 1
+    echo "Skipping application launch (RUN_APP=$RUN_APP)"
 fi
 
 echo "🎉 Installation and launch completed successfully!"
 
+# Show relevant logs in Finder
+if [[ "$SHOW_LOGS_IN_FINDER" == "1" ]]; then
+    if [[ "$APP_NAME" == "Paratext 10 Studio.app" ]]; then
+        LOG_DIR="$HOME/Library/Logs/paratext-10-studio"
+        echo "Opening $LOG_DIR in Finder..."
+        open "$LOG_DIR"
+    elif [[ "$APP_NAME" == "Platform.Bible.app" ]]; then
+        LOG_DIR="$HOME/Library/Logs/platform-bible"
+        echo "Opening $LOG_DIR in Finder..."
+        open "$LOG_DIR"
+    fi
+else
+    echo "Skipping opening logs in Finder (SHOW_LOGS_IN_FINDER=$SHOW_LOGS_IN_FINDER)"
+fi
