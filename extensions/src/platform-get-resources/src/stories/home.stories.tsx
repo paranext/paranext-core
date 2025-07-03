@@ -1,11 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import {
-  HomeDialog,
-  HomeDialogProps,
-  LocalProjectInfo,
-  SharedProjectsInfo,
-} from 'platform-bible-react';
+import { HomeDialog, HomeDialogProps } from '../home.component';
+import { LocalProjectInfo } from '../types/project-type';
 import { ReactElement, useState } from 'react';
+import { SharedProjectsInfo } from 'platform-scripture';
 
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
@@ -35,7 +32,8 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     id: '14',
     isEditable: false,
-    fullName: 'Project 3 - read-only',
+    fullName:
+      'Project 3 - read-only This_is_a_project_with_a_very_long_name_01234567890_!/"§$%&/()=?_öäüß',
     name: 'Pr3',
     language: '2ndLanguage',
     type: 'project',
@@ -115,7 +113,7 @@ function HomeDecorator(Story: (update?: { args: Partial<HomeDialogProps> }) => R
 }
 
 const meta: Meta<typeof HomeDialog> = {
-  title: 'Platform/Home',
+  title: 'Bundled Extensions/platform-get-resources/Home',
   component: HomeDialog,
   tags: ['autodocs'],
   argTypes: {},
