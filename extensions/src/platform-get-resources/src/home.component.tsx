@@ -29,6 +29,8 @@ import ProjectResourceFilter, {
 import { LocalProjectInfo, MergedProjectInfo } from './types/project-type';
 import { ProjectTypes } from './types/project-types';
 
+import './home.web-view.scss';
+
 type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';
   direction: 'ascending' | 'descending';
@@ -197,9 +199,15 @@ export function HomeDialog({
     setSortConfig(newSortConfig);
   };
 
-  const buildTableHead = (key: SortConfig['key'], label: string) => (
-    <TableHead onClick={() => handleSort(key)}>
-      <Button variant="ghost" className="tw-bg-transparent hover:tw-bg-transparent">
+  const buildTableHead = (key: SortConfig['key'], label: string, className?: string) => (
+    <TableHead
+      onClick={() => handleSort(key)}
+      className={className}
+      style={{ paddingLeft: '8px', paddingRight: '8px' }}
+    >
+      {' '}
+      {/* tw-px-4 */}
+      <Button variant="ghost" className="tw-bg-transparent hover:tw-bg-transparent tw-px-0">
         <div className="tw-font-normal">{label}</div>
         {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
         {sortConfig.key === key &&
@@ -259,8 +267,8 @@ export function HomeDialog({
     <div>
       <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
         <CardHeader className="tw-flex-shrink-0">
-          <div className="tw-flex tw-justify-between tw-gap-4">
-            <div className="tw-flex tw-flex-col tw-gap-4 md:tw-flex-row">
+          <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
+            <div className="tw-flex tw-flex-col tw-gap-4">
               <div className="tw-flex tw-items-center tw-gap-4">
                 <Home size={36} />
                 <CardTitle>{dialogTitleText}</CardTitle>
@@ -342,13 +350,12 @@ export function HomeDialog({
                             types={Object.values(ProjectTypes)}
                           />
                         </TableHead>
-                        {buildTableHead('fullName', fullNameText)}
-                        {buildTableHead('language', languageText)}
+                        {buildTableHead('fullName', fullNameText, 'tw-hidden full-name-row')}
+                        {buildTableHead('language', languageText, 'tw-hidden md:tw-table-cell')}
                         {filteredAndSortedProjectsResources.some(
                           (project) => project.isSendReceivable,
-                        ) && buildTableHead('activity', activityText)}
+                        ) && buildTableHead('activity', activityText, 'tw-hidden sm:tw-table-cell')}
                         {buildTableHead('action', actionText)}
-                        <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -367,17 +374,19 @@ export function HomeDialog({
                             key={projectResource.id}
                           >
                             <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4">
-                              <Icon className="tw-h-4 tw-pr-0" />
-                              <div className="tw-py-4">{projectResource.name}</div>
+                              <Icon className="tw-h-4 tw-pr-0" style={{ minWidth: '24px' }} />
+                              <div className="short-name tw-py-4">{projectResource.name}</div>
                             </TableCell>
-                            <TableCell className="tw-font-medium">
+                            <TableCell className="cell full-name-row tw-hidden tw-font-medium">
                               {projectResource.fullName}
                             </TableCell>
-                            <TableCell>{projectResource.language}</TableCell>
+                            <TableCell className="cell tw-hidden md:tw-table-cell">
+                              {projectResource.language}
+                            </TableCell>
                             {filteredAndSortedProjectsResources.some(
                               (proj) => proj.isSendReceivable,
                             ) && (
-                              <TableCell>
+                              <TableCell className="cell tw-hidden sm:tw-table-cell">
                                 {projectResource.lastSendReceiveDate &&
                                   formatTimeSpan(
                                     relativeTimeFormatter,
@@ -386,30 +395,30 @@ export function HomeDialog({
                               </TableCell>
                             )}
                             <TableCell>
-                              {projectResource.isSendReceivable &&
-                              (!projectResource.isLocallyAvailable ||
-                                projectResource.editedStatus === 'edited')
-                                ? syncOrGetButton(projectResource)
-                                : openButton(projectResource)}
-                            </TableCell>
-                            <TableCell>
-                              {projectResource.isSendReceivable &&
-                                projectResource.isLocallyAvailable && (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button variant="ghost">
-                                        <Ellipsis className="tw-w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="start">
-                                      <DropdownMenuItem asChild>
-                                        {projectResource.editedStatus === 'edited'
-                                          ? openButton(projectResource, true)
-                                          : syncOrGetButton(projectResource, true)}
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                )}
+                              <div className="tw-flex tw-justify-between tw-items-center">
+                                {projectResource.isSendReceivable &&
+                                (!projectResource.isLocallyAvailable ||
+                                  projectResource.editedStatus === 'edited')
+                                  ? syncOrGetButton(projectResource)
+                                  : openButton(projectResource)}
+                                {projectResource.isSendReceivable &&
+                                  projectResource.isLocallyAvailable && (
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button variant="ghost">
+                                          <Ellipsis className="tw-w-4" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="start">
+                                        <DropdownMenuItem asChild>
+                                          {projectResource.editedStatus === 'edited'
+                                            ? openButton(projectResource, true)
+                                            : syncOrGetButton(projectResource, true)}
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  )}
+                              </div>
                             </TableCell>
                           </TableRow>
                         );
