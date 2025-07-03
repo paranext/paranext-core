@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
+import { SharedProjectsInfo } from 'platform-scripture';
+import { ReactElement, useState } from 'react';
 import { HomeDialog, HomeDialogProps } from '../home.component';
 import { LocalProjectInfo } from '../types/project-type';
-import { ReactElement, useState } from 'react';
-import { SharedProjectsInfo } from 'platform-scripture';
 
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {

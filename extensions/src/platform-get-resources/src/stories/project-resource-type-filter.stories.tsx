@@ -1,10 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import {} from 'platform-bible-react';
 
+import { Ear, Earth, Rss } from 'lucide-react';
 import ProjectResourceFilter, {
   ProjectResourceFilterProps,
 } from '../projectResourceFilter.component';
-import { Ear, Earth, Rss } from 'lucide-react';
 import { ProjectType } from '../types/project-type';
 
 import { ReactElement } from 'react';

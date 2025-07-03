@@ -1,9 +1,5 @@
-import ProjectResourceFilter, {
-  ProjectResourceFilterValue,
-} from './projectResourceFilter.component';
+import { ChevronDown, ChevronsUpDown, ChevronUp, Ellipsis, Home } from 'lucide-react';
 import {
-  SearchBar,
-  Spinner,
   Button,
   Card,
   CardContent,
@@ -15,6 +11,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   Label,
+  SearchBar,
+  Spinner,
   Table,
   TableBody,
   TableCell,
@@ -22,12 +20,14 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-import { ChevronDown, ChevronsUpDown, ChevronUp, Ellipsis, Home } from 'lucide-react';
 import { formatTimeSpan, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import { SharedProjectsInfo } from 'platform-scripture';
 import { useMemo, useState } from 'react';
+import ProjectResourceFilter, {
+  ProjectResourceFilterValue,
+} from './projectResourceFilter.component';
 import { LocalProjectInfo, MergedProjectInfo } from './types/project-type';
 import { ProjectTypes } from './types/project-types';
-import { SharedProjectsInfo } from 'platform-scripture';
 
 type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';
