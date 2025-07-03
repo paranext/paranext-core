@@ -1050,17 +1050,27 @@ declare module 'platform-scripture' {
    * - `edited` = project has been edited
    * - `new` = project not present on the system and available for download
    */
-  export type { EditedStatus } from 'platform-bible-react';
+  export type EditedStatus = undefined | '' | 'edited' | 'new' | 'unregistered';
 
   /** Information about a S/R-able project needed to display it in the S/R dialog */
-  export type { SharedProjectInfo } from 'platform-bible-react';
+  export type SharedProjectInfo = {
+    id: string;
+    name: string;
+    fullName: string;
+    language: string;
+    editedStatus: EditedStatus;
+    lastSendReceiveDate: string;
+    /** Names of admins on this project. Only filled if project is new */
+    adminNames?: string[];
+    warnings?: string[];
+  };
 
   /**
    * Map of projects that can be S/Red to display in the S/R dialog.
    *
    * Maps project id to {@link SharedProjectInfo} for that project id
    */
-  export type { SharedProjectsInfo } from 'platform-bible-react';
+  export type SharedProjectsInfo = { [projectId: string]: SharedProjectInfo };
 
   // #endregion
   // #region ChecksSetup Types

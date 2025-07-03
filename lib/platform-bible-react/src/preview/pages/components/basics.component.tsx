@@ -30,7 +30,6 @@ import { TabExamples } from './basics/tab.examples.component';
 import { TableExamples } from './basics/table.examples.component';
 import { ToggleGroupExamples } from './basics/toggle-group.examples.component';
 import { TooltipExamples } from './basics/tooltip.examples.component';
-import { ProjectResourceFilterExamples } from './basics/projectResourceFilter.examples.component';
 import { ProgressExamples } from './basics/progress.examples.component';
 import { SkeletonExamples } from './basics/skeleton.examples.component';
 
@@ -123,10 +122,6 @@ export function Basics() {
 
         <VerticalTabsContent value="Menubar">
           <MenubarExamples />
-        </VerticalTabsContent>
-
-        <VerticalTabsContent value="ProjResFilter">
-          <ProjectResourceFilterExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Radio Group">

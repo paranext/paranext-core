@@ -1,15 +1,12 @@
 import {
+  cn,
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/shadcn-ui/select';
-import { cn } from '@/utils/shadcn-ui.util';
-import {
-  ProjectType,
-  ProjectTypeKey,
-} from '@/components/advanced/filterable-resource-list/project-type';
+} from 'platform-bible-react';
+import { ProjectType, ProjectTypeKey } from './types/project-type';
 
 export type ProjectResourceFilterValue = ProjectTypeKey | 'all';
 export type ProjectResourceFilterProps = {

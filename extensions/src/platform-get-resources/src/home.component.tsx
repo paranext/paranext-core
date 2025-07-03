@@ -1,30 +1,33 @@
 import ProjectResourceFilter, {
   ProjectResourceFilterValue,
-} from '@/components/basics/projectResourceFilter.component';
-import { SearchBar } from '@/components/basics/search-bar.component';
-import { Spinner } from '@/components/basics/spinner.component';
-import { Button } from '@/components/shadcn-ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/shadcn-ui/card';
+} from './projectResourceFilter.component';
 import {
+  SearchBar,
+  Spinner,
+  Button,
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/shadcn-ui/dropdown-menu';
-import { Label } from '@/components/shadcn-ui/label';
-import {
+  Label,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/shadcn-ui/table';
+} from 'platform-bible-react';
 import { ChevronDown, ChevronsUpDown, ChevronUp, Ellipsis, Home } from 'lucide-react';
 import { formatTimeSpan, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
 import { useMemo, useState } from 'react';
-import { LocalProjectInfo, MergedProjectInfo, SharedProjectsInfo } from './project-type';
-import { ProjectTypes } from './project-types';
+import { LocalProjectInfo, MergedProjectInfo } from './types/project-type';
+import { ProjectTypes } from './types/project-types';
+import { SharedProjectsInfo } from 'platform-scripture';
 
 type SortConfig = {
   key: 'fullName' | 'language' | 'activity' | 'action';

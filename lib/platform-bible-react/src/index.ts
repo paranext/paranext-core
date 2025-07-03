@@ -168,9 +168,6 @@ export {
   TooltipProvider,
   TooltipTrigger,
 } from './components/shadcn-ui/tooltip';
-export * from './components/advanced/filterable-resource-list/home.component';
-export type * from './components/advanced/filterable-resource-list/project-type';
-export * from './components/advanced/filterable-resource-list/project-types';
 export type { Scope } from './components/utils/scripture.util';
 
 // Hooks
