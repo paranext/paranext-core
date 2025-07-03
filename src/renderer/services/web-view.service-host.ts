@@ -1026,7 +1026,7 @@ async function openOrReloadWebView(
   // Get theme styles
   const theme = localThemeService.getCurrentThemeSync();
 
-  // `webViewRequire`, `getWebViewStateById`, `setWebViewStateById` and `resetWebViewStateById` below are defined in `src\renderer\global-this.model.ts`
+  // `webViewRequire`, `getWebViewStateById`, `setWebViewStateById` and `resetWebViewStateById` below are defined in `src\renderer\global-this-web-view.model.ts`
   // `useWebViewState` below is defined in `src\shared\global-this.model.ts`
   // We have to bind `useWebViewState` to the current `window` context because calls within PAPI don't have access to a webview's `window` context
   /**

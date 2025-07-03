@@ -45,7 +45,7 @@ async function showParatextRegistrationIfNoRegistrationData(): Promise<string | 
 }
 
 export async function activate(context: ExecutionActivationContext) {
-  logger.info('Paratext Registration is activating!');
+  logger.debug('Paratext Registration is activating!');
 
   const paratextRegistrationWebViewProvider = new ParatextRegistrationWebViewProvider();
 
@@ -75,6 +75,6 @@ export async function activate(context: ExecutionActivationContext) {
 }
 
 export async function deactivate() {
-  logger.info('Paratext Registration is deactivating!');
+  logger.debug('Paratext Registration is deactivating!');
   return true;
 }

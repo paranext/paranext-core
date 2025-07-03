@@ -24,7 +24,7 @@ import platformScriptureEditorWebView from './platform-scripture-editor.web-view
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import { mergeDecorations } from './decorations.util';
 
-logger.info('Scripture Editor is importing!');
+logger.debug('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
 
@@ -373,7 +373,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
-  logger.info('Scripture editor is activating!');
+  logger.debug('Scripture editor is activating!');
 
   const openPlatformScriptureEditorPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openScriptureEditor',
@@ -433,5 +433,5 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformResourceViewerPromise,
   );
 
-  logger.info('Scripture editor is finished activating!');
+  logger.debug('Scripture editor is finished activating!');
 }

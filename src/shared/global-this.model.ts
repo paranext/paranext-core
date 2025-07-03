@@ -1,4 +1,4 @@
-import { LogLevel } from 'electron-log';
+import type { LogLevel } from 'electron-log';
 import { FunctionComponent } from 'react';
 import {
   GetSavedWebViewDefinition,

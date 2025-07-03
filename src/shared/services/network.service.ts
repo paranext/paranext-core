@@ -31,7 +31,7 @@ import { IRpcMethodRegistrar } from '@shared/models/rpc.interface';
 import { createRpcHandler } from '@shared/services/rpc-handler.factory';
 import { logger } from '@shared/services/logger.service';
 import { SingleMethodDocumentation } from '@shared/models/openrpc.model';
-import { JSONRPCResponse } from '@node_modules/json-rpc-2.0/dist';
+import { JSONRPCResponse } from 'json-rpc-2.0';
 import { NetworkMethodHandlerOptions } from '@shared/models/network.model';
 
 // #region Local event handling
@@ -115,7 +115,7 @@ export function setRequestTimeout(timeoutSeconds: number) {
   if (timeoutSeconds < 0)
     throw new Error(`Invalid request timeout ${timeoutSeconds}: must be a non-negative number`);
   requestTimeoutMs = timeoutSeconds * 1000; // convert to milliseconds
-  logger.info(`[${globalThis.processType}] Request timeout set to ${requestTimeoutMs}ms`);
+  logger.info(`Request timeout set to ${requestTimeoutMs}ms`);
 }
 
 function sharedStoreKeyForRequestType(

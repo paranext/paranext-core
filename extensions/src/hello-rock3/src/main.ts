@@ -27,7 +27,7 @@ const allProjectDataStorageKey = 'allHelloRock3ProjectData';
 
 type IWebViewProviderWithType = IWebViewProvider & { webViewType: string };
 
-logger.info('Hello Rock3 is importing!');
+logger.debug('Hello Rock3 is importing!');
 
 // #region General Web Views for this extension
 
@@ -135,7 +135,7 @@ class HelloRock3ProjectWebViewFactory extends WebViewFactory<
     return {
       async focusName(name) {
         try {
-          logger.info(
+          logger.debug(
             `Hello Rock3 Project Web View Controller ${webViewDefinition.id} received request to focus ${name}`,
           );
           await papi.webViewProviders.postMessageToWebView(webViewDefinition.id, webViewNonce, {
@@ -257,7 +257,7 @@ function helloRock3Exception(message: string) {
 }
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
-  logger.info('Hello rock3 is activating!');
+  logger.debug('Hello rock3 is activating!');
 
   if (!context.elevatedPrivileges.handleUri) {
     logger.warn(
@@ -285,7 +285,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
         }
       }),
     );
-    logger.info(
+    logger.debug(
       `Hello Rock3 is listening to URIs. You can navigate to ${context.elevatedPrivileges.handleUri.redirectUri}/greet?name=your_name to say hello`,
     );
   }
@@ -526,5 +526,5 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     logger.error(`Hello Rock3 error! Could not get people data provider ${e}`);
   }
 
-  logger.info('Hello Rock3 is finished activating!');
+  logger.debug('Hello Rock3 is finished activating!');
 }

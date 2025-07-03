@@ -1,4 +1,5 @@
 import '@extension-host/global-this.model';
+import '@node/utils/log-archiver.util';
 import { isClient } from '@shared/utils/internal-util';
 import * as networkService from '@shared/services/network.service';
 import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
@@ -40,7 +41,13 @@ process.on('exit', () => {
 
 // Add unhandled exception and rejection handlers
 process.on('uncaughtException', (error) => {
-  logger.error(`Unhandled exception in extension host: ${getErrorMessage(error)}`);
+  const errorMessage = getErrorMessage(error);
+
+  // If the pipe from extension host to main breaks, stop logging to console because it will infinitely
+  // produce errors in a loop
+  if (errorMessage.startsWith('EPIPE')) logger.transports.console.level = false;
+
+  logger.error(`Unhandled exception in extension host: ${errorMessage}`);
 });
 
 process.on('unhandledRejection', (reason) => {

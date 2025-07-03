@@ -78,7 +78,7 @@ export async function initialize(networkService: NetworkService): Promise<void> 
   if (processId) throw new Error('Shared store service is already initialized');
   // Generate a unique process ID for this process that still includes the process type
   processId = `${globalThis.processType}-${Math.random().toString(36).substring(2, 10)}`;
-  logger.debug(`[${globalThis.processType}] Initializing shared store service`);
+  logger.debug(`Initializing shared store service`);
 
   // Prepare to emit changes as they are made to the local store
   storeChangeEmitter = networkService.createNetworkEventEmitter(STORE_CHANGE_EVENT);

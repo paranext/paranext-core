@@ -3,7 +3,7 @@ import {
   GetSavedWebViewDefinition,
   WebViewDefinitionUpdateInfo,
 } from '@shared/models/web-view.model';
-import { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
+import type { UpdateWebViewEvent } from '@shared/services/web-view.service-model';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { useEvent } from 'platform-bible-react';
 import { PlatformEvent, ScrollGroupId } from 'platform-bible-utils';

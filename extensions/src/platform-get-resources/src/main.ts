@@ -53,7 +53,7 @@ const homeWebViewProvider: IWebViewProvider = {
 };
 
 export async function activate(context: ExecutionActivationContext) {
-  logger.info('Platform Get Resources Extension is activating!');
+  logger.debug('Platform Get Resources Extension is activating!');
 
   // #region Validate settings
 
@@ -135,10 +135,10 @@ export async function activate(context: ExecutionActivationContext) {
     await isSendReceiveAvailableCommandPromise,
   );
 
-  logger.info('Platform Get Resources Extension finished activating!');
+  logger.debug('Platform Get Resources Extension finished activating!');
 }
 
 export async function deactivate() {
-  logger.info('Platform Get Resources Extension is deactivating!');
+  logger.debug('Platform Get Resources Extension is deactivating!');
   return true;
 }

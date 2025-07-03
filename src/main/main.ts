@@ -12,6 +12,7 @@ import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import '@main/global-this.model';
+import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import {
   APP_NAME,
@@ -29,7 +30,8 @@ import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model'
 import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
-  DEV_MODE_RENDERER_INDICATOR,
+  DEV_MODE_QUERY_PARAMETER,
+  LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
 } from '@shared/data/platform.data';
@@ -191,7 +193,7 @@ async function main() {
   // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
-  await extensionHostService.start();
+  await extensionHostService.start(PROCESS_CLOSE_TIME_OUT);
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
@@ -436,8 +438,15 @@ async function main() {
       return { action: 'deny' };
     });
 
+    // Built URL search parameters for use in `src/renderer/global-this.model.ts`
+    const searchParamsObject: Record<string, string> = {
+      [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+    };
+
+    if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
+
     // If the URL doesn't load, we might need to show something to the user
-    const urlToLoad = `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`;
+    const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
     mainWindow.loadURL(urlToLoad).catch((e) => {
       logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });

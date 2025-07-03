@@ -2,7 +2,7 @@
 
 import path from 'path';
 import webpack from 'webpack';
-import merge, { mergeWithCustomize } from 'webpack-merge';
+import { mergeWithCustomize } from 'webpack-merge';
 import mainConfig from './webpack.config.main.prod';
 import webpackPaths from './webpack.paths';
 import checkNodeEnv from '../scripts/check-node-env';
@@ -19,12 +19,36 @@ const configuration: webpack.Configuration = {
   output: {
     path: webpackPaths.distExtensionHostPath,
   },
+
+  plugins: [
+    new webpack.DefinePlugin({
+      'process.type': 'undefined',
+    }),
+  ],
 };
 
 const extensionHostConfig = mergeWithCustomize({
   customizeObject(a, b, key) {
+    // We don't want main's entry files
     if (key === 'entry') return b;
-    return merge(a, b);
+
+    // Otherwise we want to merge everything with main as usual
+    return undefined;
+  },
+  customizeArray(a, b, key) {
+    // We don't want main's DefinePlugin so we can have different ones
+    if (key === 'plugins') {
+      return [
+        ...a.filter((plugin) => {
+          if (!(plugin instanceof webpack.DefinePlugin)) return true;
+          return false;
+        }),
+        ...b,
+      ];
+    }
+
+    // Otherwise we want to merge everything with main as usual
+    return undefined;
   },
 })(mainConfig, configuration);
 export default extensionHostConfig;

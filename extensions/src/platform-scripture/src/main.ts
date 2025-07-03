@@ -172,7 +172,7 @@ async function openFind(editorWebViewId: string | undefined): Promise<string | u
 }
 
 export async function activate(context: ExecutionActivationContext) {
-  logger.info('platformScripture is activating!');
+  logger.debug('platformScripture is activating!');
 
   const scriptureExtenderPdpefPromise =
     papi.projectDataProviders.registerProjectDataProviderEngineFactory(
@@ -415,10 +415,10 @@ export async function activate(context: ExecutionActivationContext) {
     checkAggregatorService.dispose,
   );
 
-  logger.info('platformScripture is finished activating!');
+  logger.debug('platformScripture is finished activating!');
 }
 
 export async function deactivate() {
-  logger.info('platformScripture is deactivating!');
+  logger.debug('platformScripture is deactivating!');
   return true;
 }

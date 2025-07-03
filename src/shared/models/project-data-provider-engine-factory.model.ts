@@ -3,7 +3,7 @@ import { ProjectMetadataFilterOptions } from '@shared/models/project-data-provid
 import { ProjectMetadataWithoutFactoryInfo } from '@shared/models/project-metadata.model';
 import { projectLookupService } from '@shared/services/project-lookup.service';
 import { ProjectInterfaces } from 'papi-shared-types';
-import { escapeStringRegexp } from 'platform-bible-utils';
+import { escapeStringRegexp, getErrorMessage } from 'platform-bible-utils';
 
 /**
  * A factory object registered with the papi that creates a Project Data Provider Engine for each
@@ -147,7 +147,9 @@ export abstract class LayeringProjectDataProviderEngineFactory<
         return projectMetadataToOverlay;
       });
     } catch (e) {
-      throw new Error(`${this.pdpfId} was not able to get metadata for projects to overlay. ${e}`);
+      throw new Error(
+        `${this.pdpfId} was not able to get metadata for projects to overlay. ${getErrorMessage(e)}`,
+      );
     }
   }
 }

@@ -1,10 +1,11 @@
 import { ChildProcessWithoutNullStreams, SpawnOptionsWithoutStdio, spawn } from 'child_process';
 import path from 'path';
-import { formatLog, logger } from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import { waitForDuration } from 'platform-bible-utils';
+import { formatLog } from '@shared/utils/logger.utils';
 
 /** Pretty name for the process this service manages. Used in logs */
-const DOTNET_DATA_PROVIDER_NAME = 'dotnet data provider';
+const DOTNET_DATA_PROVIDER_NAME = '.net';
 
 let dotnet: ChildProcessWithoutNullStreams | undefined;
 
@@ -15,10 +16,54 @@ const closePromise: Promise<void> = new Promise<void>((resolve) => {
 
 // log functions for inside the data provider process
 function logProcessError(message: unknown) {
-  logger.error(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME, 'error'));
+  logger.error(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));
 }
-function logProcessInfo(message: unknown) {
-  logger.info(formatLog(message?.toString() || '', DOTNET_DATA_PROVIDER_NAME));
+
+const isWindows = process.platform.startsWith('win');
+/**
+ * Watch log that comes in that is likely a dotnet watch bug. Dotnet watch reports that it does not
+ * watch these files, but it watches them anyway. Very annoying log clutter
+ */
+let buggyWatchLog =
+  'dotnet watch ⌚ Files updated: .\\c-sharp\\obj\\project.assets.json, .\\c-sharp\\obj\\project.nuget.cache, .\\c-sharp\\obj\\ParanextDataProvider.csproj.nuget.dgspec.json';
+if (!isWindows) buggyWatchLog = buggyWatchLog.replace(/\\/g, '/');
+/** Possibly extraneous watch log. Should be ignored after buggyWatchLog */
+let extraneousWatchLog = 'dotnet watch ⌚ No C# changes to apply.';
+if (!isWindows) extraneousWatchLog = extraneousWatchLog.replace(/\\/g, '/');
+/** Gets ready to ignore extraneous watch log if it comes after buggyWatchLog */
+let ignoreNextWatchLog = false;
+/**
+ * Whole buggy watch log that should be ignored. No extraneous lines afterward. It sometimes comes
+ * together as one log like this
+ */
+const buggyWatchLogWhole = `${buggyWatchLog}\n${extraneousWatchLog}`;
+// For some reason, it seems to switch between \n and \r\n on Windows
+const buggyWatchLogWhole2 = `${buggyWatchLog}\r\n${extraneousWatchLog}`;
+// And there's another slightly different message that needs to be ignored
+const buggyWatchLogWhole3 = `${buggyWatchLog}\ndotnet watch ⌚`;
+const buggyWatchLogWhole4 = `${buggyWatchLog}\r\ndotnet watch ⌚`;
+function logProcessInfo(messageObj: unknown) {
+  const message = messageObj?.toString() || '';
+  const messageTrimmed = message.trim();
+
+  // Ignore likely bugged dotnet watch logs
+  if (messageTrimmed === buggyWatchLog) {
+    ignoreNextWatchLog = true;
+    return;
+  }
+  if (
+    (messageTrimmed === extraneousWatchLog && ignoreNextWatchLog) ||
+    messageTrimmed === buggyWatchLogWhole ||
+    messageTrimmed === buggyWatchLogWhole2 ||
+    messageTrimmed === buggyWatchLogWhole3 ||
+    messageTrimmed === buggyWatchLogWhole4
+  ) {
+    ignoreNextWatchLog = false;
+    return;
+  }
+
+  ignoreNextWatchLog = false;
+  logger.info(formatLog(message, DOTNET_DATA_PROVIDER_NAME));
 }
 
 /** Hard kills the Dotnet Data Provider. */

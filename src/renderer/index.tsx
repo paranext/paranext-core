@@ -1,4 +1,5 @@
 import '@renderer/global-this.model';
+import '@renderer/global-this-web-view.model';
 import { createRoot } from 'react-dom/client';
 import {
   applyThemeStylesheet,
