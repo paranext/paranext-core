@@ -1,0 +1,20 @@
+diff --git a/node_modules/electron-log/src/core/transforms/format.js b/node_modules/electron-log/src/core/transforms/format.js
+index 8b1c76f..399e014 100644
+--- a/node_modules/electron-log/src/core/transforms/format.js
++++ b/node_modules/electron-log/src/core/transforms/format.js
+@@ -10,6 +10,15 @@ module.exports = {
+   timeZoneFromOffset,
+ 
+   format({ message, logger, transport, data = message?.data }) {
++    /**
++     * patch-package notes:
++     *
++     * The renderer sends its logs to the main process after formatting, then the main process also
++     * wants to format for some reason. In `logger.utils.ts`, I added this `skipFormatting` variable
++     * to stop main from formatting and putting its own timestamp and such on the message.
++     */
++    if (message.variables?.skipFormatting) return data;
++
+     switch (typeof transport.format) {
+       case 'string': {
+         return transform({

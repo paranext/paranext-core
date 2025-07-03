@@ -5,7 +5,7 @@ import { waitForDuration } from 'platform-bible-utils';
 import { formatLog } from '@shared/utils/logger.utils';
 
 /** Pretty name for the process this service manages. Used in logs */
-const DOTNET_DATA_PROVIDER_NAME = 'dotnet data provider';
+const DOTNET_DATA_PROVIDER_NAME = '.net';
 
 let dotnet: ChildProcessWithoutNullStreams | undefined;
 

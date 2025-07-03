@@ -4,10 +4,10 @@
  */
 export const PLATFORM_NAMESPACE = 'platform';
 
-/** Query parameter passed to the renderer when starting if it should enable noisy dev mode */
+/** Query parameter passed to the renderer. Determines which log level to use */
 export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
 
-/** Query parameter passed to the renderer when starting if it should enable noisy dev mode */
+/** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
 export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
 
 /** ID of the default theme family for use in the application */

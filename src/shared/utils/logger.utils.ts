@@ -97,7 +97,7 @@ export function formatLog(message: string, serviceName: string) {
   if (includes(messageTrimmed, '\n')) {
     const closeTag = `[/${serviceName}]`;
     // Multi-line
-    return `\n${openTag}\n${messageTrimmed}\n${closeTag}`;
+    return `${openTag}\n${messageTrimmed}\n${closeTag}`;
   }
   return `${openTag} ${messageTrimmed}`;
 }
@@ -118,19 +118,45 @@ export function setUpLogger(log: MainLogger | RendererLogger) {
   log.hooks.push((message) => {
     // If we're piping through a log message from another process, don't add another file path
     // Messages from other processes all start with "[process name]"
-    if (message.data.some((logLine) => /^\s*\[[\w\d:. ]+\]/.test(logLine))) return message;
+    if (message.data.some((logLine) => /^\s*\[[\w\d:. ]+\]/.test(logLine)))
+      if (message.variables?.processType === 'renderer')
+        // And skip formatting if it comes from the renderer because it already has formatting
+        return {
+          ...message,
+          variables: {
+            ...message.variables,
+            // Not sure when variables would not be defined, so dunno when this could happen
+            processType: message.variables?.processType ?? 'unknown',
+            skipFormatting: true,
+          },
+        };
+      else return message;
 
     const caller = identifyCaller();
+
+    let processName = 'unkn';
+    switch (
+      // Renderer's logs come in through main with `message.variables.processType` set to 'renderer'
+      message.variables?.processType === 'renderer' ? ProcessType.Renderer : getProcessType()
+    ) {
+      case ProcessType.Main:
+        processName = 'main';
+        break;
+      case ProcessType.ExtensionHost:
+        processName = 'exth';
+        break;
+      case ProcessType.Renderer:
+        processName = 'rend';
+        break;
+      default:
+        // Not expecting unknown. dotnet is already handled in `dotnet-data-provider.service.ts`
+        break;
+    }
+
     return {
       ...message,
       data: message.data.map((logLine) =>
-        formatLog(
-          caller ? `${logLine} ${caller}` : `${logLine}`,
-          // Renderer's logs come in through main with `message.variables.processType` set to 'renderer'
-          message.variables?.processType === ProcessType.Renderer
-            ? ProcessType.Renderer
-            : getProcessType(),
-        ),
+        formatLog(caller ? `${logLine} ${caller}` : `${logLine}`, processName),
       ),
     };
   });

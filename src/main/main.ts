@@ -50,8 +50,6 @@ import { CommandNames } from 'papi-shared-types';
 import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
 import { windowService } from '@shared/services/window.service';
 
-console.log(`MAIN NODE_ENV=${process.env.NODE_ENV}`);
-
 // #region Helper functions
 
 /**

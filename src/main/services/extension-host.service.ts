@@ -72,7 +72,6 @@ async function waitForExtensionHost(maxWaitTimeInMS: number, shouldCloseWatcher 
       logger.warn('Extension host process lifetime variable was not initialized');
       return false;
     }
-    // This does nothing in development because nodemon is in the way, but the hard kill will work
     extensionHost?.send(gracefulShutdownMessage, (error) => {
       if (error) logger.warn(`Error sending graceful shutdown message: ${error}`);
     });
@@ -177,7 +176,7 @@ async function startExtensionHost(maxWaitTimeInMS: number, isRestarting = false)
   if (extensionHost) return;
 
   // In production, fork a new process for the extension host
-  // In development, spawn nodemon to watch the extension-host
+  // In development, fork a new process for the extension-host and watch for changes with chokidar
   /** Arguments that will be passed to the extension host no matter how we start the process */
   const sharedArgs = [
     commandLineArgumentsAliases[COMMAND_LINE_ARGS.ResourcesPath][0],

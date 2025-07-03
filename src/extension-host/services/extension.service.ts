@@ -1039,7 +1039,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
  * @returns Unsubscriber that deactivates the extension.
  */
 async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtension> {
-  logger.debug(`extension.service: importing ${extension.name}`);
+  logger.info(`extension.service: importing ${extension.name}`);
   // Import the extension file. Tell webpack to ignore it because extension files are not in the
   // bundle and should not be looked up in the bundle. Assert a more ambiguous type.
   // DO NOT REMOVE THE webpackIgnore COMMENT. It is a webpack "Magic Comment" https://webpack.js.org/api/module-methods/#magic-comments
@@ -1047,7 +1047,7 @@ async function activateExtension(extension: ExtensionInfo): Promise<ActiveExtens
   const extensionModuleAmbiguous = systemRequire(
     /* webpackIgnore: true */ getPathFromUri(extension.dirUri),
   ) as AmbiguousExtensionModule;
-  logger.debug(`extension.service: finished importing ${extension.name}`);
+  logger.info(`extension.service: finished importing ${extension.name}`);
   // Some modules import with their exports directly on the module object, while others put their
   // exports in a `default` member on the module. Let's use the module object itself if `activate`
   // is on it, and let's go into `default` otherwise.
@@ -1112,7 +1112,7 @@ async function callActivateOnExtension(
   context: ExecutionActivationContext,
   info: ExtensionInfo,
 ): Promise<void> {
-  logger.debug(`extension.service: activating ${context.name}`);
+  logger.info(`extension.service: activating ${context.name}`);
 
   let timeoutOccurred = false;
   let errorDuringActivation: unknown;
@@ -1168,7 +1168,7 @@ async function callActivateOnExtension(
   if (errorDuringActivation) throw errorDuringActivation;
   if (timeoutOccurred) throw new Error(`Activation of ${context.name} timed out`);
 
-  logger.debug(`extension.service: finished activating ${context.name}`);
+  logger.info(`extension.service: finished activating ${context.name}`);
 }
 
 /**
