@@ -4,7 +4,11 @@ import { mergeWithCustomize } from 'webpack-merge';
 import { RuleSetRule } from 'webpack';
 
 const config: StorybookConfig = {
-  stories: ['../src/**/*.mdx', '../src/**/*.stories.@(js|jsx|ts|tsx)'],
+  stories: [
+    '../src/**/*.mdx',
+    '../src/**/*.stories.@(js|jsx|ts|tsx)',
+    '../extensions/src/**/*.stories.@(js|jsx|ts|tsx)', // Collect stories from bundled extensions
+  ],
   staticDirs: ['../src/stories/assets'], // static asset folder
   addons: [
     getAbsolutePath('@storybook/addon-links'),
