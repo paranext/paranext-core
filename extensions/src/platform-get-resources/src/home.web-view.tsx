@@ -530,7 +530,7 @@ globalThis.webViewComponent = function HomeDialog() {
         ) : (
           <CardContent className="tw-flex-grow tw-overflow-auto">
             {!localProjectsInfo ? (
-              <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+              <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
                 <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
                 <Label className="tw-text-muted-foreground tw-font-normal">
                   {noProjectsInstructionText}
@@ -548,7 +548,7 @@ globalThis.webViewComponent = function HomeDialog() {
             ) : (
               <div className="tw-flex-grow tw-h-full">
                 {filteredAndSortedProjects.length === 0 ? (
-                  <div className="tw-flex-grow tw-h-full tw-border tw-border-gray-200 tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+                  <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
                     <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
                     <Label className="tw-text-muted-foreground tw-font-normal">
                       {`${searchedForText} "${textFilter}".`}
