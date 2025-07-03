@@ -33,6 +33,8 @@ import { formatTimeSpan } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { useMemo, useState } from 'react';
 
+import './home.web-view.scss';
+
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -294,9 +296,15 @@ export function Home({
     setSortConfig(newSortConfig);
   };
 
-  const buildTableHead = (key: SortConfig['key'], label: string) => (
-    <TableHead onClick={() => handleSort(key)}>
-      <div className="tw-flex tw-items-center">
+  const buildTableHead = (key: SortConfig['key'], label: string, className?: string) => (
+    <TableHead
+      onClick={() => handleSort(key)}
+      className={className}
+      style={{ paddingLeft: '8px', paddingRight: '8px' }}
+    >
+      {' '}
+      {/* tw-px-4 */}
+      <div className="tw-flex tw-items-center tw-px-0">
         <div className="tw-font-normal">{label}</div>
         {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
         {sortConfig.key === key &&
@@ -355,8 +363,8 @@ export function Home({
   return (
     <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
       <CardHeader className="tw-flex-shrink-0">
-        <div className="tw-flex tw-justify-between tw-gap-4">
-          <div className="tw-flex tw-flex-col md:tw-flex-row tw-gap-4">
+        <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
+          <div className="tw-flex tw-flex-col tw-gap-4">
             <div className="tw-flex tw-gap-4 tw-items-center">
               <HomeIcon size={36} />
               <CardTitle>{dialogTitleText}</CardTitle>
@@ -432,13 +440,11 @@ export function Home({
                     <TableHeader className="tw-bg-none" stickyHeader>
                       <TableRow>
                         <TableHead />
-                        <TableHead />
-                        {buildTableHead('fullName', fullNameText)}
-                        {buildTableHead('language', languageText)}
+                        {buildTableHead('fullName', fullNameText, 'tw-hidden full-name-row')}
+                        {buildTableHead('language', languageText, 'tw-hidden md:tw-table-cell')}
                         {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
-                          buildTableHead('activity', activityText)}
+                          buildTableHead('activity', activityText, 'tw-hidden sm:tw-table-cell')}
                         {buildTableHead('action', actionText)}
-                        <TableHead />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -447,18 +453,30 @@ export function Home({
                           onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
                           key={project.projectId}
                         >
-                          <TableCell>
+                          <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4">
                             {project.isEditable ? (
-                              <ScrollText className="tw-pr-0" size={18} />
+                              <ScrollText
+                                className="tw-pr-0"
+                                size={18}
+                                style={{ minWidth: '24px' }}
+                              />
                             ) : (
-                              <BookOpen className="tw-pr-0" size={18} />
+                              <BookOpen
+                                className="tw-pr-0"
+                                size={18}
+                                style={{ minWidth: '24px' }}
+                              />
                             )}
+                            <div className="short-name tw-py-4">{project.name}</div>
                           </TableCell>
-                          <TableCell>{project.name}</TableCell>
-                          <TableCell className="tw-font-medium">{project.fullName}</TableCell>
-                          <TableCell>{project.language}</TableCell>
+                          <TableCell className="cell full-name-row tw-hidden tw-font-medium">
+                            {project.fullName}
+                          </TableCell>
+                          <TableCell className="cell tw-hidden md:tw-table-cell">
+                            {project.language}
+                          </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell>
+                            <TableCell className="cell tw-hidden sm:tw-table-cell">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
@@ -467,28 +485,28 @@ export function Home({
                             </TableCell>
                           )}
                           <TableCell>
-                            {project.isSendReceivable &&
-                            (!project.isLocallyAvailable || project.editedStatus === 'edited')
-                              ? syncOrGetButton(project)
-                              : openButton(project)}
-                          </TableCell>
-                          <TableCell>
-                            {project.isSendReceivable && project.isLocallyAvailable && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost">
-                                    <Ellipsis className="tw-w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                  <DropdownMenuItem asChild>
-                                    {project.editedStatus === 'edited'
-                                      ? openButton(project, true)
-                                      : syncOrGetButton(project, true)}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
+                            <div className="tw-flex tw-justify-between tw-items-center">
+                              {project.isSendReceivable &&
+                              (!project.isLocallyAvailable || project.editedStatus === 'edited')
+                                ? syncOrGetButton(project)
+                                : openButton(project)}
+                              {project.isSendReceivable && project.isLocallyAvailable && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost">
+                                      <Ellipsis className="tw-w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start">
+                                    <DropdownMenuItem asChild>
+                                      {project.editedStatus === 'edited'
+                                        ? openButton(project, true)
+                                        : syncOrGetButton(project, true)}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
