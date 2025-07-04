@@ -47,7 +47,9 @@
     "test": "vitest",
     "typecheck": "tsc -p ./tsconfig.json",
     "storybook": "storybook dev -p 6007",
-    "storybook:build": "storybook build"
+    "storybook:build": "storybook build",
+    "storybook:serve": "vite preview --outDir storybook-static"
+
   },
   "peerDependencies": {
     "react": ">=18.3.1",
