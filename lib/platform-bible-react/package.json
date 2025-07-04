@@ -33,10 +33,9 @@
   "scripts": {
     "start": "vite --host --open",
     "build:basic": "tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
-    "build:docs": "typedoc",
-    "build:storybook": "storybook build",
     "build": "npm run build:basic && npm run lint-fix",
     "clean:storybook": "rimraf storybook-static",
+    "docs:build": "typedoc",
     "watch": "tsc && vite build --watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -47,7 +46,8 @@
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
     "test": "vitest",
     "typecheck": "tsc -p ./tsconfig.json",
-    "storybook": "storybook dev -p 6007"
+    "storybook": "storybook dev -p 6007",
+    "storybook:build": "storybook build"
   },
   "peerDependencies": {
     "react": ">=18.3.1",
