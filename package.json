@@ -92,6 +92,7 @@
     "storybook": "storybook dev -p 6006",
     "storybook:platform-bible-react": "cd lib/platform-bible-react && npm run storybook",
     "storybook:build": "storybook build",
+    "storybook:serve": "vite preview --outDir storybook-static",
     "test": "npm run test:core -- --run && npm run test --workspaces --if-present -- --run",
     "test:core": "vitest",
     "typecheck": "npm run typecheck:core && npm run typecheck --workspaces --if-present",
