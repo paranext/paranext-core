@@ -1,4 +1,4 @@
-import { DropdownMenuItem } from '@/components/shadcn-ui/dropdown-menu';
+import { CommandItem } from '@/components/shadcn-ui/command';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Canon } from '@sillsdev/scripture';
 import { KeyboardEvent, PropsWithChildren, forwardRef } from 'react';
@@ -41,10 +41,9 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
     ref,
   ) => {
     return (
-      <DropdownMenuItem
+      <CommandItem
         ref={ref}
         key={bookId}
-        textValue={bookId}
         className={cn(
           'tw-mx-1 tw-flex-col tw-items-start tw-px-1 tw-font-normal tw-text-foreground/80',
           {
@@ -53,12 +52,9 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
               shouldExpandChildren,
           },
         )}
-        onSelect={(event: Event) => {
-          // preventDefault() here prevents the entire dropdown menu from closing when selecting this item
-          event.preventDefault();
-          handleSelectBook();
-        }}
+        onSelect={handleSelectBook}
         onKeyDown={(event: KeyboardEvent) => {
+          console.log('BookMenuItem keydown', event.key);
           handleKeyDown(event);
         }}
         onFocus={handleHighlightBook}
@@ -78,7 +74,7 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
           {Canon.bookIdToEnglishName(bookId)}
         </span>
         {shouldExpandChildren && <div>{children}</div>}
-      </DropdownMenuItem>
+      </CommandItem>
     );
   },
 );

@@ -1,17 +1,19 @@
-import { BookChapterInput } from '@/components/advanced/book-chapter-control/book-chapter-input.component';
 import {
   BookMenuItem,
   BookType,
 } from '@/components/advanced/book-chapter-control/book-menu-item.component';
 import { ChapterSelect } from '@/components/advanced/book-chapter-control/chapter-select.component';
+import { Button } from '@/components/shadcn-ui/button';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/shadcn-ui/dropdown-menu';
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from '@/components/shadcn-ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { formatScrRef, getChaptersForBook, MODIFIER_KEYS } from 'platform-bible-utils';
@@ -34,8 +36,6 @@ export type BookChapterControlProps = {
   scrRef: SerializedVerseRef;
   /** Function to handle the submission of selected references */
   handleSubmit: (scrRef: SerializedVerseRef) => void;
-  /** Optional additional class name for styling */
-  className?: string;
   /** Function to retrieve active book IDs */
   getActiveBookIds?: () => string[];
 };
@@ -138,7 +138,6 @@ function getBookIdFromEnglishName(bookName: string): string | undefined {
 export function BookChapterControl({
   scrRef,
   handleSubmit,
-  className,
   getActiveBookIds,
 }: BookChapterControlProps) {
   const dir: Direction = readDirection();
@@ -168,7 +167,7 @@ export function BookChapterControl({
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const inputRef = useRef<HTMLInputElement>(undefined!);
+  // const inputRef = useRef<HTMLInputElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const contentRef = useRef<HTMLDivElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -423,79 +422,79 @@ export function BookChapterControl({
   );
 
   /** Send keydown event to the book chapter input component. */
-  const passInputToBookChapterInput = useCallback((event: ReactKeyboardEvent) => {
-    // Wait to do anything if the user presses a modifier key since that doesn't constitute typing
-    if (MODIFIER_KEYS.has(event.key)) return;
+  // const passInputToBookChapterInput = useCallback((event: ReactKeyboardEvent) => {
+  //   // Wait to do anything if the user presses a modifier key since that doesn't constitute typing
+  //   if (MODIFIER_KEYS.has(event.key)) return;
 
-    // Tab sends you to next element outside this BC control, while Shift+tab should send you back to the input
-    if (event.key === 'Tab') {
-      if (event.shiftKey) {
-        inputRef.current.focus();
-      } else {
-        // We are checking in the filter that it is HTMLElement. TypeScript is getting thrown off
-        // by the additional checks for some reason
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const focusableElementsOutsideThisComponent = [
-          ...document.querySelectorAll(TAB_INDEX_QUERY),
-        ].filter(
-          (element) =>
-            element instanceof HTMLElement &&
-            (((element.offsetWidth > 0 || element.offsetHeight > 0) &&
-              !contentRef.current?.contains(element) &&
-              !inputRef.current?.contains(element)) ||
-              element === event.target),
-        ) as HTMLElement[];
-        const currentFocusedIndex =
-          event.target instanceof HTMLElement
-            ? focusableElementsOutsideThisComponent.indexOf(event.target)
-            : -1;
-        if (currentFocusedIndex >= 0) {
-          // Focus the next element if there is one
-          const nextElement =
-            focusableElementsOutsideThisComponent[
-              (currentFocusedIndex + 1) % focusableElementsOutsideThisComponent.length
-            ];
-          nextElement.focus();
-        } else {
-          // If we didn't find any focusable elements, just focus the input
-          inputRef.current.focus();
-        }
-      }
+  //   // Tab sends you to next element outside this BC control, while Shift+tab should send you back to the input
+  //   if (event.key === 'Tab') {
+  //     if (event.shiftKey) {
+  //       inputRef.current.focus();
+  //     } else {
+  //       // We are checking in the filter that it is HTMLElement. TypeScript is getting thrown off
+  //       // by the additional checks for some reason
+  //       // eslint-disable-next-line no-type-assertion/no-type-assertion
+  //       const focusableElementsOutsideThisComponent = [
+  //         ...document.querySelectorAll(TAB_INDEX_QUERY),
+  //       ].filter(
+  //         (element) =>
+  //           element instanceof HTMLElement &&
+  //           (((element.offsetWidth > 0 || element.offsetHeight > 0) &&
+  //             !contentRef.current?.contains(element) &&
+  //             !inputRef.current?.contains(element)) ||
+  //             element === event.target),
+  //       ) as HTMLElement[];
+  //       const currentFocusedIndex =
+  //         event.target instanceof HTMLElement
+  //           ? focusableElementsOutsideThisComponent.indexOf(event.target)
+  //           : -1;
+  //       if (currentFocusedIndex >= 0) {
+  //         // Focus the next element if there is one
+  //         const nextElement =
+  //           focusableElementsOutsideThisComponent[
+  //             (currentFocusedIndex + 1) % focusableElementsOutsideThisComponent.length
+  //           ];
+  //         nextElement.focus();
+  //       } else {
+  //         // If we didn't find any focusable elements, just focus the input
+  //         inputRef.current.focus();
+  //       }
+  //     }
 
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
+  //     event.preventDefault();
+  //     event.stopPropagation();
+  //     return;
+  //   }
 
-    // This is some kind of keyboard input. Send it to the input component
-    event.stopPropagation();
-    inputRef.current.focus();
-    inputRef.current.dispatchEvent(new KeyboardEvent('keydown', { ...event, view: undefined }));
-  }, []);
+  //   // This is some kind of keyboard input. Send it to the input component
+  //   event.stopPropagation();
+  //   inputRef.current.focus();
+  //   inputRef.current.dispatchEvent(new KeyboardEvent('keydown', { ...event, view: undefined }));
+  // }, []);
 
   /**
    * Handles keydown events for the content area of the dropdown menu.
    *
    * These occur when the user opens the dropdown, mouses over it, then mouses out of the dropdown
    */
-  const handleKeyDownContent = useCallback(
-    (event: ReactKeyboardEvent) => {
-      const { key } = event;
+  // const handleKeyDownContent = useCallback(
+  //   (event: ReactKeyboardEvent) => {
+  //     const { key } = event;
 
-      if (CONTENT_NAVIGATION_KEYS.has(key)) {
-        // Built-in hover management works well in this case. Don't mess with it
-        return;
-      }
+  //     if (CONTENT_NAVIGATION_KEYS.has(key)) {
+  //       // Built-in hover management works well in this case. Don't mess with it
+  //       return;
+  //     }
 
-      // User is not navigating in the content. Other key strokes give focus back to the input
-      // component to type in the filter
-      passInputToBookChapterInput(event);
-      // Prevent from scrolling to the book whose name starts with the letter typed
-      // Unfortunately, this also prevents the character from going to the input for some reason
-      event.preventDefault();
-    },
-    [passInputToBookChapterInput],
-  );
+  //     // User is not navigating in the content. Other key strokes give focus back to the input
+  //     // component to type in the filter
+  //     passInputToBookChapterInput(event);
+  //     // Prevent from scrolling to the book whose name starts with the letter typed
+  //     // Unfortunately, this also prevents the character from going to the input for some reason
+  //     event.preventDefault();
+  //   },
+  //   [passInputToBookChapterInput],
+  // );
 
   /**
    * Handles keydown events for individual book menu items.
@@ -509,7 +508,8 @@ export function BookChapterControl({
    * @param index Which book menu item is receiving the keydown event
    */
   const handleKeyDownMenuItem = useCallback(
-    (event: ReactKeyboardEvent, index: number) => {
+    (event: ReactKeyboardEvent) => {
+      // (event: ReactKeyboardEvent, index: number) => {
       const { key } = event;
 
       if (CONTENT_NAVIGATION_KEYS.has(key)) {
@@ -596,11 +596,11 @@ export function BookChapterControl({
         }
 
         // If we're at the top of the menu and the user presses up, go to the input
-        if (index === 0 && key === 'ArrowUp') {
-          event.preventDefault();
-          inputRef.current.focus();
-          return;
-        }
+        // if (index === 0 && key === 'ArrowUp') {
+        //   event.preventDefault();
+        //   inputRef.current.focus();
+        //   return;
+        // }
 
         // Do not pass the key to the input component if the user is navigating in the chapter menu
         return;
@@ -608,7 +608,7 @@ export function BookChapterControl({
 
       // User is not navigating in the content. Other key strokes give focus back to the input
       // component to type in the filter
-      passInputToBookChapterInput(event);
+      // passInputToBookChapterInput(event);
 
       // Prevent the original event from continuing to propagate
       event.preventDefault();
@@ -618,7 +618,6 @@ export function BookChapterControl({
       dir,
       highlightedBookId,
       highlightedChapter,
-      passInputToBookChapterInput,
       selectedBookId,
       topMatchChapters,
       totalFilteredBooks,
@@ -672,14 +671,14 @@ export function BookChapterControl({
 
         // Sometimes the input was losing focus because the radix dropdown logic would grab the focus.
         // Work around this to make sure the input stays focused when the user clicks to open the dropdown
-        inputRef.current.focus();
+        // inputRef.current.focus();
       }
 
       // If the user clicks away, reset to the Scripture Reference
       if (
         !isContentOpenDelayed &&
-        document.activeElement !== inputRef.current &&
-        !inputRef.current?.contains(document.activeElement) &&
+        // document.activeElement !== inputRef.current &&
+        // !inputRef.current?.contains(document.activeElement) &&
         document.activeElement !== contentRef.current &&
         !contentRef.current?.contains(document.activeElement)
       ) {
@@ -708,10 +707,27 @@ export function BookChapterControl({
   }, [bookChapterInputValue, scrRef, calculateTopMatch]);
 
   return (
-    <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
-      <DropdownMenuTrigger asChild>
-        <BookChapterInput
-          ref={inputRef}
+    <Popover open={isContentOpen} onOpenChange={controlMenuState}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          // className="tw-absolute tw-right-2 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2"
+        >
+          {formatScrRef(scrRef, 'English')}
+        </Button>
+      </PopoverTrigger>
+      {totalFilteredBooks > 0 && (
+        <PopoverContent
+          className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
+          // Need to get over the floating window z-index 200
+          style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
+          align={dir === 'ltr' ? 'start' : 'end'}
+          ref={contentRef}
+          // onKeyDown={handleKeyDownContent}
+        >
+          <Command>
+            {/* <BookChapterInput
+
           value={bookChapterInputValue}
           handleSearch={handleSearchInput}
           handleKeyDown={handleKeyDownInput}
@@ -736,83 +752,80 @@ export function BookChapterControl({
           hasTopMatch={!!topMatch}
           hasNoMatches={totalFilteredBooks === 0}
           hasInputChanged={isSearchDifferentFromScrRef}
-        />
-      </DropdownMenuTrigger>
-      {totalFilteredBooks > 0 && (
-        <DropdownMenuContent
-          className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
-          // Need to get over the floating window z-index 200
-          style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
-          align={dir === 'ltr' ? 'start' : 'end'}
-          ref={contentRef}
-          onKeyDown={handleKeyDownContent}
-        >
-          {/* work around until DropdownMenuContent supports a dir prop */}
-          <div className="rtl:tw-ps-2">
-            {topMatch && isSearchDifferentFromScrRef && (
-              <>
-                <DropdownMenuItem
-                  className="tw-cursor-pointer tw-p-4 tw-font-semibold tw-text-foreground"
-                  onClick={handleInputSubmit}
-                >
-                  {formatScrRef({
-                    book: topMatch.bookId,
-                    chapterNum: topMatch.chapterNum ?? 1,
-                    verseNum: topMatch.verseNum ?? 1,
-                  })}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-              </>
-            )}
-            {allFilteredBooksByType.map((section, sectionIndex) => (
-              <div key={section.bookType}>
-                <DropdownMenuLabel className="tw-font-semibold tw-text-foreground/80">
-                  {BOOK_TYPE_LABELS[section.bookType]}
-                </DropdownMenuLabel>
-
-                {section.books.map((bookId, bookIndex) => (
-                  <div key={bookId}>
-                    <BookMenuItem
-                      bookId={bookId}
-                      handleSelectBook={() => updateReference(bookId, false)}
-                      shouldExpandChildren={
-                        selectedBookId.toLowerCase() === bookId.toLowerCase() ||
-                        totalFilteredBooks === 1
-                      }
-                      handleHighlightBook={() => setHighlightedBookId(bookId)}
-                      handleKeyDown={(event) => handleKeyDownMenuItem(event, bookIndex)}
-                      bookType={section.bookType}
-                      ref={(element: HTMLDivElement) => {
-                        if (selectedBookId === bookId) menuItemRef.current = element;
-                      }}
+        /> */}
+            <CommandInput placeholder="Search framework..." className="h-9" />
+            <CommandList>
+              <CommandEmpty>No framework found.</CommandEmpty>
+              {/* work around until DropdownMenuContent supports a dir prop */}
+              <div className="rtl:tw-ps-2">
+                {topMatch && isSearchDifferentFromScrRef && (
+                  <>
+                    <CommandItem
+                      className="tw-cursor-pointer tw-p-4 tw-font-semibold tw-text-foreground"
+                      onClick={handleInputSubmit}
                     >
-                      <ChapterSelect
-                        handleSelectChapter={handleSelectChapter}
-                        endChapter={fetchEndChapter(bookId)}
-                        // Without this condition- will highlight that chapterNum in every book- not just the selected book
-                        selectedChapter={selectedBookId === scrRef.book ? scrRef.chapterNum : 0}
-                        highlightedChapter={
-                          selectedBookId === highlightedBookId || totalFilteredBooks === 1
-                            ? highlightedChapter
-                            : 0
-                        }
-                        handleHighlightedChapter={(chapterNumber: number): void => {
-                          setHighlightedChapter(chapterNumber);
-                        }}
-                        matchingChapters={
-                          isSearchDifferentFromScrRef ? topMatchChapters : undefined
-                        }
-                      />
-                    </BookMenuItem>
+                      {formatScrRef({
+                        book: topMatch.bookId,
+                        chapterNum: topMatch.chapterNum ?? 1,
+                        verseNum: topMatch.verseNum ?? 1,
+                      })}
+                    </CommandItem>
+                    <CommandSeparator />
+                  </>
+                )}
+                {allFilteredBooksByType.map((section, sectionIndex) => (
+                  <div key={section.bookType}>
+                    <CommandGroup className="tw-font-semibold tw-text-foreground/80">
+                      {BOOK_TYPE_LABELS[section.bookType]}
+
+                      {section.books.map((bookId) => (
+                        <div key={bookId}>
+                          <BookMenuItem
+                            bookId={bookId}
+                            handleSelectBook={() => updateReference(bookId, false)}
+                            shouldExpandChildren={
+                              selectedBookId.toLowerCase() === bookId.toLowerCase() ||
+                              totalFilteredBooks === 1
+                            }
+                            handleHighlightBook={() => setHighlightedBookId(bookId)}
+                            handleKeyDown={(event) => handleKeyDownMenuItem(event)}
+                            bookType={section.bookType}
+                            ref={(element: HTMLDivElement) => {
+                              if (selectedBookId === bookId) menuItemRef.current = element;
+                            }}
+                          >
+                            <ChapterSelect
+                              handleSelectChapter={handleSelectChapter}
+                              endChapter={fetchEndChapter(bookId)}
+                              // Without this condition- will highlight that chapterNum in every book- not just the selected book
+                              selectedChapter={
+                                selectedBookId === scrRef.book ? scrRef.chapterNum : 0
+                              }
+                              highlightedChapter={
+                                selectedBookId === highlightedBookId || totalFilteredBooks === 1
+                                  ? highlightedChapter
+                                  : 0
+                              }
+                              handleHighlightedChapter={(chapterNumber: number): void => {
+                                setHighlightedChapter(chapterNumber);
+                              }}
+                              matchingChapters={
+                                isSearchDifferentFromScrRef ? topMatchChapters : undefined
+                              }
+                            />
+                          </BookMenuItem>
+                        </div>
+                      ))}
+                      {sectionIndex < allFilteredBooksByType.length - 1 && <CommandSeparator />}
+                    </CommandGroup>
                   </div>
                 ))}
-                {sectionIndex < allFilteredBooksByType.length - 1 && <DropdownMenuSeparator />}
               </div>
-            ))}
-          </div>
-        </DropdownMenuContent>
+            </CommandList>
+          </Command>
+        </PopoverContent>
       )}
-    </DropdownMenu>
+    </Popover>
   );
 }
 
