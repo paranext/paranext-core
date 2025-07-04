@@ -33,9 +33,8 @@
   "scripts": {
     "start": "vite --host --open",
     "build:basic": "tsc && vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
-    "build:docs": "npm install && typedoc",
     "build": "npm run build:basic && npm run lint-fix && npm run test -- --run",
-    "watch": "tsc && vite build --watch",
+    "docs:build": "npm install && typedoc",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "npm run lint:scripts",
@@ -43,7 +42,8 @@
     "lint-fix": "npm run lint-fix:scripts",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
     "test": "vitest",
-    "typecheck": "tsc -p ./tsconfig.json"
+    "typecheck": "tsc -p ./tsconfig.json",
+    "watch": "tsc && vite build --watch"
   },
   "peerDependencies": {},
   "dependencies": {

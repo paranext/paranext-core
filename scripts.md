@@ -101,6 +101,30 @@ npm run -ws test
 - Ensures a consistent code style across the monorepo.
 - Makes it easy to run checks everywhere with the same commands.
 
+### 6. Naming Conventions for Documentation Scripts
+
+**Use `docs:build`.** Both `build:docs` and `docs:build` are script names commonly found in `package.json` files in JavaScript/TypeScript projects. They are used to automate the process of building project documentation.
+
+- **`build:docs`:**  
+  This script name follows the convention of "action:target" (i.e., build the docs). It's commonly used in single-package repositories.
+
+  ```json
+  "scripts": {
+    "build:docs": "typedoc src"
+  }
+  ```
+
+- **`docs:build`:**  
+  This script name follows the "target:action" convention (i.e., docs build). It's often seen in monorepos or projects where documentation is a top-level concern, possibly alongside other doc-related scripts (like `docs:serve`, `docs:deploy`).
+
+  ```json
+  "scripts": {
+    "docs:build": "docusaurus build"
+  }
+  ```
+
+Since this is a monorepo, it uses `docs:build`.
+
 ---
 
 ## Opportunities for Increased Standardization
