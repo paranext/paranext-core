@@ -32,11 +32,10 @@
   "files": ["dist"],
   "scripts": {
     "start": "vite --host --open",
-    "build:basic": "tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
     "build": "npm run build:basic && npm run lint-fix",
+    "build:basic": "tsc && cross-env NODE_ENV=production vite build && dts-bundle-generator --config ./dts-bundle-generator.config.ts",
     "clean:storybook": "rimraf storybook-static",
     "docs:build": "typedoc",
-    "watch": "tsc && vite build --watch",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "npm run lint:scripts && npm run lint:styles",
@@ -44,11 +43,12 @@
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
     "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
-    "test": "vitest",
-    "typecheck": "tsc -p ./tsconfig.json",
     "storybook": "storybook dev -p 6007",
     "storybook:build": "storybook build",
-    "storybook:serve": "vite preview --outDir storybook-static"
+    "storybook:serve": "vite preview --outDir storybook-static",
+    "test": "vitest",
+    "typecheck": "tsc -p ./tsconfig.json",
+    "watch": "tsc && vite build --watch"
 
   },
   "peerDependencies": {
