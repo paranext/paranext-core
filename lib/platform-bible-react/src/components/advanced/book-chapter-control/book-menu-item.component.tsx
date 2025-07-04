@@ -13,18 +13,20 @@ type BookMenuItemProps = PropsWithChildren<{
   /** Indicates if this menu item is should be expanded to show its children */
   shouldExpandChildren: boolean;
   /** Function that is called upon highlighting a book in the dropdown menu */
-  handleHighlightBook: () => void;
+  handleHighlightBook?: () => void;
   /**
    * Function that is called on pressing a key
    *
    * @param event Event that contains information about the key stroke
    */
-  handleKeyDown: (event: KeyboardEvent) => void;
+  handleKeyDown?: (event: KeyboardEvent) => void;
   /**
    * Type of book associated with this menu item, coordinates color labels ? Mock up has the labels
    * coordinated to genre
    */
   bookType: BookType;
+  /** Value for the CommandItem to enable programmatic selection */
+  value?: string;
 }>;
 
 export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
@@ -36,6 +38,7 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
       handleHighlightBook,
       handleKeyDown,
       bookType,
+      value,
       children,
     }: BookMenuItemProps,
     ref,
@@ -44,6 +47,7 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
       <CommandItem
         ref={ref}
         key={bookId}
+        value={value || bookId}
         className={cn(
           'tw-mx-1 tw-flex-col tw-items-start tw-px-1 tw-font-normal tw-text-foreground/80',
           {
@@ -55,7 +59,7 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
         onSelect={handleSelectBook}
         onKeyDown={(event: KeyboardEvent) => {
           console.log('BookMenuItem keydown', event.key);
-          handleKeyDown(event);
+          handleKeyDown?.(event);
         }}
         onFocus={handleHighlightBook}
         onMouseMove={handleHighlightBook}

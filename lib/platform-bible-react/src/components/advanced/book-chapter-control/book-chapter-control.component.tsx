@@ -14,9 +14,9 @@ import {
   CommandSeparator,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
-import { Direction, readDirection } from '@/utils/dir-helper.util';
+// import { Direction, readDirection } from '@/utils/dir-helper.util';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { formatScrRef, getChaptersForBook, MODIFIER_KEYS } from 'platform-bible-utils';
+import { formatScrRef, getChaptersForBook } from 'platform-bible-utils';
 import {
   KeyboardEvent as ReactKeyboardEvent,
   useCallback,
@@ -47,7 +47,7 @@ type BookWithOptionalChapterAndVerse = {
 };
 
 /** How many chapter buttons fit in each row in the chapter select */
-const CHAPTERS_PER_ROW = 6;
+// const CHAPTERS_PER_ROW = 6;
 
 const ALL_BOOK_IDS = Canon.allBookIds.filter((b) => !Canon.isObsolete(Canon.bookIdToNumber(b)));
 
@@ -85,18 +85,18 @@ const SEARCH_QUERY_FORMATS = [
 ];
 
 /** Keys used for navigating around in the content menu */
-const CONTENT_NAVIGATION_KEYS = new Set([
-  'ArrowUp',
-  'ArrowDown',
-  'ArrowLeft',
-  'ArrowRight',
-  'Enter',
-]);
+// const CONTENT_NAVIGATION_KEYS = new Set([
+//   'ArrowUp',
+//   'ArrowDown',
+//   'ArrowLeft',
+//   'ArrowRight',
+//   'Enter',
+// ]);
 
 // Thanks to Mx. at https://stackoverflow.com/a/35173443
 /** Query selector for finding tab indexable elements */
-const TAB_INDEX_QUERY =
-  'a:not([disabled]), button:not([disabled]), input[type=text]:not([disabled]), [tabindex]:not([disabled]):not([tabindex="-1"])';
+// const TAB_INDEX_QUERY =
+//   'a:not([disabled]), button:not([disabled]), input[type=text]:not([disabled]), [tabindex]:not([disabled]):not([tabindex="-1"])';
 
 const fetchEndChapter = (bookId: string) => {
   // getChaptersForBook returns -1 if not found in scrBookData
@@ -140,7 +140,7 @@ export function BookChapterControl({
   handleSubmit,
   getActiveBookIds,
 }: BookChapterControlProps) {
-  const dir: Direction = readDirection();
+  // const dir: Direction = readDirection();
   // Value displayed on the book chapter input
   const [bookChapterInputValue, setBookChapterInputValue] = useState<string>(() =>
     formatScrRef(scrRef, 'English'),
@@ -152,24 +152,30 @@ export function BookChapterControl({
   // Which chapter is highlighted (as if it were being hovered) in the chapter selection controls
   const [highlightedChapter, setHighlightedChapter] = useState<number>(scrRef.chapterNum ?? 0);
   // Which book is highlighted (as if it were being hovered) in the book selection list
-  const [highlightedBookId, setHighlightedBookId] = useState<string>(scrRef.book);
+  // const [highlightedBookId, setHighlightedBookId] = useState<string>(scrRef.book);
   // Whether the dropdown content is showing
   const [isContentOpen, setIsContentOpen] = useState<boolean>(false);
   // `isContentOpen` but delayed by a `useLayoutEffect` cycle - used to delay the scroll to the
   // selected book menu item until the refs are defined and available. This is necessary because the
   // refs are not defined immediately after we set the content to opened, so we need to wait a bit
   // before scrolling to the selected book menu item
-  const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
+  // const [isContentOpenDelayed, setIsContentOpenDelayed] = useState<boolean>(isContentOpen);
   // Track whether the user has started typing since the input was focused
   const [hasStartedTyping, setHasStartedTyping] = useState<boolean>(false);
   // Store the top match result for display in dropdown
   const [topMatch, setTopMatch] = useState<BookWithOptionalChapterAndVerse | undefined>(undefined);
+  // Track the currently selected command item for programmatic control
+  const [selectedCommandValue, setSelectedCommandValue] = useState<string>('');
 
   // This ref will always be defined
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   // const inputRef = useRef<HTMLInputElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const contentRef = useRef<HTMLDivElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const commandListRef = useRef<HTMLDivElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const commandInputRef = useRef<HTMLInputElement>(undefined!);
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const menuItemRef = useRef<HTMLDivElement>(undefined!);
 
@@ -215,11 +221,18 @@ export function BookChapterControl({
   const topMatchChapters = useMemo(() => {
     if (!topMatch || !topMatch.chapterNum) return undefined;
     if (topMatch.verseNum) return [topMatch.chapterNum];
-    return Array.from({ length: fetchEndChapter(highlightedBookId) }, (_, i) => i + 1).filter(
+    return Array.from(
+      { length: fetchEndChapter(selectedCommandValue.slice(0, 3)) },
+      (_, i) => i + 1,
+    ).filter(
       (chapter) =>
         topMatch?.chapterNum && chapter.toString().includes(topMatch?.chapterNum?.toString()),
     );
-  }, [highlightedBookId, topMatch]);
+  }, [selectedCommandValue, topMatch]);
+
+  useEffect(() => {
+    console.log(topMatchChapters);
+  }, [topMatchChapters]);
 
   const fetchFilteredBooks = useCallback(
     (bookType: BookType) => {
@@ -255,13 +268,41 @@ export function BookChapterControl({
     [allFilteredBooksByType],
   );
 
-  const handleSearchInput = useCallback(
-    (searchString: string) => {
-      setBookChapterInputValue(searchString);
-      setSearchQuery(searchString.trim());
-      setTopMatch(calculateTopMatch(searchString.trim()));
+  const handleSmartEdit = useCallback(
+    (key: string) => {
+      if (hasStartedTyping) return;
+      if (/^\d$/.test(key)) {
+        const currentValue = formatScrRef(scrRef, 'English');
+        const bookMatch = currentValue.match(SCRIPTURE_REGEX_PATTERNS.EXTRACT_BOOK_FROM_REFERENCE);
+        if (bookMatch) {
+          const bookName = bookMatch[1];
+          const newValue = `${bookName} ${key}`;
+          setBookChapterInputValue(newValue);
+          setTopMatch(calculateTopMatch(newValue));
+          setHasStartedTyping(true);
+          return newValue;
+        }
+      } else if (key === ':') {
+        const currentValue = formatScrRef(scrRef, 'English');
+        const bookAndChapterMatch = currentValue.match(
+          SCRIPTURE_REGEX_PATTERNS.EXTRACT_BOOK_CHAPTER_FROM_REFERENCE,
+        );
+        if (bookAndChapterMatch) {
+          const bookAndChapter = bookAndChapterMatch[1];
+          const newValue = `${bookAndChapter}:`;
+          setBookChapterInputValue(newValue);
+          setTopMatch(calculateTopMatch(newValue));
+          setHasStartedTyping(true);
+          return newValue;
+        }
+      } else if (/^[a-zA-Z]$/.test(key)) {
+        setBookChapterInputValue(key);
+        setHasStartedTyping(true);
+        return key;
+      }
+      return undefined;
     },
-    [calculateTopMatch],
+    [calculateTopMatch, hasStartedTyping, scrRef],
   );
 
   /**
@@ -270,7 +311,7 @@ export function BookChapterControl({
    * we don't want to prevent the dropdown from closing when we click away from the input, so we
    * don't want to just keep it open if the input is focused
    */
-  const shouldPreventAutoClosing = useRef(false);
+  // const shouldPreventAutoClosing = useRef(false);
 
   /**
    * Reset this component's internal state to match the scripture reference. For example, this
@@ -280,14 +321,15 @@ export function BookChapterControl({
     setBookChapterInputValue(formatScrRef(scrRef, 'English'));
     setSearchQuery('');
     setSelectedBookId(scrRef.book);
-    setHighlightedBookId(scrRef.book);
+    // setHighlightedBookId(scrRef.book);
   }, [scrRef]);
 
   const controlMenuState = useCallback((open: boolean) => {
-    if (shouldPreventAutoClosing.current) {
-      shouldPreventAutoClosing.current = false;
-      return;
-    }
+    // if (shouldPreventAutoClosing.current) {
+    //   shouldPreventAutoClosing.current = false;
+    //   return;
+    // }
+    setTopMatch(undefined);
     setIsContentOpen(open);
   }, []);
 
@@ -322,7 +364,7 @@ export function BookChapterControl({
 
   const handleInputSubmit = useCallback(() => {
     SEARCH_QUERY_FORMATS.forEach((format) => {
-      const matches = format.exec(searchQuery);
+      const matches = format.exec(bookChapterInputValue);
       if (matches) {
         // Book should be a bookId or an english name
         const [book, chapter = undefined, verse = undefined] = matches.slice(1);
@@ -338,87 +380,60 @@ export function BookChapterControl({
         }
       }
     });
-  }, [updateReference, searchQuery]);
+  }, [updateReference, bookChapterInputValue]);
 
-  const handleKeyDownInput = useCallback(
+  const handleKeyDownCommandInput = useCallback(
     (event: ReactKeyboardEvent) => {
-      // If the dropdown isn't open, open it for looking at what you're typing.
-      // If it's open and the user presses down, go into the dropdown
-      // If it's open and the user presses escape, close it
-      if (!isContentOpen) {
-        // Just let Tab do its thing
-        if (event.key !== 'Tab') setIsContentOpen(true);
-      } else if (event.key === 'ArrowDown' || (event.key === 'Tab' && !event.shiftKey)) {
-        // If the user presses down or tab, focus the content
-        if (menuItemRef?.current) {
-          menuItemRef.current.focus();
-        } else if (contentRef.current) {
-          contentRef.current.focus();
+      // If arrow down is pressed, focus the command list
+      if (event.key === 'ArrowDown') {
+        // If the command list is open, focus it
+        if (commandListRef.current) {
+          commandListRef.current.focus();
+          setSelectedCommandValue(`${scrRef.book}-${Canon.bookIdToEnglishName(scrRef.book)}`);
+        }
+        // If the command list is not open, open it and focus it
+        else {
+          setIsContentOpen(true);
+          setTimeout(() => {
+            commandListRef.current?.focus();
+          }, 0);
         }
         event.preventDefault();
-      } else if (event.key === 'Escape' && document.activeElement === inputRef.current) {
-        // If the input isn't focused, the menu dropdown automatically handles the escape key
-        setIsContentOpen(false);
-        event.preventDefault();
-        event.stopPropagation();
+        return;
       }
 
-      // Special handling for smart chapter/verse editing
-      if (document.activeElement === inputRef.current) {
-        // Only apply smart editing on the first keypress after focusing
-        if (!hasStartedTyping) {
-          // Check if user is typing a letter as the first character - start new search query
-          if (/^[a-zA-Z]$/.test(event.key)) {
-            handleSearchInput(event.key);
-            setHasStartedTyping(true);
-            event.preventDefault();
-          }
-
-          // Check if user is typing a digit as the first character - start new chapter number
-          if (/^\d$/.test(event.key)) {
-            const currentValue = bookChapterInputValue;
-            // Match pattern "Name of Book 0:0" to extract book name
-            const bookMatch = currentValue.match(
-              SCRIPTURE_REGEX_PATTERNS.EXTRACT_BOOK_FROM_REFERENCE,
-            );
-            if (bookMatch) {
-              const bookName = bookMatch[1];
-              // Replace the input with book name + space + new digit
-              const newValue = `${bookName} ${event.key}`;
-              handleSearchInput(newValue);
-              setHasStartedTyping(true);
-              event.preventDefault();
-            }
-          }
-
-          // Check if user is typing a colon as the first character - start new verse number
-          if (event.key === ':') {
-            const currentValue = bookChapterInputValue;
-            // Match pattern "Name of Book 0:0" to extract book name and chapter number
-            const bookAndChapterMatch = currentValue.match(
-              SCRIPTURE_REGEX_PATTERNS.EXTRACT_BOOK_CHAPTER_FROM_REFERENCE,
-            );
-            if (bookAndChapterMatch) {
-              const bookAndChapter = bookAndChapterMatch[1];
-              // Replace the input with book name + chapter + colon, ready for verse input
-              // In some cases an extraneous colon was added here, so the colon is only added if needed
-              const newValue = bookAndChapter.endsWith(':')
-                ? `${bookAndChapter}`
-                : `${bookAndChapter}:`;
-              handleSearchInput(newValue);
-              setHasStartedTyping(true);
-              event.preventDefault();
-            }
-          }
-        }
-
-        // Mark that the user has started typing on any non-modifier key
-        if (!MODIFIER_KEYS.has(event.key)) {
-          setHasStartedTyping(true);
+      // Handle smart editing for letters, digits, and colons
+      const isRefSearchKey = /^[a-zA-Z0-9:]$/.test(event.key);
+      if (isRefSearchKey) {
+        const result = handleSmartEdit(event.key);
+        if (result !== undefined) {
+          event.preventDefault();
         }
       }
     },
-    [isContentOpen, bookChapterInputValue, hasStartedTyping, handleSearchInput],
+    [handleSmartEdit, scrRef],
+  );
+
+  const handleKeyDownCommandList = useCallback(
+    (event: ReactKeyboardEvent) => {
+      const { key } = event;
+
+      // Check if the pressed key is a letter, digit, or colon
+      const isRefSearchKey = /^[a-zA-Z0-9:]$/.test(key);
+
+      if (isRefSearchKey && commandInputRef.current) {
+        // Prevent the original event from propagating first
+        event.preventDefault();
+        event.stopPropagation();
+
+        // Focus the CommandInput
+        commandInputRef.current.focus();
+
+        // Use the shared smart editing logic
+        handleSmartEdit(key);
+      }
+    },
+    [handleSmartEdit],
   );
 
   /** Send keydown event to the book chapter input component. */
@@ -507,128 +522,128 @@ export function BookChapterControl({
    * @param event Keydown event
    * @param index Which book menu item is receiving the keydown event
    */
-  const handleKeyDownMenuItem = useCallback(
-    (event: ReactKeyboardEvent) => {
-      // (event: ReactKeyboardEvent, index: number) => {
-      const { key } = event;
+  // const handleKeyDownMenuItem = useCallback(
+  //   (event: ReactKeyboardEvent) => {
+  //     // (event: ReactKeyboardEvent, index: number) => {
+  //     const { key } = event;
 
-      if (CONTENT_NAVIGATION_KEYS.has(key)) {
-        // Navigate around in the book/chapter menu using arrow keys and submit with enter
-        // Opening the hovered book with enter is handled elsewhere
-        const isNavigatingChapters =
-          highlightedBookId === selectedBookId || totalFilteredBooks === 1;
-        if (isNavigatingChapters) {
-          const activeBook = totalFilteredBooks === 1 ? highlightedBookId : selectedBookId;
-          if (key === 'Enter') {
-            event.preventDefault();
-            updateReference(activeBook, true, highlightedChapter);
-            return;
-          }
+  //     if (CONTENT_NAVIGATION_KEYS.has(key)) {
+  //       // Navigate around in the book/chapter menu using arrow keys and submit with enter
+  //       // Opening the hovered book with enter is handled elsewhere
+  //       const isNavigatingChapters =
+  //         highlightedBookId === selectedBookId || totalFilteredBooks === 1;
+  //       if (isNavigatingChapters) {
+  //         const activeBook = totalFilteredBooks === 1 ? highlightedBookId : selectedBookId;
+  //         if (key === 'Enter') {
+  //           event.preventDefault();
+  //           updateReference(activeBook, true, highlightedChapter);
+  //           return;
+  //         }
 
-          const upOneChapter =
-            (key === 'ArrowRight' && !dir) ||
-            (key === 'ArrowRight' && dir === 'ltr') ||
-            (key === 'ArrowLeft' && dir === 'rtl');
-          const downOneChapter =
-            (key === 'ArrowLeft' && !dir) ||
-            (key === 'ArrowLeft' && dir === 'ltr') ||
-            (key === 'ArrowRight' && dir === 'rtl');
+  //         const upOneChapter =
+  //           (key === 'ArrowRight' && !dir) ||
+  //           (key === 'ArrowRight' && dir === 'ltr') ||
+  //           (key === 'ArrowLeft' && dir === 'rtl');
+  //         const downOneChapter =
+  //           (key === 'ArrowLeft' && !dir) ||
+  //           (key === 'ArrowLeft' && dir === 'ltr') ||
+  //           (key === 'ArrowRight' && dir === 'rtl');
 
-          // Determine available chapters for navigation
-          const availableChapters =
-            selectedBookId !== highlightedBookId
-              ? (topMatchChapters ??
-                Array.from({ length: fetchEndChapter(highlightedBookId) }, (_, i) => i + 1))
-              : Array.from({ length: fetchEndChapter(highlightedBookId) }, (_, i) => i + 1);
+  //         // Determine available chapters for navigation
+  //         const availableChapters =
+  //           selectedBookId !== highlightedBookId
+  //             ? (topMatchChapters ??
+  //               Array.from({ length: fetchEndChapter(highlightedBookId) }, (_, i) => i + 1))
+  //             : Array.from({ length: fetchEndChapter(highlightedBookId) }, (_, i) => i + 1);
 
-          const currentIndex = availableChapters.indexOf(highlightedChapter);
+  //         const currentIndex = availableChapters.indexOf(highlightedChapter);
 
-          let newHighlightedChapter = highlightedChapter;
+  //         let newHighlightedChapter = highlightedChapter;
 
-          if (upOneChapter) {
-            if (currentIndex >= 0 && currentIndex < availableChapters.length - 1) {
-              newHighlightedChapter = availableChapters[currentIndex + 1];
-            } else {
-              event.preventDefault();
-              return;
-            }
-          } else if (downOneChapter) {
-            if (currentIndex > 0) {
-              newHighlightedChapter = availableChapters[currentIndex - 1];
-            } else {
-              event.preventDefault();
-              return;
-            }
-          } else if (key === 'ArrowDown') {
-            // Move down by CHAPTERS_PER_ROW in the available chapters
-            const targetChapter = availableChapters[currentIndex] + CHAPTERS_PER_ROW;
-            // Find the closest available chapter >= targetChapter
-            const foundChapter = availableChapters.find((chapter) => chapter >= targetChapter);
-            if (foundChapter !== undefined) {
-              newHighlightedChapter = foundChapter;
-            } else {
-              // If no chapter found, go to the last available chapter
-              const [lastChapter] = availableChapters.slice(-1);
-              newHighlightedChapter = lastChapter;
-            }
-          } else if (key === 'ArrowUp') {
-            // Move up by CHAPTERS_PER_ROW in the available chapters
-            const targetChapter = availableChapters[currentIndex] - CHAPTERS_PER_ROW;
-            // Find the closest available chapter <= targetChapter (searching backwards)
-            const foundChapter = availableChapters
-              .slice()
-              .reverse()
-              .find((chapter) => chapter <= targetChapter);
-            if (foundChapter !== undefined) {
-              newHighlightedChapter = foundChapter;
-            } else {
-              // If no chapter found, go to the first available chapter
-              const [firstChapter] = availableChapters;
-              newHighlightedChapter = firstChapter;
-            }
-          }
+  //         if (upOneChapter) {
+  //           if (currentIndex >= 0 && currentIndex < availableChapters.length - 1) {
+  //             newHighlightedChapter = availableChapters[currentIndex + 1];
+  //           } else {
+  //             event.preventDefault();
+  //             return;
+  //           }
+  //         } else if (downOneChapter) {
+  //           if (currentIndex > 0) {
+  //             newHighlightedChapter = availableChapters[currentIndex - 1];
+  //           } else {
+  //             event.preventDefault();
+  //             return;
+  //           }
+  //         } else if (key === 'ArrowDown') {
+  //           // Move down by CHAPTERS_PER_ROW in the available chapters
+  //           const targetChapter = availableChapters[currentIndex] + CHAPTERS_PER_ROW;
+  //           // Find the closest available chapter >= targetChapter
+  //           const foundChapter = availableChapters.find((chapter) => chapter >= targetChapter);
+  //           if (foundChapter !== undefined) {
+  //             newHighlightedChapter = foundChapter;
+  //           } else {
+  //             // If no chapter found, go to the last available chapter
+  //             const [lastChapter] = availableChapters.slice(-1);
+  //             newHighlightedChapter = lastChapter;
+  //           }
+  //         } else if (key === 'ArrowUp') {
+  //           // Move up by CHAPTERS_PER_ROW in the available chapters
+  //           const targetChapter = availableChapters[currentIndex] - CHAPTERS_PER_ROW;
+  //           // Find the closest available chapter <= targetChapter (searching backwards)
+  //           const foundChapter = availableChapters
+  //             .slice()
+  //             .reverse()
+  //             .find((chapter) => chapter <= targetChapter);
+  //           if (foundChapter !== undefined) {
+  //             newHighlightedChapter = foundChapter;
+  //           } else {
+  //             // If no chapter found, go to the first available chapter
+  //             const [firstChapter] = availableChapters;
+  //             newHighlightedChapter = firstChapter;
+  //           }
+  //         }
 
-          if (newHighlightedChapter !== highlightedChapter) {
-            setHighlightedChapter(newHighlightedChapter);
-            event.preventDefault();
-            return;
-          }
-        }
+  //         if (newHighlightedChapter !== highlightedChapter) {
+  //           setHighlightedChapter(newHighlightedChapter);
+  //           event.preventDefault();
+  //           return;
+  //         }
+  //       }
 
-        // If we're at the top of the menu and the user presses up, go to the input
-        // if (index === 0 && key === 'ArrowUp') {
-        //   event.preventDefault();
-        //   inputRef.current.focus();
-        //   return;
-        // }
+  //       // If we're at the top of the menu and the user presses up, go to the input
+  //       // if (index === 0 && key === 'ArrowUp') {
+  //       //   event.preventDefault();
+  //       //   inputRef.current.focus();
+  //       //   return;
+  //       // }
 
-        // Do not pass the key to the input component if the user is navigating in the chapter menu
-        return;
-      }
+  //       // Do not pass the key to the input component if the user is navigating in the chapter menu
+  //       return;
+  //     }
 
-      // User is not navigating in the content. Other key strokes give focus back to the input
-      // component to type in the filter
-      // passInputToBookChapterInput(event);
+  //     // User is not navigating in the content. Other key strokes give focus back to the input
+  //     // component to type in the filter
+  //     // passInputToBookChapterInput(event);
 
-      // Prevent the original event from continuing to propagate
-      event.preventDefault();
-      event.stopPropagation();
-    },
-    [
-      dir,
-      highlightedBookId,
-      highlightedChapter,
-      selectedBookId,
-      topMatchChapters,
-      totalFilteredBooks,
-      updateReference,
-    ],
-  );
+  //     // Prevent the original event from continuing to propagate
+  //     event.preventDefault();
+  //     event.stopPropagation();
+  //   },
+  //   [
+  //     dir,
+  //     highlightedBookId,
+  //     highlightedChapter,
+  //     selectedBookId,
+  //     topMatchChapters,
+  //     totalFilteredBooks,
+  //     updateReference,
+  //   ],
+  // );
 
   useEffect(() => {
     if (totalFilteredBooks === 1) {
       setHighlightedChapter(1);
-    } else if (selectedBookId === highlightedBookId) {
+    } else if (selectedBookId === selectedCommandValue.slice(0, 3)) {
       if (selectedBookId === scrRef.book) {
         setHighlightedChapter(scrRef.chapterNum);
       } else {
@@ -637,7 +652,7 @@ export function BookChapterControl({
     } else {
       setHighlightedChapter(0);
     }
-  }, [highlightedBookId, scrRef.book, scrRef.chapterNum, selectedBookId, totalFilteredBooks]);
+  }, [scrRef.book, scrRef.chapterNum, selectedBookId, selectedCommandValue, totalFilteredBooks]);
 
   useEffect(() => {
     if (!topMatchChapters || totalFilteredBooks > 1) return;
@@ -646,7 +661,7 @@ export function BookChapterControl({
     if (currentIndex === -1) {
       setHighlightedChapter(topMatchChapters[0]);
     }
-  }, [highlightedBookId, highlightedChapter, selectedBookId, topMatchChapters, totalFilteredBooks]);
+  }, [highlightedChapter, selectedBookId, topMatchChapters, totalFilteredBooks]);
 
   // When a new scrRef comes in, set the book chapter input value to the formatted scrRef and focus
   // the new scrRef
@@ -658,27 +673,21 @@ export function BookChapterControl({
 
   // The purpose of these useLayoutEffects and timeout is to delay the scroll just
   // enough so that the refs are defined and available when they are used after the timeout
-  useLayoutEffect(() => {
-    setIsContentOpenDelayed(isContentOpen);
-  }, [isContentOpen]);
+  // useLayoutEffect(() => {
+  //   setIsContentOpenDelayed(isContentOpen);
+  // }, [isContentOpen]);
 
   useLayoutEffect(() => {
     const scrollTimeout = setTimeout(() => {
-      if (isContentOpenDelayed && contentRef.current && menuItemRef.current) {
+      if (isContentOpen && commandListRef.current && menuItemRef.current) {
         const menuItemOffsetTop = menuItemRef.current.offsetTop;
         const scrollPosition = menuItemOffsetTop - SCROLL_OFFSET;
-        contentRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
-
-        // Sometimes the input was losing focus because the radix dropdown logic would grab the focus.
-        // Work around this to make sure the input stays focused when the user clicks to open the dropdown
-        // inputRef.current.focus();
+        commandListRef.current.scrollTo({ top: scrollPosition, behavior: 'instant' });
       }
 
       // If the user clicks away, reset to the Scripture Reference
       if (
-        !isContentOpenDelayed &&
-        // document.activeElement !== inputRef.current &&
-        // !inputRef.current?.contains(document.activeElement) &&
+        !isContentOpen &&
         document.activeElement !== contentRef.current &&
         !contentRef.current?.contains(document.activeElement)
       ) {
@@ -688,7 +697,7 @@ export function BookChapterControl({
     return () => {
       clearTimeout(scrollTimeout);
     };
-  }, [isContentOpenDelayed, resetToScrRef]);
+  }, [isContentOpen, resetToScrRef]);
 
   const isSearchDifferentFromScrRef = useMemo(() => {
     const parsedRef = calculateTopMatch(bookChapterInputValue.trim());
@@ -706,27 +715,27 @@ export function BookChapterControl({
     );
   }, [bookChapterInputValue, scrRef, calculateTopMatch]);
 
+  useEffect(() => {
+    console.log(selectedCommandValue);
+  }, [selectedCommandValue]);
+
   return (
     <Popover open={isContentOpen} onOpenChange={controlMenuState}>
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          // className="tw-absolute tw-right-2 tw-top-1/2 tw-h-4 tw-w-4 tw--translate-y-1/2"
-        >
-          {formatScrRef(scrRef, 'English')}
-        </Button>
+        <Button variant="ghost">{formatScrRef(scrRef, 'English')}</Button>
       </PopoverTrigger>
-      {totalFilteredBooks > 0 && (
-        <PopoverContent
-          className="tw-m-1 tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
-          // Need to get over the floating window z-index 200
-          style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
-          align={dir === 'ltr' ? 'start' : 'end'}
-          ref={contentRef}
-          // onKeyDown={handleKeyDownContent}
-        >
-          <Command>
-            {/* <BookChapterInput
+
+      <PopoverContent
+        className="tw-m-1 tw-max-h-[500px] tw-w-[233px] tw-overflow-y-auto tw-p-0 tw-font-normal tw-text-foreground/80"
+        // Need to get over the floating window z-index 200
+        // style={{ width: '233px', maxHeight: '500px', zIndex: '250' }}
+        align="start"
+        ref={contentRef}
+        // onKeyDown={handleKeyDownContent}
+      >
+        {/* <Command shouldFilter={false} value={selectedCommandValue} onValueChange={setSelectedCommandValue}> */}
+        <Command value={selectedCommandValue} onValueChange={setSelectedCommandValue}>
+          {/* <BookChapterInput
 
           value={bookChapterInputValue}
           handleSearch={handleSearchInput}
@@ -753,78 +762,91 @@ export function BookChapterControl({
           hasNoMatches={totalFilteredBooks === 0}
           hasInputChanged={isSearchDifferentFromScrRef}
         /> */}
-            <CommandInput placeholder="Search framework..." className="h-9" />
-            <CommandList>
-              <CommandEmpty>No framework found.</CommandEmpty>
-              {/* work around until DropdownMenuContent supports a dir prop */}
-              <div className="rtl:tw-ps-2">
-                {topMatch && isSearchDifferentFromScrRef && (
-                  <>
-                    <CommandItem
-                      className="tw-cursor-pointer tw-p-4 tw-font-semibold tw-text-foreground"
-                      onClick={handleInputSubmit}
-                    >
-                      {formatScrRef({
-                        book: topMatch.bookId,
-                        chapterNum: topMatch.chapterNum ?? 1,
-                        verseNum: topMatch.verseNum ?? 1,
-                      })}
-                    </CommandItem>
-                    <CommandSeparator />
-                  </>
-                )}
-                {allFilteredBooksByType.map((section, sectionIndex) => (
-                  <div key={section.bookType}>
-                    <CommandGroup className="tw-font-semibold tw-text-foreground/80">
-                      {BOOK_TYPE_LABELS[section.bookType]}
-
-                      {section.books.map((bookId) => (
-                        <div key={bookId}>
-                          <BookMenuItem
-                            bookId={bookId}
-                            handleSelectBook={() => updateReference(bookId, false)}
-                            shouldExpandChildren={
-                              selectedBookId.toLowerCase() === bookId.toLowerCase() ||
-                              totalFilteredBooks === 1
+          <CommandInput
+            ref={commandInputRef}
+            placeholder={formatScrRef(scrRef, 'English')}
+            className="h-9"
+            onKeyDown={handleKeyDownCommandInput}
+            value={bookChapterInputValue}
+            onFocus={() => {
+              setBookChapterInputValue('');
+              setHasStartedTyping(false);
+            }}
+            onValueChange={(value) => {
+              setBookChapterInputValue(value);
+              setTopMatch(calculateTopMatch(value));
+            }}
+          />
+          <CommandList ref={commandListRef} onKeyDown={handleKeyDownCommandList}>
+            <CommandEmpty>No matches found.</CommandEmpty>
+            {/* work around until DropdownMenuContent supports a dir prop */}
+            <div className="rtl:tw-ps-2">
+              {topMatch && (
+                <CommandGroup>
+                  <CommandItem
+                    // className="tw-cursor-pointer tw-p-4 tw-font-semibold tw-text-foreground"
+                    onClick={handleInputSubmit}
+                  >
+                    {formatScrRef({
+                      book: topMatch.bookId,
+                      chapterNum: topMatch.chapterNum ?? 1,
+                      verseNum: topMatch.verseNum ?? 1,
+                    })}
+                  </CommandItem>
+                  <CommandSeparator />
+                </CommandGroup>
+              )}
+              {allFilteredBooksByType.map((section, sectionIndex) => (
+                <div key={section.bookType}>
+                  <CommandGroup
+                    heading={BOOK_TYPE_LABELS[section.bookType]}
+                    className="tw-font-semibold tw-text-foreground/80"
+                  >
+                    {section.books.map((bookId) => (
+                      <div key={bookId}>
+                        <BookMenuItem
+                          bookId={bookId}
+                          value={`${bookId}-${Canon.bookIdToEnglishName(bookId)}`}
+                          handleSelectBook={() => updateReference(bookId, false)}
+                          shouldExpandChildren={
+                            selectedBookId.toLowerCase() === bookId.toLowerCase() ||
+                            totalFilteredBooks === 1
+                          }
+                          // handleHighlightBook={() => setHighlightedBookId(bookId)}
+                          // handleKeyDown={(event) => handleKeyDownMenuItem(event)}
+                          bookType={section.bookType}
+                          ref={(element: HTMLDivElement) => {
+                            if (selectedBookId === bookId) menuItemRef.current = element;
+                          }}
+                        >
+                          <ChapterSelect
+                            handleSelectChapter={handleSelectChapter}
+                            endChapter={fetchEndChapter(bookId)}
+                            // Without this condition- will highlight that chapterNum in every book- not just the selected book
+                            selectedChapter={selectedBookId === scrRef.book ? scrRef.chapterNum : 0}
+                            highlightedChapter={
+                              selectedBookId === selectedCommandValue || totalFilteredBooks === 1
+                                ? highlightedChapter
+                                : 0
                             }
-                            handleHighlightBook={() => setHighlightedBookId(bookId)}
-                            handleKeyDown={(event) => handleKeyDownMenuItem(event)}
-                            bookType={section.bookType}
-                            ref={(element: HTMLDivElement) => {
-                              if (selectedBookId === bookId) menuItemRef.current = element;
+                            handleHighlightedChapter={(chapterNumber: number): void => {
+                              setHighlightedChapter(chapterNumber);
                             }}
-                          >
-                            <ChapterSelect
-                              handleSelectChapter={handleSelectChapter}
-                              endChapter={fetchEndChapter(bookId)}
-                              // Without this condition- will highlight that chapterNum in every book- not just the selected book
-                              selectedChapter={
-                                selectedBookId === scrRef.book ? scrRef.chapterNum : 0
-                              }
-                              highlightedChapter={
-                                selectedBookId === highlightedBookId || totalFilteredBooks === 1
-                                  ? highlightedChapter
-                                  : 0
-                              }
-                              handleHighlightedChapter={(chapterNumber: number): void => {
-                                setHighlightedChapter(chapterNumber);
-                              }}
-                              matchingChapters={
-                                isSearchDifferentFromScrRef ? topMatchChapters : undefined
-                              }
-                            />
-                          </BookMenuItem>
-                        </div>
-                      ))}
-                      {sectionIndex < allFilteredBooksByType.length - 1 && <CommandSeparator />}
-                    </CommandGroup>
-                  </div>
-                ))}
-              </div>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      )}
+                            matchingChapters={
+                              isSearchDifferentFromScrRef ? topMatchChapters : undefined
+                            }
+                          />
+                        </BookMenuItem>
+                      </div>
+                    ))}
+                    {sectionIndex < allFilteredBooksByType.length - 1 && <CommandSeparator />}
+                  </CommandGroup>
+                </div>
+              ))}
+            </div>
+          </CommandList>
+        </Command>
+      </PopoverContent>
     </Popover>
   );
 }
