@@ -5,7 +5,14 @@ import JSZip from 'jszip';
 import path from 'path';
 import { IExtension } from '@extension-host/extension-types/extension.interface';
 import * as nodeFS from '@node/services/node-file-system.service';
-import { FILE_PROTOCOL, getPathFromUri, joinUriPaths } from '@node/utils/util';
+import {
+  DISABLED_EXTENSIONS_DIR,
+  FILE_PROTOCOL,
+  getPathFromUri,
+  INSTALLED_EXTENSIONS_DIR,
+  joinUriPaths,
+  UNZIPPED_EXTENSIONS_CACHE_DIR,
+} from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
 import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
@@ -162,18 +169,18 @@ const requireOriginal = Module.prototype.require;
 const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 
 /** The location where installed extensions are stored. Created if it does not exist for ease of use */
-const installedExtensionsUri: Uri = `app://installed-extensions`;
+const installedExtensionsUri: Uri = `app://${INSTALLED_EXTENSIONS_DIR}`;
 nodeFS.createDir(installedExtensionsUri);
 
 /**
  * The location where installed extensions may be moved if they are disabled. Created if it does not
  * exist for ease of use
  */
-const disabledExtensionsUri: Uri = `app://disabled-extensions`;
+const disabledExtensionsUri: Uri = `app://${DISABLED_EXTENSIONS_DIR}`;
 nodeFS.createDir(disabledExtensionsUri);
 
 /** The location where we will store decompressed extension ZIP files */
-const userUnzippedExtensionsCacheUri: Uri = 'cache://extensions';
+const userUnzippedExtensionsCacheUri: Uri = `cache://${UNZIPPED_EXTENSIONS_CACHE_DIR}`;
 
 /**
  * The location where we will copy extension type declaration files for extensions to use in
