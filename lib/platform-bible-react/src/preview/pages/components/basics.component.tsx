@@ -55,6 +55,7 @@ export function Basics() {
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Menubar">Menubar</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="ProjResFilter">Project Resource Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Progress">Progress</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
