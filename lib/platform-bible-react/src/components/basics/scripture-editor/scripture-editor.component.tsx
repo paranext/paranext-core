@@ -2,15 +2,13 @@ import { Editorial } from '@eten-tech-foundation/platform-editor';
 import { Usj, USJ_TYPE, USJ_VERSION } from '@eten-tech-foundation/scripture-utilities';
 import '@/components/basics/scripture-editor/scripture-editor.component.css';
 
-const defaultUsj:Usj = {
+const defaultUsj: Usj = {
   type: USJ_TYPE,
   version: USJ_VERSION,
-  content: ["hello world"],
-}
+  content: ['hello world'],
+};
 
-/**
- * Component to render a scripture editor (or viewer)
- */
+/** Component to render a scripture editor (or viewer) */
 export function ScriptureEditor() {
   return (
     <div>
