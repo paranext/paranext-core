@@ -1,156 +1,30 @@
+import log from 'electron-log';
+import { isRenderer, isServer } from '@shared/utils/internal-util';
+import { setUpLogger } from '@shared/utils/logger.utils';
 import chalk from 'chalk';
-import log, { LogLevel } from 'electron-log';
-import { getProcessType, isClient, isExtensionHost, isRenderer } from '@shared/utils/internal-util';
-import { includes, split } from 'platform-bible-utils';
 
-export const WARN_TAG = '<WARN>';
+// Abstract and shim the logger
+setUpLogger(log);
 
-/** Represents details that can be parsed from a single line of an Error object */
-type parsedErrorLine =
-  | {
-      functionName: string;
-      fileName: string;
-      lineNumber: number;
-      columnNumber: number;
-    }
-  | undefined;
+// Adjust some log settings that should not be set up in the renderer process
+if (!isRenderer()) {
+  // Renderer doesn't log to file. Sends to main to log in file
+  if (log.transports.file) {
+    // This must be a `require`! Do not change to `import`. Importing outside `src` messes up papi.d.ts
+    // eslint-disable-next-line global-require
+    const packageInfo = require('../../../release/app/package.json');
+    /** Same as {@link AppInfo.name} from `app.service-host.ts */
+    const APP_NAME: string = packageInfo.name;
 
-/**
- * Destructure a line from an Error object
- *
- * @param errorLine Single line from an Error object string
- * @returns Object containing the function name, file name, line number, and column number from the
- *   line of the Error object string. If the line couldn't be parsed, then undefined.
- */
-function parseErrorLine(errorLine: string): parsedErrorLine {
-  // A few example lines to parse:
-  // "    at functionName (filename.js:15:27)"
-  // "at /home/username/paranext-core/src/shared/services/logger.service.ts:119:22"
-  // "     at Timeout.i [as _onTimeout] (/home/username/paranext-core/extensions/dist/evil/evil.js:1:591)"
-  const regex = /at[\s+]?([\w .[\]<>]+)?\s+\(?(.*?):(\d+):(\d+)\)?$/;
-  const matches = errorLine.match(regex);
-
-  // This console log is helpful if you need to see why some Error line isn't parsing as expected
-  // eslint-disable-next-line no-console
-  // console.log(`**** LINE: ${errorLine}\nResulting filename: ${matches?.at(2)}`);
-
-  if (matches && matches.length === 5) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
-    const [_, functionName, fileName, lineNumber, columnNumber] = matches;
-    return {
-      functionName,
-      fileName,
-      lineNumber: parseInt(lineNumber, 10),
-      columnNumber: parseInt(columnNumber, 10),
-    };
+    log.transports.file.level = globalThis.logLevel;
+    // Point electron-log to the folder to put its logs in. This is default functionality; it just
+    // doesn't get set properly on the extension host without this
+    log.transports.file.setAppName(globalThis.isPackaged ? APP_NAME : 'Electron');
   }
-  if (matches && matches.length === 4) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
-    const [_, fileName, lineNumber, columnNumber] = matches;
-    return {
-      functionName: '',
-      fileName,
-      lineNumber: parseInt(lineNumber, 10),
-      columnNumber: parseInt(columnNumber, 10),
-    };
-  }
-  return undefined;
-}
 
-/**
- * Examine the call stack and return a parsed string containing the function name, file name, line
- * number, and column number where the call to the logger was made.
- *
- * @returns String that is suitable to attach to log output to indicate who what code wants to log
- */
-function identifyCaller(): string | undefined {
-  const { stack } = new Error();
-  if (!stack) return undefined;
-  let details: parsedErrorLine;
-  const lines = split(stack, '\n');
-  // Start at 3 to skip the "Error" line, this function's stack frame, and this function's caller
-  for (let lineNumber = 3; lineNumber < lines.length; lineNumber += 1) {
-    // Skip over all logging library frames to get to the real call
-    if (!includes(lines[lineNumber], 'node_modules') && !includes(lines[lineNumber], 'node:')) {
-      details = parseErrorLine(lines[lineNumber]);
-      if (details) break;
-    }
-  }
-  if (!details) return '';
-  const functionName = details.functionName ? `${details.functionName} ` : '';
-  const filePath = process.platform === 'win32' ? details.fileName : `file://${details.fileName}`;
-  return `[at ${functionName}${filePath}:${details.lineNumber}:${details.columnNumber}]`;
-}
-
-/**
- * Format a string of a service message
- *
- * @param message Message from the service
- * @param serviceName Name of the service to show in the log
- * @param tag Optional tag at the end of the service name
- * @returns Formatted string of a service message
- */
-export function formatLog(message: string, serviceName: string, tag = '') {
-  // Remove the new line at the end of every message coming from stdout from other processes
-  const messageTrimmed = message.trimEnd();
-  const openTag = `[${serviceName}${tag ? ' ' : ''}${tag}]`;
-  if (includes(messageTrimmed, '\n')) {
-    const closeTag = `[/${serviceName}${tag ? ' ' : ''}${tag}]`;
-    // Multi-line
-    return `\n${openTag}\n${messageTrimmed}\n${closeTag}`;
-  }
-  return `${openTag} ${messageTrimmed}`;
-}
-
-/** Abstract and shim the logger */
-
-if (isClient()) {
-  log.transports.console.level = globalThis.logLevel;
-  if (isRenderer())
-    // On the renderer, insert formatting before sending
-    log.hooks.push((message) => {
-      const caller = identifyCaller();
-      return {
-        ...message,
-        data: message.data.map((logLine) =>
-          formatLog(
-            caller ? `${logLine} ${caller}` : `${logLine}`,
-            getProcessType(),
-            // Renderer sends back with log level of log. Not sure why it's not in the type
-            // eslint-disable-next-line no-type-assertion/no-type-assertion
-            (message.level as LogLevel | 'log') === 'log' ? undefined : message.level,
-          ),
-        ),
-      };
-    });
-  else if (isExtensionHost())
-    // Add a tag for warnings so we can recognize them outside the process.
-    log.hooks.push((message) => {
-      const caller = identifyCaller();
-      const lineEnd = caller ? ` ${caller}` : '';
-      return {
-        ...message,
-        data: message.data.map((logLine) =>
-          message.level === 'warn' ? `${WARN_TAG}${logLine}${lineEnd}` : `${logLine}${lineEnd}`,
-        ),
-      };
-    });
-  else {
-    // eslint-disable-next-line no-console
-    console.warn(chalk.yellow(`Unexpected process type: ${globalThis.processType}`));
-  }
-} else {
-  log.initialize();
-  log.transports.console.level = globalThis.logLevel;
-  log.transports.console.format = '{h}:{i}:{s} {text}';
+  // Chalk messes up the renderer logs a bit for some reason. Adds extra newlines
   log.transports.console.writeFn = ({ message: msg }) => {
-    let message = `${msg.data}`;
-    // If we're piping through a log message from another service, don't add another file path
-    // Messages from other services all start with "[service name]"
-    if (!/\[[\w ]+\]/.test(message)) {
-      const caller = identifyCaller();
-      message = caller ? `${message} ${caller}` : `${message}`;
-    }
+    const message = msg.data.join('\n');
 
     /* eslint-disable no-console */
     switch (msg.level) {
@@ -163,14 +37,19 @@ if (isClient()) {
       case 'error':
         console.log(chalk.red(message));
         break;
+      case 'debug':
+        console.log(chalk.gray(message));
+        break;
       default:
         console.log(message);
         break;
     }
     /* eslint-enable */
   };
-  log.transports.file.level = globalThis.logLevel;
 }
+
+// spyRendererConsole sends logs from the renderer to the main process
+if (isServer()) log.initialize({ spyRendererConsole: true });
 
 /**
  * JSDOC SOURCE logger

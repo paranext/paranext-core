@@ -505,7 +505,13 @@ async function internalGetMetadataWithRetries(
     retryTimes += 1;
     if (allProjectsMetadataArray.length > 0)
       logger.debug(
-        `Finally found project metadata on retry ${retryTimes} around ${performance.now()} for ${JSON.stringify(options)}! ${JSON.stringify(allProjectsMetadataArray)}`,
+        `Finally found project metadata on retry ${retryTimes} around ${performance.now()} for ${JSON.stringify(options)}! ${JSON.stringify(
+          allProjectsMetadataArray.map((projectMetadata) => {
+            const projectMetadataStripped: Partial<ProjectMetadata> = projectMetadata;
+            delete projectMetadataStripped.projectInterfaces;
+            return projectMetadataStripped;
+          }),
+        )}`,
       );
   }
   if (allProjectsMetadataArray.length === 0) {

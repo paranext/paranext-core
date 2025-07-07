@@ -8,7 +8,7 @@ import type {
 } from '@papi/core';
 import type { QuickVerseDataTypes, QuickVerseSetData } from 'quick-verse';
 
-logger.info('Quick Verse is importing!');
+logger.debug('Quick Verse is importing!');
 
 /**
  * Example data provider engine that provides easy access to Scripture from an internet API.
@@ -278,7 +278,7 @@ class QuickVerseDataProviderEngine
 }
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
-  logger.info('Quick Verse is activating!');
+  logger.debug('Quick Verse is activating!');
 
   const token: ExecutionToken = context.executionToken;
   const warning = await papi.storage.readTextFileFromInstallDirectory(
@@ -311,5 +311,5 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
   // Await the registration promises at the end so we don't hold everything else up
   context.registrations.add(quickVerseDataProvider);
 
-  logger.info('Quick Verse is finished activating!');
+  logger.debug('Quick Verse is finished activating!');
 }
