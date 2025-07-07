@@ -111,14 +111,15 @@ export function setUpLogger(log: MainLogger | RendererLogger) {
 
   // insert formatting before logging
   log.transports.console.level = globalThis.logLevel;
-  // Match console format to default file format but without the date
-  log.transports.console.format = '[{h}:{i}:{s}.{ms}] [{level}] {text}';
+  // Match console format to default file format so the renderer console logs can be sent to main
+  // and recorded the same as main logs
+  log.transports.console.format = '[{y}-{m}-{d} {h}:{i}:{s}.{ms}] [{level}] {text}';
   // Don't show main console logs in the renderer DevTools
   if (log.transports.ipc) log.transports.ipc.level = false;
   log.hooks.push((message) => {
     // If we're piping through a log message from another process, don't add another file path
     // Messages from other processes all start with "[process name]"
-    if (message.data.some((logLine) => /^\s*\[[\w\d:. ]+\]/.test(logLine)))
+    if (message.data.some((logLine) => /^\s*\[[\w\d:\-. ]+\]/.test(logLine)))
       if (message.variables?.processType === 'renderer')
         // And skip formatting if it comes from the renderer because it already has formatting
         return {

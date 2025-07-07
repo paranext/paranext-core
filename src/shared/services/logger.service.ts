@@ -6,6 +6,7 @@ import chalk from 'chalk';
 // Abstract and shim the logger
 setUpLogger(log);
 
+// Adjust some log settings that should not be set up in the renderer process
 if (!isRenderer()) {
   // Renderer doesn't log to file. Sends to main to log in file
   if (log.transports.file) {
@@ -22,30 +23,29 @@ if (!isRenderer()) {
   }
 
   // Chalk messes up the renderer logs a bit for some reason. Adds extra newlines
-  if (!isRenderer())
-    log.transports.console.writeFn = ({ message: msg }) => {
-      const message = msg.data.join('\n');
+  log.transports.console.writeFn = ({ message: msg }) => {
+    const message = msg.data.join('\n');
 
-      /* eslint-disable no-console */
-      switch (msg.level) {
-        case 'info':
-          console.log(message);
-          break;
-        case 'warn':
-          console.log(chalk.yellow(message));
-          break;
-        case 'error':
-          console.log(chalk.red(message));
-          break;
-        case 'debug':
-          console.log(chalk.gray(message));
-          break;
-        default:
-          console.log(message);
-          break;
-      }
-      /* eslint-enable */
-    };
+    /* eslint-disable no-console */
+    switch (msg.level) {
+      case 'info':
+        console.log(message);
+        break;
+      case 'warn':
+        console.log(chalk.yellow(message));
+        break;
+      case 'error':
+        console.log(chalk.red(message));
+        break;
+      case 'debug':
+        console.log(chalk.gray(message));
+        break;
+      default:
+        console.log(message);
+        break;
+    }
+    /* eslint-enable */
+  };
 }
 
 // spyRendererConsole sends logs from the renderer to the main process
