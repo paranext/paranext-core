@@ -290,6 +290,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
 
+        // BooksPresent in Settings.xml isn't always 123 characters, but this way of getting it is always
+        if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
+            return scrText.BooksPresentSet.Books;
+
         if (
             scrText.Settings.ParametersDictionary.TryGetValue(
                 paratextSettingName,
@@ -349,6 +353,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             throw new Exception(
                 "Cannot set text direction this way. Must edit the language definition ldml file"
+            );
+
+        // BooksPresentSet is changed by adding and removing books, not setting the setting value
+        if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
+            throw new Exception(
+                "Cannot set BooksPresent this way. Must add or delete books in the project"
             );
 
         // Now actually write the setting
