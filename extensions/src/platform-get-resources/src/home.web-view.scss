@@ -1,1 +1,18 @@
 @use './tailwind';
+
+@media (min-width: 60rem) {
+  .full-name-row {
+    display: table-cell;
+  }
+}
+
+.cell {
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 0;
+}
+
+.short-name {
+  white-space: nowrap;
+}
