@@ -1,4 +1,4 @@
-import { MenuItemContainingCommand } from '@node_modules/platform-bible-utils/dist';
+import { MenuItemContainingCommand } from 'platform-bible-utils';
 import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
 import type { Meta, StoryObj } from '@storybook/react';
 import { Label, Toolbar } from 'platform-bible-react';
