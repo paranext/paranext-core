@@ -101,13 +101,24 @@
     "utils:unlink": "yalc remove @biblionexus-foundation/scripture-utilities && npm i --ignore-scripts"
   },
   "lint-staged": {
-    "*.{cjs,js,jsx,ts,tsx}": ["prettier --write"],
-    "*.json": ["prettier --parser json --write"],
-    "*.{css,scss}": ["stylelint --fix --allow-empty-input"],
-    "*.{html,md,yml}": ["prettier --single-quote --write"]
+    "*.{cjs,js,jsx,ts,tsx}": [
+      "prettier --write"
+    ],
+    "*.json": [
+      "prettier --parser json --write"
+    ],
+    "*.{css,scss}": [
+      "stylelint --fix --allow-empty-input"
+    ],
+    "*.{html,md,yml}": [
+      "prettier --single-quote --write"
+    ]
   },
-  "browserslist": ["extends browserslist-config-detect-electron"],
+  "browserslist": [
+    "extends browserslist-config-detect-electron"
+  ],
   "dependencies": {
+    "@eten-tech-foundation/scripture-utilities": "^0.1.1",
     "@sillsdev/scripture": "^2.0.2",
     "ajv": "^8.17.1",
     "chalk": "^4.1.2",
@@ -247,10 +258,20 @@
     "npm": ">=7.x"
   },
   "electronmon": {
-    "patterns": ["!**/**", "src/main/**", "src/node/**", "src/shared/**", ".erb/dll/**"],
+    "patterns": [
+      "!**/**",
+      "src/main/**",
+      "src/node/**",
+      "src/shared/**",
+      ".erb/dll/**"
+    ],
     "logLevel": "quiet"
   },
-  "workspaces": ["lib/*", "extensions", "extensions/src/*"],
+  "workspaces": [
+    "lib/*",
+    "extensions",
+    "extensions/src/*"
+  ],
   "volta": {
     "node": "22.16.0"
   }
