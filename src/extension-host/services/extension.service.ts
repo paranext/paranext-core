@@ -876,9 +876,9 @@ async function parseExtensionData(
 
   // Generate zip file hash if the zip file was found
   let extensionBuffer: Buffer | undefined;
-  if (disabledExtensionStats) {
+  if (disabledExtensionStats !== undefined) {
     extensionBuffer = await nodeFS.readFileBinary(disabledExtensionUri);
-  } else if (enabledExtensionStats) {
+  } else if (enabledExtensionStats !== undefined) {
     extensionBuffer = await nodeFS.readFileBinary(enabledExtensionUri);
   }
   const hashcode = extensionBuffer
@@ -888,7 +888,7 @@ async function parseExtensionData(
   // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
   // and values are the display names in those languages
   let displayName: ExtensionLocalizedStrings = {};
-  if (displayData) {
+  if (displayData !== undefined) {
     displayName = Object.fromEntries(
       Object.entries(displayData.localizedDisplayInfo).map(([locale, data]) => {
         return [locale, data.displayName];
@@ -899,7 +899,7 @@ async function parseExtensionData(
   // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
   // and values are the summaries in those languages
   let shortSummary: ExtensionLocalizedStrings = {};
-  if (displayData) {
+  if (displayData !== undefined) {
     shortSummary = Object.fromEntries(
       Object.entries(displayData.localizedDisplayInfo).map(([locale, data]) => {
         return [locale, data.shortSummary];
@@ -909,7 +909,7 @@ async function parseExtensionData(
 
   // Converts any two-digit locales to three-digit locales
   let locales: string[] = [];
-  if (localizedStrings) {
+  if (localizedStrings !== undefined) {
     locales = Object.keys(localizedStrings.localizedStrings).map((locale) => locale);
   }
 
