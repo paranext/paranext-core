@@ -29,6 +29,16 @@ export async function readFileBinary(uri: Uri): Promise<Buffer> {
 }
 
 /**
+ * Read a file and encode with Base 64
+ *
+ * @param uri URI of file
+ * @returns Promise that resolves to the contents of the file
+ */
+export async function readFileBase64(uri: Uri): Promise<string> {
+  return fs.promises.readFile(getPathFromUri(uri), { encoding: 'base64' });
+}
+
+/**
  * Write data to a file
  *
  * @param uri URI of file

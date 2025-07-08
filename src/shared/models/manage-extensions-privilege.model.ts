@@ -1,3 +1,5 @@
+import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
+
 /** Base64 encoded hash values */
 export type HashValues = Partial<{
   sha256: string;
@@ -9,6 +11,44 @@ export type ExtensionIdentifier = {
   extensionName: string;
   extensionVersion: string;
 };
+
+/**
+ * Type storing localized strings for an extension field. Indexed by locale, values are localized
+ * strings in that language.
+ */
+export type ExtensionLocalizedStrings = Record<string, string>;
+
+/** Interface that stores extension icon information */
+export interface ExtensionIcon {
+  /** Path to the icon's file. Could be a URL */
+  filepath: string;
+  /** Icon file extension (png, svg, ...) */
+  filetype: string;
+  /** Raw binary data of the icon, intended to be encoded in a base64 string */
+  data: string;
+  /** True if this icon was submitted as a URL, else false. */
+  isUrl: boolean;
+}
+
+/**
+ * Full image of the data of an extension including the additional extension marketplace
+ * visualization data
+ */
+export type ExtensionData = Readonly<
+  Omit<ExtensionManifest, 'name' | 'version'> & {
+    id: string;
+    currentVersion: string;
+    displayName: ExtensionLocalizedStrings;
+    shortSummary: ExtensionLocalizedStrings;
+    description: ExtensionLocalizedStrings;
+    icon: ExtensionIcon;
+    locales: string[];
+    moreInfoUrl: string;
+    supportUrl: string;
+    fileSize: number;
+    hashcode: string;
+  }
+>;
 
 /**
  * Represents all extensions that are installed. Note that packaged extensions cannot be disabled,
@@ -71,6 +111,11 @@ export type DisableExtensionFunction = (extensionIdentifier: ExtensionIdentifier
 /** Get extension identifiers of all extensions on the system */
 export type GetInstalledExtensionsFunction = () => Promise<InstalledExtensions>;
 
+/** Get full extension data for a specified list of extensions */
+export type GetExtensionsDataFunction = (
+  extensionIds: ExtensionIdentifier[],
+) => Promise<ExtensionData[]>;
+
 /** Functions needed to manage extensions */
 export type ManageExtensions = {
   /** Function to download an extension and enable it */
@@ -81,4 +126,6 @@ export type ManageExtensions = {
   disableExtension: DisableExtensionFunction;
   /** Function to retrieve details about all installed extensions */
   getInstalledExtensions: GetInstalledExtensionsFunction;
+  /** Function to retrieve full details about a list of installed or disabled extensions */
+  getExtensionsData: GetExtensionsDataFunction;
 };
