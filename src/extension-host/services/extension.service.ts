@@ -41,10 +41,8 @@ import {
 import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import {
-  ElevatedPrivilegeNames,
-  ElevatedPrivileges,
-} from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges-names.model';
 import { generateHashFromBuffer } from '@node/utils/crypto-util';
 import {
   ExtensionIdentifier,
@@ -1062,7 +1060,7 @@ async function readExtensionDataFromFolder(extensionInfo: ExtensionInfo): Promis
     icon = {
       filepath: displayData.icon,
       filetype: path.extname(fullIconFilepath).substring(1), // Remove the first `.` to just extract the file extension
-      data: isUrl ? '' : await nodeFS.readFileBase64(fullIconFilepath),
+      data: isUrl ? '' : await nodeFS.readFileText(fullIconFilepath, 'base64'),
       isUrl,
     };
   }

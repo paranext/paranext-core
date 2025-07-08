@@ -1,4 +1,4 @@
-import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges-names.model';
 
 /** Interface that stores the extension dependency information */
 export interface ExtensionDependency {

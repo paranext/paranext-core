@@ -5105,13 +5105,27 @@ declare module 'node/services/node-file-system.service' {
   /** File system calls from Node */
   import fs, { BigIntStats } from 'fs';
   import { Uri } from 'shared/data/file-system.model';
+  /** Type containing the buffer encoding strings for the `readFileText` function */
+  export type BufferEncoding =
+    | 'ascii'
+    | 'utf8'
+    | 'utf-8'
+    | 'utf16le'
+    | 'utf-16le'
+    | 'ucs2'
+    | 'ucs-2'
+    | 'base64'
+    | 'base64url'
+    | 'latin1'
+    | 'binary'
+    | 'hex';
   /**
    * Read a text file
    *
    * @param uri URI of file
    * @returns Promise that resolves to the contents of the file
    */
-  export function readFileText(uri: Uri): Promise<string>;
+  export function readFileText(uri: Uri, encoding?: BufferEncoding): Promise<string>;
   /**
    * Read a binary file
    *
@@ -5119,13 +5133,6 @@ declare module 'node/services/node-file-system.service' {
    * @returns Promise that resolves to the contents of the file
    */
   export function readFileBinary(uri: Uri): Promise<Buffer>;
-  /**
-   * Read a file and encode with Base 64
-   *
-   * @param uri URI of file
-   * @returns Promise that resolves to the contents of the file
-   */
-  export function readFileBase64(uri: Uri): Promise<string>;
   /**
    * Write data to a file
    *
@@ -5789,8 +5796,16 @@ declare module 'shared/models/create-process-privilege.model' {
     osData: OperatingSystemData;
   };
 }
+declare module 'shared/models/elevated-privileges-names.model' {
+  /** String constants that are listed in an extension's manifest.json to state needed privileges */
+  export enum ElevatedPrivilegeNames {
+    createProcess = 'createProcess',
+    manageExtensions = 'manageExtensions',
+    handleUri = 'handleUri',
+  }
+}
 declare module 'extension-host/extension-types/extension-manifest.model' {
-  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges.model';
+  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges-names.model';
   /** Interface that stores the extension dependency information */
   export interface ExtensionDependency {
     /** Extension id of the given extension dependency */
@@ -5883,6 +5898,10 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     /** True if this icon was submitted as a URL, else false. */
     isUrl: boolean;
   }
+  /**
+   * Full image of the data of an extension including the additional extension marketplace
+   * visualization data
+   */
   /**
    * Full image of the data of an extension including the additional extension marketplace
    * visualization data
@@ -6033,15 +6052,9 @@ declare module 'shared/models/handle-uri-privilege.model' {
   };
 }
 declare module 'shared/models/elevated-privileges.model' {
-  import { CreateProcess } from 'shared/models/create-process-privilege.model';
-  import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
-  import { HandleUri } from 'shared/models/handle-uri-privilege.model';
-  /** String constants that are listed in an extension's manifest.json to state needed privileges */
-  export enum ElevatedPrivilegeNames {
-    createProcess = 'createProcess',
-    manageExtensions = 'manageExtensions',
-    handleUri = 'handleUri',
-  }
+  import type { CreateProcess } from 'shared/models/create-process-privilege.model';
+  import type { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  import type { HandleUri } from 'shared/models/handle-uri-privilege.model';
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
     /** Functions that can be run to start new processes */
