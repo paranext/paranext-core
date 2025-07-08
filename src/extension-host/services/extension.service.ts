@@ -256,6 +256,7 @@ const bundledExtensionDir = `resources://extensions${globalThis.isPackaged ? '' 
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 3. Core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -303,6 +304,7 @@ const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 3. Core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -323,6 +325,7 @@ async function getExtensionRootDirectoryContents() {
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 4. Extensions in core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -349,6 +352,7 @@ async function getExtensionZipUris(): Promise<Uri[]> {
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 4. Extensions in core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -462,6 +466,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 4. Extensions in core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
