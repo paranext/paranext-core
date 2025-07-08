@@ -92,13 +92,12 @@ function checkNewMenuItems(
     if (targetGroupName && !startsWith(targetGroupName, namePrefix)) {
       if (!currentGroups) return;
       const targetGroup = currentGroups[targetGroupName];
-      if (targetGroup && targetGroup.isExtensible !== true) {
+      if (!targetGroup)
+        throw new Error(`Could not find a current group by the group name ${targetGroupName}`);
+      if (targetGroup && targetGroup.isExtensible !== true)
         throw new Error(
           `Cannot add new menu item ${menuItem.label} to group ${targetGroupName} because isExtensible is not set`,
         );
-      } else if (!targetGroup) {
-        throw new Error(`Could not find a current group by the group name ${targetGroupName}`);
-      }
     }
   });
 }
