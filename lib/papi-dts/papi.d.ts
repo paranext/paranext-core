@@ -5120,6 +5120,13 @@ declare module 'node/services/node-file-system.service' {
    */
   export function readFileBinary(uri: Uri): Promise<Buffer>;
   /**
+   * Read a file and encode with Base 64
+   *
+   * @param uri URI of file
+   * @returns Promise that resolves to the contents of the file
+   */
+  export function readFileBase64(uri: Uri): Promise<string>;
+  /**
    * Write data to a file
    *
    * @param uri URI of file
@@ -5782,7 +5789,74 @@ declare module 'shared/models/create-process-privilege.model' {
     osData: OperatingSystemData;
   };
 }
+declare module 'extension-host/extension-types/extension-manifest.model' {
+  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges.model';
+  /** Interface that stores the extension dependency information */
+  export interface ExtensionDependency {
+    /** Extension id of the given extension dependency */
+    id: string;
+    /** Version of the given extension dependency */
+    version: string;
+  }
+  /** Information about an extension provided by the extension developer. */
+  export type ExtensionManifest = {
+    /** Name of the extension */
+    name: string;
+    /**
+     * Extension version - expected to be [semver](https://semver.org/) like `"0.1.3"`.
+     *
+     * Note: semver may become a hard requirement in the future, so we recommend using it now.
+     */
+    version: string;
+    /**
+     * Path to the JavaScript file to run in the extension host. Relative to the extension's root
+     * folder.
+     *
+     * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
+     */
+    main: string;
+    /** List of special permissions required by the extension to work as intended */
+    elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
+    /**
+     * Path to the TypeScript type declaration file that describes this extension and its interactions
+     * on the PAPI. Relative to the extension's root folder.
+     *
+     * If not provided, Platform.Bible will look in the following locations:
+     *
+     * 1. `<extension-name>.d.ts` (kebab-case version of the extension name)
+     * 2. `<extension-name><other_stuff>.d.ts` (kebab-case version of the extension name)
+     * 3. `index.d.ts`
+     *
+     * See [Extension Anatomy - Type Declaration
+     * Files](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#type-declaration-files-dts)
+     * for more information about extension type declaration files.
+     */
+    types?: string;
+    /** Path to the JSON file that defines the menu items this extension is adding. */
+    menus?: string;
+    /** Path to the JSON file that defines the settings this extension is adding. */
+    settings?: string;
+    /** Path to the JSON file that defines the project settings this extension is adding. */
+    projectSettings?: string;
+    /** Path to the JSON file that defines the localized strings this extension is adding. */
+    localizedStrings?: string;
+    /** Path to the JSON file that defines the themes this extension is adding. */
+    themes?: string;
+    /**
+     * List of events that occur that should cause this extension to be activated. Not yet
+     * implemented.
+     */
+    activationEvents: string[];
+    /** List of extension dependencies required for this extension to work */
+    extensionDependencies?: ExtensionDependency;
+    /** Path to the JSON file that defines the display data this extension is adding */
+    displayData?: string;
+    /** Id of publisher who published this extension on the extension marketplace */
+    publisher?: string;
+  };
+}
 declare module 'shared/models/manage-extensions-privilege.model' {
+  import { ExtensionManifest } from 'extension-host/extension-types/extension-manifest.model';
   /** Base64 encoded hash values */
   export type HashValues = Partial<{
     sha256: string;
@@ -5793,6 +5867,41 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     extensionName: string;
     extensionVersion: string;
   };
+  /**
+   * Type storing localized strings for an extension field. Indexed by locale, values are localized
+   * strings in that language.
+   */
+  export type ExtensionLocalizedStrings = Record<string, string>;
+  /** Interface that stores extension icon information */
+  export interface ExtensionIcon {
+    /** Path to the icon's file. Could be a URL */
+    filepath: string;
+    /** Icon file extension (png, svg, ...) */
+    filetype: string;
+    /** Raw binary data of the icon, intended to be encoded in a base64 string */
+    data: string;
+    /** True if this icon was submitted as a URL, else false. */
+    isUrl: boolean;
+  }
+  /**
+   * Full image of the data of an extension including the additional extension marketplace
+   * visualization data
+   */
+  export type ExtensionData = Readonly<
+    Omit<ExtensionManifest, 'name' | 'version'> & {
+      id: string;
+      currentVersion: string;
+      displayName: ExtensionLocalizedStrings;
+      shortSummary: ExtensionLocalizedStrings;
+      description: ExtensionLocalizedStrings;
+      icon: ExtensionIcon;
+      locales: string[];
+      moreInfoUrl: string;
+      supportUrl: string;
+      fileSize: number;
+      hashcode: string;
+    }
+  >;
   /**
    * Represents all extensions that are installed. Note that packaged extensions cannot be disabled,
    * so they are implied to always be enabled.
@@ -5851,6 +5960,10 @@ declare module 'shared/models/manage-extensions-privilege.model' {
   ) => Promise<void>;
   /** Get extension identifiers of all extensions on the system */
   export type GetInstalledExtensionsFunction = () => Promise<InstalledExtensions>;
+  /** Get full extension data for a specified list of extensions */
+  export type GetExtensionsDataFunction = (
+    extensionIds: ExtensionIdentifier[],
+  ) => Promise<ExtensionData[]>;
   /** Functions needed to manage extensions */
   export type ManageExtensions = {
     /** Function to download an extension and enable it */
@@ -5861,6 +5974,8 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     disableExtension: DisableExtensionFunction;
     /** Function to retrieve details about all installed extensions */
     getInstalledExtensions: GetInstalledExtensionsFunction;
+    /** Function to retrieve full details about a list of installed or disabled extensions */
+    getExtensionsData: GetExtensionsDataFunction;
   };
 }
 declare module 'shared/models/handle-uri-privilege.model' {
@@ -8287,61 +8402,6 @@ declare module 'extension-host/extension-types/extension.interface' {
      */
     deactivate?: UnsubscriberAsync;
   }
-}
-declare module 'extension-host/extension-types/extension-manifest.model' {
-  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges.model';
-  /** Information about an extension provided by the extension developer. */
-  export type ExtensionManifest = {
-    /** Name of the extension */
-    name: string;
-    /**
-     * Extension version - expected to be [semver](https://semver.org/) like `"0.1.3"`.
-     *
-     * Note: semver may become a hard requirement in the future, so we recommend using it now.
-     */
-    version: string;
-    /**
-     * Path to the JavaScript file to run in the extension host. Relative to the extension's root
-     * folder.
-     *
-     * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
-     */
-    main: string;
-    /** List of special permissions required by the extension to work as intended */
-    elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
-    /**
-     * Path to the TypeScript type declaration file that describes this extension and its interactions
-     * on the PAPI. Relative to the extension's root folder.
-     *
-     * If not provided, Platform.Bible will look in the following locations:
-     *
-     * 1. `<extension-name>.d.ts` (kebab-case version of the extension name)
-     * 2. `<extension-name><other_stuff>.d.ts` (kebab-case version of the extension name)
-     * 3. `index.d.ts`
-     *
-     * See [Extension Anatomy - Type Declaration
-     * Files](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#type-declaration-files-dts)
-     * for more information about extension type declaration files.
-     */
-    types?: string;
-    /** Path to the JSON file that defines the menu items this extension is adding. */
-    menus?: string;
-    /** Path to the JSON file that defines the settings this extension is adding. */
-    settings?: string;
-    /** Path to the JSON file that defines the project settings this extension is adding. */
-    projectSettings?: string;
-    /** Path to the JSON file that defines the localized strings this extension is adding. */
-    localizedStrings?: string;
-    /** Path to the JSON file that defines the themes this extension is adding. */
-    themes?: string;
-    /**
-     * List of events that occur that should cause this extension to be activated. Not yet
-     * implemented.
-     */
-    activationEvents: string[];
-    /** Id of publisher who published this extension on the extension marketplace */
-    publisher?: string;
-  };
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject } from 'shared/models/network-object.model';

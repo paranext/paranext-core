@@ -978,6 +978,10 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
 
           // And return the language key with its corresponding description
           return [locale, descriptionString];
+          // Need to be able to return something so returns undefined filtered out in the later lines
+          // eslint-disable-next-line no-else-return
+        } else {
+          return undefined;
         }
       }),
     );
@@ -1211,6 +1215,10 @@ async function getExtensionsData(extensions: ExtensionIdentifier[]): Promise<Ext
       if (await nodeFS.getStats(extensionUri)) {
         return readExtensionDataFromZip(extensionUri);
       }
+
+      // Need to be able to return something so returns undefined filtered out in the later lines
+      // eslint-disable-next-line no-else-return
+      return undefined;
     }),
   );
   return extensionsData.filter((value) => !!value);
