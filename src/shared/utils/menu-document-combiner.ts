@@ -67,7 +67,9 @@ function checkNewGroups(
       if (!currentColumns) return;
       const targetColumn = currentColumns[group.column];
       if (targetColumn && targetColumn.isExtensible !== true)
-        throw new Error(`Cannot add new group ${groupName} because isExtensible is not set`);
+        throw new Error(
+          `Cannot add new group ${groupName} because isExtensible is not set on ${targetColumn.label}`,
+        );
     } else if ('menuItem' in group && group.menuItem) {
       const targetMenuItemName = group.menuItem;
       if (!startsWith(targetMenuItemName, namePrefix))
@@ -90,7 +92,9 @@ function checkNewMenuItems(
     if (targetGroupName && !startsWith(targetGroupName, namePrefix)) {
       if (!currentGroups) return;
       const targetGroup = currentGroups[targetGroupName];
-      if (targetGroup.isExtensible !== true)
+      if (!targetGroup)
+        throw new Error(`Could not find a current group by the group name ${targetGroupName}`);
+      if (targetGroup && targetGroup.isExtensible !== true)
         throw new Error(
           `Cannot add new menu item ${menuItem.label} to group ${targetGroupName} because isExtensible is not set`,
         );

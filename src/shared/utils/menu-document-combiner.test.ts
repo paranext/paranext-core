@@ -458,7 +458,9 @@ test('isExtensible flags are honored', () => {
         },
       },
     }),
-  ).toThrow(/Cannot add new group test.group1 because isExtensible is not set/);
+  ).toThrow(
+    /Cannot add new group test.group1 because isExtensible is not set on %mainMenu_window%/,
+  );
 
   expect(() =>
     menuCombiner.addOrUpdateContribution('test', {
@@ -476,6 +478,21 @@ test('isExtensible flags are honored', () => {
   ).toThrow(
     /Cannot add new menu item %doSomething% to group platform.windowGroup2 because isExtensible is not set/,
   );
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        items: [
+          {
+            label: '%doSomething%',
+            group: 'external.nonexistentGroup',
+            order: 1,
+            command: 'test.something',
+          },
+        ],
+      },
+    }),
+  ).toThrow(/Could not find a current group by the group name external.nonexistentGroup/);
 });
 
 test('Name prefixes are verified', () => {
