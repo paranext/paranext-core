@@ -1,4 +1,4 @@
-﻿/**
+/**
  * This module executes inside of electron's main process. You can start electron renderer process
  * from here and communicate with the other processes through IPC.
  *
@@ -471,6 +471,18 @@ async function main() {
         }
       });
     }
+
+    // Register F12 to open dev tools in both development and production
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.key === 'F12') {
+        event.preventDefault();
+        if (mainWindow?.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow?.webContents.openDevTools();
+        }
+      }
+    });
 
     // Set initial zoom factor from settings
     mainWindow.webContents.on('did-finish-load', async () => {
