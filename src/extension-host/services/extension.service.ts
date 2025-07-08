@@ -1297,7 +1297,7 @@ async function deactivateExtension(extension: ActiveExtension): Promise<boolean 
     extensionKey = getExtensionKey(extension.info);
   } catch (e) {
     logger.debug(
-      `Could not get extension key for extension '${extension.info.name}'. Skipping attempting to delete uri handler.`,
+      `Could not get extension key for extension '${extension.info.name}' due to ${getErrorMessage(e)}. Skipping attempting to delete uri handler.`,
     );
   }
   if (extensionKey) uriHandlersByExtensionKey.delete(extensionKey);
