@@ -1,6 +1,6 @@
-import { projectDataProviders } from '@papi/frontend';
+import { SerializedVerseRef } from '@sillsdev/scripture';
 import { LocalizeKey } from 'platform-bible-utils';
-import { Entry, Occurrence } from 'platform-lexical-tools';
+import { Entry, Occurrence, Sense } from 'platform-lexical-tools';
 import { useEffect, useState } from 'react';
 
 // Regex to remove any parenthetical statements (including nested)
@@ -50,10 +50,28 @@ export function useIsWideScreen() {
  * @param dictionaryEntry - The dictionary entry to format.
  * @returns An array of glosses.
  */
-export function getFormatGlossesStringFromDictionaryEntrySenses(dictionaryEntry: Entry): string {
+export function getFormatGlossesStringFromDictionaryEntrySenses(
+  dictionaryEntry: Entry,
+  scrRef?: SerializedVerseRef,
+): string {
+  // If scrRef is provided, filter senses to those with occurrences in the current book/chapter
+  const senses = scrRef
+    ? Object.values(dictionaryEntry.senses).filter((sense) =>
+        Object.values(sense?.occurrences ?? {}).some((arr) =>
+          Array.isArray(arr)
+            ? arr.some(
+                (occ) =>
+                  occ.verseRef.book === scrRef.book &&
+                  occ.verseRef.chapterNum === scrRef.chapterNum,
+              )
+            : false,
+        ),
+      )
+    : Object.values(dictionaryEntry.senses);
+
   return [
     ...new Set(
-      Object.values(dictionaryEntry.senses).flatMap(
+      senses.flatMap(
         (sense) =>
           sense?.glosses?.flatMap((gloss) =>
             gloss
@@ -73,7 +91,10 @@ export function getFormatGlossesStringFromDictionaryEntrySenses(dictionaryEntry:
  * @param dictionaryEntry - The dictionary entry containing senses to be counted.
  * @returns The total count of occurrences across all senses in the entry.
  */
-export function getOccurrencesCountFromDictionaryEntrySenses(dictionaryEntry: Entry): number {
+export function getCombinedOccurrencesCountFromDictionaryEntrySenses(
+  dictionaryEntry: Entry,
+  scrRef?: SerializedVerseRef,
+): number {
   const allOccurrences: Occurrence[] = [];
   Object.values(dictionaryEntry.senses).forEach((sense) => {
     if (!sense?.occurrences) return;
@@ -81,24 +102,64 @@ export function getOccurrencesCountFromDictionaryEntrySenses(dictionaryEntry: En
       .filter((arr): arr is Occurrence[] => Array.isArray(arr))
       .forEach((arr) => allOccurrences.push(...arr));
   });
+
+  // Filter by bookNum and chapterNum if scrRef is provided
+  const filteredOccurrences = scrRef
+    ? allOccurrences.filter(
+        (occ) => occ.verseRef.book === scrRef.book && occ.verseRef.chapterNum === scrRef.chapterNum,
+      )
+    : allOccurrences;
+
   // De-duplicate occurrences using Set and a unique key (e.g., JSON.stringify)
-  const uniqueOccurrences = new Set(allOccurrences.map((occ) => JSON.stringify(occ)));
+  const uniqueOccurrences = new Set(filteredOccurrences.map((occ) => JSON.stringify(occ)));
   return uniqueOccurrences.size;
 }
 
-/**
- * Gets the short name of a project from its ID.
- *
- * @param projectIdToGetName The ID of the project to get the names of.
- * @returns An object with the short and full names of the project, or undefined if the project is
- *   not editable.
- */
-export async function getProjectShortName(projectIdToGetName: string): Promise<string | undefined> {
-  const pdp = await projectDataProviders.get('platform.base', projectIdToGetName);
+export function getOccurrenceCountForSense(sense: Sense, scrRef?: SerializedVerseRef): number {
+  if (!sense.occurrences) return 0;
 
-  if (!(await pdp.getSetting('platform.isEditable'))) return undefined;
+  // Filter occurrences by bookNum and chapterNum if scrRef is provided
+  const occurrences = scrRef
+    ? Object.values(sense.occurrences)
+        .flat()
+        .filter(
+          (occ): occ is Occurrence =>
+            !!occ &&
+            occ.verseRef.book === scrRef.book &&
+            occ.verseRef.chapterNum === scrRef.chapterNum,
+        )
+    : Object.values(sense.occurrences)
+        .flat()
+        .filter((occ): occ is Occurrence => !!occ);
 
-  const projectShortName = await pdp.getSetting('platform.name');
+  const uniqueOccurrences = new Set(occurrences);
+  return uniqueOccurrences.size;
+}
 
-  return projectShortName;
+export function getChapterOrAllOccurrencesForSense(
+  sense: Sense,
+  scrRef?: SerializedVerseRef,
+): Occurrence[] {
+  const allOccurrences: Occurrence[] = [];
+  if (!sense?.occurrences) return [];
+  Object.values(sense.occurrences)
+    .filter((arr): arr is Occurrence[] => Array.isArray(arr))
+    .forEach((arr) => allOccurrences.push(...arr));
+
+  // Filter by bookNum and chapterNum if scrRef is provided
+  const filteredOccurrences = scrRef
+    ? allOccurrences.filter(
+        (occ) => occ.verseRef.book === scrRef.book && occ.verseRef.chapterNum === scrRef.chapterNum,
+      )
+    : allOccurrences;
+
+  // De-duplicate occurrences by verseRef using a Map
+  const uniqueOccurrencesMap = new Map<string, Occurrence>();
+  filteredOccurrences.forEach((occ) => {
+    const key = JSON.stringify(occ.verseRef);
+    if (!uniqueOccurrencesMap.has(key)) {
+      uniqueOccurrencesMap.set(key, occ);
+    }
+  });
+  return Array.from(uniqueOccurrencesMap.values());
 }

@@ -1,5 +1,6 @@
 import {
   Button,
+  cn,
   DrawerClose,
   DrawerDescription,
   DrawerTitle,
@@ -7,15 +8,18 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from 'platform-bible-react';
-import { ArrowLeft } from 'lucide-react';
-import { Entry, Occurrence } from 'platform-lexical-tools';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, ChevronUpIcon } from 'lucide-react';
+import { DictionaryOccurrenceView, Entry, Sense } from 'platform-lexical-tools';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import { ListboxOption } from 'src/utils/listbox-keyboard-navigation.util';
+import { SerializedVerseRef } from '@sillsdev/scripture';
+import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
+  getChapterOrAllOccurrencesForSense,
   getFormatGlossesStringFromDictionaryEntrySenses,
+  getOccurrenceCountForSense,
 } from '../../utils/dictionary.util';
 import { DomainsDisplay } from './domains-display.component';
 
@@ -27,7 +31,14 @@ export type DictionaryEntryDisplayProps = {
   isDrawer: boolean;
   /** Callback function to handle back button click, returning to the list view */
   handleBackToListButton?: (option: ListboxOption) => void;
+  /** Scripture reference to filter occurrences by */
+  scriptureReferenceToFilterBy?: SerializedVerseRef;
+  /** Callback function to handle occurrence selection */
+  onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
 };
+
+// TODO: Localize text and book names
+// TODO: Pagination in sense occurrences list
 
 /**
  * Renders a detailed view of a dictionary entry, displaying its key properties such as Hebrew text,
@@ -38,95 +49,93 @@ export function DictionaryEntryDisplay({
   dictionaryEntry,
   isDrawer,
   handleBackToListButton,
+  scriptureReferenceToFilterBy,
+  onSelectOccurrence,
 }: DictionaryEntryDisplayProps) {
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
-  const [selectedSenseId, setSelectedSenseId] = useState<string | undefined>();
+  const [selectedSense, setSelectedSense] = useState<Sense | undefined>(undefined);
   const [selectedSenseIndex, setSelectedSenseIndex] = useState<number | undefined>();
+  const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
+  // ref.current expects null and not undefined when we pass it to the div
+  // eslint-disable-next-line no-null/no-null
+  const containerRef = useRef<HTMLDivElement>(null);
 
-  // TODO: Show occurrences for chapter vs all with toggle
-  // const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
+  const scrollToTop = () => {
+    containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const formattedGlosses = useMemo(
-    () => getFormatGlossesStringFromDictionaryEntrySenses(dictionaryEntry),
-    [dictionaryEntry],
+    () =>
+      getFormatGlossesStringFromDictionaryEntrySenses(
+        dictionaryEntry,
+        scriptureReferenceToFilterBy,
+      ),
+    [dictionaryEntry, scriptureReferenceToFilterBy],
   );
 
-  const getOccurrencesLabel = useCallback(
-    (senseIndex?: number) =>
-      senseIndex
+  const occurrencesLabel = useMemo(
+    () =>
+      selectedSenseIndex
         ? formatReplacementString(
             localizedStrings['%platformLexicalTools_dictionary_occurrencesForSenseLabel%'],
-            { index: senseIndex.toString() },
+            { index: selectedSenseIndex.toString() },
           )
         : localizedStrings['%platformLexicalTools_dictionary_allOccurrencesLabel%'],
-    [localizedStrings],
+    [localizedStrings, selectedSenseIndex],
   );
 
-  // const getSenseOccurrences = useCallback(() => {
-  //   if (!selectedSenseId) return [];
-
-  //   const sense = dictionaryEntry.senses[selectedSenseId];
-  //   if (!sense) return [];
-
-  //   const occurrences = Object.values(sense.occurrences ?? {})
-  //     .flat()
-  //     .filter((occurrence): occurrence is Occurrence => occurrence !== undefined);
-
-  //   // De-duplicate by verseRef (assuming verseRef is unique per occurrence)
-  //   const seen = new Set<string>();
-  //   return occurrences.filter((occurrence) => {
-  //     const key = formatScrRef(occurrence.verseRef, 'English');
-  //     if (seen.has(key)) return false;
-  //     seen.add(key);
-  //     return true;
-  //   });
-  // }, []);
-
-  const getEntryOrSenseOccurrences = useCallback(() => {
-    const occurrences = selectedSenseId
-      ? Object.values(dictionaryEntry.senses[selectedSenseId]?.occurrences ?? {})
-          .flat()
-          .filter((occurrence): occurrence is Occurrence => occurrence !== undefined)
-      : Object.values(dictionaryEntry.senses)
-          .filter((sense) => sense !== undefined)
-          .flatMap((sense) =>
-            Object.values(sense.occurrences ?? {})
-              .flat()
-              .filter((occurrence): occurrence is Occurrence => occurrence !== undefined),
-          );
-
-    // De-duplicate by verseRef (assuming verseRef is unique per occurrence)
-    const seen = new Set<string>();
-    return occurrences.filter((occurrence) => {
-      const key = formatScrRef(occurrence.verseRef, 'English');
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [dictionaryEntry.senses, selectedSenseId]);
-
-  // const getChapterOrAllOccurrencesForSense = useCallback(() => {
-  //   const occurrences = occurrenceView === 'chapter' ? getEntryOrSenseOccurrences()
-  // }, []);
-
-  // Automatically select the only sense if there is exactly one; otherwise clear selection
-  useEffect(() => {
-    const senses = Object.values(dictionaryEntry.senses).filter((sense) => sense !== undefined);
-    if (senses.length === 1) {
-      setSelectedSenseId(senses[0].id);
-      setSelectedSenseIndex(1);
-    } else {
-      setSelectedSenseId(undefined);
-      setSelectedSenseIndex(undefined);
-    }
-  }, [dictionaryEntry.senses]);
-
+  // Cannot use Drawer components when there is no Drawer, if the screen is wider than 1024px it will render Button and span here.
   const BackToListButton = isDrawer ? DrawerClose : Button;
   const TitleComponent = isDrawer ? DrawerTitle : 'span';
   const DescriptionComponent = isDrawer ? DrawerDescription : 'span';
 
+  const sensesFilteredByScrRef = useMemo(() => {
+    const result: { [uniqueSenseId: string]: Sense[] } = {};
+    Object.values(dictionaryEntry.senses)
+      .filter((sense) => {
+        if (!sense?.occurrences) return false;
+        if (
+          scriptureReferenceToFilterBy &&
+          !Object.values(sense.occurrences).some((occurrences) =>
+            occurrences?.some(
+              (occurrence) =>
+                occurrence.verseRef.book === scriptureReferenceToFilterBy.book &&
+                occurrence.verseRef.chapterNum === scriptureReferenceToFilterBy.chapterNum,
+            ),
+          )
+        ) {
+          return false;
+        }
+        return true;
+      })
+      .forEach((sense) => {
+        if (!sense) return;
+        const key = `${sense.lexicalReferenceTextId}-sense-${sense.id}`;
+        if (!result[key]) {
+          result[key] = [];
+        }
+        result[key].push(sense);
+      });
+    return result;
+  }, [dictionaryEntry.senses, scriptureReferenceToFilterBy]);
+
+  // Automatically select the only sense if there is exactly one; otherwise clear selection
+  useEffect(() => {
+    const sensesFlat = Object.values(sensesFilteredByScrRef).flat();
+    if (sensesFlat.length === 1) {
+      setSelectedSense(sensesFlat[0]);
+      setSelectedSenseIndex(1);
+    } else {
+      setSelectedSense(undefined);
+      setSelectedSenseIndex(undefined);
+    }
+  }, [sensesFilteredByScrRef]);
+
   return (
-    <div className="tw-px-4 tw-pt-20 tw-pb-4 tw-w-full tw-h-full tw-flex tw-flex-col tw-overflow-y-auto">
+    <div
+      ref={containerRef}
+      className={cn('tw-top-14 tw-p-4 tw-w-full tw-h-full tw-flex tw-flex-col tw-overflow-y-auto')}
+    >
       <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">
         <BackToListButton
           onClick={
@@ -176,22 +185,26 @@ export function DictionaryEntryDisplay({
         </h3>
         <ToggleGroup
           type="single"
-          value={selectedSenseId ?? ''}
+          value={
+            selectedSense ? `${selectedSense.lexicalReferenceTextId}-sense-${selectedSense.id}` : ''
+          }
           onValueChange={(value) => {
-            setSelectedSenseId(value);
-            const index = Object.values(dictionaryEntry.senses)
-              .filter((sense) => sense !== undefined)
-              .findIndex((sense) => sense.id === value);
-            setSelectedSenseIndex(index + 1);
+            const sensesFlat = Object.values(sensesFilteredByScrRef).flat();
+            const index = sensesFlat.findIndex(
+              (sense) => `${sense.lexicalReferenceTextId}-sense-${sense.id}` === value,
+            );
+            setSelectedSenseIndex(index >= 0 ? index + 1 : undefined);
+            setSelectedSense(index >= 0 ? sensesFlat[index] : undefined);
           }}
           className="tw-flex tw-flex-col tw-gap-3"
         >
-          {Object.values(dictionaryEntry.senses)
+          {Object.values(sensesFilteredByScrRef)
+            .flat()
             .filter((sense) => sense !== undefined)
             .map((sense, senseIndex) => (
               <ToggleGroupItem
-                key={sense.id}
-                value={sense.id}
+                key={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
+                value={`${sense.lexicalReferenceTextId}-sense-${sense.id}`}
                 className="tw-flex tw-w-full tw-h-fit tw-flex-col tw-items-start tw-border tw-rounded-lg tw-shadow-sm tw-p-4 tw-bg-white tw-cursor-pointer data-[state=on]:tw-border-accent data-[state=on]:tw-shadow-md tw-transition-colors"
               >
                 <div className="tw-flex tw-items-baseline tw-gap-2">
@@ -213,68 +226,97 @@ export function DictionaryEntryDisplay({
             ))}
         </ToggleGroup>
       </div>
-
       <div>
-        <h3 className="tw-mb-1 tw-font-semibold">{getOccurrencesLabel(selectedSenseIndex)}</h3>
-        <ul className="tw-list-inside tw-list-disc">
-          {getEntryOrSenseOccurrences().map((occurrence: Occurrence) => (
-            <li
-              key={`${dictionaryEntry.lexicalReferenceTextId}-entry-${dictionaryEntry.id}-${formatScrRef(occurrence.verseRef, 'English')}`}
-              className="tw-py-0.5 tw-text-sm"
+        <div className="tw-flex tw-items-center tw-justify-between tw-mb-2">
+          <h3 className="tw-font-semibold">{occurrencesLabel}</h3>
+
+          <div className="tw-flex tw-items-center tw-gap-2 tw-border tw-rounded-md">
+            <button
+              type="button"
+              className={cn(
+                'tw-text-xs tw-px-3 tw-py-1 tw-rounded-s-md',
+                { 'tw-bg-accent': occurrenceView === 'chapter' },
+                { 'hover:tw-bg-accent': occurrenceView !== 'chapter' },
+              )}
+              onClick={() => setOccurrenceView('chapter')}
             >
-              {formatScrRef(occurrence.verseRef, 'English')}
+              chapter (
+              {(() => {
+                const senses = Object.values(sensesFilteredByScrRef)
+                  .flat()
+                  .filter((s): s is Sense => s !== undefined);
+                if (selectedSense) {
+                  return getOccurrenceCountForSense(selectedSense, scriptureReferenceToFilterBy);
+                }
+                return senses.reduce(
+                  (total, s) => total + getOccurrenceCountForSense(s, scriptureReferenceToFilterBy),
+                  0,
+                );
+              })()}
+              )
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'tw-text-xs tw-px-3 tw-py-1 tw-rounded-e-md',
+                { 'tw-bg-accent': occurrenceView === 'all' },
+                { 'hover:tw-bg-accent': occurrenceView !== 'all' },
+              )}
+              onClick={() => setOccurrenceView('all')}
+            >
+              all (
+              {(() => {
+                const senses = Object.values(sensesFilteredByScrRef)
+                  .flat()
+                  .filter((s): s is Sense => s !== undefined);
+                if (selectedSense) {
+                  return getOccurrenceCountForSense(selectedSense);
+                }
+                return senses.reduce((total, s) => total + getOccurrenceCountForSense(s), 0);
+              })()}
+              )
+            </button>
+          </div>
+        </div>
+        <ul className="tw-list-disc tw-list-inside">
+          {(selectedSense
+            ? getChapterOrAllOccurrencesForSense(
+                selectedSense,
+                occurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
+              )
+            : Object.values(sensesFilteredByScrRef)
+                .flat()
+                .filter((sense): sense is Sense => sense !== undefined)
+                .flatMap((sense) =>
+                  getChapterOrAllOccurrencesForSense(
+                    sense,
+                    occurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
+                  ),
+                )
+          ).map((occurrence) => (
+            <li
+              key={`${occurrence.wordNum}-${formatScrRef(occurrence.verseRef, 'English')}`}
+              className="tw-py-0.5"
+            >
+              <Button
+                variant="link"
+                className="tw-p-0 tw-h-auto"
+                onClick={() => onSelectOccurrence(occurrence.verseRef)}
+              >
+                {formatScrRef(occurrence.verseRef, 'English')}
+              </Button>
             </li>
           ))}
         </ul>
       </div>
-
-      {/* TODO: Localize book names */}
-      {/* TODO: Show occurrences for chapter vs all with toggle */}
-      {/* <div>
-        <div className="tw-flex tw-items-center tw-justify-between tw-mb-2">
-          <h3 className="tw-font-semibold">Occurrences:</h3>
-          <div className="tw-flex tw-items-center tw-gap-2 tw-border tw-rounded-md">
-            <Button
-              className={cn('tw-text-xs tw-px-3 tw-py-1 tw-rounded-l-md hover:tw-bg-gray-100', {
-                'tw-bg-blue-100': occurrenceView === 'chapter',
-              })}
-              onClick={() => setOccurrenceView('chapter')}
-            >
-              chapter ({selectedEntry.usage.length})
-            </Button>
-            <Button
-              className={cn('tw-text-xs tw-px-3 tw-py-1 tw-rounded-r-md hover:tw-bg-gray-100', {
-                'tw-bg-blue-100': occurrenceView === 'all',
-              })}
-              onClick={() => setOccurrenceView('all')}
-            >
-              all ({selectedEntry.allUsageCount})
-            </Button>
-          </div>
-        </div>
-        <ul className="tw-list-disc tw-list-inside">
-          {occurrenceView === 'chapter' ? (
-            selectedEntry.usage.map((reference, index) => (
-              <li key={index} className="tw-text-sm tw-py-0.5">
-                {reference}
-              </li>
-            ))
-          ) : (
-            <>
-              {selectedEntry.allUsage.map((reference, index) => (
-                <li key={index} className="tw-text-sm tw-py-0.5">
-                  {reference}
-                </li>
-              ))}
-              {selectedEntry.allUsageCount > 100 && (
-                <li className="tw-text-sm tw-py-2 tw-text-muted-foreground tw-italic">
-                  Note: This prototype only shows the first 100 occurrences of a word.
-                </li>
-              )}
-            </>
-          )}
-        </ul>
-      </div> */}
+      <Button
+        variant="secondary"
+        size="icon"
+        className="tw-fixed tw-bottom-4 tw-right-4 tw-z-20"
+        onClick={scrollToTop}
+      >
+        <ChevronUpIcon />
+      </Button>
     </div>
   );
 }
