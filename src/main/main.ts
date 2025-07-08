@@ -1,4 +1,4 @@
-﻿/**
+/**
  * This module executes inside of electron's main process. You can start electron renderer process
  * from here and communicate with the other processes through IPC.
  *
@@ -452,8 +452,18 @@ async function main() {
     });
 
     // Register zoom keyboard shortcuts. MacOS already supports this natively
-    if (process.platform !== 'darwin') {
-      mainWindow.webContents.on('before-input-event', (event, input) => {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      // F12: Open dev tools in both development and production
+      if (input.key === 'F12') {
+        event.preventDefault();
+        if (mainWindow?.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow?.webContents.openDevTools();
+        }
+      }
+
+      if (process.platform !== 'darwin') {
         // Zoom in: Ctrl++ or Ctrl+=
         if (input.control && (input.key === '=' || input.key === '+')) {
           event.preventDefault();
@@ -469,8 +479,8 @@ async function main() {
           event.preventDefault();
           resetZoomFactor();
         }
-      });
-    }
+      }
+    });
 
     // Set initial zoom factor from settings
     mainWindow.webContents.on('did-finish-load', async () => {
