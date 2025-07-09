@@ -17,6 +17,7 @@ import { executionTokenService } from '@node/services/execution-token.service';
 import { ExecutionToken } from '@node/models/execution-token.model';
 import { getErrorMessage } from 'platform-bible-utils';
 import { chmodSync, statSync } from 'fs';
+import path from 'path';
 
 const childProcesses: ChildProcess[] = [];
 
@@ -70,7 +71,7 @@ export const wrappedSpawn: PlatformSpawn = (
   options.cwd = extensionRootPath;
 
   // Need to set executable bit on the command so it can actually run
-  trySetExecutableSafe(command);
+  trySetExecutableSafe(path.join(extensionRootPath, command));
 
   const childProcess = spawn(command, args, options);
   childProcesses.push(childProcess);
