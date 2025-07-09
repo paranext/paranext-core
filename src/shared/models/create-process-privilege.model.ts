@@ -18,8 +18,7 @@ import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
  * JSDOC SOURCE PlatformSpawn
  *
  * Run {@link spawn} to create a child process. The platform will automatically kill all child
- * processes created this way in packaged builds. Child processes are not killed when running in
- * development.
+ * processes created this way in packaged builds.
  *
  * This method is essentially a layer over the [`spawn`
  * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
@@ -67,8 +66,7 @@ export type PlatformSpawn = (
  * JSDOC SOURCE PlatformFork
  *
  * Run {@link fork} to create a child process. The platform will automatically kill all child
- * processes created this way in packaged builds. Child processes are not killed when running in
- * development.
+ * processes created this way in packaged builds.
  *
  * This method is essentially a layer over the [`fork`
  * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
