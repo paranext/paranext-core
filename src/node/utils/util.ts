@@ -16,6 +16,34 @@ const RESOURCES_SCHEME = 'resources';
 const FILE_SCHEME = 'file';
 const PROTOCOL_PART = '://';
 
+/** Name of the directory in app that should be used to hold extension data */
+export const EXTENSION_DATA_DIR = 'extensions';
+/** Name of the directory in app where installed extensions live */
+export const INSTALLED_EXTENSIONS_DIR = 'installed-extensions';
+/** Name of the directory in app where disabled extensions live */
+export const DISABLED_EXTENSIONS_DIR = 'disabled-extensions';
+/** Name of the directory in cache where installed extensions are unzipped and run */
+export const UNZIPPED_EXTENSIONS_CACHE_DIR = 'extensions';
+
+/**
+ * If we're running in snap, we need to run extensions from a place where snap has permissions. This
+ * is an alternate directory to `app://` that is to be used in some specific circumstances. See
+ * `getSchemePaths` for details.
+ *
+ * If this is `undefined`, we are not running in snap
+ */
+const SNAP_APP_DIR = process.env.SNAP_USER_COMMON
+  ? path.join(process.env.SNAP_USER_COMMON, APP_SCHEME)
+  : undefined;
+/**
+ * If we're running in snap, we need to run extensions from a place where snap has permissions. This
+ * is an alternate directory to `cache://` that is to be used in some specific circumstances. See
+ * `getSchemePaths` for details.
+ *
+ * If this is `undefined`, we are not running in snap
+ */
+const SNAP_CACHE_DIR = SNAP_APP_DIR ? path.join(SNAP_APP_DIR, CACHE_DIR_NAME) : undefined;
+
 export const FILE_PROTOCOL = `${FILE_SCHEME}${PROTOCOL_PART}`;
 export const RESOURCES_PROTOCOL = `${RESOURCES_SCHEME}${PROTOCOL_PART}`;
 
@@ -78,6 +106,33 @@ function getPathInfoFromUri(uri: Uri): { scheme: string; uriPath: string } {
  */
 export function getPathFromUri(uri: Uri): string {
   const { scheme, uriPath } = getPathInfoFromUri(uri);
+
+  // If we're running in snap, we need to run extensions and store their data in a place where snap
+  // has permissions https://snapcraft.io/docs/data-locations#p-94053-user-data
+  if (SNAP_APP_DIR && SNAP_CACHE_DIR) {
+    switch (scheme) {
+      case APP_SCHEME:
+        if (
+          // Extension data directory needs to be in snap so extensions can launch processes from
+          // some future storage location
+          uriPath.startsWith(EXTENSION_DATA_DIR) ||
+          // Installed extensions directory needs to be in snap
+          uriPath.startsWith(INSTALLED_EXTENSIONS_DIR) ||
+          // Disabled extensions directory is nice to keep next to installed extensions directory
+          uriPath.startsWith(DISABLED_EXTENSIONS_DIR)
+        )
+          return path.resolve(SNAP_APP_DIR, uriPath);
+        break;
+      case CACHE_SCHEME:
+        // Unzipped extensions directory needs to be in snap
+        if (uriPath.startsWith(UNZIPPED_EXTENSIONS_CACHE_DIR))
+          return path.resolve(SNAP_CACHE_DIR, uriPath);
+        break;
+      default:
+        break;
+    }
+  }
+
   return path.join(getSchemePaths()[scheme], uriPath);
 }
 
