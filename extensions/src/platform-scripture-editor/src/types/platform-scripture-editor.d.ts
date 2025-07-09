@@ -184,6 +184,7 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.openScriptureEditor': (
       projectId?: string | undefined,
       options?: OpenEditorOptions,
+      tabId?: string,
     ) => Promise<string | undefined>;
 
     /**
@@ -198,6 +199,7 @@ declare module 'papi-shared-types' {
     'platformScriptureEditor.openResourceViewer': (
       projectId?: string | undefined,
       options?: OpenEditorOptions,
+      tabId?: string,
     ) => Promise<string | undefined>;
   }
 

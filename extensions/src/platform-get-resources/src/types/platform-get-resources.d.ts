@@ -53,6 +53,18 @@ declare module 'papi-shared-types' {
      */
     'platformGetResources.openHome': () => Promise<string | undefined>;
 
+    /**
+     * Opens a web view with a new tab and returns the WebView id
+     *
+     * @param dockMode Dock mode to use for the new tab. Either 'tab' or 'float'
+     * @param tabGroupId Id of the tab group (panel) to put the new tab in
+     * @returns WebView id for new tab WebView or `undefined` if not created
+     */
+    'platformGetResources.openNewTab': (
+      dockMode: 'tab' | 'float',
+      tabGroupId?: string,
+    ) => Promise<string | undefined>;
+
     /** @returns True if Send/Receive is available to the user, false if not */
     'platformGetResources.isSendReceiveAvailable': () => Promise<boolean | undefined>;
   }
