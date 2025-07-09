@@ -8,6 +8,7 @@
     "en": {
       "%mainMenu_openPlatformScriptureEditor%": "Open Scripture Editor",
       "%mainMenu_openPlatformResourceViewer%": "Open Resource Viewer",
+      "%webView_platformScriptureEditor_edit%": "Edit",
       "%webView_platformScriptureEditor_options%": "Options",
       "%webView_platformScriptureEditor_tools%": "Tools",
       "%webView_platformScriptureEditor_info%": "Info",
