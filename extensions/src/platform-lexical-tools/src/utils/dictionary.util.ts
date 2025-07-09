@@ -86,6 +86,41 @@ export function getFormatGlossesStringFromDictionaryEntrySenses(
 }
 
 /**
+ * Helper function to collect and filter all occurrences from a dictionary entry. De-duplicates
+ * occurrences by verseRef.
+ */
+function deduplicateOccurrencesByVerseRef(occurrences: Occurrence[]): Occurrence[] {
+  const seen = new Set<string>();
+  return occurrences.filter((occurrence) => {
+    const key = JSON.stringify(occurrence.verseRef);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function getAllOccurrencesFromDictionaryEntry(
+  dictionaryEntry: Entry,
+  scrRef?: SerializedVerseRef,
+): Occurrence[] {
+  const occurrences: Occurrence[] = [];
+  Object.values(dictionaryEntry.senses).forEach((sense) => {
+    if (!sense?.occurrences) return;
+    Object.values(sense.occurrences)
+      .filter((arr): arr is Occurrence[] => Array.isArray(arr))
+      .forEach((arr) => occurrences.push(...arr));
+  });
+
+  const filtered = scrRef
+    ? occurrences.filter(
+        (occ) => occ.verseRef.book === scrRef.book && occ.verseRef.chapterNum === scrRef.chapterNum,
+      )
+    : occurrences;
+
+  return deduplicateOccurrencesByVerseRef(filtered);
+}
+
+/**
  * Calculates the total number of occurrences for all senses within a dictionary entry.
  *
  * @param dictionaryEntry - The dictionary entry containing senses to be counted.
@@ -95,71 +130,32 @@ export function getCombinedOccurrencesCountFromDictionaryEntrySenses(
   dictionaryEntry: Entry,
   scrRef?: SerializedVerseRef,
 ): number {
-  const allOccurrences: Occurrence[] = [];
-  Object.values(dictionaryEntry.senses).forEach((sense) => {
-    if (!sense?.occurrences) return;
-    Object.values(sense.occurrences)
-      .filter((arr): arr is Occurrence[] => Array.isArray(arr))
-      .forEach((arr) => allOccurrences.push(...arr));
-  });
-
-  // Filter by bookNum and chapterNum if scrRef is provided
-  const filteredOccurrences = scrRef
-    ? allOccurrences.filter(
-        (occ) => occ.verseRef.book === scrRef.book && occ.verseRef.chapterNum === scrRef.chapterNum,
-      )
-    : allOccurrences;
-
-  // De-duplicate occurrences using Set and a unique key (e.g., JSON.stringify)
-  const uniqueOccurrences = new Set(filteredOccurrences.map((occ) => JSON.stringify(occ)));
-  return uniqueOccurrences.size;
+  return getAllOccurrencesFromDictionaryEntry(dictionaryEntry, scrRef).length;
 }
 
-export function getOccurrenceCountForSense(sense: Sense, scrRef?: SerializedVerseRef): number {
-  if (!sense.occurrences) return 0;
-
-  // Filter occurrences by bookNum and chapterNum if scrRef is provided
-  const occurrences = scrRef
-    ? Object.values(sense.occurrences)
-        .flat()
-        .filter(
-          (occ): occ is Occurrence =>
-            !!occ &&
-            occ.verseRef.book === scrRef.book &&
-            occ.verseRef.chapterNum === scrRef.chapterNum,
-        )
-    : Object.values(sense.occurrences)
-        .flat()
-        .filter((occ): occ is Occurrence => !!occ);
-
-  const uniqueOccurrences = new Set(occurrences);
-  return uniqueOccurrences.size;
-}
-
-export function getChapterOrAllOccurrencesForSense(
+function getChapterOrAllOccurrencesForSense(
   sense: Sense,
   scrRef?: SerializedVerseRef,
 ): Occurrence[] {
-  const allOccurrences: Occurrence[] = [];
+  const occurrences: Occurrence[] = [];
   if (!sense?.occurrences) return [];
-  Object.values(sense.occurrences)
+  Object.values(sense.occurrences ?? {})
     .filter((arr): arr is Occurrence[] => Array.isArray(arr))
-    .forEach((arr) => allOccurrences.push(...arr));
+    .forEach((arr) => occurrences.push(...arr));
 
-  // Filter by bookNum and chapterNum if scrRef is provided
   const filteredOccurrences = scrRef
-    ? allOccurrences.filter(
+    ? occurrences.filter(
         (occ) => occ.verseRef.book === scrRef.book && occ.verseRef.chapterNum === scrRef.chapterNum,
       )
-    : allOccurrences;
+    : occurrences;
 
-  // De-duplicate occurrences by verseRef using a Map
-  const uniqueOccurrencesMap = new Map<string, Occurrence>();
-  filteredOccurrences.forEach((occ) => {
-    const key = JSON.stringify(occ.verseRef);
-    if (!uniqueOccurrencesMap.has(key)) {
-      uniqueOccurrencesMap.set(key, occ);
-    }
-  });
-  return Array.from(uniqueOccurrencesMap.values());
+  return deduplicateOccurrencesByVerseRef(filteredOccurrences);
+}
+
+export function getDeduplicatedOccurrencesFromSenses(
+  senses: Sense[],
+  scrRef?: SerializedVerseRef,
+): Occurrence[] {
+  const occurrences = senses.flatMap((sense) => getChapterOrAllOccurrencesForSense(sense, scrRef));
+  return deduplicateOccurrencesByVerseRef(occurrences);
 }

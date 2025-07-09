@@ -17,9 +17,8 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
-  getChapterOrAllOccurrencesForSense,
   getFormatGlossesStringFromDictionaryEntrySenses,
-  getOccurrenceCountForSense,
+  getDeduplicatedOccurrencesFromSenses,
 } from '../../utils/dictionary.util';
 import { DomainsDisplay } from './domains-display.component';
 
@@ -84,11 +83,6 @@ export function DictionaryEntryDisplay({
     [localizedStrings, selectedSenseIndex],
   );
 
-  // Cannot use Drawer components when there is no Drawer, if the screen is wider than 1024px it will render Button and span here.
-  const BackToListButton = isDrawer ? DrawerClose : Button;
-  const TitleComponent = isDrawer ? DrawerTitle : 'span';
-  const DescriptionComponent = isDrawer ? DrawerDescription : 'span';
-
   const sensesFilteredByScrRef = useMemo(() => {
     const result: { [uniqueSenseId: string]: Sense[] } = {};
     Object.values(dictionaryEntry.senses)
@@ -118,6 +112,24 @@ export function DictionaryEntryDisplay({
       });
     return result;
   }, [dictionaryEntry.senses, scriptureReferenceToFilterBy]);
+
+  // Memoized, deduplicated list of occurrences
+  const deduplicatedOccurrences = useMemo(() => {
+    return selectedSense
+      ? getDeduplicatedOccurrencesFromSenses(
+          [selectedSense],
+          occurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
+        )
+      : getDeduplicatedOccurrencesFromSenses(
+          Object.values(sensesFilteredByScrRef).flat(),
+          occurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
+        );
+  }, [selectedSense, occurrenceView, scriptureReferenceToFilterBy, sensesFilteredByScrRef]);
+
+  // Cannot use Drawer components when there is no Drawer, if the screen is wider than 1024px it will render Button and span here.
+  const BackToListButton = isDrawer ? DrawerClose : Button;
+  const TitleComponent = isDrawer ? DrawerTitle : 'span';
+  const DescriptionComponent = isDrawer ? DrawerDescription : 'span';
 
   // Automatically select the only sense if there is exactly one; otherwise clear selection
   useEffect(() => {
@@ -242,16 +254,14 @@ export function DictionaryEntryDisplay({
             >
               chapter (
               {(() => {
-                const senses = Object.values(sensesFilteredByScrRef)
-                  .flat()
-                  .filter((s): s is Sense => s !== undefined);
-                if (selectedSense) {
-                  return getOccurrenceCountForSense(selectedSense, scriptureReferenceToFilterBy);
-                }
-                return senses.reduce(
-                  (total, s) => total + getOccurrenceCountForSense(s, scriptureReferenceToFilterBy),
-                  0,
-                );
+                const senses = Object.values(sensesFilteredByScrRef).flat();
+                return selectedSense
+                  ? getDeduplicatedOccurrencesFromSenses(
+                      [selectedSense],
+                      scriptureReferenceToFilterBy,
+                    ).length
+                  : getDeduplicatedOccurrencesFromSenses(senses, scriptureReferenceToFilterBy)
+                      .length;
               })()}
               )
             </button>
@@ -266,34 +276,17 @@ export function DictionaryEntryDisplay({
             >
               all (
               {(() => {
-                const senses = Object.values(sensesFilteredByScrRef)
-                  .flat()
-                  .filter((s): s is Sense => s !== undefined);
-                if (selectedSense) {
-                  return getOccurrenceCountForSense(selectedSense);
-                }
-                return senses.reduce((total, s) => total + getOccurrenceCountForSense(s), 0);
+                const senses = Object.values(sensesFilteredByScrRef).flat();
+                return selectedSense
+                  ? getDeduplicatedOccurrencesFromSenses([selectedSense]).length
+                  : getDeduplicatedOccurrencesFromSenses(senses).length;
               })()}
               )
             </button>
           </div>
         </div>
         <ul className="tw-list-disc tw-list-inside">
-          {(selectedSense
-            ? getChapterOrAllOccurrencesForSense(
-                selectedSense,
-                occurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
-              )
-            : Object.values(sensesFilteredByScrRef)
-                .flat()
-                .filter((sense): sense is Sense => sense !== undefined)
-                .flatMap((sense) =>
-                  getChapterOrAllOccurrencesForSense(
-                    sense,
-                    occurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
-                  ),
-                )
-          ).map((occurrence) => (
+          {deduplicatedOccurrences.map((occurrence) => (
             <li
               key={`${occurrence.wordNum}-${formatScrRef(occurrence.verseRef, 'English')}`}
               className="tw-py-0.5"
