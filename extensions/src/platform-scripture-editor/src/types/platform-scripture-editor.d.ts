@@ -179,11 +179,14 @@ declare module 'papi-shared-types' {
      *   editable) is provided, this will properly open the resource viewer. Prompts the user to
      *   select a project if this parameter is not provided.
      * @param options Options for configuring the editor you are opening
+     * @param existingTabIdToReplace Optional ID of the tab that should be replaced by the scripture
+     *   editor
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openScriptureEditor': (
       projectId?: string | undefined,
       options?: OpenEditorOptions,
+      existingTabIdToReplace?: string,
     ) => Promise<string | undefined>;
 
     /**
@@ -193,11 +196,14 @@ declare module 'papi-shared-types' {
      *   (editable) is provided, this will properly open the Scripture editor. Prompts the user to
      *   select a resource if this parameter is not provided.
      * @param options Options for configuring the editor you are opening
+     * @param existingTabIdToReplace Optional ID of the tab that should be replaced by the resource
+     *   viewer
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openResourceViewer': (
       projectId?: string | undefined,
       options?: OpenEditorOptions,
+      existingTabIdToReplace?: string,
     ) => Promise<string | undefined>;
   }
 
