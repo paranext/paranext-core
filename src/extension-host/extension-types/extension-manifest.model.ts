@@ -58,7 +58,7 @@ export type ExtensionManifest = {
    */
   activationEvents: string[];
   /** List of extension dependencies required for this extension to work */
-  extensionDependencies?: ExtensionDependency;
+  extensionDependencies?: ExtensionDependency[];
   /** Path to the JSON file that defines the display data this extension is adding */
   displayData?: string;
   /** Id of publisher who published this extension on the extension marketplace */
