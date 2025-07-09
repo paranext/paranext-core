@@ -34,25 +34,6 @@ export interface ExtensionIcon {
  * Full image of the data of an extension including the additional extension marketplace
  * visualization data
  */
-// export interface ExtensionData {
-//   id: string;
-//   currentVersion: string;
-//   main: string;
-//   displayName: ExtensionLocalizedStrings;
-//   shortSummary: ExtensionLocalizedStrings;
-//   description: ExtensionLocalizedStrings;
-//   icon: ExtensionIcon;
-//   locales: string[];
-//   moreInfoUrl: string;
-//   supportUrl: string;
-//   fileSize: number;
-//   hashcode: string;
-// }
-
-/**
- * Full image of the data of an extension including the additional extension marketplace
- * visualization data
- */
 export type ExtensionData = Readonly<
   Omit<ExtensionManifest, 'name' | 'version'> & {
     id: string;
@@ -65,7 +46,7 @@ export type ExtensionData = Readonly<
     moreInfoUrl: string;
     supportUrl: string;
     fileSize: number;
-    hashcode: string;
+    hashcode: Record<string, string>;
   }
 >;
 

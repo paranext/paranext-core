@@ -879,7 +879,7 @@ async function parseExtensionData(
   } else if (enabledExtensionStats !== undefined) {
     extensionBuffer = await nodeFS.readFileBinary(enabledExtensionUri);
   }
-  const hashcode = extensionBuffer
+  const sha512Hashcode = extensionBuffer
     ? generateHashFromBuffer('sha512', 'base64', extensionBuffer)
     : '';
 
@@ -924,7 +924,7 @@ async function parseExtensionData(
     moreInfoUrl: displayData?.moreInfoUrl ?? '',
     supportUrl: displayData?.supportUrl ?? '',
     fileSize: fileSize ?? -1,
-    hashcode,
+    hashcode: { sha512: sha512Hashcode },
   };
 }
 

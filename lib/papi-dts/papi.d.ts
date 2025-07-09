@@ -5863,7 +5863,7 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      */
     activationEvents: string[];
     /** List of extension dependencies required for this extension to work */
-    extensionDependencies?: ExtensionDependency;
+    extensionDependencies?: ExtensionDependency[];
     /** Path to the JSON file that defines the display data this extension is adding */
     displayData?: string;
     /** Id of publisher who published this extension on the extension marketplace */
@@ -5902,10 +5902,6 @@ declare module 'shared/models/manage-extensions-privilege.model' {
    * Full image of the data of an extension including the additional extension marketplace
    * visualization data
    */
-  /**
-   * Full image of the data of an extension including the additional extension marketplace
-   * visualization data
-   */
   export type ExtensionData = Readonly<
     Omit<ExtensionManifest, 'name' | 'version'> & {
       id: string;
@@ -5918,7 +5914,7 @@ declare module 'shared/models/manage-extensions-privilege.model' {
       moreInfoUrl: string;
       supportUrl: string;
       fileSize: number;
-      hashcode: string;
+      hashcode: Record<string, string>;
     }
   >;
   /**
