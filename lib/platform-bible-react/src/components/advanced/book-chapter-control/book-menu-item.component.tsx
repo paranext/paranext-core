@@ -10,8 +10,8 @@ type BookMenuItemProps = PropsWithChildren<{
   bookId: string;
   /** Callback to run when a book menu item is selected */
   handleSelectBook: () => void;
-  /** Indicates if this menu item is currently selected and expanded to show its children */
-  isSelected: boolean;
+  /** Indicates if this menu item should be expanded to show its children */
+  shouldExpandChildren: boolean;
   /** Function that is called upon highlighting a book in the dropdown menu */
   handleHighlightBook: () => void;
   /**
@@ -32,7 +32,7 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
     {
       bookId,
       handleSelectBook,
-      isSelected,
+      shouldExpandChildren,
       handleHighlightBook,
       handleKeyDown,
       bookType,
@@ -49,7 +49,8 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
           'tw-mx-1 tw-flex-col tw-items-start tw-px-1 tw-font-normal tw-text-foreground/80',
           {
             // Overriding `data-[highlighted]` changes the default gray background that is normally shown on hover
-            'tw-bg-amber-50 tw-text-yellow-900 data-[highlighted]:tw-bg-amber-100': isSelected,
+            'tw-bg-amber-50 tw-text-yellow-900 data-[highlighted]:tw-bg-amber-100':
+              shouldExpandChildren,
           },
         )}
         onSelect={(event: Event) => {
@@ -67,7 +68,7 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
           className={cn(
             'tw-border-b-0 tw-border-e-0 tw-border-s-2 tw-border-t-0 tw-border-solid tw-px-2',
             {
-              'tw-font-bold': isSelected,
+              'tw-font-bold': shouldExpandChildren,
               'tw-border-s-red-200': bookType.toLowerCase() === 'ot',
               'tw-border-s-purple-200': bookType.toLowerCase() === 'nt',
               'tw-border-s-indigo-200': bookType.toLowerCase() === 'dc',
@@ -76,7 +77,7 @@ export const BookMenuItem = forwardRef<HTMLDivElement, BookMenuItemProps>(
         >
           {Canon.bookIdToEnglishName(bookId)}
         </span>
-        {isSelected && <div>{children}</div>}
+        {shouldExpandChildren && <div>{children}</div>}
       </DropdownMenuItem>
     );
   },
