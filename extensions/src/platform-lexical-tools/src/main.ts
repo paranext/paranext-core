@@ -47,7 +47,7 @@ const dictionaryWebViewProvider: IWebViewProvider = {
 };
 
 export async function activate(context: ExecutionActivationContext) {
-  logger.info('Platform Lexical Tools is activating!');
+  logger.debug('Platform Lexical Tools is activating!');
 
   const dictionaryWebViewProviderPromise = papi.webViewProviders.registerWebViewProvider(
     DICTIONARY_WEB_VIEW_TYPE,
@@ -112,6 +112,6 @@ export async function activate(context: ExecutionActivationContext) {
 }
 
 export async function deactivate() {
-  logger.info('Platform Lexical Tools is deactivating!');
+  logger.debug('Platform Lexical Tools is deactivating!');
   return true;
 }

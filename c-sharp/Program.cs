@@ -17,7 +17,12 @@ public static class Program
         Console.WriteLine("Paranext data provider starting up");
         Thread.CurrentThread.Name = "Main";
 
-        var listener = new ConsoleTraceListener { TraceOutputOptions = TraceOptions.DateTime };
+        var listener = new ConsoleTraceListener
+        {
+            TraceOutputOptions = TraceOptions.DateTime,
+            // Ignore trace for every S/R-able project https://github.com/ubsicap/Paratext/blob/master/ParatextData/Repository/SharingLogic.cs#L450
+            Filter = new TraceExclusionFilter("CreateSharedProject for {0} ({1})"),
+        };
         // Clear the default listeners to stop Debug.Assert from crashing the app
         Trace.Listeners.Clear();
         // Log all trace messages to the console
