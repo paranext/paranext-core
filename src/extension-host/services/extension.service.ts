@@ -929,7 +929,14 @@ async function parseExtensionData(
 }
 
 async function readExtensionDataFromZip(extensionUri: string): Promise<ExtensionData | undefined> {
-  const zip: JSZip = await JSZip.loadAsync(extensionUri);
+  let zip: JSZip;
+  try {
+    const extensionZipData: Buffer = await nodeFS.readFileBinary(extensionUri);
+    zip = await JSZip.loadAsync(extensionZipData);
+  } catch {
+    return undefined;
+  }
+
   const manifestFile = zip.file(MANIFEST_FILE_NAME);
   // If the manifest file does not exist then returns undefined since can't really get any more info
   if (!manifestFile) {
@@ -944,11 +951,17 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
   if (manifest.localizedStrings) {
     const localizedStringsFile = zip.file(manifest.localizedStrings);
     if (localizedStringsFile) {
-      // Type assertion to appropriate form of the localized strings
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      localizedStrings = JSON.parse(
-        await localizedStringsFile.async('string'),
-      ) as LocalizedStringsJSON;
+      try {
+        // Type assertion to appropriate form of the localized strings
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        localizedStrings = JSON.parse(
+          await localizedStringsFile.async('string'),
+        ) as LocalizedStringsJSON;
+      } catch {
+        logger.warn(
+          `Could not read localized strings file '${manifest.localizedStrings}' for extension '${manifest.name}!'`,
+        );
+      }
     }
   }
 
@@ -957,9 +970,15 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
   if (manifest.displayData) {
     const displayDataFile = zip.file(manifest.displayData);
     if (displayDataFile) {
-      // Type assertion to appropriate form of the localized display data
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      displayData = JSON.parse(await displayDataFile.async('string')) as DisplayDataJSON;
+      try {
+        // Type assertion to appropriate form of the localized display data
+        // eslint-disable-next-line no-type-assertion/no-type-assertion
+        displayData = JSON.parse(await displayDataFile.async('string')) as DisplayDataJSON;
+      } catch {
+        logger.warn(
+          `Could not read display data file '${manifest.displayData}' for extension '${manifest.name}!'`,
+        );
+      }
     }
   }
 
@@ -972,7 +991,16 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
         const descriptionFile = zip.file(data.description);
         if (descriptionFile) {
           // Now we can read that description to a string
-          const descriptionString = await descriptionFile.async('string');
+          let descriptionString = '';
+          try {
+            descriptionString = await descriptionFile.async('string');
+          } catch {
+            logger.warn(
+              `Could not read '${locale}' description file '${data.description}' for extension '${manifest.name}!'`,
+            );
+            return undefined;
+          }
+          // Now we can read that description to a string
 
           // And return the language key with its corresponding description
           return [locale, descriptionString];
@@ -993,7 +1021,13 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
     const iconFile = zip.file(displayData.icon);
     let iconData = '';
     if (!isUrl && iconFile) {
-      iconData = await iconFile.async('base64');
+      try {
+        iconData = await iconFile.async('base64');
+      } catch {
+        logger.warn(
+          `Could not read icon file '${displayData.icon}' for extension '${manifest.name}!'`,
+        );
+      }
     }
 
     // Read the icon file into a buffer of bytes.
@@ -1013,54 +1047,83 @@ async function readExtensionDataFromFolder(extensionInfo: ExtensionInfo): Promis
   // Extract the localized strings of extension info, to determine supported languages.
   let localizedStrings: LocalizedStringsJSON | undefined;
   if (extensionInfo.localizedStrings) {
-    // Type assertion to appropriate form of the localized strings
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    localizedStrings = JSON.parse(
-      await nodeFS.readFileText(path.join(folderUri, extensionInfo.localizedStrings)),
-    ) as LocalizedStringsJSON;
+    try {
+      // Type assertion to appropriate form of the localized strings
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      localizedStrings = JSON.parse(
+        await nodeFS.readFileText(joinUriPaths(folderUri, extensionInfo.localizedStrings)),
+      ) as LocalizedStringsJSON;
+    } catch {
+      logger.warn(
+        `Could not read localized strings file '${extensionInfo.localizedStrings}' for extension '${extensionInfo.name}!'`,
+      );
+    }
   }
 
   // Extract the localized display data, for description/display name/summary/etc.
   let displayData: DisplayDataJSON | undefined;
   if (extensionInfo.displayData) {
-    // Type assertion to appropriate form of the localized display data
-    // eslint-disable-next-line no-type-assertion/no-type-assertion
-    displayData = JSON.parse(
-      await nodeFS.readFileText(path.join(folderUri, extensionInfo.displayData)),
-    ) as DisplayDataJSON;
+    try {
+      // Type assertion to appropriate form of the localized display data
+      // eslint-disable-next-line no-type-assertion/no-type-assertion
+      displayData = JSON.parse(
+        await nodeFS.readFileText(joinUriPaths(folderUri, extensionInfo.displayData)),
+      ) as DisplayDataJSON;
+    } catch {
+      logger.warn(
+        `Could not read display data file '${extensionInfo.displayData}' for extension '${extensionInfo.name}!'`,
+      );
+    }
   }
 
   // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
   // and values are the contents of the files found in the locale's "description" field
   let description: ExtensionLocalizedStrings = {};
   if (displayData !== undefined) {
-    description = Object.fromEntries(
-      await Promise.all(
-        Object.entries(displayData.localizedDisplayInfo).map(async ([locale, data]) => {
-          // Construct the path to the description file
-          const descriptionPath = path.join(folderUri, data.description);
+    const resolvedDescriptionEntries = await Promise.all(
+      Object.entries(displayData.localizedDisplayInfo).map(async ([locale, data]) => {
+        // Construct the path to the description file
+        const descriptionPath = joinUriPaths(folderUri, data.description);
 
-          // Now we can read that description to a string
-          const descriptionString = await nodeFS.readFileText(descriptionPath);
+        // Now we can read that description to a string
+        let descriptionString = '';
+        try {
+          descriptionString = await nodeFS.readFileText(descriptionPath);
+        } catch {
+          logger.warn(
+            `Could not read '${locale}' description file '${descriptionPath}' for extension '${extensionInfo.name}!'`,
+          );
+          return undefined;
+        }
 
-          // And return the language key with its corresponding description
-          return [locale, descriptionString];
-        }),
-      ),
+        // And return the language key with its corresponding description
+        return [locale, descriptionString];
+      }),
     );
+    description = Object.fromEntries(resolvedDescriptionEntries.filter((value) => !!value));
   }
 
   // Retrieves the extension icon
   let icon: ExtensionIcon = { filepath: '', filetype: '', data: '', isUrl: false };
   if (displayData?.icon) {
     const isUrl = URL.canParse(displayData.icon);
-    const fullIconFilepath = isUrl ? displayData.icon : path.join(folderUri, displayData.icon);
+    const fullIconFilepath = isUrl ? displayData.icon : joinUriPaths(folderUri, displayData.icon);
+    let iconData = '';
+    if (!isUrl) {
+      try {
+        iconData = await nodeFS.readFileText(fullIconFilepath, 'base64');
+      } catch {
+        logger.warn(
+          `Could not read icon file '${fullIconFilepath}' for extension '${extensionInfo.name}!'`,
+        );
+      }
+    }
 
     // Read the icon file into a buffer of bytes.
     icon = {
       filepath: displayData.icon,
       filetype: path.extname(fullIconFilepath).substring(1), // Remove the first `.` to just extract the file extension
-      data: isUrl ? '' : await nodeFS.readFileText(fullIconFilepath, 'base64'),
+      data: isUrl ? '' : iconData,
       isUrl,
     };
   }
