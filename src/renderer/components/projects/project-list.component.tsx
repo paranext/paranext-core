@@ -120,7 +120,7 @@ export type ProjectListProps = PropsWithChildren<{
    * If multiselect is selected, then the array of selected project IDs is passed to control the
    * selected flag on ListItemButton
    */
-  selectedProjectIds?: string[] | undefined;
+  selectedProjectIds?: string[];
 
   /** Optional subheader */
   subheader?: string;

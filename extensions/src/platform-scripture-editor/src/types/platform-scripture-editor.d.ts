@@ -182,7 +182,7 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openScriptureEditor': (
-      projectId?: string | undefined,
+      projectId?: string,
       options?: OpenEditorOptions,
     ) => Promise<string | undefined>;
 
@@ -196,7 +196,7 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openResourceViewer': (
-      projectId?: string | undefined,
+      projectId?: string,
       options?: OpenEditorOptions,
     ) => Promise<string | undefined>;
   }

@@ -13,7 +13,7 @@ import {
 
 async function mockGetLocalizedString(item: {
   localizeKey: string;
-  languagesToSearch?: string[] | undefined;
+  languagesToSearch?: string[];
 }): Promise<string> {
   if (!item.languagesToSearch) item.languagesToSearch = ['en'];
 
