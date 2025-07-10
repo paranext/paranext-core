@@ -1,4 +1,12 @@
-import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges-names.model';
+
+/** Interface that stores the extension dependency information */
+export interface ExtensionDependency {
+  /** Extension id of the given extension dependency */
+  id: string;
+  /** Version of the given extension dependency */
+  version: string;
+}
 
 /** Information about an extension provided by the extension developer. */
 export type ExtensionManifest = {
@@ -49,6 +57,10 @@ export type ExtensionManifest = {
    * implemented.
    */
   activationEvents: string[];
+  /** List of extension dependencies required for this extension to work */
+  extensionDependencies?: ExtensionDependency[];
+  /** Path to the JSON file that defines the display data this extension is adding */
+  displayData?: string;
   /** Id of publisher who published this extension on the extension marketplace */
   publisher?: string;
 };

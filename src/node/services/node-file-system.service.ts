@@ -6,6 +6,21 @@ import { Uri } from '@shared/data/file-system.model';
 import { getPathFromUri, joinUriPaths } from '@node/utils/util';
 import { groupBy } from 'platform-bible-utils';
 
+/** Type containing the buffer encoding strings for the `readFileText` function */
+export type BufferEncoding =
+  | 'ascii'
+  | 'utf8'
+  | 'utf-8'
+  | 'utf16le'
+  | 'utf-16le'
+  | 'ucs2'
+  | 'ucs-2'
+  | 'base64'
+  | 'base64url'
+  | 'latin1'
+  | 'binary'
+  | 'hex';
+
 /**
  * Read a text file
  *
@@ -14,8 +29,8 @@ import { groupBy } from 'platform-bible-utils';
  */
 // TODO: Provide options or some other way to allow callers to the URI isn't pointing outside of
 // some expected location (e.g., an extension file's URI doesn't point outside of the extension dir)
-export async function readFileText(uri: Uri): Promise<string> {
-  return fs.promises.readFile(getPathFromUri(uri), 'utf8');
+export async function readFileText(uri: Uri, encoding: BufferEncoding = 'utf8'): Promise<string> {
+  return fs.promises.readFile(getPathFromUri(uri), encoding);
 }
 
 /**

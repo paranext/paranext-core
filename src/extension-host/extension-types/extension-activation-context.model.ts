@@ -1,11 +1,9 @@
 import { ExecutionToken } from '@node/models/execution-token.model';
 import { UnsubscriberAsyncList } from 'platform-bible-utils';
-import {
-  ElevatedPrivileges,
-  // Needed for documentation links to work
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ElevatedPrivilegeNames,
-} from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
+// Needed for documentation links to work
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges-names.model';
 
 /** An object of this type is passed into `activate()` for each extension during initialization */
 export type ExecutionActivationContext = {
