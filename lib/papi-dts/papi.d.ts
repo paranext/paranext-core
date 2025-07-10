@@ -2698,6 +2698,8 @@ declare module 'shared/models/docking-framework.model' {
   /** Information about a tab in a panel */
   interface TabLayout {
     type: 'tab';
+    /** Id of the parent dock box that the tab belongs to */
+    parentTabGroupId?: string;
   }
   /**
    * Indicates where to display a floating window
@@ -2718,6 +2720,8 @@ declare module 'shared/models/docking-framework.model' {
     floatSize?: FloatSize;
     /** Where to display the floating window. Defaults to `cascade` */
     position?: FloatPosition;
+    /** Id of the parent float box that the tab belongs to */
+    parentTabGroupId?: string;
   }
   export type PanelDirection =
     | 'left'
@@ -2737,8 +2741,13 @@ declare module 'shared/models/docking-framework.model' {
     /** If undefined, it will add in the `direction` relative to the previously added tab. */
     targetTabId?: string;
   }
+  interface ReplaceTabLayout {
+    type: 'replace-tab';
+    /** The ID of the tab to replace */
+    targetTabId: string;
+  }
   /** Information about how a Paranext tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout;
+  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /**

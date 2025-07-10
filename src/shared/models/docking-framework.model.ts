@@ -72,6 +72,8 @@ export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
 /** Information about a tab in a panel */
 interface TabLayout {
   type: 'tab';
+  /** Id of the parent dock box that the tab belongs to */
+  parentTabGroupId?: string;
 }
 
 /**
@@ -92,6 +94,8 @@ export interface FloatLayout {
   floatSize?: FloatSize;
   /** Where to display the floating window. Defaults to `cascade` */
   position?: FloatPosition;
+  /** Id of the parent float box that the tab belongs to */
+  parentTabGroupId?: string;
 }
 
 export type PanelDirection =
@@ -115,8 +119,14 @@ interface PanelLayout {
   targetTabId?: string;
 }
 
+interface ReplaceTabLayout {
+  type: 'replace-tab';
+  /** The ID of the tab to replace */
+  targetTabId: string;
+}
+
 /** Information about how a Paranext tab fits into the dock layout */
-export type Layout = TabLayout | FloatLayout | PanelLayout;
+export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
 
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;

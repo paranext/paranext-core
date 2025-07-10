@@ -3,6 +3,7 @@
   "localizedStrings": {
     "en": {
       "%home_dialog_title%": "Home",
+      "%new_tab_dialog_title%": "New Tab",
       "%resources_action%": "Action",
       "%resources_activity%": "Activity",
       "%resources_any%": "Any",
