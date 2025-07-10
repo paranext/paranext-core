@@ -62,7 +62,7 @@ function checkNewGroups(
     const group = newGroups[groupName as ReferencedItem];
     if (!group) return;
     if (!startsWith(groupName, namePrefix))
-      throw new Error(`Group name ${groupName} does not start with ${namePrefix}`);
+      throw new Error(`Group name '${groupName}' does not start with ${namePrefix}`);
     if ('column' in group && group.column) {
       if (!currentColumns) return;
       const targetColumn = currentColumns[group.column];
@@ -329,7 +329,9 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       /* eslint-enable no-type-assertion/no-type-assertion */
 
       if (!currentWebView && !startsWith(webViewName, namePrefix))
-        throw new Error(`Cannot add a new web view unless it starts with ${namePrefix}`);
+        throw new Error(
+          `Cannot add '${webViewName}'. The new web view must start with ${namePrefix}`,
+        );
 
       checkNewColumns(newWebView?.topMenu?.columns, namePrefix, currentWebView?.topMenu?.columns);
       checkNewGroups(newWebView?.topMenu?.groups, namePrefix, currentWebView?.topMenu?.columns);
