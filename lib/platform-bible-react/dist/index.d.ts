@@ -1156,7 +1156,7 @@ export type ComboBoxProps<T> = {
 	/** Triggers when content of textfield is changed */
 	onChange?: (newValue: T) => void;
 	/** Used to determine the string value for a given option. */
-	getOptionLabel?: (option: ComboBoxOption) => string;
+	getOptionLabel?: (option: T) => string;
 	/** Icon to be displayed on the trigger */
 	icon?: React$1.ReactNode;
 	/** Text displayed on button if `value` is undefined */
