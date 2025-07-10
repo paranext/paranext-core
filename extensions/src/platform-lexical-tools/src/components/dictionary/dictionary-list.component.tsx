@@ -129,6 +129,8 @@ export type DictionaryListBoxProps = {
   scriptureReferenceToFilterBy: SerializedVerseRef;
   /** Callback function to handle occurrence selection */
   onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
+  /** Callback function to handle character press */
+  onCharacterPress?: (char: string) => void;
 };
 
 /**
@@ -146,6 +148,7 @@ export function DictionaryList({
   dictionaryData,
   scriptureReferenceToFilterBy,
   onSelectOccurrence,
+  onCharacterPress,
 }: DictionaryListBoxProps) {
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const isWideScreen = useIsWideScreen();
@@ -162,6 +165,7 @@ export function DictionaryList({
   const { listboxRef, activeId, handleKeyDown } = useListbox({
     options,
     onOptionSelect: handleOptionSelect,
+    onCharacterPress,
   });
 
   return (

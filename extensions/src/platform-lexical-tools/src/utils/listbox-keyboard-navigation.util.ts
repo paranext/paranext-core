@@ -17,6 +17,8 @@ export interface UseListboxProps {
   onFocusChange?: (option: ListboxOption) => void;
   /** Callback to toggle the selection of an option */
   onOptionSelect?: (option: ListboxOption) => void;
+  /** Callback when a character key is pressed */
+  onCharacterPress?: (char: string) => void;
 }
 /**
  * Hook for handling keyboard navigation of a listbox.
@@ -32,14 +34,17 @@ export interface UseListboxProps {
  *       navigation and selection.
  *   - `focusOption`: A function to programmatically focus a specific option by id.
  */
-export function useListbox({ options, onFocusChange, onOptionSelect }: UseListboxProps) {
+export function useListbox({
+  options,
+  onFocusChange,
+  onOptionSelect,
+  onCharacterPress,
+}: UseListboxProps) {
   // ul ref property expects null and not undefined
   // eslint-disable-next-line no-null/no-null
   const listboxRef = useRef<HTMLUListElement>(null);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
-  // const [keysSoFar, setKeysSoFar] = useState('');
-  // const keysTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const focusOption = useCallback(
     (id: string) => {
@@ -74,15 +79,8 @@ export function useListbox({ options, onFocusChange, onOptionSelect }: UseListbo
     [onOptionSelect, options],
   );
 
-  // const clearKeys = () => {
-  //   setKeysSoFar('');
-  //   keysTimeoutRef.current = undefined;
-  // };
-
   // TODO: Fix focus ring goes away when closing the drawer then comes back
   // TODO: Fix trap keyboard navigation in drawer content unless Esc, Enter, or Space (closes drawer)
-  // TODO: Tab into table makes it scroll down slightly (probably from custom onFocusChange that is passed in)
-  // TODO: Type a character to go to the entry stating with that character
   const handleKeyDown = useCallback(
     (evt: KeyboardEvent<HTMLUListElement>) => {
       const currentIndex = options.findIndex((opt) => opt.id === activeId);
@@ -111,22 +109,20 @@ export function useListbox({ options, onFocusChange, onOptionSelect }: UseListbo
             toggleSelectInternal(activeId);
           }
           evt.preventDefault();
+          evt.stopPropagation();
           return;
         default:
-          // if (evt.key.length === 1) {
-          //   const itemToFocus = this.findItemToFocus(evt.key.toLowerCase());
-          //   if (itemToFocus) {
-          //     this.focusItem(itemToFocus);
-          //   }
-          // }
-          // break;
+          if (evt.key.length === 1 && !evt.metaKey && !evt.ctrlKey && !evt.altKey) {
+            onCharacterPress?.(evt.key);
+            evt.preventDefault();
+          }
           return;
       }
 
       const nextOption = options[nextIndex];
       if (nextOption) focusOption(nextOption.id);
     },
-    [options, focusOption, activeId, toggleSelectInternal],
+    [options, focusOption, activeId, toggleSelectInternal, onCharacterPress],
   );
 
   return {

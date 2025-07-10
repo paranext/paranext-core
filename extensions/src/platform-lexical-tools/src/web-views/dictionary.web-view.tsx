@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import {
   Label,
   SearchBar,
@@ -34,8 +34,36 @@ globalThis.webViewComponent = function Dictionary({
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
+  // eslint-disable-next-line no-null/no-null
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const lexicalService = useDataProvider('platformLexicalTools.lexicalReferenceService');
   const isWideScreen = useIsWideScreen();
+
+  // Global key listener to pass character key presses to the searchbar
+  // useEffect(() => {
+  //   const handleKeyDown = (event: KeyboardEvent) => {
+  //     const isTypingCharacter =
+  //       event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey;
+  //     if (!isTypingCharacter) return;
+
+  //     // Don’t override when user is already typing into an input
+  //     const activeTag = document.activeElement?.tagName;
+  //     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
+
+  //     event.preventDefault();
+
+  //     searchInputRef.current?.focus();
+
+  //     // Pre-fill the typed character
+  //     const typedChar = event.key;
+  //     setSearchQuery(typedChar); // Replace prev if you want to start fresh
+  //   };
+
+  //   window.addEventListener('keydown', handleKeyDown);
+  //   return () => {
+  //     window.removeEventListener('keydown', handleKeyDown);
+  //   };
+  // }, [setSearchQuery]);
 
   const getEntriesById = useCallback(() => {
     if (!lexicalService) return Promise.resolve(undefined);
@@ -119,6 +147,7 @@ globalThis.webViewComponent = function Dictionary({
           </div>
           <div className="tw-max-w-72">
             <SearchBar
+              ref={searchInputRef}
               value={searchQuery}
               onSearch={setSearchQuery}
               placeholder={localizedStrings['%platformLexicalTools_dictionary_searchDictionary%']}
@@ -145,6 +174,10 @@ globalThis.webViewComponent = function Dictionary({
           dictionaryData={allEntriesByScrRef}
           scriptureReferenceToFilterBy={scrRef}
           onSelectOccurrence={onSelectOccurrence}
+          onCharacterPress={(char) => {
+            searchInputRef.current?.focus();
+            setSearchQuery(char);
+          }}
         />
       )}
     </div>

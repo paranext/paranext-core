@@ -1211,7 +1211,7 @@ export type SearchBarProps = {
  *   search bar
  * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
  */
-export declare function SearchBar({ value, onSearch, placeholder, isFullWidth, className, isDisabled, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export declare const SearchBar: import("react").ForwardRefExoticComponent<SearchBarProps & import("react").RefAttributes<HTMLInputElement>>;
 export type SpinnerProps = LucideProps;
 /**
  * A spinner component that uses the LoaderCircle icon from lucide-react to indicate loading states.
