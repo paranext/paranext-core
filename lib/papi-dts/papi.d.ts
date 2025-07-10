@@ -5065,6 +5065,14 @@ declare module 'shared/data/file-system.model' {
 }
 declare module 'node/utils/util' {
   import { Uri } from 'shared/data/file-system.model';
+  /** Name of the directory in app that should be used to hold extension data */
+  export const EXTENSION_DATA_DIR = 'extensions';
+  /** Name of the directory in app where installed extensions live */
+  export const INSTALLED_EXTENSIONS_DIR = 'installed-extensions';
+  /** Name of the directory in app where disabled extensions live */
+  export const DISABLED_EXTENSIONS_DIR = 'disabled-extensions';
+  /** Name of the directory in cache where installed extensions are unzipped and run */
+  export const UNZIPPED_EXTENSIONS_CACHE_DIR = 'extensions';
   export const FILE_PROTOCOL = 'file://';
   export const RESOURCES_PROTOCOL = 'resources://';
   export function resolveHtmlPath(htmlFileName: string): string;
@@ -5614,8 +5622,7 @@ declare module 'shared/models/create-process-privilege.model' {
   /**
    *
    * Run {@link spawn} to create a child process. The platform will automatically kill all child
-   * processes created this way in packaged builds. Child processes are not killed when running in
-   * development.
+   * processes created this way in packaged builds.
    *
    * This method is essentially a layer over the [`spawn`
    * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
@@ -5661,8 +5668,7 @@ declare module 'shared/models/create-process-privilege.model' {
   /**
    *
    * Run {@link fork} to create a child process. The platform will automatically kill all child
-   * processes created this way in packaged builds. Child processes are not killed when running in
-   * development.
+   * processes created this way in packaged builds.
    *
    * This method is essentially a layer over the [`fork`
    * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
@@ -5706,8 +5712,7 @@ declare module 'shared/models/create-process-privilege.model' {
     /**
      *
      * Run {@link spawn} to create a child process. The platform will automatically kill all child
-     * processes created this way in packaged builds. Child processes are not killed when running in
-     * development.
+     * processes created this way in packaged builds.
      *
      * This method is essentially a layer over the [`spawn`
      * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
@@ -5748,8 +5753,7 @@ declare module 'shared/models/create-process-privilege.model' {
     /**
      *
      * Run {@link fork} to create a child process. The platform will automatically kill all child
-     * processes created this way in packaged builds. Child processes are not killed when running in
-     * development.
+     * processes created this way in packaged builds.
      *
      * This method is essentially a layer over the [`fork`
      * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
