@@ -159,7 +159,7 @@ declare module 'platform-scripture-editor' {
      * @param decorationsToRemove List of IDs of decorations to remove completely
      */
     updateDecorations(
-      decorationsToAdd: EditorDecorations | undefined,
+      decorationsToAdd?: EditorDecorations,
       decorationsToRemove?: string[],
     ): Promise<void>;
   }>;
@@ -182,7 +182,7 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openScriptureEditor': (
-      projectId?: string | undefined,
+      projectId?: string,
       options?: OpenEditorOptions,
     ) => Promise<string | undefined>;
 
@@ -196,7 +196,7 @@ declare module 'papi-shared-types' {
      * @returns WebView id for new editor WebView or `undefined` if the user canceled the dialog
      */
     'platformScriptureEditor.openResourceViewer': (
-      projectId?: string | undefined,
+      projectId?: string,
       options?: OpenEditorOptions,
     ) => Promise<string | undefined>;
   }

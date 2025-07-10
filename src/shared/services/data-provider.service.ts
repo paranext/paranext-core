@@ -420,8 +420,8 @@ function createDataProviderProxy<DataProviderName extends DataProviderNames>(
  *   to update
  */
 function mapUpdateInstructionsToUpdateEvent<TDataTypes extends DataProviderDataTypes>(
-  updateInstructions: DataProviderUpdateInstructions<TDataTypes> | undefined,
-  dataType: DataTypeNames<TDataTypes> | undefined,
+  updateInstructions?: DataProviderUpdateInstructions<TDataTypes>,
+  dataType?: DataTypeNames<TDataTypes>,
 ): DataProviderUpdateInstructions<TDataTypes> {
   // If they want to update all data types, let them do it
   if (updateInstructions === '*') return updateInstructions;

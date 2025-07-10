@@ -16,7 +16,7 @@ import { PlatformError, isPlatformError } from 'platform-bible-utils';
  */
 type UseDataHook = {
   <DataProviderName extends DataProviderNames>(
-    dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+    dataProviderSource?: DataProviderName | DataProviders[DataProviderName],
   ): {
     [TDataType in keyof DataProviderTypes[DataProviderName]]: (
       // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
@@ -45,7 +45,7 @@ type UseDataHook = {
 /**
  * ```typescript
  * useData<DataProviderName extends DataProviderNames>(
- *     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+ *     dataProviderSource?: DataProviderName | DataProviders[DataProviderName],
  *   ).DataType(
  *       selector: DataProviderTypes[DataProviderName][DataType]['selector'],
  *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
@@ -110,9 +110,7 @@ type UseDataHook = {
 // Assert the more general and more specific types.
 /* eslint-disable no-type-assertion/no-type-assertion */
 export const useData = createUseDataHook(
-  useDataProvider as (
-    dataProviderSource: string | IDataProvider | undefined,
-  ) => IDataProvider | undefined,
+  useDataProvider as (dataProviderSource?: string | IDataProvider) => IDataProvider | undefined,
 ) as UseDataHook;
 /* eslint-enable */
 

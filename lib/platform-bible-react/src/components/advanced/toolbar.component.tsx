@@ -59,9 +59,7 @@ export type ToolbarProps = PropsWithChildren<{
  * @param operatingSystem The os platform: 'darwin' (macos) | anything else
  * @returns The class name to apply to the toolbar if os specific space should be reserved
  */
-export function getToolbarOSReservedSpaceClassName(
-  operatingSystem: string | undefined,
-): string | undefined {
+export function getToolbarOSReservedSpaceClassName(operatingSystem?: string): string | undefined {
   switch (operatingSystem) {
     case undefined:
       return undefined;

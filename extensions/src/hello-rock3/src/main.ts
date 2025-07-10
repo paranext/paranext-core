@@ -160,9 +160,7 @@ const helloRock3ProjectWebViewProvider = new HelloRock3ProjectWebViewFactory();
  * Function to prompt for a project and open it in the hello rock3 project web view. Registered as a
  * command handler.
  */
-async function openHelloRock3ProjectWebView(
-  projectId: string | undefined,
-): Promise<string | undefined> {
+async function openHelloRock3ProjectWebView(projectId?: string): Promise<string | undefined> {
   let projectIdForWebView = projectId;
   if (!projectIdForWebView) {
     projectIdForWebView = await papi.dialogs.selectProject({

@@ -76,7 +76,7 @@ export function hasDialogRequest(id: string) {
  */
 export function resolveDialogRequest<TReturn>(
   id: string,
-  data: TReturn | undefined,
+  data?: TReturn,
   shouldCloseDialog = true,
 ) {
   const dialogRequest = dialogRequests.get(id);
