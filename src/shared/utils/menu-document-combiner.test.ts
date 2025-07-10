@@ -525,7 +525,7 @@ test('Name prefixes are verified', () => {
         },
       },
     }),
-  ).toThrow(/Group name differentPrefix.group1 does not start with test./);
+  ).toThrow(/Group name 'differentPrefix.group1' does not start with test./);
 
   expect(() =>
     menuCombiner.addOrUpdateContribution('test', {
@@ -575,7 +575,7 @@ test('Name prefixes are verified', () => {
         },
       },
     }),
-  ).toThrow(/Cannot add a new web view unless it starts with test./);
+  ).toThrow(/Cannot add 'differentPrefix.something'. The new web view must start with test./);
 });
 
 test('Web view menu defaults are combined', () => {
