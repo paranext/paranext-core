@@ -37,6 +37,12 @@ import { IThemeServiceLocal } from '@shared/services/theme.service-model';
 import { webViewService } from '@shared/services/web-view.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
 import { PapiRendererXMLHttpRequest } from '@renderer/services/renderer-xml-http-request.service';
+import {
+  FrontendNetworkObjectService,
+  frontendNetworkObjectService,
+} from '@shared/services/network-object.service';
+import { networkObjectStatusService } from '@shared/services/network-object-status.service';
+import { NetworkObjectStatusServiceType } from '@shared/models/network-object-status.service-model';
 
 // IMPORTANT NOTES:
 // 1) When adding new services here, consider whether they also belong in papi-backend.service.ts.
@@ -68,6 +74,10 @@ const papi = {
   dialogs: dialogService as DialogService,
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
+  /** JSDOC DESTINATION networkObjectService */
+  networkObjects: frontendNetworkObjectService as FrontendNetworkObjectService,
+  /** JSDOC DESTINATION networkObjectStatusService */
+  networkObjectStatus: networkObjectStatusService as NetworkObjectStatusServiceType,
   /** JSDOC DESTINATION logger */
   logger: papiLogger,
   /** JSDOC DESTINATION internetService */
@@ -133,6 +143,12 @@ Object.freeze(papi.dialogs);
 /** JSDOC DESTINATION papiNetworkService */
 export const { network } = papi;
 Object.freeze(papi.network);
+/** JSDOC DESTINATION networkObjectService */
+export const { networkObjects } = papi;
+Object.freeze(papi.networkObjects);
+/** JSDOC DESTINATION networkObjectStatusService */
+export const { networkObjectStatus } = papi;
+Object.freeze(papi.networkObjectStatus);
 /** JSDOC DESTINATION logger */
 export const { logger } = papi;
 Object.freeze(papi.logger);

@@ -9,8 +9,14 @@ type CommandLineArgumentAliases = {
  * Command-line arguments
  *
  * - Extensions - Command-line argument that specifies extra individual extension folders
+ *
+ *   - Note: when running in Snap on Linux, if an unzipped extension folder is provided this way, that
+ *       extension will not be able to launch separate processes.
  * - ExtensionsDir - Command-line argument that specifies extra extension directories in which to
  *   check all contained folders for extensions
+ *
+ *   - Note: when running in Snap on Linux, if unzipped extension folders are provided this way, those
+ *       extensions will not be able to launch separate processes.
  * - LogLevel - Command-line argument that specifies log level to use Options: 'error' | 'warn' |
  *   'info' | 'verbose' | 'debug'
  * - ResourcesPath - Command-line argument that specifies the path to the resources folder

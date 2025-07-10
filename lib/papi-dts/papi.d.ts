@@ -1758,12 +1758,14 @@ declare module 'shared/services/network-object.service' {
       | undefined,
     objectDocumentation?: NetworkObjectDocumentation,
   ) => Promise<DisposableNetworkObject<T>>;
-  export interface MinimalNetworkObjectService {
+  export interface FrontendNetworkObjectService {
     get: typeof get;
-    set: typeof set;
     onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
   }
-  export interface NetworkObjectService extends MinimalNetworkObjectService {
+  export interface BackendNetworkObjectService extends FrontendNetworkObjectService {
+    set: typeof set;
+  }
+  export interface NetworkObjectService extends BackendNetworkObjectService {
     initialize: typeof initialize;
     hasKnown: typeof hasKnown;
   }
@@ -1825,7 +1827,36 @@ declare module 'shared/services/network-object.service' {
    * event handler will be called. After an object is disposed, calls to its functions will no longer
    * be proxied to the original object.
    */
-  export const minimalNetworkObjectService: MinimalNetworkObjectService;
+  export const frontendNetworkObjectService: FrontendNetworkObjectService;
+  /**
+   *
+   * Network objects are distributed objects within PAPI for TS/JS objects. @see
+   * https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using
+   * {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+   * the registered object are proxied except for constructors, `dispose`, and functions starting with
+   * `on` since those should be events (which are not intended to be proxied) based on our naming
+   * convention. If you don't want a function to be proxied, don't make it a property of the
+   * registered object.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be called
+   * across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+   * of that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  export const backendNetworkObjectService: BackendNetworkObjectService;
 }
 declare module 'shared/models/network-object.model' {
   import {
@@ -7746,7 +7777,7 @@ declare module '@papi/backend' {
   import { IDatabaseService } from 'shared/services/database.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
-  import { MinimalNetworkObjectService } from 'shared/services/network-object.service';
+  import { BackendNetworkObjectService } from 'shared/services/network-object.service';
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
   import { IWindowService } from 'shared/services/window.service-model';
@@ -7911,7 +7942,7 @@ declare module '@papi/backend' {
      * event handler will be called. After an object is disposed, calls to its functions will no longer
      * be proxied to the original object.
      */
-    networkObjects: MinimalNetworkObjectService;
+    networkObjects: BackendNetworkObjectService;
     /**
      *
      * Provides functions related to the set of available network objects
@@ -8169,7 +8200,7 @@ declare module '@papi/backend' {
    * event handler will be called. After an object is disposed, calls to its functions will no longer
    * be proxied to the original object.
    */
-  export const networkObjects: MinimalNetworkObjectService;
+  export const networkObjects: BackendNetworkObjectService;
   /**
    *
    * Provides functions related to the set of available network objects
@@ -9258,6 +9289,8 @@ declare module '@papi/frontend' {
   import { IThemeServiceLocal } from 'shared/services/theme.service-model';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
+  import { FrontendNetworkObjectService } from 'shared/services/network-object.service';
+  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   const papi: {
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
@@ -9305,6 +9338,40 @@ declare module '@papi/frontend' {
      * Service that provides a way to send and receive network events
      */
     network: PapiNetworkService;
+    /**
+     *
+     * Network objects are distributed objects within PAPI for TS/JS objects. @see
+     * https://en.wikipedia.org/wiki/Distributed_object
+     *
+     * Objects registered via {@link networkObjectService.set} are retrievable using
+     * {@link networkObjectService.get}.
+     *
+     * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+     * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+     * the registered object are proxied except for constructors, `dispose`, and functions starting with
+     * `on` since those should be events (which are not intended to be proxied) based on our naming
+     * convention. If you don't want a function to be proxied, don't make it a property of the
+     * registered object.
+     *
+     * Functions on a network object will be called asynchronously by other processes regardless of
+     * whether the functions are synchronous or asynchronous, so it is best to make them all
+     * asynchronous. All shared functions' arguments and return values must be serializable to be called
+     * across processes.
+     *
+     * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+     * of that service, and only that service, to call `dispose` on that object when it is no longer
+     * intended to be shared with other services.
+     *
+     * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+     * event handler will be called. After an object is disposed, calls to its functions will no longer
+     * be proxied to the original object.
+     */
+    networkObjects: FrontendNetworkObjectService;
+    /**
+     *
+     * Provides functions related to the set of available network objects
+     */
+    networkObjectStatus: NetworkObjectStatusServiceType;
     /**
      *
      * All extensions and services should use this logger to provide a unified output of logs
@@ -9424,6 +9491,40 @@ declare module '@papi/frontend' {
    * Service that provides a way to send and receive network events
    */
   export const network: PapiNetworkService;
+  /**
+   *
+   * Network objects are distributed objects within PAPI for TS/JS objects. @see
+   * https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using
+   * {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+   * the registered object are proxied except for constructors, `dispose`, and functions starting with
+   * `on` since those should be events (which are not intended to be proxied) based on our naming
+   * convention. If you don't want a function to be proxied, don't make it a property of the
+   * registered object.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be called
+   * across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+   * of that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  export const networkObjects: FrontendNetworkObjectService;
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export const networkObjectStatus: NetworkObjectStatusServiceType;
   /**
    *
    * All extensions and services should use this logger to provide a unified output of logs

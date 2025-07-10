@@ -40,8 +40,8 @@ import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
 import { localizationService } from '@shared/services/localization.service';
 import {
-  MinimalNetworkObjectService,
-  minimalNetworkObjectService,
+  BackendNetworkObjectService,
+  backendNetworkObjectService,
 } from '@shared/services/network-object.service';
 import { NetworkObjectStatusServiceType } from '@shared/models/network-object-status.service-model';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
@@ -100,7 +100,7 @@ const papi = {
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
   /** JSDOC DESTINATION networkObjectService */
-  networkObjects: minimalNetworkObjectService as MinimalNetworkObjectService,
+  networkObjects: backendNetworkObjectService as BackendNetworkObjectService,
   /** JSDOC DESTINATION networkObjectStatusService */
   networkObjectStatus: networkObjectStatusService as NetworkObjectStatusServiceType,
   /** JSDOC DESTINATION logger */
