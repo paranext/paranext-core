@@ -698,7 +698,7 @@ export function escapeStringRegexp(string: string): string {
  *   an empty array is returned.
  */
 export function transformAndEnsureRegExpRegExpArray(
-  stringStringMaybeArray: string | (string | string[])[] | undefined,
+  stringStringMaybeArray?: string | (string | string[])[],
 ): (RegExp | RegExp[])[] {
   if (!stringStringMaybeArray) return [];
 
@@ -726,9 +726,7 @@ export function transformAndEnsureRegExpRegExpArray(
  *   strings, or `undefined`.
  * @returns An array of `RegExp` objects. If the input is `undefined`, an empty array is returned.
  */
-export function transformAndEnsureRegExpArray(
-  stringMaybeArray: string | string[] | undefined,
-): RegExp[] {
+export function transformAndEnsureRegExpArray(stringMaybeArray?: string | string[]): RegExp[] {
   if (!stringMaybeArray) return [];
 
   const stringArray = ensureArray(stringMaybeArray);

@@ -1458,7 +1458,7 @@ export declare function normalizeScriptureSpaces(str: string): string;
  * markers other than `content` that are complex objects like arrays or objects as the properties
  * are shallow equaled.
  */
-export declare function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined): boolean;
+export declare function areUsjContentsEqualExceptWhitespace(a?: Usj, b?: Usj): boolean;
 /** USJ content node type for a chapter */
 export declare const CHAPTER_TYPE = "chapter";
 /** USJ content node type for a verse */
@@ -1542,7 +1542,7 @@ export interface IUsjReaderWriter {
 	 * @returns SerializedVerseRef and offset representing the location of `node`, if one could be
 	 *   found
 	 */
-	nodeToVerseRefAndOffset(bookId: string, node: MarkerContent, nodeParent: MarkerObject | MarkerContent[] | undefined): {
+	nodeToVerseRefAndOffset(bookId: string, node: MarkerContent, nodeParent?: MarkerObject | MarkerContent[]): {
 		verseRef: SerializedVerseRef;
 		offset: number;
 	} | undefined;
@@ -1917,7 +1917,7 @@ export declare function escapeStringRegexp(string: string): string;
  * @returns An array of `RegExp` objects or arrays of `RegExp` objects. If the input is `undefined`,
  *   an empty array is returned.
  */
-export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArray: string | (string | string[])[] | undefined): (RegExp | RegExp[])[];
+export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArray?: string | (string | string[])[]): (RegExp | RegExp[])[];
 /**
  * Transforms a string or an array of strings into an array of regular expressions.
  *
@@ -1931,7 +1931,7 @@ export declare function transformAndEnsureRegExpRegExpArray(stringStringMaybeArr
  *   strings, or `undefined`.
  * @returns An array of `RegExp` objects. If the input is `undefined`, an empty array is returned.
  */
-export declare function transformAndEnsureRegExpArray(stringMaybeArray: string | string[] | undefined): RegExp[];
+export declare function transformAndEnsureRegExpArray(stringMaybeArray?: string | string[]): RegExp[];
 /**
  * Determines whether a string contains one or more white space characters and no other characters.
  *
@@ -2429,7 +2429,7 @@ export interface ModifierProject {
 	 * - Include `one`
 	 * - Include both `two` and `three`.
 	 */
-	includeProjectInterfaces?: undefined | string | (string | string[])[];
+	includeProjectInterfaces?: string | (string | string[])[];
 	/**
 	 * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
 	 * (using the
@@ -2465,7 +2465,7 @@ export interface ModifierProject {
 	 * - Include `one`
 	 * - Include both `two` and `three`.
 	 */
-	excludeProjectInterfaces?: undefined | string | (string | string[])[];
+	excludeProjectInterfaces?: string | (string | string[])[];
 	/**
 	 * String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory
 	 * Ids that provided each project's metadata (using the
@@ -2475,7 +2475,7 @@ export interface ModifierProject {
 	 * Defaults to all Project Data Provider Factory Ids, so all projects that do not match
 	 * `excludePdpFactoryIds` will be included
 	 */
-	includePdpFactoryIds?: undefined | string | string[];
+	includePdpFactoryIds?: string | string[];
 	/**
 	 * String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory
 	 * Ids that provided each project's metadata (using the
@@ -2485,7 +2485,7 @@ export interface ModifierProject {
 	 *
 	 * Defaults to none, so all projects that match `includePdpFactoryIds` will be included
 	 */
-	excludePdpFactoryIds?: undefined | string | string[];
+	excludePdpFactoryIds?: string | string[];
 }
 /** The data an extension provides to inform Platform.Bible of the user state it provides */
 export interface UserStateContribution {
@@ -3375,7 +3375,7 @@ export declare const THEME_STYLE_ELEMENT_ID = "theme-styles";
  *   `cssVariables`
  * @returns The expanded theme families
  */
-export declare function expandThemeContribution(themeFamiliesById: ThemeFamiliesById, defaultThemeFamily: ThemeFamily | undefined): ThemeFamiliesByIdExpanded;
+export declare function expandThemeContribution(themeFamiliesById: ThemeFamiliesById, defaultThemeFamily?: ThemeFamily): ThemeFamiliesByIdExpanded;
 /** Gets the CSS stylesheet that should be applied for the given theme */
 export declare function getStylesheetForTheme(theme: ThemeDefinitionExpanded): string;
 /**
@@ -3440,7 +3440,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	nodeToJsonPath(node: MarkerObject): ContentJsonPath;
 	/** Find the chapter and verse that apply to a given USJ node */
 	private findVerseRefForNode;
-	nodeToVerseRefAndOffset(bookId: string, node: MarkerContent, nodeParent: MarkerObject | MarkerContent[] | undefined): {
+	nodeToVerseRefAndOffset(bookId: string, node: MarkerContent, nodeParent?: MarkerObject | MarkerContent[]): {
 		verseRef: SerializedVerseRef;
 		offset: number;
 	} | undefined;

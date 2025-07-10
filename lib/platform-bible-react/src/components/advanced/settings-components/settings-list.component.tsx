@@ -20,7 +20,7 @@ type SettingsListItemProps = PropsWithChildren & {
   primary: string;
 
   /** Optional text of the list item */
-  secondary?: string | undefined;
+  secondary?: string;
 
   /** Optional boolean to display a message if the children aren't loaded yet. Defaults to false */
   isLoading?: boolean;
@@ -66,7 +66,7 @@ type SettingsListHeaderProps = {
   primary: string;
 
   /** Optional secondary text of the list header */
-  secondary?: string | undefined;
+  secondary?: string;
 
   /** Optional boolean to include a separator underneath the secondary text. Defaults to false */
   includeSeparator?: boolean;

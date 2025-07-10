@@ -20,7 +20,7 @@ import {
 type UseProjectDataHook = {
   <ProjectInterface extends ProjectInterfaces>(
     projectInterface: ProjectInterface,
-    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+    projectDataProviderSource?: string | ProjectDataProviderInterfaces[ProjectInterface],
   ): {
     [TDataType in keyof ProjectInterfaceDataTypes[ProjectInterface]]: (
       // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
@@ -50,7 +50,7 @@ type UseProjectDataHook = {
  * ```typescript
  * useProjectData<ProjectInterface extends ProjectInterfaces>(
  *     projectInterface: ProjectInterface,
- *     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+ *     projectDataProviderSource?: string | ProjectDataProviderInterfaces[ProjectInterface],
  *   ).DataType(
  *       selector: ProjectInterfaceDataTypes[ProjectInterface][DataType]['selector'],
  *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
@@ -130,7 +130,7 @@ type UseProjectDataHook = {
 export const useProjectData = createUseDataHook(
   useProjectDataProvider as (
     projectInterface: ProjectInterfaces,
-    dataProviderSource: string | IDataProvider | undefined,
+    dataProviderSource?: string | IDataProvider,
     pdpFactoryId?: string,
   ) => IDataProvider | undefined,
 ) as UseProjectDataHook;

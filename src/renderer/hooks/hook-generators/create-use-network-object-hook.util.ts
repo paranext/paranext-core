@@ -13,7 +13,7 @@ import { usePromise, useEvent } from 'platform-bible-react';
  * @returns `networkObjectSource` for getting the network object
  */
 function mapParametersToNetworkObjectSourceDefault(
-  networkObjectSource: string | NetworkObject<object> | undefined,
+  networkObjectSource?: string | NetworkObject<object>,
 ) {
   return networkObjectSource;
 }

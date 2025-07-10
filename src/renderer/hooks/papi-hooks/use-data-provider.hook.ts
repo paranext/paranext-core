@@ -22,7 +22,7 @@ export const useDataProvider = createUseNetworkObjectHook(
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   dataProviderService.get as (providerName: string) => Promise<IDataProvider | undefined>,
 ) as <DataProviderName extends DataProviderNames>(
-  dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+  dataProviderSource?: DataProviderName | DataProviders[DataProviderName],
 ) => DataProviders[DataProviderName] | undefined;
 
 export default useDataProvider;

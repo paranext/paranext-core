@@ -831,7 +831,7 @@ type SettingsListItemProps = React$1.PropsWithChildren & {
 	/** Primary text of the list item */
 	primary: string;
 	/** Optional text of the list item */
-	secondary?: string | undefined;
+	secondary?: string;
 	/** Optional boolean to display a message if the children aren't loaded yet. Defaults to false */
 	isLoading?: boolean;
 	/** Optional message to display if isLoading */
@@ -848,7 +848,7 @@ type SettingsListHeaderProps = {
 	/** The primary text of the list header */
 	primary: string;
 	/** Optional secondary text of the list header */
-	secondary?: string | undefined;
+	secondary?: string;
 	/** Optional boolean to include a separator underneath the secondary text. Defaults to false */
 	includeSeparator?: boolean;
 };
@@ -990,7 +990,7 @@ export type ToolbarProps = React$1.PropsWithChildren<{
  * @param operatingSystem The os platform: 'darwin' (macos) | anything else
  * @returns The class name to apply to the toolbar if os specific space should be reserved
  */
-export declare function getToolbarOSReservedSpaceClassName(operatingSystem: string | undefined): string | undefined;
+export declare function getToolbarOSReservedSpaceClassName(operatingSystem?: string): string | undefined;
 /**
  * A customizable toolbar component with a menubar, content area, and configure area.
  *

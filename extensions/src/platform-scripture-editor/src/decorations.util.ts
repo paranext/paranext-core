@@ -11,10 +11,7 @@ import { EditorDecorations } from 'platform-scripture-editor';
  * @param b New decorations to merge into `a`
  * @returns New object containing merged decorations
  */
-export function mergeDecorations(
-  a: EditorDecorations | undefined,
-  b: EditorDecorations | undefined,
-): EditorDecorations {
+export function mergeDecorations(a?: EditorDecorations, b?: EditorDecorations): EditorDecorations {
   return {
     ...a,
     ...b,
@@ -35,10 +32,7 @@ export function mergeDecorations(
  * @param decorations Editor decorations from which to remove some decorations
  * @param decorationsToRemove List of IDs of decorations to remove completely
  */
-export function removeDecorations(
-  decorations: EditorDecorations | undefined,
-  decorationsToRemove: string[] | undefined,
-) {
+export function removeDecorations(decorations?: EditorDecorations, decorationsToRemove?: string[]) {
   if (!decorations || !decorationsToRemove) return;
 
   // Get all the objects in the decorations object (assuming they all have decorations mapped by id)
@@ -50,9 +44,7 @@ export function removeDecorations(
   );
 }
 
-export function getLocalizeKeysFromDecorations(
-  decorations: EditorDecorations | undefined,
-): LocalizeKey[] {
+export function getLocalizeKeysFromDecorations(decorations?: EditorDecorations): LocalizeKey[] {
   if (!decorations) return [];
 
   if (!decorations.headers) return [];

@@ -127,8 +127,8 @@ export type ProjectLookupServiceType = {
   ): ProjectMetadata[];
   /** Combines two project metadata filters, removing duplicate items */
   mergeMetadataFilters(
-    metadataFilter1: ProjectMetadataFilterOptions | undefined,
-    metadataFilter2: ProjectMetadataFilterOptions | undefined,
+    metadataFilter1?: ProjectMetadataFilterOptions,
+    metadataFilter2?: ProjectMetadataFilterOptions,
   ): ProjectMetadataFilterOptions;
   /**
    * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
@@ -260,8 +260,8 @@ export const projectLookupServiceBase: ProjectLookupServiceType = {
     });
   },
   mergeMetadataFilters(
-    metadataFilter1: ProjectMetadataFilterOptions | undefined,
-    metadataFilter2: ProjectMetadataFilterOptions | undefined,
+    metadataFilter1?: ProjectMetadataFilterOptions,
+    metadataFilter2?: ProjectMetadataFilterOptions,
   ) {
     const mergedFilter: ProjectMetadataFilterOptions = {};
 
@@ -703,8 +703,8 @@ function arePdpFactoryIdsIncluded(
  * @returns -1 if a is less than b, 0 if equal, and 1 otherwise
  */
 function compareProjectDataProviderFactoryMetadataInfoMinimalMatch(
-  pdpFMetadataInfoA: ProjectDataProviderFactoryMetadataInfo | undefined,
-  pdpFMetadataInfoB: ProjectDataProviderFactoryMetadataInfo | undefined,
+  pdpFMetadataInfoA?: ProjectDataProviderFactoryMetadataInfo,
+  pdpFMetadataInfoB?: ProjectDataProviderFactoryMetadataInfo,
 ): -1 | 0 | 1 {
   if (!pdpFMetadataInfoA) {
     if (!pdpFMetadataInfoB) return 0;

@@ -59,34 +59,23 @@ const punctuationValidator: ProjectSettingValidator<
 
 // #endregion
 
-async function openPlatformCharactersInventory(
-  webViewId: string | undefined,
-): Promise<string | undefined> {
-  return openInventory(webViewId, characterInventoryWebViewType);
+async function openPlatformCharactersInventory(webViewId?: string): Promise<string | undefined> {
+  return openInventory(characterInventoryWebViewType, webViewId);
 }
 
-async function openPlatformRepeatedWordsInventory(
-  webViewId: string | undefined,
-): Promise<string | undefined> {
-  return openInventory(webViewId, repeatedWordsInventoryWebViewType);
+async function openPlatformRepeatedWordsInventory(webViewId?: string): Promise<string | undefined> {
+  return openInventory(repeatedWordsInventoryWebViewType, webViewId);
 }
 
-async function openPlatformMarkersInventory(
-  webViewId: string | undefined,
-): Promise<string | undefined> {
-  return openInventory(webViewId, markersInventoryWebViewType);
+async function openPlatformMarkersInventory(webViewId?: string): Promise<string | undefined> {
+  return openInventory(markersInventoryWebViewType, webViewId);
 }
 
-async function openPlatformPunctuationInventory(
-  webViewId: string | undefined,
-): Promise<string | undefined> {
-  return openInventory(webViewId, punctuationInventoryWebViewType);
+async function openPlatformPunctuationInventory(webViewId?: string): Promise<string | undefined> {
+  return openInventory(punctuationInventoryWebViewType, webViewId);
 }
 
-async function openInventory(
-  webViewId: string | undefined,
-  webViewType: string,
-): Promise<string | undefined> {
+async function openInventory(webViewType: string, webViewId?: string): Promise<string | undefined> {
   let projectId: string | undefined;
 
   if (webViewId) {
@@ -106,9 +95,7 @@ async function openInventory(
   );
 }
 
-async function openChecksSidePanel(
-  editorWebViewId: string | undefined,
-): Promise<string | undefined> {
+async function openChecksSidePanel(editorWebViewId?: string): Promise<string | undefined> {
   let projectId: ChecksSidePanelWebViewOptions['projectId'];
   let tabIdFromWebViewId: string | undefined;
   let editorScrollGroupId: ChecksSidePanelWebViewOptions['editorScrollGroupId'];

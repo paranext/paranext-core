@@ -54,7 +54,7 @@ const isEditableValidator: ProjectSettingValidator<'platform.isEditable'> = asyn
 ) => typeof newValue === 'boolean';
 
 const textDirectionValidator: ProjectSettingValidator<'platform.textDirection'> = async (
-  newValue: string | undefined,
+  newValue?: string,
 ) => {
   return newValue === 'rtl' || newValue === 'ltr' || newValue === '' || newValue === undefined;
 };

@@ -448,10 +448,7 @@ function isUsjContentEmpty(content: MarkerContent[] | undefined) {
  * @returns `true` if `contentObject` is the final child of the closest block-level marker; `false`
  *   otherwise
  */
-function isAtEndOfBlockMarker(
-  contentObject: MarkerContent | Usj,
-  parent: MarkerObject | Usj | undefined,
-) {
+function isAtEndOfBlockMarker(contentObject: MarkerContent | Usj, parent?: MarkerObject | Usj) {
   if (!parent) return false;
   // If the parent is not a block-level marker, the content object is not at the end of a block-level marker
   if (!BLOCK_MARKER_TYPES.includes(parent.type)) return false;
@@ -480,10 +477,10 @@ function isAtEndOfBlockMarker(
  * @param bParent Parent object of `b`. If `b` is a USJ document, this should be `undefined`.
  */
 function areUsjContentsEqualExceptWhitespaceInternal(
-  a: MarkerContent | Usj | undefined,
-  aParent: MarkerObject | Usj | undefined,
-  b: MarkerContent | Usj | undefined,
-  bParent: MarkerObject | Usj | undefined,
+  a?: MarkerContent | Usj,
+  aParent?: MarkerObject | Usj,
+  b?: MarkerContent | Usj,
+  bParent?: MarkerObject | Usj,
 ) {
   if (!a && !b) return true;
   if (!a || !b) return false;
@@ -574,7 +571,7 @@ function areUsjContentsEqualExceptWhitespaceInternal(
  * markers other than `content` that are complex objects like arrays or objects as the properties
  * are shallow equaled.
  */
-export function areUsjContentsEqualExceptWhitespace(a: Usj | undefined, b: Usj | undefined) {
+export function areUsjContentsEqualExceptWhitespace(a?: Usj, b?: Usj) {
   return areUsjContentsEqualExceptWhitespaceInternal(a, undefined, b, undefined);
 }
 

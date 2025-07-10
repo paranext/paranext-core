@@ -17,7 +17,7 @@ import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-ty
  */
 function mapParametersToProjectDataProviderSource<ProjectInterface extends ProjectInterfaces>(
   _projectInterface: ProjectInterface,
-  projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+  projectDataProviderSource?: string | ProjectDataProviderInterfaces[ProjectInterface],
 ) {
   return projectDataProviderSource;
 }
@@ -47,7 +47,7 @@ export const useProjectDataProvider = createUseNetworkObjectHook(
   mapParametersToProjectDataProviderSource,
 ) as <ProjectInterface extends ProjectInterfaces>(
   projectInterface: ProjectInterface,
-  projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+  projectDataProviderSource?: string | ProjectDataProviderInterfaces[ProjectInterface],
   pdpFactoryId?: string,
 ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
 

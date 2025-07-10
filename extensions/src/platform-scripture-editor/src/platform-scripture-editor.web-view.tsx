@@ -397,10 +397,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
    * refs) the latest comments are in scripture text.
    */
   const saveCommentsToPdp = useCallback(
-    (
-      newComments: Comments | undefined,
-      usjWithAnchors: Usj | undefined = editorRef.current?.getUsj(),
-    ) => {
+    (newComments?: Comments, usjWithAnchors: Usj | undefined = editorRef.current?.getUsj()) => {
       // Cannot convert between legacy and current comments without access to corresponding USJ
       if (!usjWithAnchors) {
         logger.warn('Updating comments without providing USJ');

@@ -128,7 +128,7 @@ export interface ModifierProject {
    * - Include `one`
    * - Include both `two` and `three`.
    */
-  includeProjectInterfaces?: undefined | string | (string | string[])[];
+  includeProjectInterfaces?: string | (string | string[])[];
   /**
    * String representation of `RegExp` pattern(s) to match against projects' `projectInterface`s
    * (using the
@@ -164,7 +164,7 @@ export interface ModifierProject {
    * - Include `one`
    * - Include both `two` and `three`.
    */
-  excludeProjectInterfaces?: undefined | string | (string | string[])[];
+  excludeProjectInterfaces?: string | (string | string[])[];
   /**
    * String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory
    * Ids that provided each project's metadata (using the
@@ -174,7 +174,7 @@ export interface ModifierProject {
    * Defaults to all Project Data Provider Factory Ids, so all projects that do not match
    * `excludePdpFactoryIds` will be included
    */
-  includePdpFactoryIds?: undefined | string | string[];
+  includePdpFactoryIds?: string | string[];
   /**
    * String representation of `RegExp` pattern(s) to match against the Project Data Provider Factory
    * Ids that provided each project's metadata (using the
@@ -184,7 +184,7 @@ export interface ModifierProject {
    *
    * Defaults to none, so all projects that match `includePdpFactoryIds` will be included
    */
-  excludePdpFactoryIds?: undefined | string | string[];
+  excludePdpFactoryIds?: string | string[];
 }
 
 /** The data an extension provides to inform Platform.Bible of the user state it provides */

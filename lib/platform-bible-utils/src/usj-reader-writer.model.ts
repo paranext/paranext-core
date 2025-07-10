@@ -107,7 +107,7 @@ export interface IUsjReaderWriter {
   nodeToVerseRefAndOffset(
     bookId: string,
     node: MarkerContent,
-    nodeParent: MarkerObject | MarkerContent[] | undefined,
+    nodeParent?: MarkerObject | MarkerContent[],
   ): { verseRef: SerializedVerseRef; offset: number } | undefined;
   /**
    * Remove all nodes from this USJ data that match a given search function.

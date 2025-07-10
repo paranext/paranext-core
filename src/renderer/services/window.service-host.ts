@@ -88,7 +88,7 @@ class WindowDataProviderEngine
 
   // Can be called with or without a selector
   async setFocus(
-    newFocusSubjectPossiblyUndefinedSelector: FocusSubject | undefined,
+    newFocusSubjectPossiblyUndefinedSelector?: FocusSubject,
     newFocusSubjectPossiblyNotProvided?: FocusSubject | 'detect',
   ): Promise<DataProviderUpdateInstructions<WindowDataTypes>> {
     const newFocusSubject: FocusSubject | FocusSubjectElement | 'detect' | undefined =

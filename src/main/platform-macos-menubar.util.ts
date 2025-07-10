@@ -143,7 +143,7 @@ const getSubMenuKeyForId = (
 function getMenubarColumnContent(
   groups: Localized<GroupsInMultiColumnMenu>,
   items: Localized<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]>,
-  columnOrSubMenuKey: string | undefined,
+  columnOrSubMenuKey?: string,
 ): LocalizedMacosMenubar | [] {
   if (!columnOrSubMenuKey) return [];
 
