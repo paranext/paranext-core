@@ -42,7 +42,9 @@ function checkNewColumns(
 ) {
   if (!newColumns) return;
   Object.getOwnPropertyNames(newColumns).forEach((columnName: string) => {
-    if (!columnName) return;
+    // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (!columnName || typeof newColumns[columnName as ReferencedItem] !== 'object') return;
     if (!startsWith(columnName, namePrefix))
       throw new Error(`Column name ${columnName} does not start with ${namePrefix}`);
     if (!!currentColumns && currentColumns.isExtensible !== true)
