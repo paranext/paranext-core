@@ -23,8 +23,6 @@ import {
   useIsWideScreen,
 } from '../../utils/dictionary.util';
 
-// TODO: Fix padding top, need a better way to move content under the sticky header
-
 function DictionaryListItem({
   entry,
   entryId,
@@ -45,6 +43,7 @@ function DictionaryListItem({
   onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
 }) {
   const content = (
+    // This component does have keyboard navigation, it is being handled through the useListbox hook
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events
     <li
       role="option"
@@ -100,20 +99,24 @@ function DictionaryListItem({
     setOpen(isSelected);
   }, [isSelected]);
 
-  return isDrawerMode ? (
-    <Drawer direction="right" dismissible={false} open={open} onOpenChange={setOpen}>
-      <DrawerTrigger asChild>{content}</DrawerTrigger>
-      <DrawerContent className="tw-max-w-lg">
-        <DictionaryEntryDisplay
-          isDrawer
-          dictionaryEntry={entry}
-          handleBackToListButton={() => setOpen(false)}
-          scriptureReferenceToFilterBy={scrRef}
-          onSelectOccurrence={onSelectOccurrence}
-        />
-      </DrawerContent>
-    </Drawer>
-  ) : (
+  if (isDrawerMode && isSelected) {
+    return (
+      <Drawer direction="right" dismissible={false} open={open} onOpenChange={setOpen}>
+        <DrawerTrigger asChild>{content}</DrawerTrigger>
+        <DrawerContent className="tw-max-w-xl">
+          <DictionaryEntryDisplay
+            isDrawer
+            dictionaryEntry={entry}
+            handleBackToListButton={() => setOpen(false)}
+            scriptureReferenceToFilterBy={scrRef}
+            onSelectOccurrence={onSelectOccurrence}
+          />
+        </DrawerContent>
+      </Drawer>
+    );
+  }
+
+  return (
     <>
       {content}
       <Separator />
@@ -169,7 +172,7 @@ export function DictionaryList({
   });
 
   return (
-    <div className="tw-absolute tw-left-0 tw-right-0 tw-top-14 tw-bottom-0">
+    <div className="tw-left-0 tw-right-0 tw-top-14 tw-bottom-0">
       <div className="tw-flex tw-h-full">
         <div
           className={cn('tw-overflow-y-auto', {

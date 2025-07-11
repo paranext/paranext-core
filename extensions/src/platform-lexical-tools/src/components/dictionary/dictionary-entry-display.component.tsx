@@ -37,7 +37,6 @@ export type DictionaryEntryDisplayProps = {
 };
 
 // TODO: Localize text and book names
-// TODO: Pagination in sense occurrences list
 
 /**
  * Renders a detailed view of a dictionary entry, displaying its key properties such as Hebrew text,
@@ -159,7 +158,7 @@ export function DictionaryEntryDisplay({
               : undefined
           }
           className="tw-flex tw-items-center"
-          variant="outline"
+          variant="link"
         >
           <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
           {localizedStrings['%platformLexicalTools_dictionary_backToList%']}

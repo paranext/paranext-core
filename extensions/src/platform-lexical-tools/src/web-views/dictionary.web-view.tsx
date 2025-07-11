@@ -7,6 +7,7 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
+  Skeleton,
   usePromise,
 } from 'platform-bible-react';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
@@ -34,46 +35,22 @@ globalThis.webViewComponent = function Dictionary({
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const [scrRef, setScrRef] = useWebViewScrollGroupScrRef();
 
+  // ref.current expects null and not undefined when we pass it to the search input
   // eslint-disable-next-line no-null/no-null
   const searchInputRef = useRef<HTMLInputElement>(null);
   const lexicalService = useDataProvider('platformLexicalTools.lexicalReferenceService');
   const isWideScreen = useIsWideScreen();
-
-  // Global key listener to pass character key presses to the searchbar
-  // useEffect(() => {
-  //   const handleKeyDown = (event: KeyboardEvent) => {
-  //     const isTypingCharacter =
-  //       event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey;
-  //     if (!isTypingCharacter) return;
-
-  //     // Don’t override when user is already typing into an input
-  //     const activeTag = document.activeElement?.tagName;
-  //     if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
-
-  //     event.preventDefault();
-
-  //     searchInputRef.current?.focus();
-
-  //     // Pre-fill the typed character
-  //     const typedChar = event.key;
-  //     setSearchQuery(typedChar); // Replace prev if you want to start fresh
-  //   };
-
-  //   window.addEventListener('keydown', handleKeyDown);
-  //   return () => {
-  //     window.removeEventListener('keydown', handleKeyDown);
-  //   };
-  // }, [setSearchQuery]);
 
   const getEntriesById = useCallback(() => {
     if (!lexicalService) return Promise.resolve(undefined);
     return lexicalService.getEntriesById({});
   }, [lexicalService]);
 
-  const [entriesById] = usePromise(getEntriesById, undefined);
+  const [entriesById, isLoadingEntriesById] = usePromise(getEntriesById, undefined);
 
   // Return all defined entries filtered by scrRef and searchQuery
   const allEntriesByScrRef = useMemo(() => {
+    if (!entriesById) return [];
     // First filter entries by scrRef and scope
     const filteredByScrRef = Object.values(entriesById ?? {})
       .flat()
@@ -123,7 +100,7 @@ globalThis.webViewComponent = function Dictionary({
 
   return (
     <div className="tw-flex tw-flex-col tw-h-full">
-      <div className="tw-sticky tw-top-0 tw-z-10 tw-shrink-0 tw-p-2 tw-border-b">
+      <div className="tw-sticky tw-bg-background tw-top-0 tw-z-10 tw-shrink-0 tw-p-2 tw-border-b">
         <div className="tw-flex tw-items-center tw-gap-2">
           <div className="tw-max-w-56">
             <Select value={scope} onValueChange={setScope}>
@@ -156,7 +133,18 @@ globalThis.webViewComponent = function Dictionary({
           </div>
         </div>
       </div>
-      {allEntriesByScrRef.length === 0 && (
+      {isLoadingEntriesById && (
+        <div className="tw-p-2 tw-space-y-4">
+          {[...Array(10)].map((_, index) => (
+            <Skeleton
+              // eslint-disable-next-line react/no-array-index-key
+              key={`dictionary-list-item-skeleton-${index}`}
+              className="tw-h-14 tw-w-full"
+            />
+          ))}
+        </div>
+      )}
+      {allEntriesByScrRef.length === 0 && !isLoadingEntriesById && (
         <div className="tw-m-4 tw-flex tw-justify-center">
           <Label>{localizedStrings['%platformLexicalTools_dictionary_noResults%']}</Label>
         </div>
