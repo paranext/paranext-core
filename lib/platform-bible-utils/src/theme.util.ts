@@ -67,7 +67,7 @@ function getThemeId(themeFamilyId: string, type: string) {
  */
 export function expandThemeContribution(
   themeFamiliesById: ThemeFamiliesById,
-  defaultThemeFamily: ThemeFamily | undefined,
+  defaultThemeFamily?: ThemeFamily,
 ): ThemeFamiliesByIdExpanded {
   const themeFamiliesByIdExpanded: ThemeFamiliesByIdExpanded = Object.fromEntries(
     Object.entries(themeFamiliesById)

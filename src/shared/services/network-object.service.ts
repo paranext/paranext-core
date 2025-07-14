@@ -176,7 +176,7 @@ const setterMutexMap = new MutexMap();
 /** This proxy enables calling functions on a network object that exists in a different process */
 const createRemoteProxy = (
   id: string,
-  base: object | undefined,
+  base?: object,
 ): {
   // The full 'remote' network object which accesses local properties and sends requests for remote functions
   proxy: object;
@@ -256,7 +256,7 @@ function createNetworkObjectDetails(
   id: string,
   objectType: string,
   objectToShare: { [property: string]: unknown },
-  objectAttributes: { [property: string]: unknown } | undefined,
+  objectAttributes?: { [property: string]: unknown },
 ): NetworkObjectDetails {
   const objectFunctionNames = getAllObjectFunctionNames(objectToShare, id);
 

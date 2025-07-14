@@ -143,7 +143,7 @@ declare module 'platform-scripture' {
      */
     setExtensionData(
       dataScope: ExtensionDataScope,
-      extensionData: string | undefined,
+      extensionData?: string,
     ): Promise<DataProviderUpdateInstructions<UnfinishedScriptureProjectDataTypes>>;
     /**
      * Subscribe to run a callback function when an extension's serialized project data is changed
@@ -1158,26 +1158,22 @@ declare module 'papi-shared-types' {
     ) => Promise<UnsubscriberAsync>;
 
     'platformScripture.openCharactersInventory': (
-      projectId?: string | undefined,
+      projectId?: string,
     ) => Promise<string | undefined>;
 
     'platformScripture.openRepeatedWordsInventory': (
-      projectId?: string | undefined,
+      projectId?: string,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openMarkersInventory': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
+    'platformScripture.openMarkersInventory': (projectId?: string) => Promise<string | undefined>;
 
     'platformScripture.openPunctuationInventory': (
-      projectId?: string | undefined,
+      projectId?: string,
     ) => Promise<string | undefined>;
 
-    'platformScripture.openChecksSidePanel': (
-      projectId?: string | undefined,
-    ) => Promise<string | undefined>;
+    'platformScripture.openChecksSidePanel': (projectId?: string) => Promise<string | undefined>;
 
-    'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
+    'platformScripture.openFind': (projectId?: string) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {

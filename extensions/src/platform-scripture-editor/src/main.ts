@@ -57,27 +57,27 @@ async function getEditorTabLocalizations(
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformScriptureEditor(
-  projectId: string | undefined,
+  projectId?: string,
   options?: OpenEditorOptions,
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(projectId, options, false);
+  return open(false, projectId, options);
 }
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformResourceViewer(
-  projectId: string | undefined,
+  projectId?: string,
   options?: OpenEditorOptions,
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(projectId, options, true);
+  return open(true, projectId, options);
 }
 
 /** Function to prompt for a project and open it in the editor */
 async function open(
-  projectId: string | undefined,
-  options: OpenEditorOptions | undefined,
   isReadOnly: boolean,
+  projectId?: string,
+  options?: OpenEditorOptions,
 ): Promise<string | undefined> {
   const projectForWebView = { projectId, isEditable: !isReadOnly };
   if (!projectForWebView.projectId) {

@@ -10,7 +10,7 @@ const HEADER_COLOR_DEFAULT = 'Black';
 export function useHelloRock3ProjectSettings(
   // Any Base PDP type works. Without `any`, the DataProviderUpdateInstructions types are incompatible
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
+  projectDataProviderSource?: string | IBaseProjectDataProvider<any>,
 ) {
   const [headerSizePossiblyError, setHeaderSize, resetHeaderSize] = useProjectSetting(
     projectDataProviderSource,

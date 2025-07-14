@@ -4566,8 +4566,8 @@ declare module 'shared/models/project-lookup.service-model' {
     ): ProjectMetadata[];
     /** Combines two project metadata filters, removing duplicate items */
     mergeMetadataFilters(
-      metadataFilter1: ProjectMetadataFilterOptions | undefined,
-      metadataFilter2: ProjectMetadataFilterOptions | undefined,
+      metadataFilter1?: ProjectMetadataFilterOptions,
+      metadataFilter2?: ProjectMetadataFilterOptions,
     ): ProjectMetadataFilterOptions;
     /**
      * Get the PDP Factory info whose `projectInterface`s are most minimally matching to the provided
@@ -4645,8 +4645,8 @@ declare module 'shared/models/project-lookup.service-model' {
    * @returns -1 if a is less than b, 0 if equal, and 1 otherwise
    */
   function compareProjectDataProviderFactoryMetadataInfoMinimalMatch(
-    pdpFMetadataInfoA: ProjectDataProviderFactoryMetadataInfo | undefined,
-    pdpFMetadataInfoB: ProjectDataProviderFactoryMetadataInfo | undefined,
+    pdpFMetadataInfoA?: ProjectDataProviderFactoryMetadataInfo,
+    pdpFMetadataInfoB?: ProjectDataProviderFactoryMetadataInfo,
   ): -1 | 0 | 1;
   /** This is an internal-only export for testing purposes and should not be used in development */
   export const testingProjectLookupService: {
@@ -8414,7 +8414,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    *   retrieved and is not disposed, and undefined again if the data provider is disposed
    */
   export const useDataProvider: <DataProviderName extends DataProviderNames>(
-    dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+    dataProviderSource?: DataProviderName | DataProviders[DataProviderName],
   ) => DataProviders[DataProviderName] | undefined;
   export default useDataProvider;
 }
@@ -8501,7 +8501,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
    */
   type UseDataHook = {
     <DataProviderName extends DataProviderNames>(
-      dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+      dataProviderSource?: DataProviderName | DataProviders[DataProviderName],
     ): {
       [TDataType in keyof DataProviderTypes[DataProviderName]]: (
         // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
@@ -8526,7 +8526,7 @@ declare module 'renderer/hooks/papi-hooks/use-data.hook' {
   /**
    * ```typescript
    * useData<DataProviderName extends DataProviderNames>(
-   *     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
+   *     dataProviderSource?: DataProviderName | DataProviders[DataProviderName],
    *   ).DataType(
    *       selector: DataProviderTypes[DataProviderName][DataType]['selector'],
    *       defaultValue: DataProviderTypes[DataProviderName][DataType]['getData'],
@@ -8731,7 +8731,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    */
   export const useProjectDataProvider: <ProjectInterface extends ProjectInterfaces>(
     projectInterface: ProjectInterface,
-    projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+    projectDataProviderSource?: string | ProjectDataProviderInterfaces[ProjectInterface],
     pdpFactoryId?: string,
   ) => ProjectDataProviderInterfaces[ProjectInterface] | undefined;
   export default useProjectDataProvider;
@@ -8755,10 +8755,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
   type UseProjectDataHook = {
     <ProjectInterface extends ProjectInterfaces>(
       projectInterface: ProjectInterface,
-      projectDataProviderSource:
-        | string
-        | ProjectDataProviderInterfaces[ProjectInterface]
-        | undefined,
+      projectDataProviderSource?: string | ProjectDataProviderInterfaces[ProjectInterface],
     ): {
       [TDataType in keyof ProjectInterfaceDataTypes[ProjectInterface]]: (
         // @ts-ignore TypeScript pretends it can't find `selector`, but it works just fine
@@ -8786,7 +8783,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
    * ```typescript
    * useProjectData<ProjectInterface extends ProjectInterfaces>(
    *     projectInterface: ProjectInterface,
-   *     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
+   *     projectDataProviderSource?: string | ProjectDataProviderInterfaces[ProjectInterface],
    *   ).DataType(
    *       selector: ProjectInterfaceDataTypes[ProjectInterface][DataType]['selector'],
    *       defaultValue: ProjectInterfaceDataTypes[ProjectInterface][DataType]['getData'],
@@ -9015,7 +9012,7 @@ declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
    */
   export const useWebViewController: <WebViewType extends WebViewControllerTypes>(
     webViewType: WebViewType,
-    webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
+    webViewId?: WebViewId | NetworkObject<WebViewControllers[WebViewType]>,
   ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
   export default useWebViewController;
 }
@@ -9169,17 +9166,17 @@ declare module 'renderer/services/theme.service-host' {
     );
     getCurrentTheme(): Promise<ThemeDefinitionExpanded>;
     setCurrentTheme(
-      newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
+      newThemeSpecifierPossiblyUndefinedSelector?: CurrentThemeSpecifier,
       newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     getShouldMatchSystem(): Promise<boolean>;
     setShouldMatchSystem(
-      newShouldMatchSystemPossiblyUndefinedSelector: boolean | undefined,
+      newShouldMatchSystemPossiblyUndefinedSelector?: boolean,
       newShouldMatchSystemPossiblyNotProvided?: boolean,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     getAllThemes(): Promise<ThemeFamiliesByIdExpanded>;
     setAllThemes(
-      newUserThemesPossiblyUndefinedSelector: Partial<ThemeFamiliesById> | undefined,
+      newUserThemesPossiblyUndefinedSelector?: Partial<ThemeFamiliesById>,
       newUserThemesPossiblyNotProvided?: Partial<ThemeFamiliesById>,
     ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>>;
     dispose(): Promise<boolean>;

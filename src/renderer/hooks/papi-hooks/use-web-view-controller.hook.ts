@@ -19,7 +19,7 @@ import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
  */
 function mapParametersToWebViewId<WebViewType extends WebViewControllerTypes>(
   _webViewType: WebViewType,
-  webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
+  webViewId?: WebViewId | NetworkObject<WebViewControllers[WebViewType]>,
 ) {
   return webViewId;
 }
@@ -49,7 +49,7 @@ export const useWebViewController = createUseNetworkObjectHook(
   mapParametersToWebViewId,
 ) as <WebViewType extends WebViewControllerTypes>(
   webViewType: WebViewType,
-  webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
+  webViewId?: WebViewId | NetworkObject<WebViewControllers[WebViewType]>,
 ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
 
 export default useWebViewController;

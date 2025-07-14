@@ -19,7 +19,7 @@ export type DockLayoutWrapperProps = PropsWithChildren<{
 
 export const DockLayoutWrapper = forwardRef(function DockLayoutWrapper(
   { loadTab, saveTab, onLayoutChange, defaultLayout, style }: DockLayoutWrapperProps,
-  ref: ForwardedRef<DockLayout> | undefined,
+  ref?: ForwardedRef<DockLayout>,
 ) {
   return (
     <DockLayout

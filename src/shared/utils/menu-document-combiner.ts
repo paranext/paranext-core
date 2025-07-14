@@ -38,7 +38,7 @@ function performSchemaValidation(document: JsonDocumentLike, docType: string): v
 function checkNewColumns(
   newColumns: DeepPartial<ColumnsWithHeaders> | undefined,
   namePrefix: string,
-  currentColumns: ColumnsWithHeaders | undefined,
+  currentColumns?: ColumnsWithHeaders,
 ) {
   if (!newColumns) return;
   Object.getOwnPropertyNames(newColumns).forEach((columnName: string) => {
@@ -55,7 +55,7 @@ function checkNewColumns(
 function checkNewGroups(
   newGroups: DeepPartial<GroupsInMultiColumnMenu | GroupsInSingleColumnMenu> | undefined,
   namePrefix: string,
-  currentColumns: ColumnsWithHeaders | undefined,
+  currentColumns?: ColumnsWithHeaders,
 ) {
   if (!newGroups) return;
   Object.getOwnPropertyNames(newGroups).forEach((groupName: string) => {
@@ -83,7 +83,7 @@ function checkNewGroups(
 function checkNewMenuItems(
   newMenuItems: DeepPartial<(MenuItemContainingCommand | MenuItemContainingSubmenu)[]> | undefined,
   namePrefix: string,
-  currentGroups: GroupsInSingleColumnMenu | GroupsInMultiColumnMenu | undefined,
+  currentGroups?: GroupsInSingleColumnMenu | GroupsInMultiColumnMenu,
 ) {
   if (!newMenuItems) return;
   newMenuItems.forEach((menuItem) => {
@@ -125,7 +125,7 @@ function getOrAssign(map: Map<string, Set<number>>, key: string): Set<number> {
 }
 
 function checkMenuGroupsForDuplicateOrdering(
-  groups: GroupsInSingleColumnMenu | GroupsInMultiColumnMenu | undefined,
+  groups?: GroupsInSingleColumnMenu | GroupsInMultiColumnMenu,
 ) {
   if (!groups) return;
   const menuGroupsInColumns = new Map<string, Set<number>>();

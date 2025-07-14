@@ -414,7 +414,7 @@ export class UsjReaderWriter implements IUsjReaderWriter {
   nodeToVerseRefAndOffset(
     bookId: string,
     node: MarkerContent,
-    nodeParent: MarkerObject | MarkerContent[] | undefined,
+    nodeParent?: MarkerObject | MarkerContent[],
   ): { verseRef: SerializedVerseRef; offset: number } | undefined {
     if (typeof node === 'string' && nodeParent === undefined)
       throw new Error(`If "node" is a string, then "nodeParent" cannot be undefined`);

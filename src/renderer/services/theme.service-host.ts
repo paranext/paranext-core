@@ -266,7 +266,7 @@ class ThemeDataProviderEngine
 
   // Can be called with or without a selector
   async setCurrentTheme(
-    newThemeSpecifierPossiblyUndefinedSelector: CurrentThemeSpecifier | undefined,
+    newThemeSpecifierPossiblyUndefinedSelector?: CurrentThemeSpecifier,
     newThemeSpecifierPossiblyNotProvided?: CurrentThemeSpecifier,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
     const newThemeSpecifier =
@@ -319,7 +319,7 @@ class ThemeDataProviderEngine
 
   // Can be called with or without a selector
   async setShouldMatchSystem(
-    newShouldMatchSystemPossiblyUndefinedSelector: boolean | undefined,
+    newShouldMatchSystemPossiblyUndefinedSelector?: boolean,
     newShouldMatchSystemPossiblyNotProvided?: boolean,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
     const newShouldMatchSystem =
@@ -343,7 +343,7 @@ class ThemeDataProviderEngine
 
   // Can be called with or without a selector
   async setAllThemes(
-    newUserThemesPossiblyUndefinedSelector: Partial<ThemeFamiliesById> | undefined,
+    newUserThemesPossiblyUndefinedSelector?: Partial<ThemeFamiliesById>,
     newUserThemesPossiblyNotProvided?: Partial<ThemeFamiliesById>,
   ): Promise<DataProviderUpdateInstructions<ThemeDataTypes>> {
     const newUserThemes =
