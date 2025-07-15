@@ -1,5 +1,5 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { BookChapterControl } from 'platform-bible-react';
 
 const handleSubmit = (scrRef: SerializedVerseRef) => {
