@@ -3,6 +3,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { BookChapterControl } from 'platform-bible-react';
 
 const handleSubmit = (scrRef: SerializedVerseRef) => {
+  // eslint-disable-next-line no-console
   console.log(scrRef); // This should be replaced with the intended action
 };
 

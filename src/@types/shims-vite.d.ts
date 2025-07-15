@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
+// Update: vite is also used for Storybook
 // vite is shimmed since we only use it for vitest and this excludes it from type checking. Note to
 // use this a path for 'vite' is added in `tsconfig.json`.
 // Without this, when running `npm run typecheck:core` we get this error:
@@ -12,4 +13,12 @@ declare module 'vite' {
   export type ConfigEnv = any;
   export type ViteDevServer = any;
   export type ModuleNode = any;
+  export type InlineConfig = any;
+  export type PluginOption = any;
+  export type HookHandler<T = any> = T;
+  // A is for structural compatibility with Vite's Plugin interface
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  export interface Plugin<A = any> {
+    [key: string]: any;
+  }
 }
