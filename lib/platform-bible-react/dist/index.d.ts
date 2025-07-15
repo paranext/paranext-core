@@ -1058,6 +1058,51 @@ export type UiLanguageSelectorProps = {
  * @param {UiLanguageSelectorProps} props - The props for the component.
  */
 export declare function UiLanguageSelector({ knownUiLanguages, primaryLanguage, fallbackLanguages, onLanguagesChange, onPrimaryLanguageChange, onFallbackLanguagesChange, localizedStrings, className, }: UiLanguageSelectorProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export declare const ERROR_DUMP_STRING_KEYS: readonly [
+	"%webView_error_dump_header%",
+	"%webView_error_dump_info_message%"
+];
+export type ErrorDumpLocalizedStrings = {
+	[localizedInventoryKey in (typeof ERROR_DUMP_STRING_KEYS)[number]]?: LocalizedStringValue;
+};
+interface ErrorDumpProps {
+	/** String containing the error details to show */
+	errorDetails: string;
+	/** Handler function to notify the frontend when the error is copied */
+	handleCopyNotify?: () => void;
+	/** List of localized strings to localize the strings in this component */
+	localizedStrings: ErrorDumpLocalizedStrings;
+}
+/**
+ * Component to render an error dump
+ *
+ * @param errorDetails Error details string
+ * @param handleCopyNotify Handler function to add a notification to the UI to alert that the error
+ *   was copied
+ * @param localizedStrings Localized strings to use in the ErrorDump component
+ *
+ */
+export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
+type ErrorPopoverProps = React$1.PropsWithChildren & {
+	/** String containing the error details to show */
+	errorDetails: string;
+	/** Optional handler function to notify the frontend when the error is copied */
+	handleCopyNotify?: () => void;
+	/** List of localized strings to localize the strings in this component */
+	localizedStrings: ErrorDumpLocalizedStrings;
+};
+/**
+ *
+ * @param errorDetails The error details to show in the error popover
+ * @param handleCopyNotify Optional notification handler function to handle when the error is copied
+ * @param localizedStrings List of localized strings to use in the ErrorDump component
+ */
+export declare function ErrorPopover({ errorDetails, handleCopyNotify, localizedStrings, children }: ErrorPopoverProps): import("react/jsx-runtime").JSX.Element;
 export type ChecklistProps = {
 	/** Optional string representing the id attribute of the Checklist */
 	id?: string;
@@ -1270,34 +1315,6 @@ export type TextFieldProps = {
  * https://ui.shadcn.com/docs/components/input#with-label
  */
 export declare function TextField({ id, isDisabled, hasError, isFullWidth, helperText, label, placeholder, isRequired, className, defaultValue, value, onChange, onFocus, onBlur, }: TextFieldProps): import("react/jsx-runtime").JSX.Element;
-/**
- * Object containing all keys used for localization in this component. If you're using this
- * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
- * localized strings and pass them into the localizedStrings prop of this component
- */
-export declare const ERROR_DUMP_STRING_KEYS: readonly [
-	"%webView_error_dump_header%",
-	"%webView_error_dump_info_message%"
-];
-export type ErrorDumpLocalizedStrings = {
-	[localizedInventoryKey in (typeof ERROR_DUMP_STRING_KEYS)[number]]?: LocalizedStringValue;
-};
-interface ErrorDumpProps {
-	/** String containing the error details to show */
-	errorDetails: string;
-	/** Handler function to notify the frontend when the error is copied */
-	handleCopyNotify?: () => void;
-	/** List of localized strings to localize the strings in this component */
-	localizedStrings: ErrorDumpLocalizedStrings;
-}
-/**
- * Component to render an error dump
- *
- * @param errorDetails Error details string
- * @param handleCopyNotify Handler function to add a notification to the UI to alert that the error
- *   was copied
- */
-export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
 /**
  * The Alert displays a callout for user attention. The component is built and styled by Shadcn UI.
  * See Shadcn UI Documentation https://ui.shadcn.com/docs/components/alert

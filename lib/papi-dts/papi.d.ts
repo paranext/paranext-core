@@ -1,3 +1,9 @@
+/// <reference types="react" />
+/// <reference types="node" />
+/// <reference types="node" />
+/// <reference types="node" />
+/// <reference types="node" />
+/// <reference types="node" />
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**
@@ -1623,7 +1629,7 @@ declare module 'shared/services/network.service' {
    * @param args Arguments to send in the request (put in request.contents)
    * @returns Promise that resolves with the response message
    */
-  export const request: <TParam extends Array<unknown>, TReturn>(
+  export const request: <TParam extends unknown[], TReturn>(
     requestType: SerializedRequestType,
     ...args: TParam
   ) => Promise<TReturn>;
@@ -1651,7 +1657,7 @@ declare module 'shared/services/network.service' {
    * @returns Function to call with arguments of request that performs the request and resolves with
    *   the response contents
    */
-  export const createRequestFunction: <TParam extends Array<unknown>, TReturn>(
+  export const createRequestFunction: <TParam extends unknown[], TReturn>(
     requestType: SerializedRequestType,
   ) => (...args: TParam) => Promise<TReturn>;
   /**
@@ -3890,7 +3896,7 @@ declare module 'papi-shared-types' {
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
-  import { CommandHandlers, CommandNames } from 'papi-shared-types';
+  import { CommandHandlers } from 'papi-shared-types';
   import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
   /**
@@ -3908,14 +3914,14 @@ declare module 'shared/services/command.service' {
    * @returns Promise that resolves if the command successfully registered and unsubscriber function
    *   to run to stop the passed-in function from handling commands
    */
-  export const registerCommand: <CommandName extends CommandNames>(
+  export const registerCommand: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
     handler: CommandHandlers[CommandName],
     commandDocs?: SingleMethodDocumentation,
     commandOptions?: NetworkMethodHandlerOptions,
   ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
-  export const sendCommand: <CommandName extends CommandNames>(
+  export const sendCommand: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
     ...args: Parameters<CommandHandlers[CommandName]>
   ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
@@ -3927,7 +3933,7 @@ declare module 'shared/services/command.service' {
    * @returns Function to call with arguments of command that sends the command and resolves with the
    *   result of the command
    */
-  export const createSendCommandFunction: <CommandName extends CommandNames>(
+  export const createSendCommandFunction: <CommandName extends keyof CommandHandlers>(
     commandName: CommandName,
   ) => (
     ...args: Parameters<CommandHandlers[CommandName]>
@@ -6458,7 +6464,7 @@ declare module 'shared/services/settings.service-model' {
      * @param validator Function to call to validate the new setting value
      * @returns Unsubscriber that should be called whenever the providing extension is deactivated
      */
-    registerValidator: <SettingName extends SettingNames>(
+    registerValidator: <SettingName extends keyof SettingTypes>(
       key: SettingName,
       validator: SettingValidator<SettingName>,
     ) => Promise<UnsubscriberAsync>;
@@ -6801,7 +6807,7 @@ declare module 'shared/services/project-settings.service-model' {
      * @param validator Function to call to validate the new setting value
      * @returns Unsubscriber that should be called whenever the providing extension is deactivated
      */
-    registerValidator: <ProjectSettingName extends ProjectSettingNames>(
+    registerValidator: <ProjectSettingName extends keyof ProjectSettingTypes>(
       key: ProjectSettingName,
       validator: ProjectSettingValidator<ProjectSettingName>,
     ) => Promise<UnsubscriberAsync>;
@@ -8402,7 +8408,7 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
   export default createUseNetworkObjectHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import { DataProviderNames, DataProviders } from 'papi-shared-types';
+  import { DataProviders } from 'papi-shared-types';
   /**
    * Gets a data provider with specified provider name
    *
@@ -8413,7 +8419,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @returns Undefined if the data provider has not been retrieved, data provider if it has been
    *   retrieved and is not disposed, and undefined again if the data provider is disposed
    */
-  export const useDataProvider: <DataProviderName extends DataProviderNames>(
+  export const useDataProvider: <DataProviderName extends keyof DataProviders>(
     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
   ) => DataProviders[DataProviderName] | undefined;
   export default useDataProvider;
@@ -8670,7 +8676,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { SettingDataTypes } from 'shared/services/settings.service-model';
-  import { SettingNames, SettingTypes } from 'papi-shared-types';
+  import { SettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
    * and gets updated when the setting is changed by others.
@@ -8696,7 +8702,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  export const useSetting: <SettingName extends SettingNames>(
+  export const useSetting: <SettingName extends keyof SettingTypes>(
     key: SettingName,
     defaultState: SettingTypes[SettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
@@ -8711,7 +8717,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
+  import { ProjectDataProviderInterfaces } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
    *
@@ -8729,7 +8735,9 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
    *   Data Provider is disposed
    */
-  export const useProjectDataProvider: <ProjectInterface extends ProjectInterfaces>(
+  export const useProjectDataProvider: <
+    ProjectInterface extends keyof ProjectDataProviderInterfaces,
+  >(
     projectInterface: ProjectInterface,
     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
     pdpFactoryId?: string,
@@ -8867,11 +8875,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
-  import {
-    IBaseProjectDataProvider,
-    ProjectSettingNames,
-    ProjectSettingTypes,
-  } from 'papi-shared-types';
+  import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
    * subscribers when the project setting changes and gets updated when the project setting is changed
@@ -8912,7 +8916,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  export const useProjectSetting: <ProjectSettingName extends ProjectSettingNames>(
+  export const useProjectSetting: <ProjectSettingName extends keyof ProjectSettingTypes>(
     projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
     key: ProjectSettingName,
     defaultValue: ProjectSettingTypes[ProjectSettingName],
@@ -8995,7 +8999,7 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
 declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
   import { NetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
-  import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
+  import { WebViewControllers } from 'papi-shared-types';
   /**
    * Gets a Web View Controller with specified provider name
    *
@@ -9013,7 +9017,7 @@ declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
    *   Controller if it has been retrieved and is not disposed, and undefined again if the Web View
    *   Controller is disposed
    */
-  export const useWebViewController: <WebViewType extends WebViewControllerTypes>(
+  export const useWebViewController: <WebViewType extends keyof WebViewControllers>(
     webViewType: WebViewType,
     webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
   ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;

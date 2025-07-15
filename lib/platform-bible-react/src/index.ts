@@ -96,6 +96,7 @@ export {
   type LanguageInfo,
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
+export { ErrorPopover } from './components/advanced/error-popover.component';
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';

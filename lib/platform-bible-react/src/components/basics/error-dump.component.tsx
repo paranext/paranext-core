@@ -47,6 +47,7 @@ interface ErrorDumpProps {
  * @param errorDetails Error details string
  * @param handleCopyNotify Handler function to add a notification to the UI to alert that the error
  *   was copied
+ * @param localizedStrings Localized strings to use in the ErrorDump component
  */
 export function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps) {
   const headerText = localizeString(localizedStrings, '%webView_error_dump_header%');
