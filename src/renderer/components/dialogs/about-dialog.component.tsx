@@ -1,4 +1,3 @@
-import { ReactComponent as InlineLogoAndName } from '@assets/Lockup Inline.svg';
 import { useLocalizedStrings } from '@renderer/hooks/papi-hooks';
 import { appService } from '@shared/services/app.service';
 import { AppInfo } from '@shared/services/app.service-model';
@@ -59,7 +58,6 @@ function AboutDialog() {
   return (
     <div className="about-panel dark">
       <div className="about">
-        <InlineLogoAndName width="80%" />
         <h1>{productName}</h1>
         <p>Copyright ©2017-2025 SIL Global and United Bible Societies.</p>
         <p>{formatReplacementString(versionLabelFormat, packageInfo)}</p>

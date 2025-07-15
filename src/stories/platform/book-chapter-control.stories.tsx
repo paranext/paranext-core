@@ -1,34 +1,18 @@
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { useArgs } from '@storybook/preview-api';
 import type { Meta, StoryObj } from '@storybook/react';
-import { BookChapterControl, BookChapterControlProps } from 'platform-bible-react';
-import { ReactElement } from 'react';
+import { BookChapterControl } from 'platform-bible-react';
 
-function BookChapterControlDecorator(
-  Story: (update?: { args: Partial<BookChapterControlProps> }) => ReactElement,
-) {
-  const [args, updateArgs] = useArgs();
-
-  const handleSubmit = (scrRef: SerializedVerseRef) => {
-    updateArgs({ scrRef });
-  };
-
-  return (
-    <Story
-      args={{
-        ...args,
-        handleSubmit,
-      }}
-    />
-  );
-}
+const handleSubmit = (scrRef: SerializedVerseRef) => {
+  console.log(scrRef); // This should be replaced with the intended action
+};
 
 const meta: Meta<typeof BookChapterControl> = {
   title: 'Platform/BookChapterControl',
   component: BookChapterControl,
   tags: ['autodocs'],
-  argTypes: {},
-  decorators: [BookChapterControlDecorator],
+  argTypes: {
+    scrRef: { action: 'handleSubmit' },
+  },
 };
 export default meta;
 
@@ -39,5 +23,6 @@ const defaultScrRef: SerializedVerseRef = { book: 'GEN', chapterNum: 4, verseNum
 export const Default: Story = {
   args: {
     scrRef: defaultScrRef,
+    handleSubmit,
   },
 };
