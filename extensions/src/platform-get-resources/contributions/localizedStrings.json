@@ -14,6 +14,8 @@
       "%resources_fullName%": "Full Name",
       "%resources_get%": "Get",
       "%resources_getResources%": "Get resources",
+      "%resources_getStarted%": "Get started",
+      "%resources_getStartedDescription%": "Expecting more items?",
       "%resources_installed%": "Installed",
       "%resources_items%": "items",
       "%resources_language%": "Language",
