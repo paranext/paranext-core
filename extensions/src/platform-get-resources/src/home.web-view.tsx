@@ -51,6 +51,8 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
   '%resources_filterInput%',
   '%resources_fullName%',
   '%resources_get%',
+  '%resources_getStarted%',
+  '%resources_getStartedDescription%',
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
@@ -109,6 +111,8 @@ globalThis.webViewComponent = function HomeDialog() {
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
   const getText: string = localizedStrings['%resources_get%'];
+  const getStartedText: string = localizedStrings['%resources_getStarted%'];
+  const getStartedDescriptionText: string = localizedStrings['%resources_getStartedDescription%'];
   const getResourcesText: string = localizedStrings['%resources_getResources%'];
   const itemsText: string = localizedStrings['%resources_items%'];
   const languageText: string = localizedStrings['%resources_language%'];
@@ -647,11 +651,29 @@ globalThis.webViewComponent = function HomeDialog() {
             )}
           </CardContent>
         )}
-        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-p-4 tw-border-t">
-          {filteredAndSortedProjects.length > 0 && (
-            <Label className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
-          )}
-        </CardFooter>
+        {filteredAndSortedProjects.length > 0 && (
+          <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2">
+            <p className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</p>
+            {filteredAndSortedProjects.length === 1 &&
+              filteredAndSortedProjects[0].name === 'WEB' && (
+                <>
+                  <p className="tw-text-muted-foreground tw-font-normal">
+                    {getStartedDescriptionText}
+                  </p>
+                  <Button
+                    onClick={() => {
+                      papi.commands.sendCommand(
+                        'platform.openWindow',
+                        'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio',
+                      );
+                    }}
+                  >
+                    {getStartedText}
+                  </Button>
+                </>
+              )}
+          </CardFooter>
+        )}
       </Card>
     </div>
   );
