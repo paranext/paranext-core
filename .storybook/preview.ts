@@ -1,12 +1,11 @@
 import type { Preview } from '@storybook/react';
-import { fn } from '@storybook/test';
 
 const preview: Preview = {
   parameters: {
     backgrounds: {
       default: 'light',
     },
-    actions: { onClick: fn() },
+    actions: { argTypesRegex: '^on[A-Z].*' },
     controls: {
       matchers: {
         color: /(background|color)$/i,
