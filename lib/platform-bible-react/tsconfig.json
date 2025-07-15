@@ -22,10 +22,13 @@
     "useDefineForClassFields": true,
     "outDir": "",
     "paths": {
-      "@/*": ["./*"]
+      "@/*": ["./*"],
+      "@components/*": ["./components/*"],
+      "@stories/*": ["./stories/*"],
+      "@utils/*": ["./utils/*"]
     }
   },
-  "include": ["src"],
+  "include": ["src", ".storybook"],
   "exclude": ["node_modules"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

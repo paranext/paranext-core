@@ -1,4 +1,6 @@
 import type { StorybookConfig } from '@storybook/react-vite';
+import tsconfigPaths from 'vite-tsconfig-paths';
+import path from 'path';
 
 import { join, dirname } from 'path';
 
@@ -11,8 +13,8 @@ function getAbsolutePath(value: string): any {
 }
 const config: StorybookConfig = {
   stories: [
-    '../src/**/*.mdx',
-    '../src/**/*.stories.@(js|jsx|ts|tsx)', // Explicitly list supported extensions
+    '@stories/**/*.mdx',
+    '@stories/**/*.stories.@(js|jsx|ts|tsx)', // Explicitly list supported extensions
   ],
   addons: [
     getAbsolutePath('@storybook/addon-docs'),
