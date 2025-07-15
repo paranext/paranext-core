@@ -12,9 +12,9 @@ import { ArrowLeft, ChevronUpIcon } from 'lucide-react';
 import { DictionaryOccurrenceView, Entry, Sense } from 'platform-lexical-tools';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { ListboxOption } from 'src/utils/listbox-keyboard-navigation.util';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
+import { ListboxOption } from '../../utils/listbox-keyboard-navigation.util';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
   getFormatGlossesStringFromDictionaryEntrySenses,
