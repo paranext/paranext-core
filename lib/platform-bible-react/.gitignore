@@ -26,4 +26,6 @@ lerna-debug.log*
 *.sln
 *.sw?
 
+# Storybook exports
 *storybook.log
+storybook-static
