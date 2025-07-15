@@ -1,4 +1,5 @@
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
+import { LanguageStrings } from 'platform-bible-utils';
 
 /** Base64 encoded hash values */
 export type HashValues = Partial<{
@@ -11,12 +12,6 @@ export type ExtensionIdentifier = {
   extensionName: string;
   extensionVersion: string;
 };
-
-/**
- * Type storing localized strings for an extension field. Indexed by locale, values are localized
- * strings in that language.
- */
-export type ExtensionLocalizedStrings = Record<string, string>;
 
 /** Interface that stores extension icon information */
 export interface ExtensionIcon {
@@ -31,16 +26,16 @@ export interface ExtensionIcon {
 }
 
 /**
- * Full image of the data of an extension including the additional extension marketplace
- * visualization data
+ * Full set of descriptive metadata for an extension including the extension manifest and
+ * visualization data that is useful for the extension marketplace
  */
-export type ExtensionData = Readonly<
+export type FullExtensionData = Readonly<
   Omit<ExtensionManifest, 'name' | 'version'> & {
     id: string;
     currentVersion: string;
-    displayName: ExtensionLocalizedStrings;
-    shortSummary: ExtensionLocalizedStrings;
-    description: ExtensionLocalizedStrings;
+    displayName: LanguageStrings;
+    shortSummary: LanguageStrings;
+    description: LanguageStrings;
     icon: ExtensionIcon;
     locales: string[];
     moreInfoUrl: string;
@@ -114,7 +109,7 @@ export type GetInstalledExtensionsFunction = () => Promise<InstalledExtensions>;
 /** Get full extension data for a specified list of extensions */
 export type GetExtensionsDataFunction = (
   extensionIds: ExtensionIdentifier[],
-) => Promise<ExtensionData[]>;
+) => Promise<FullExtensionData[]>;
 
 /** Functions needed to manage extensions */
 export type ManageExtensions = {

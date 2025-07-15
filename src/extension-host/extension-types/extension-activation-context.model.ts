@@ -3,7 +3,7 @@ import { UnsubscriberAsyncList } from 'platform-bible-utils';
 import { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
 // Needed for documentation links to work
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges-names.model';
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privilege-names.model';
 
 /** An object of this type is passed into `activate()` for each extension during initialization */
 export type ExecutionActivationContext = {

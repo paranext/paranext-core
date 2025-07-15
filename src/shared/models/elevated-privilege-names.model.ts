@@ -1,4 +1,4 @@
-// NOTE: This was moved to it's own type file to avoid circular dependencies:
+// NOTE: This was moved to its own type file to avoid circular dependencies:
 // `manage-extension-privilege.model.ts` > `extension-manifest.model.ts` > `elevated-privileges-names.model.ts`
 // > `manage-extension-privilege.model.ts`
 

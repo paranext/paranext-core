@@ -42,15 +42,14 @@ import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
 import { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
-import { ElevatedPrivilegeNames } from '@shared/models/elevated-privileges-names.model';
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privilege-names.model';
 import { generateHashFromBuffer } from '@node/utils/crypto-util';
 import {
   ExtensionIdentifier,
   HashValues,
   InstalledExtensions,
-  ExtensionLocalizedStrings,
   ManageExtensions,
-  ExtensionData,
+  FullExtensionData,
   ExtensionIcon,
 } from '@shared/models/manage-extensions-privilege.model';
 import { CreateProcess } from '@shared/models/create-process-privilege.model';
@@ -142,47 +141,12 @@ type PublisherIdentifier = {
 };
 
 /**
- * Type alias for an extension's locales.
- *
- * Locales can be found at the path specified by the `localizedStrings` key in the extension's
- * `manifest.json`. Within that file, the `localizedStrings` key defines the extension's locales.
- *
- * Locales are indexed by language, such as "en" for English. The values are mappings of text keys
- * to their language-specific translations. An example of an English locale could look like this:
- *
- * ```json
- *      "en": {
- *        "%mainMenu_helloWorldSubmenu%": "Hello World Projects",
- *        "%mainMenu_openHelloWorldProject%": "Open Hello World Project",
- *        "%mainMenu_createNewHelloWorldProject%": "Create New Hello World Project",
- *      }
- * ```
- */
-type ExtensionLocales = Record<string, Record<string, string>>;
-
-/**
- * Interface for the contents of an extension's localization data.
- *
- * This data is pulled from an extension's `localizedStrings.json` file. The path of that file is
- * specified in the extension's `manifest.json` file.
- *
- * Localization data contains metadata and localized strings.
- */
-interface LocalizedStringsJSON {
-  // Localization metadata.
-  metadata: Record<string, Record<string, string>>;
-
-  // Localized strings. See {@link LocalizedDisplayInfo} for more information.
-  localizedStrings: ExtensionLocales;
-}
-
-/**
  * Interface for the contents of an extension's localized display data.
  *
  * This data is pulled from an extension's `displayData.json` file. The path of that file is
  * specified in the extension's `manifest.json` file.
  */
-interface DisplayDataJSON {
+interface DisplayDataContribution {
   // Path to the extension's icon file.
   icon: string;
 
@@ -193,7 +157,19 @@ interface DisplayDataJSON {
   supportUrl: string;
 
   // Localized strings, indexed by locale.
-  localizedDisplayInfo: Record<string, ExtensionLocalizedStrings>;
+  localizedDisplayInfo: Record<string, LocalizedDisplayInfo>;
+}
+
+/** Interface for localized display data of an extension. */
+interface LocalizedDisplayInfo {
+  // Name of the extension to be displayed in user's language.
+  displayName: string;
+
+  // Short summary of the extension to be displayed in user's language.
+  shortSummary: string;
+
+  // Path to localized description file.
+  description: string;
 }
 
 /**
@@ -850,12 +826,12 @@ async function normalizeExtensionFileName(baseUri: string, zipUri: string) {
 }
 
 async function parseExtensionData(
-  displayData: DisplayDataJSON | undefined,
-  localizedStrings: LocalizedStringsJSON | undefined,
+  displayData: DisplayDataContribution | undefined,
+  localizedStrings: platformBibleUtils.LocalizedStringDataContribution | undefined,
   icon: ExtensionIcon,
-  description: ExtensionLocalizedStrings,
+  description: platformBibleUtils.LanguageStrings,
   manifest: ExtensionManifest,
-): Promise<ExtensionData> {
+): Promise<FullExtensionData> {
   // Gets the file size and hash from the local zip file
   const disabledExtensionUri = getExtensionUri(
     disabledExtensionsUri,
@@ -885,7 +861,7 @@ async function parseExtensionData(
 
   // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
   // and values are the display names in those languages
-  let displayName: ExtensionLocalizedStrings = {};
+  let displayName: platformBibleUtils.LanguageStrings = {};
   if (displayData !== undefined) {
     displayName = Object.fromEntries(
       Object.entries(displayData.localizedDisplayInfo).map(([locale, data]) => {
@@ -896,7 +872,7 @@ async function parseExtensionData(
 
   // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
   // and values are the summaries in those languages
-  let shortSummary: ExtensionLocalizedStrings = {};
+  let shortSummary: platformBibleUtils.LanguageStrings = {};
   if (displayData !== undefined) {
     shortSummary = Object.fromEntries(
       Object.entries(displayData.localizedDisplayInfo).map(([locale, data]) => {
@@ -908,7 +884,7 @@ async function parseExtensionData(
   // Converts any two-digit locales to three-digit locales
   let locales: string[] = [];
   if (localizedStrings !== undefined) {
-    locales = Object.keys(localizedStrings.localizedStrings).map((locale) => locale);
+    locales = Object.keys(localizedStrings.localizedStrings ?? {});
   }
 
   // We can now create and return a struct containing the extracted data
@@ -928,7 +904,9 @@ async function parseExtensionData(
   };
 }
 
-async function readExtensionDataFromZip(extensionUri: string): Promise<ExtensionData | undefined> {
+async function readExtensionDataFromZip(
+  extensionUri: string,
+): Promise<FullExtensionData | undefined> {
   let zip: JSZip;
   try {
     const extensionZipData: Buffer = await nodeFS.readFileBinary(extensionUri);
@@ -947,7 +925,7 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
   const manifest = JSON.parse(await manifestFile.async('string')) as ExtensionManifest;
 
   // Extract the localized strings of extension info, to determine supported languages.
-  let localizedStrings: LocalizedStringsJSON | undefined;
+  let localizedStrings: platformBibleUtils.LocalizedStringDataContribution | undefined;
   if (manifest.localizedStrings) {
     const localizedStringsFile = zip.file(manifest.localizedStrings);
     if (localizedStringsFile) {
@@ -956,7 +934,7 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         localizedStrings = JSON.parse(
           await localizedStringsFile.async('string'),
-        ) as LocalizedStringsJSON;
+        ) as platformBibleUtils.LocalizedStringDataContribution;
       } catch {
         logger.warn(
           `Could not read localized strings file '${manifest.localizedStrings}' for extension '${manifest.name}!'`,
@@ -966,14 +944,14 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
   }
 
   // Extract the localized display data, for description/display name/summary/etc.
-  let displayData: DisplayDataJSON | undefined;
+  let displayData: DisplayDataContribution | undefined;
   if (manifest.displayData) {
     const displayDataFile = zip.file(manifest.displayData);
     if (displayDataFile) {
       try {
         // Type assertion to appropriate form of the localized display data
         // eslint-disable-next-line no-type-assertion/no-type-assertion
-        displayData = JSON.parse(await displayDataFile.async('string')) as DisplayDataJSON;
+        displayData = JSON.parse(await displayDataFile.async('string')) as DisplayDataContribution;
       } catch {
         logger.warn(
           `Could not read display data file '${manifest.displayData}' for extension '${manifest.name}!'`,
@@ -984,7 +962,7 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
 
   // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
   // and values are the contents of the files found in the locale's "description" field
-  let description: ExtensionLocalizedStrings = {};
+  let description: platformBibleUtils.LanguageStrings = {};
   if (displayData !== undefined) {
     const resolvedDescriptionEntries = await Promise.all(
       Object.entries(displayData.localizedDisplayInfo).map(async ([locale, data]) => {
@@ -1042,17 +1020,19 @@ async function readExtensionDataFromZip(extensionUri: string): Promise<Extension
   return parseExtensionData(displayData, localizedStrings, icon, description, manifest);
 }
 
-async function readExtensionDataFromFolder(extensionInfo: ExtensionInfo): Promise<ExtensionData> {
+async function readExtensionDataFromFolder(
+  extensionInfo: ExtensionInfo,
+): Promise<FullExtensionData> {
   const folderUri = extensionInfo.dirUri;
   // Extract the localized strings of extension info, to determine supported languages.
-  let localizedStrings: LocalizedStringsJSON | undefined;
+  let localizedStrings: platformBibleUtils.LocalizedStringDataContribution | undefined;
   if (extensionInfo.localizedStrings) {
     try {
       // Type assertion to appropriate form of the localized strings
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       localizedStrings = JSON.parse(
         await nodeFS.readFileText(joinUriPaths(folderUri, extensionInfo.localizedStrings)),
-      ) as LocalizedStringsJSON;
+      ) as platformBibleUtils.LocalizedStringDataContribution;
     } catch {
       logger.warn(
         `Could not read localized strings file '${extensionInfo.localizedStrings}' for extension '${extensionInfo.name}!'`,
@@ -1061,14 +1041,14 @@ async function readExtensionDataFromFolder(extensionInfo: ExtensionInfo): Promis
   }
 
   // Extract the localized display data, for description/display name/summary/etc.
-  let displayData: DisplayDataJSON | undefined;
+  let displayData: DisplayDataContribution | undefined;
   if (extensionInfo.displayData) {
     try {
       // Type assertion to appropriate form of the localized display data
       // eslint-disable-next-line no-type-assertion/no-type-assertion
       displayData = JSON.parse(
         await nodeFS.readFileText(joinUriPaths(folderUri, extensionInfo.displayData)),
-      ) as DisplayDataJSON;
+      ) as DisplayDataContribution;
     } catch {
       logger.warn(
         `Could not read display data file '${extensionInfo.displayData}' for extension '${extensionInfo.name}!'`,
@@ -1078,7 +1058,7 @@ async function readExtensionDataFromFolder(extensionInfo: ExtensionInfo): Promis
 
   // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
   // and values are the contents of the files found in the locale's "description" field
-  let description: ExtensionLocalizedStrings = {};
+  let description: platformBibleUtils.LanguageStrings = {};
   if (displayData !== undefined) {
     const resolvedDescriptionEntries = await Promise.all(
       Object.entries(displayData.localizedDisplayInfo).map(async ([locale, data]) => {
@@ -1253,7 +1233,7 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
   };
 }
 
-async function getExtensionsData(extensions: ExtensionIdentifier[]): Promise<ExtensionData[]> {
+async function getExtensionsData(extensions: ExtensionIdentifier[]): Promise<FullExtensionData[]> {
   const extensionsData = await Promise.all(
     extensions.map(async (extensionId) => {
       // First checks to see if the extension is an available extension
