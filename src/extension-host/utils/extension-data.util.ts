@@ -72,7 +72,7 @@ async function parseExtensionData(
   if (displayData !== undefined) {
     displayName = Object.fromEntries(
       Object.entries(displayData.localizedDisplayInfo).map(([locale, data]) => {
-        return [locale, data.displayName];
+        return [Intl.getCanonicalLocales(locale)[0], data.displayName];
       }),
     );
   }
@@ -83,7 +83,7 @@ async function parseExtensionData(
   if (displayData !== undefined) {
     shortSummary = Object.fromEntries(
       Object.entries(displayData.localizedDisplayInfo).map(([locale, data]) => {
-        return [locale, data.shortSummary];
+        return [Intl.getCanonicalLocales(locale)[0], data.shortSummary];
       }),
     );
   }
@@ -100,8 +100,6 @@ async function parseExtensionData(
   // We can now create and return a struct containing the extracted data
   return {
     ...manifest,
-    id: manifest.name,
-    currentVersion: manifest.version,
     displayName,
     shortSummary,
     description,
@@ -193,7 +191,7 @@ export async function readExtensionDataFromZip(
           // Now we can read that description to a string
 
           // And return the language key with its corresponding description
-          return [locale, descriptionString];
+          return [Intl.getCanonicalLocales(locale)[0], descriptionString];
           // Need to be able to return something so returns undefined filtered out in the later lines
           // eslint-disable-next-line no-else-return
         } else {
@@ -299,7 +297,7 @@ export async function readExtensionDataFromFolder(
         }
 
         // And return the language key with its corresponding description
-        return [locale, descriptionString];
+        return [Intl.getCanonicalLocales(locale)[0], descriptionString];
       }),
     );
     description = Object.fromEntries(resolvedDescriptionEntries.filter((value) => !!value));

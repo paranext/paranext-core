@@ -18,17 +18,24 @@ export interface ExtensionIcon {
  * visualization data that is useful for the extension marketplace
  */
 export type FullExtensionData = Readonly<
-  Omit<ExtensionManifest, 'name' | 'version'> & {
-    id: string;
-    currentVersion: string;
+  ExtensionManifest & {
+    /** Localized display name data used to visualize the extension name */
     displayName: LanguageStrings;
+    /** Localized short summary for the extension which is used as a sort of subtitle for extensions */
     shortSummary: LanguageStrings;
+    /** Localized descriptions for the extension to describe the functionality of the extension */
     description: LanguageStrings;
+    /** Extension icon object used to visualize the extension icon */
     icon: ExtensionIcon;
+    /** Locales that the extension supports which have been formatted to be in the BCP 47 format */
     locales: string[];
+    /** Supplied URL to find more information about the extension */
     moreInfoUrl: string;
+    /** Supplied URL to get support concerning the extension */
     supportUrl: string;
+    /** File size of the extension ZIP file for extension file validation */
     fileSize: number;
+    /** Generated hash codes for the extension ZIP file for extension file validation validation */
     hashcode: Record<string, string>;
   }
 >;
