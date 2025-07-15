@@ -51,10 +51,12 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
   '%resources_filterInput%',
   '%resources_fullName%',
   '%resources_get%',
+  '%resources_getStarted%',
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
   '%resources_loading%',
+  '%resources_needHelp%',
   '%resources_noProjects%',
   '%resources_noProjectsInstruction%',
   '%resources_noSearchResults%',
@@ -109,10 +111,12 @@ globalThis.webViewComponent = function HomeDialog() {
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
   const getText: string = localizedStrings['%resources_get%'];
+  const getStartedText: string = localizedStrings['%resources_getStarted%'];
   const getResourcesText: string = localizedStrings['%resources_getResources%'];
   const itemsText: string = localizedStrings['%resources_items%'];
   const languageText: string = localizedStrings['%resources_language%'];
   const loadingText: string = localizedStrings['%resources_loading%'];
+  const needHelpText: string = localizedStrings['%resources_needHelp%'];
   const noProjectsText: string = localizedStrings['%resources_noProjects%'];
   const noProjectsInstructionText: string = localizedStrings['%resources_noProjectsInstruction%'];
   const noSearchResultsText: string = localizedStrings['%resources_noSearchResults%'];
@@ -647,11 +651,27 @@ globalThis.webViewComponent = function HomeDialog() {
             )}
           </CardContent>
         )}
-        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-p-4 tw-border-t">
-          {filteredAndSortedProjects.length > 0 && (
+        {filteredAndSortedProjects.length > 0 && (
+          <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2">
             <Label className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
-          )}
-        </CardFooter>
+            {filteredAndSortedProjects.length === 1 &&
+              filteredAndSortedProjects[0].name === 'WEB' && (
+                <>
+                  <Label className="tw-text-muted-foreground tw-font-normal">{needHelpText}</Label>
+                  <Button
+                    onClick={() => {
+                      papi.commands.sendCommand(
+                        'platform.openWindow',
+                        'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio',
+                      );
+                    }}
+                  >
+                    {getStartedText}
+                  </Button>
+                </>
+              )}
+          </CardFooter>
+        )}
       </Card>
     </div>
   );
