@@ -5806,13 +5806,6 @@ declare module 'shared/models/elevated-privilege-names.model' {
 }
 declare module 'extension-host/extension-types/extension-manifest.model' {
   import { ElevatedPrivilegeNames } from 'shared/models/elevated-privilege-names.model';
-  /** Interface that stores the extension dependency information */
-  export interface ExtensionDependency {
-    /** Extension id of the given extension dependency */
-    id: string;
-    /** Version of the given extension dependency */
-    version: string;
-  }
   /** Information about an extension provided by the extension developer. */
   export type ExtensionManifest = {
     /** Name of the extension */
@@ -5863,26 +5856,16 @@ declare module 'extension-host/extension-types/extension-manifest.model' {
      */
     activationEvents: string[];
     /** List of extension dependencies required for this extension to work */
-    extensionDependencies?: ExtensionDependency[];
+    extensionDependencies?: Record<string, string>;
     /** Path to the JSON file that defines the display data this extension is adding */
     displayData?: string;
     /** Id of publisher who published this extension on the extension marketplace */
     publisher?: string;
   };
 }
-declare module 'shared/models/manage-extensions-privilege.model' {
+declare module 'shared/models/full-extension-data.model' {
   import { ExtensionManifest } from 'extension-host/extension-types/extension-manifest.model';
   import { LanguageStrings } from 'platform-bible-utils';
-  /** Base64 encoded hash values */
-  export type HashValues = Partial<{
-    sha256: string;
-    sha512: string;
-  }>;
-  /** Represents an extension that can be enabled or disabled */
-  export type ExtensionIdentifier = {
-    extensionName: string;
-    extensionVersion: string;
-  };
   /** Interface that stores extension icon information */
   export interface ExtensionIcon {
     /** Path to the icon's file. Could be a URL */
@@ -5913,6 +5896,19 @@ declare module 'shared/models/manage-extensions-privilege.model' {
       hashcode: Record<string, string>;
     }
   >;
+}
+declare module 'shared/models/manage-extensions-privilege.model' {
+  import { FullExtensionData } from 'shared/models/full-extension-data.model';
+  /** Base64 encoded hash values */
+  export type HashValues = Partial<{
+    sha256: string;
+    sha512: string;
+  }>;
+  /** Represents an extension that can be enabled or disabled */
+  export type ExtensionIdentifier = {
+    extensionName: string;
+    extensionVersion: string;
+  };
   /**
    * Represents all extensions that are installed. Note that packaged extensions cannot be disabled,
    * so they are implied to always be enabled.
@@ -5985,7 +5981,10 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     disableExtension: DisableExtensionFunction;
     /** Function to retrieve details about all installed extensions */
     getInstalledExtensions: GetInstalledExtensionsFunction;
-    /** Function to retrieve full details about a list of installed or disabled extensions */
+    /**
+     * Function to retrieve descriptive metadata and visualization data for an extension. Useful for
+     * the extension marketplace.
+     */
     getExtensionsData: GetExtensionsDataFunction;
   };
 }

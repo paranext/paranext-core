@@ -49,8 +49,6 @@ import {
   HashValues,
   InstalledExtensions,
   ManageExtensions,
-  FullExtensionData,
-  ExtensionIcon,
 } from '@shared/models/manage-extensions-privilege.model';
 import { CreateProcess } from '@shared/models/create-process-privilege.model';
 import { wrappedFork, wrappedSpawn } from '@extension-host/services/create-process.service';
@@ -72,6 +70,14 @@ import { appService } from '@shared/services/app.service';
 // Used in JSDoc
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AppInfo } from '@shared/services/app.service-model';
+import {
+  EXTENSION_MANIFEST_FILE_NAME,
+  getExtensionUri,
+  readExtensionDataFromFolder,
+  readExtensionDataFromZip,
+} from '@extension-host/utils/extension-data.util';
+import { FullExtensionData } from '@shared/models/full-extension-data.model';
+import { ExtensionInfo } from '@extension-host/extension-types/extension-info.model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -88,21 +94,6 @@ const TEST_EXTENSION_NAMES = [
   'helloRock3',
   'quickVerse',
 ];
-
-/**
- * Information about an extension and extra metadata about it that we generate
- *
- * This is a transformed and frozen version of the extension's {@link ExtensionManifest}
- */
-type ExtensionInfo = Readonly<
-  ExtensionManifest & {
-    /**
-     * Uri to this extension's directory. Not provided in actual manifest, but added while parsing
-     * the manifest
-     */
-    dirUri: Uri;
-  }
->;
 
 /** Information about an active extension */
 type ActiveExtension = {
@@ -139,44 +130,6 @@ type ExtensionKey = `${string}.${string}`;
 type PublisherIdentifier = {
   publisherName?: string;
 };
-
-/**
- * Interface for the contents of an extension's localized display data.
- *
- * This data is pulled from an extension's `displayData.json` file. The path of that file is
- * specified in the extension's `manifest.json` file.
- */
-interface DisplayDataContribution {
-  // Path to the extension's icon file.
-  icon: string;
-
-  // URL to access more information about the extension, such as developer's website.
-  moreInfoUrl: string;
-
-  // URL to access a support page for this extension.
-  supportUrl: string;
-
-  // Localized strings, indexed by locale.
-  localizedDisplayInfo: Record<string, LocalizedDisplayInfo>;
-}
-
-/** Interface for localized display data of an extension. */
-interface LocalizedDisplayInfo {
-  // Name of the extension to be displayed in user's language.
-  displayName: string;
-
-  // Short summary of the extension to be displayed in user's language.
-  shortSummary: string;
-
-  // Path to localized description file.
-  description: string;
-}
-
-/**
- * Name of the file describing the extension and its capabilities. Provided by the extension
- * developer
- */
-const MANIFEST_FILE_NAME = 'manifest.json';
 
 /** List of all forbidden extension names. Extensions with these names will not work */
 const FORBIDDEN_EXTENSION_NAMES = ['', PLATFORM_NAMESPACE];
@@ -394,8 +347,8 @@ async function getExtensionUrisToLoad(): Promise<Uri[]> {
   // filter out files
   const extensionFolderPromises = commandLineExtensionDirectories
     .map((extensionDirPath) => {
-      const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
-        ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+      const extensionFolder = extensionDirPath.endsWith(EXTENSION_MANIFEST_FILE_NAME)
+        ? extensionDirPath.slice(0, -EXTENSION_MANIFEST_FILE_NAME.length)
         : extensionDirPath;
       return extensionFolder;
     })
@@ -452,7 +405,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
         logger.warn(`Invalid extension ZIP file entry in "${zipUri}": ${fileName}`);
         zipEntriesInProperDirectory = false;
       }
-      if (parsedPath.base === MANIFEST_FILE_NAME) foundManifestFile = true;
+      if (parsedPath.base === EXTENSION_MANIFEST_FILE_NAME) foundManifestFile = true;
     }),
   );
   if (!zipEntriesInProperDirectory) return;
@@ -505,7 +458,7 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
       extensionUris.map(async (extensionUri) => {
         try {
           const extensionManifestJson = await nodeFS.readFileText(
-            joinUriPaths(extensionUri, MANIFEST_FILE_NAME),
+            joinUriPaths(extensionUri, EXTENSION_MANIFEST_FILE_NAME),
           );
           // Assert the return type after freeze.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -745,15 +698,6 @@ function watchForExtensionChanges(): UnsubscriberAsync {
 }
 
 /**
- * Returns a URI we can use with `nodeFS` calls that is an expected filename given a base URI,
- * extension name, and extension version. This is not that useful for packaged extensions but is
- * important for all other extensions, both enabled and disabled.
- */
-function getExtensionUri(baseUri: string, extensionName: string, extensionVersion: string): string {
-  return `${baseUri}/${extensionName}_${extensionVersion}.zip`;
-}
-
-/**
  * Provides extension identifier information based on extension ZIP files names given the naming
  * convention used in {@link getExtensionUri}
  */
@@ -774,7 +718,7 @@ async function extractExtensionDetailsFromZip(
   zipData: Buffer,
 ): Promise<ExtensionIdentifier & PublisherIdentifier> {
   const zip: JSZip = await JSZip.loadAsync(zipData);
-  const zippedManifest = zip.file(MANIFEST_FILE_NAME);
+  const zippedManifest = zip.file(EXTENSION_MANIFEST_FILE_NAME);
   if (!zippedManifest) throw new Error('no manifest file found in ZIP data');
   // Assert the extracted manifest.json data as the associated type
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -823,292 +767,6 @@ async function normalizeExtensionFileName(baseUri: string, zipUri: string) {
   } catch (error) {
     logger.warn(`Failed to normalize extension file for ${zipUri}: ${error}`);
   }
-}
-
-async function parseExtensionData(
-  displayData: DisplayDataContribution | undefined,
-  localizedStrings: platformBibleUtils.LocalizedStringDataContribution | undefined,
-  icon: ExtensionIcon,
-  description: platformBibleUtils.LanguageStrings,
-  manifest: ExtensionManifest,
-): Promise<FullExtensionData> {
-  // Gets the file size and hash from the local zip file
-  const disabledExtensionUri = getExtensionUri(
-    disabledExtensionsUri,
-    manifest.name,
-    manifest.version,
-  );
-  const enabledExtensionUri = getExtensionUri(
-    installedExtensionsUri,
-    manifest.name,
-    manifest.version,
-  );
-  // Find the file size of the installed extension zip file if found
-  const disabledExtensionStats = await nodeFS.getStats(disabledExtensionUri);
-  const enabledExtensionStats = await nodeFS.getStats(enabledExtensionUri);
-  const fileSize = Number(disabledExtensionStats?.size ?? enabledExtensionStats?.size ?? -1);
-
-  // Generate zip file hash if the zip file was found
-  let extensionBuffer: Buffer | undefined;
-  if (disabledExtensionStats !== undefined) {
-    extensionBuffer = await nodeFS.readFileBinary(disabledExtensionUri);
-  } else if (enabledExtensionStats !== undefined) {
-    extensionBuffer = await nodeFS.readFileBinary(enabledExtensionUri);
-  }
-  const sha512Hashcode = extensionBuffer
-    ? generateHashFromBuffer('sha512', 'base64', extensionBuffer)
-    : '';
-
-  // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
-  // and values are the display names in those languages
-  let displayName: platformBibleUtils.LanguageStrings = {};
-  if (displayData !== undefined) {
-    displayName = Object.fromEntries(
-      Object.entries(displayData.localizedDisplayInfo).map(([locale, data]) => {
-        return [locale, data.displayName];
-      }),
-    );
-  }
-
-  // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
-  // and values are the summaries in those languages
-  let shortSummary: platformBibleUtils.LanguageStrings = {};
-  if (displayData !== undefined) {
-    shortSummary = Object.fromEntries(
-      Object.entries(displayData.localizedDisplayInfo).map(([locale, data]) => {
-        return [locale, data.shortSummary];
-      }),
-    );
-  }
-
-  // Converts any two-digit locales to three-digit locales
-  let locales: string[] = [];
-  if (localizedStrings !== undefined) {
-    locales = Object.keys(localizedStrings.localizedStrings ?? {});
-  }
-
-  // We can now create and return a struct containing the extracted data
-  return {
-    ...manifest,
-    id: manifest.name,
-    currentVersion: manifest.version,
-    displayName,
-    shortSummary,
-    description,
-    icon,
-    locales,
-    moreInfoUrl: displayData?.moreInfoUrl ?? '',
-    supportUrl: displayData?.supportUrl ?? '',
-    fileSize: fileSize ?? -1,
-    hashcode: { sha512: sha512Hashcode },
-  };
-}
-
-async function readExtensionDataFromZip(
-  extensionUri: string,
-): Promise<FullExtensionData | undefined> {
-  let zip: JSZip;
-  try {
-    const extensionZipData: Buffer = await nodeFS.readFileBinary(extensionUri);
-    zip = await JSZip.loadAsync(extensionZipData);
-  } catch {
-    return undefined;
-  }
-
-  const manifestFile = zip.file(MANIFEST_FILE_NAME);
-  // If the manifest file does not exist then returns undefined since can't really get any more info
-  if (!manifestFile) {
-    return undefined;
-  }
-  // Need to assert type to be ExtensionManifest for the manifest.json
-  // eslint-disable-next-line no-type-assertion/no-type-assertion
-  const manifest = JSON.parse(await manifestFile.async('string')) as ExtensionManifest;
-
-  // Extract the localized strings of extension info, to determine supported languages.
-  let localizedStrings: platformBibleUtils.LocalizedStringDataContribution | undefined;
-  if (manifest.localizedStrings) {
-    const localizedStringsFile = zip.file(manifest.localizedStrings);
-    if (localizedStringsFile) {
-      try {
-        // Type assertion to appropriate form of the localized strings
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        localizedStrings = JSON.parse(
-          await localizedStringsFile.async('string'),
-        ) as platformBibleUtils.LocalizedStringDataContribution;
-      } catch {
-        logger.warn(
-          `Could not read localized strings file '${manifest.localizedStrings}' for extension '${manifest.name}!'`,
-        );
-      }
-    }
-  }
-
-  // Extract the localized display data, for description/display name/summary/etc.
-  let displayData: DisplayDataContribution | undefined;
-  if (manifest.displayData) {
-    const displayDataFile = zip.file(manifest.displayData);
-    if (displayDataFile) {
-      try {
-        // Type assertion to appropriate form of the localized display data
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        displayData = JSON.parse(await displayDataFile.async('string')) as DisplayDataContribution;
-      } catch {
-        logger.warn(
-          `Could not read display data file '${manifest.displayData}' for extension '${manifest.name}!'`,
-        );
-      }
-    }
-  }
-
-  // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
-  // and values are the contents of the files found in the locale's "description" field
-  let description: platformBibleUtils.LanguageStrings = {};
-  if (displayData !== undefined) {
-    const resolvedDescriptionEntries = await Promise.all(
-      Object.entries(displayData.localizedDisplayInfo).map(async ([locale, data]) => {
-        const descriptionFile = zip.file(data.description);
-        if (descriptionFile) {
-          // Now we can read that description to a string
-          let descriptionString = '';
-          try {
-            descriptionString = await descriptionFile.async('string');
-          } catch {
-            logger.warn(
-              `Could not read '${locale}' description file '${data.description}' for extension '${manifest.name}!'`,
-            );
-            return undefined;
-          }
-          // Now we can read that description to a string
-
-          // And return the language key with its corresponding description
-          return [locale, descriptionString];
-          // Need to be able to return something so returns undefined filtered out in the later lines
-          // eslint-disable-next-line no-else-return
-        } else {
-          return undefined;
-        }
-      }),
-    );
-    description = Object.fromEntries(resolvedDescriptionEntries.filter((value) => !!value));
-  }
-
-  // Retrieves the extension icon
-  let icon: ExtensionIcon = { filepath: '', filetype: '', data: '', isUrl: false };
-  if (displayData?.icon) {
-    const isUrl = URL.canParse(displayData.icon);
-    const iconFile = zip.file(displayData.icon);
-    let iconData = '';
-    if (!isUrl && iconFile) {
-      try {
-        iconData = await iconFile.async('base64');
-      } catch {
-        logger.warn(
-          `Could not read icon file '${displayData.icon}' for extension '${manifest.name}!'`,
-        );
-      }
-    }
-
-    // Read the icon file into a buffer of bytes.
-    icon = {
-      filepath: displayData.icon,
-      filetype: path.extname(displayData.icon).substring(1), // Remove the first `.` to just extract the file extension
-      data: iconData,
-      isUrl,
-    };
-  }
-
-  return parseExtensionData(displayData, localizedStrings, icon, description, manifest);
-}
-
-async function readExtensionDataFromFolder(
-  extensionInfo: ExtensionInfo,
-): Promise<FullExtensionData> {
-  const folderUri = extensionInfo.dirUri;
-  // Extract the localized strings of extension info, to determine supported languages.
-  let localizedStrings: platformBibleUtils.LocalizedStringDataContribution | undefined;
-  if (extensionInfo.localizedStrings) {
-    try {
-      // Type assertion to appropriate form of the localized strings
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      localizedStrings = JSON.parse(
-        await nodeFS.readFileText(joinUriPaths(folderUri, extensionInfo.localizedStrings)),
-      ) as platformBibleUtils.LocalizedStringDataContribution;
-    } catch {
-      logger.warn(
-        `Could not read localized strings file '${extensionInfo.localizedStrings}' for extension '${extensionInfo.name}!'`,
-      );
-    }
-  }
-
-  // Extract the localized display data, for description/display name/summary/etc.
-  let displayData: DisplayDataContribution | undefined;
-  if (extensionInfo.displayData) {
-    try {
-      // Type assertion to appropriate form of the localized display data
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      displayData = JSON.parse(
-        await nodeFS.readFileText(joinUriPaths(folderUri, extensionInfo.displayData)),
-      ) as DisplayDataContribution;
-    } catch {
-      logger.warn(
-        `Could not read display data file '${extensionInfo.displayData}' for extension '${extensionInfo.name}!'`,
-      );
-    }
-  }
-
-  // Creates an object whose keys are the language abbreviations (en, fr, es, ...)
-  // and values are the contents of the files found in the locale's "description" field
-  let description: platformBibleUtils.LanguageStrings = {};
-  if (displayData !== undefined) {
-    const resolvedDescriptionEntries = await Promise.all(
-      Object.entries(displayData.localizedDisplayInfo).map(async ([locale, data]) => {
-        // Construct the path to the description file
-        const descriptionPath = joinUriPaths(folderUri, data.description);
-
-        // Now we can read that description to a string
-        let descriptionString = '';
-        try {
-          descriptionString = await nodeFS.readFileText(descriptionPath);
-        } catch {
-          logger.warn(
-            `Could not read '${locale}' description file '${descriptionPath}' for extension '${extensionInfo.name}!'`,
-          );
-          return undefined;
-        }
-
-        // And return the language key with its corresponding description
-        return [locale, descriptionString];
-      }),
-    );
-    description = Object.fromEntries(resolvedDescriptionEntries.filter((value) => !!value));
-  }
-
-  // Retrieves the extension icon
-  let icon: ExtensionIcon = { filepath: '', filetype: '', data: '', isUrl: false };
-  if (displayData?.icon) {
-    const isUrl = URL.canParse(displayData.icon);
-    const fullIconFilepath = isUrl ? displayData.icon : joinUriPaths(folderUri, displayData.icon);
-    let iconData = '';
-    if (!isUrl) {
-      try {
-        iconData = await nodeFS.readFileText(fullIconFilepath, 'base64');
-      } catch {
-        logger.warn(
-          `Could not read icon file '${fullIconFilepath}' for extension '${extensionInfo.name}!'`,
-        );
-      }
-    }
-
-    // Read the icon file into a buffer of bytes.
-    icon = {
-      filepath: displayData.icon,
-      filetype: path.extname(fullIconFilepath).substring(1), // Remove the first `.` to just extract the file extension
-      data: isUrl ? '' : iconData,
-      isUrl,
-    };
-  }
-
-  return parseExtensionData(displayData, localizedStrings, icon, description, extensionInfo);
 }
 
 // #region Extension management privileges
@@ -1243,7 +901,11 @@ async function getExtensionsData(extensions: ExtensionIdentifier[]): Promise<Ful
 
       // If the extension is available then reads the files from the extension folder
       if (availableExtension) {
-        return readExtensionDataFromFolder(availableExtension);
+        return readExtensionDataFromFolder(
+          availableExtension,
+          disabledExtensionsUri,
+          installedExtensionsUri,
+        );
       }
 
       // Otherwise gets it from the zipped file in the disabled extensions folder if it exists
@@ -1254,7 +916,11 @@ async function getExtensionsData(extensions: ExtensionIdentifier[]): Promise<Ful
       );
 
       if (await nodeFS.getStats(extensionUri)) {
-        return readExtensionDataFromZip(extensionUri);
+        return readExtensionDataFromZip(
+          extensionUri,
+          disabledExtensionsUri,
+          installedExtensionsUri,
+        );
       }
 
       // Need to be able to return something so returns undefined filtered out in the later lines
