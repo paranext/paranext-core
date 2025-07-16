@@ -33,7 +33,6 @@ npm-debug.log.*
 
 # Packager output
 dist
-storybook-static
 
 # eslint ignores hidden directories by default:
 # https://github.com/eslint/eslint/issues/8429
@@ -50,8 +49,9 @@ extensions
 package-lock.json
 bin
 obj
+storybook-static
 
 # Formats not supported by Prettier
 # (no sync with .eslintignore and .stylelintignore)
-# MDXv2+ (used by Storybook)
+## MDXv2+ (used by Storybook)
 *.mdx
