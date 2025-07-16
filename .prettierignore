@@ -33,13 +33,12 @@ npm-debug.log.*
 
 # Packager output
 dist
+storybook-static
 
 # eslint ignores hidden directories by default:
 # https://github.com/eslint/eslint/issues/8429
 !.erb
 !.storybook
-
-storybook-static
 
 # directories that have separate eslint project
 lib/platform-bible-react
@@ -52,3 +51,7 @@ package-lock.json
 bin
 obj
 
+# Formats not supported by Prettier
+# (no sync with .eslintignore and .stylelintignore)
+# MDXv2+ (used by Storybook)
+*.mdx
