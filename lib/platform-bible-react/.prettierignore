@@ -5,10 +5,12 @@ node_modules
 
 # Built files
 dist
-storybook-static
 
 # Doc files
 docs
+
+# Static files
+storybook-static
 
 # Formats not supported by Prettier
 # (no sync with .eslintignore and .stylelintignore)
