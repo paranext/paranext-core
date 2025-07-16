@@ -401,6 +401,22 @@ async function main() {
       }
     });
 
+    mainWindow.on('close', async (event) => {
+      event.preventDefault();
+
+      try {
+        const isFormOpen = await commandService.sendCommand('platform.isUsersnapFormCurrentlyOpen');
+        if (isFormOpen) {
+          await commandService.sendCommand('platform.closeOpenUsersnapForm');
+          return;
+        }
+      } catch (error) {
+        logger.warn(`Failed to check if usersnap form is open: ${getErrorMessage(error)}`);
+      }
+
+      mainWindow?.destroy();
+    });
+
     mainWindow.on('closed', () => {
       mainWindow = undefined;
     });
