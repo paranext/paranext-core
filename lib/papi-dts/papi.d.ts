@@ -3367,6 +3367,10 @@ declare module 'papi-shared-types' {
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
+    /** Open Usersnap feedback form to submit an idea */
+    'platform.usersnapSubmitIdea': () => Promise<void>;
+    /** Open Usersnap feedback form to report an issue */
+    'platform.usersnapReportIssue': () => Promise<void>;
     'test.addMany': (...nums: number[]) => number;
     'test.throwErrorExtensionHost': (message: string) => void;
   }
