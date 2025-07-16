@@ -274,17 +274,21 @@ interface ErrorDumpProps {
  * @param localizedStrings Localized strings to use in the ErrorDump component
  */
 export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
-type ErrorPopoverProps = React$1.PropsWithChildren & ErrorDumpProps;
+type ErrorPopoverProps = React$1.PropsWithChildren & ErrorDumpProps & {
+	/** Optional CSS classes to insert into the `PopoverContent` */
+	className: string;
+};
 /**
  * @param errorDetails The error details to show in the error popover
  * @param handleCopyNotify Optional notification handler function to handle when the error is copied
  * @param localizedStrings List of localized strings to use in the ErrorDump component
+ * @param className Optional CSS classes to insert into the `PopoverContent`
  *
- * NOTE: The `ERROR_DUMP_STRING_KEYS` array will need to be imported from the `ErrorDump` component
- * which contains a list of the localized strings that will need to be set to populate the
- * `localizedStrings` parameter
+ *   NOTE: The `ERROR_DUMP_STRING_KEYS` array will need to be imported from the `ErrorDump` component
+ *   which contains a list of the localized strings that will need to be set to populate the
+ *   `localizedStrings` parameter
  */
-export declare function ErrorPopover({ errorDetails, handleCopyNotify, localizedStrings, children, }: ErrorPopoverProps): import("react/jsx-runtime").JSX.Element;
+export declare function ErrorPopover({ errorDetails, handleCopyNotify, localizedStrings, children, className, }: ErrorPopoverProps): import("react/jsx-runtime").JSX.Element;
 /** The DropdownMenuItemType enum is used to determine the type of the dropdown item */
 export declare enum DropdownMenuItemType {
 	Check = 0,
