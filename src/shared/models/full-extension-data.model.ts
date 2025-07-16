@@ -33,9 +33,15 @@ export type FullExtensionData = Readonly<
     moreInfoUrl: string;
     /** Supplied URL to get support concerning the extension */
     supportUrl: string;
-    /** File size of the extension ZIP file for extension file validation */
+    /**
+     * File size of the extension ZIP file for extension file validation. Can be `-1` if the
+     * extension ZIP could not be found.
+     */
     fileSize: number;
-    /** Generated hash codes for the extension ZIP file for extension file validation validation */
+    /**
+     * Generated hash codes for the extension ZIP file for extension file validation validation. Can
+     * be an empty object if the extension ZIP could not be found.
+     */
     hashcode: Record<string, string>;
   }
 >;
