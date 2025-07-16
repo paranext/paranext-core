@@ -90,11 +90,6 @@ const CONTENT_NAVIGATION_KEYS = new Set([
   'Enter',
 ]);
 
-// Thanks to Mx. at https://stackoverflow.com/a/35173443
-/** Query selector for finding tab indexable elements */
-const TAB_INDEX_QUERY =
-  'a:not([disabled]), button:not([disabled]), input[type=text]:not([disabled]), [tabindex]:not([disabled]):not([tabindex="-1"])';
-
 const fetchEndChapter = (bookId: string) => {
   // getChaptersForBook returns -1 if not found in scrBookData
   // scrBookData only includes OT and NT, so all DC will return -1
@@ -289,7 +284,7 @@ export function BookChapterControl({
   const handleSearchInput = useCallback(
     (searchString: string) => {
       setBookChapterInputValue(searchString);
-      setSearchQuery(searchString.trim());
+      setSearchQuery(searchString);
       setTopMatch(calculateTopMatch(searchString.trim()));
     },
     [calculateTopMatch],
@@ -380,6 +375,10 @@ export function BookChapterControl({
       if (!isContentOpen) {
         // Just let Tab do its thing
         if (event.key !== 'Tab' && event.key !== 'Escape') setIsContentOpen(true);
+      } else if (event.key === 'Tab') {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
       } else if (event.key === 'ArrowDown') {
         // If the user presses down or tab, focus the content
         if (topMatchMenuItemRef?.current) {
@@ -406,11 +405,10 @@ export function BookChapterControl({
           event.preventDefault();
         }
 
-        if (!hasStartedTyping) {
-          // Only apply smart editing on the first keypress after focusing
+        if (/^\d$/.test(event.key)) {
+          const currentValue = bookChapterInputValue;
           // Check if user is typing a digit as the first character - start new chapter number
-          if (/^\d$/.test(event.key)) {
-            const currentValue = bookChapterInputValue;
+          if (!hasStartedTyping) {
             // Match pattern "Name of Book 0:0" to extract book name
             const bookMatch = currentValue.match(
               SCRIPTURE_REGEX_PATTERNS.EXTRACT_BOOK_FROM_REFERENCE,
@@ -421,10 +419,14 @@ export function BookChapterControl({
               const newValue = `${bookName} ${event.key}`;
               handleSearchInput(newValue);
               setHasStartedTyping(true);
-              event.preventDefault();
             }
+          } else {
+            handleSearchInput(searchQuery + event.key);
           }
+          event.preventDefault();
+        }
 
+        if (!hasStartedTyping) {
           // Check if user is typing a colon as the first character - start new verse number
           if (event.key === ':') {
             const currentValue = bookChapterInputValue;
@@ -444,9 +446,6 @@ export function BookChapterControl({
               event.preventDefault();
             }
           }
-        } else {
-          handleSearchInput(searchQuery + event.key);
-          event.preventDefault();
         }
 
         // Mark that the user has started typing on any non-modifier key
@@ -470,44 +469,10 @@ export function BookChapterControl({
     // Wait to do anything if the user presses a modifier key since that doesn't constitute typing
     if (MODIFIER_KEYS.has(event.key)) return;
 
-    // Tab sends you to next element outside this BC control, while Shift+tab should send you back to the input
-    if (event.key === 'Tab') {
-      if (event.shiftKey) {
-        inputRef.current.focus();
-      } else {
-        // We are checking in the filter that it is HTMLElement. TypeScript is getting thrown off
-        // by the additional checks for some reason
-        // eslint-disable-next-line no-type-assertion/no-type-assertion
-        const focusableElementsOutsideThisComponent = [
-          ...document.querySelectorAll(TAB_INDEX_QUERY),
-        ].filter(
-          (element) =>
-            element instanceof HTMLElement &&
-            (((element.offsetWidth > 0 || element.offsetHeight > 0) &&
-              !contentRef.current?.contains(element) &&
-              !inputRef.current?.contains(element)) ||
-              element === event.target),
-        ) as HTMLElement[];
-        const currentFocusedIndex =
-          event.target instanceof HTMLElement
-            ? focusableElementsOutsideThisComponent.indexOf(event.target)
-            : -1;
-        if (currentFocusedIndex >= 0) {
-          // Focus the next element if there is one
-          const nextElement =
-            focusableElementsOutsideThisComponent[
-              (currentFocusedIndex + 1) % focusableElementsOutsideThisComponent.length
-            ];
-          nextElement.focus();
-        } else {
-          // If we didn't find any focusable elements, just focus the input
-          inputRef.current.focus();
-        }
-      }
-
+    // Shift+tab sends you back to the input
+    if (event.key === 'Tab' && event.shiftKey) {
+      inputRef.current.focus();
       event.preventDefault();
-      event.stopPropagation();
-      return;
     }
 
     // This is some kind of keyboard input. Send it to the input component
