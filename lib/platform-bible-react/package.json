@@ -40,7 +40,7 @@
     "watch": "tsc && vite build --watch",
     "format": "npm run format:base && npm run format:mdx",
     "format:check": "npm run format:base:check && npm run format:mdx:check",
-    "format:base": "prettier --check --write .",
+    "format:base": "prettier --write .",
     "format:base:check": "prettier --check .",
     "format:mdx": "remark . --use remark-mdx --ext .mdx --output",
     "format:mdx:check": "remark . --use remark-mdx --ext .mdx",
@@ -48,7 +48,7 @@
     "lint:scripts": "cross-env NODE_ENV=development eslint --ext .cjs,.js,.jsx,.ts,.tsx --cache .",
     "lint:styles": "stylelint **/*.{css,scss}",
     "lint-fix": "npm run lint-fix:scripts && npm run lint:styles -- --fix",
-    "lint-fix:scripts": "prettier --check --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
+    "lint-fix:scripts": "prettier --write \"**/*.{ts,tsx,js,jsx,cjs}\" && npm run lint:scripts",
     "test": "vitest",
     "typecheck": "tsc -p ./tsconfig.json",
     "storybook": "storybook dev -p 6007"
