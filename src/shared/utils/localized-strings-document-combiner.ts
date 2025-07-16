@@ -29,7 +29,7 @@ function performSchemaValidation(document: JsonDocumentLike, docType: string): v
 }
 
 /** Modifies the input localized string contribution by canonizing the locales */
-function transformLocalizedStringDataToCanonicalLocales(
+export function transformLocalizedStringDataToCanonicalLocales(
   stringData: LocalizedStringDataContribution,
 ): LocalizedStringDataContribution {
   if (!stringData.localizedStrings) return stringData;
