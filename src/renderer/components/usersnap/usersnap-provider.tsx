@@ -41,21 +41,24 @@ export function UsersnapProvider({ children, initParams }: UsersnapProviderProps
       return;
     }
 
-    const mergedInitParams = { ...defaultInitParams, ...initParams };
+    const initializeUserSnap = async () => {
+      try {
+        const mergedInitParams = { ...defaultInitParams, ...initParams };
+        const api = await loadSpace(USERSNAP_SPACE_API_KEY);
+        console.log('api', JSON.stringify(api));
 
-    loadSpace(USERSNAP_SPACE_API_KEY)
-      .then((api) => {
         api.init(mergedInitParams);
         setUsersnapApi(api);
         setIsLoading(false);
         logger.info('UserSnap initialized successfully');
-        return api;
-      })
-      .catch((err) => {
+      } catch (err) {
         const errorMessage = `Failed to initialize UserSnap: ${err}`;
         logger.error(errorMessage);
         setIsLoading(false);
-      });
+      }
+    };
+
+    initializeUserSnap();
   }, [initParams]);
 
   // Log loading state for debugging
