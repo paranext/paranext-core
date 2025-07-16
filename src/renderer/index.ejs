@@ -29,6 +29,7 @@
           We cannot solve this by using the same nonce on every webview because each HTML webview
           will need to provide its own nonces to merge with ours. Not sure if it would be an issue
           beyond that, though, assuming we don't provide a way to get the nonce from a script.
+        https://*.usersnap.com so we can load feedback forms from Usersnap
         We do NOT list papi-extension: so scripts cannot be loaded from installed extensions without
         being limited by our WebView iframe security
       style-src allows them to use style/link tags and style attributes on tags
@@ -98,7 +99,7 @@
       http-equiv="Content-Security-Policy"
       content="
         default-src 'none';
-        script-src-elem 'self' 'wasm-unsafe-eval' 'unsafe-inline';
+        script-src-elem 'self' 'wasm-unsafe-eval' 'unsafe-inline' https://*.usersnap.com;
         style-src 'self' papi-extension: 'unsafe-inline';
         frame-src 'self' papi-extension: https: http://localhost:*;
         object-src 'none';

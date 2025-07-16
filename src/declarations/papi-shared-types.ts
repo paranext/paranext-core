@@ -95,6 +95,14 @@ declare module 'papi-shared-types' {
     'platform.openSettings': (webViewId?: WebViewId) => Promise<void>;
     /** Open a dialog that displays essential information about the application */
     'platform.about': () => Promise<void>;
+    /** Open Usersnap feedback form to submit an idea */
+    'platform.usersnapSubmitIdea': () => Promise<void>;
+    /** Open Usersnap feedback form to report an issue */
+    'platform.usersnapReportIssue': () => Promise<void>;
+    /** Check if a Usersnap form is currently open */
+    'platform.isUsersnapFormCurrentlyOpen': () => Promise<boolean>;
+    /** Call close function for Usersnap forms known to the application */
+    'platform.closeOpenUsersnapForm': () => Promise<void>;
 
     // These commands are provided in `extension-host.ts`. They are only here because I needed them to
     // use in other places, but building `papi-dts` wasn't working because it didn't see
