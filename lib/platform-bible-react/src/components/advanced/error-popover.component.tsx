@@ -1,20 +1,18 @@
 import { PropsWithChildren } from 'react';
-import { ErrorDump, ErrorDumpLocalizedStrings } from '../basics/error-dump.component';
+import { ErrorDump, ErrorDumpProps } from '../basics/error-dump.component';
 import { Popover, PopoverContent, PopoverTrigger } from '../shadcn-ui/popover';
 
 // Interface to store the parameters for the ErrorPopover component
-type ErrorPopoverProps = PropsWithChildren & {
-  /** String containing the error details to show */
-  errorDetails: string;
-  /** Optional handler function to notify the frontend when the error is copied */
-  handleCopyNotify?: () => void;
-  /** List of localized strings to localize the strings in this component */
-  localizedStrings: ErrorDumpLocalizedStrings;
-};
+type ErrorPopoverProps = PropsWithChildren & ErrorDumpProps;
+
 /**
  * @param errorDetails The error details to show in the error popover
  * @param handleCopyNotify Optional notification handler function to handle when the error is copied
  * @param localizedStrings List of localized strings to use in the ErrorDump component
+ *
+ * NOTE: The `ERROR_DUMP_STRING_KEYS` array will need to be imported from the `ErrorDump` component
+ * which contains a list of the localized strings that will need to be set to populate the
+ * `localizedStrings` parameter
  */
 export function ErrorPopover({
   errorDetails,

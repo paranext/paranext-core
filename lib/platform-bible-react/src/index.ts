@@ -17,6 +17,7 @@ export type {
   TableContents,
 } from './components/advanced/data-table/data-table.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
+export { ErrorPopover } from './components/advanced/error-popover.component';
 export {
   default as FilterDropdown,
   DropdownMenuItemType,
@@ -96,7 +97,6 @@ export {
   type LanguageInfo,
   type UiLanguageSelectorProps,
 } from './components/advanced/ui-language-selector.component';
-export { ErrorPopover } from './components/advanced/error-popover.component';
 
 export { default as ChapterRangeSelector } from './components/basics/chapter-range-selector.component';
 export type { ChapterRangeSelectorProps } from './components/basics/chapter-range-selector.component';
@@ -109,15 +109,15 @@ export type {
   ComboBoxOption,
 } from './components/basics/combo-box.component';
 
+export { ErrorDump } from './components/basics/error-dump.component';
+export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
+export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
 export type { SpinnerProps } from './components/basics/spinner.component';
 export { default as TextField } from './components/basics/text-field.component';
 export type { TextFieldProps } from './components/basics/text-field.component';
-export { ErrorDump } from './components/basics/error-dump.component';
-export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
-export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
 
 export { Alert, AlertTitle, AlertDescription } from './components/shadcn-ui/alert';
 export { Avatar, AvatarFallback, AvatarImage } from './components/shadcn-ui/avatar';

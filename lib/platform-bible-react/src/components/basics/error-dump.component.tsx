@@ -32,7 +32,7 @@ const localizeString = (
 };
 
 // Interface to store the parameters for the ErrorDump component
-interface ErrorDumpProps {
+export interface ErrorDumpProps {
   /** String containing the error details to show */
   errorDetails: string;
   /** Handler function to notify the frontend when the error is copied */
