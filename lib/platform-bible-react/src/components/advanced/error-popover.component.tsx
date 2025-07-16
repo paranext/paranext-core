@@ -10,9 +10,9 @@ type ErrorPopoverProps = PropsWithChildren & ErrorDumpProps;
  * @param handleCopyNotify Optional notification handler function to handle when the error is copied
  * @param localizedStrings List of localized strings to use in the ErrorDump component
  *
- * NOTE: The `ERROR_DUMP_STRING_KEYS` array will need to be imported from the `ErrorDump` component
- * which contains a list of the localized strings that will need to be set to populate the
- * `localizedStrings` parameter
+ *   NOTE: The `ERROR_DUMP_STRING_KEYS` array will need to be imported from the `ErrorDump` component
+ *   which contains a list of the localized strings that will need to be set to populate the
+ *   `localizedStrings` parameter
  */
 export function ErrorPopover({
   errorDetails,
