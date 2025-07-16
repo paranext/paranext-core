@@ -1,13 +1,19 @@
 import logo from '@assets/icon.png';
+import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
 import {
   useData,
   useDataProvider,
   useLocalizedStrings,
   useScrollGroupScrRef,
 } from '@renderer/hooks/papi-hooks';
+import { app } from '@renderer/services/papi-frontend.service';
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
+import { localThemeService } from '@renderer/services/theme.service-host';
+import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
 import { sendCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
+import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
 import { HomeIcon, Moon, Sun, User } from 'lucide-react';
 import {
   Badge,
@@ -32,12 +38,6 @@ import {
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { handleMenuCommand } from '@shared/data/platform-bible-menu.commands';
-import { app } from '@renderer/services/papi-frontend.service';
-import { themeServiceDataProviderName } from '@shared/services/theme.service-model';
-import { logger } from '@shared/services/logger.service';
-import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
-import { localThemeService } from '@renderer/services/theme.service-host';
 
 const TOOLTIP_DELAY = 300;
 
@@ -66,6 +66,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_change_to_dark%',
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
+  '%toolbar_feedback%',
 ];
 
 export function PlatformBibleToolbar() {

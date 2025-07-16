@@ -1,29 +1,31 @@
-import '@renderer/global-this.model';
+import { App } from '@renderer/app.component';
 import '@renderer/global-this-web-view.model';
-import { createRoot } from 'react-dom/client';
+import '@renderer/global-this.model';
+import { startDialogService } from '@renderer/services/dialog.service-host';
+import { startNotificationService } from '@renderer/services/notification.service-host';
+import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
+import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
+import {
+  initialize as initializeThemeService,
+  localThemeService,
+} from '@renderer/services/theme.service-host';
+import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
+import { startWebViewService } from '@renderer/services/web-view.service-host';
+import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { logger } from '@shared/services/logger.service';
+import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import { InitOptions, loadSpace } from '@usersnap/browser';
 import {
   applyThemeStylesheet,
   getErrorMessage,
   isPlatformError,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import * as networkService from '@shared/services/network.service';
-import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { startWebViewService } from '@renderer/services/web-view.service-host';
-import { logger } from '@shared/services/logger.service';
-import { webViewProviderService } from '@shared/services/web-view-provider.service';
-import { startDialogService } from '@renderer/services/dialog.service-host';
-import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
-import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
-import { startNotificationService } from '@renderer/services/notification.service-host';
-import {
-  initialize as initializeThemeService,
-  localThemeService,
-} from '@renderer/services/theme.service-host';
-import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
-import { App } from '@renderer/app.component';
-import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { createRoot } from 'react-dom/client';
+import { setUsersnapApi, USERSNAP_SPACE_API_KEY } from './services/usersnap.service';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -70,6 +72,29 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
   throw new Error(`${reasons}`);
 }
 
+async function initializeUsersnapApi() {
+  const defaultInitParams: InitOptions = {
+    enableScreenshot: true,
+    collectGeoLocation: 'none',
+    useSystemFonts: true,
+    useLocalStorage: true,
+    custom: {
+      platform: 'Electron',
+      app: 'Platform.Bible',
+      environment: globalThis.isNoisyDevModeEnabled ? 'development' : 'production',
+    },
+  };
+
+  const startTime = performance.now();
+  const api = await loadSpace(USERSNAP_SPACE_API_KEY);
+  await api.init(defaultInitParams);
+
+  const endTime = performance.now();
+  logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
+
+  setUsersnapApi(api);
+}
+
 // App-wide service setup
 // We are not awaiting these service startups for a few reasons:
 // - They internally await other services when they need others in order to start
@@ -84,6 +109,8 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
+
+    await initializeUsersnapApi();
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),

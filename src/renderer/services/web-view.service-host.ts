@@ -4,37 +4,17 @@
  * Don't expose this whole service on papi, just specific operations. The remaining exports are only
  * for services in the renderer to call.
  */
-import cloneDeep from 'lodash/cloneDeep';
 import {
-  AsyncVariable,
-  getStylesheetForTheme,
-  Unsubscriber,
-  deserialize,
-  serialize,
-  isString,
-  newGuid,
-  indexOf,
-  substring,
-  startsWith,
-  split,
-  THEME_STYLE_ELEMENT_ID,
-} from 'platform-bible-utils';
-import { newNonce } from '@shared/utils/util';
-import { createNetworkEventEmitter } from '@shared/services/network.service';
+  type SettingsTabData,
+  TAB_TYPE_SETTINGS_TAB,
+} from '@renderer/components/settings-tabs/settings-tab.component';
+import { localThemeService } from '@renderer/services/theme.service-host';
 import {
-  OpenWebViewOptions,
-  SavedWebViewDefinition,
-  WebViewDefinition,
-  WebViewDefinitionReact,
-  WebViewDefinitionUpdateInfo,
-  WebViewId,
-  WebViewType,
-  WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
-  SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
-  SavedWebViewDefinitionOmittedKeys,
-  WEB_VIEW_CONTENT_TYPE,
-  ReloadWebViewOptions,
-} from '@shared/models/web-view.model';
+  getFullWebViewStateById,
+  setFullWebViewStateById,
+} from '@renderer/services/web-view-state.service';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { LogError } from '@shared/log-error.model';
 import {
   Layout,
   OnLayoutChangeRCDock,
@@ -43,13 +23,26 @@ import {
   TabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import { webViewProviderService } from '@shared/services/web-view-provider.service';
-import { LayoutBase } from 'rc-dock';
-import { logger } from '@shared/services/logger.service';
-import { LogError } from '@shared/log-error.model';
-import memoizeOne from 'memoize-one';
 import {
-  OpenWebViewEvent,
+  OpenWebViewOptions,
+  ReloadWebViewOptions,
+  SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
+  SavedWebViewDefinition,
+  SavedWebViewDefinitionOmittedKeys,
+  WEB_VIEW_CONTENT_TYPE,
+  WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
+  WebViewDefinition,
+  WebViewDefinitionReact,
+  WebViewDefinitionUpdateInfo,
+  WebViewId,
+  WebViewType,
+} from '@shared/models/web-view.model';
+import { registerCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import { createNetworkEventEmitter } from '@shared/services/network.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import {
   CloseWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
@@ -57,22 +50,34 @@ import {
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  OpenWebViewEvent,
   UpdateWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
-import { networkObjectService } from '@shared/services/network-object.service';
-import {
-  getFullWebViewStateById,
-  setFullWebViewStateById,
-} from '@renderer/services/web-view-state.service';
-import { registerCommand } from '@shared/services/command.service';
+import { newNonce } from '@shared/utils/util';
+import cloneDeep from 'lodash/cloneDeep';
+import memoizeOne from 'memoize-one';
 import { CommandNames } from 'papi-shared-types';
 import {
-  type SettingsTabData,
-  TAB_TYPE_SETTINGS_TAB,
-} from '@renderer/components/settings-tabs/settings-tab.component';
-import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
-import { localThemeService } from '@renderer/services/theme.service-host';
+  AsyncVariable,
+  deserialize,
+  getStylesheetForTheme,
+  indexOf,
+  isString,
+  newGuid,
+  serialize,
+  split,
+  startsWith,
+  substring,
+  THEME_STYLE_ELEMENT_ID,
+  Unsubscriber,
+} from 'platform-bible-utils';
+import { LayoutBase } from 'rc-dock';
+import {
+  getUsersnapApi,
+  USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
+  USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
+} from './usersnap.service';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -938,6 +943,171 @@ onDidCloseWebView(({ webView: { id, webViewType } }) => {
 
 // #endregion
 
+// #region Initialization
+
+/** Whether this service has finished setting up */
+let isInitialized = false;
+
+/** Promise that resolves when this service is finished initializing */
+let initializePromise: Promise<void> | undefined;
+
+/**
+ * Async Variable that resolves when this service is finished initializing. If the service has not
+ * yet initialized, await this variable.
+ */
+let initializeAsyncVariable: AsyncVariable<void> | undefined;
+
+/**
+ * Wait for the web view service to finish initializing
+ *
+ * @returns Promise that resolves when this service is finished initializing
+ */
+export function waitForInitialize(): Promise<void> {
+  if (isInitialized) return Promise.resolve();
+
+  if (!initializeAsyncVariable) {
+    initializeAsyncVariable = new AsyncVariable<void>('web-view.service-host.initialize');
+  }
+
+  return initializeAsyncVariable.promise;
+}
+
+/** Sets up the WebViewService. Runs only once */
+export const initialize = () => {
+  if (initializePromise) return initializePromise;
+
+  initializePromise = (async (): Promise<void> => {
+    if (isInitialized) return;
+
+    // Set up subscriptions that the service needs to work
+
+    // We do not want iframes to be able to create their own iframes and scripts in the main window
+    // context so they cannot execute arbitrary scripts without sandboxing. This prevents them from
+    // showing modals, navigating to different pages, etc.
+    // These methods work as of July 2023
+
+    // Create a MutationObserver that watches the document for added iframes that do not have
+    // permission to be running and removes them before they execute any code.
+    const observer = new MutationObserver(removeForbiddenElements);
+    // We want the observer to watch for all elements added or removed in this document
+    // This does not pay attention to elements in iframes. They already have sandboxing, so there
+    // is no need
+    // We also want to watch the 'src' and 'srcdoc' attributes on iframes to catch forbidden
+    // iframes
+    // We don't need to watch the sandbox attribute to make sure it doesn't change because sandbox
+    // doesn't update unless an iframe is removed and added
+    // https://stackoverflow.com/a/16135502/8535752
+    observer.observe(document, {
+      subtree: true,
+      childList: true,
+      attributeFilter: ['src', 'srcdoc'],
+    });
+
+    // #region delete some things on `window` for a quick prevention for same-origin child iframes
+    // like HTML and React WebViews from doing things we don't want them to do
+    // We can change these to monkey patches with validation that they are coming from the
+    // renderer if we need them in the renderer or we can save out variables and use those
+
+    // Following are a number of deletions that correspond to various iframe sandbox values
+    // as noted in comments. HTML and React WebView iframes have access to these through
+    // `window.top` because they are on the same origin, so we must prevent access in addition to
+    // sandboxing
+
+    // Remove the ability to do presentations
+    // Corresponds to iframe sandbox `allow-presentation`
+    // `window.navigator` does not have a setter but is configurable, so we redefine the property
+    Object.defineProperty(window, 'navigator', {
+      writable: false,
+      value: new Proxy(globalThis.navigator, {
+        get(obj, prop) {
+          if (prop === 'presentation') return undefined;
+          // Get the property on the object - doesn't matter what it is
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          return obj[prop as keyof typeof obj];
+        },
+      }),
+    });
+
+    // Remove the ability to show modals
+    // Corresponds to iframe sandbox `allow-modals`
+    // @ts-expect-error we want to remove the ability to show modals
+    delete globalThis.alert;
+    // @ts-expect-error we want to remove the ability to show modals
+    delete globalThis.confirm;
+    // @ts-expect-error we want to remove the ability to show modals
+    delete globalThis.print;
+    // @ts-expect-error we want to remove the ability to show modals
+    delete globalThis.prompt;
+
+    // TODO: Remove the ability to change the screen orientation? https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock
+    // Corresponds to iframe sandbox `allow-orientation-lock`
+
+    // TODO: Remove the ability to lock the pointer? https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API
+    // Corresponds to iframe sandbox `allow-pointer-lock`
+
+    // Remove the ability to create popups
+    // Corresponds to iframe sandbox `allow-popups`
+    // @ts-expect-error we want to remove the ability to create popups
+    delete globalThis.open;
+    // @ts-expect-error we want to remove the ability to create popups
+    delete globalThis.showModalDialog;
+
+    // #endregion
+
+    // #region monkey patches on `window` to prevent same-origin child iframes like HTML and React
+    // WebViews from doing things we don't want them to do
+    // WARNING: calling these requires us to generate a call stack, so all of these things should
+    // be used as sparingly as possible since they are now less performant than usual
+
+    // Monkey-patch document.createElement so new script tags cannot be added by anything but our
+    // code (since we load renderer files in chunks)
+    const createElementOriginal = document.createElement.bind(document);
+    // If we name this function, we will need to change the regex testing the stack traces, and we
+    // may also have trouble with minifying production code. Leaving this function unnamed keeps
+    // things simpler
+    // eslint-disable-next-line func-names
+    document.createElement = function (...args: Parameters<Document['createElement']>) {
+      const [tagNameCaps] = args;
+
+      const tagNameLower = tagNameCaps.toLowerCase();
+
+      const tagName = tagNameLower === 'form' || tagNameLower === 'a' ? 'div' : tagNameLower;
+      if (FORBIDDEN_HTML_TAGS.includes(tagName) || RESTRICTED_HTML_TAGS.includes(tagName)) {
+        const stackTrace = Error().stack ?? '';
+        const isInRenderer = getRendererScriptRegex().test(stackTrace);
+
+        if (isInRenderer) {
+          logger.debug(
+            `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackTrace}`,
+          );
+        } else {
+          const message = `Rejected creating new ${tagName} tag on renderer document! Not allowed.\nStack: ${stackTrace}`;
+          // LogError puts an error in the console and throws an error. We don't want to scare
+          // anyone with the script and iframe tags evil adds to test this feature, so let's not
+          // log an error in development. But no exceptions when packaged
+          if (globalThis.isPackaged || !stackTrace.includes('at evil.web-view.html'))
+            throw new LogError(message);
+          throw new Error(message);
+        }
+      }
+      return createElementOriginal(...args);
+    };
+
+    // #endregion
+
+    isInitialized = true;
+
+    // Resolve the AsyncVariable to let any waiting code know initialization is complete
+    if (initializeAsyncVariable && !initializeAsyncVariable.hasSettled) {
+      initializeAsyncVariable.resolveToValue();
+    }
+  })();
+
+  return initializePromise;
+};
+
+// #endregion
+
 // #region Set up global variables to use in `openWebView`'s `imports` below
 
 globalThis.getSavedWebViewDefinitionById = getSavedWebViewDefinitionSync;
@@ -1339,6 +1509,8 @@ export const openWebView = async (
   layout: Layout = { type: 'tab' },
   options: OpenWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
+  await waitForInitialize();
+
   const optionsDefaulted = getWebViewOptionsDefaults(options);
 
   // Find existing webView if one exists and handle it if it does
@@ -1395,6 +1567,8 @@ export async function reloadWebView(
   webViewId: WebViewId,
   options: ReloadWebViewOptions = {},
 ): Promise<WebViewId | undefined> {
+  await waitForInitialize();
+
   const existingSavedWebView = await getOpenWebViewDefinition(webViewId);
   // If the web view is not found, return undefined
   if (!existingSavedWebView) return undefined;
@@ -1402,142 +1576,6 @@ export async function reloadWebView(
   // If the web view is found, open it again with the same ID
   return openOrReloadWebView(existingSavedWebView, undefined, getWebViewOptionsDefaults(options));
 }
-
-// #endregion
-
-// #region Initialization
-
-/** Whether this service has finished setting up */
-let isInitialized = false;
-
-/** Promise that resolves when this service is finished initializing */
-let initializePromise: Promise<void> | undefined;
-
-/** Sets up the WebViewService. Runs only once */
-export const initialize = () => {
-  if (initializePromise) return initializePromise;
-
-  initializePromise = (async (): Promise<void> => {
-    if (isInitialized) return;
-
-    // Set up subscriptions that the service needs to work
-
-    // We do not want iframes to be able to create their own iframes and scripts in the main window
-    // context so they cannot execute arbitrary scripts without sandboxing. This prevents them from
-    // showing modals, navigating to different pages, etc.
-    // These methods work as of July 2023
-
-    // Create a MutationObserver that watches the document for added iframes that do not have
-    // permission to be running and removes them before they execute any code.
-    const observer = new MutationObserver(removeForbiddenElements);
-    // We want the observer to watch for all elements added or removed in this document
-    // This does not pay attention to elements in iframes. They already have sandboxing, so there
-    // is no need
-    // We also want to watch the 'src' and 'srcdoc' attributes on iframes to catch forbidden
-    // iframes
-    // We don't need to watch the sandbox attribute to make sure it doesn't change because sandbox
-    // doesn't update unless an iframe is removed and added
-    // https://stackoverflow.com/a/16135502/8535752
-    observer.observe(document, {
-      subtree: true,
-      childList: true,
-      attributeFilter: ['src', 'srcdoc'],
-    });
-
-    // #region delete some things on `window` for a quick prevention for same-origin child iframes
-    // like HTML and React WebViews from doing things we don't want them to do
-    // We can change these to monkey patches with validation that they are coming from the
-    // renderer if we need them in the renderer or we can save out variables and use those
-
-    // Following are a number of deletions that correspond to various iframe sandbox values
-    // as noted in comments. HTML and React WebView iframes have access to these through
-    // `window.top` because they are on the same origin, so we must prevent access in addition to
-    // sandboxing
-
-    // Remove the ability to do presentations
-    // Corresponds to iframe sandbox `allow-presentation`
-    // `window.navigator` does not have a setter but is configurable, so we redefine the property
-    Object.defineProperty(window, 'navigator', {
-      writable: false,
-      value: new Proxy(globalThis.navigator, {
-        get(obj, prop) {
-          if (prop === 'presentation') return undefined;
-          // Get the property on the object - doesn't matter what it is
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          return obj[prop as keyof typeof obj];
-        },
-      }),
-    });
-
-    // Remove the ability to show modals
-    // Corresponds to iframe sandbox `allow-modals`
-    // @ts-expect-error we want to remove the ability to show modals
-    delete globalThis.alert;
-    // @ts-expect-error we want to remove the ability to show modals
-    delete globalThis.confirm;
-    // @ts-expect-error we want to remove the ability to show modals
-    delete globalThis.print;
-    // @ts-expect-error we want to remove the ability to show modals
-    delete globalThis.prompt;
-
-    // TODO: Remove the ability to change the screen orientation? https://developer.mozilla.org/en-US/docs/Web/API/ScreenOrientation/lock
-    // Corresponds to iframe sandbox `allow-orientation-lock`
-
-    // TODO: Remove the ability to lock the pointer? https://developer.mozilla.org/en-US/docs/Web/API/Pointer_Lock_API
-    // Corresponds to iframe sandbox `allow-pointer-lock`
-
-    // Remove the ability to create popups
-    // Corresponds to iframe sandbox `allow-popups`
-    // @ts-expect-error we want to remove the ability to create popups
-    delete globalThis.open;
-    // @ts-expect-error we want to remove the ability to create popups
-    delete globalThis.showModalDialog;
-
-    // #endregion
-
-    // #region monkey patches on `window` to prevent same-origin child iframes like HTML and React
-    // WebViews from doing things we don't want them to do
-    // WARNING: calling these requires us to generate a call stack, so all of these things should
-    // be used as sparingly as possible since they are now less performant than usual
-
-    // Monkey-patch document.createElement so new script tags cannot be added by anything but our
-    // code (since we load renderer files in chunks)
-    const createElementOriginal = document.createElement.bind(document);
-    // If we name this function, we will need to change the regex testing the stack traces, and we
-    // may also have trouble with minifying production code. Leaving this function unnamed keeps
-    // things simpler
-    // eslint-disable-next-line func-names
-    document.createElement = function (...args: Parameters<Document['createElement']>) {
-      const [tagNameCaps] = args;
-
-      const tagName = tagNameCaps.toLowerCase();
-      if (FORBIDDEN_HTML_TAGS.includes(tagName) || RESTRICTED_HTML_TAGS.includes(tagName)) {
-        const stackTrace = Error().stack ?? '';
-        const isInRenderer = getRendererScriptRegex().test(stackTrace);
-        if (isInRenderer) {
-          logger.debug(
-            `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackTrace}`,
-          );
-        } else {
-          const message = `Rejected creating new ${tagName} tag on renderer document! Not allowed.\nStack: ${stackTrace}`;
-          // LogError puts an error in the console and throws an error. We don't want to scare
-          // anyone with the script and iframe tags evil adds to test this feature, so let's not
-          // log an error in development. But no exceptions when packaged
-          if (globalThis.isPackaged || !stackTrace.includes('at evil.web-view.html'))
-            throw new LogError(message);
-          throw new Error(message);
-        }
-      }
-      return createElementOriginal(...args);
-    };
-
-    // #endregion
-
-    isInitialized = true;
-  })();
-
-  return initializePromise;
-};
 
 // #endregion
 
@@ -1574,6 +1612,18 @@ async function openSettingsTab(webViewId: WebViewId): Promise<Layout | undefined
   );
 }
 
+async function openUsersnapForm(apiKey: string) {
+  const usersnapApi = getUsersnapApi();
+  if (usersnapApi) {
+    try {
+      const widgetApi = await usersnapApi.show(apiKey);
+      await widgetApi.open();
+    } catch (error) {
+      logger.warn(`Failed to open Usersnap widget: ${error}`);
+    }
+  }
+}
+
 /** Register the network object that backs the PAPI webview service */
 // To use this service, you should use `web-view.service.ts`
 export async function startWebViewService(): Promise<void> {
@@ -1589,6 +1639,8 @@ export async function startWebViewService(): Promise<void> {
     'platform.openSettings': openSettingsTab,
     'platform.openProjectSettings': openSettingsTab,
     'platform.openUserSettings': openSettingsTab,
+    'platform.usersnapSubmitIdea': () => openUsersnapForm(USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY),
+    'platform.usersnapReportIssue': () => openUsersnapForm(USERSNAP_PROJECT_REPORT_ISSUE_API_KEY),
   };
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {
