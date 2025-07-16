@@ -48,10 +48,8 @@ import {
 import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import {
-  ElevatedPrivilegeNames,
-  ElevatedPrivileges,
-} from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privilege-names.model';
 import { generateHashFromBuffer } from '@node/utils/crypto-util';
 import {
   ExtensionIdentifier,
@@ -79,6 +77,14 @@ import { appService } from '@shared/services/app.service';
 // Used in JSDoc
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AppInfo } from '@shared/services/app.service-model';
+import {
+  EXTENSION_MANIFEST_FILE_NAME,
+  getExtensionUri,
+  readExtensionDataFromFolder,
+  readExtensionDataFromZip,
+} from '@extension-host/utils/extension-data.util';
+import { FullExtensionData } from '@shared/models/full-extension-data.model';
+import { ExtensionInfo } from '@extension-host/extension-types/extension-info.model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
@@ -95,21 +101,6 @@ const TEST_EXTENSION_NAMES = [
   'helloRock3',
   'quickVerse',
 ];
-
-/**
- * Information about an extension and extra metadata about it that we generate
- *
- * This is a transformed and frozen version of the extension's {@link ExtensionManifest}
- */
-type ExtensionInfo = Readonly<
-  ExtensionManifest & {
-    /**
-     * Uri to this extension's directory. Not provided in actual manifest, but added while parsing
-     * the manifest
-     */
-    dirUri: Uri;
-  }
->;
 
 /** Information about an active extension */
 type ActiveExtension = {
@@ -146,12 +137,6 @@ type ExtensionKey = `${string}.${string}`;
 type PublisherIdentifier = {
   publisherName?: string;
 };
-
-/**
- * Name of the file describing the extension and its capabilities. Provided by the extension
- * developer
- */
-const MANIFEST_FILE_NAME = 'manifest.json';
 
 /** List of all forbidden extension names. Extensions with these names will not work */
 const FORBIDDEN_EXTENSION_NAMES = ['', PLATFORM_NAMESPACE];
@@ -373,8 +358,8 @@ async function getExtensionUrisToLoad(): Promise<Uri[]> {
   // filter out files
   const extensionFolderPromises = commandLineExtensionDirectories
     .map((extensionDirPath) => {
-      const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
-        ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+      const extensionFolder = extensionDirPath.endsWith(EXTENSION_MANIFEST_FILE_NAME)
+        ? extensionDirPath.slice(0, -EXTENSION_MANIFEST_FILE_NAME.length)
         : extensionDirPath;
       return extensionFolder;
     })
@@ -431,7 +416,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
         logger.warn(`Invalid extension ZIP file entry in "${zipUri}": ${fileName}`);
         zipEntriesInProperDirectory = false;
       }
-      if (parsedPath.base === MANIFEST_FILE_NAME) foundManifestFile = true;
+      if (parsedPath.base === EXTENSION_MANIFEST_FILE_NAME) foundManifestFile = true;
     }),
   );
   if (!zipEntriesInProperDirectory) return;
@@ -485,7 +470,7 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
       extensionUris.map(async (extensionUri) => {
         try {
           const extensionManifestJson = await nodeFS.readFileText(
-            joinUriPaths(extensionUri, MANIFEST_FILE_NAME),
+            joinUriPaths(extensionUri, EXTENSION_MANIFEST_FILE_NAME),
           );
           // Assert the return type after freeze.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -723,15 +708,6 @@ function watchForExtensionChanges(): UnsubscriberAsync {
 }
 
 /**
- * Returns a URI we can use with `nodeFS` calls that is an expected filename given a base URI,
- * extension name, and extension version. This is not that useful for packaged extensions but is
- * important for all other extensions, both enabled and disabled.
- */
-function getExtensionUri(baseUri: string, extensionName: string, extensionVersion: string): string {
-  return `${baseUri}/${extensionName}_${extensionVersion}.zip`;
-}
-
-/**
  * Provides extension identifier information based on extension ZIP files names given the naming
  * convention used in {@link getExtensionUri}
  */
@@ -752,7 +728,7 @@ async function extractExtensionDetailsFromZip(
   zipData: Buffer,
 ): Promise<ExtensionIdentifier & PublisherIdentifier> {
   const zip: JSZip = await JSZip.loadAsync(zipData);
-  const zippedManifest = zip.file(MANIFEST_FILE_NAME);
+  const zippedManifest = zip.file(EXTENSION_MANIFEST_FILE_NAME);
   if (!zippedManifest) throw new Error('no manifest file found in ZIP data');
   // Assert the extracted manifest.json data as the associated type
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -925,6 +901,46 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
   };
 }
 
+async function getExtensionsData(extensions: ExtensionIdentifier[]): Promise<FullExtensionData[]> {
+  const extensionsData = await Promise.all(
+    extensions.map(async (extensionId) => {
+      // First checks to see if the extension is an available extension
+      const availableExtension = availableExtensions.find(
+        (extension) => extension.name === extensionId.extensionName,
+      );
+
+      // If the extension is available then reads the files from the extension folder
+      if (availableExtension) {
+        return readExtensionDataFromFolder(
+          availableExtension,
+          disabledExtensionsUri,
+          installedExtensionsUri,
+        );
+      }
+
+      // Otherwise gets it from the zipped file in the disabled extensions folder if it exists
+      const extensionUri = getExtensionUri(
+        disabledExtensionsUri,
+        extensionId.extensionName,
+        extensionId.extensionVersion,
+      );
+
+      if (await nodeFS.getStats(extensionUri)) {
+        return readExtensionDataFromZip(
+          extensionUri,
+          disabledExtensionsUri,
+          installedExtensionsUri,
+        );
+      }
+
+      // Need to be able to return something so returns undefined filtered out in the later lines
+      // eslint-disable-next-line no-else-return
+      return undefined;
+    }),
+  );
+  return extensionsData.filter((value) => !!value);
+}
+
 // #endregion
 
 // #region Extension URI handling privileges
@@ -1025,6 +1041,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
       enableExtension,
       disableExtension,
       getInstalledExtensions,
+      getExtensionsData,
     };
     Object.freeze(manageExtensions);
     retVal.manageExtensions = manageExtensions;

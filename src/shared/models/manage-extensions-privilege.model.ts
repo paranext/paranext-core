@@ -1,3 +1,5 @@
+import { FullExtensionData } from './full-extension-data.model';
+
 /** Base64 encoded hash values */
 export type HashValues = Partial<{
   sha256: string;
@@ -71,6 +73,11 @@ export type DisableExtensionFunction = (extensionIdentifier: ExtensionIdentifier
 /** Get extension identifiers of all extensions on the system */
 export type GetInstalledExtensionsFunction = () => Promise<InstalledExtensions>;
 
+/** Get full extension data for a specified list of extensions */
+export type GetExtensionsDataFunction = (
+  extensionIds: ExtensionIdentifier[],
+) => Promise<FullExtensionData[]>;
+
 /** Functions needed to manage extensions */
 export type ManageExtensions = {
   /** Function to download an extension and enable it */
@@ -81,4 +88,9 @@ export type ManageExtensions = {
   disableExtension: DisableExtensionFunction;
   /** Function to retrieve details about all installed extensions */
   getInstalledExtensions: GetInstalledExtensionsFunction;
+  /**
+   * Function to retrieve descriptive metadata and visualization data for an extension. Useful for
+   * the extension marketplace.
+   */
+  getExtensionsData: GetExtensionsDataFunction;
 };
