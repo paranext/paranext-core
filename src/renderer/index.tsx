@@ -1,29 +1,33 @@
-import '@renderer/global-this.model';
+// Keep these imports at the top of the file, because they have side effects that are important to
+// be run first because they set up global variables that could be used anywhere
 import '@renderer/global-this-web-view.model';
-import { createRoot } from 'react-dom/client';
+import '@renderer/global-this.model';
+
+import { App } from '@renderer/app.component';
+import { startDialogService } from '@renderer/services/dialog.service-host';
+import { startNotificationService } from '@renderer/services/notification.service-host';
+import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
+import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
+import {
+  initialize as initializeThemeService,
+  localThemeService,
+} from '@renderer/services/theme.service-host';
+import { initializeUsersnapApi } from '@renderer/services/usersnap.service';
+import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
+import { startWebViewService } from '@renderer/services/web-view.service-host';
+import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { logger } from '@shared/services/logger.service';
+import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
 import {
   applyThemeStylesheet,
   getErrorMessage,
   isPlatformError,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import * as networkService from '@shared/services/network.service';
-import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { startWebViewService } from '@renderer/services/web-view.service-host';
-import { logger } from '@shared/services/logger.service';
-import { webViewProviderService } from '@shared/services/web-view-provider.service';
-import { startDialogService } from '@renderer/services/dialog.service-host';
-import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
-import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
-import { startNotificationService } from '@renderer/services/notification.service-host';
-import {
-  initialize as initializeThemeService,
-  localThemeService,
-} from '@renderer/services/theme.service-host';
-import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
-import { App } from '@renderer/app.component';
-import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { createRoot } from 'react-dom/client';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -84,6 +88,10 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
+
+    // This needs to run before the web view service host starts running and blocks us from creating
+    // an iframe for the Usersnap feedback forms
+    await initializeUsersnapApi();
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),
