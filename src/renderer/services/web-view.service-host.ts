@@ -4,37 +4,17 @@
  * Don't expose this whole service on papi, just specific operations. The remaining exports are only
  * for services in the renderer to call.
  */
-import cloneDeep from 'lodash/cloneDeep';
 import {
-  AsyncVariable,
-  getStylesheetForTheme,
-  Unsubscriber,
-  deserialize,
-  serialize,
-  isString,
-  newGuid,
-  indexOf,
-  substring,
-  startsWith,
-  split,
-  THEME_STYLE_ELEMENT_ID,
-} from 'platform-bible-utils';
-import { newNonce } from '@shared/utils/util';
-import { createNetworkEventEmitter } from '@shared/services/network.service';
+  type SettingsTabData,
+  TAB_TYPE_SETTINGS_TAB,
+} from '@renderer/components/settings-tabs/settings-tab.component';
+import { localThemeService } from '@renderer/services/theme.service-host';
 import {
-  OpenWebViewOptions,
-  SavedWebViewDefinition,
-  WebViewDefinition,
-  WebViewDefinitionReact,
-  WebViewDefinitionUpdateInfo,
-  WebViewId,
-  WebViewType,
-  WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
-  SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
-  SavedWebViewDefinitionOmittedKeys,
-  WEB_VIEW_CONTENT_TYPE,
-  ReloadWebViewOptions,
-} from '@shared/models/web-view.model';
+  getFullWebViewStateById,
+  setFullWebViewStateById,
+} from '@renderer/services/web-view-state.service';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { LogError } from '@shared/log-error.model';
 import {
   Layout,
   OnLayoutChangeRCDock,
@@ -43,13 +23,26 @@ import {
   TabInfo,
   WebViewTabProps,
 } from '@shared/models/docking-framework.model';
-import { webViewProviderService } from '@shared/services/web-view-provider.service';
-import { LayoutBase } from 'rc-dock';
-import { logger } from '@shared/services/logger.service';
-import { LogError } from '@shared/log-error.model';
-import memoizeOne from 'memoize-one';
 import {
-  OpenWebViewEvent,
+  OpenWebViewOptions,
+  ReloadWebViewOptions,
+  SAVED_WEBVIEW_DEFINITION_OMITTED_KEYS,
+  SavedWebViewDefinition,
+  SavedWebViewDefinitionOmittedKeys,
+  WEB_VIEW_CONTENT_TYPE,
+  WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS,
+  WebViewDefinition,
+  WebViewDefinitionReact,
+  WebViewDefinitionUpdateInfo,
+  WebViewId,
+  WebViewType,
+} from '@shared/models/web-view.model';
+import { registerCommand } from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import { createNetworkEventEmitter } from '@shared/services/network.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import {
   CloseWebViewEvent,
   EVENT_NAME_ON_DID_ADD_WEB_VIEW,
   EVENT_NAME_ON_DID_CLOSE_WEB_VIEW,
@@ -57,22 +50,36 @@ import {
   EVENT_NAME_ON_DID_UPDATE_WEB_VIEW,
   getWebViewController,
   NETWORK_OBJECT_NAME_WEB_VIEW_SERVICE,
+  OpenWebViewEvent,
   UpdateWebViewEvent,
   WebViewServiceType,
 } from '@shared/services/web-view.service-model';
-import { networkObjectService } from '@shared/services/network-object.service';
-import {
-  getFullWebViewStateById,
-  setFullWebViewStateById,
-} from '@renderer/services/web-view-state.service';
-import { registerCommand } from '@shared/services/command.service';
+import { newNonce } from '@shared/utils/util';
+import cloneDeep from 'lodash/cloneDeep';
+import memoizeOne from 'memoize-one';
 import { CommandNames } from 'papi-shared-types';
 import {
-  type SettingsTabData,
-  TAB_TYPE_SETTINGS_TAB,
-} from '@renderer/components/settings-tabs/settings-tab.component';
-import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
-import { localThemeService } from '@renderer/services/theme.service-host';
+  AsyncVariable,
+  deserialize,
+  getStylesheetForTheme,
+  indexOf,
+  isString,
+  newGuid,
+  serialize,
+  split,
+  startsWith,
+  substring,
+  THEME_STYLE_ELEMENT_ID,
+  Unsubscriber,
+} from 'platform-bible-utils';
+import { LayoutBase } from 'rc-dock';
+import {
+  closeOpenUsersnapForm,
+  isUsersnapFormCurrentlyOpen,
+  openUsersnapForm,
+  USERSNAP_PROJECT_REPORT_ISSUE_API_KEY,
+  USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY,
+} from './usersnap.service';
 
 /**
  * @deprecated 13 November 2024. Changed to {@link onDidOpenWebViewEmitter}. This remains for now to
@@ -302,6 +309,31 @@ const getRendererScriptRegex = memoizeOne(() =>
   globalThis.isPackaged
     ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)/
     : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/,
+);
+/**
+ * Get Regex to test stack traces against for rendering Usersnap feedback forms on the renderer
+ * document. Only Usersnap is allowed to create form and anchor tags. forms and anchor tags coming
+ * from any other source throw an error.
+ *
+ * Note that sourceURLs can't have spaces in them, so we explicitly test for a space before the
+ * source so bad actors can't put these special words into their sourceURL
+ */
+/* In development, safe errors look like this:
+Error
+	at document.createElement (http://localhost/renderer.dev.js...)
+	at Kl (https://resources.usersnap.com/widget-assets/js/chunks/6057/cf91460f62d8c495661e.js...)
+  ...
+*/
+/* In production, safe errors look like this:
+Error
+	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/renderer.js...)
+	at Kl (https://resources.usersnap.com/widget-assets/js/chunks/6057/cf91460f62d8c495661e.js...)
+  ...
+*/
+const getRendererUsersnapRegex = memoizeOne(() =>
+  globalThis.isPackaged
+    ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(https?:\/\/resources\.usersnap\.com\/widget-assets\/js\/chunks\/\d+\/\w+\.js\S*\)/
+    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/resources\.usersnap\.com\/widget-assets\/js\/chunks\/\d+\/\w+\.js\S*\)/,
 );
 /**
  * The HTML tags that are not allowed at all in the main renderer window. Our MutationObserver
@@ -1339,6 +1371,8 @@ export const openWebView = async (
   layout: Layout = { type: 'tab' },
   options: OpenWebViewOptions = {},
 ): Promise<WebViewId | undefined> => {
+  await waitForInitialize();
+
   const optionsDefaulted = getWebViewOptionsDefaults(options);
 
   // Find existing webView if one exists and handle it if it does
@@ -1395,6 +1429,8 @@ export async function reloadWebView(
   webViewId: WebViewId,
   options: ReloadWebViewOptions = {},
 ): Promise<WebViewId | undefined> {
+  await waitForInitialize();
+
   const existingSavedWebView = await getOpenWebViewDefinition(webViewId);
   // If the web view is not found, return undefined
   if (!existingSavedWebView) return undefined;
@@ -1412,6 +1448,27 @@ let isInitialized = false;
 
 /** Promise that resolves when this service is finished initializing */
 let initializePromise: Promise<void> | undefined;
+
+/**
+ * Async Variable that resolves when this service is finished initializing. If the service has not
+ * yet initialized, await this variable.
+ */
+let initializeAsyncVariable: AsyncVariable<void> | undefined;
+
+/**
+ * Wait for the web view service to finish initializing
+ *
+ * @returns Promise that resolves when this service is finished initializing
+ */
+export function waitForInitialize(): Promise<void> {
+  if (isInitialized) return Promise.resolve();
+
+  if (!initializeAsyncVariable) {
+    initializeAsyncVariable = new AsyncVariable<void>('web-view.service-host.initialize');
+  }
+
+  return initializeAsyncVariable.promise;
+}
 
 /** Sets up the WebViewService. Runs only once */
 export const initialize = () => {
@@ -1513,8 +1570,10 @@ export const initialize = () => {
       const tagName = tagNameCaps.toLowerCase();
       if (FORBIDDEN_HTML_TAGS.includes(tagName) || RESTRICTED_HTML_TAGS.includes(tagName)) {
         const stackTrace = Error().stack ?? '';
-        const isInRenderer = getRendererScriptRegex().test(stackTrace);
-        if (isInRenderer) {
+        if (
+          getRendererScriptRegex().test(stackTrace) ||
+          getRendererUsersnapRegex().test(stackTrace)
+        ) {
           logger.debug(
             `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackTrace}`,
           );
@@ -1534,6 +1593,11 @@ export const initialize = () => {
     // #endregion
 
     isInitialized = true;
+
+    // Resolve the AsyncVariable to let any waiting code know initialization is complete
+    if (initializeAsyncVariable && !initializeAsyncVariable.hasSettled) {
+      initializeAsyncVariable.resolveToValue();
+    }
   })();
 
   return initializePromise;
@@ -1589,6 +1653,10 @@ export async function startWebViewService(): Promise<void> {
     'platform.openSettings': openSettingsTab,
     'platform.openProjectSettings': openSettingsTab,
     'platform.openUserSettings': openSettingsTab,
+    'platform.usersnapSubmitIdea': () => openUsersnapForm(USERSNAP_PROJECT_SUBMIT_IDEA_API_KEY),
+    'platform.usersnapReportIssue': () => openUsersnapForm(USERSNAP_PROJECT_REPORT_ISSUE_API_KEY),
+    'platform.isUsersnapFormCurrentlyOpen': () => isUsersnapFormCurrentlyOpen(),
+    'platform.closeOpenUsersnapForm': () => closeOpenUsersnapForm(),
   };
 
   Object.entries(commandHandlers).forEach(([commandName, handler]) => {

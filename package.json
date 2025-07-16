@@ -165,6 +165,7 @@
     "@types/ws": "^8.5.14",
     "@typescript-eslint/eslint-plugin": "^6.21.0",
     "@typescript-eslint/parser": "^6.21.0",
+    "@usersnap/browser": "^1.0.2",
     "browserslist": "^4.25.0",
     "browserslist-config-detect-electron": "file:./lib/browserslist-config-detect-electron",
     "concurrently": "^9.1.2",
