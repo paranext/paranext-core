@@ -276,7 +276,7 @@ interface ErrorDumpProps {
 export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
 type ErrorPopoverProps = React$1.PropsWithChildren & ErrorDumpProps & {
 	/** Optional CSS classes to insert into the `PopoverContent` */
-	className: string;
+	className?: string;
 };
 /**
  * @param errorDetails The error details to show in the error popover
