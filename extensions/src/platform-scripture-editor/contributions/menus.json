@@ -11,7 +11,8 @@
         "columns": {
           "platformScriptureEditor.edit": {
             "label": "%webView_platformScriptureEditor_edit%",
-            "order": 2
+            "order": 2,
+            "isExtensible": true
           },
           "platformScriptureEditor.options": {
             "label": "%webView_platformScriptureEditor_options%",
