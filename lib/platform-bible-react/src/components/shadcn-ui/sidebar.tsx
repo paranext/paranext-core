@@ -17,6 +17,12 @@ import { cn } from '@/utils/shadcn-ui.util';
 import { Direction, readDirection } from '@/utils/dir-helper.util';
 
 /**
+ * Sidebar components providing an accessible sidebar along with all the sub components that can be
+ * used to populate and style it. These components are adapted from Shadcn UI. See Shadcn UI
+ * Documentation: https://ui.shadcn.com/docs/components/sidebar
+ */
+
+/**
  * CUSTOM: Changes from the original code from Shadcn- Removed uses of useIsMobile, Sheet, and
  * SheetContent. Also removed the parts setting COOKIES.
  */

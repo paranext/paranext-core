@@ -1647,6 +1647,79 @@ export declare const SelectSeparator: React$1.ForwardRefExoticComponent<Omit<Sel
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/separator}
  */
 export declare const Separator: React$1.ForwardRefExoticComponent<Omit<SeparatorPrimitive.SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Tooltip */
+export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProviderProps>;
+/**
+ * Tooltip components provide a popover that displays information related to an element when hovered
+ * or focused. These components are built on Radix UI primitives and styled with Shadcn UI. See
+ * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tooltip See Radix UI
+ * Documentation: https://www.radix-ui.com/primitives/docs/components/tooltip
+ */
+export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
+/** @inheritdoc Tooltip */
+export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Tooltip */
+export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+type Side = "primary" | "secondary";
+type SidebarContextProps = {
+	state: "expanded" | "collapsed";
+	open: boolean;
+	setOpen: (open: boolean) => void;
+	toggleSidebar: () => void;
+	side: Side;
+};
+export declare function useSidebar(): SidebarContextProps;
+export declare const SidebarProvider: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLDivElement> & React$1.HTMLAttributes<HTMLDivElement> & {
+	defaultOpen?: boolean;
+	open?: boolean;
+	onOpenChange?: (open: boolean) => void;
+	side?: Side;
+}, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const Sidebar: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLDivElement> & React$1.HTMLAttributes<HTMLDivElement> & {
+	variant?: "sidebar" | "floating" | "inset";
+	collapsible?: "offcanvas" | "icon" | "none";
+}, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarTrigger: React$1.ForwardRefExoticComponent<Omit<ButtonProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const SidebarRail: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.ButtonHTMLAttributes<HTMLButtonElement>, HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const SidebarInset: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLElement>, HTMLElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarInput: React$1.ForwardRefExoticComponent<Omit<InputProps & React$1.RefAttributes<HTMLInputElement>, "ref"> & React$1.RefAttributes<HTMLInputElement>>;
+export declare const SidebarHeader: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarFooter: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarSeparator: React$1.ForwardRefExoticComponent<Omit<Omit<import("@radix-ui/react-separator").SeparatorProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarContent: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarGroup: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarGroupLabel: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLDivElement> & React$1.HTMLAttributes<HTMLDivElement> & {
+	asChild?: boolean;
+}, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarGroupAction: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLButtonElement> & React$1.ButtonHTMLAttributes<HTMLButtonElement> & {
+	asChild?: boolean;
+}, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const SidebarGroupContent: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarMenu: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLUListElement>, HTMLUListElement>, "ref"> & React$1.RefAttributes<HTMLUListElement>>;
+export declare const SidebarMenuItem: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.LiHTMLAttributes<HTMLLIElement>, HTMLLIElement>, "ref"> & React$1.RefAttributes<HTMLLIElement>>;
+export declare const SidebarMenuButton: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLButtonElement> & React$1.ButtonHTMLAttributes<HTMLButtonElement> & {
+	asChild?: boolean;
+	isActive?: boolean;
+	tooltip?: string | React$1.ComponentProps<typeof TooltipContent>;
+} & VariantProps<(props?: ({
+	variant?: "default" | "outline" | null | undefined;
+	size?: "default" | "sm" | "lg" | null | undefined;
+} & ClassProp) | undefined) => string>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const SidebarMenuAction: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLButtonElement> & React$1.ButtonHTMLAttributes<HTMLButtonElement> & {
+	asChild?: boolean;
+	showOnHover?: boolean;
+}, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+export declare const SidebarMenuBadge: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarMenuSkeleton: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLDivElement> & React$1.HTMLAttributes<HTMLDivElement> & {
+	showIcon?: boolean;
+}, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const SidebarMenuSub: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLUListElement>, HTMLUListElement>, "ref"> & React$1.RefAttributes<HTMLUListElement>>;
+export declare const SidebarMenuSubItem: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.LiHTMLAttributes<HTMLLIElement>, HTMLLIElement>, "ref"> & React$1.RefAttributes<HTMLLIElement>>;
+export declare const SidebarMenuSubButton: React$1.ForwardRefExoticComponent<Omit<React$1.ClassAttributes<HTMLAnchorElement> & React$1.AnchorHTMLAttributes<HTMLAnchorElement> & {
+	asChild?: boolean;
+	size?: "sm" | "md";
+	isActive?: boolean;
+}, "ref"> & React$1.RefAttributes<HTMLAnchorElement>>;
 type SonnerProps = React$1.ComponentProps<typeof Toaster>;
 /**
  * The Sonner component is an opinionated toast component for React. It is built on Sonner and
@@ -1758,19 +1831,6 @@ export declare const ToggleGroupItem: React$1.ForwardRefExoticComponent<Omit<Tog
 	variant?: "default" | "outline" | null | undefined;
 	size?: "default" | "sm" | "lg" | null | undefined;
 } & ClassProp) | undefined) => string> & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Tooltip */
-export declare const TooltipProvider: React$1.FC<TooltipPrimitive.TooltipProviderProps>;
-/**
- * Tooltip components provide a popover that displays information related to an element when hovered
- * or focused. These components are built on Radix UI primitives and styled with Shadcn UI. See
- * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/tooltip See Radix UI
- * Documentation: https://www.radix-ui.com/primitives/docs/components/tooltip
- */
-export declare const Tooltip: React$1.FC<TooltipPrimitive.TooltipProps>;
-/** @inheritdoc Tooltip */
-export declare const TooltipTrigger: React$1.ForwardRefExoticComponent<TooltipPrimitive.TooltipTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
-/** @inheritdoc Tooltip */
-export declare const TooltipContent: React$1.ForwardRefExoticComponent<Omit<TooltipPrimitive.TooltipContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Adds an event handler to an event so the event handler runs when the event is emitted. Use
  * `papi.network.getNetworkEvent` to use a networked event with this hook.
