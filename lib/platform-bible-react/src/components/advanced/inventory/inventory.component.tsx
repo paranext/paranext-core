@@ -223,12 +223,12 @@ export function Inventory({
   setVerseRef,
   localizedStrings,
 
-       additionalItemsLabels,
+  additionalItemsLabels,
   approvedItems,
 
   unapprovedItems,
 
-     scope,
+  scope,
   onScopeChange,
   columns,
 }: InventoryProps) {
