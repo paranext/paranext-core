@@ -94,7 +94,7 @@ export function DictionaryEntryDisplay({
   onClickScrollToTop,
 }: DictionaryEntryDisplayProps) {
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
-  const [selectedSense, setSelectedSense] = useState<Sense | undefined>(undefined);
+  const [selectedSense, setSelectedSense] = useState<Sense | undefined>();
   const [selectedSenseIndex, setSelectedSenseIndex] = useState<number | undefined>();
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
 
@@ -170,15 +170,11 @@ export function DictionaryEntryDisplay({
     if (sensesFlat.length === 1) {
       setSelectedSense(sensesFlat[0]);
       setSelectedSenseIndex(1);
+    } else {
+      setSelectedSense(undefined);
+      setSelectedSenseIndex(undefined);
     }
-  }, [
-    dictionaryEntry,
-    handleBackToListButton,
-    isDrawer,
-    localizedStrings,
-    selectedSense,
-    sensesFilteredByScrRef,
-  ]);
+  }, [sensesFilteredByScrRef, dictionaryEntry]);
 
   return (
     <div>
