@@ -257,6 +257,10 @@ export type DropdownItem = {
 	itemType: DropdownMenuItemType;
 	/** The onClick function is called when the item is clicked. */
 	onClick: () => void;
+	/** For checkbox items: whether the item is checked */
+	checked?: boolean;
+	/** For radio items: the value of this radio item */
+	value?: string;
 };
 export type DropdownGroup = {
 	/**
@@ -266,6 +270,10 @@ export type DropdownGroup = {
 	label: string;
 	/** The items array contains the items that will be displayed in the dropdown group */
 	items: DropdownItem[];
+	/** For radio groups: the currently selected value */
+	radioValue?: string;
+	/** For radio groups: callback when radio selection changes */
+	onRadioValueChange?: (value: string) => void;
 };
 type FilterDropdownProps = {
 	/** Object unique identifier */

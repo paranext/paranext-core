@@ -6,6 +6,7 @@ import {
   DropdownMenuGroup,
   DropdownMenuCheckboxItem,
   DropdownMenuRadioItem,
+  DropdownMenuRadioGroup,
   DropdownMenuSeparator,
 } from '@/components/shadcn-ui/dropdown-menu';
 import { Button } from '@/components/shadcn-ui/button';
@@ -24,6 +25,10 @@ export type DropdownItem = {
   itemType: DropdownMenuItemType;
   /** The onClick function is called when the item is clicked. */
   onClick: () => void;
+  /** For checkbox items: whether the item is checked */
+  checked?: boolean;
+  /** For radio items: the value of this radio item */
+  value?: string;
 };
 
 export type DropdownGroup = {
@@ -34,6 +39,10 @@ export type DropdownGroup = {
   label: string;
   /** The items array contains the items that will be displayed in the dropdown group */
   items: DropdownItem[];
+  /** For radio groups: the currently selected value */
+  radioValue?: string;
+  /** For radio groups: callback when radio selection changes */
+  onRadioValueChange?: (value: string) => void;
 };
 
 export type FilterDropdownProps = {
@@ -53,6 +62,63 @@ export type FilterDropdownProps = {
  * @returns A filter dropdown.
  */
 export function FilterDropdown({ id, label, groups }: FilterDropdownProps) {
+  const renderGroupItems = (group: DropdownGroup) => {
+    // Check if all items in the group are the same type
+    const hasRadioItems = group.items.some((item) => item.itemType === DropdownMenuItemType.Radio);
+    const hasCheckboxItems = group.items.some(
+      (item) => item.itemType === DropdownMenuItemType.Check,
+    );
+
+    // If mixing types, render in a regular group (not recommended but supported)
+    if (hasRadioItems && hasCheckboxItems) {
+      return (
+        <DropdownMenuGroup>
+          {group.items.map((item) => (
+            <div key={item.label}>
+              {item.itemType === DropdownMenuItemType.Check ? (
+                <DropdownMenuCheckboxItem checked={item.checked} onClick={item.onClick}>
+                  {item.label}
+                </DropdownMenuCheckboxItem>
+              ) : (
+                <DropdownMenuRadioItem onClick={item.onClick} value={item.value || item.label}>
+                  {item.label}
+                </DropdownMenuRadioItem>
+              )}
+            </div>
+          ))}
+        </DropdownMenuGroup>
+      );
+    }
+
+    // If all items are radio items, use RadioGroup
+    if (hasRadioItems) {
+      return (
+        <DropdownMenuRadioGroup value={group.radioValue} onValueChange={group.onRadioValueChange}>
+          {group.items.map((item) => (
+            <DropdownMenuRadioItem
+              key={item.label}
+              value={item.value || item.label}
+              onClick={item.onClick}
+            >
+              {item.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      );
+    }
+
+    // If all items are checkbox items, use regular group
+    return (
+      <DropdownMenuGroup>
+        {group.items.map((item) => (
+          <DropdownMenuCheckboxItem key={item.label} checked={item.checked} onClick={item.onClick}>
+            {item.label}
+          </DropdownMenuCheckboxItem>
+        ))}
+      </DropdownMenuGroup>
+    );
+  };
+
   return (
     <div id={id}>
       {/* TODO: remove this once the DropDown Menu shadcn has an id prop */}
@@ -65,25 +131,11 @@ export function FilterDropdown({ id, label, groups }: FilterDropdownProps) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent>
-          {groups.map((group) => (
+          {groups.map((group, index) => (
             <div key={group.label}>
               <DropdownMenuLabel>{group.label}</DropdownMenuLabel>
-              <DropdownMenuGroup>
-                {group.items.map((item) => (
-                  <div key={item.label}>
-                    {item.itemType === DropdownMenuItemType.Check ? (
-                      <DropdownMenuCheckboxItem onClick={item.onClick}>
-                        {item.label}
-                      </DropdownMenuCheckboxItem>
-                    ) : (
-                      <DropdownMenuRadioItem onClick={item.onClick} value={item.label}>
-                        {item.label}
-                      </DropdownMenuRadioItem>
-                    )}
-                  </div>
-                ))}
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
+              {renderGroupItems(group)}
+              {index < groups.length - 1 && <DropdownMenuSeparator />}
             </div>
           ))}
         </DropdownMenuContent>
