@@ -9,6 +9,8 @@
       "%platformLexicalTools_dictionary_noResults%": "No results",
       "%platformLexicalTools_dictionary_occurrencesInChapterLabel%": "Occurrences in chapter",
       "%platformLexicalTools_dictionary_occurrencesForSenseLabel%": "Occurrences for Sense {index}",
+      "%platformLexicalTools_dictionary_occurrencesToggleAll%": "all",
+      "%platformLexicalTools_dictionary_occurrencesToggleChapter%": "chapter",
       "%platformLexicalTools_dictionary_searchDictionary%": "Search Dictionary...",
       "%platformLexicalTools_dictionary_sensesLabel%": "Senses",
       "%platformLexicalTools_dictionary_scopeSelector_chapter%": "Current Chapter",

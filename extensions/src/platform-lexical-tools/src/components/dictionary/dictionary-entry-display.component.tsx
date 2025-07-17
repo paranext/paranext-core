@@ -10,10 +10,10 @@ import {
 } from 'platform-bible-react';
 import { ArrowLeft, ChevronUpIcon } from 'lucide-react';
 import { DictionaryOccurrenceView, Entry, Sense } from 'platform-lexical-tools';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
+import { formatReplacementString, formatScrRef, LanguageStrings } from 'platform-bible-utils';
 import { ListboxOption } from '../../utils/listbox-keyboard-navigation.util';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
@@ -21,6 +21,48 @@ import {
   getDeduplicatedOccurrencesFromSenses,
 } from '../../utils/dictionary.util';
 import { DomainsDisplay } from './domains-display.component';
+
+/** Props for the BackToListButton component */
+type BackToListButtonProps = {
+  /** Callback function to handle back button click, returning to the list view */
+  handleBackToListButton?: (option: ListboxOption) => void;
+  /** Dictionary entry to display in the button */
+  dictionaryEntry: Entry;
+  /** Whether the display is in a drawer or just next to the list */
+  isDrawer: boolean;
+  /** Localized strings for the button */
+  localizedStrings: LanguageStrings;
+};
+
+function BackToListButton({
+  handleBackToListButton,
+  dictionaryEntry,
+  isDrawer,
+  localizedStrings,
+}: BackToListButtonProps) {
+  if (!handleBackToListButton) return undefined;
+
+  const button = (
+    <Button
+      onClick={() =>
+        handleBackToListButton({
+          id: `${dictionaryEntry.lexicalReferenceTextId}-entry-${dictionaryEntry.id}`,
+        })
+      }
+      className="tw-flex tw-items-center"
+      variant="link"
+    >
+      <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
+      {localizedStrings['%platformLexicalTools_dictionary_backToList%']}
+    </Button>
+  );
+
+  return (
+    <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">
+      {isDrawer ? <DrawerClose asChild>{button}</DrawerClose> : button}
+    </div>
+  );
+}
 
 /** Props for the DictionaryEntryDisplay component */
 export type DictionaryEntryDisplayProps = {
@@ -34,9 +76,9 @@ export type DictionaryEntryDisplayProps = {
   scriptureReferenceToFilterBy?: SerializedVerseRef;
   /** Callback function to handle occurrence selection */
   onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
+  /** Callback function to handle scroll to top */
+  onClickScrollToTop: () => void;
 };
-
-// TODO: Localize text and book names
 
 /**
  * Renders a detailed view of a dictionary entry, displaying its key properties such as Hebrew text,
@@ -49,18 +91,12 @@ export function DictionaryEntryDisplay({
   handleBackToListButton,
   scriptureReferenceToFilterBy,
   onSelectOccurrence,
+  onClickScrollToTop,
 }: DictionaryEntryDisplayProps) {
   const [localizedStrings] = useLocalizedStrings(DICTIONARY_LOCALIZED_STRING_KEYS);
   const [selectedSense, setSelectedSense] = useState<Sense | undefined>(undefined);
   const [selectedSenseIndex, setSelectedSenseIndex] = useState<number | undefined>();
   const [occurrenceView, setOccurrenceView] = useState<DictionaryOccurrenceView>('chapter');
-  // ref.current expects null and not undefined when we pass it to the div
-  // eslint-disable-next-line no-null/no-null
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const scrollToTop = () => {
-    containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
-  };
 
   const formattedGlosses = useMemo(
     () =>
@@ -112,7 +148,6 @@ export function DictionaryEntryDisplay({
     return result;
   }, [dictionaryEntry.senses, scriptureReferenceToFilterBy]);
 
-  // Memoized, deduplicated list of occurrences
   const deduplicatedOccurrences = useMemo(() => {
     return selectedSense
       ? getDeduplicatedOccurrencesFromSenses(
@@ -126,7 +161,6 @@ export function DictionaryEntryDisplay({
   }, [selectedSense, occurrenceView, scriptureReferenceToFilterBy, sensesFilteredByScrRef]);
 
   // Cannot use Drawer components when there is no Drawer, if the screen is wider than 1024px it will render Button and span here.
-  const BackToListButton = isDrawer ? DrawerClose : Button;
   const TitleComponent = isDrawer ? DrawerTitle : 'span';
   const DescriptionComponent = isDrawer ? DrawerDescription : 'span';
 
@@ -140,31 +174,23 @@ export function DictionaryEntryDisplay({
       setSelectedSense(undefined);
       setSelectedSenseIndex(undefined);
     }
-  }, [sensesFilteredByScrRef]);
+  }, [
+    dictionaryEntry,
+    handleBackToListButton,
+    isDrawer,
+    localizedStrings,
+    selectedSense,
+    sensesFilteredByScrRef,
+  ]);
 
   return (
-    <div
-      ref={containerRef}
-      className={cn('tw-top-14 tw-p-4 tw-w-full tw-h-full tw-flex tw-flex-col tw-overflow-y-auto')}
-    >
-      <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">
-        <BackToListButton
-          onClick={
-            handleBackToListButton
-              ? () =>
-                  handleBackToListButton({
-                    id: `${dictionaryEntry.lexicalReferenceTextId}-entry-${dictionaryEntry.id}`,
-                  })
-              : undefined
-          }
-          className="tw-flex tw-items-center"
-          variant="link"
-        >
-          <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-          {localizedStrings['%platformLexicalTools_dictionary_backToList%']}
-        </BackToListButton>
-      </div>
-
+    <div>
+      <BackToListButton
+        dictionaryEntry={dictionaryEntry}
+        isDrawer={isDrawer}
+        localizedStrings={localizedStrings}
+        handleBackToListButton={handleBackToListButton}
+      />
       <div className="tw-mb-4">
         <div className="tw-flex tw-items-baseline tw-justify-between tw-gap-2">
           <span className="tw-flex tw-flex-row tw-items-baseline tw-gap-2">
@@ -251,7 +277,7 @@ export function DictionaryEntryDisplay({
               )}
               onClick={() => setOccurrenceView('chapter')}
             >
-              chapter (
+              {localizedStrings['%platformLexicalTools_dictionary_occurrencesToggleChapter%']} (
               {(() => {
                 const senses = Object.values(sensesFilteredByScrRef).flat();
                 return selectedSense
@@ -273,7 +299,7 @@ export function DictionaryEntryDisplay({
               )}
               onClick={() => setOccurrenceView('all')}
             >
-              all (
+              {localizedStrings['%platformLexicalTools_dictionary_occurrencesToggleAll%']} (
               {(() => {
                 const senses = Object.values(sensesFilteredByScrRef).flat();
                 return selectedSense
@@ -300,15 +326,15 @@ export function DictionaryEntryDisplay({
             </li>
           ))}
         </ul>
+        <Button
+          variant="secondary"
+          size="icon"
+          className="tw-fixed tw-bottom-4 tw-right-4 tw-z-20"
+          onClick={onClickScrollToTop}
+        >
+          <ChevronUpIcon />
+        </Button>
       </div>
-      <Button
-        variant="secondary"
-        size="icon"
-        className="tw-fixed tw-bottom-4 tw-right-4 tw-z-20"
-        onClick={scrollToTop}
-      >
-        <ChevronUpIcon />
-      </Button>
     </div>
   );
 }

@@ -1843,6 +1843,43 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
+/** Properties of one option contained in a listbox */
+export interface ListboxOption {
+	/** Unique identifier for the option */
+	id: string;
+}
+/** Props for the useListbox hook */
+export interface UseListboxProps {
+	/** Array of options for the listbox */
+	options: ListboxOption[];
+	/** Callback when the focus changes to a different option */
+	onFocusChange?: (option: ListboxOption) => void;
+	/** Callback to toggle the selection of an option */
+	onOptionSelect?: (option: ListboxOption) => void;
+	/** Callback when a character key is pressed */
+	onCharacterPress?: (char: string) => void;
+}
+/**
+ * Hook for handling keyboard navigation of a listbox.
+ *
+ * @param UseListboxProps - The properties for configuring the listbox behavior.
+ * @returns An object containing:
+ *
+ *   - `listboxRef`: A ref to be attached to the listbox container element (e.g., `<ul>`), used for
+ *       focus management.
+ *   - `activeId`: The id of the currently focused (active) option, or `undefined` if none is focused.
+ *   - `selectedId`: The id of the currently selected option, or `undefined` if none is selected.
+ *   - `handleKeyDown`: A keyboard event handler to be attached to the listbox container for handling
+ *       navigation and selection.
+ *   - `focusOption`: A function to programmatically focus a specific option by id.
+ */
+export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCharacterPress, }: UseListboxProps) => {
+	listboxRef: React$1.RefObject<HTMLElement>;
+	activeId: string | undefined;
+	selectedId: string | undefined;
+	handleKeyDown: (evt: React$1.KeyboardEvent<HTMLElement>) => void;
+	focusOption: (id: string) => void;
+};
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

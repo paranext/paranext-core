@@ -1,7 +1,4 @@
-import { useCallback, useRef, useState, KeyboardEvent } from 'react';
-
-// TODO: Generalize this to work with div and ul list boxes?
-// TODO: Move to PBR
+import React, { useCallback, useRef, useState } from 'react';
 
 /** Properties of one option contained in a listbox */
 export interface ListboxOption {
@@ -34,15 +31,15 @@ export interface UseListboxProps {
  *       navigation and selection.
  *   - `focusOption`: A function to programmatically focus a specific option by id.
  */
-export function useListbox({
+export const useListbox = ({
   options,
   onFocusChange,
   onOptionSelect,
   onCharacterPress,
-}: UseListboxProps) {
-  // ul ref property expects null and not undefined
+}: UseListboxProps) => {
+  // ul/div ref property expects null and not undefined
   // eslint-disable-next-line no-null/no-null
-  const listboxRef = useRef<HTMLUListElement>(null);
+  const listboxRef = useRef<HTMLElement>(null);
   const [activeId, setActiveId] = useState<string | undefined>(undefined);
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
 
@@ -79,10 +76,8 @@ export function useListbox({
     [onOptionSelect, options],
   );
 
-  // TODO: Fix focus ring goes away when closing the drawer then comes back
-  // TODO: Fix trap keyboard navigation in drawer content unless Esc, Enter, or Space (closes drawer)
   const handleKeyDown = useCallback(
-    (evt: KeyboardEvent<HTMLUListElement>) => {
+    (evt: React.KeyboardEvent<HTMLElement>) => {
       const currentIndex = options.findIndex((opt) => opt.id === activeId);
       let nextIndex = currentIndex;
 
@@ -132,4 +127,4 @@ export function useListbox({
     handleKeyDown,
     focusOption,
   };
-}
+};

@@ -14,6 +14,8 @@ export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_noResults%',
   '%platformLexicalTools_dictionary_occurrencesInChapterLabel%',
   '%platformLexicalTools_dictionary_occurrencesForSenseLabel%',
+  '%platformLexicalTools_dictionary_occurrencesToggleAll%',
+  '%platformLexicalTools_dictionary_occurrencesToggleChapter%',
   '%platformLexicalTools_dictionary_searchDictionary%',
   '%platformLexicalTools_dictionary_sensesLabel%',
   '%platformLexicalTools_dictionary_scopeSelector_chapter%',

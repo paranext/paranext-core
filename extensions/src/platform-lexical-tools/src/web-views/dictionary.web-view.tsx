@@ -22,9 +22,6 @@ import {
 } from '../utils/dictionary.util';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
 
-// TODO: Implement 'section' scope, see comment line 115
-// TODO: If projectId, sync scrRef
-
 globalThis.webViewComponent = function Dictionary({
   projectId,
   useWebViewScrollGroupScrRef,
@@ -38,8 +35,16 @@ globalThis.webViewComponent = function Dictionary({
   // ref.current expects null and not undefined when we pass it to the search input
   // eslint-disable-next-line no-null/no-null
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // ref.current expects null and not undefined when we pass it to the div
+  // eslint-disable-next-line no-null/no-null
+  const dictionaryEntryRef = useRef<HTMLDivElement>(null);
+
   const lexicalService = useDataProvider('platformLexicalTools.lexicalReferenceService');
   const isWideScreen = useIsWideScreen();
+
+  const scrollToTop = () => {
+    dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const getEntriesById = useCallback(() => {
     if (!lexicalService) return Promise.resolve(undefined);
@@ -59,13 +64,14 @@ globalThis.webViewComponent = function Dictionary({
         return Object.values(entry.senses).some(
           (sense) =>
             sense?.occurrences &&
-            Object.values(sense.occurrences).some((occurrences) =>
-              occurrences?.some(
-                (occurrence) =>
-                  occurrence.verseRef.book === scrRef.book &&
-                  occurrence.verseRef.chapterNum === scrRef.chapterNum &&
-                  (scope === 'verse' ? occurrence.verseRef.verseNum === scrRef.verseNum : true),
-              ),
+            Object.values(sense.occurrences).some(
+              (occurrences) =>
+                occurrences?.some(
+                  (occurrence) =>
+                    occurrence.verseRef.book === scrRef.book &&
+                    occurrence.verseRef.chapterNum === scrRef.chapterNum &&
+                    (scope === 'verse' ? occurrence.verseRef.verseNum === scrRef.verseNum : true),
+                ), // TODO: Filter by section
             ),
         );
       });
@@ -88,6 +94,14 @@ globalThis.webViewComponent = function Dictionary({
     [setScrRef],
   );
 
+  const onCharacterPress = useCallback(
+    (character: string) => {
+      searchInputRef.current?.focus();
+      setSearchQuery(character);
+    },
+    [setSearchQuery],
+  );
+
   // TODO: Implement project selection when lexical data from scripture projects available
   // const handleSelectProject = useCallback(
   //   (newProjectId: string) => {
@@ -99,8 +113,8 @@ globalThis.webViewComponent = function Dictionary({
   // );
 
   return (
-    <div className="tw-flex tw-flex-col tw-h-full">
-      <div className="tw-sticky tw-bg-background tw-top-0 tw-z-10 tw-shrink-0 tw-p-2 tw-border-b">
+    <div className="tw-flex tw-flex-col tw-h-[100dvh]">
+      <div className="tw-sticky tw-bg-background tw-top-0 tw-z-10 tw-shrink-0 tw-p-2 tw-border-b tw-h-auto">
         <div className="tw-flex tw-items-center tw-gap-2">
           <div className="tw-max-w-56">
             <Select value={scope} onValueChange={setScope}>
@@ -134,9 +148,10 @@ globalThis.webViewComponent = function Dictionary({
         </div>
       </div>
       {isLoadingEntriesById && (
-        <div className="tw-p-2 tw-space-y-4">
+        <div className="tw-flex-1 tw-p-2 tw-space-y-4">
           {[...Array(10)].map((_, index) => (
             <Skeleton
+              // There are no other unique identifiers for these items
               // eslint-disable-next-line react/no-array-index-key
               key={`dictionary-list-item-skeleton-${index}`}
               className="tw-h-14 tw-w-full"
@@ -150,22 +165,22 @@ globalThis.webViewComponent = function Dictionary({
         </div>
       )}
       {allEntriesByScrRef.length === 1 && (
-        <DictionaryEntryDisplay
-          scriptureReferenceToFilterBy={scrRef}
-          isDrawer={!isWideScreen}
-          dictionaryEntry={allEntriesByScrRef[0]}
-          onSelectOccurrence={onSelectOccurrence}
-        />
+        <div ref={dictionaryEntryRef} className="tw-overflow-y-auto tw-p-4">
+          <DictionaryEntryDisplay
+            scriptureReferenceToFilterBy={scrRef}
+            isDrawer={!isWideScreen}
+            dictionaryEntry={allEntriesByScrRef[0]}
+            onSelectOccurrence={onSelectOccurrence}
+            onClickScrollToTop={scrollToTop}
+          />
+        </div>
       )}
       {allEntriesByScrRef.length > 1 && (
         <DictionaryList
           dictionaryData={allEntriesByScrRef}
           scriptureReferenceToFilterBy={scrRef}
           onSelectOccurrence={onSelectOccurrence}
-          onCharacterPress={(char) => {
-            searchInputRef.current?.focus();
-            setSearchQuery(char);
-          }}
+          onCharacterPress={onCharacterPress}
         />
       )}
     </div>

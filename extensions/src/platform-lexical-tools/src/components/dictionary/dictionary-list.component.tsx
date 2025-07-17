@@ -9,12 +9,13 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useListbox,
+  type ListboxOption,
 } from 'platform-bible-react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, RefObject, useMemo, useRef } from 'react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { LocalizationData } from '@papi/core';
-import { ListboxOption, useListbox } from '../../utils/listbox-keyboard-navigation.util';
 import { DictionaryEntryDisplay } from './dictionary-entry-display.component';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
@@ -23,34 +24,56 @@ import {
   useIsWideScreen,
 } from '../../utils/dictionary.util';
 
+/** Props for the DictionaryListItem component */
+type DictionaryListItemProps = {
+  /** The dictionary entry to display */
+  entry: Entry;
+  /** Whether the dictionary entry is selected */
+  isSelected: boolean;
+  /** Whether the dictionary entry is in drawer mode */
+  isDrawerMode: boolean;
+  /** Localized strings for the dictionary */
+  localizedStrings: LocalizationData;
+  /** Scripture reference to filter the occurrences by */
+  scrRef: SerializedVerseRef;
+  /** Callback function to handle click on the entry */
+  onClick: () => void;
+  /** Callback function to handle occurrence selection */
+  onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
+};
+
 function DictionaryListItem({
   entry,
-  entryId,
   isSelected,
   isDrawerMode,
   localizedStrings,
   scrRef,
   onClick,
   onSelectOccurrence,
-}: {
-  entry: Entry;
-  entryId: string;
-  isSelected: boolean;
-  isDrawerMode: boolean;
-  localizedStrings: LocalizationData;
-  scrRef: SerializedVerseRef;
-  onClick: () => void;
-  onSelectOccurrence: (scrRefOfOccurrence: SerializedVerseRef) => void;
-}) {
+}: DictionaryListItemProps) {
+  // ref.current expects null and not undefined when we pass it to the div
+  // eslint-disable-next-line no-null/no-null
+  const dictionaryEntryRef = useRef<HTMLDivElement>(null);
+
+  const scrollToTop = () => {
+    dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const content = (
     // This component does have keyboard navigation, it is being handled through the useListbox hook
     // eslint-disable-next-line jsx-a11y/click-events-have-key-events
     <li
       role="option"
       aria-selected={isSelected}
-      id={entryId}
+      id={`${entry.lexicalReferenceTextId}-entry-${entry.id}`}
       onClick={onClick}
-      className="tw-flex tw-flex-col tw-p-2 hover:tw-bg-muted tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
+      className={cn(
+        'tw-flex tw-flex-col tw-p-2 tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background',
+        {
+          'tw-bg-muted': isSelected,
+          'hover:tw-bg-muted': !isSelected,
+        },
+      )}
       tabIndex={-1}
     >
       <div className="tw-flex tw-items-baseline tw-gap-2">
@@ -104,13 +127,16 @@ function DictionaryListItem({
       <Drawer direction="right" dismissible={false} open={open} onOpenChange={setOpen}>
         <DrawerTrigger asChild>{content}</DrawerTrigger>
         <DrawerContent className="tw-max-w-xl">
-          <DictionaryEntryDisplay
-            isDrawer
-            dictionaryEntry={entry}
-            handleBackToListButton={() => setOpen(false)}
-            scriptureReferenceToFilterBy={scrRef}
-            onSelectOccurrence={onSelectOccurrence}
-          />
+          <div ref={dictionaryEntryRef} className="tw-overflow-y-auto tw-p-4">
+            <DictionaryEntryDisplay
+              isDrawer
+              dictionaryEntry={entry}
+              handleBackToListButton={() => setOpen(false)}
+              scriptureReferenceToFilterBy={scrRef}
+              onSelectOccurrence={onSelectOccurrence}
+              onClickScrollToTop={scrollToTop}
+            />
+          </div>
         </DrawerContent>
       </Drawer>
     );
@@ -161,6 +187,12 @@ export function DictionaryList({
     id: `${entry.lexicalReferenceTextId}-entry-${entry.id}`,
   }));
 
+  const selectedEntry = useMemo(() => {
+    return dictionaryData.find(
+      (entry) => `${entry.lexicalReferenceTextId}-entry-${entry.id}` === selectedEntryId,
+    );
+  }, [dictionaryData, selectedEntryId]);
+
   const handleOptionSelect = (option: ListboxOption) => {
     setSelectedEntryId((prevId) => (prevId === option.id ? undefined : option.id));
   };
@@ -171,63 +203,64 @@ export function DictionaryList({
     onCharacterPress,
   });
 
+  // ref.current expects null and not undefined when we pass it to the div
+  // eslint-disable-next-line no-null/no-null
+  const dictionaryEntryRef = useRef<HTMLDivElement>(null);
+
+  const scrollToTop = () => {
+    dictionaryEntryRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   return (
-    <div className="tw-left-0 tw-right-0 tw-top-14 tw-bottom-0">
-      <div className="tw-flex tw-h-full">
-        <div
-          className={cn('tw-overflow-y-auto', {
-            'tw-w-1/2': isWideScreen && selectedEntryId,
-            'tw-w-full': !selectedEntryId || !isWideScreen,
-          })}
+    <div className="tw-flex tw-flex-row tw-flex-1 tw-overflow-hidden">
+      <div
+        className={cn('tw-overflow-y-auto tw-px-2 tw-py-2', {
+          'tw-w-1/2': isWideScreen && selectedEntryId,
+          'tw-w-full': !isWideScreen || !selectedEntryId,
+        })}
+      >
+        <ul
+          id="dictionary-list"
+          role="listbox"
+          tabIndex={0}
+          // The listboxRef is a HTMLElement so that the keyboard navigation can be used with multiple types of elements
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          ref={listboxRef as RefObject<HTMLUListElement>}
+          aria-activedescendant={activeId ?? undefined}
+          className="tw-outline-none focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
+          onKeyDown={handleKeyDown}
         >
-          <ul
-            id="dictionary-list"
-            role="listbox"
-            tabIndex={0}
-            ref={listboxRef}
-            aria-activedescendant={activeId ?? undefined}
-            className="tw-outline-none tw-px-2 tw-py-2 focus:tw-ring-2 focus:tw-ring-ring focus:tw-ring-offset-1 focus:tw-ring-offset-background"
-            onKeyDown={handleKeyDown}
-          >
-            {dictionaryData.map((entry) => {
-              const entryId = `${entry.lexicalReferenceTextId}-entry-${entry.id}`;
-              const isSelected = selectedEntryId === entryId;
-              return (
-                <div key={entryId}>
-                  <DictionaryListItem
-                    entry={entry}
-                    entryId={entryId}
-                    isSelected={isSelected}
-                    isDrawerMode={!isWideScreen}
-                    localizedStrings={localizedStrings}
-                    scrRef={scriptureReferenceToFilterBy}
-                    onClick={() => setSelectedEntryId(entryId)}
-                    onSelectOccurrence={onSelectOccurrence}
-                  />
-                </div>
-              );
-            })}
-          </ul>
-        </div>
-        {isWideScreen &&
-          selectedEntryId &&
-          (() => {
-            const selectedEntry = dictionaryData.find(
-              (entry) => `${entry.lexicalReferenceTextId}-entry-${entry.id}` === selectedEntryId,
-            );
-            return selectedEntry ? (
-              <div className="tw-w-1/2 tw-h-full tw-overflow-auto">
-                <DictionaryEntryDisplay
-                  scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
-                  isDrawer={false}
-                  dictionaryEntry={selectedEntry}
-                  handleBackToListButton={handleOptionSelect}
+          {dictionaryData.map((entry) => {
+            const entryId = `${entry.lexicalReferenceTextId}-entry-${entry.id}`;
+            const isSelected = selectedEntryId === entryId;
+            return (
+              <div key={entryId}>
+                <DictionaryListItem
+                  entry={entry}
+                  isSelected={isSelected}
+                  isDrawerMode={!isWideScreen}
+                  localizedStrings={localizedStrings}
+                  scrRef={scriptureReferenceToFilterBy}
+                  onClick={() => setSelectedEntryId(entryId)}
                   onSelectOccurrence={onSelectOccurrence}
                 />
               </div>
-            ) : undefined;
-          })()}
+            );
+          })}
+        </ul>
       </div>
+      {isWideScreen && selectedEntryId && selectedEntry && (
+        <div ref={dictionaryEntryRef} className="tw-w-1/2 tw-overflow-y-auto tw-p-4">
+          <DictionaryEntryDisplay
+            scriptureReferenceToFilterBy={scriptureReferenceToFilterBy}
+            isDrawer={false}
+            dictionaryEntry={selectedEntry}
+            handleBackToListButton={handleOptionSelect}
+            onSelectOccurrence={onSelectOccurrence}
+            onClickScrollToTop={scrollToTop}
+          />
+        </div>
+      )}
     </div>
   );
 }
