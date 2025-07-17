@@ -7,7 +7,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '../shadcn-ui/popover';
 type ErrorPopoverProps = PropsWithChildren &
   ErrorDumpProps & {
     /** Optional CSS classes to insert into the `PopoverContent` */
-    className: string;
+    className?: string;
   };
 
 /**
