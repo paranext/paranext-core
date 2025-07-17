@@ -23,7 +23,6 @@ import {
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
 
 globalThis.webViewComponent = function Dictionary({
-  projectId,
   useWebViewScrollGroupScrRef,
   useWebViewState,
 }: WebViewProps) {
@@ -125,11 +124,12 @@ globalThis.webViewComponent = function Dictionary({
                 <SelectItem value="chapter">
                   {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_chapter%']}
                 </SelectItem>
-                {projectId !== undefined && (
+                {/* TODO: Implement project selection when lexical data from scripture projects available */}
+                {/* {projectId !== undefined && (
                   <SelectItem value="section">
                     {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_section%']}
                   </SelectItem>
-                )}
+                )} */}
                 <SelectItem value="verse">
                   {localizedStrings['%platformLexicalTools_dictionary_scopeSelector_verse%']}
                 </SelectItem>
