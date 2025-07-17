@@ -170,9 +170,6 @@ export function DictionaryEntryDisplay({
     if (sensesFlat.length === 1) {
       setSelectedSense(sensesFlat[0]);
       setSelectedSenseIndex(1);
-    } else {
-      setSelectedSense(undefined);
-      setSelectedSenseIndex(undefined);
     }
   }, [
     dictionaryEntry,
