@@ -222,12 +222,9 @@ export function Inventory({
   inventoryItems,
   setVerseRef,
   localizedStrings,
-
   additionalItemsLabels,
   approvedItems,
-
   unapprovedItems,
-
   scope,
   onScopeChange,
   columns,

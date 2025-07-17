@@ -17,6 +17,8 @@ export function createRCDockTabFromTabInfo(tabInfo: TabInfo, shouldFlash = false
   // Update the flash trigger time if we are supposed to bring the tab to the front
   const flashTriggerTime = shouldFlash ? Date.now() : tabInfo.flashTriggerTime;
 
+  console.log('This console log should be removed by eslint');
+
   // Translate the data from the loaded tab to be in the form needed by rc-dock
   return {
     ...tabInfo,
