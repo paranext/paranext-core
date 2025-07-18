@@ -51,6 +51,8 @@ const HOME_STRING_KEYS: LocalizeKey[] = [
   '%resources_filterInput%',
   '%resources_fullName%',
   '%resources_get%',
+  '%resources_getStarted%',
+  '%resources_getStartedDescription%',
   '%resources_getResources%',
   '%resources_items%',
   '%resources_language%',
@@ -109,6 +111,8 @@ globalThis.webViewComponent = function HomeDialog() {
   const filterInputText: string = localizedStrings['%resources_filterInput%'];
   const fullNameText: string = localizedStrings['%resources_fullName%'];
   const getText: string = localizedStrings['%resources_get%'];
+  const getStartedText: string = localizedStrings['%resources_getStarted%'];
+  const getStartedDescriptionText: string = localizedStrings['%resources_getStartedDescription%'];
   const getResourcesText: string = localizedStrings['%resources_getResources%'];
   const itemsText: string = localizedStrings['%resources_items%'];
   const languageText: string = localizedStrings['%resources_language%'];
@@ -529,129 +533,151 @@ globalThis.webViewComponent = function HomeDialog() {
           </CardContent>
         ) : (
           <CardContent className="tw-flex-grow tw-overflow-auto">
-            {!localProjectsInfo ? (
-              <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
-                <Label className="tw-text-muted-foreground tw-font-normal">
-                  {noProjectsInstructionText}
-                </Label>
+            <div className="tw-flex tw-flex-col tw-gap-4">
+              {!localProjectsInfo ? (
+                <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+                  <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
+                  <Label className="tw-text-muted-foreground tw-font-normal">
+                    {noProjectsInstructionText}
+                  </Label>
 
-                {showGetResourcesButton && (
-                  <Button
-                    onClick={() =>
-                      papi.commands.sendCommand('platformGetResources.openGetResources')
-                    }
-                    className="tw-mt-4"
-                  >{`+ ${getResourcesText}`}</Button>
-                )}
-              </div>
-            ) : (
-              <div className="tw-flex-grow tw-h-full">
-                {filteredAndSortedProjects.length === 0 ? (
-                  <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                    <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
-                    <Label className="tw-text-muted-foreground tw-font-normal">
-                      {`${searchedForText} "${textFilter}".`}
-                    </Label>
-                    <div className="tw-flex tw-gap-1  tw-mt-4">
-                      <Button
-                        variant="ghost"
-                        onClick={() => {
-                          setTextFilter('');
-                        }}
-                      >
-                        {clearSearchText}
-                      </Button>
-                      {showGetResourcesButton && (
+                  {showGetResourcesButton && (
+                    <Button
+                      onClick={() =>
+                        papi.commands.sendCommand('platformGetResources.openGetResources')
+                      }
+                      className="tw-mt-4"
+                    >{`+ ${getResourcesText}`}</Button>
+                  )}
+                </div>
+              ) : (
+                <div className="tw-flex-grow tw-h-full">
+                  {filteredAndSortedProjects.length === 0 ? (
+                    <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+                      <Label className="tw-text-muted-foreground">{noSearchResultsText}</Label>
+                      <Label className="tw-text-muted-foreground tw-font-normal">
+                        {`${searchedForText} "${textFilter}".`}
+                      </Label>
+                      <div className="tw-flex tw-gap-1  tw-mt-4">
                         <Button
-                          onClick={() =>
-                            papi.commands.sendCommand('platformGetResources.openGetResources')
-                          }
                           variant="ghost"
-                          className="tw-bg-muted"
+                          onClick={() => {
+                            setTextFilter('');
+                          }}
                         >
-                          {`+ ${getResourcesText}`}
+                          {clearSearchText}
                         </Button>
-                      )}
+                        {showGetResourcesButton && (
+                          <Button
+                            onClick={() =>
+                              papi.commands.sendCommand('platformGetResources.openGetResources')
+                            }
+                            variant="ghost"
+                            className="tw-bg-muted"
+                          >
+                            {`+ ${getResourcesText}`}
+                          </Button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <Table stickyHeader>
-                    <TableHeader className="tw-bg-none" stickyHeader>
-                      <TableRow>
-                        <TableHead />
-                        <TableHead />
-                        {buildTableHead('fullName', fullNameText)}
-                        {buildTableHead('language', languageText)}
-                        {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
-                          buildTableHead('activity', activityText)}
-                        {buildTableHead('action', actionText)}
-                        <TableHead />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredAndSortedProjects.map((project) => (
-                        <TableRow
-                          onDoubleClick={() => openResource(project.projectId, project.isEditable)}
-                          key={project.projectId}
-                        >
-                          <TableCell>
-                            {project.isSendReceivable ? (
-                              <ScrollText className="tw-pr-0" size={18} />
-                            ) : (
-                              <BookOpen className="tw-pr-0" size={18} />
-                            )}
-                          </TableCell>
-                          <TableCell>{project.name}</TableCell>
-                          <TableCell className="tw-font-medium">{project.fullName}</TableCell>
-                          <TableCell>{project.language}</TableCell>
-                          {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell>
-                              {project.lastSendReceiveDate &&
-                                formatTimeSpan(
-                                  relativeTimeFormatter,
-                                  new Date(project.lastSendReceiveDate),
-                                )}
-                            </TableCell>
-                          )}
-                          <TableCell>
-                            {project.isSendReceivable &&
-                            (!project.isLocallyAvailable || project.editedStatus === 'edited')
-                              ? syncOrGetButton(project)
-                              : openButton(project)}
-                          </TableCell>
-                          <TableCell>
-                            {project.isSendReceivable && project.isLocallyAvailable && (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost">
-                                    <Ellipsis className="tw-w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start">
-                                  <DropdownMenuItem asChild>
-                                    {project.editedStatus === 'edited'
-                                      ? openButton(project, true)
-                                      : syncOrGetButton(project, true)}
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            )}
-                          </TableCell>
+                  ) : (
+                    <Table stickyHeader>
+                      <TableHeader className="tw-bg-none" stickyHeader>
+                        <TableRow>
+                          <TableHead />
+                          <TableHead />
+                          {buildTableHead('fullName', fullNameText)}
+                          {buildTableHead('language', languageText)}
+                          {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
+                            buildTableHead('activity', activityText)}
+                          {buildTableHead('action', actionText)}
+                          <TableHead />
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredAndSortedProjects.map((project) => (
+                          <TableRow
+                            onDoubleClick={() =>
+                              openResource(project.projectId, project.isEditable)
+                            }
+                            key={project.projectId}
+                          >
+                            <TableCell>
+                              {project.isSendReceivable ? (
+                                <ScrollText className="tw-pr-0" size={18} />
+                              ) : (
+                                <BookOpen className="tw-pr-0" size={18} />
+                              )}
+                            </TableCell>
+                            <TableCell>{project.name}</TableCell>
+                            <TableCell className="tw-font-medium">{project.fullName}</TableCell>
+                            <TableCell>{project.language}</TableCell>
+                            {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
+                              <TableCell>
+                                {project.lastSendReceiveDate &&
+                                  formatTimeSpan(
+                                    relativeTimeFormatter,
+                                    new Date(project.lastSendReceiveDate),
+                                  )}
+                              </TableCell>
+                            )}
+                            <TableCell>
+                              {project.isSendReceivable &&
+                              (!project.isLocallyAvailable || project.editedStatus === 'edited')
+                                ? syncOrGetButton(project)
+                                : openButton(project)}
+                            </TableCell>
+                            <TableCell>
+                              {project.isSendReceivable && project.isLocallyAvailable && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost">
+                                      <Ellipsis className="tw-w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start">
+                                    <DropdownMenuItem asChild>
+                                      {project.editedStatus === 'edited'
+                                        ? openButton(project, true)
+                                        : syncOrGetButton(project, true)}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                </div>
+              )}
+              {filteredAndSortedProjects.length === 1 &&
+                filteredAndSortedProjects[0].name === 'WEB' && (
+                  <div className="tw-flex tw-flex-col tw-gap-4 tw-items-center tw-w-auto">
+                    <p className="tw-text-muted-foreground tw-font-normal">
+                      {getStartedDescriptionText}
+                    </p>
+                    <Button
+                      onClick={() => {
+                        papi.commands.sendCommand(
+                          'platform.openWindow',
+                          'https://github.com/paranext/paranext/wiki/Getting-Started-with-Platform.Bible-and-Paratext-10-Studio',
+                        );
+                      }}
+                    >
+                      {getStartedText}
+                    </Button>
+                  </div>
                 )}
-              </div>
-            )}
+            </div>
           </CardContent>
         )}
-        <CardFooter className="tw-flex-shrink-0 tw-justify-center tw-p-4 tw-border-t">
-          {filteredAndSortedProjects.length > 0 && (
-            <Label className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</Label>
-          )}
-        </CardFooter>
+        {filteredAndSortedProjects.length > 0 && (
+          <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2">
+            <p className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</p>
+          </CardFooter>
+        )}
       </Card>
     </div>
   );
