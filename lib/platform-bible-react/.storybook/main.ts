@@ -1,3 +1,5 @@
+import remarkGfm from 'remark-gfm';
+
 import type { StorybookConfig } from '@storybook/react-vite';
 
 import { join, dirname } from 'path';
@@ -15,7 +17,16 @@ const config: StorybookConfig = {
     '../src/**/*.stories.@(js|jsx|ts|tsx)', // Explicitly list supported extensions
   ],
   addons: [
-    getAbsolutePath('@storybook/addon-docs'),
+    {
+      name: getAbsolutePath('@storybook/addon-docs'),
+      options: {
+        mdxPluginOptions: {
+          mdxCompileOptions: {
+            remarkPlugins: [remarkGfm],
+          },
+        },
+      },
+    },
     getAbsolutePath('@storybook/addon-links'),
     getAbsolutePath('@storybook/addon-a11y'),
     getAbsolutePath('@chromatic-com/storybook'),
