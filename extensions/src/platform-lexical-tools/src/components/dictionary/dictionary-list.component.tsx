@@ -22,7 +22,7 @@ import {
   getFormatGlossesStringFromDictionaryEntrySenses,
   getCombinedOccurrencesCountFromDictionaryEntrySenses,
   useIsWideScreen,
-} from '../../utils/dictionary.util';
+} from '../../utils/dictionary.utils';
 
 /** Props for the DictionaryListItem component */
 type DictionaryListItemProps = {

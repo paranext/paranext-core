@@ -19,7 +19,7 @@ import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
   getFormatGlossesStringFromDictionaryEntrySenses,
   useIsWideScreen,
-} from '../utils/dictionary.util';
+} from '../utils/dictionary.utils';
 import { DictionaryList } from '../components/dictionary/dictionary-list.component';
 
 globalThis.webViewComponent = function Dictionary({

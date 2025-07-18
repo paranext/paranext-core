@@ -19,7 +19,7 @@ import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
   getFormatGlossesStringFromDictionaryEntrySenses,
   getDeduplicatedOccurrencesFromSenses,
-} from '../../utils/dictionary.util';
+} from '../../utils/dictionary.utils';
 import { DomainsDisplay } from './domains-display.component';
 
 /** Props for the BackToListButton component */
