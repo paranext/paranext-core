@@ -3,7 +3,7 @@
 // a shared file.
 // TODO: please move these utility functions with #203
 
-import DockLayout, { FloatPosition, PanelData, TabData } from 'rc-dock';
+import DockLayout, { BoxData, FloatPosition, PanelData, TabData } from 'rc-dock';
 
 import { LogError } from '@shared/log-error.model';
 import {
@@ -376,19 +376,50 @@ export function findPreviousTab(dockLayout: DockLayout) {
  *   order to make the tab flash.
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
+ * @param tabIdToReplace If specified, the tab with this ID will be replaced with the new tab
  */
 function updateTab(
   tabInfo: RCDockTabInfo,
   shouldBringToFront: boolean,
   dockLayout: DockLayout,
-): void {
+  tabIdToReplace?: string,
+): boolean {
+  const tabId = tabIdToReplace ?? tabInfo.id;
+
   // Make sure the tab is unobscured
   if (shouldBringToFront) {
-    unmaximizeAnyMaximizedTabGroup(dockLayout, tabInfo.id);
-    bringFloatingTabGroupToFront(dockLayout, tabInfo.id);
+    unmaximizeAnyMaximizedTabGroup(dockLayout, tabId);
+    bringFloatingTabGroupToFront(dockLayout, tabId);
   }
 
-  dockLayout.updateTab(tabInfo.id, tabInfo, shouldBringToFront);
+  return dockLayout.updateTab(tabId, tabInfo, shouldBringToFront);
+}
+
+/**
+ * Recursively finds a panel with the specified ID in the given panel hierarchy
+ *
+ * @param tabGroups Array of panels to search through
+ * @param targetId The ID of the tab group to search for
+ * @returns The panel with the matching ID, or undefined if not found
+ */
+function findTabGroupById(
+  tabGroups: (PanelData | BoxData)[],
+  targetId: string,
+): PanelData | undefined {
+  return tabGroups.reduce<PanelData | undefined>((foundTabGroup, tabGroup) => {
+    if (foundTabGroup) return foundTabGroup;
+
+    if (tabGroup.id === targetId && 'tabs' in tabGroup) {
+      return tabGroup;
+    }
+
+    // If this tab group has children, search recursively
+    if ('children' in tabGroup) {
+      return findTabGroupById(tabGroup.children, targetId);
+    }
+
+    return undefined;
+  }, undefined);
 }
 
 /**
@@ -432,30 +463,43 @@ export function addTabToDock(
   // Add new tab
   switch (updatedLayout.type) {
     case 'tab': {
-      // eslint-disable-next-line no-type-assertion/no-type-assertion
-      const dockLayoutDockBoxChildren = dockLayout.getLayout().dockbox.children as PanelData[];
+      const dockLayoutDockBoxChildren = dockLayout.getLayout().dockbox.children;
+      const dockLayoutFloatBoxChildren = dockLayout.getLayout().floatbox?.children;
+
+      if (updatedLayout.parentTabGroupId) {
+        const targetTabGroup = findTabGroupById(
+          dockLayoutDockBoxChildren.concat(dockLayoutFloatBoxChildren ?? []),
+          updatedLayout.parentTabGroupId,
+        );
+        if (targetTabGroup) {
+          dockLayout.dockMove(tab, targetTabGroup, 'middle');
+
+          previousTabId = tab.id;
+          break;
+        }
+      }
+
       const isDockBoxEmpty =
-        dockLayoutDockBoxChildren.length === 1 && dockLayoutDockBoxChildren[0].tabs.length === 0;
+        dockLayoutDockBoxChildren.length === 1 &&
+        'tabs' in dockLayoutDockBoxChildren[0] &&
+        dockLayoutDockBoxChildren[0].tabs.length === 0;
+
       targetTab = isDockBoxEmpty ? undefined : findPreviousTab(dockLayout);
+
       if (targetTab) {
-        if (previousTabId === undefined)
+        if (previousTabId === undefined && targetTab.parent)
           // The target tab is the first found tab, so just add this as a new panel on top.
-          // Assert the more specific type.
-          // eslint-disable-next-line no-type-assertion/no-type-assertion
-          dockLayout.dockMove(tab, targetTab.parent as PanelData, 'top');
+          dockLayout.dockMove(tab, targetTab.parent, 'top');
         // The target tab is a previously added tab, so add this as a tab next to it
         else dockLayout.dockMove(tab, targetTab, 'after-tab');
       }
       // Didn't find any tabs. Add as a new tab
-      else
-        dockLayout.dockMove(
-          tab,
-          // Find the first thing (the dock box) and add the tab to it
-          // Null required by the external API
-          // eslint-disable-next-line no-null/no-null
-          dockLayout.find(() => true) ?? null,
-          'middle',
-        );
+      else {
+        const target = dockLayout.find(() => true);
+        if (!target) throw new LogError('No target found to add the tab to');
+
+        dockLayout.dockMove(tab, target, 'middle');
+      }
       previousTabId = tab.id;
       break;
     }
@@ -501,6 +545,17 @@ export function addTabToDock(
         // eslint-disable-next-line no-type-assertion/no-type-assertion
         updatedLayout.direction!,
       );
+      break;
+
+    case 'replace-tab':
+      if (!updatedLayout.targetTabId) {
+        throw new LogError(`When replacing a tab, targetTabId must be specified`);
+      }
+      if (!updateTab(tab, shouldBringToFront, dockLayout, updatedLayout.targetTabId)) {
+        throw new LogError(
+          `Replacing tab failed: target tab with id ${updatedLayout.targetTabId} not found when attempting to replace it with tab ${tab.id}`,
+        );
+      }
       break;
 
     default:
