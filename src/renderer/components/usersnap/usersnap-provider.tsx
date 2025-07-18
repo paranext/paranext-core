@@ -18,8 +18,8 @@ const defaultInitParams: InitOptions = {
   useLocalStorage: true,
   // Additional context data
   custom: {
-    platform: 'electron',
-    app: 'paranext-core',
+    platform: 'Electron',
+    app: 'Platform.Bible',
     environment: globalThis.isNoisyDevModeEnabled ? 'development' : 'production',
   },
 };
@@ -31,42 +31,27 @@ interface UsersnapProviderProps {
 
 export function UsersnapProvider({ children, initParams }: UsersnapProviderProps) {
   const [usersnapApi, setUsersnapApi] = useState<SpaceApi | undefined>(undefined);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Don't initialize UserSnap if no API key is configured
-    if (!USERSNAP_SPACE_API_KEY || USERSNAP_SPACE_API_KEY === '<USERSNAP_SPACE_API_KEY>') {
-      logger.warn('UserSnap API key not configured. UserSnap will not be available.');
-      setIsLoading(false);
-      return;
-    }
-
     const initializeUserSnap = async () => {
       try {
         const mergedInitParams = { ...defaultInitParams, ...initParams };
-        const api = await loadSpace(USERSNAP_SPACE_API_KEY);
-        console.log('api', JSON.stringify(api));
 
+        const startTime = performance.now();
+        const api = await loadSpace(USERSNAP_SPACE_API_KEY);
         api.init(mergedInitParams);
+        const endTime = performance.now();
+        logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
+
         setUsersnapApi(api);
-        setIsLoading(false);
-        logger.info('UserSnap initialized successfully');
       } catch (err) {
         const errorMessage = `Failed to initialize UserSnap: ${err}`;
         logger.error(errorMessage);
-        setIsLoading(false);
       }
     };
 
     initializeUserSnap();
   }, [initParams]);
-
-  // Log loading state for debugging
-  useEffect(() => {
-    if (isLoading) {
-      logger.debug('UserSnap is loading...');
-    }
-  }, [isLoading]);
 
   return <UsersnapContext.Provider value={usersnapApi}>{children}</UsersnapContext.Provider>;
 }
