@@ -272,10 +272,11 @@ interface ErrorDumpProps {
 /**
  * Component to render an error dump
  *
- * @param errorDetails Error details string
- * @param handleCopyNotify Handler function to add a notification to the UI to alert that the error
- *   was copied
- * @param localizedStrings Localized strings to use in the ErrorDump component
+ * @param {ErrorDumpProps} props
+ * @param props.errorDetails Error details string
+ * @param props.handleCopyNotify Handler function to add a notification to the UI to alert that the
+ *   error was copied
+ * @param props.localizedStrings Localized strings to use in the ErrorDump component
  */
 export declare function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps): import("react/jsx-runtime").JSX.Element;
 type ErrorPopoverProps = React$1.PropsWithChildren & ErrorDumpProps & {
@@ -283,10 +284,14 @@ type ErrorPopoverProps = React$1.PropsWithChildren & ErrorDumpProps & {
 	className?: string;
 };
 /**
- * @param errorDetails The error details to show in the error popover
- * @param handleCopyNotify Optional notification handler function to handle when the error is copied
- * @param localizedStrings List of localized strings to use in the ErrorDump component
- * @param className Optional CSS classes to insert into the `PopoverContent`
+ * A popover component that displays detailed error information using the ErrorDump component.
+ *
+ * @param {ErrorPopoverProps} props
+ * @param props.errorDetails The error details to show in the error popover
+ * @param props.handleCopyNotify Optional notification handler function to handle when the error is
+ *   copied
+ * @param props.localizedStrings List of localized strings to use in the ErrorDump component
+ * @param props.className Optional CSS classes to insert into the `PopoverContent`
  *
  *   NOTE: The `ERROR_DUMP_STRING_KEYS` array will need to be imported from the `ErrorDump` component
  *   which contains a list of the localized strings that will need to be set to populate the
@@ -964,6 +969,12 @@ export type TabToolbarProps = React$1.PropsWithChildren<{
 	 */
 	endAreaChildren?: React$1.ReactNode;
 }>;
+/**
+ * Component for rendering a customizable tab toolbar.
+ *
+ * The toolbar includes three main areas to place children components: start, center, and end. It
+ * optionally displays dropdown menus for project and view info, populated by the given menu data.
+ */
 export declare function TabToolbar({ onSelectProjectMenuItem, onSelectViewInfoMenuItem, projectMenuData, tabViewMenuData, id, className, startAreaChildren, centerAreaChildren, endAreaChildren, }: TabToolbarProps): import("react/jsx-runtime").JSX.Element;
 export type TabKeyValueContent = {
 	key: string;
@@ -1391,6 +1402,11 @@ export declare const CardFooter: React$1.ForwardRefExoticComponent<React$1.HTMLA
  * @see Radix UI Documentation: {@link https://www.radix-ui.com/primitives/docs/components/checkbox}
  */
 export declare const Checkbox: React$1.ForwardRefExoticComponent<Omit<CheckboxPrimitive.CheckboxProps & React$1.RefAttributes<HTMLButtonElement>, "ref"> & React$1.RefAttributes<HTMLButtonElement>>;
+/**
+ * Command menu for React. These components are built on cmdk and styled with Shadcn UI. See Shadcn
+ * UI documentation: https://ui.shadcn.com/docs/components/command See cmdk documentation:
+ * https://cmdk.paco.me/
+ */
 export declare const Command: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
@@ -1408,6 +1424,7 @@ export declare const Command: React$1.ForwardRefExoticComponent<Omit<{
 	disablePointerSelection?: boolean;
 	vimBindings?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Command */
 export declare const CommandInput: React$1.ForwardRefExoticComponent<Omit<Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement>> & {
 	ref?: React$1.Ref<HTMLInputElement>;
 } & {
@@ -1416,6 +1433,7 @@ export declare const CommandInput: React$1.ForwardRefExoticComponent<Omit<Omit<P
 	value?: string;
 	onValueChange?: (search: string) => void;
 } & React$1.RefAttributes<HTMLInputElement>, "ref"> & React$1.RefAttributes<HTMLInputElement>>;
+/** @inheritdoc Command */
 export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
@@ -1425,6 +1443,7 @@ export declare const CommandList: React$1.ForwardRefExoticComponent<Omit<{
 }, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & {
 	label?: string;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Command */
 export declare const CommandEmpty: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
@@ -1432,6 +1451,7 @@ export declare const CommandEmpty: React$1.ForwardRefExoticComponent<Omit<{
 } & {
 	asChild?: boolean;
 }, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Command */
 export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
@@ -1443,6 +1463,7 @@ export declare const CommandGroup: React$1.ForwardRefExoticComponent<Omit<{
 	value?: string;
 	forceMount?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Command */
 export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
 	children?: React$1.ReactNode;
 } & Omit<Pick<Pick<React$1.DetailedHTMLProps<React$1.HTMLAttributes<HTMLDivElement>, HTMLDivElement>, "key" | keyof React$1.HTMLAttributes<HTMLDivElement>> & {
@@ -1456,24 +1477,38 @@ export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
 	keywords?: string[];
 	forceMount?: boolean;
 } & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
+ * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
+ * https://vaul.emilkowal.ski/getting-started
+ */
 export declare function Drawer({ shouldScaleBackground, direction, ...props }: React$1.ComponentProps<typeof DrawerPrimitive.Root>): import("react/jsx-runtime").JSX.Element;
 export declare namespace Drawer {
 	var displayName: string;
 }
+/** @inheritdoc Drawer */
 export declare const DrawerTrigger: React$1.ForwardRefExoticComponent<import("@radix-ui/react-dialog").DialogTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Drawer */
 export declare const DrawerPortal: typeof import("vaul").Portal;
+/** @inheritdoc Drawer */
 export declare const DrawerClose: React$1.ForwardRefExoticComponent<import("@radix-ui/react-dialog").DialogCloseProps & React$1.RefAttributes<HTMLButtonElement>>;
+/** @inheritdoc Drawer */
 export declare const DrawerOverlay: React$1.ForwardRefExoticComponent<Omit<Omit<import("@radix-ui/react-dialog").DialogOverlayProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Drawer */
 export declare const DrawerContent: React$1.ForwardRefExoticComponent<Omit<Omit<import("@radix-ui/react-dialog").DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/** @inheritdoc Drawer */
 export declare function DrawerHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
 export declare namespace DrawerHeader {
 	var displayName: string;
 }
+/** @inheritdoc Drawer */
 export declare function DrawerFooter({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
 export declare namespace DrawerFooter {
 	var displayName: string;
 }
+/** @inheritdoc Drawer */
 export declare const DrawerTitle: React$1.ForwardRefExoticComponent<Omit<import("@radix-ui/react-dialog").DialogTitleProps & React$1.RefAttributes<HTMLHeadingElement>, "ref"> & React$1.RefAttributes<HTMLHeadingElement>>;
+/** @inheritdoc Drawer */
 export declare const DrawerDescription: React$1.ForwardRefExoticComponent<Omit<import("@radix-ui/react-dialog").DialogDescriptionProps & React$1.RefAttributes<HTMLParagraphElement>, "ref"> & React$1.RefAttributes<HTMLParagraphElement>>;
 type MenuContextProps = {
 	variant?: "default" | "muted";
@@ -1612,6 +1647,12 @@ export declare const Popover: React$1.FC<PopoverPrimitive.PopoverProps>;
 export declare const PopoverTrigger: React$1.ForwardRefExoticComponent<PopoverPrimitive.PopoverTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Popover */
 export declare const PopoverContent: React$1.ForwardRefExoticComponent<Omit<PopoverPrimitive.PopoverContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Displays an indicator showing the completion progress of a task, typically displayed as a
+ * progress bar. This component is built on Radix UI primitives and styled with Shadcn UI. See
+ * Shadcn UI documentation: https://ui.shadcn.com/docs/components/progress See Radix UI
+ * documentation: https://www.radix-ui.com/primitives/docs/components/progress#api-reference
+ */
 export declare const Progress: React$1.ForwardRefExoticComponent<Omit<ProgressPrimitive.ProgressProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
 /**
  * Radio Group components providing a set of checkable buttons—known as radio buttons—where no more
@@ -1684,6 +1725,10 @@ type SonnerProps = React$1.ComponentProps<typeof Toaster>;
  * @see Sonner Documentation: {@link https://sonner.emilkowal.ski}
  */
 export declare function Sonner({ ...props }: SonnerProps): import("react/jsx-runtime").JSX.Element;
+/**
+ * Use to show a placeholder while content is loading. This component is from Shadcn UI. See Shadcn
+ * UI documentation: https://ui.shadcn.com/docs/components/skeleton
+ */
 export declare function Skeleton({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
 /**
  * The Slider component is an input where the user selects a value from within a given range. This
@@ -1769,6 +1814,10 @@ export declare const VerticalTabsTrigger: React$1.ForwardRefExoticComponent<Omit
 export declare const VerticalTabsContent: React$1.ForwardRefExoticComponent<Omit<TabsPrimitive.TabsContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & {
 	className?: string;
 } & React$1.RefAttributes<HTMLDivElement>>;
+/**
+ * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn
+ * UI. See Shadcn UI documentation: https://ui.shadcn.com/docs/components/textarea
+ */
 export declare const Textarea: React$1.ForwardRefExoticComponent<Omit<React$1.DetailedHTMLProps<React$1.TextareaHTMLAttributes<HTMLTextAreaElement>, HTMLTextAreaElement>, "ref"> & React$1.RefAttributes<HTMLTextAreaElement>>;
 /**
  * ToggleGroup components provide a set of two-state buttons that can be toggled on or off. These
