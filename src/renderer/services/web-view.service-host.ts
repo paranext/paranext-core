@@ -298,32 +298,11 @@ Error
 	at Qt.document.createElement (file:///C:/Users/app.asar/dist/renderer/stuffnthings)
 	at evil.web-view.htmlfile://app.asar
 */
-const getRendererScriptRegex = memoizeOne(() => {
-  const rendererPattern = globalThis.isPackaged
+const getRendererScriptRegex = memoizeOne(() =>
+  globalThis.isPackaged
     ? /^.+\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)\s+.+ \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)/
-    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/;
-
-  return {
-    test: (stackTrace: string) => {
-      // Check if this is a standard renderer call
-      if (rendererPattern.test(stackTrace)) return true;
-
-      // Allow Usersnap widget to create iframes: check if document.createElement is called from renderer
-      // and there's a Usersnap URL anywhere in the stack trace
-      const hasRendererCreateElement = globalThis.isPackaged
-        ? /\s+.+ \S*document\.createElement \(file:\/\/\S*app.asar\/dist\/renderer\/renderer\.js\S*\)/.test(
-            stackTrace,
-          )
-        : /\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/.test(
-            stackTrace,
-          );
-
-      const hasUsersnapInStack = /https:\/\/[\w-]*\.?usersnap\.com\//.test(stackTrace);
-
-      return hasRendererCreateElement && hasUsersnapInStack;
-    },
-  };
-});
+    : /^.+\s+.+ \S*document\.createElement \(https?:\/\/\S*\/renderer\.dev\.js\S*\)\s+.+ \(https?:\/\/\S*\/renderer\.dev\.js\S*\)/,
+);
 /**
  * The HTML tags that are not allowed at all in the main renderer window. Our MutationObserver
  * deletes these immediately if it sees them.
@@ -407,59 +386,53 @@ function removeNodeIfForbidden(node: Node) {
     if (currentTag === 'iframe') {
       const src = currentElement.attributes.getNamedItem('src');
 
-      // Allow Usersnap iframes - check src or look for Usersnap in the current call stack
-      // Also check if this iframe is being added by Usersnap by looking at various attributes
-      const hasUsersnapSrc =
-        src && src.value && /^https:\/\/[\w-]*\.?usersnap\.com\//.test(src.value);
-      const hasUsersnapInStack =
-        Error().stack && /https:\/\/[\w-]*\.?usersnap\.com\//.test(Error().stack || '');
+      // Check if this is a UserSnap iframe by various means
+      const isUserSnapIframe =
+        (src && src.value && src.value.includes('usersnap.com')) ||
+        currentElement.hasAttribute('data-usersnap') ||
+        currentElement.id?.includes('usersnap') ||
+        currentElement.className?.includes('usersnap');
 
-      // Check for common Usersnap iframe patterns
-      const id = currentElement.attributes.getNamedItem('id');
-      const className = currentElement.attributes.getNamedItem('class');
-      const hasUsersnapId = id && id.value && /usersnap/i.test(id.value);
-      const hasUsersnapClass = className && className.value && /usersnap/i.test(className.value);
-
-      const isUsersnapIframe =
-        hasUsersnapSrc || hasUsersnapInStack || hasUsersnapId || hasUsersnapClass;
-
-      if (isUsersnapIframe) {
-        // This is a Usersnap iframe, allow it to pass through without sandbox validation
-        logger.debug(
-          `Allowing Usersnap iframe: src=${src?.value || 'none'}, id=${id?.value || 'none'}, class=${className?.value || 'none'}`,
-        );
-        return;
-      }
-
-      const sandbox = currentElement.attributes.getNamedItem('sandbox');
-      if (!sandbox) {
-        logger.debug(
-          `Rejecting iframe with no sandbox: src=${src?.value || 'none'}, id=${id?.value || 'none'}, class=${className?.value || 'none'}, stack=${Error().stack?.substring(0, 200)}`,
-        );
-        removeElement('iframe with no sandbox');
-        return;
-      }
-      if (!isString(sandbox.value)) {
-        removeElement(`iframe with a non-string sandbox value ${sandbox.value}`);
-        return;
-      }
-      const sandboxValues = split(sandbox.value, ' ');
-      // If the iframe has `src`, only allow `src` sandbox values because browsers that do not
-      // support `srcdoc` fall back to `src` so we should be more strict
-      const allowedSandboxValues = src
-        ? ALLOWED_IFRAME_SRC_SANDBOX_VALUES
-        : ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES;
-      if (
-        sandboxValues.some(
-          (sandboxValue) => sandboxValue !== '' && !allowedSandboxValues.includes(sandboxValue),
-        )
-      ) {
-        removeElement(
-          `iframe with \`${
-            src ? 'src' : 'srcdoc'
-          }\` attribute and disallowed sandbox attribute value '${sandbox.value}'`,
-        );
-        return;
+      if (isUserSnapIframe) {
+        // For UserSnap iframes, ensure they have appropriate sandboxing
+        const sandbox = currentElement.attributes.getNamedItem('sandbox');
+        if (!sandbox) {
+          // Add secure sandbox attributes for UserSnap iframes
+          currentElement.setAttribute('sandbox', 'allow-scripts allow-same-origin allow-popups');
+          logger.debug('UserSnap iframe detected and secured with sandbox attributes');
+        } else {
+          logger.debug('UserSnap iframe already has sandbox attributes');
+        }
+        // Allow UserSnap iframes to proceed
+      } else {
+        // Apply normal iframe validation for non-UserSnap iframes
+        const sandbox = currentElement.attributes.getNamedItem('sandbox');
+        if (!sandbox) {
+          removeElement('iframe with no sandbox');
+          return;
+        }
+        if (!isString(sandbox.value)) {
+          removeElement(`iframe with a non-string sandbox value ${sandbox.value}`);
+          return;
+        }
+        const sandboxValues = split(sandbox.value, ' ');
+        // If the iframe has `src`, only allow `src` sandbox values because browsers that do not
+        // support `srcdoc` fall back to `src` so we should be more strict
+        const allowedSandboxValues = src
+          ? ALLOWED_IFRAME_SRC_SANDBOX_VALUES
+          : ALLOWED_IFRAME_SRCDOC_SANDBOX_VALUES;
+        if (
+          sandboxValues.some(
+            (sandboxValue) => sandboxValue !== '' && !allowedSandboxValues.includes(sandboxValue),
+          )
+        ) {
+          removeElement(
+            `iframe with \`${
+              src ? 'src' : 'srcdoc'
+            }\` attribute and disallowed sandbox attribute value '${sandbox.value}'`,
+          );
+          return;
+        }
       }
     }
     if (FORBIDDEN_HTML_TAGS.includes(currentTag)) {
@@ -1096,10 +1069,25 @@ export const initialize = () => {
       if (FORBIDDEN_HTML_TAGS.includes(tagName) || RESTRICTED_HTML_TAGS.includes(tagName)) {
         const stackTrace = Error().stack ?? '';
         const isInRenderer = getRendererScriptRegex().test(stackTrace);
+        const isUserSnap = stackTrace.includes('usersnap.com');
+        // Tags that UserSnap is allowed to create for its functionality
+        const allowedUserSnapTags = ['iframe', 'script', 'a', 'form', 'dialog'];
+        const isUserSnapAllowedTag = allowedUserSnapTags.includes(tagName);
+
         if (isInRenderer) {
           logger.debug(
             `Allowed ${tagName} on renderer document. If this isn't recognized, this is a very serious security violation.\nStack: ${stackTrace}`,
           );
+        } else if (isUserSnap && isUserSnapAllowedTag) {
+          logger.debug(
+            `Allowed UserSnap ${tagName} creation on renderer document.\nStack: ${stackTrace}`,
+          );
+          // Mark UserSnap elements so we can identify them later
+          const element = createElementOriginal(...args);
+          if (tagName === 'iframe' || tagName === 'a') {
+            element.setAttribute('data-usersnap', 'true');
+          }
+          return element;
         } else {
           const message = `Rejected creating new ${tagName} tag on renderer document! Not allowed.\nStack: ${stackTrace}`;
           // LogError puts an error in the console and throws an error. We don't want to scare
