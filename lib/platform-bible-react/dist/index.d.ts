@@ -162,6 +162,8 @@ export type ChapterRangeSelectorProps = {
  * consists of two combo boxes for selecting the start and end chapters. The component ensures that
  * the selected start chapter is always less than or equal to the end chapter, and vice versa.
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param {ChapterRangeSelectorProps} props - The props for the component.
  */
 export declare function ChapterRangeSelector({ startChapter, endChapter, handleSelectStartChapter, handleSelectEndChapter, isDisabled, chapterCount, }: ChapterRangeSelectorProps): import("react/jsx-runtime").JSX.Element;
@@ -196,6 +198,8 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
  * will display the range of chapters in the selected book, and in the latter case it will display a
  * list of the selected books.
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param {BookSelectorProps} props
  * @param {function} props.handleBookSelectionModeChange - Callback function to handle changes in
  *   book selection mode.
@@ -629,7 +633,8 @@ export type SettingsSidebarProps = {
 };
 /**
  * The SettingsSidebar component is a sidebar that displays a list of extension settings and project
- * settings. It can be used to navigate to different settings pages.
+ * settings. It can be used to navigate to different settings pages. Must be wrapped in a
+ * SidebarProvider component otherwise produces errors.
  *
  * @param props - {@link SettingsSidebarProps} The props for the component.
  */
@@ -867,6 +872,8 @@ type SettingsListProps = React$1.PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param children To populate the list with
  * @returns Formatted div encompassing the children
  */
@@ -884,6 +891,8 @@ type SettingsListItemProps = React$1.PropsWithChildren & {
 /**
  * SettingsListItem component is a common list item. Rendered with a formatted div
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param SettingsListItemProps
  * @returns Formatted div encompassing the list item content
  */
@@ -899,6 +908,8 @@ type SettingsListHeaderProps = {
 /**
  * SettingsListHeader component displays text above the list
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param SettingsListHeaderProps
  * @returns Formatted div with list header content
  */

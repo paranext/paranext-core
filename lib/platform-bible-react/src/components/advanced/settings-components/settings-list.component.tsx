@@ -7,6 +7,8 @@ type SettingsListProps = PropsWithChildren;
 /**
  * SettingsList component is a wrapper for list items. Rendered with a formatted div
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param children To populate the list with
  * @returns Formatted div encompassing the children
  */
@@ -32,6 +34,8 @@ type SettingsListItemProps = PropsWithChildren & {
 /**
  * SettingsListItem component is a common list item. Rendered with a formatted div
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param SettingsListItemProps
  * @returns Formatted div encompassing the list item content
  */
@@ -75,6 +79,8 @@ type SettingsListHeaderProps = {
 /**
  * SettingsListHeader component displays text above the list
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param SettingsListHeaderProps
  * @returns Formatted div with list header content
  */
