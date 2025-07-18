@@ -8,7 +8,7 @@ import {
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { HomeIcon, Moon, Sun, User } from 'lucide-react';
+import { HomeIcon, Moon, Sun, User, MessageSquare } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -38,6 +38,8 @@ import { themeServiceDataProviderName } from '@shared/services/theme.service-mod
 import { logger } from '@shared/services/logger.service';
 import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
 import { localThemeService } from '@renderer/services/theme.service-host';
+import { useUsersnapApi } from '@renderer/components/usersnap';
+import { USERSNAP_PROJECT_API_KEY } from '@renderer/components/usersnap/usersnap.constants';
 
 const TOOLTIP_DELAY = 300;
 
@@ -66,9 +68,12 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%toolbar_theme_change_to_dark%',
   '%toolbar_theme_loading%',
   '%toolbar_theme_loading_error%',
+  '%toolbar_feedback%',
 ];
 
 export function PlatformBibleToolbar() {
+  const usersnapApi = useUsersnapApi();
+
   // Internal state tracker for scroll group in local storage
   const [scrollGroupIdInternal, setScrollGroupIdInternal] = useState<ScrollGroupId>(() =>
     JSON.parse(localStorage.getItem(scrollGroupIdLocalStorageKey) ?? '0'),
@@ -230,6 +235,32 @@ export function PlatformBibleToolbar() {
               <TooltipContent>
                 <p className="tw-font-light">{themeButtonTooltip}</p>
               </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {/* UserSnap Feedback Button */}
+          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="pr-twp tw-h-8 tw-flex-shrink-0"
+                  onClick={() => {
+                    if (usersnapApi) {
+                      // Force open UserSnap widget, ignoring display rules
+                      usersnapApi.show(USERSNAP_PROJECT_API_KEY);
+                    }
+                  }}
+                  disabled={!usersnapApi}
+                >
+                  <MessageSquare />
+                </Button>
+              </TooltipTrigger>
+              {localizedStrings['%toolbar_feedback%'] && (
+                <TooltipContent>
+                  <p className="tw-font-light">{localizedStrings['%toolbar_feedback%']}</p>
+                </TooltipContent>
+              )}
             </Tooltip>
           </TooltipProvider>
           {/* This is a placeholder for the actual user menu */}
