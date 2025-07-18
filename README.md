@@ -76,13 +76,17 @@ This should be a temporary workaround until we update to newer versions of `elec
 
 ### macOS Development Pre-requisites
 
-macOS doesn't come preinstalled with all the
-[icu4c](https://unicode-org.github.io/icu/userguide/icu4c/) libraries. They must be
-installed separately to provide Unicode support to our .NET code. Platform.Bible is
-configured to expect those libraries to be installed using
-[MacPorts](https://www.macports.org/). The
-[icu package on MacPorts](https://ports.macports.org/port/icu/) has the icu4c
-libraries needed for icu.net to run properly.
+You will need to separately install the [icu4c](https://unicode-org.github.io/icu/userguide/icu4c/) libraries that provide Unicode support to our .NET code, since they do not come preinstalled with macOS.
+
+In order to do this, you must first install [MacPorts](https://www.macports.org/).
+
+Then, run the following command:
+
+```bash
+sudo port install icu
+```
+
+You can reference the full instructions [here](https://ports.macports.org/port/icu/), as well as the icu4c libraries needed for icu.net to run properly.
 
 The build processes are configured to automatically download and package icu4c
 libraries with the application, but for development this has to be done manually.
@@ -150,7 +154,7 @@ After you run `npm start` (or, in VSCode, launch `Debug Platform`), you can edit
 
 ### Developing Extensions
 
-Platfrom.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
+Platform.Bible core extensions are found in the `extensions` folder. Please follow the instructions in
 [extensions/README.md](extensions/README.md) to develop core extensions.
 
 Please see the [Extension Template wiki](https://github.com/paranext/paranext-extension-template/wiki) for guides on developing additional extensions that are not part of the Platform.Bible core. Once you have packaged an extension, it can be distributed for Platform.Bible users to install. See [Running your extension in an app](https://github.com/paranext/paranext-extension-template/wiki/Debugging-Your-Extension-in-the-Production-Application#running-your-extension-in-an-app) for installation information.
