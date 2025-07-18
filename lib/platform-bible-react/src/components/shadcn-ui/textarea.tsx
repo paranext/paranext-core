@@ -2,6 +2,10 @@ import React from 'react';
 
 import { cn } from '@/utils/shadcn-ui.util';
 
+/**
+ * Displays a form textarea or a component that looks like a textarea. This component is from Shadcn
+ * UI. See Shadcn UI documentation: https://ui.shadcn.com/docs/components/textarea
+ */
 const Textarea = React.forwardRef<HTMLTextAreaElement, React.ComponentProps<'textarea'>>(
   ({ className, ...props }, ref) => {
     return (

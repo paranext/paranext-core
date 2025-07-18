@@ -51,7 +51,8 @@ export type SettingsSidebarProps = {
 
 /**
  * The SettingsSidebar component is a sidebar that displays a list of extension settings and project
- * settings. It can be used to navigate to different settings pages.
+ * settings. It can be used to navigate to different settings pages. Must be wrapped in a
+ * SidebarProvider component otherwise produces errors.
  *
  * @param props - {@link SettingsSidebarProps} The props for the component.
  */
