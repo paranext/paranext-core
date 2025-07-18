@@ -1,19 +1,12 @@
 import { dirname, join } from 'path';
-import type { StorybookConfig } from '@storybook/react-webpack5';
-import { mergeWithCustomize } from 'webpack-merge';
-import { RuleSetRule } from 'webpack';
+import type { StorybookConfig } from '@storybook/react-vite';
 
 const config: StorybookConfig = {
   stories: ['../src/**/*.mdx', '../src/**/*.stories.@(js|jsx|ts|tsx)'],
   staticDirs: ['../src/stories/assets'], // static asset folder
-  addons: [
-    getAbsolutePath('@storybook/addon-links'),
-    getAbsolutePath('@storybook/addon-essentials'),
-    getAbsolutePath('@storybook/addon-interactions'),
-    getAbsolutePath('@storybook/addon-webpack5-compiler-babel'),
-  ],
+  addons: [getAbsolutePath('@storybook/addon-links'), getAbsolutePath('@storybook/addon-docs')],
   framework: {
-    name: getAbsolutePath('@storybook/react-webpack5'),
+    name: getAbsolutePath('@storybook/react-vite'),
     options: {},
   },
   docs: {},
@@ -30,49 +23,35 @@ const config: StorybookConfig = {
     },
   },
 
-  // Merge StorybookWebpackConfig with our WebpackRendererConfig
-  // See the current webpack configuration using npm run storybook -- --debug-webpack
-  // TODO: Make this work in production mode
-  webpackFinal: async (webpackConfig, { configType }) => {
-    const rendererConfig =
-      configType === 'PRODUCTION'
-        ? // Storybook is a build tool so this will not affect anything
-          // eslint-disable-next-line global-require
-          require('../.erb/configs/webpack.config.renderer.prod').default
-        : // eslint-disable-next-line global-require
-          require('../.erb/configs/webpack.config.renderer.dev').default;
-    // Remove configs that break stuff (https://storybook.js.org/docs/react/builders/webpack#extending-storybooks-webpack-config)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { devServer, entry, output, ...rendererConfigSanitized } = rendererConfig;
+  // Vite-specific configuration
+  async viteFinal(viteConfig) {
+    // Merge custom configuration into the default config
+    const { mergeConfig } = await import('vite');
 
-    // Remove the Storybook Webpack rules that we already have our own rules for
-    return mergeWithCustomize({
-      customizeObject(wpConfig: object, rConfig: object, key: string) {
-        if (key === 'module') {
-          return mergeWithCustomize({
-            customizeArray(wpModule: object[], rModule: object[], moduleKey: string) {
-              if (moduleKey === 'rules') {
-                const wpRules: RuleSetRule[] = wpModule;
-                const rRules: RuleSetRule[] = rModule;
-                return [
-                  ...wpRules.filter(
-                    (rule) =>
-                      !rule ||
-                      !rule.test ||
-                      (rule.test.toString() !== /\.css$/.toString() &&
-                        rule.test.toString() !== /\.(mjs|tsx?|jsx?)$/.toString()),
-                  ),
-                  ...rRules,
-                ];
-              }
-
-              return undefined;
-            },
-          })(wpConfig, rConfig);
-        }
-        return undefined;
+    return mergeConfig(viteConfig, {
+      plugins: [],
+      resolve: {
+        alias: {
+          '@renderer': join(__dirname, '../src/renderer'),
+          '@shared': join(__dirname, '../src/shared'),
+          '@main': join(__dirname, '../src/main'),
+          '@client': join(__dirname, '../src/client'),
+          '@extension-host': join(__dirname, '../src/extension-host'),
+          '@node': join(__dirname, '../src/node'),
+          '@assets': join(__dirname, '../assets'),
+        },
       },
-    })(webpackConfig, rendererConfigSanitized);
+      css: {
+        modules: {
+          localsConvention: 'camelCase',
+        },
+      },
+      define: {
+        // Define environment variables for Storybook
+        'process.type': '"renderer"',
+        'webpackRenderer.isPackaged': 'false',
+      },
+    });
   },
 };
 export default config;

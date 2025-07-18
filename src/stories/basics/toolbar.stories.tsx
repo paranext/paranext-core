@@ -1,6 +1,6 @@
 import { MenuItemContainingCommand } from 'platform-bible-utils';
 import { LocalizedMenus } from '@shared/utils/menu-document-combiner';
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Label, Toolbar } from 'platform-bible-react';
 
 const meta: Meta<typeof Toolbar> = {
