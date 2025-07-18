@@ -235,6 +235,7 @@ export function Inventory({
   const unknownItemsText = localizeString(localizedStrings, '%webView_inventory_unknown%');
   const scopeBookText = localizeString(localizedStrings, '%webView_inventory_scope_currentBook%');
   const scopeChapterText = localizeString(localizedStrings, '%webView_inventory_scope_chapter%');
+  const scopeVerseText = localizeString(localizedStrings, '%webView_inventory_scope_verse%');
   const filterText = localizeString(localizedStrings, '%webView_inventory_filter_text%');
   const showAdditionalItemsText = localizeString(
     localizedStrings,
@@ -325,7 +326,7 @@ export function Inventory({
   };
 
   const handleScopeChange = (value: string) => {
-    if (value === 'book' || value === 'chapter') {
+    if (value === 'book' || value === 'chapter' || value === 'verse') {
       onScopeChange(value);
     } else {
       throw new Error(`Invalid scope value: ${value}`);
@@ -377,6 +378,7 @@ export function Inventory({
           <SelectContent>
             <SelectItem value="book">{scopeBookText}</SelectItem>
             <SelectItem value="chapter">{scopeChapterText}</SelectItem>
+            <SelectItem value="verse">{scopeVerseText}</SelectItem>
           </SelectContent>
         </Select>
         <Input
