@@ -114,6 +114,14 @@ declare module 'platform-lexical-tools' {
   };
 
   /**
+   * Entries mapped by their U23003-defined word number. There may be multiple entries for one word
+   * number.
+   */
+  export type LexicalEntriesByWordNum = {
+    [wordNum: string]: Entry[] | undefined;
+  };
+
+  /**
    * Entries mapped by their location in Scripture. There may be multiple entries for one location
    * even from the same version of a lexical reference text.
    */
@@ -702,6 +710,19 @@ declare module 'platform-lexical-tools' {
   } & LexicalReferenceTextRegistrar;
 
   // #endregion
+
+  // #region Types relating to the dictionary web view
+
+  /** Type for the dictionary scope */
+  export type DictionaryScope = 'chapter' | 'section' | 'verse';
+
+  /** Type for the occurrence view */
+  export type DictionaryOccurrenceView = 'chapter' | 'all';
+
+  /** Type for the project options */
+  export type DictionaryProjectOption = { projectId: string | undefined; projectShortName: string };
+
+  // #endregion
 }
 
 declare module 'papi-shared-types' {
@@ -724,8 +745,11 @@ declare module 'papi-shared-types' {
     /**
      * Opens the dictionary web view
      *
+     * @param editorWebViewId - The id of the editor web view the user opened the dictionary from
      * @returns WebView id for new Dictionary WebView or `undefined` if not created
      */
-    'platformLexicalTools.openDictionary': () => Promise<string | undefined>;
+    'platformLexicalTools.openDictionary': (
+      editorWebViewId: string | undefined,
+    ) => Promise<string | undefined>;
   }
 }

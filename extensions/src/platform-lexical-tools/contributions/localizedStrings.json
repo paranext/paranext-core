@@ -2,15 +2,24 @@
   "metadata": {},
   "localizedStrings": {
     "en": {
+      "%platformLexicalTools_dictionary_allOccurrencesLabel%": "Occurrences",
       "%platformLexicalTools_dictionary_backToList%": "Back to List",
       "%platformLexicalTools_dictionary_definitionLabel%": "Definition",
+      "%platformLexicalTools_dictionary_domainTaxonomyLabel%": "{taxonomy} Domain",
       "%platformLexicalTools_dictionary_noResults%": "No results",
-      "%platformLexicalTools_dictionary_occurrencesInLabel%": "Occurrences in {location} {chapter}",
+      "%platformLexicalTools_dictionary_occurrencesInChapterLabel%": "Occurrences in chapter",
+      "%platformLexicalTools_dictionary_occurrencesForSenseLabel%": "Occurrences for Sense {index}",
+      "%platformLexicalTools_dictionary_occurrencesToggleAll%": "all",
+      "%platformLexicalTools_dictionary_occurrencesToggleChapter%": "chapter",
       "%platformLexicalTools_dictionary_searchDictionary%": "Search Dictionary...",
+      "%platformLexicalTools_dictionary_sensesLabel%": "Senses",
       "%platformLexicalTools_dictionary_scopeSelector_chapter%": "Current Chapter",
       "%platformLexicalTools_dictionary_scopeSelector_section%": "Current Section",
       "%platformLexicalTools_dictionary_scopeSelector_verse%": "Current Verse",
-      "%platformLexicalTools_mainMenu_openDictionary%": "Open Dictionary"
+      "%platformLexicalTools_dictionary_strongsCodeLabel%": "Strong's code",
+      "%platformLexicalTools_dictionary_trackProjectDropdownLabel%": "Track Biblical Terms",
+      "%platformLexicalTools_mainMenu_openDictionary%": "Open Dictionary",
+      "%platformLexicalTools_webViewMenu_openDictionary%": "Open Dictionary"
     }
   }
 }
