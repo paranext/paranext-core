@@ -1,29 +1,31 @@
-import '@renderer/global-this.model';
+import { App } from '@renderer/app.component';
 import '@renderer/global-this-web-view.model';
-import { createRoot } from 'react-dom/client';
+import '@renderer/global-this.model';
+import { startDialogService } from '@renderer/services/dialog.service-host';
+import { startNotificationService } from '@renderer/services/notification.service-host';
+import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
+import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
+import {
+  initialize as initializeThemeService,
+  localThemeService,
+} from '@renderer/services/theme.service-host';
+import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
+import { startWebViewService } from '@renderer/services/web-view.service-host';
+import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
+import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { logger } from '@shared/services/logger.service';
+import * as networkService from '@shared/services/network.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { webViewProviderService } from '@shared/services/web-view-provider.service';
+import { InitOptions, loadSpace } from '@usersnap/browser';
 import {
   applyThemeStylesheet,
   getErrorMessage,
   isPlatformError,
   ThemeDefinitionExpanded,
 } from 'platform-bible-utils';
-import * as networkService from '@shared/services/network.service';
-import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { startWebViewService } from '@renderer/services/web-view.service-host';
-import { logger } from '@shared/services/logger.service';
-import { webViewProviderService } from '@shared/services/web-view-provider.service';
-import { startDialogService } from '@renderer/services/dialog.service-host';
-import { cleanupOldWebViewState } from '@renderer/services/web-view-state.service';
-import { blockWebSocketsToPapiNetwork } from '@renderer/services/renderer-web-socket.service';
-import { startScrollGroupService } from '@renderer/services/scroll-group.service-host';
-import { startNotificationService } from '@renderer/services/notification.service-host';
-import {
-  initialize as initializeThemeService,
-  localThemeService,
-} from '@renderer/services/theme.service-host';
-import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
-import { App } from '@renderer/app.component';
-import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
+import { createRoot } from 'react-dom/client';
+import { USERSNAP_SPACE_API_KEY } from './components/usersnap';
 
 window.addEventListener('error', (errorEvent: ErrorEvent) => {
   const { filename, lineno, colno, error } = errorEvent;
@@ -84,6 +86,35 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
 
     // This needs to run before web views start running and after the network service is running
     blockWebSocketsToPapiNetwork();
+
+    // Start usersnap block
+
+    // Default init parameters for Paranext
+    const defaultInitParams: InitOptions = {
+      // Electron-specific configuration
+      // Use native screenshot capability for better performance in Electron
+      nativeScreenshot: true,
+      // Don't collect geo location for privacy
+      collectGeoLocation: 'none',
+      // Use system fonts for better integration
+      useSystemFonts: true,
+      // Allow local storage for better user experience
+      useLocalStorage: true,
+      // Additional context data
+      custom: {
+        platform: 'Electron',
+        app: 'Platform.Bible',
+        environment: globalThis.isNoisyDevModeEnabled ? 'development' : 'production',
+      },
+    };
+
+    const startTime = performance.now();
+    const api = await loadSpace(USERSNAP_SPACE_API_KEY);
+    api.init(defaultInitParams);
+    const endTime = performance.now();
+    logger.info(`UserSnap initialized successfully in ${endTime - startTime}ms`);
+
+    // End usersnap block
 
     await runPromisesAndThrowIfRejected(
       webViewProviderService.initialize(),

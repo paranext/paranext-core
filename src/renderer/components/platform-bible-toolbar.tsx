@@ -8,7 +8,8 @@ import {
 import { availableScrollGroupIds } from '@renderer/services/scroll-group.service-host';
 import { sendCommand } from '@shared/services/command.service';
 import { ScrollGroupScrRef } from '@shared/services/scroll-group.service-model';
-import { HomeIcon, Moon, Sun, User, MessageSquare } from 'lucide-react';
+import { HomeIcon, Moon, Sun, User } from 'lucide-react';
+// import { HomeIcon, Moon, Sun, User, MessageSquare } from 'lucide-react';
 import {
   Badge,
   BookChapterControl,
@@ -38,8 +39,8 @@ import { themeServiceDataProviderName } from '@shared/services/theme.service-mod
 import { logger } from '@shared/services/logger.service';
 import { provideMenuData } from '@renderer/components/platform-bible-menu.data';
 import { localThemeService } from '@renderer/services/theme.service-host';
-import { useUsersnapApi } from '@renderer/components/usersnap';
-import { USERSNAP_PROJECT_API_KEY } from '@renderer/components/usersnap/usersnap.constants';
+// import { useUsersnapApi } from '@renderer/components/usersnap';
+// import { USERSNAP_PROJECT_API_KEY } from '@renderer/components/usersnap/usersnap.constants';
 
 const TOOLTIP_DELAY = 300;
 
@@ -72,7 +73,7 @@ const LOCALIZED_STRING_KEYS: LocalizeKey[] = [
 ];
 
 export function PlatformBibleToolbar() {
-  const usersnapApi = useUsersnapApi();
+  // const usersnapApi = useUsersnapApi();
 
   // Internal state tracker for scroll group in local storage
   const [scrollGroupIdInternal, setScrollGroupIdInternal] = useState<ScrollGroupId>(() =>
@@ -238,7 +239,7 @@ export function PlatformBibleToolbar() {
             </Tooltip>
           </TooltipProvider>
           {/* UserSnap Feedback Button */}
-          <TooltipProvider delayDuration={TOOLTIP_DELAY}>
+          {/* <TooltipProvider delayDuration={TOOLTIP_DELAY}>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -262,7 +263,7 @@ export function PlatformBibleToolbar() {
                 </TooltipContent>
               )}
             </Tooltip>
-          </TooltipProvider>
+          </TooltipProvider> */}
           {/* This is a placeholder for the actual user menu */}
           <TooltipProvider delayDuration={TOOLTIP_DELAY}>
             <Tooltip>
