@@ -149,6 +149,7 @@ export { Progress } from './components/shadcn-ui/progress';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
 export { Separator } from './components/shadcn-ui/separator';
+export * from './components/shadcn-ui/sidebar';
 export * from './components/shadcn-ui/sonner';
 export * from './components/shadcn-ui/skeleton';
 export { Slider } from './components/shadcn-ui/slider';
