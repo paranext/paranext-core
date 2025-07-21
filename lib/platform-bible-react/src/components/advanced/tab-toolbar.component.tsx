@@ -49,60 +49,11 @@ export type TabToolbarProps = PropsWithChildren<{
   menuButtonIcon?: ReactNode;
 }>;
 
-/**
- * Conditionally render children in start and middle areas of the toolbar based on whether the whole
- * toolbar should be showing or whether just the project menu button should be showing.
+ * Component for rendering a customizable tab toolbar.
  *
- * @param tabToolbarVariant Variant of the tab toolbar. The menuButton option displays just the
- *   project menu as a floating action button that scrolls with the screen.
- * @param className Tailwind CSS classes that should be applied to the container of the children.
- * @param areaChildren Toolbar children to be put in this area of the the toolbar.
- * @returns Nothing for the menuButton variant, otherwise a styled toolbar container with children.
+ * The toolbar includes three main areas to place children components: start, center, and end. It
+ * optionally displays dropdown menus for project and view info, populated by the given menu data.
  */
-function ToolbarChildren(
-  tabToolbarVariant: TabToolbarProps['tabToolbarVariant'],
-  className: string,
-  areaChildren: ReactNode,
-) {
-  if (tabToolbarVariant === 'menuButton') return;
-  return <div className={className}>{areaChildren}</div>;
-}
-
-/**
- * Conditionally render view menu (if it has menu item(s)) and end area children at the end of the
- * toolbar based on whether the whole toolbar should be showing or whether just the project menu
- * button should be showing.
- *
- * @param tabToolbarVariant
- * @param className
- * @param endAreaChildren
- * @param tabViewMenuData
- * @param viewInfoMenuCommandHandler
- * @returns
- */
-function ToolbarEnd(
-  tabToolbarVariant: TabToolbarProps['tabToolbarVariant'],
-  endAreaChildren: ReactNode,
-  tabViewMenuData: Localized<MultiColumnMenu> | undefined,
-  viewInfoMenuCommandHandler: CommandHandler,
-) {
-  if (tabToolbarVariant === 'menuButton') return;
-  return (
-    <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
-      {tabViewMenuData && (
-        <TabDropdownMenu
-          commandHandler={viewInfoMenuCommandHandler}
-          menuData={tabViewMenuData}
-          tabLabel="View Info"
-          icon={<EllipsisVertical />}
-          className="tw-h-full"
-        />
-      )}
-      {endAreaChildren}
-    </div>
-  );
-}
-
 export function TabToolbar({
   onSelectProjectMenuItem,
   onSelectViewInfoMenuItem,

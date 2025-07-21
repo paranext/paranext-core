@@ -31,7 +31,7 @@ const localizeString = (
   return strings[key] ?? key;
 };
 
-// Interface to store the parameters for the ErrorDump component
+/** Interface to store the parameters for the ErrorDump component */
 export interface ErrorDumpProps {
   /** String containing the error details to show */
   errorDetails: string;
@@ -44,10 +44,11 @@ export interface ErrorDumpProps {
 /**
  * Component to render an error dump
  *
- * @param errorDetails Error details string
- * @param handleCopyNotify Handler function to add a notification to the UI to alert that the error
- *   was copied
- * @param localizedStrings Localized strings to use in the ErrorDump component
+ * @param {ErrorDumpProps} props
+ * @param props.errorDetails Error details string
+ * @param props.handleCopyNotify Handler function to add a notification to the UI to alert that the
+ *   error was copied
+ * @param props.localizedStrings Localized strings to use in the ErrorDump component
  */
 export function ErrorDump({ errorDetails, handleCopyNotify, localizedStrings }: ErrorDumpProps) {
   const headerText = localizeString(localizedStrings, '%webView_error_dump_header%');

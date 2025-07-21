@@ -10,6 +10,11 @@ const DrawerContext = React.createContext<{
   direction: 'bottom',
 });
 
+/**
+ * A drawer component for React. These components are built on Vaul and styled with Shadcn UI. See
+ * Shadcn UI Documentation: https://ui.shadcn.com/docs/components/drawer See Vaul Documentation:
+ * https://vaul.emilkowal.ski/getting-started
+ */
 function Drawer({
   shouldScaleBackground = true,
   direction = 'bottom',
@@ -29,12 +34,16 @@ function Drawer({
 }
 Drawer.displayName = 'Drawer';
 
+/** @inheritdoc Drawer */
 const DrawerTrigger = DrawerPrimitive.Trigger;
 
+/** @inheritdoc Drawer */
 const DrawerPortal = DrawerPrimitive.Portal;
 
+/** @inheritdoc Drawer */
 const DrawerClose = DrawerPrimitive.Close;
 
+/** @inheritdoc Drawer */
 const DrawerOverlay = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Overlay>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Overlay>
@@ -47,6 +56,7 @@ const DrawerOverlay = React.forwardRef<
 ));
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 
+/** @inheritdoc Drawer */
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
@@ -99,6 +109,7 @@ const DrawerContent = React.forwardRef<
 });
 DrawerContent.displayName = 'DrawerContent';
 
+/** @inheritdoc Drawer */
 function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
@@ -109,6 +120,7 @@ function DrawerHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DrawerHeader.displayName = 'DrawerHeader';
 
+/** @inheritdoc Drawer */
 function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div className={cn('tw-mt-auto tw-flex tw-flex-col tw-gap-2 tw-p-4', className)} {...props} />
@@ -116,6 +128,7 @@ function DrawerFooter({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
 }
 DrawerFooter.displayName = 'DrawerFooter';
 
+/** @inheritdoc Drawer */
 const DrawerTitle = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Title>
@@ -128,6 +141,7 @@ const DrawerTitle = React.forwardRef<
 ));
 DrawerTitle.displayName = DrawerPrimitive.Title.displayName;
 
+/** @inheritdoc Drawer */
 const DrawerDescription = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Description>,
   React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Description>
