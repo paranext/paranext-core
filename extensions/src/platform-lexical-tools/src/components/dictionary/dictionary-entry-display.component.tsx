@@ -10,7 +10,7 @@ import {
   ListboxOption,
 } from 'platform-bible-react';
 import { ArrowLeft, ChevronUpIcon } from 'lucide-react';
-import { DictionaryOccurrenceView, Entry, Sense } from 'platform-lexical-tools';
+import { Entry, Sense } from 'platform-lexical-tools';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
@@ -19,6 +19,7 @@ import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
   getFormatGlossesStringFromDictionaryEntrySenses,
   getDeduplicatedOccurrencesFromSenses,
+  DictionaryOccurrenceView,
 } from '../../utils/dictionary.utils';
 import { DomainsDisplay } from './domains-display.component';
 

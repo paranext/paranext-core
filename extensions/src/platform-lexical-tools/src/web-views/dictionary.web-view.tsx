@@ -12,11 +12,12 @@ import {
 } from 'platform-bible-react';
 import { useDataProvider, useLocalizedStrings } from '@papi/frontend/react';
 import { WebViewProps } from '@papi/core';
-import { DictionaryScope, Entry } from 'platform-lexical-tools';
+import { Entry } from 'platform-lexical-tools';
 import { SerializedVerseRef } from '@sillsdev/scripture';
 import { DictionaryEntryDisplay } from '../components/dictionary/dictionary-entry-display.component';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
+  DictionaryScope,
   getFormatGlossesStringFromDictionaryEntrySenses,
   useIsWideScreen,
 } from '../utils/dictionary.utils';

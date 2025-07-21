@@ -114,14 +114,6 @@ declare module 'platform-lexical-tools' {
   };
 
   /**
-   * Entries mapped by their U23003-defined word number. There may be multiple entries for one word
-   * number.
-   */
-  export type LexicalEntriesByWordNum = {
-    [wordNum: string]: Entry[] | undefined;
-  };
-
-  /**
    * Entries mapped by their location in Scripture. There may be multiple entries for one location
    * even from the same version of a lexical reference text.
    */
@@ -708,19 +700,6 @@ declare module 'platform-lexical-tools' {
       options?: DataProviderSubscriberOptions,
     ): Promise<UnsubscriberAsync>;
   } & LexicalReferenceTextRegistrar;
-
-  // #endregion
-
-  // #region Types relating to the dictionary web view
-
-  /** Type for the dictionary scope */
-  export type DictionaryScope = 'chapter' | 'section' | 'verse';
-
-  /** Type for the occurrence view */
-  export type DictionaryOccurrenceView = 'chapter' | 'all';
-
-  /** Type for the project options */
-  export type DictionaryProjectOption = { projectId: string | undefined; projectShortName: string };
 
   // #endregion
 }

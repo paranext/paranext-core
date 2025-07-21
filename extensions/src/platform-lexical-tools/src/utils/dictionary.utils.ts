@@ -25,6 +25,15 @@ export const DICTIONARY_LOCALIZED_STRING_KEYS: LocalizeKey[] = [
   '%platformLexicalTools_dictionary_trackProjectDropdownLabel%',
 ];
 
+/** Type for the dictionary scope */
+export type DictionaryScope = 'chapter' | 'section' | 'verse';
+
+/** Type for the occurrence view */
+export type DictionaryOccurrenceView = 'chapter' | 'all';
+
+/** Type for the project options */
+export type DictionaryProjectOption = { projectId: string | undefined; projectShortName: string };
+
 export function useIsWideScreen() {
   const [isWide, setIsWide] = useState(() => window.innerWidth >= 1024);
 

@@ -6,10 +6,12 @@ import {
   SelectContent,
   SelectItem,
 } from 'platform-bible-react';
-import { DictionaryProjectOption } from 'platform-lexical-tools';
 import { useMemo } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
-import { DICTIONARY_LOCALIZED_STRING_KEYS } from '../../utils/dictionary.utils';
+import {
+  DICTIONARY_LOCALIZED_STRING_KEYS,
+  DictionaryProjectOption,
+} from '../../utils/dictionary.utils';
 
 /** Props for the TrackProjectDropdown component */
 type TrackProjectDropdownProps = {
