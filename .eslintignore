@@ -39,8 +39,6 @@ dist
 !.erb
 !.storybook
 
-storybook-static
-
 # directories that have separate eslint project
 lib/platform-bible-react
 lib/platform-bible-utils
@@ -52,3 +50,4 @@ extensions
 package-lock.json
 bin
 obj
+storybook-static

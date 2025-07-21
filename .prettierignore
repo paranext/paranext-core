@@ -39,8 +39,6 @@ dist
 !.erb
 !.storybook
 
-storybook-static
-
 # directories that have separate eslint project
 lib/platform-bible-react
 lib/platform-bible-utils
@@ -51,4 +49,9 @@ extensions
 package-lock.json
 bin
 obj
+storybook-static
 
+# Formats not supported by Prettier
+# (no sync with .eslintignore and .stylelintignore)
+## MDXv2+ (used by Storybook)
+*.mdx

@@ -9,7 +9,6 @@ import { AvatarExample } from './basics/avatar.examples.component';
 import { BadgeExamples } from './basics/badge.examples.component';
 import { ButtonExamples } from './basics/button.examples.component';
 import { CardExamples } from './basics/card.examples.component';
-import { ChapterRangeSelectorExample } from './basics/chapter-range-example.component';
 import { CheckboxExamples } from './basics/checkbox.examples.component';
 import { ChecklistExamples } from './basics/checklist.examples.component';
 import { ComboBoxExamples } from './basics/combo-box.examples.component';
@@ -44,9 +43,6 @@ export function Basics() {
           <VerticalTabsTrigger value="Badge">Badge</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Chapter Range Selector">
-            Chapter Range Selector
-          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checklist">Checklist</VerticalTabsTrigger>
           <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
@@ -89,10 +85,6 @@ export function Basics() {
 
         <VerticalTabsContent value="Card">
           <CardExamples />
-        </VerticalTabsContent>
-
-        <VerticalTabsContent value="Chapter Range Selector">
-          <ChapterRangeSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Checkbox">

@@ -10,7 +10,6 @@ import {
 } from '@/components/basics/tabs-vertical';
 import { defaultScrRef, ScrollGroupId } from 'platform-bible-utils';
 import { useState } from 'react';
-import { BookSelectorExample } from './advanced/book-selector-example.component';
 import { FilterExample } from './advanced/filter-example';
 import { InventoryExample } from './advanced/inventory-example.component';
 import { MarkdownRendererExample } from './advanced/markdown-renderer-example.component';
@@ -75,7 +74,6 @@ export function Compositions() {
           <VerticalTabsTrigger value="Book Chapter Control">
             Book Chapter Control
           </VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Book Selector">Book Selector</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Data Table">Data Table</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Filter">Filter</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Inventory">Inventory</VerticalTabsTrigger>
@@ -106,10 +104,6 @@ export function Compositions() {
 
         <VerticalTabsContent value="Book Chapter Control">
           <BookChapterControl scrRef={scrRef} handleSubmit={setScrRef} />
-        </VerticalTabsContent>
-
-        <VerticalTabsContent value="Book Selector">
-          <BookSelectorExample />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Data Table">
