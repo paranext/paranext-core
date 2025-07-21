@@ -24,7 +24,7 @@ export type DropdownItem = {
   id: string;
   /** The label is the text that will be displayed on the dropdown item. */
   label: string;
-  /** The onClick function is called when the item is clicked. */
+  /** The onUpdate function is called when the state of a dropdown item is changed. */
   onUpdate: (id: string, checked?: boolean) => void;
 };
 
