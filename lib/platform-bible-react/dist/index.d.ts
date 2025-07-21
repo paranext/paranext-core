@@ -304,12 +304,12 @@ export declare enum DropdownMenuItemType {
 	Radio = 1
 }
 export type DropdownItem = {
+	/** Unique identifier for this dropdown */
+	id: string;
 	/** The label is the text that will be displayed on the dropdown item. */
 	label: string;
-	/** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
-	itemType: DropdownMenuItemType;
-	/** The onClick function is called when the item is clicked. */
-	onClick: () => void;
+	/** The onUpdate function is called when the state of a dropdown item is changed. */
+	onUpdate: (id: string, checked?: boolean) => void;
 };
 export type DropdownGroup = {
 	/**
@@ -317,6 +317,8 @@ export type DropdownGroup = {
 	 * the items in the group.
 	 */
 	label: string;
+	/** The itemType determines the DropdownMenuItemType type as either Check or Radio. */
+	itemType: DropdownMenuItemType;
 	/** The items array contains the items that will be displayed in the dropdown group */
 	items: DropdownItem[];
 };
