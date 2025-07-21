@@ -59,6 +59,8 @@ type BookSelectorProps = ChapterRangeSelectorProps & {
  * will display the range of chapters in the selected book, and in the latter case it will display a
  * list of the selected books.
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param {BookSelectorProps} props
  * @param {function} props.handleBookSelectionModeChange - Callback function to handle changes in
  *   book selection mode.
