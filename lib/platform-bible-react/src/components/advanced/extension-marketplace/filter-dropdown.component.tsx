@@ -118,7 +118,6 @@ export function FilterDropdown({ id, label, groups }: FilterDropdownProps) {
                   <>
                     {group.items.map((item, index) => (
                       <div key={item.id}>
-                        {console.log('item', index, checkedStates[groupIndex][index]) ?? ''}
                         <DropdownMenuCheckboxItem
                           checked={checkedStates[groupIndex][index]}
                           onCheckedChange={() => handleCheckboxUpdate(groupIndex, index)}
