@@ -1,0 +1,9 @@
+@use './hello-rock3.web-view.base';
+
+.title {
+  color: rebeccapurple;
+
+  .framework {
+    font-weight: 900;
+  }
+}

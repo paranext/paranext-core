@@ -2,15 +2,15 @@ import { PropsWithChildren, ReactNode } from 'react';
 import { cn } from '@/utils/shadcn-ui.util';
 import { Localized, MultiColumnMenu } from 'platform-bible-utils';
 import { Menu, EllipsisVertical } from 'lucide-react';
-import { CommandHandler } from './menus/platform-menubar.component';
+import { SelectMenuItemHandler } from './menus/platform-menubar.component';
 import TabDropdownMenu from './menus/tab-dropdown-menu.component';
 
 export type TabToolbarProps = PropsWithChildren<{
   /** The handler to use for toolbar item commands */
-  projectMenuCommandHandler: CommandHandler;
+  onSelectProjectMenuItem: SelectMenuItemHandler;
 
   /** The handler to use for toolbar item commands */
-  viewInfoMenuCommandHandler: CommandHandler;
+  onSelectViewInfoMenuItem: SelectMenuItemHandler;
 
   /** Menu data that is used to populate the Menubar component for the project menu. */
   projectMenuData?: Localized<MultiColumnMenu>;
@@ -40,9 +40,15 @@ export type TabToolbarProps = PropsWithChildren<{
   endAreaChildren?: ReactNode;
 }>;
 
+/**
+ * Component for rendering a customizable tab toolbar.
+ *
+ * The toolbar includes three main areas to place children components: start, center, and end. It
+ * optionally displays dropdown menus for project and view info, populated by the given menu data.
+ */
 export function TabToolbar({
-  projectMenuCommandHandler,
-  viewInfoMenuCommandHandler,
+  onSelectProjectMenuItem,
+  onSelectViewInfoMenuItem,
   projectMenuData,
   tabViewMenuData,
   id,
@@ -61,7 +67,7 @@ export function TabToolbar({
     >
       {projectMenuData && (
         <TabDropdownMenu
-          commandHandler={projectMenuCommandHandler}
+          onSelectMenuItem={onSelectProjectMenuItem}
           menuData={projectMenuData}
           tabLabel="Project"
           icon={<Menu />}
@@ -77,7 +83,7 @@ export function TabToolbar({
       <div className="tw-flex tw-h-full tw-shrink tw-grow-[2] tw-flex-row-reverse tw-flex-wrap tw-items-start tw-gap-2 tw-overflow-clip tw-@container/tab-toolbar-end">
         {tabViewMenuData && (
           <TabDropdownMenu
-            commandHandler={viewInfoMenuCommandHandler}
+            onSelectMenuItem={onSelectViewInfoMenuItem}
             menuData={tabViewMenuData}
             tabLabel="View Info"
             icon={<EllipsisVertical />}

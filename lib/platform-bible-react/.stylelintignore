@@ -3,8 +3,11 @@
 # Dependency directory
 node_modules
 
-# Built files
+# Generated files
 dist
-
-# Doc files
+storybook-static
 docs
+
+# Formats not supported by Prettier
+## MDXv2+ (used by Storybook)
+*.mdx

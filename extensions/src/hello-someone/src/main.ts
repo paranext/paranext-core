@@ -11,7 +11,7 @@ import {
 import type { PeopleData, PeopleDataMethods, PeopleDataTypes, Person } from 'hello-someone';
 import helloSomeoneHtmlWebView from './hello-someone.web-view.html?inline';
 
-logger.info('Hello Someone is importing!');
+logger.debug('Hello Someone is importing!');
 
 /**
  * Example data provider engine that provides information about people.
@@ -183,7 +183,7 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
    *   throw an error.
    */
   notifyUpdate(updateInstructions) {
-    logger.info(`people data provider engine ran notifyUpdate! ${updateInstructions}`);
+    logger.debug(`people data provider engine ran notifyUpdate! ${updateInstructions}`);
   },
 
   /**
@@ -221,7 +221,7 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
   async deletePerson(name: string) {
     const person = this.getPerson(name, false);
     if (person) {
-      logger.info(`RIP ${name}, who died tragically young at age ${person.age}. ;(`);
+      logger.debug(`RIP ${name}, who died tragically young at age ${person.age}. ;(`);
       delete this.people[name.toLowerCase()];
       this.notifyUpdate();
       return true;
@@ -232,7 +232,7 @@ const peopleDataProviderEngine: IDataProviderEngine<PeopleDataTypes> &
   /** Test method to make sure people can use data provider engines' custom methods */
   testRandomMethod: async (things: string) => {
     const result = `People data provider got testRandomMethod! ${things}`;
-    logger.info(result);
+    logger.debug(result);
     return result;
   },
 };
@@ -258,7 +258,7 @@ const peopleWebViewProvider: IWebViewProvider = {
 };
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
-  logger.info('Hello Someone is activating!');
+  logger.debug('Hello Someone is activating!');
 
   const peopleDataProviderPromise = papi.dataProviders.registerEngine(
     'helloSomeone.people',
@@ -294,11 +294,11 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     },
   );
 
-  // Create a webview or get the existing webview if ours already exists
+  // Create a webview or get the existing webview if ours already exists.
   // Note: here, we are storing a created webview's id when we create it, and using that id on
   // `existingId` to look specifically for the webview that we previously created if we have ever
   // created one in a previous session. This means that, if someone else creates a people web view,
-  // it will be distinct from this one. We are creating our own web view here. See `hello-world.ts`
+  // it will be distinct from this one. We are creating our own web view here. See `hello-rock3.ts`
   // for an example of getting any webview with the specified `webViewType`
 
   // Get existing webview id if we previously created a webview for this type
@@ -318,7 +318,7 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     const peopleWebViewId = await papi.webViews.openWebView(
       peopleWebViewType,
       { type: 'panel', direction: 'top' },
-      { existingId: existingPeopleWebViewId },
+      { existingId: existingPeopleWebViewId, bringToFront: false },
     );
 
     // Save newly acquired webview id
@@ -334,13 +334,13 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await peopleDataProviderPromise,
     await peopleWebViewProviderPromise,
     await helloSomeoneCommandPromise,
-    papi.webViews.onDidAddWebView((addWebViewEvent) => {
+    papi.webViews.onDidOpenWebView((addWebViewEvent) => {
       if (addWebViewEvent.webView.webViewType === peopleWebViewType)
-        logger.info(
+        logger.debug(
           `We noticed a ${peopleWebViewType} webView was added with id ${addWebViewEvent.webView.id}`,
         );
     }),
   );
 
-  logger.info('Hello Someone is finished activating!');
+  logger.debug('Hello Someone is finished activating!');
 }

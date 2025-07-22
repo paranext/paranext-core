@@ -1,11 +1,18 @@
 /** Handles setting up activation of and running of extensions */
 
-import chokidar from 'chokidar';
+import { watch as chokidarWatch } from 'chokidar';
 import JSZip from 'jszip';
 import path from 'path';
 import { IExtension } from '@extension-host/extension-types/extension.interface';
 import * as nodeFS from '@node/services/node-file-system.service';
-import { FILE_PROTOCOL, getPathFromUri, joinUriPaths } from '@node/utils/util';
+import {
+  DISABLED_EXTENSIONS_DIR,
+  FILE_PROTOCOL,
+  getPathFromUri,
+  INSTALLED_EXTENSIONS_DIR,
+  joinUriPaths,
+  UNZIPPED_EXTENSIONS_CACHE_DIR,
+} from '@node/utils/util';
 import { Uri } from '@shared/data/file-system.model';
 import { getModuleSimilarApiMessage } from '@shared/utils/util';
 import Module from 'module';
@@ -14,8 +21,8 @@ import * as platformBibleUtils from 'platform-bible-utils';
 import * as crypto from 'crypto';
 import { logger } from '@shared/services/logger.service';
 import {
-  getCommandLineArgumentsGroup,
   COMMAND_LINE_ARGS,
+  getCommandLineArgumentsGroup,
   getCommandLineSwitch,
 } from '@node/utils/command-line.util';
 import { setExtensionUris } from '@extension-host/services/extension-storage.service';
@@ -28,22 +35,21 @@ import {
   deserialize,
   endsWith,
   formatReplacementString,
+  getErrorMessage,
   includes,
-  stringLength,
-  startsWith,
   slice,
+  SortedSet,
+  startsWith,
+  stringLength,
   toKebabCase,
   UnsubscriberAsync,
   UnsubscriberAsyncList,
-  getErrorMessage,
 } from 'platform-bible-utils';
 import { LogError } from '@shared/log-error.model';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import { PLATFORM_NAMESPACE } from '@shared/data/platform.data';
-import {
-  ElevatedPrivilegeNames,
-  ElevatedPrivileges,
-} from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivileges } from '@shared/models/elevated-privileges.model';
+import { ElevatedPrivilegeNames } from '@shared/models/elevated-privilege-names.model';
 import { generateHashFromBuffer } from '@node/utils/crypto-util';
 import {
   ExtensionIdentifier,
@@ -71,12 +77,20 @@ import { appService } from '@shared/services/app.service';
 // Used in JSDoc
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import { AppInfo } from '@shared/services/app.service-model';
+import {
+  EXTENSION_MANIFEST_FILE_NAME,
+  getExtensionUri,
+  readExtensionDataFromFolder,
+  readExtensionDataFromZip,
+} from '@extension-host/utils/extension-data.util';
+import { FullExtensionData } from '@shared/models/full-extension-data.model';
+import { ExtensionInfo } from '@extension-host/extension-types/extension-info.model';
 
 /**
  * The way to use `require` directly - provided by webpack because they overwrite normal `require`.
  * https://webpack.js.org/api/module-variables/#**non_webpack_require**-webpack-specific
  */
-// eslint-disable-next-line camelcase, no-underscore-dangle
+// eslint-disable-next-line camelcase, no-underscore-dangle, @typescript-eslint/naming-convention
 declare const __non_webpack_require__: typeof require;
 
 /** These are names of extensions that should only be loaded if "noisy dev mode" is enabled */
@@ -84,24 +98,9 @@ const TEST_EXTENSION_NAMES = [
   'c-sharp-provider-test',
   'evil',
   'helloSomeone',
-  'helloWorld',
+  'helloRock3',
   'quickVerse',
 ];
-
-/**
- * Information about an extension and extra metadata about it that we generate
- *
- * This is a transformed and frozen version of the extension's {@link ExtensionManifest}
- */
-type ExtensionInfo = Readonly<
-  ExtensionManifest & {
-    /**
-     * Uri to this extension's directory. Not provided in actual manifest, but added while parsing
-     * the manifest
-     */
-    dirUri: Uri;
-  }
->;
 
 /** Information about an active extension */
 type ActiveExtension = {
@@ -134,11 +133,10 @@ type DtsInfo = {
  */
 type ExtensionKey = `${string}.${string}`;
 
-/**
- * Name of the file describing the extension and its capabilities. Provided by the extension
- * developer
- */
-const MANIFEST_FILE_NAME = 'manifest.json';
+/** Represents the publisher of an extension as identified in an extension manifest */
+type PublisherIdentifier = {
+  publisherName?: string;
+};
 
 /** List of all forbidden extension names. Extensions with these names will not work */
 const FORBIDDEN_EXTENSION_NAMES = ['', PLATFORM_NAMESPACE];
@@ -156,18 +154,18 @@ const requireOriginal = Module.prototype.require;
 const systemRequire = globalThis.isPackaged ? __non_webpack_require__ : require;
 
 /** The location where installed extensions are stored. Created if it does not exist for ease of use */
-const installedExtensionsUri: Uri = `app://installed-extensions`;
+const installedExtensionsUri: Uri = `app://${INSTALLED_EXTENSIONS_DIR}`;
 nodeFS.createDir(installedExtensionsUri);
 
 /**
  * The location where installed extensions may be moved if they are disabled. Created if it does not
  * exist for ease of use
  */
-const disabledExtensionsUri: Uri = `app://disabled-extensions`;
+const disabledExtensionsUri: Uri = `app://${DISABLED_EXTENSIONS_DIR}`;
 nodeFS.createDir(disabledExtensionsUri);
 
 /** The location where we will store decompressed extension ZIP files */
-const userUnzippedExtensionsCacheUri: Uri = 'cache://extensions';
+const userUnzippedExtensionsCacheUri: Uri = `cache://${UNZIPPED_EXTENSIONS_CACHE_DIR}`;
 
 /**
  * The location where we will copy extension type declaration files for extensions to use in
@@ -207,6 +205,9 @@ const uriHandlersByExtensionKey = new Map<ExtensionKey, UriHandler>();
 /** Regex matching to spaces */
 const spaceRegex = /\s/;
 
+/** String comparison function used to check for similarity of extension and publisher names */
+const nameComparator = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
+
 /** Parse string extension manifest into an object and perform any transformations needed */
 function parseManifest(extensionManifestJson: string): ExtensionManifest {
   const extensionManifest: ExtensionManifest = deserialize(extensionManifestJson);
@@ -240,6 +241,7 @@ const bundledExtensionDir = `resources://extensions${globalThis.isPackaged ? '' 
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 3. Core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -287,6 +289,7 @@ const commandLineExtensionDirectories: string[] = getCommandLineArgumentsGroup(
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 3. Core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -307,6 +310,7 @@ async function getExtensionRootDirectoryContents() {
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 4. Extensions in core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -333,6 +337,7 @@ async function getExtensionZipUris(): Promise<Uri[]> {
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 4. Extensions in core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -353,8 +358,8 @@ async function getExtensionUrisToLoad(): Promise<Uri[]> {
   // filter out files
   const extensionFolderPromises = commandLineExtensionDirectories
     .map((extensionDirPath) => {
-      const extensionFolder = extensionDirPath.endsWith(MANIFEST_FILE_NAME)
-        ? extensionDirPath.slice(0, -MANIFEST_FILE_NAME.length)
+      const extensionFolder = extensionDirPath.endsWith(EXTENSION_MANIFEST_FILE_NAME)
+        ? extensionDirPath.slice(0, -EXTENSION_MANIFEST_FILE_NAME.length)
         : extensionDirPath;
       return extensionFolder;
     })
@@ -395,7 +400,7 @@ async function unzipCompressedExtensionFiles(): Promise<void> {
 
 /** Unpack a single ZIP file into a known location so we can try to load an extension from it */
 async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
-  logger.info(`Unpacking zipped extension: ${zipUri}`);
+  logger.debug(`Unpacking zipped extension: ${zipUri}`);
   const parsedZipUri: path.ParsedPath = path.parse(zipUri);
   const zipData: Buffer = await nodeFS.readFileBinary(zipUri);
   const zip: JSZip = await JSZip.loadAsync(zipData);
@@ -411,7 +416,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
         logger.warn(`Invalid extension ZIP file entry in "${zipUri}": ${fileName}`);
         zipEntriesInProperDirectory = false;
       }
-      if (parsedPath.base === MANIFEST_FILE_NAME) foundManifestFile = true;
+      if (parsedPath.base === EXTENSION_MANIFEST_FILE_NAME) foundManifestFile = true;
     }),
   );
   if (!zipEntriesInProperDirectory) return;
@@ -446,6 +451,7 @@ async function unzipCompressedExtensionFile(zipUri: Uri): Promise<void> {
  *
  *    - In development: `paranext-core/dev-appdata/installed-extensions`
  *    - In production: `<user_home_directory>/.platform.bible/installed-extensions`
+ *    - In snap package: `<user_home_directory>/snap/platform-bible/common/app/installed-extensions`
  * 4. Extensions in core extensions directory
  *
  *    - In development: `paranext-core/extensions/dist`
@@ -464,7 +470,7 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
       extensionUris.map(async (extensionUri) => {
         try {
           const extensionManifestJson = await nodeFS.readFileText(
-            joinUriPaths(extensionUri, MANIFEST_FILE_NAME),
+            joinUriPaths(extensionUri, EXTENSION_MANIFEST_FILE_NAME),
           );
           // Assert the return type after freeze.
           // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -496,36 +502,57 @@ async function getExtensions(): Promise<ExtensionInfo[]> {
     })
     // Assert the fulfilled type since the unfulfilled ones have been filtered out.
     // eslint-disable-next-line no-type-assertion/no-type-assertion
-    .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value);
+    .map((fulfilled) => (fulfilled as PromiseFulfilledResult<ExtensionInfo>).value)
+    // TODO: Properly sort the order of extensions for activation based on their stated dependencies
+    // All embedded extensions should probably also be given priority over others. If we want to be
+    // "fancy" we could use a tree instead of a list and activate functions all on the same level
+    // concurrently instead of sequentially. For now, manually prioritize some extensions.
+    .sort((extA, extB) => {
+      if (extA.name === 'platformScripture') return -1;
+      if (extB.name === 'platformScripture') return 1;
+      if (extA.name === 'platformScriptureEditor') return -1;
+      if (extB.name === 'platformScriptureEditor') return 1;
 
-  // Filter out duplicate extensions. Only the first extension encountered in order is used
+      // TEMPORARY: Explicitly load helloRock3 after helloSomeone.
+      if (extA.name === 'helloRock3' && extB.name === 'helloSomeone') return 1;
+      if (extA.name === 'helloSomeone' && extB.name === 'helloRock3') return -1;
+
+      const extAIsPlatform = extA.name.startsWith('platform');
+      const extBIsPlatform = extB.name.startsWith('platform');
+      if (extAIsPlatform && !extBIsPlatform) return -1;
+      if (extBIsPlatform && !extAIsPlatform) return 1;
+      if (extAIsPlatform && extBIsPlatform) return extA.name < extB.name ? -1 : 1;
+      const extAIsPT = extA.name.startsWith('paratext');
+      const extBIsPT = extB.name.startsWith('paratext');
+      if (extAIsPT && !extBIsPT) return -1;
+      if (extBIsPT && !extAIsPT) return 1;
+      return extA.name < extB.name ? -1 : 1;
+    });
+
+  // Now go through the ordered list of extensions and remove anything with a name or publisher
+  // that is too similar to another extension's name or publisher that is higher on the list
+  const extensionNames = new SortedSet(nameComparator);
+  const publisherNames = new SortedSet(nameComparator);
   const extensionInfos: ExtensionInfo[] = [];
   allExtensionInfos.forEach((extensionInfo) => {
-    if (
-      !extensionInfos.some((finalExtensionInfo) => finalExtensionInfo.name === extensionInfo.name)
-    )
-      extensionInfos.push(extensionInfo);
-  });
+    if (extensionNames.has(extensionInfo.name)) {
+      logger.warn(
+        `Skipping extension ${extensionInfo.name} because its name is too similar to another extension`,
+      );
+      return;
+    }
 
-  // TODO: Properly sort the order of extensions for activation based on their stated dependencies
-  // All embedded extensions should probably also be given priority over others. If we want to be
-  // "fancy" we could use a tree instead of a list and activate functions all on the same level
-  // concurrently instead of sequentially. For now, manually prioritize some extensions.
-  extensionInfos.sort((extA, extB) => {
-    if (extA.name === 'platformScripture') return -1;
-    if (extB.name === 'platformScripture') return 1;
-    if (extA.name === 'platformScriptureEditor') return -1;
-    if (extB.name === 'platformScriptureEditor') return 1;
-    const extAIsPlatform = extA.name.startsWith('platform');
-    const extBIsPlatform = extB.name.startsWith('platform');
-    if (extAIsPlatform && !extBIsPlatform) return -1;
-    if (extBIsPlatform && !extAIsPlatform) return 1;
-    if (extAIsPlatform && extBIsPlatform) return extA.name < extB.name ? -1 : 1;
-    const extAIsPT = extA.name.startsWith('paratext');
-    const extBIsPT = extB.name.startsWith('paratext');
-    if (extAIsPT && !extBIsPT) return -1;
-    if (extBIsPT && !extAIsPT) return 1;
-    return extA.name < extB.name ? -1 : 1;
+    const publisherIndex = publisherNames.findIndex(extensionInfo.publisher ?? '');
+    if (publisherIndex >= 0 && extensionInfo.publisher !== publisherNames.at(publisherIndex)) {
+      logger.warn(
+        `Skipping extension ${extensionInfo.name} because its publisher is too similar to another extension`,
+      );
+      return;
+    }
+
+    extensionInfos.push(extensionInfo);
+    extensionNames.insert(extensionInfo.name);
+    if (extensionInfo.publisher) publisherNames.insert(extensionInfo.publisher);
   });
 
   return extensionInfos;
@@ -656,39 +683,28 @@ async function cacheExtensionTypeDeclarations(extensionInfos: ExtensionInfo[]) {
 function watchForExtensionChanges(): UnsubscriberAsync {
   const reloadExtensionsDebounced = debounce(async (shouldDeactivateExtensions) => {
     try {
-      logger.debug('Reload extensions from watching');
+      logger.info('Reload extensions from watching');
       await reloadExtensions(shouldDeactivateExtensions, true);
     } catch (e) {
       throw new LogError(`Reload extensions from watching failed. Investigate: ${e}`);
     }
   }, RESTART_DELAY_MS);
 
-  const watcher = chokidar
-    .watch(
-      extensionRootDirectoriesToWatch
-        .concat(commandLineExtensionDirectories)
-        .map((uri) => getPathFromUri(uri)),
-      { ignoreInitial: true, awaitWriteFinish: true },
-    )
-    .on('all', async (eventType) => {
-      let shouldDeactivateExtensions: boolean = true;
-      if (eventType === 'add' || eventType === 'addDir') shouldDeactivateExtensions = false;
-      reloadExtensionsDebounced(shouldDeactivateExtensions);
-    });
+  const watcher = chokidarWatch(
+    extensionRootDirectoriesToWatch
+      .concat(commandLineExtensionDirectories)
+      .map((uri) => getPathFromUri(uri)),
+    { ignoreInitial: true, awaitWriteFinish: true },
+  ).on('all', async (eventType) => {
+    let shouldDeactivateExtensions: boolean = true;
+    if (eventType === 'add' || eventType === 'addDir') shouldDeactivateExtensions = false;
+    reloadExtensionsDebounced(shouldDeactivateExtensions);
+  });
 
   return async () => {
     watcher.close();
     return true;
   };
-}
-
-/**
- * Returns a URI we can use with `nodeFS` calls that is an expected filename given a base URI,
- * extension name, and extension version. This is not that useful for packaged extensions but is
- * important for all other extensions, both enabled and disabled.
- */
-function getExtensionUri(baseUri: string, extensionName: string, extensionVersion: string): string {
-  return `${baseUri}/${extensionName}_${extensionVersion}.zip`;
 }
 
 /**
@@ -708,14 +724,20 @@ function extractExtensionDetailsFromFileNames(fileUris: string[]): ExtensionIden
 }
 
 /** Extracts extension identifier information from a buffer containing an extension ZIP file */
-async function extractExtensionDetailsFromZip(zipData: Buffer): Promise<ExtensionIdentifier> {
+async function extractExtensionDetailsFromZip(
+  zipData: Buffer,
+): Promise<ExtensionIdentifier & PublisherIdentifier> {
   const zip: JSZip = await JSZip.loadAsync(zipData);
-  const zippedManifest = zip.file(MANIFEST_FILE_NAME);
+  const zippedManifest = zip.file(EXTENSION_MANIFEST_FILE_NAME);
   if (!zippedManifest) throw new Error('no manifest file found in ZIP data');
   // Assert the extracted manifest.json data as the associated type
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const manifest = JSON.parse(await zippedManifest.async('string')) as ExtensionManifest;
-  return { extensionName: manifest.name, extensionVersion: manifest.version };
+  return {
+    extensionName: manifest.name,
+    extensionVersion: manifest.version,
+    publisherName: manifest.publisher,
+  };
 }
 
 /**
@@ -787,9 +809,26 @@ async function installExtension(
     throw new Error(`file hash mismatch, expected ${expectedHashValue}, actual ${hashValue}`);
 
   // Extract information needed from the extension
-  const { extensionName, extensionVersion } = await extractExtensionDetailsFromZip(extensionBuffer);
+  const { extensionName, extensionVersion, publisherName } =
+    await extractExtensionDetailsFromZip(extensionBuffer);
+
+  // Check if the extension's name is invalid or too similar to another extension's name
   if (FORBIDDEN_EXTENSION_NAMES.find((forbiddenName) => extensionName === forbiddenName))
     throw new Error(`Forbidden extension name: ${extensionName}`);
+
+  const extensionNames = new SortedSet(nameComparator);
+  const publisherNames = new SortedSet(nameComparator);
+  activeExtensions.forEach((active) => {
+    extensionNames.insert(active.info.name);
+    if (active.info.publisher) publisherNames.insert(active.info.publisher);
+  });
+  if (extensionNames.has(extensionName))
+    throw new Error(`Extension name '${extensionName}' is too similar to another extension's name`);
+  const publisherIndex = publisherNames.findIndex(publisherName ?? '');
+  if (publisherIndex >= 0 && publisherName !== publisherNames.at(publisherIndex))
+    throw new Error(
+      `Extension publisher '${publisherName}' is too similar to another extension's publisher`,
+    );
 
   // Save the extension file in a location where it will be automatically installed
   const extensionUri = getExtensionUri(installedExtensionsUri, extensionName, extensionVersion);
@@ -853,13 +892,53 @@ async function getInstalledExtensions(): Promise<InstalledExtensions> {
         ? undefined
         : packagedId;
     })
-    .filter((identifier) => !!identifier) as ExtensionIdentifier[];
+    .filter((identifier) => !!identifier);
 
   return {
     enabled,
     disabled,
     packaged,
   };
+}
+
+async function getExtensionsData(extensions: ExtensionIdentifier[]): Promise<FullExtensionData[]> {
+  const extensionsData = await Promise.all(
+    extensions.map(async (extensionId) => {
+      // First checks to see if the extension is an available extension
+      const availableExtension = availableExtensions.find(
+        (extension) => extension.name === extensionId.extensionName,
+      );
+
+      // If the extension is available then reads the files from the extension folder
+      if (availableExtension) {
+        return readExtensionDataFromFolder(
+          availableExtension,
+          disabledExtensionsUri,
+          installedExtensionsUri,
+        );
+      }
+
+      // Otherwise gets it from the zipped file in the disabled extensions folder if it exists
+      const extensionUri = getExtensionUri(
+        disabledExtensionsUri,
+        extensionId.extensionName,
+        extensionId.extensionVersion,
+      );
+
+      if (await nodeFS.getStats(extensionUri)) {
+        return readExtensionDataFromZip(
+          extensionUri,
+          disabledExtensionsUri,
+          installedExtensionsUri,
+        );
+      }
+
+      // Need to be able to return something so returns undefined filtered out in the later lines
+      // eslint-disable-next-line no-else-return
+      return undefined;
+    }),
+  );
+  return extensionsData.filter((value) => !!value);
 }
 
 // #endregion
@@ -962,6 +1041,7 @@ function prepareElevatedPrivileges(manifest: ExtensionManifest): Readonly<Elevat
       enableExtension,
       disableExtension,
       getInstalledExtensions,
+      getExtensionsData,
     };
     Object.freeze(manageExtensions);
     retVal.manageExtensions = manageExtensions;
@@ -1203,6 +1283,10 @@ async function activateExtensions(extensions: ExtensionInfo[]): Promise<ActiveEx
     throw new Error('Cannot use WebSocket!');
   };
 
+  logger.info(
+    `Activating the following extensions: ${extensionsWithCheck.map(({ extension }) => extension.name).join(',')}`,
+  );
+
   // Import the extensions and run their activate() functions
   const extensionsActive: ActiveExtension[] = [];
   // This is a case where we want to run through the array in order sequentially
@@ -1242,7 +1326,7 @@ async function deactivateExtension(extension: ActiveExtension): Promise<boolean 
     extensionKey = getExtensionKey(extension.info);
   } catch (e) {
     logger.debug(
-      `Could not get extension key for extension '${extension.info.name}'. Skipping attempting to delete uri handler.`,
+      `Could not get extension key for extension '${extension.info.name}' due to ${getErrorMessage(e)}. Skipping attempting to delete uri handler.`,
     );
   }
   if (extensionKey) uriHandlersByExtensionKey.delete(extensionKey);
@@ -1263,9 +1347,13 @@ async function deactivateExtension(extension: ActiveExtension): Promise<boolean 
  * @returns An array of the deactivation results - `true`, `false`, or `undefined`.
  */
 async function deactivateExtensions(extensions: ExtensionInfo[]): Promise<void> {
+  const extensionsToDeactivate = [...extensions].reverse();
+  logger.info(
+    `Deactivating the following extensions: ${extensionsToDeactivate.map(({ name }) => name).join(',')}`,
+  );
   // We want to deactivate extensions sequentially in opposite order of which they were activated
   // eslint-disable-next-line no-restricted-syntax
-  for (const extension of [...extensions].reverse()) {
+  for (const extension of extensionsToDeactivate) {
     try {
       const activeExtension = activeExtensions.get(extension.name);
       if (!activeExtension) {
@@ -1319,7 +1407,7 @@ async function reloadExtensions(
     const uriMap: Map<string, string> = new Map();
     availableExtensions.forEach((extensionInfo) => {
       uriMap.set(extensionInfo.name, extensionInfo.dirUri);
-      logger.info(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
+      logger.debug(`Extension ${extensionInfo.name} loaded from ${extensionInfo.dirUri}`);
     });
     setExtensionUris(uriMap);
 
@@ -1342,12 +1430,13 @@ async function reloadExtensions(
       try {
         await platformBibleUtils.wait(RESTART_DELAY_MS);
         shouldReload = false;
+        logger.info('Reloading extensions again immediately after previous reload');
         await reloadExtensions(shouldDeactivateExtensions, shouldEmitDidReloadEvent);
       } catch (e) {
         logger.error(`Subsequent reload after initial reload extensions failed! ${e}`);
       }
     })();
-  }
+  } else logger.info('Finished reloading extensions');
 
   if (errorMessage) throw new Error(errorMessage);
 }
@@ -1373,7 +1462,11 @@ export const initialize = () => {
 
     await normalizeExtensionFileNames();
 
-    await reloadExtensions(false, false);
+    const didRestart = getCommandLineSwitch(COMMAND_LINE_ARGS.DidRestart);
+    logger.info(
+      `Loading extensions on initializing extension service. didRestart: ${didRestart}. ${process.argv}`,
+    );
+    await reloadExtensions(false, didRestart);
 
     watchForExtensionChanges();
 

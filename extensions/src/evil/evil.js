@@ -310,13 +310,19 @@ async function activate(context) {
     evilWebViewProvider.webViewType,
     evilWebViewProvider,
   );
-  papi.webViews.openWebView(evilWebViewProvider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.openWebView(evilWebViewProvider.webViewType, undefined, {
+    existingId: '?',
+    bringToFront: false,
+  });
 
   const evilFileWebViewProviderPromise = papi.webViewProviders.register(
     evilFileWebViewProvider.webViewType,
     evilFileWebViewProvider,
   );
-  papi.webViews.openWebView(evilFileWebViewProvider.webViewType, undefined, { existingId: '?' });
+  papi.webViews.openWebView(evilFileWebViewProvider.webViewType, undefined, {
+    existingId: '?',
+    bringToFront: false,
+  });
 
   context.registrations.add(await evilWebViewProviderPromise);
   context.registrations.add(await evilFileWebViewProviderPromise);

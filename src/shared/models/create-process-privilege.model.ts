@@ -15,9 +15,10 @@ import { Readable, Writable } from 'stream';
 import { ExtensionBasicData } from '@shared/models/extension-basic-data.model';
 
 /**
+ * JSDOC SOURCE PlatformSpawn
+ *
  * Run {@link spawn} to create a child process. The platform will automatically kill all child
- * processes created this way in packaged builds. Child processes are not killed when running in
- * development.
+ * processes created this way in packaged builds.
  *
  * This method is essentially a layer over the [`spawn`
  * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
@@ -58,13 +59,14 @@ export type PlatformSpawn = (
   executionToken: ExtensionBasicData,
   command: string,
   args: readonly string[],
-  options: SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>,
+  options: Omit<SpawnOptionsWithStdioTuple<StdioPipe, StdioPipe, StdioPipe>, 'cwd'>,
 ) => ChildProcessByStdio<Writable, Readable, Readable>;
 
 /**
+ * JSDOC SOURCE PlatformFork
+ *
  * Run {@link fork} to create a child process. The platform will automatically kill all child
- * processes created this way in packaged builds. Child processes are not killed when running in
- * development.
+ * processes created this way in packaged builds.
  *
  * This method is essentially a layer over the [`fork`
  * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
@@ -93,10 +95,10 @@ export type PlatformFork = (
   executionToken: ExtensionBasicData,
   modulePath: string,
   args?: readonly string[],
-  options?: ForkOptions,
+  options?: Omit<ForkOptions, 'cwd'>,
 ) => ChildProcess;
 
-/** Data about the operating system on which this process is running */
+/** JSDOC SOURCE OperatingSystemData Data about the operating system on which this process is running */
 export type OperatingSystemData = {
   /** Value of `os.platform()` in Node */
   platform: string;
@@ -107,7 +109,10 @@ export type OperatingSystemData = {
 };
 
 export type CreateProcess = {
+  /** JSDOC DESTINATION PlatformSpawn */
   spawn: PlatformSpawn;
+  /** JSDOC DESTINATION PlatformFork */
   fork: PlatformFork;
+  /** JSDOC DESTINATION OperatingSystemData */
   osData: OperatingSystemData;
 };

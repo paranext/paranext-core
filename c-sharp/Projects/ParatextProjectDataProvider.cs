@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Text;
 using System.Xml;
 using System.Xml.Linq;
@@ -289,6 +290,10 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             return scrText.RightToLeft ? "rtl" : "ltr";
 
+        // BooksPresent in Settings.xml isn't always 123 characters, but this way of getting it is always
+        if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
+            return scrText.BooksPresentSet.Books;
+
         if (
             scrText.Settings.ParametersDictionary.TryGetValue(
                 paratextSettingName,
@@ -348,6 +353,12 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         if (paratextSettingName == ProjectSettingsNames.PT_TEXT_DIRECTION)
             throw new Exception(
                 "Cannot set text direction this way. Must edit the language definition ldml file"
+            );
+
+        // BooksPresentSet is changed by adding and removing books, not setting the setting value
+        if (paratextSettingName == ProjectSettingsNames.PT_BOOKS_PRESENT)
+            throw new Exception(
+                "Cannot set BooksPresent this way. Must add or delete books in the project"
             );
 
         // Now actually write the setting
@@ -468,7 +479,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         return GetFromScrText(
             verseRef,
-            (ScrText scrText, VerseRef verseRef) => scrText.Parser.GetVerseUsfmText(verseRef)
+            (ScrText scrText, VerseRef verseRef) =>
+                scrText.Parser.GetVerseUsfmText(FindMatchingVerseRefInScrText(verseRef, scrText))
         );
     }
 
@@ -620,7 +632,8 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
     {
         return GetFromScrText(
             verseRef,
-            (ScrText scrText, VerseRef verseRef) => scrText.GetVerseText(verseRef)
+            (ScrText scrText, VerseRef verseRef) =>
+                scrText.GetVerseText(FindMatchingVerseRefInScrText(verseRef, scrText))
         );
     }
 
@@ -646,6 +659,38 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
                 $"Project with ID '{ProjectDetails.Metadata.Id}' was not found"
             );
         }
+    }
+
+    /// <summary>
+    /// In a given ScrText, find the VerseRef that best matches the provided VerseRef. If no
+    /// good match is found, this returns the original VerseRef passed in since ScrText might still
+    /// find data using it.
+    /// <br>
+    /// This is useful to find a VerseRef in a ScrText that has combined verses when we are asking
+    /// for the text of a single verse within that combined verse.
+    /// </summary>
+    private static VerseRef FindMatchingVerseRefInScrText(VerseRef verseRef, ScrText scrText)
+    {
+        // Limit the search scope to the chapter of the provided VerseRef
+        var allVerses = scrText.Parser.GetVersesInText(verseRef, true);
+        foreach (var v in allVerses)
+        {
+            // Look for an exact match, excluding versification
+            if (
+                v.BookNum == verseRef.BookNum
+                && v.ChapterNum == verseRef.ChapterNum
+                && v.Verse == verseRef.Verse
+            )
+                return v;
+
+            // Look for a range that overlaps with the provided verseRef
+            if (v.HasMultiple && v.OverlapsAny(verseRef))
+                return v;
+        }
+
+        // Didn't find a match, but ScrText has special rules that mean we should return the original
+        // For example, verse 0 has special meaning that we won't see in all the verse tags
+        return verseRef;
     }
 
     private static string ConvertUsfmToUsx(ScrText scrText, VerseRef verseRef, bool chapterOnly)
@@ -684,6 +729,7 @@ internal class ParatextProjectDataProvider : ProjectDataProvider
         // $"//chapter[@number=\"{verseRef.ChapterNum}\"]/following::verse[@number=\"{verseRef.VerseNum}\"][1]/following::node()[preceding::chapter[1]/@number=\"{verseRef.ChapterNum}\"][preceding-sibling::verse[1]/@number=\"{verseRef.VerseNum}\"][not(self::verse)]";
         // It's more likely that a successful approach would require walking the XmlDocument DOM
 
+        vRef = FindMatchingVerseRefInScrText(vRef, scrText);
         string usfmData = scrText.GetText(vRef, true, true) ?? string.Empty;
         XmlDocument usxData = UsfmToUsx.ConvertToXmlDocument(scrText, vRef.BookNum, usfmData);
         var chapterNode = usxData.SelectSingleNode(VerseXPath(vRef.ChapterNum, 1));

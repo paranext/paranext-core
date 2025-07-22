@@ -1,4 +1,4 @@
-import type { Meta, StoryObj } from '@storybook/react';
+import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Button } from '@/components/shadcn-ui/button';
 import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 
@@ -53,11 +53,24 @@ export const Outline: Story = {
   },
 };
 
-export const Playground: Story = {
+export const Secondary: Story = {
   args: {
-    children: 'Playground Button',
-    variant: 'default',
-    size: 'default',
+    children: 'Secondary Button',
+    variant: 'secondary',
+  },
+};
+
+export const Ghost: Story = {
+  args: {
+    children: 'Ghost Button',
+    variant: 'ghost',
+  },
+};
+
+export const Link: Story = {
+  args: {
+    children: 'Link Button',
+    variant: 'link',
   },
 };
 
@@ -65,5 +78,13 @@ export const Disabled: Story = {
   args: {
     children: 'Disabled Button',
     disabled: true,
+  },
+};
+
+export const Playground: Story = {
+  args: {
+    children: 'Playground Button',
+    variant: 'default',
+    size: 'default',
   },
 };

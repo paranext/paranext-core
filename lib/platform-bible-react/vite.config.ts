@@ -28,6 +28,7 @@ const config = defineConfig({
         ...Object.keys(peerDependencies ?? {}),
         ...Object.keys(dependencies ?? {}),
         'react/jsx-runtime',
+        'react/jsx-dev-runtime',
       ],
       output: {
         globals: {

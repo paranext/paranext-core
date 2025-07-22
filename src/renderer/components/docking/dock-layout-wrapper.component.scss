@@ -77,6 +77,7 @@
 /* overriding default style for the shadow indicating that not all tabs are shown */
 .dock-nav-more {
   color: hsl(var(--foreground));
+  margin-right: 10px;
 }
 
 .dock-nav-more::after {
@@ -167,6 +168,12 @@ $tab-top-rounding: vars.$space--xs;
   border-radius: $tab-top-rounding;
 }
 
+// TODO: UX should make this better
+.dock-tabpane.dock-tabpane-active-highlight {
+  outline: 2px solid red;
+  outline-offset: -2px;
+}
+
 .dock-nav-wrap,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-bar,
 .dock-layout .dock-panel.dock-style-platform-bible .dock-nav,
@@ -197,6 +204,48 @@ $tab-bottom-rounding: vars.$space--s;
   right: -$tab-bottom-rounding;
   border-bottom-left-radius: $tab-bottom-rounding - 2;
   box-shadow: -2px 2px 0 vars.$color--active-tab;
+}
+
+// TODO: UX should make this better
+.dock-tab.dock-tab-active.dock-tab-active-highlight {
+  outline: 2px solid red;
+  outline-offset: -2px;
+  // This duration must be ≤ "cssHighlightDurationMilliseconds" in platform-tab-title.component.tsx
+  animation: tabTitleBarFlash 1s ease-in-out 3;
+}
+
+// TODO: UX should make this better
+@keyframes tabTitleBarFlash {
+  0% {
+    background-color: transparent;
+  }
+
+  25% {
+    background-color: rgba(59, 130, 246, 0.3); // Blue flash with transparency
+  }
+
+  50% {
+    background-color: rgba(59, 130, 246, 0.5);
+  }
+
+  75% {
+    background-color: rgba(59, 130, 246, 0.3);
+  }
+
+  100% {
+    background-color: transparent;
+  }
+}
+
+// TODO: UX should make this better
+.dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active.dock-tab-window-focus {
+  background-color: #15c04f;
+}
+
+// Hide the bottom corner rounding pseudo-elements when highlight is active
+.dock-tab.dock-tab-active.dock-tab-active-highlight::before,
+.dock-tab.dock-tab-active.dock-tab-active-highlight::after {
+  display: none;
 }
 
 // #endregion
@@ -252,58 +301,6 @@ $tab-bottom-rounding: vars.$space--s;
   visibility: visible;
 }
 
-/* maximize - minimize control */
 .dock-panel.dock-style-card .dock-extra-content {
   height: 0; // absolutely positioned with 0 height, to avoid influencing anything else
 }
-
-.dock-panel.dock-style-card .dock-panel-min-btn,
-.dock-panel.dock-style-card .dock-panel-max-btn {
-  padding: 4px;
-  height: 16px;
-  width: 16px;
-  border-radius: 4px;
-  margin: 2px 2px 2px 0;
-  color: hsl(var(--muted-foreground));
-}
-
-.dock-panel-min-btn::before {
-  /* https://lucide.dev/icons/minimize-2 TODO: papi-extension://platformIcons/assets/semantic/minimize.svg once this extension exists */
-  mask: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLW1pbmltaXplMi1pY29uIGx1Y2lkZS1taW5pbWl6ZS0yIj48cG9seWxpbmUgcG9pbnRzPSI0IDE0IDEwIDE0IDEwIDIwIi8+PHBvbHlsaW5lIHBvaW50cz0iMjAgMTAgMTQgMTAgMTQgNCIvPjxsaW5lIHgxPSIxNCIgeDI9IjIxIiB5MT0iMTAiIHkyPSIzIi8+PGxpbmUgeDE9IjMiIHgyPSIxMCIgeTE9IjIxIiB5Mj0iMTQiLz48L3N2Zz4=');
-}
-
-.dock-panel-max-btn::before {
-  /* https://lucide.dev/icons/maximize-2 TODO: papi-extension://platformIcons/assets/semantic/maximize.svg once this extension exists */
-  mask: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIyNCIgaGVpZ2h0PSIyNCIgdmlld0JveD0iMCAwIDI0IDI0IiBmaWxsPSJub25lIiBzdHJva2U9ImN1cnJlbnRDb2xvciIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIGNsYXNzPSJsdWNpZGUgbHVjaWRlLW1heGltaXplMi1pY29uIGx1Y2lkZS1tYXhpbWl6ZS0yIj48cG9seWxpbmUgcG9pbnRzPSIxNSAzIDIxIDMgMjEgOSIvPjxwb2x5bGluZSBwb2ludHM9IjkgMjEgMyAyMSAzIDE1Ii8+PGxpbmUgeDE9IjIxIiB4Mj0iMTQiIHkxPSIzIiB5Mj0iMTAiLz48bGluZSB4MT0iMyIgeDI9IjEwIiB5MT0iMjEiIHkyPSIxNCIvPjwvc3ZnPg==');
-}
-
-.dock-panel-min-btn::before,
-.dock-panel-max-btn::before {
-  content: '';
-  mask-size: contain;
-  mask-position: center;
-  background-size: 100%;
-  background-position: center;
-  background-repeat: no-repeat;
-  background-color: currentColor;
-  width: 16px;
-  height: 16px;
-  border: 0;
-}
-
-.dock-panel.dock-style-card .dock-panel-min-btn:hover,
-.dock-panel.dock-style-card .dock-panel-max-btn:hover,
-.dock-panel.dock-style-card .dock-panel-min-btn:focus,
-.dock-panel.dock-style-card .dock-panel-max-btn:focus {
-  transform: none;
-  background-color: hsl(var(--accent));
-  color: hsl(var(--accent-foreground));
-}
-
-.dock-panel-min-btn:hover::before,
-.dock-panel-max-btn:hover::before,
-.dock-panel-min-btn:focus::before,
-.dock-panel-max-btn:focus::before {
-  color: inherit;
-}
-// #endregion

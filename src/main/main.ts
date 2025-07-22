@@ -1,4 +1,4 @@
-﻿/**
+/**
  * This module executes inside of electron's main process. You can start electron renderer process
  * from here and communicate with the other processes through IPC.
  *
@@ -6,33 +6,13 @@
  * using webpack. This gives us some performance wins.
  */
 
+import { app, BrowserWindow, ipcMain, RenderProcessGoneDetails, shell } from 'electron';
 import os from 'os';
 import path from 'path';
-import { app, BrowserWindow, shell, ipcMain, RenderProcessGoneDetails } from 'electron';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
-import windowStateKeeper from 'electron-window-state';
 import '@main/global-this.model';
-import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
-import { logger } from '@shared/services/logger.service';
-import * as networkService from '@shared/services/network.service';
-import * as commandService from '@shared/services/command.service';
-import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
-import { resolveHtmlPath } from '@node/utils/util';
-import { extensionHostService } from '@main/services/extension-host.service';
-import { networkObjectService } from '@shared/services/network-object.service';
-import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
-import { wait, serialize, getErrorMessage } from 'platform-bible-utils';
-import { CommandNames } from 'papi-shared-types';
-import { SerializedRequestType } from '@shared/utils/util';
-import { get } from '@shared/services/project-data-provider.service';
-import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
-import { DEV_MODE_RENDERER_INDICATOR } from '@shared/data/platform.data';
-import { startProjectLookupService } from '@main/services/project-lookup.service-host';
-import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
-import { GET_METHODS } from '@shared/data/rpc.model';
-import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
-import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import {
   APP_NAME,
@@ -40,7 +20,98 @@ import {
   APP_VERSION,
   startAppService,
 } from '@main/services/app.service-host';
+import { startDataProtectionService } from '@main/services/data-protection.service-host';
+import { dotnetDataProvider } from '@main/services/dotnet-data-provider.service';
+import { extensionAssetProtocolService } from '@main/services/extension-asset-protocol.service';
+import { extensionHostService } from '@main/services/extension-host.service';
+import { startNetworkObjectStatusService } from '@main/services/network-object-status.service-host';
+import { startProjectLookupService } from '@main/services/project-lookup.service-host';
+import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model';
+import { resolveHtmlPath } from '@node/utils/util';
+import {
+  DEFAULT_ZOOM_FACTOR,
+  DEV_MODE_QUERY_PARAMETER,
+  LOG_LEVEL_QUERY_PARAMETER,
+  MAX_ZOOM_FACTOR,
+  MIN_ZOOM_FACTOR,
+} from '@shared/data/platform.data';
+import { GET_METHODS } from '@shared/data/rpc.model';
+import { PROJECT_INTERFACE_PLATFORM_BASE } from '@shared/models/project-data-provider.model';
+import * as commandService from '@shared/services/command.service';
+import { logger } from '@shared/services/logger.service';
+import { networkObjectService } from '@shared/services/network-object.service';
+import * as networkService from '@shared/services/network.service';
+import { get } from '@shared/services/project-data-provider.service';
 import { settingsService } from '@shared/services/settings.service';
+import { initialize as initializeSharedStoreService } from '@shared/services/shared-store.service';
+import { SerializedRequestType } from '@shared/utils/util';
+import windowStateKeeper from 'electron-window-state';
+import { CommandNames } from 'papi-shared-types';
+import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
+import { windowService } from '@shared/services/window.service';
+
+// #region Helper functions
+
+/**
+ * Get the zoom factor from settings or return the default value
+ *
+ * @returns The stored zoom factor or the default value
+ */
+const getZoomFactor = async (): Promise<number> => {
+  try {
+    return await settingsService.get('platform.zoomFactor');
+  } catch (e) {
+    logger.warn(`Failed to get zoom factor from settings: ${getErrorMessage(e)}`);
+    return DEFAULT_ZOOM_FACTOR;
+  }
+};
+
+/**
+ * Save the zoom factor to settings
+ *
+ * @param factor The zoom factor to save
+ */
+const setZoomFactor = async (factor: number): Promise<void> => {
+  try {
+    await settingsService.set('platform.zoomFactor', factor);
+  } catch (e) {
+    logger.warn(`Failed to save zoom factor to settings: ${getErrorMessage(e)}`);
+  }
+};
+
+/**
+ * Reset the zoom factor of the app's main window to 1.0 (100%)
+ *
+ * @param mainWindow The main BrowserWindow instance
+ */
+const resetZoomFactor = async () => {
+  try {
+    return await settingsService.reset('platform.zoomFactor');
+  } catch (e) {
+    logger.warn(`Failed to reset zoom factor from settings: ${getErrorMessage(e)}`);
+    return DEFAULT_ZOOM_FACTOR;
+  }
+};
+
+/** Increase the zoom factor of the app's main window by 0.1, up to a maximum of 3.0 */
+const zoomIn = async () => {
+  const currentZoom = await getZoomFactor();
+  if (currentZoom < MAX_ZOOM_FACTOR) {
+    const newZoom = currentZoom + 0.1;
+    await setZoomFactor(newZoom);
+  }
+};
+
+/** Decrease the zoom factor of the app's main window by 0.1, down to a minimum of 0.5 */
+const zoomOut = async () => {
+  const currentZoom = await getZoomFactor();
+  if (currentZoom > MIN_ZOOM_FACTOR) {
+    const newZoom = currentZoom - 0.1;
+    await setZoomFactor(newZoom);
+  }
+};
+
+// #endregion
 
 // #region Prevent multiple instances of the app. This needs to stay at the top of the app!
 
@@ -122,7 +193,7 @@ async function main() {
   // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
-  await extensionHostService.start();
+  await extensionHostService.start(PROCESS_CLOSE_TIME_OUT);
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
@@ -292,6 +363,34 @@ async function main() {
       },
     );
 
+    mainWindow.webContents.on('before-input-event', async (_, event) => {
+      // Key up seems not to change focus in Windows, so we will only change on keyDown
+      if (event.type !== 'keyDown') return;
+
+      // Announce a possible focus change
+      try {
+        await windowService.setFocus('detect');
+      } catch (e) {
+        logger.warn(
+          `Failed to instruct window service to detect focus on ${event.type} ${event.key}: ${getErrorMessage(e)}`,
+        );
+      }
+    });
+
+    mainWindow.webContents.on('before-mouse-event', async (_, event) => {
+      // Mouse up and other events seem not to change focus in Windows, so we will only change on mouseDown
+      if (event.type !== 'mouseDown') return;
+
+      // Announce a possible focus change
+      try {
+        await windowService.setFocus('detect');
+      } catch (e) {
+        logger.warn(
+          `Failed to instruct window service to detect focus on ${event.type} ${event.button}: ${getErrorMessage(e)}`,
+        );
+      }
+    });
+
     mainWindow.on('ready-to-show', () => {
       logger.info('mainWindow is ready to show');
       if (!mainWindow) throw new Error('"mainWindow" is not defined');
@@ -339,10 +438,79 @@ async function main() {
       return { action: 'deny' };
     });
 
+    // Built URL search parameters for use in `src/renderer/global-this.model.ts`
+    const searchParamsObject: Record<string, string> = {
+      [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+    };
+
+    if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
+
     // If the URL doesn't load, we might need to show something to the user
-    const urlToLoad = `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`;
+    const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
     mainWindow.loadURL(urlToLoad).catch((e) => {
       logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
+    });
+
+    // Register zoom keyboard shortcuts. MacOS already supports this natively
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      // F12: Open dev tools in both development and production
+      if (input.key === 'F12') {
+        event.preventDefault();
+        if (mainWindow?.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow?.webContents.openDevTools();
+        }
+        return;
+      }
+
+      if (process.platform !== 'darwin') {
+        // Zoom in: Ctrl++ or Ctrl+=
+        if (input.control && (input.key === '=' || input.key === '+')) {
+          event.preventDefault();
+          zoomIn();
+        }
+        // Zoom out: Ctrl+-
+        else if (input.control && input.key === '-') {
+          event.preventDefault();
+          zoomOut();
+        }
+        // Reset zoom: Ctrl+0
+        else if (input.control && input.key === '0') {
+          event.preventDefault();
+          resetZoomFactor();
+        }
+      }
+    });
+
+    // Set initial zoom factor from settings
+    mainWindow.webContents.on('did-finish-load', async () => {
+      if (mainWindow && mainWindow.webContents) {
+        try {
+          const zoom = await getZoomFactor();
+          mainWindow.webContents.setZoomFactor(zoom);
+        } catch (e) {
+          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
+        }
+      }
+    });
+
+    // Update zoomfactor when the setting changes
+    settingsService.subscribe('platform.zoomFactor', async (newZoomFactor) => {
+      const zoomFactor = () => {
+        if (isPlatformError(newZoomFactor)) {
+          logger.error(`Error getting new zoom factor: ${getErrorMessage(newZoomFactor)}`);
+          return DEFAULT_ZOOM_FACTOR;
+        }
+        return newZoomFactor;
+      };
+      if (mainWindow && mainWindow.webContents) {
+        try {
+          mainWindow.webContents.setZoomFactor(zoomFactor());
+        } catch (e) {
+          logger.error(`Failed to set initial zoom factor: ${getErrorMessage(e)}`);
+        }
+      }
     });
 
     // Remove this if your app does not use auto updates
@@ -396,6 +564,7 @@ async function main() {
       );
 
       createWindow();
+
       app.on('activate', () => {
         // On macOS it's common to re-create a window in the app when the
         // dock icon is clicked and there are no other windows open.
@@ -551,6 +720,40 @@ async function main() {
             schema: { type: 'string' },
           },
         ],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.zoomIn',
+    async () => {
+      await zoomIn();
+    },
+    {
+      method: {
+        summary: 'Increase the zoom factor of the main window by 10%',
+        params: [],
+        result: {
+          name: 'return value',
+          schema: { type: 'null' },
+        },
+      },
+    },
+  );
+
+  commandService.registerCommand(
+    'platform.zoomOut',
+    async () => {
+      await zoomOut();
+    },
+    {
+      method: {
+        summary: 'Decrease the zoom factor of the main window by 10%',
+        params: [],
         result: {
           name: 'return value',
           schema: { type: 'null' },

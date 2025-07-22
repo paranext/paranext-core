@@ -241,7 +241,13 @@ const createLocalProxy = (
       // register functions to run when the object is going away
       if (isString(key) && startsWith(key, 'on') && key !== 'onDidDispose') return undefined;
 
-      return Reflect.get(target, key, objectBeingSet);
+      const property = Reflect.get(target, key, objectBeingSet);
+
+      // Bind function to the object being set so it calls the object's method on the object even
+      // when going through multiple proxies
+      if (typeof property === 'function') return property.bind(target);
+
+      return property;
     },
   });
 
@@ -552,15 +558,19 @@ const set = async <T extends NetworkableObject>(
 
 // #endregion
 
-// Declare an interface for the object we will export to PAPI
-export interface MinimalNetworkObjectService {
+// Declare an interface for the object we will export to PAPI frontend
+export interface FrontendNetworkObjectService {
   get: typeof get;
-  set: typeof set;
   onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
 }
 
+// Declare an interface for the object we will export to PAPI backend
+export interface BackendNetworkObjectService extends FrontendNetworkObjectService {
+  set: typeof set;
+}
+
 // Declare an interface for the object we're exporting so that JSDoc comments propagate
-export interface NetworkObjectService extends MinimalNetworkObjectService {
+export interface NetworkObjectService extends BackendNetworkObjectService {
   initialize: typeof initialize;
   hasKnown: typeof hasKnown;
 }
@@ -604,9 +614,16 @@ export const networkObjectService: NetworkObjectService = {
 
 export default networkObjectService;
 
-// This is only intended for use on PAPI
+// This is only intended for use on PAPI frontend
 /** JSDOC DESTINATION networkObjectService */
-export const minimalNetworkObjectService: MinimalNetworkObjectService = {
+export const frontendNetworkObjectService: FrontendNetworkObjectService = {
+  get,
+  onDidCreateNetworkObject,
+};
+
+// This is only intended for use on PAPI backend
+/** JSDOC DESTINATION networkObjectService */
+export const backendNetworkObjectService: BackendNetworkObjectService = {
   get,
   set,
   onDidCreateNetworkObject,

@@ -1,4 +1,4 @@
-import { ComboBox, ComboBoxOption } from '@/components/basics/combo-box.component';
+import { ComboBox } from '@/components/basics/combo-box.component';
 import {
   Sidebar,
   SidebarContent,
@@ -51,7 +51,8 @@ export type SettingsSidebarProps = {
 
 /**
  * The SettingsSidebar component is a sidebar that displays a list of extension settings and project
- * settings. It can be used to navigate to different settings pages.
+ * settings. It can be used to navigate to different settings pages. Must be wrapped in a
+ * SidebarProvider component otherwise produces errors.
  *
  * @param props - {@link SettingsSidebarProps} The props for the component.
  */
@@ -124,11 +125,7 @@ export function SettingsSidebar({
               })}
               popoverContentClassName="tw-z-[1000]"
               options={projectInfo.flatMap((info) => info.projectId)}
-              getOptionLabel={(projectId: ComboBoxOption) => {
-                // This function expects a ComboBoxOption, but we know it is a string
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                return getProjectNameFromProjectId(projectId as string);
-              }}
+              getOptionLabel={getProjectNameFromProjectId}
               buttonPlaceholder={buttonPlaceholderText}
               onChange={(projectId: string) => {
                 const selectedProjectName = getProjectNameFromProjectId(projectId);

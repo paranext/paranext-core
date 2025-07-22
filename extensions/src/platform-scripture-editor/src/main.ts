@@ -24,7 +24,7 @@ import platformScriptureEditorWebView from './platform-scripture-editor.web-view
 import platformScriptureEditorWebViewStyles from './platform-scripture-editor.web-view.scss?inline';
 import { mergeDecorations } from './decorations.util';
 
-logger.info('Scripture Editor is importing!');
+logger.debug('Scripture Editor is importing!');
 
 const scriptureEditorWebViewType = 'platformScriptureEditor.react';
 
@@ -59,25 +59,28 @@ async function getEditorTabLocalizations(
 async function openPlatformScriptureEditor(
   projectId: string | undefined,
   options?: OpenEditorOptions,
+  existingTabIdToReplace?: string,
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(projectId, options, false);
+  return open(false, projectId, existingTabIdToReplace, options);
 }
 
 /** Temporary function to manually control `isReadOnly`. Registered as a command handler. */
 async function openPlatformResourceViewer(
   projectId: string | undefined,
   options?: OpenEditorOptions,
+  existingTabIdToReplace?: string,
 ): Promise<string | undefined> {
   // The second argument (isReadOnly) is hardcoded for now, but should be a parameter in the future
-  return open(projectId, options, true);
+  return open(true, projectId, existingTabIdToReplace, options);
 }
 
 /** Function to prompt for a project and open it in the editor */
 async function open(
-  projectId: string | undefined,
-  options: OpenEditorOptions | undefined,
   isReadOnly: boolean,
+  projectId?: string,
+  existingTabIdToReplace?: string,
+  options?: OpenEditorOptions,
 ): Promise<string | undefined> {
   const projectForWebView = { projectId, isEditable: !isReadOnly };
   if (!projectForWebView.projectId) {
@@ -131,7 +134,13 @@ async function open(
     };
     // REVIEW: If an editor is already open for the selected project, we open another.
     // This matches the current behavior in P9, though it might not be what we want long-term.
-    return papi.webViews.openWebView(scriptureEditorWebViewType, undefined, openWebViewOptions);
+    return papi.webViews.openWebView(
+      scriptureEditorWebViewType,
+      existingTabIdToReplace
+        ? { type: 'replace-tab', targetTabId: existingTabIdToReplace }
+        : undefined,
+      openWebViewOptions,
+    );
   }
   return undefined;
 }
@@ -373,7 +382,7 @@ class ScriptureEditorWebViewFactory extends WebViewFactory<typeof scriptureEdito
 const scriptureEditorWebViewProvider: IWebViewProvider = new ScriptureEditorWebViewFactory();
 
 export async function activate(context: ExecutionActivationContext): Promise<void> {
-  logger.info('Scripture editor is activating!');
+  logger.debug('Scripture editor is activating!');
 
   const openPlatformScriptureEditorPromise = papi.commands.registerCommand(
     'platformScriptureEditor.openScriptureEditor',
@@ -386,6 +395,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             name: 'projectId',
             required: false,
             summary: 'The project ID to open the scripture editor for',
+            schema: { type: 'string' },
+          },
+          {
+            name: 'existingTabIdToReplace',
+            required: false,
+            summary: 'The ID of the tab that should be replaced by the scripture editor',
             schema: { type: 'string' },
           },
         ],
@@ -411,6 +426,12 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
             summary: 'The project ID to open the scripture editor for',
             schema: { type: 'string' },
           },
+          {
+            name: 'existingTabIdToReplace',
+            required: false,
+            summary: 'The ID of the tab that should be replaced by the resource viewer',
+            schema: { type: 'string' },
+          },
         ],
         result: {
           name: 'return value',
@@ -433,5 +454,5 @@ export async function activate(context: ExecutionActivationContext): Promise<voi
     await openPlatformResourceViewerPromise,
   );
 
-  logger.info('Scripture editor is finished activating!');
+  logger.debug('Scripture editor is finished activating!');
 }

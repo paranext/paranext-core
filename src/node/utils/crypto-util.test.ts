@@ -56,7 +56,7 @@ function calculateEntropy(data: Uint8Array): number {
   }
 
   let entropy = 0;
-  // eslint-disable-next-line no-restricted-syntax, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line no-restricted-syntax, @typescript-eslint/no-unused-vars, @typescript-eslint/naming-convention
   for (const [_ignore, frequency] of frequencies) {
     const probability = frequency / total;
     entropy -= probability * Math.log2(probability);

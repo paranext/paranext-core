@@ -23,6 +23,7 @@ import { DockLayoutWrapper } from '@renderer/components/docking/dock-layout-wrap
 import {
   addTabToDock,
   addWebViewToDock,
+  getTabInfoByElement,
   getWebViewDefinition,
   loadTab,
   saveTab,
@@ -51,10 +52,10 @@ export function PlatformDockLayout() {
     const unsub = registerDockLayout({
       dockLayout: dockLayoutRef.current,
       onLayoutChangeRef,
-      addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout) =>
-        addTabToDock(savedTabInfo, layout, dockLayoutRef.current),
-      addWebViewToDock: (webView: WebViewTabProps, layout: Layout) =>
-        addWebViewToDock(webView, layout, dockLayoutRef.current),
+      addTabToDock: (savedTabInfo: SavedTabInfo, layout: Layout, shouldBringToFront = true) =>
+        addTabToDock(savedTabInfo, layout, shouldBringToFront, dockLayoutRef.current),
+      addWebViewToDock: (webView: WebViewTabProps, layout: Layout, shouldBringToFront = true) =>
+        addWebViewToDock(webView, layout, shouldBringToFront, dockLayoutRef.current),
       removeTabFromDock: (tabId: string) => {
         const tabToRemove = dockLayoutRef.current.find(tabId);
         // Null required by the external API
@@ -68,7 +69,11 @@ export function PlatformDockLayout() {
       updateWebViewDefinition: (
         webViewId: string,
         updateInfo: Partial<WebViewDefinitionUpdatableProperties>,
-      ) => updateWebViewDefinition(webViewId, updateInfo, dockLayoutRef.current),
+        shouldBringToFront = false,
+      ) =>
+        updateWebViewDefinition(webViewId, updateInfo, shouldBringToFront, dockLayoutRef.current),
+      getTabInfoByElement: (tabElement: Element) =>
+        getTabInfoByElement(dockLayoutRef.current, tabElement),
       testLayout,
     });
     return () => {

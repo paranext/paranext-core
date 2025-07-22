@@ -39,15 +39,15 @@ dist
 !.erb
 !.storybook
 
-storybook-static
-
 # directories that have separate eslint project
 lib/platform-bible-react
 lib/platform-bible-utils
 lib/papi-dts
+lib/browserslist-config-detect-electron
 extensions
 
 # generated files
 package-lock.json
 bin
 obj
+storybook-static

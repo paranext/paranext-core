@@ -1,16 +1,19 @@
-﻿import type { Meta as MetaBase, StoryObj } from '@storybook/react';
+﻿import type { Meta, StoryObj } from '@storybook/react';
 import { Button } from 'platform-bible-react';
 
-export const Meta: MetaBase<typeof Button> = {
+const meta: Meta<typeof Button> = {
   title: 'Basics/Button',
   component: Button,
   tags: ['autodocs'],
   argTypes: {
     disabled: { control: 'boolean' },
-    variant: { string: 'boolean' },
+    variant: {
+      control: { type: 'select' },
+      options: ['default', 'secondary', 'destructive', 'outline', 'ghost', 'link'],
+    },
   },
 };
-export default Meta;
+export default meta;
 
 type Story = StoryObj<typeof Button>;
 

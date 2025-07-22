@@ -536,6 +536,154 @@ export declare class PromiseChainingMap<TKey = string> {
 	 */
 	private cleanupPromiseChain;
 }
+/**
+ * A map-like data structure that maintains numeric keys in sorted order and provides efficient
+ * operations for finding the closest key-value pair less than or equal to a target.
+ *
+ * This class combines the benefits of a Map (O(1) key-value lookups) with sorted key access (O(log
+ * n) binary search operations). It's particularly useful when you need to frequently find the
+ * "closest" entry to a given numeric key.
+ *
+ * @example
+ *
+ * ```typescript
+ * const versionMap = new SortedNumberMap<string>();
+ * versionMap.set(100, 'Version 1.0.0');
+ * versionMap.set(150, 'Version 1.5.0');
+ * versionMap.set(200, 'Version 2.0.0');
+ *
+ * // Find the highest version <= 175
+ * const result = versionMap.findClosestLessThanOrEqual(175);
+ * console.log(result); // { key: 150, value: 'Version 1.5.0' }
+ * ```
+ *
+ * @template T The type of values stored in the map
+ */
+export declare class SortedNumberMap<T> {
+	private map;
+	private sortedKeys;
+	/**
+	 * Sets a key-value pair in the map. If the key already exists, its value is updated. If the key
+	 * is new, it's inserted in the correct sorted position.
+	 *
+	 * Time complexity: O(log n) for new keys (due to binary search and array insertion), O(1) for
+	 * existing keys.
+	 *
+	 * @example
+	 *
+	 * ```typescript
+	 * const map = new SortedNumberMap<string>();
+	 * map.set(10, 'ten');
+	 * map.set(5, 'five');
+	 * map.set(15, 'fifteen');
+	 * // Keys are automatically maintained in sorted order: [5, 10, 15]
+	 * ```
+	 *
+	 * @param key - The numeric key to set
+	 * @param value - The value to associate with the key
+	 */
+	set(key: number, value: T): void;
+	/**
+	 * Finds the key-value pair with the largest key that is less than or equal to the target.
+	 *
+	 * This method uses binary search to efficiently locate the closest match. If no key is less than
+	 * or equal to the target, it returns undefined.
+	 *
+	 * Time complexity: O(log n)
+	 *
+	 * @example
+	 *
+	 * ```typescript
+	 * const map = new SortedNumberMap<string>();
+	 * map.set(10, 'ten');
+	 * map.set(20, 'twenty');
+	 * map.set(30, 'thirty');
+	 *
+	 * // Exact match
+	 * map.findClosestLessThanOrEqual(20); // { key: 20, value: 'twenty' }
+	 *
+	 * // Closest less than
+	 * map.findClosestLessThanOrEqual(25); // { key: 20, value: 'twenty' }
+	 *
+	 * // No match (target too small)
+	 * map.findClosestLessThanOrEqual(5); // undefined
+	 * ```
+	 *
+	 * @param target - The number to search for
+	 * @returns The key-value pair with the largest key ≤ target, or undefined if none exists
+	 */
+	findClosestLessThanOrEqual(target: number): {
+		key: number;
+		value: T;
+	} | undefined;
+	private binarySearchLessThanOrEqual;
+	private binarySearchInsertIndex;
+}
+/**
+ * A collection of unique items that are automatically maintained in sorted order, similar to C#'s
+ * SortedSet.
+ *
+ * @template T The type of elements in the set
+ */
+export declare class SortedSet<T> {
+	private readonly compareFn;
+	/** Internal storage for the sorted items */
+	private readonly items;
+	/**
+	 * Creates a new sorted set
+	 *
+	 * @param compareFn - Function used to determine the order of elements. Returns negative when a <
+	 *   b, zero when a = b, positive when a > b
+	 */
+	constructor(compareFn: (a: T, b: T) => number);
+	/** Gets the number of elements in the set */
+	get size(): number;
+	/** Returns whether the set is empty */
+	get isEmpty(): boolean;
+	/**
+	 * Inserts an item into the set if it's not already present
+	 *
+	 * @param item - The item to insert
+	 * @returns True if the item was added; false if an equal item already exists
+	 */
+	insert(item: T): boolean;
+	/**
+	 * Removes an item from the set
+	 *
+	 * @param item - The item to remove
+	 * @returns True if the item was removed; false if it wasn't found
+	 */
+	remove(item: T): boolean;
+	/**
+	 * Checks if an item exists in the set
+	 *
+	 * @param item - The item to check
+	 * @returns True if the item exists; false otherwise
+	 */
+	has(item: T): boolean;
+	/** Returns all items in the set as an array, in sorted order */
+	toArray(): T[];
+	/** Returns the index of an item in the set, or -1 if not found */
+	findIndex(item: T): number;
+	/**
+	 * Returns the element at the specified index in the sorted order
+	 *
+	 * @param index - The zero-based index of the element to get
+	 * @returns The element at the specified index, or undefined if the index is out of range
+	 */
+	at(index: number): T | undefined;
+	/** Iterates through each item in the sorted set */
+	forEach(callback: (item: T, index: number, set: SortedSet<T>) => void): void;
+	/** Returns an iterator for the set's items */
+	[Symbol.iterator](): Iterator<T>;
+	/** Clears all items from the set */
+	clear(): void;
+	/**
+	 * Uses binary search to find the position where an item should be inserted to maintain the sorted
+	 * order
+	 */
+	private findInsertionIndex;
+}
 /** Simple collection for UnsubscriberAsync objects that also provides an easy way to run them. */
 export declare class UnsubscriberAsyncList {
 	private name;
@@ -665,7 +813,7 @@ export declare function deepClone<T>(obj: T): T;
  *   to call the function
  * @returns Function that, when called, only calls the function passed in at maximum every delay ms
  */
-export declare function debounce<T extends (...args: any[]) => void>(fn: T, delay?: number): T;
+export declare function debounce<TFunc extends (...args: any[]) => any>(fn: TFunc, delay?: number): (...args: Parameters<TFunc>) => Promise<ReturnType<TFunc>>;
 /**
  * Groups each item in the array of items into a map according to the keySelector
  *
@@ -1328,6 +1476,12 @@ export type UsjContentLocation = {
 	offset: number;
 	jsonPath: ContentJsonPath;
 };
+/** Result of a search for text within a USJ object */
+export type UsjSearchResult = {
+	location: UsjContentLocation;
+	/** The matching text that was found at the location */
+	text: string;
+};
 /** Utilities for reading from and writing to `Usj` objects */
 export interface IUsjReaderWriter {
 	/**
@@ -1399,6 +1553,13 @@ export interface IUsjReaderWriter {
 	 * @returns Number of nodes removed
 	 */
 	removeContentNodes(searchFunction: (potentiallyMatchingNode: MarkerContent) => boolean): number;
+	/**
+	 * Search for matches of a regular expression within this USJ's text data
+	 *
+	 * @param regex Regular expression to search for. Specify the global flag to find all matches.
+	 * @returns Array of `UsjSearchResult` objects that match the given regular expression
+	 */
+	search(regex: RegExp): UsjSearchResult[];
 	/**
 	 * Inform this UsjReaderWriter that the underlying USJ object changed. This is needed to clear
 	 * caches used when querying.
@@ -1968,6 +2129,13 @@ export declare function ensureArray<T>(maybeArray: T | T[] | undefined): T[];
  * @returns Time span in words from `to` to `since`
  */
 export declare function formatTimeSpan(relativeTimeFormatter: Intl.RelativeTimeFormat, since: Date, to?: Date): string;
+/**
+ * Modifier keys that don't constitute typed input
+ *
+ * Sourced from
+ * https://developer.mozilla.org/en-US/docs/Web/API/UI_Events/Keyboard_event_key_values#modifier_keys
+ */
+export declare const MODIFIER_KEYS: Set<string>;
 /** Localized string value associated with this key */
 export type LocalizedStringValue = string;
 /**
@@ -3279,6 +3447,7 @@ export declare class UsjReaderWriter implements IUsjReaderWriter {
 	jsonPathToVerseRefAndOffset(jsonPathQuery: string, bookId?: string): VerseRefOffset;
 	verseRefToUsjContentLocation(verseRef: SerializedVerseRef, verseRefOffset?: number): UsjContentLocation;
 	findNextLocationOfMatchingText(startingPoint: UsjContentLocation, text: string, maxTextLengthToSearch?: number): UsjContentLocation | undefined;
+	search(regex: RegExp): UsjSearchResult[];
 	extractText(start: UsjContentLocation, desiredLength: number): string;
 	extractTextBetweenPoints(start: UsjContentLocation, end: UsjContentLocation, maxLength?: number): string;
 	private static removeContentNodesFromArray;

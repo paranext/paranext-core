@@ -1,5 +1,5 @@
 import {
-  CommandHandler,
+  SelectMenuItemHandler,
   PlatformMenubar,
 } from '@/components/advanced/menus/platform-menubar.component';
 import { cn } from '@/utils/shadcn-ui.util';
@@ -8,7 +8,7 @@ import { PropsWithChildren, ReactNode, useRef } from 'react';
 
 export type ToolbarProps = PropsWithChildren<{
   /** The handler to use for menu commands (and eventually toolbar commands). */
-  commandHandler: CommandHandler;
+  onSelectMenuItem: SelectMenuItemHandler;
 
   /**
    * Menu data that is used to populate the Menubar component. If empty object, no menus will be
@@ -82,7 +82,7 @@ export function getToolbarOSReservedSpaceClassName(
 export function Toolbar({
   menuData,
   onOpenChange,
-  commandHandler,
+  onSelectMenuItem,
   className,
   id,
   children,
@@ -120,7 +120,7 @@ export function Toolbar({
               <PlatformMenubar
                 menuData={menuData}
                 onOpenChange={onOpenChange}
-                commandHandler={commandHandler}
+                onSelectMenuItem={onSelectMenuItem}
                 variant={menubarVariant}
               />
             )}

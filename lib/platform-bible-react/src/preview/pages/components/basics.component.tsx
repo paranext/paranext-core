@@ -9,11 +9,11 @@ import { AvatarExample } from './basics/avatar.examples.component';
 import { BadgeExamples } from './basics/badge.examples.component';
 import { ButtonExamples } from './basics/button.examples.component';
 import { CardExamples } from './basics/card.examples.component';
-import { ChapterRangeSelectorExample } from './basics/chapter-range-example.component';
 import { CheckboxExamples } from './basics/checkbox.examples.component';
 import { ChecklistExamples } from './basics/checklist.examples.component';
 import { ComboBoxExamples } from './basics/combo-box.examples.component';
 import { DialogExamples } from './basics/dialog.examples.component';
+import { DrawerExamples } from './basics/drawer.examples.component';
 import { DropdownExamples } from './basics/dropdown.examples.component';
 import { InputExamples } from './basics/input.examples.component';
 import { MenubarExamples } from './basics/menubar.examples.component';
@@ -29,6 +29,8 @@ import { TabExamples } from './basics/tab.examples.component';
 import { TableExamples } from './basics/table.examples.component';
 import { ToggleGroupExamples } from './basics/toggle-group.examples.component';
 import { TooltipExamples } from './basics/tooltip.examples.component';
+import { ProgressExamples } from './basics/progress.examples.component';
+import { SkeletonExamples } from './basics/skeleton.examples.component';
 
 export function Basics() {
   return (
@@ -41,20 +43,20 @@ export function Basics() {
           <VerticalTabsTrigger value="Badge">Badge</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Button">Button</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Card">Card</VerticalTabsTrigger>
-          <VerticalTabsTrigger value="Chapter Range Selector">
-            Chapter Range Selector
-          </VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checkbox">Checkbox</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Checklist">Checklist</VerticalTabsTrigger>
           <VerticalTabsTrigger value="ComboBox">Combo Box</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dialog">Dialog</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Drawer">Drawer</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Dropdown Menu">Dropdown Menu</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Input">Input</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Menubar">Menubar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Radio Group">Radio Group</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Progress">Progress</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Search Bar">Search Bar</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Select">Select</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Sidebar">Sidebar</VerticalTabsTrigger>
+          <VerticalTabsTrigger value="Skeleton">Skeleton</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Slider">Slider</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Sonner">Sonner</VerticalTabsTrigger>
           <VerticalTabsTrigger value="Spinner">Spinner</VerticalTabsTrigger>
@@ -85,10 +87,6 @@ export function Basics() {
           <CardExamples />
         </VerticalTabsContent>
 
-        <VerticalTabsContent value="Chapter Range Selector">
-          <ChapterRangeSelectorExample />
-        </VerticalTabsContent>
-
         <VerticalTabsContent value="Checkbox">
           <CheckboxExamples />
         </VerticalTabsContent>
@@ -105,6 +103,10 @@ export function Basics() {
           <DialogExamples />
         </VerticalTabsContent>
 
+        <VerticalTabsContent value="Drawer">
+          <DrawerExamples />
+        </VerticalTabsContent>
+
         <VerticalTabsContent value="Input">
           <InputExamples />
         </VerticalTabsContent>
@@ -115,6 +117,10 @@ export function Basics() {
 
         <VerticalTabsContent value="Radio Group">
           <RadioGroupExamples />
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Progress">
+          <ProgressExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Search Bar">
@@ -129,6 +135,10 @@ export function Basics() {
           <div className="tw-relative tw-overflow-hidden">
             <SidebarExamples />
           </div>
+        </VerticalTabsContent>
+
+        <VerticalTabsContent value="Skeleton">
+          <SkeletonExamples />
         </VerticalTabsContent>
 
         <VerticalTabsContent value="Slider">

@@ -4,7 +4,7 @@
     "module": "commonjs",
     "moduleResolution": "node",
     "jsx": "react-jsx",
-    "lib": ["dom", "es2022"],
+    "lib": ["dom", "es2023"],
     "strict": true,
     "sourceMap": true,
     "baseUrl": "./src",
@@ -16,7 +16,6 @@
       "@node/*": ["./node/*"],
       "@renderer/*": ["./renderer/*"],
       "@shared/*": ["./shared/*"],
-      "@node_modules/*": ["../node_modules/*"],
       "vite": ["./@types/shims-vite.d.ts"]
     },
     "experimentalDecorators": true,
@@ -50,7 +49,8 @@
     "extensions",
     "lib/platform-bible-react",
     "lib/platform-bible-utils",
-    "lib/papi-dts"
+    "lib/papi-dts",
+    "lib/browserslist-config-detect-electron"
   ],
   "ts-node": {
     "require": ["tsconfig-paths/register"]

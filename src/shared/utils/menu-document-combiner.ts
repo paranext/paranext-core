@@ -42,7 +42,9 @@ function checkNewColumns(
 ) {
   if (!newColumns) return;
   Object.getOwnPropertyNames(newColumns).forEach((columnName: string) => {
-    if (!columnName) return;
+    // TS doesn't allow `columnName` above to be a ReferencedItem even though the type says it is
+    // eslint-disable-next-line no-type-assertion/no-type-assertion
+    if (!columnName || typeof newColumns[columnName as ReferencedItem] !== 'object') return;
     if (!startsWith(columnName, namePrefix))
       throw new Error(`Column name ${columnName} does not start with ${namePrefix}`);
     if (!!currentColumns && currentColumns.isExtensible !== true)
@@ -62,12 +64,14 @@ function checkNewGroups(
     const group = newGroups[groupName as ReferencedItem];
     if (!group) return;
     if (!startsWith(groupName, namePrefix))
-      throw new Error(`Group name ${groupName} does not start with ${namePrefix}`);
+      throw new Error(`Group name '${groupName}' does not start with ${namePrefix}`);
     if ('column' in group && group.column) {
       if (!currentColumns) return;
       const targetColumn = currentColumns[group.column];
       if (targetColumn && targetColumn.isExtensible !== true)
-        throw new Error(`Cannot add new group ${groupName} because isExtensible is not set`);
+        throw new Error(
+          `Cannot add new group ${groupName} because isExtensible is not set on ${targetColumn.label}`,
+        );
     } else if ('menuItem' in group && group.menuItem) {
       const targetMenuItemName = group.menuItem;
       if (!startsWith(targetMenuItemName, namePrefix))
@@ -90,6 +94,8 @@ function checkNewMenuItems(
     if (targetGroupName && !startsWith(targetGroupName, namePrefix)) {
       if (!currentGroups) return;
       const targetGroup = currentGroups[targetGroupName];
+      if (!targetGroup)
+        throw new Error(`Could not find a current group by the group name ${targetGroupName}`);
       if (targetGroup.isExtensible !== true)
         throw new Error(
           `Cannot add new menu item ${menuItem.label} to group ${targetGroupName} because isExtensible is not set`,
@@ -325,7 +331,9 @@ export class MenuDocumentCombiner extends DocumentCombiner {
       /* eslint-enable no-type-assertion/no-type-assertion */
 
       if (!currentWebView && !startsWith(webViewName, namePrefix))
-        throw new Error(`Cannot add a new web view unless it starts with ${namePrefix}`);
+        throw new Error(
+          `Cannot add '${webViewName}'. The new web view must start with ${namePrefix}`,
+        );
 
       checkNewColumns(newWebView?.topMenu?.columns, namePrefix, currentWebView?.topMenu?.columns);
       checkNewGroups(newWebView?.topMenu?.groups, namePrefix, currentWebView?.topMenu?.columns);

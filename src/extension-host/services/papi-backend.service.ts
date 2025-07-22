@@ -40,13 +40,15 @@ import { scrollGroupService } from '@shared/services/scroll-group.service';
 import { ILocalizationService } from '@shared/services/localization.service-model';
 import { localizationService } from '@shared/services/localization.service';
 import {
-  MinimalNetworkObjectService,
-  minimalNetworkObjectService,
+  BackendNetworkObjectService,
+  backendNetworkObjectService,
 } from '@shared/services/network-object.service';
 import { NetworkObjectStatusServiceType } from '@shared/models/network-object-status.service-model';
 import { networkObjectStatusService } from '@shared/services/network-object-status.service';
 import { ISettingsService } from '@shared/services/settings.service-model';
 import { settingsService } from '@shared/services/settings.service';
+import { IWindowService } from '@shared/services/window.service-model';
+import { windowService } from '@shared/services/window.service';
 import { themeService } from '@shared/services/theme.service';
 import { IThemeService } from '@shared/services/theme.service-model';
 import { IProjectSettingsService } from '@shared/services/project-settings.service-model';
@@ -98,7 +100,7 @@ const papi = {
   /** JSDOC DESTINATION papiNetworkService */
   network: papiNetworkService as PapiNetworkService,
   /** JSDOC DESTINATION networkObjectService */
-  networkObjects: minimalNetworkObjectService as MinimalNetworkObjectService,
+  networkObjects: backendNetworkObjectService as BackendNetworkObjectService,
   /** JSDOC DESTINATION networkObjectStatusService */
   networkObjectStatus: networkObjectStatusService as NetworkObjectStatusServiceType,
   /** JSDOC DESTINATION logger */
@@ -130,6 +132,8 @@ const papi = {
   localization: localizationService as ILocalizationService,
   /** JSDOC DESTINATION notificationService */
   notifications: notificationService as INotificationService,
+  /** JSDOC DESTINATION windowService */
+  window: windowService as IWindowService,
 };
 /* eslint-enable */
 
@@ -227,3 +231,6 @@ Object.freeze(papi.localization);
 /** JSDOC DESTINATION notificationService */
 export const { notifications } = papi;
 Object.freeze(papi.notifications);
+/** JSDOC DESTINATION windowService */
+export const { window } = papi;
+Object.freeze(papi.window);

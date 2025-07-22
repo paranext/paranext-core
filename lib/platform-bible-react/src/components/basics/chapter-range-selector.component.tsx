@@ -22,6 +22,8 @@ export type ChapterRangeSelectorProps = {
  * consists of two combo boxes for selecting the start and end chapters. The component ensures that
  * the selected start chapter is always less than or equal to the end chapter, and vice versa.
  *
+ * @deprecated Jul 18 2025. This component is no longer supported or tested. Use of this component
+ *   is discouraged and it may be removed in the future.
  * @param {ChapterRangeSelectorProps} props - The props for the component.
  */
 

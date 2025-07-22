@@ -29,6 +29,13 @@ export type UsjContentLocation = {
   jsonPath: ContentJsonPath;
 };
 
+/** Result of a search for text within a USJ object */
+export type UsjSearchResult = {
+  location: UsjContentLocation;
+  /** The matching text that was found at the location */
+  text: string;
+};
+
 /** Utilities for reading from and writing to `Usj` objects */
 export interface IUsjReaderWriter {
   /**
@@ -109,6 +116,13 @@ export interface IUsjReaderWriter {
    * @returns Number of nodes removed
    */
   removeContentNodes(searchFunction: (potentiallyMatchingNode: MarkerContent) => boolean): number;
+  /**
+   * Search for matches of a regular expression within this USJ's text data
+   *
+   * @param regex Regular expression to search for. Specify the global flag to find all matches.
+   * @returns Array of `UsjSearchResult` objects that match the given regular expression
+   */
+  search(regex: RegExp): UsjSearchResult[];
   /**
    * Inform this UsjReaderWriter that the underlying USJ object changed. This is needed to clear
    * caches used when querying.

@@ -1,4 +1,4 @@
-import { LogLevel } from 'electron-log';
+import type { LogLevel } from 'electron-log';
 import { FunctionComponent } from 'react';
 import {
   GetSavedWebViewDefinition,
@@ -57,6 +57,7 @@ declare global {
   var updateWebViewDefinitionById: (
     webViewId: string,
     webViewDefinitionUpdateInfo: WebViewDefinitionUpdateInfo,
+    shouldBringToFront?: boolean,
   ) => boolean;
   /** JSDOC DESTINATION GetSavedWebViewDefinition */
   var getSavedWebViewDefinition: GetSavedWebViewDefinition;

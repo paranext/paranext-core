@@ -9,6 +9,11 @@
       "includeDefaults": true,
       "topMenu": {
         "columns": {
+          "platformScriptureEditor.edit": {
+            "label": "%webView_platformScriptureEditor_edit%",
+            "order": 2,
+            "isExtensible": true
+          },
           "platformScriptureEditor.options": {
             "label": "%webView_platformScriptureEditor_options%",
             "order": 3
@@ -23,6 +28,10 @@
           }
         },
         "groups": {
+          "platformScriptureEditor.find": {
+            "column": "platformScriptureEditor.edit",
+            "order": 1
+          },
           "platformScriptureEditor.colors": {
             "column": "platformScriptureEditor.options",
             "order": 1
@@ -45,6 +54,12 @@
           }
         },
         "items": [
+          {
+            "label": "%webView_platformScriptureEditor_openFind%",
+            "group": "platformScriptureEditor.find",
+            "order": 3,
+            "command": "platformScripture.openFind"
+          },
           {
             "label": "%webView_platformScriptureEditor_charactersInventory%",
             "group": "platformScriptureEditor.inventory",

@@ -99,6 +99,9 @@ declare module 'platform-scripture' {
     MarkerNames: DataProviderDataType<number, string[], string[]>;
   };
 
+  /** Provides information about running "Find" on scripture projects (intentionally empty) */
+  export type FindInScriptureProjectInterfaceDataTypes = {};
+
   /**
    * Provides project data for Scripture projects.
    *
@@ -530,6 +533,227 @@ declare module 'platform-scripture' {
       ): Promise<UnsubscriberAsync>;
     };
 
+  /** Provides methods for running "Find" jobs on scripture projects */
+  export type IFindInScriptureProjectDataProvider =
+    IProjectDataProvider<FindInScriptureProjectInterfaceDataTypes> & {
+      /**
+       * Begins an asynchronous find operation across the specified scripture scopes.
+       *
+       * Creates and starts a new find job that will search for the specified text or pattern across
+       * the provided scripture scopes. The operation runs asynchronously and can be monitored,
+       * stopped, or have results retrieved using the returned job ID.
+       *
+       * **Important:** All jobs should have {@link cleanUpFindJob} called after they finish to free
+       * resources and remove them from tracking. Not doing so will lead to memory leaks as jobs are
+       * not automatically cleaned up when they finish. If you no longer need a job that might be
+       * running, you can call {@link abandonFindJob} instead to have it automatically cleaned up
+       * once it finishes.
+       *
+       * @example
+       *
+       * ```typescript
+       * const jobId = await engine.beginFindJob({
+       *   searchString: 'Blessed',
+       *   scope: [{ bookId: 'MAT', chapter: 5 }],
+       *   useRegex: false,
+       *   caseInsensitive: true,
+       * });
+       * ```
+       *
+       * @param findOptions - Configuration for the find operation, see {@link FindOptions}
+       * @returns Promise that resolves to a unique job ID that can be used to interact with the
+       *   find operation (retrieve results, check status, stop, etc.)
+       */
+      beginFindJob(options: FindOptions): Promise<string>;
+      /**
+       * Attempts to gracefully stop an ongoing find operation.
+       *
+       * Requests the specified find job to stop processing and waits for it to finish gracefully
+       * within the specified timeout period. If the job doesn't stop within the timeout, it will
+       * continue running but this method will return false.
+       *
+       * **Important:** All jobs, even stopped jobs, should have {@link cleanUpFindJob} called after
+       * they finish to free resources and remove them from tracking. Not doing so will lead to
+       * memory leaks as jobs are not automatically cleaned up when they finish. If you no longer
+       * need a job that might be running, you can call {@link abandonFindJob} instead to have it
+       * automatically cleaned up once it finishes.
+       *
+       * @example
+       *
+       * ```typescript
+       * try {
+       *   const stopped = await engine.stopFindJob(jobId, 2000);
+       *   if (stopped) {
+       *     console.log('Job stopped successfully');
+       *     // Do something with the job, like call retrieveFindJobUpdate to get results
+       *     ...
+       *     // Clean up the job after we have all the results we need
+       *     cleanUpFindJob(jobId);
+       *   } else {
+       *     console.log("Job didn't stop in time");
+       *     // Decide what to do if the job didn't stop gracefully within the timeout period
+       *   }
+       * }
+       * ```
+       *
+       * @param jobId - The unique identifier of the find job to stop
+       * @param timeoutMs - The maximum time in milliseconds to wait for the job to stop gracefully.
+       *   Defaults to 1000ms (1 second).
+       * @returns Promise that resolves to `true` if the job stopped gracefully within the timeout
+       *   period, `false` if the job didn't stop in time
+       * @throws Error if the job ID doesn't exist
+       */
+      stopFindJob(jobId: string, timeoutMs?: number): Promise<boolean>;
+      /**
+       * Removes a find job from tracking and frees its resources.
+       *
+       * This method should be called after a find job has finished for any reason to clean up
+       * memory and remove the job from the internal tracking system.
+       *
+       * @example
+       *
+       * ```typescript
+       * const status = await engine.retrieveFindJobUpdate(jobId, 0);
+       * if (status.status !== 'running') {
+       *   await engine.cleanUpFindJob(jobId);
+       * }
+       * ```
+       *
+       * @param jobId - The unique identifier of the find job to clean up
+       * @throws Error if the job ID doesn't exist or if the job is still running. Running jobs must
+       *   finish before they can be cleaned up.
+       */
+      cleanUpFindJob(jobId: string): Promise<void>;
+      /**
+       * Abandons a find job, preventing any further interaction with it.
+       *
+       * This method prevents any further calls to retrieve results or interact with the job in any
+       * way. It is useful for jobs that are no longer needed and should not be tracked. Abandoned
+       * jobs will be cleaned up automatically once it is possible.
+       *
+       * @example
+       *
+       * ```typescript
+       * await engine.abandonFindJob(jobId);
+       * console.log('Job abandoned, no further interaction allowed');
+       * ```
+       *
+       * @param jobId - The unique identifier of the find job to abandon
+       * @throws Error if the job ID doesn't exist
+       */
+      abandonFindJob(jobId: string): Promise<void>;
+      /**
+       * Retrieves the current status and results of a find job.
+       *
+       * Returns comprehensive information about the job's progress. This method can be called
+       * repeatedly to poll for updates and retrieve results incrementally. Once a set results have
+       * been retrieved, they cannot be retrieved again for this job ID. Subsequent calls to this
+       * method will return the next set of results found so far.
+       *
+       * @example
+       *
+       * ```typescript
+       * // Poll for updates and up to the next 10 results
+       * const update = await engine.retrieveFindJobUpdate(jobId, 10);
+       * console.log(`Status: ${update.status}, Progress: ${update.percentComplete}%`);
+       * console.log(`Found ${update.totalResultsCount} total results`);
+       * update.nextResults.forEach((result) => {
+       *   console.log(`${result.verseRef}: ${result.text}`);
+       * });
+       * ```
+       *
+       * @param jobId - The unique identifier of the find job to check
+       * @param maxResultsToInclude - The maximum number of results to include in the response. Use
+       *   0 to get status without results, or a reasonable number to paginate through large result
+       *   sets.
+       * @returns Promise that resolves to a {@link FindJobStatusReport}. It will contain at most
+       *   `maxResultsToInclude` results, or fewer if there are not enough results yet.
+       * @throws Error if the job ID doesn't exist
+       */
+      retrieveFindJobUpdate(
+        jobId: string,
+        maxResultsToInclude: number,
+      ): Promise<FindJobStatusReport>;
+    };
+
+  // #endregion
+
+  // #region Find Types
+
+  /**
+   * Defines the scope of a find operation. A scope is a book and optionally a chapter within that
+   * book. If no chapter is provided, then the find operation should search across all chapters.
+   */
+  export type FindScope = {
+    bookId: string;
+    chapter?: number;
+  };
+
+  /** Options to use when performing a find operation. */
+  export type FindOptions = {
+    /** The text or regex pattern to search for */
+    searchString: string;
+    /**
+     * Array of {@link FindScope} values defining which books and chapters to search and in what
+     * order
+     */
+    scope: FindScope[];
+    /**
+     * If true, then the search string is treated as a regular expression. If false or undefined,
+     * then it is treated as a plain text search.
+     */
+    useRegex?: boolean;
+    /**
+     * If true, then the search is case insensitive. If false or undefined, then it is case
+     * sensitive.
+     */
+    caseInsensitive?: boolean;
+  };
+
+  /** Represents a single result from a find operation. */
+  export type FindResult = {
+    /** The verse reference where the text was found */
+    verseRef: SerializedVerseRef;
+    /** The text that matched the find operation */
+    text: string;
+  };
+
+  /**
+   * The status of a find job.
+   *
+   * - `running`: The job is currently running
+   * - `stopped`: The job was stopped by the user
+   * - `errored`: The job encountered an error and is no longer running
+   * - `exceeded`: The job was stopped because it generated too many results
+   * - `completed`: The job completed successfully
+   */
+  export type FindJobStatus = 'running' | 'stopped' | 'errored' | 'exceeded' | 'completed';
+
+  /**
+   * Represents the status of a find job, including the results found so far and any errors that
+   * occurred.
+   */
+  export type FindJobStatusReport = {
+    /** Unique ID of the find job */
+    jobId: string;
+    /** Current status of the find job */
+    status: FindJobStatus;
+    /** Percentage of the job that is complete (0-100) */
+    percentComplete: number;
+    /** Total number of results found so far */
+    totalResultsCount: number;
+    /** The next set of results found so far, if any. */
+    nextResults?: FindResult[];
+    /** If the job encountered an error, this will contain the error message */
+    error?: string;
+    /**
+     * Total time in milliseconds that the find operation has taken to run. This is the total time
+     * from when the job started until now if the job is still running. If the job is no longer
+     * running, then this is the total time it took to run the job until it finished.
+     */
+    totalExecutionTimeMs: number;
+  };
+
   // #endregion
 
   // #region Check Types
@@ -883,6 +1107,7 @@ declare module 'papi-shared-types' {
     IUSJVerseProjectDataProvider,
     IPlainTextVerseProjectDataProvider,
     IMarkerNamesProjectDataProvider,
+    IFindInScriptureProjectDataProvider,
     ICheckAggregatorService,
     ICheckRunner,
     CheckDetails,
@@ -901,6 +1126,7 @@ declare module 'papi-shared-types' {
     'platformScripture.USJ_Verse': IUSJVerseProjectDataProvider;
     'platformScripture.PlainText_Verse': IPlainTextVerseProjectDataProvider;
     'platformScripture.MarkerNames': IMarkerNamesProjectDataProvider;
+    'platformScripture.findInScripture': IFindInScriptureProjectDataProvider;
   }
 
   export interface DataProviders {
@@ -950,6 +1176,8 @@ declare module 'papi-shared-types' {
     'platformScripture.openChecksSidePanel': (
       projectId?: string | undefined,
     ) => Promise<string | undefined>;
+
+    'platformScripture.openFind': (projectId?: string | undefined) => Promise<string | undefined>;
   }
 
   export interface ProjectSettingTypes {
