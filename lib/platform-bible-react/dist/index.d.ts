@@ -298,7 +298,7 @@ export type DropdownItem = {
 	id: string;
 	/** The label is the text that will be displayed on the dropdown item. */
 	label: string;
-	/** The onClick function is called when the item is clicked. */
+	/** The onUpdate function is called when the state of a dropdown item is changed. */
 	onUpdate: (id: string, checked?: boolean) => void;
 };
 export type DropdownGroup = {
@@ -339,6 +339,12 @@ interface MoreInfoProps {
 	languages: string[];
 	/** The URL to the more info page of the extension */
 	moreInfoUrl: string;
+	/** Handler function triggered when the more info (Website) link is clicked */
+	handleMoreInfoLinkClick: () => void;
+	/** Optional URL to a website link to get support for the extension */
+	supportUrl: string;
+	/** Handler function triggered when the support link is clicked */
+	handleSupportLinkClick: () => void;
 }
 /**
  * This component displays the more info section of the extension which includes the category,
@@ -348,7 +354,7 @@ interface MoreInfoProps {
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */
-export declare function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
+export declare function MoreInfo({ id, category, downloads, languages, moreInfoUrl, handleMoreInfoLinkClick, supportUrl, handleSupportLinkClick, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
 type VersionInformation = {
 	/** Date the version was published */
 	date: string;

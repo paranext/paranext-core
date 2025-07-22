@@ -1,3 +1,4 @@
+import { Button } from '@/components/shadcn-ui/button';
 import { CircleHelp, Link as LucideLink, User } from 'lucide-react';
 import { NumberFormat } from 'platform-bible-utils';
 
@@ -13,6 +14,12 @@ interface MoreInfoProps {
   languages: string[];
   /** The URL to the more info page of the extension */
   moreInfoUrl: string;
+  /** Handler function triggered when the more info (Website) link is clicked */
+  handleMoreInfoLinkClick: () => void;
+  /** Optional URL to a website link to get support for the extension */
+  supportUrl: string;
+  /** Handler function triggered when the support link is clicked */
+  handleSupportLinkClick: () => void;
 }
 /**
  * This component displays the more info section of the extension which includes the category,
@@ -22,7 +29,16 @@ interface MoreInfoProps {
  * @returns {JSX.Element} - Returns the more info component that displays the category, number of
  *   downloads, languages, and links to the website and support
  */
-export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: MoreInfoProps) {
+export function MoreInfo({
+  id,
+  category,
+  downloads,
+  languages,
+  moreInfoUrl,
+  handleMoreInfoLinkClick,
+  supportUrl,
+  handleSupportLinkClick,
+}: MoreInfoProps) {
   /**
    * This constant formats the number of downloads into a more readable format.
    *
@@ -78,32 +94,34 @@ export function MoreInfo({ id, category, downloads, languages, moreInfoUrl }: Mo
           </button>
         )}
       </div>
-      <div className="tw-flex tw-flex-col tw-gap-1 tw-ps-4">
-        <div className="tw-flex tw-gap-1">
-          <a
-            href={moreInfoUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="tw-flex tw-text-xs tw-font-semibold tw-text-foreground tw-underline"
-          >
-            Website
-          </a>
-          <LucideLink className="tw-h-4 tw-w-4" />
+      {(moreInfoUrl || supportUrl) && (
+        <div className="tw-flex tw-flex-col tw-gap-1 tw-ps-4">
+          {moreInfoUrl && (
+            <div className="tw-flex tw-gap-1">
+              <Button
+                onClick={() => handleMoreInfoLinkClick()}
+                variant="link"
+                className="tw-flex tw-h-auto tw-gap-1 tw-py-0 tw-text-xs tw-font-semibold tw-text-foreground"
+              >
+                Website
+                <LucideLink className="tw-h-4 tw-w-4" />
+              </Button>
+            </div>
+          )}
+          {supportUrl && (
+            <div className="tw-flex tw-gap-1">
+              <Button
+                onClick={() => handleSupportLinkClick()}
+                variant="link"
+                className="tw-flex tw-h-auto tw-gap-1 tw-py-0 tw-text-xs tw-font-semibold tw-text-foreground"
+              >
+                Support
+                <CircleHelp className="tw-h-4 tw-w-4" />
+              </Button>
+            </div>
+          )}
         </div>
-        <div className="tw-flex tw-gap-1">
-          <a
-            href="https://example.com"
-            target="_blank"
-            rel="noreferrer"
-            className="tw-flex tw-text-xs tw-font-semibold tw-text-foreground tw-underline"
-          >
-            Support
-          </a>
-          <CircleHelp className="tw-h-4 tw-w-4" />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
-
-export default MoreInfo;
