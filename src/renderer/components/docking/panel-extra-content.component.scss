@@ -2,7 +2,7 @@
 
 // Base class for panel buttons with shared styles
 %panel-button-base {
-  height: 22px;
+  height: 24px !important;
   width: 32px;
   margin: 4px 4px 4px 0;
 
@@ -10,7 +10,7 @@
   transition: background-color 0.5s ease;
 
   &:hover {
-    background-color: hsl(var(--muted-foreground));
+    background-color: hsl(var(--muted-foreground)) !important;
   }
 }
 
