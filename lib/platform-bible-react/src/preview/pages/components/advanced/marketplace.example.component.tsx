@@ -1,14 +1,21 @@
 import { Footer } from '@/components/advanced/extension-marketplace/footer.component';
 import { MoreInfo } from '@/components/advanced/extension-marketplace/more-info.component';
+import { useNavigate } from 'storybook/internal/router';
 
 export function MarketplaceExamples() {
+  const navigate = useNavigate();
+  const sampleUrl = 'https://example.com';
+
   return (
     <div className="tw-w-1/2 tw-space-y-4">
       <MoreInfo
         category="Study Tools"
         downloads={{ x: 1000000000 }}
         languages={['es', 'en', 'fr', 'ur']}
-        moreInfoUrl="https://example.com"
+        moreInfoUrl={sampleUrl}
+        handleMoreInfoLinkClick={() => navigate(sampleUrl)}
+        supportUrl={sampleUrl}
+        handleSupportLinkClick={() => navigate(sampleUrl)}
       />
       <Footer
         publisherDisplayName="Publisher"
