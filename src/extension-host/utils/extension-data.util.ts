@@ -1,7 +1,7 @@
 import * as nodeFS from '@node/services/node-file-system.service';
 import { LanguageStrings, LocalizedStringDataContribution } from 'platform-bible-utils';
 import { ExtensionIcon, FullExtensionData } from '@shared/models/full-extension-data.model';
-import logger from '@shared/services/logger.service';
+import { logger } from '@shared/services/logger.service';
 import path from 'path';
 import { ExtensionManifest } from '@extension-host/extension-types/extension-manifest.model';
 import { DisplayDataContribution } from '@extension-host/extension-types/display-data-contribution.model';
