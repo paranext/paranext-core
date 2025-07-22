@@ -24,7 +24,7 @@ export {
   type DropdownItem,
   type DropdownGroup,
 } from './components/advanced/extension-marketplace/filter-dropdown.component';
-export { default as MoreInfo } from './components/advanced/extension-marketplace/more-info.component';
+export { MoreInfo } from './components/advanced/extension-marketplace/more-info.component';
 export type { VersionHistoryType } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 
