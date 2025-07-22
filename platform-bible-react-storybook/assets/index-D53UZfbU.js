@@ -1,0 +1,1 @@
+import{r}from"./iframe-BS4Qk0Bz.js";function o(e){const t=r.useRef({value:e,previous:e});return r.useMemo(()=>(t.current.value!==e&&(t.current.previous=t.current.value,t.current.value=e),t.current.previous),[e])}export{o as u};
