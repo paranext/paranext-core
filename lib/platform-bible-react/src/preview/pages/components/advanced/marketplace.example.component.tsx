@@ -2,13 +2,18 @@ import { Footer } from '@/components/advanced/extension-marketplace/footer.compo
 import { MoreInfo } from '@/components/advanced/extension-marketplace/more-info.component';
 
 export function MarketplaceExamples() {
+  const sampleUrl = 'https://example.com';
+
   return (
     <div className="tw-w-1/2 tw-space-y-4">
       <MoreInfo
         category="Study Tools"
         downloads={{ x: 1000000000 }}
         languages={['es', 'en', 'fr', 'ur']}
-        moreInfoUrl="https://example.com"
+        moreInfoUrl={sampleUrl}
+        handleMoreInfoLinkClick={() => window.open(sampleUrl, '_blank', 'noopener,noreferrer')}
+        supportUrl={sampleUrl}
+        handleSupportLinkClick={() => window.open(sampleUrl, '_blank', 'noopener,noreferrer')}
       />
       <Footer
         publisherDisplayName="Publisher"
