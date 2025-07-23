@@ -1,7 +1,6 @@
 import {
   Button,
   cn,
-  DrawerClose,
   DrawerDescription,
   DrawerTitle,
   Separator,
@@ -9,12 +8,12 @@ import {
   ToggleGroupItem,
   ListboxOption,
 } from 'platform-bible-react';
-import { ArrowLeft, ChevronUpIcon } from 'lucide-react';
+import { ChevronUpIcon } from 'lucide-react';
 import { Entry, Sense } from 'platform-lexical-tools';
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocalizedStrings } from '@papi/frontend/react';
 import { SerializedVerseRef } from '@sillsdev/scripture';
-import { formatReplacementString, formatScrRef, LanguageStrings } from 'platform-bible-utils';
+import { formatReplacementString, formatScrRef } from 'platform-bible-utils';
 import {
   DICTIONARY_LOCALIZED_STRING_KEYS,
   getFormatGlossesStringFromDictionaryEntrySenses,
@@ -22,48 +21,7 @@ import {
   DictionaryOccurrenceView,
 } from '../../utils/dictionary.utils';
 import { DomainsDisplay } from './domains-display.component';
-
-/** Props for the BackToListButton component */
-type BackToListButtonProps = {
-  /** Callback function to handle back button click, returning to the list view */
-  handleBackToListButton?: (option: ListboxOption) => void;
-  /** Dictionary entry to display in the button */
-  dictionaryEntry: Entry;
-  /** Whether the display is in a drawer or just next to the list */
-  isDrawer: boolean;
-  /** Localized strings for the button */
-  localizedStrings: LanguageStrings;
-};
-
-function BackToListButton({
-  handleBackToListButton,
-  dictionaryEntry,
-  isDrawer,
-  localizedStrings,
-}: BackToListButtonProps) {
-  if (!handleBackToListButton) return undefined;
-
-  const button = (
-    <Button
-      onClick={() =>
-        handleBackToListButton({
-          id: `${dictionaryEntry.lexicalReferenceTextId}-entry-${dictionaryEntry.id}`,
-        })
-      }
-      className="tw-flex tw-items-center"
-      variant="link"
-    >
-      <ArrowLeft className="tw-mr-1 tw-h-4 tw-w-4" />
-      {localizedStrings['%platformLexicalTools_dictionary_backToList%']}
-    </Button>
-  );
-
-  return (
-    <div className="tw-mb-4 tw-flex tw-items-center tw-justify-between">
-      {isDrawer ? <DrawerClose asChild>{button}</DrawerClose> : button}
-    </div>
-  );
-}
+import { BackToListButton } from './back-to-list-button.component';
 
 /** Props for the DictionaryEntryDisplay component */
 export type DictionaryEntryDisplayProps = {
@@ -161,7 +119,7 @@ export function DictionaryEntryDisplay({
         );
   }, [selectedSense, occurrenceView, scriptureReferenceToFilterBy, sensesFilteredByScrRef]);
 
-  // Cannot use Drawer components when there is no Drawer, if the screen is wider than 1024px it will render Button and span here.
+  // Cannot use Drawer components when there is no Drawer, if the screen is considered wide it will render Button and span here.
   const TitleComponent = isDrawer ? DrawerTitle : 'span';
   const DescriptionComponent = isDrawer ? DrawerDescription : 'span';
 
@@ -176,6 +134,23 @@ export function DictionaryEntryDisplay({
       setSelectedSenseIndex(undefined);
     }
   }, [sensesFilteredByScrRef, dictionaryEntry]);
+
+  const getOccurrenceCountsFromSenses = useCallback(
+    (localOccurrenceView: DictionaryOccurrenceView) => {
+      const senses = Object.values(sensesFilteredByScrRef).flat();
+
+      return selectedSense
+        ? getDeduplicatedOccurrencesFromSenses(
+            [selectedSense],
+            localOccurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
+          ).length
+        : getDeduplicatedOccurrencesFromSenses(
+            senses,
+            localOccurrenceView === 'chapter' ? scriptureReferenceToFilterBy : undefined,
+          ).length;
+    },
+    [scriptureReferenceToFilterBy, selectedSense, sensesFilteredByScrRef],
+  );
 
   return (
     <div>
@@ -272,17 +247,7 @@ export function DictionaryEntryDisplay({
               onClick={() => setOccurrenceView('chapter')}
             >
               {localizedStrings['%platformLexicalTools_dictionary_occurrencesToggleChapter%']} (
-              {(() => {
-                const senses = Object.values(sensesFilteredByScrRef).flat();
-                return selectedSense
-                  ? getDeduplicatedOccurrencesFromSenses(
-                      [selectedSense],
-                      scriptureReferenceToFilterBy,
-                    ).length
-                  : getDeduplicatedOccurrencesFromSenses(senses, scriptureReferenceToFilterBy)
-                      .length;
-              })()}
-              )
+              {getOccurrenceCountsFromSenses('chapter')})
             </button>
             <button
               type="button"
@@ -294,13 +259,7 @@ export function DictionaryEntryDisplay({
               onClick={() => setOccurrenceView('all')}
             >
               {localizedStrings['%platformLexicalTools_dictionary_occurrencesToggleAll%']} (
-              {(() => {
-                const senses = Object.values(sensesFilteredByScrRef).flat();
-                return selectedSense
-                  ? getDeduplicatedOccurrencesFromSenses([selectedSense]).length
-                  : getDeduplicatedOccurrencesFromSenses(senses).length;
-              })()}
-              )
+              {getOccurrenceCountsFromSenses('all')})
             </button>
           </div>
         </div>

@@ -1502,8 +1502,12 @@ export declare const DrawerPortal: typeof import("vaul").Portal;
 export declare const DrawerClose: React$1.ForwardRefExoticComponent<import("@radix-ui/react-dialog").DialogCloseProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Drawer */
 export declare const DrawerOverlay: React$1.ForwardRefExoticComponent<Omit<Omit<import("@radix-ui/react-dialog").DialogOverlayProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+interface DrawerContentProps extends React$1.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
+	/** Optionally hide the drawer handle */
+	hideDrawerHandle?: boolean;
+}
 /** @inheritdoc Drawer */
-export declare const DrawerContent: React$1.ForwardRefExoticComponent<Omit<Omit<import("@radix-ui/react-dialog").DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DrawerContent: React$1.ForwardRefExoticComponent<DrawerContentProps & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Drawer */
 export declare function DrawerHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
 export declare namespace DrawerHeader {
