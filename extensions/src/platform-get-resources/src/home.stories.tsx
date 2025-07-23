@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useState } from 'react';
-import { HomeDialog, HomeDialogProps, LocalProjectInfo } from './home.component';
+import { Home, HomeProps, LocalProjectInfo } from './home.component';
+
 const staticLocalProjectsAndResources: LocalProjectInfo[] = [
   {
     projectId: '1',
@@ -73,7 +74,18 @@ const staticProjectsAndResources: SharedProjectsInfo = {
   },
 };
 
-function HomeDecorator(Story: (update?: { args: Partial<HomeDialogProps> }) => ReactElement) {
+const meta: Meta<typeof Home> = {
+  title: 'Bundled Extensions/platform-get-resources/Home',
+  component: Home,
+  tags: ['autodocs'],
+  argTypes: {},
+  decorators: [],
+};
+export default meta;
+
+type Story = StoryObj<typeof Home>;
+
+function DefaultHomeDecorator(Story: (update?: { args: Partial<HomeProps> }) => ReactElement) {
   const [localProjectsAndResources, setLocalProjectsAndResources] = useState<LocalProjectInfo[]>(
     [],
   );
@@ -110,17 +122,10 @@ function HomeDecorator(Story: (update?: { args: Partial<HomeDialogProps> }) => R
   );
 }
 
-const meta: Meta<typeof HomeDialog> = {
-  title: 'Bundled Extensions/platform-get-resources/Home',
-  component: HomeDialog,
-  tags: ['autodocs'],
-  argTypes: {},
-  decorators: [HomeDecorator],
-};
-export default meta;
-
-type Story = StoryObj<typeof HomeDialog>;
-
 export const Default: Story = {
-  args: {},
+  decorators: [DefaultHomeDecorator],
+};
+
+export const NoProjects: Story = {
+  decorators: [],
 };

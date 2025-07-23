@@ -12,34 +12,12 @@ import {
 } from 'platform-bible-utils';
 import { SharedProjectsInfo } from 'platform-scripture';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { HomeDialog, LocalProjectInfo } from './home.component';
-
-const HOME_STRING_KEYS: LocalizeKey[] = [
-  '%resources_action%',
-  '%resources_activity%',
-  '%resources_clearSearch%',
-  '%home_dialog_title%',
-  '%resources_filterInput%',
-  '%resources_fullName%',
-  '%resources_get%',
-  '%resources_getStarted%',
-  '%resources_getStartedDescription%',
-  '%resources_getResources%',
-  '%resources_items%',
-  '%resources_language%',
-  '%resources_loading%',
-  '%resources_noProjects%',
-  '%resources_noProjectsInstruction%',
-  '%resources_noSearchResults%',
-  '%resources_open%',
-  '%resources_searchedFor%',
-  '%resources_sync%',
-];
+import { Home, HOME_STRING_KEYS, LocalProjectInfo } from './home.component';
 
 const defaultExcludePdpFactoryIds: string[] = [];
 const defaultInterfaceLanguages: string[] = ['en'];
 
-globalThis.webViewComponent = function HomeDialogWebview() {
+globalThis.webViewComponent = function HomeWebview() {
   const isMounted = useRef(false);
   useEffect(() => {
     isMounted.current = true;
@@ -48,7 +26,11 @@ globalThis.webViewComponent = function HomeDialogWebview() {
     };
   }, []);
 
-  const [localizedStrings] = useLocalizedStrings(HOME_STRING_KEYS);
+  const [localizedStrings] = useLocalizedStrings(
+    useMemo(() => {
+      return Array.from(HOME_STRING_KEYS);
+    }, []),
+  );
 
   const dblResourcesProvider = useDataProvider('platformGetResources.dblResourcesProvider');
 
@@ -277,7 +259,7 @@ globalThis.webViewComponent = function HomeDialogWebview() {
   }, [interfaceLanguages]);
 
   return (
-    <HomeDialog
+    <Home
       localizedStrings={localizedStrings}
       uiLocales={uiLocales}
       onOpenGetResources={openGetResources}

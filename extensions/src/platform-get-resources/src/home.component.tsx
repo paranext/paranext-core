@@ -4,7 +4,7 @@ import {
   ChevronsUpDown,
   ChevronUp,
   Ellipsis,
-  Home,
+  Home as HomeIcon,
   ScrollText,
 } from 'lucide-react';
 import {
@@ -28,24 +28,45 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-import { formatTimeSpan, LanguageStrings, LocalizeKey } from 'platform-bible-utils';
+import {
+  formatTimeSpan,
+  LanguageStrings,
+  LocalizedStringValue,
+  LocalizeKey,
+} from 'platform-bible-utils';
 import { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { useMemo, useState } from 'react';
 
-export type HomeDialogProps = {
-  localizedStrings?: LanguageStrings;
-  uiLocales?: Intl.LocalesArgument;
-  onOpenGetResources?: () => void;
-  onOpenProject?: (projectId: string, isEditable: boolean) => void;
-  onSendReceiveProject?: (projectId: string) => void;
-  onGetStarted?: () => void;
-  showGetResourcesButton?: boolean;
-  isSendReceiveInProgress?: boolean;
-  isLoadingLocalProjects?: boolean;
-  isLoadingRemoteProjects?: boolean;
-  localProjectsInfo?: LocalProjectInfo[];
-  sharedProjectsInfo?: SharedProjectsInfo;
-  activeSendReceiveProjects?: string[];
+/**
+ * Object containing all keys used for localization in this component. If you're using this
+ * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
+ * localized strings and pass them into the localizedStrings prop of this component
+ */
+export const HOME_STRING_KEYS = Object.freeze([
+  '%resources_action%',
+  '%resources_activity%',
+  '%resources_clearSearch%',
+  '%home_dialog_title%',
+  '%resources_filterInput%',
+  '%resources_fullName%',
+  '%resources_get%',
+  '%resources_getStarted%',
+  '%resources_getStartedDescription%',
+  '%resources_getResources%',
+  '%resources_items%',
+  '%resources_language%',
+  '%resources_loading%',
+  '%resources_noProjects%',
+  '%resources_noProjectsInstruction%',
+  '%resources_noSearchResults%',
+  '%resources_open%',
+  '%resources_searchedFor%',
+  '%resources_sync%',
+] as const);
+
+type HomeLocalizedStringKey = (typeof HOME_STRING_KEYS)[number];
+type HomeLocalizedStrings = {
+  [localizedHomeKey in HomeLocalizedStringKey]?: LocalizedStringValue;
 };
 
 export type SortConfig = {
@@ -73,7 +94,29 @@ export type MergedProjectInfo = {
   lastSendReceiveDate?: string;
 };
 
-export function HomeDialog({
+export type HomeProps = {
+  /**
+   * Object with all localized strings that the Inventory needs to work well across multiple
+   * languages. When using this component with Platform.Bible, you can import `HOME_STRING_KEYS`
+   * from this library, pass it in to the Platform's localization hook, and pass the localized keys
+   * that are returned by the hook into this prop.
+   */
+  localizedStrings?: HomeLocalizedStrings;
+  uiLocales?: Intl.LocalesArgument;
+  onOpenGetResources?: () => void;
+  onOpenProject?: (projectId: string, isEditable: boolean) => void;
+  onSendReceiveProject?: (projectId: string) => void;
+  onGetStarted?: () => void;
+  showGetResourcesButton?: boolean;
+  isSendReceiveInProgress?: boolean;
+  isLoadingLocalProjects?: boolean;
+  isLoadingRemoteProjects?: boolean;
+  localProjectsInfo?: LocalProjectInfo[];
+  sharedProjectsInfo?: SharedProjectsInfo;
+  activeSendReceiveProjects?: string[];
+};
+
+export function Home({
   localizedStrings = {},
   uiLocales = [],
   onOpenGetResources = () => {},
@@ -87,8 +130,8 @@ export function HomeDialog({
   localProjectsInfo = [],
   sharedProjectsInfo = {},
   activeSendReceiveProjects = [],
-}: HomeDialogProps) {
-  const getLocalizedString: { (localizeKey: LocalizeKey): string } = (localizeKey: LocalizeKey) => {
+}: HomeProps) {
+  const getLocalizedString = (localizeKey: HomeLocalizedStringKey) => {
     return localizedStrings[localizeKey] ?? localizeKey;
   };
   const actionText: string = getLocalizedString('%resources_action%');
@@ -98,8 +141,8 @@ export function HomeDialog({
   const filterInputText: string = getLocalizedString('%resources_filterInput%');
   const fullNameText: string = getLocalizedString('%resources_fullName%');
   const getText: string = getLocalizedString('%resources_get%');
-  const getStartedText: string = localizedStrings['%resources_getStarted%'];
-  const getStartedDescriptionText: string = localizedStrings['%resources_getStartedDescription%'];
+  const getStartedText: string = getLocalizedString('%resources_getStarted%');
+  const getStartedDescriptionText: string = getLocalizedString('%resources_getStartedDescription%');
   const getResourcesText: string = getLocalizedString('%resources_getResources%');
   const itemsText: string = getLocalizedString('%resources_items%');
   const languageText: string = getLocalizedString('%resources_language%');
@@ -269,45 +312,44 @@ export function HomeDialog({
   };
 
   return (
-    <div>
-      <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
-        <CardHeader className="tw-flex-shrink-0">
-          <div className="tw-flex tw-justify-between tw-gap-4">
-            <div className="tw-flex tw-flex-col md:tw-flex-row tw-gap-4">
-              <div className="tw-flex tw-gap-4 tw-items-center">
-                <Home size={36} />
-                <CardTitle>{dialogTitleText}</CardTitle>
-              </div>
-              <SearchBar
-                value={textFilter}
-                className="tw-min-w-72"
-                onSearch={setTextFilter}
-                placeholder={filterInputText}
-              />
+    <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
+      <CardHeader className="tw-flex-shrink-0">
+        <div className="tw-flex tw-justify-between tw-gap-4">
+          <div className="tw-flex tw-flex-col md:tw-flex-row tw-gap-4">
+            <div className="tw-flex tw-gap-4 tw-items-center">
+              <HomeIcon size={36} />
+              <CardTitle>{dialogTitleText}</CardTitle>
             </div>
-            <div className="tw-self-end">
-              {showGetResourcesButton && (
-                <Button onClick={onOpenGetResources} className="tw-bg-muted" variant="ghost">
-                  {`+ ${getResourcesText}`}
-                </Button>
-              )}
-            </div>
+            <SearchBar
+              value={textFilter}
+              className="tw-min-w-72"
+              onSearch={setTextFilter}
+              placeholder={filterInputText}
+            />
           </div>
-        </CardHeader>
-        {isLoadingLocalProjects || isLoadingRemoteProjects ? (
-          <CardContent className="tw-flex tw-flex-grow tw-flex-col tw-items-center tw-justify-center tw-gap-2">
-            <Label>{loadingText}</Label>
-            <Spinner />
-          </CardContent>
-        ) : (
-          <CardContent className="tw-flex-grow tw-overflow-auto">
+          <div className="tw-self-end">
+            {showGetResourcesButton && (
+              <Button onClick={onOpenGetResources} className="tw-bg-muted" variant="ghost">
+                {`+ ${getResourcesText}`}
+              </Button>
+            )}
+          </div>
+        </div>
+      </CardHeader>
+      {isLoadingLocalProjects || isLoadingRemoteProjects ? (
+        <CardContent className="tw-flex tw-flex-grow tw-flex-col tw-items-center tw-justify-center tw-gap-2">
+          <Label>{loadingText}</Label>
+          <Spinner />
+        </CardContent>
+      ) : (
+        <CardContent className="tw-flex-grow tw-overflow-auto">
           <div className="tw-flex tw-flex-col tw-gap-4">
-            {!localProjectsInfo ? (
-              <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-                <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
-                <Label className="tw-text-muted-foreground tw-font-normal">
-                  {noProjectsInstructionText}
-                </Label>
+          {!localProjectsInfo ? (
+            <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+              <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
+              <Label className="tw-text-muted-foreground tw-font-normal">
+                {noProjectsInstructionText}
+              </Label>
 
                 {showGetResourcesButton && (
                   <Button
@@ -432,6 +474,5 @@ export function HomeDialog({
             <p className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</p>
           </CardFooter>
       </Card>
-    </div>
   );
 }
