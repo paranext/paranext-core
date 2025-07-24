@@ -28,6 +28,18 @@ type DictionaryListItemProps = {
   onClick: () => void;
 };
 
+/**
+ * A list item for a dictionary entry.
+ *
+ * This component is used to display a dictionary entry in a list of dictionary entries.
+ *
+ * The component renders a list item with the lemma of the dictionary entry, the number of
+ * occurrences in the chapter, and the Strong's codes for the dictionary entry. The component also
+ * renders a tooltip that displays the number of occurrences in the chapter.
+ *
+ * The component uses the `useListbox` hook from the `listbox-keyboard-navigation.util` module to
+ * handle keyboard navigation of the list.
+ */
 export function DictionaryListItem({
   entry,
   isSelected,

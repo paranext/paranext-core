@@ -15,6 +15,14 @@ type BackToListButtonProps = {
   localizedStrings: LanguageStrings;
 };
 
+/**
+ * A button that appears above the detailed view of a dictionary entry.
+ *
+ * If the user is viewing the detailed view in a drawer, this button is a drawer close button.
+ * Otherwise, it is a regular button.
+ *
+ * Clicking the button will return the user to the list view of all dictionary entries.
+ */
 export function BackToListButton({
   handleBackToListButton,
   dictionaryEntry,
