@@ -148,7 +148,7 @@ async function registerWebViewProvider(
 /**
  * Get a web view provider that has previously been set up
  *
- * @param webViewType Type of webview provider to get
+ * @param webViewType Type of web view provider to get
  * @returns Web view provider with the given name if one exists, undefined otherwise
  */
 async function getWebViewProvider(

@@ -41,7 +41,7 @@ export interface IWebViewProvider extends NetworkableObject {
    *
    * @param savedWebViewDefinition The saved web view information from which to build a complete web
    *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
-   *   web view if an existing webview is being called for (matched by ID). Just provides the
+   *   web view if an existing web view is being called for (matched by ID). Just provides the
    *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
    *   the web view with the existing ID was not found.
    * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`

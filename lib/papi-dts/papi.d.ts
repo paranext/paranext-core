@@ -126,9 +126,9 @@ declare module 'shared/models/web-view.model' {
    * If `html`: This web view is a raw HTML/JS/CSS web view. See {@link WebViewDefinitionHtml} for more
    * information.
    *
-   * If `url`: This web view's content is fetched from the url specified (iframe `src` attribute). Note
-   * that webViews of this type cannot access the `papi` because they cannot be on the same origin as
-   * the parent window. See {@link WebViewDefinitionURL} for more information.
+   * If `url`: This web view's content is fetched from the url specified (iframe `src` attribute).
+   * Note that WebViews of this type cannot access the `papi` because they cannot be on the same
+   * origin as the parent window. See {@link WebViewDefinitionURL} for more information.
    */
   export type WebViewContentType = 'react' | 'html' | 'url';
   /**
@@ -409,8 +409,8 @@ declare module 'shared/models/web-view.model' {
   export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
   /**
    *
-   * A React hook for working with a state object tied to a web view. Returns a WebView state value and
-   * a function to set it. Use similarly to `useState`.
+   * A React hook for working with a state object tied to a web view. Returns a WebView state value
+   * and a function to set it. Use similarly to `useState`.
    *
    * Only used in WebView iframes.
    *
@@ -517,8 +517,8 @@ declare module 'shared/models/web-view.model' {
   export type WebViewProps = SavedWebViewDefinition & {
     /**
      *
-     * A React hook for working with a state object tied to a web view. Returns a WebView state value and
-     * a function to set it. Use similarly to `useState`.
+     * A React hook for working with a state object tied to a web view. Returns a WebView state value
+     * and a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
@@ -678,8 +678,8 @@ declare module 'shared/global-this.model' {
     var webViewId: WebViewId;
     /**
      *
-     * A React hook for working with a state object tied to a web view. Returns a WebView state value and
-     * a function to set it. Use similarly to `useState`.
+     * A React hook for working with a state object tied to a web view. Returns a WebView state value
+     * and a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
@@ -2928,8 +2928,8 @@ declare module 'shared/services/web-view.service-model' {
      *   tab. Does nothing on an existing WebView
      * @param options Options that affect what this method does. For example, you can provide an
      *   existing web view ID to request an existing web view with that ID.
-     * @returns Promise that resolves to the ID of the web view we got or undefined if the provider did
-     *   not create a WebView for this request.
+     * @returns Promise that resolves to the ID of the web view we got or undefined if the provider
+     *   did not create a WebView for this request.
      * @throws If something went wrong like the provider for the webViewType was not found
      */
     openWebView: (

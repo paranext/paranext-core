@@ -1,4 +1,4 @@
-// #region utility functions that deal with loading, saving, and adding webviews. This code should
+// #region utility functions that deal with loading, saving, and adding web views. This code should
 // really be in `web-view.service.ts`, but that file cannot currently import renderer code as it is
 // a shared file.
 // TODO: please move these utility functions with #203
@@ -161,7 +161,7 @@ function getTabInfoById(
 ): RCDockTabInfo | undefined {
   const targetTab = dockLayout.find(tabId);
 
-  // If we didn't find the webview, return undefined
+  // If we didn't find the web view, return undefined
   if (!targetTab) return undefined;
 
   if (!isTab(targetTab))
@@ -237,7 +237,7 @@ export function getTabInfoByElement(
 
 // #endregion
 
-// #region webview storage
+// #region web view storage
 /**
  * Gets the web view definition (data on the TabInfo) for the web view with the specified id
  *
@@ -252,7 +252,7 @@ export function getTabInfoByElement(
  *   - `targetTabWebViewData` - web view definition for the specified web view or `undefined` if not
  *       found
  *
- * @throws If the tab found with the specified webViewId is not a tab or is not a webview
+ * @throws If the tab found with the specified webViewId is not a tab or is not a web view
  */
 function getWebViewTabInfoById(
   webViewId: string,
@@ -261,7 +261,7 @@ function getWebViewTabInfoById(
 ): [RCDockTabInfo | undefined, WebViewDefinition | undefined] {
   const targetTabInfo = getTabInfoById(dockLayout, webViewId, methodName);
 
-  // If we didn't find the webview, return nothing
+  // If we didn't find the web view, return nothing
   if (!targetTabInfo) return [undefined, undefined];
 
   if (targetTabInfo.tabType !== TAB_TYPE_WEBVIEW)
@@ -269,7 +269,7 @@ function getWebViewTabInfoById(
       `platform-dock-layout.component ${methodName} error: target tab with id '${targetTabInfo.id}' is not a WebView tab`,
     );
 
-  // Type assert the webview data in the web view tab
+  // Type assert the web view data in the web view tab
   // eslint-disable-next-line no-type-assertion/no-type-assertion
   const targetTabWebViewData = targetTabInfo.data as WebViewDefinition;
 
@@ -585,10 +585,10 @@ export function addTabToDock(
 }
 
 /**
- * Add or update a webview in the layout
+ * Add or update a web view in the layout
  *
  * @param webView Web view to add or update
- * @param layout Information about where to put a new webview
+ * @param layout Information about where to put a new web view
  * @param dockLayout The rc-dock dock layout React component ref. Used to perform operations on the
  *   layout
  * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other

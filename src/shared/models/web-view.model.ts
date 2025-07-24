@@ -5,17 +5,17 @@ import { SerializedVerseRef } from '@sillsdev/scripture';
 import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
 
 /**
- * The type of code that defines a webview's content.
+ * The type of code that defines a web view's content.
  *
- * If `react`: This webview is a React webview. It must specify its component by setting it to
+ * If `react`: This web view is a React web view. It must specify its component by setting it to
  * `globalThis.webViewComponent`. See {@link WebViewDefinitionReact} for more information.
  *
- * If `html`: This webview is a raw HTML/JS/CSS webview. See {@link WebViewDefinitionHtml} for more
+ * If `html`: This web view is a raw HTML/JS/CSS web view. See {@link WebViewDefinitionHtml} for more
  * information.
  *
- * If `url`: This webview's content is fetched from the url specified (iframe `src` attribute). Note
- * that webViews of this type cannot access the `papi` because they cannot be on the same origin as
- * the parent window. See {@link WebViewDefinitionURL} for more information.
+ * If `url`: This web view's content is fetched from the url specified (iframe `src` attribute).
+ * Note that WebViews of this type cannot access the `papi` because they cannot be on the same
+ * origin as the parent window. See {@link WebViewDefinitionURL} for more information.
  */
 export type WebViewContentType = 'react' | 'html' | 'url';
 
@@ -39,7 +39,7 @@ export type WebViewId = string;
 type WebViewDefinitionBase = {
   /** What type of WebView this is. Unique to all other WebView definitions */
   webViewType: WebViewType;
-  /** Unique ID among webviews specific to this webview instance. */
+  /** Unique ID among web views specific to this web view instance. */
   id: WebViewId;
   /**
    * The content for the WebView that papi puts into an iframe. This field differs significantly
@@ -108,7 +108,7 @@ type WebViewDefinitionBase = {
    * WebView
    */
   title?: string | LocalizeKey;
-  /** Tooltip that is shown when hovering over the webview title */
+  /** Tooltip that is shown when hovering over the web view title */
   tooltip?: string;
   /**
    * Project id associated with this web view.
@@ -123,7 +123,7 @@ type WebViewDefinitionBase = {
    */
   scrollGroupScrRef?: ScrollGroupScrRef;
   /**
-   * General object to store unique state for this webview.
+   * General object to store unique state for this web view.
    *
    * WARNING: This storage is not private; other extensions can access this data. Do not store
    * secrets in here
@@ -176,7 +176,7 @@ type WebViewDefinitionBase = {
    * with `papi-extension:` and `https:`; any others are ignored. Specifying urls in this array
    * whitelists those urls so you can embed iframes with those urls as the `src` attribute. By
    * default, no urls are available to be iframes. If you want to embed iframes with the `src`
-   * attribute in your webview, you must include them in this property.
+   * attribute in your web view, you must include them in this property.
    *
    * For example, if you specify `allowFrameSources: ['https://example.com/']`, you will be able to
    * embed iframes with urls starting with `papi-extension:` and on the same host as
@@ -295,7 +295,7 @@ export type SavedWebViewDefinition = (
   Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
 
 /**
- * The keys of properties on a WebViewDefinition that may be updated when that webview is already
+ * The keys of properties on a WebViewDefinition that may be updated when that web view is already
  * displayed
  */
 // If you add to these, please make sure they are in `WebViewDefinition`
@@ -309,7 +309,7 @@ export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS = [
   'scrollGroupScrRef',
 ] as const;
 
-/** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
+/** The properties on a WebViewDefinition that may be updated when that web view is already displayed */
 export type WebViewDefinitionUpdatableProperties = Pick<
   WebViewDefinitionBase,
   (typeof WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS)[number]
@@ -332,12 +332,12 @@ export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProp
 /**
  * JSDOC SOURCE UseWebViewStateHook
  *
- * A React hook for working with a state object tied to a webview. Returns a WebView state value and
- * a function to set it. Use similarly to `useState`.
+ * A React hook for working with a state object tied to a web view. Returns a WebView state value
+ * and a function to set it. Use similarly to `useState`.
  *
  * Only used in WebView iframes.
  *
- * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
+ * _＠param_ `stateKey` Key of the state value to use. The web view state holds a unique value per
  * key.
  *
  * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be

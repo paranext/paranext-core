@@ -120,7 +120,7 @@ export type IMenuDataService = {
   /**
    * Get localized menu content for a web view
    *
-   * @param webViewType The type of webview for which a menu should be retrieved
+   * @param webViewType The type of web view for which a menu should be retrieved
    * @returns WebViewMenu object of web view menu content
    */
   getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
@@ -135,7 +135,7 @@ export type IMenuDataService = {
   /**
    * Subscribe to run a callback function when the localized web view menu data is changed
    *
-   * @param webViewType The type of webview for which a menu should be subscribed
+   * @param webViewType The type of web view for which a menu should be subscribed
    * @param callback Function to run with the updated menuContent for this selector. If there is an
    *   error while retrieving the updated data, the function will run with a {@link PlatformError}
    *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an

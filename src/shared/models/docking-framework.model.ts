@@ -173,10 +173,10 @@ export type PapiDockLayout = {
     shouldBringToFront?: boolean,
   ) => Layout | undefined;
   /**
-   * Add or update a webview in the layout
+   * Add or update a web view in the layout
    *
    * @param webView Web view to add or update
-   * @param layout Information about where to put a new webview
+   * @param layout Information about where to put a new web view
    * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
    *   tabs. Defaults to `true`
    * @returns If WebView added, final layout used to display the new webView. If existing webView
