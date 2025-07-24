@@ -28,12 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-import {
-  formatTimeSpan,
-  LanguageStrings,
-  LocalizedStringValue,
-  LocalizeKey,
-} from 'platform-bible-utils';
+import { formatTimeSpan, LocalizedStringValue } from 'platform-bible-utils';
 import { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { useMemo, useState } from 'react';
 
@@ -344,12 +339,12 @@ export function Home({
       ) : (
         <CardContent className="tw-flex-grow tw-overflow-auto">
           <div className="tw-flex tw-flex-col tw-gap-4">
-          {!localProjectsInfo ? (
-            <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
-              <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
-              <Label className="tw-text-muted-foreground tw-font-normal">
-                {noProjectsInstructionText}
-              </Label>
+            {!localProjectsInfo ? (
+              <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
+                <Label className="tw-text-muted-foreground">{noProjectsText}</Label>
+                <Label className="tw-text-muted-foreground tw-font-normal">
+                  {noProjectsInstructionText}
+                </Label>
 
                 {showGetResourcesButton && (
                   <Button
@@ -457,22 +452,20 @@ export function Home({
               </div>
             )}
             {filteredAndSortedProjects.length === 1 &&
-                filteredAndSortedProjects[0].name === 'WEB' && (
-                  <div className="tw-flex tw-flex-col tw-gap-4 tw-items-center tw-w-auto">
-                    <p className="tw-text-muted-foreground tw-font-normal">
-                      {getStartedDescriptionText}
-                    </p>
-                    <Button onClick={onGetStarted}>
-                      {getStartedText}
-                    </Button>
-                  </div>
-                )}
-            </div>
-          </CardContent>
-        )}
-          <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2">
-            <p className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</p>
-          </CardFooter>
-      </Card>
+              filteredAndSortedProjects[0].name === 'WEB' && (
+                <div className="tw-flex tw-flex-col tw-gap-4 tw-items-center tw-w-auto">
+                  <p className="tw-text-muted-foreground tw-font-normal">
+                    {getStartedDescriptionText}
+                  </p>
+                  <Button onClick={onGetStarted}>{getStartedText}</Button>
+                </div>
+              )}
+          </div>
+        </CardContent>
+      )}
+      <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2">
+        <p className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</p>
+      </CardFooter>
+    </Card>
   );
 }
