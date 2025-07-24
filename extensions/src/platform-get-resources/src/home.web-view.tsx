@@ -7,7 +7,6 @@ import {
   isErrorMessageAboutParatextBlockingInternetAccess,
   isErrorMessageAboutRegistryAuthFailure,
   isPlatformError,
-  LocalizeKey,
   newGuid,
 } from 'platform-bible-utils';
 import { SharedProjectsInfo } from 'platform-scripture';
