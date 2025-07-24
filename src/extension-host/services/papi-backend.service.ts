@@ -5,7 +5,7 @@
  */
 
 import * as commandService from '@shared/services/command.service';
-import papiLogger from '@shared/services/logger.service';
+import { logger as papiLogger } from '@shared/services/logger.service';
 import { papiNetworkService, PapiNetworkService } from '@shared/services/network.service';
 import { WebViewServiceType } from '@shared/services/web-view.service-model';
 import { webViewService } from '@shared/services/web-view.service';

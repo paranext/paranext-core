@@ -1284,7 +1284,7 @@ export type SearchBarProps = {
  *   search bar
  * @param {boolean} [props.isDisabled] - Optional boolean to disable the search bar
  */
-export declare function SearchBar({ value, onSearch, placeholder, isFullWidth, className, isDisabled, }: SearchBarProps): import("react/jsx-runtime").JSX.Element;
+export declare const SearchBar: import("react").ForwardRefExoticComponent<SearchBarProps & import("react").RefAttributes<HTMLInputElement>>;
 export type SpinnerProps = LucideProps;
 /**
  * A spinner component that uses the LoaderCircle icon from lucide-react to indicate loading states.
@@ -1502,8 +1502,12 @@ export declare const DrawerPortal: typeof import("vaul").Portal;
 export declare const DrawerClose: React$1.ForwardRefExoticComponent<import("@radix-ui/react-dialog").DialogCloseProps & React$1.RefAttributes<HTMLButtonElement>>;
 /** @inheritdoc Drawer */
 export declare const DrawerOverlay: React$1.ForwardRefExoticComponent<Omit<Omit<import("@radix-ui/react-dialog").DialogOverlayProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+interface DrawerContentProps extends React$1.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
+	/** Optionally hide the drawer handle */
+	hideDrawerHandle?: boolean;
+}
 /** @inheritdoc Drawer */
-export declare const DrawerContent: React$1.ForwardRefExoticComponent<Omit<Omit<import("@radix-ui/react-dialog").DialogContentProps & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>, "ref"> & React$1.RefAttributes<HTMLDivElement>>;
+export declare const DrawerContent: React$1.ForwardRefExoticComponent<DrawerContentProps & React$1.RefAttributes<HTMLDivElement>>;
 /** @inheritdoc Drawer */
 export declare function DrawerHeader({ className, ...props }: React$1.HTMLAttributes<HTMLDivElement>): import("react/jsx-runtime").JSX.Element;
 export declare namespace DrawerHeader {
@@ -2017,6 +2021,43 @@ export declare const usePromise: <T>(promiseFactoryCallback: (() => Promise<T>) 
 	value: T,
 	isLoading: boolean
 ];
+/** Properties of one option contained in a listbox */
+export interface ListboxOption {
+	/** Unique identifier for the option */
+	id: string;
+}
+/** Props for the useListbox hook */
+export interface UseListboxProps {
+	/** Array of options for the listbox */
+	options: ListboxOption[];
+	/** Callback when the focus changes to a different option */
+	onFocusChange?: (option: ListboxOption) => void;
+	/** Callback to toggle the selection of an option */
+	onOptionSelect?: (option: ListboxOption) => void;
+	/** Callback when a character key is pressed */
+	onCharacterPress?: (char: string) => void;
+}
+/**
+ * Hook for handling keyboard navigation of a listbox.
+ *
+ * @param UseListboxProps - The properties for configuring the listbox behavior.
+ * @returns An object containing:
+ *
+ *   - `listboxRef`: A ref to be attached to the listbox container element (e.g., `<ul>`), used for
+ *       focus management.
+ *   - `activeId`: The id of the currently focused (active) option, or `undefined` if none is focused.
+ *   - `selectedId`: The id of the currently selected option, or `undefined` if none is selected.
+ *   - `handleKeyDown`: A keyboard event handler to be attached to the listbox container for handling
+ *       navigation and selection.
+ *   - `focusOption`: A function to programmatically focus a specific option by id.
+ */
+export declare const useListbox: ({ options, onFocusChange, onOptionSelect, onCharacterPress, }: UseListboxProps) => {
+	listboxRef: React$1.RefObject<HTMLElement>;
+	activeId: string | undefined;
+	selectedId: string | undefined;
+	handleKeyDown: (evt: React$1.KeyboardEvent<HTMLElement>) => void;
+	focusOption: (id: string) => void;
+};
 /**
  * Tailwind and CSS class application helper function. Uses
  * [`clsx`](https://www.npmjs.com/package/clsx) to make it easy to apply classes conditionally using

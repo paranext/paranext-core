@@ -22,6 +22,19 @@
     "items": []
   },
   "webViewMenus": {
-    "platformLexicalTools.dictionary": {}
+    "platformLexicalTools.dictionary": {},
+    "platformScriptureEditor.react": {
+      "topMenu": {
+        "items": [
+          {
+            "label": "%platformLexicalTools_webViewMenu_openDictionary%",
+            "localizeNotes": "Scripture Editor top menu > Project > Dictionary",
+            "group": "platform.projectTop",
+            "order": 1000,
+            "command": "platformLexicalTools.openDictionary"
+          }
+        ]
+      }
+    }
   }
 }
