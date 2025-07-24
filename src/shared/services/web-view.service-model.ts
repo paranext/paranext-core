@@ -45,7 +45,7 @@ export interface WebViewServiceType {
 
   /**
    * Creates a new web view or gets an existing one depending on if you request an existing one. If
-   * you request an existing one, it will not reload the WebView. To reload an existing Webview, use
+   * you request an existing one, it will not reload the WebView. To reload an existing WebView, use
    * {@link WebViewServiceType.reloadWebView}.
    *
    * @param webViewType Type of WebView to create
@@ -53,8 +53,8 @@ export interface WebViewServiceType {
    *   tab. Does nothing on an existing WebView
    * @param options Options that affect what this method does. For example, you can provide an
    *   existing web view ID to request an existing web view with that ID.
-   * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
-   *   not create a WebView for this request.
+   * @returns Promise that resolves to the ID of the web view we got or undefined if the provider
+   *   did not create a WebView for this request.
    * @throws If something went wrong like the provider for the webViewType was not found
    */
   openWebView: (
@@ -119,7 +119,7 @@ export interface WebViewServiceType {
    *
    * Web View Controllers are registered on the web view provider service.
    *
-   * @param webViewType Type of webview controller you expect to get. If the web view controller's
+   * @param webViewType Type of web view controller you expect to get. If the web view controller's
    *   `webViewType` does not match this, an error will be thrown
    * @param webViewId Id of web view for which to get the corresponding web view controller if one
    *   exists

@@ -118,15 +118,15 @@ declare module 'shared/models/web-view.model' {
   import { SerializedVerseRef } from '@sillsdev/scripture';
   import { LocalizeKey, ScrollGroupId } from 'platform-bible-utils';
   /**
-   * The type of code that defines a webview's content.
+   * The type of code that defines a web view's content.
    *
-   * If `react`: This webview is a React webview. It must specify its component by setting it to
+   * If `react`: This web view is a React web view. It must specify its component by setting it to
    * `globalThis.webViewComponent`. See {@link WebViewDefinitionReact} for more information.
    *
-   * If `html`: This webview is a raw HTML/JS/CSS webview. See {@link WebViewDefinitionHtml} for more
+   * If `html`: This web view is a raw HTML/JS/CSS web view. See {@link WebViewDefinitionHtml} for more
    * information.
    *
-   * If `url`: This webview's content is fetched from the url specified (iframe `src` attribute). Note
+   * If `url`: This web view's content is fetched from the url specified (iframe `src` attribute). Note
    * that webViews of this type cannot access the `papi` because they cannot be on the same origin as
    * the parent window. See {@link WebViewDefinitionURL} for more information.
    */
@@ -148,7 +148,7 @@ declare module 'shared/models/web-view.model' {
   type WebViewDefinitionBase = {
     /** What type of WebView this is. Unique to all other WebView definitions */
     webViewType: WebViewType;
-    /** Unique ID among webviews specific to this webview instance. */
+    /** Unique ID among web views specific to this web view instance. */
     id: WebViewId;
     /**
      * The content for the WebView that papi puts into an iframe. This field differs significantly
@@ -217,7 +217,7 @@ declare module 'shared/models/web-view.model' {
      * WebView
      */
     title?: string | LocalizeKey;
-    /** Tooltip that is shown when hovering over the webview title */
+    /** Tooltip that is shown when hovering over the web view title */
     tooltip?: string;
     /**
      * Project id associated with this web view.
@@ -232,7 +232,7 @@ declare module 'shared/models/web-view.model' {
      */
     scrollGroupScrRef?: ScrollGroupScrRef;
     /**
-     * General object to store unique state for this webview.
+     * General object to store unique state for this web view.
      *
      * WARNING: This storage is not private; other extensions can access this data. Do not store
      * secrets in here
@@ -285,7 +285,7 @@ declare module 'shared/models/web-view.model' {
      * with `papi-extension:` and `https:`; any others are ignored. Specifying urls in this array
      * whitelists those urls so you can embed iframes with those urls as the `src` attribute. By
      * default, no urls are available to be iframes. If you want to embed iframes with the `src`
-     * attribute in your webview, you must include them in this property.
+     * attribute in your web view, you must include them in this property.
      *
      * For example, if you specify `allowFrameSources: ['https://example.com/']`, you will be able to
      * embed iframes with urls starting with `papi-extension:` and on the same host as
@@ -387,7 +387,7 @@ declare module 'shared/models/web-view.model' {
   ) &
     Pick<WebViewDefinitionBase, 'id' | 'webViewType'>;
   /**
-   * The keys of properties on a WebViewDefinition that may be updated when that webview is already
+   * The keys of properties on a WebViewDefinition that may be updated when that web view is already
    * displayed
    */
   export const WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS: readonly [
@@ -397,7 +397,7 @@ declare module 'shared/models/web-view.model' {
     'projectId',
     'scrollGroupScrRef',
   ];
-  /** The properties on a WebViewDefinition that may be updated when that webview is already displayed */
+  /** The properties on a WebViewDefinition that may be updated when that web view is already displayed */
   export type WebViewDefinitionUpdatableProperties = Pick<
     WebViewDefinitionBase,
     (typeof WEBVIEW_DEFINITION_UPDATABLE_PROPERTY_KEYS)[number]
@@ -409,12 +409,12 @@ declare module 'shared/models/web-view.model' {
   export type WebViewDefinitionUpdateInfo = Partial<WebViewDefinitionUpdatableProperties>;
   /**
    *
-   * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+   * A React hook for working with a state object tied to a web view. Returns a WebView state value and
    * a function to set it. Use similarly to `useState`.
    *
    * Only used in WebView iframes.
    *
-   * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
+   * _＠param_ `stateKey` Key of the state value to use. The web view state holds a unique value per
    * key.
    *
    * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
@@ -517,12 +517,12 @@ declare module 'shared/models/web-view.model' {
   export type WebViewProps = SavedWebViewDefinition & {
     /**
      *
-     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+     * A React hook for working with a state object tied to a web view. Returns a WebView state value and
      * a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
-     * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
+     * _＠param_ `stateKey` Key of the state value to use. The web view state holds a unique value per
      * key.
      *
      * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
@@ -678,12 +678,12 @@ declare module 'shared/global-this.model' {
     var webViewId: WebViewId;
     /**
      *
-     * A React hook for working with a state object tied to a webview. Returns a WebView state value and
+     * A React hook for working with a state object tied to a web view. Returns a WebView state value and
      * a function to set it. Use similarly to `useState`.
      *
      * Only used in WebView iframes.
      *
-     * _＠param_ `stateKey` Key of the state value to use. The webview state holds a unique value per
+     * _＠param_ `stateKey` Key of the state value to use. The web view state holds a unique value per
      * key.
      *
      * WARNING: MUST BE STABLE - const or wrapped in useState, useMemo, etc. The reference must not be
@@ -2574,7 +2574,7 @@ declare module 'shared/models/web-view-provider.model' {
      *
      * @param savedWebViewDefinition The saved web view information from which to build a complete web
      *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
-     *   web view if an existing webview is being called for (matched by ID). Just provides the
+     *   web view if an existing web view is being called for (matched by ID). Just provides the
      *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
      *   the web view with the existing ID was not found.
      * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
@@ -2822,10 +2822,10 @@ declare module 'shared/models/docking-framework.model' {
       shouldBringToFront?: boolean,
     ) => Layout | undefined;
     /**
-     * Add or update a webview in the layout
+     * Add or update a web view in the layout
      *
      * @param webView Web view to add or update
-     * @param layout Information about where to put a new webview
+     * @param layout Information about where to put a new web view
      * @param shouldBringToFront If true, the tab will be brought to the front and unobscured by other
      *   tabs. Defaults to `true`
      * @returns If WebView added, final layout used to display the new webView. If existing webView
@@ -2920,7 +2920,7 @@ declare module 'shared/services/web-view.service-model' {
     ) => Promise<WebViewId | undefined>;
     /**
      * Creates a new web view or gets an existing one depending on if you request an existing one. If
-     * you request an existing one, it will not reload the WebView. To reload an existing Webview, use
+     * you request an existing one, it will not reload the WebView. To reload an existing WebView, use
      * {@link WebViewServiceType.reloadWebView}.
      *
      * @param webViewType Type of WebView to create
@@ -2928,7 +2928,7 @@ declare module 'shared/services/web-view.service-model' {
      *   tab. Does nothing on an existing WebView
      * @param options Options that affect what this method does. For example, you can provide an
      *   existing web view ID to request an existing web view with that ID.
-     * @returns Promise that resolves to the ID of the webview we got or undefined if the provider did
+     * @returns Promise that resolves to the ID of the web view we got or undefined if the provider did
      *   not create a WebView for this request.
      * @throws If something went wrong like the provider for the webViewType was not found
      */
@@ -2990,7 +2990,7 @@ declare module 'shared/services/web-view.service-model' {
      *
      * Web View Controllers are registered on the web view provider service.
      *
-     * @param webViewType Type of webview controller you expect to get. If the web view controller's
+     * @param webViewType Type of web view controller you expect to get. If the web view controller's
      *   `webViewType` does not match this, an error will be thrown
      * @param webViewId Id of web view for which to get the corresponding web view controller if one
      *   exists
@@ -3083,7 +3083,7 @@ declare module 'shared/services/web-view-provider.service' {
   /**
    * Get a web view provider that has previously been set up
    *
-   * @param webViewType Type of webview provider to get
+   * @param webViewType Type of web view provider to get
    * @returns Web view provider with the given name if one exists, undefined otherwise
    */
   function getWebViewProvider(webViewType: string): Promise<IRegisteredWebViewProvider | undefined>;
@@ -3232,7 +3232,7 @@ declare module 'shared/models/web-view-factory.model' {
      *
      * @param savedWebViewDefinition The saved web view information from which to build a complete web
      *   view definition. Filled out with all {@link SavedWebViewDefinition} properties of the existing
-     *   web view if an existing webview is being called for (matched by ID). Just provides the
+     *   web view if an existing web view is being called for (matched by ID). Just provides the
      *   minimal properties required on {@link SavedWebViewDefinition} if this is a new request or if
      *   the web view with the existing ID was not found.
      * @param openWebViewOptions Various options that affect what calling `papi.webViews.openWebView`
@@ -7255,7 +7255,7 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * Get localized menu content for a web view
      *
-     * @param webViewType The type of webview for which a menu should be retrieved
+     * @param webViewType The type of web view for which a menu should be retrieved
      * @returns WebViewMenu object of web view menu content
      */
     getWebViewMenu(webViewType: ReferencedItem): Promise<Localized<WebViewMenu>>;
@@ -7270,7 +7270,7 @@ declare module 'shared/services/menu-data.service-model' {
     /**
      * Subscribe to run a callback function when the localized web view menu data is changed
      *
-     * @param webViewType The type of webview for which a menu should be subscribed
+     * @param webViewType The type of web view for which a menu should be subscribed
      * @param callback Function to run with the updated menuContent for this selector. If there is an
      *   error while retrieving the updated data, the function will run with a {@link PlatformError}
      *   instead of the data. You can call {@link isPlatformError} on this value to check if it is an

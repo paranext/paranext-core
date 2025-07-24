@@ -7,10 +7,10 @@ import { ChecksFilterDropdown } from './checks-filter-dropdown.component';
 
 const LOCALIZED_STRINGS: LocalizeKey[] = [
   '%webView_checksSidePanel_checkTypeFilter_countLabel%',
-  '%webview_checksSidePanel_checkTypeFilter_deselectAll%',
+  '%webView_checksSidePanel_checkTypeFilter_deselectAll%',
   '%webView_checksSidePanel_checkTypeFilter_label%',
-  '%webview_checksSidePanel_checkTypeFilter_selectAll%',
-  '%webview_checksSidePanel_checkTypeFilter_setUp%',
+  '%webView_checksSidePanel_checkTypeFilter_selectAll%',
+  '%webView_checksSidePanel_checkTypeFilter_setUp%',
 ];
 
 // function SetUp(setUpLink: string, localizedSetUp: string) {
@@ -60,12 +60,12 @@ type CheckDisplayDetails = {
 export default function ChecksCheckTypeFilter({
   handleSelectCheckTypeToggle,
   filterItems,
-  selectedCheckTypeIds: selectedCheckTypesFromWebview,
+  selectedCheckTypeIds: selectedCheckTypesFromWebView,
   open,
   onOpenChange,
 }: ChecksCheckTypeFilterProps) {
   const [selectedCheckTypeIds, setSelectedCheckTypeIds] = useState<string[]>(
-    selectedCheckTypesFromWebview || [],
+    selectedCheckTypesFromWebView || [],
   );
   const [localizedStrings] = useLocalizedStrings(useMemo(() => LOCALIZED_STRINGS, []));
   const checkNameToDetails: CheckDisplayDetails[] = useMemo<CheckDisplayDetails[]>(
@@ -88,7 +88,7 @@ export default function ChecksCheckTypeFilter({
       return (
         <div>
           <div className="tw-text-start">{item}</div>
-          {/* {SetUp(link, localizedStrings['%webview_checksSidePanel_checkTypeFilter_setUp%'])} */}
+          {/* {SetUp(link, localizedStrings['%webView_checksSidePanel_checkTypeFilter_setUp%'])} */}
         </div>
       );
     },
@@ -110,8 +110,8 @@ export default function ChecksCheckTypeFilter({
   const getSelectionLabel = useCallback(() => {
     const selectionLabel =
       selectedCheckTypeIds.length > 0
-        ? localizedStrings['%webview_checksSidePanel_checkTypeFilter_deselectAll%']
-        : localizedStrings['%webview_checksSidePanel_checkTypeFilter_selectAll%'];
+        ? localizedStrings['%webView_checksSidePanel_checkTypeFilter_deselectAll%']
+        : localizedStrings['%webView_checksSidePanel_checkTypeFilter_selectAll%'];
     return <span>{selectionLabel}</span>;
   }, [localizedStrings, selectedCheckTypeIds.length]);
 
