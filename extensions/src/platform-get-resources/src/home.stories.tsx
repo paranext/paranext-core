@@ -129,3 +129,27 @@ export const Default: Story = {
 export const NoProjects: Story = {
   decorators: [],
 };
+
+function OnlyWebProjectDecorator(Story: (update?: { args: Partial<HomeProps> }) => ReactElement) {
+  const onlyWebProjectList: LocalProjectInfo[] = [
+    {
+      projectId: '0',
+      isEditable: false,
+      fullName: 'The WEB project',
+      name: 'WEB',
+      language: 'myLanguage',
+    },
+  ];
+
+  return (
+    <Story
+      args={{
+        localProjectsInfo: onlyWebProjectList,
+      }}
+    />
+  );
+}
+
+export const OnlyWebProject: Story = {
+  decorators: [OnlyWebProjectDecorator],
+};
