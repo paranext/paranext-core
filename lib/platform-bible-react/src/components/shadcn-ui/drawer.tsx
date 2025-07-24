@@ -56,11 +56,18 @@ const DrawerOverlay = React.forwardRef<
 ));
 DrawerOverlay.displayName = DrawerPrimitive.Overlay.displayName;
 
+/* CUSTOM: Extend DrawerPrimitive.Content with additional props */
+interface DrawerContentProps
+  extends React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content> {
+  /** Optionally hide the drawer handle */
+  hideDrawerHandle?: boolean;
+}
+
 /** @inheritdoc Drawer */
 const DrawerContent = React.forwardRef<
   React.ElementRef<typeof DrawerPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DrawerPrimitive.Content>
->(({ className, children, ...props }, ref) => {
+  DrawerContentProps
+>(({ className, children, hideDrawerHandle = false, ...props }, ref) => {
   // CUSTOM: Use context to provide direction to child components
   const { direction = 'bottom' } = React.useContext(DrawerContext);
 
@@ -95,12 +102,12 @@ const DrawerContent = React.forwardRef<
         )}
         {...props}
       >
-        {/* CUSTOM: Render handles and children based on direction */}
-        {(direction === 'bottom' || direction === 'right') && (
+        {/* CUSTOM: Render handles and children based on direction and if the drawer handle is hidden */}
+        {!hideDrawerHandle && (direction === 'bottom' || direction === 'right') && (
           <div className={handleStyles[direction]} />
         )}
         <div className="tw-flex tw-flex-col">{children}</div>
-        {(direction === 'top' || direction === 'left') && (
+        {!hideDrawerHandle && (direction === 'top' || direction === 'left') && (
           <div className={handleStyles[direction]} />
         )}
       </DrawerPrimitive.Content>
