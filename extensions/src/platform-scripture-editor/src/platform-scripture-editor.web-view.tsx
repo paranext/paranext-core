@@ -13,7 +13,7 @@ import {
   Usj,
 } from '@biblionexus-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
 import papi, { logger } from '@papi/frontend';
 import {
@@ -129,7 +129,7 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
-}: WebViewProps): JSX.Element {
+}: WebViewProps) {
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
     'decorations',
