@@ -440,7 +440,8 @@ export function Home({
                           onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
                           key={project.projectId}
                         >
-                          <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4">
+                          {/* setting a max-width on any column makes the columns evenly distribute */}
+                          <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4 tw-max-w-0">
                             {project.isEditable ? (
                               <ScrollText
                                 className="tw-pr-0"
@@ -456,14 +457,14 @@ export function Home({
                             )}
                             <div className="tw-py-4 tw-whitespace-nowrap">{project.name}</div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap tw-max-w-0">
+                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
                             {project.fullName}
                           </TableCell>
-                          <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap tw-max-w-0">
+                          <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
                             {project.language}
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap tw-max-w-0">
+                            <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
