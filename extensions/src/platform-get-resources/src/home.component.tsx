@@ -28,8 +28,9 @@ import {
   TableHeader,
   TableRow,
 } from 'platform-bible-react';
-import { formatTimeSpan, LocalizedStringValue } from 'platform-bible-utils';
-import { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
+import type { LocalizedStringValue } from 'platform-bible-utils';
+import { formatTimeSpan } from 'platform-bible-utils';
+import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { useMemo, useState } from 'react';
 
 /**
@@ -97,20 +98,65 @@ export type HomeProps = {
    * that are returned by the hook into this prop.
    */
   localizedStrings?: HomeLocalizedStrings;
+  /**
+   * Locales for formatting dates and times. This is used to format the last send/receive date of
+   * projects.
+   */
   uiLocales?: Intl.LocalesArgument;
+  /** Callback function to open the Get Resources dialog. */
   onOpenGetResources?: () => void;
+  /**
+   * Callback function to open a project.
+   *
+   * @param projectId - The ID of the project to open.
+   * @param isEditable - Whether the project is editable.
+   */
   onOpenProject?: (projectId: string, isEditable: boolean) => void;
+  /**
+   * Callback function to send/receive a project.
+   *
+   * @param projectId - The ID of the project to send/receive.
+   */
   onSendReceiveProject?: (projectId: string) => void;
+  /** Callback function to open the get started website of platform. */
   onGetStarted?: () => void;
+  /** Whether to show the Get Resources button. */
   showGetResourcesButton?: boolean;
+  /** Whether a send/receive operation is in progress. */
   isSendReceiveInProgress?: boolean;
+  /** Whether loading local projects is in progress. */
   isLoadingLocalProjects?: boolean;
+  /** Whether loading remote projects is in progress. */
   isLoadingRemoteProjects?: boolean;
+  /** Array of local project information, containing projects and resources. */
   localProjectsInfo?: LocalProjectInfo[];
+  /** Object of shared project information, containing projects on the send/receive server. */
   sharedProjectsInfo?: SharedProjectsInfo;
+  /** Array of project IDs that are currently being sent/received. */
   activeSendReceiveProjects?: string[];
 };
 
+/**
+ * A component that displays a list of local and remote projects, allowing users to open,
+ * synchronize, and manage them. It also provides a button to get more resources.
+ *
+ * @param {localizedStrings} - Object with localized strings for the component.
+ * @param {uiLocales} - Locales for formatting dates and times.
+ * @param {onOpenGetResources} - Callback function to open the Get Resources dialog.
+ * @param {onOpenProject} - Callback function to open a project.
+ * @param {onSendReceiveProject} - Callback function to send/receive a project.
+ * @param {onGetStarted} - Callback function to get started with the platform.
+ * @param {showGetResourcesButton} - Whether to show the Get Resources button.
+ * @param {isSendReceiveInProgress} - Whether a send/receive operation is in progress.
+ * @param {isLoadingLocalProjects} - Whether loading local projects is in progress.
+ * @param {isLoadingRemoteProjects} - Whether loading remote projects is in progress.
+ * @param {localProjectsInfo} - Array of local project information, containing projects and
+ *   resources.
+ * @param {sharedProjectsInfo} - Object of shared project information, containing projects on the
+ *   send/receive server.
+ * @param {activeSendReceiveProjects} - Array of project IDs that are currently being sent/received.
+ * @returns
+ */
 export function Home({
   localizedStrings = {},
   uiLocales = [],

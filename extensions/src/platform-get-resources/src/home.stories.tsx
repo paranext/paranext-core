@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react';
-import { SharedProjectsInfo } from 'platform-scripture';
+import type { SharedProjectsInfo } from 'platform-scripture';
 import { ReactElement, useState } from 'react';
 import { Home, HomeProps, LocalProjectInfo } from './home.component';
 
@@ -10,7 +10,6 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'Resource 1',
     name: 'Res1',
     language: 'myLanguage',
-    // type: 'resource',
   },
   {
     projectId: '2',
@@ -18,7 +17,6 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'Resource 2',
     name: 'Res2',
     language: 'English',
-    // type: 'resource',
   },
   {
     projectId: '13',
@@ -26,7 +24,6 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'Project 4 - editable',
     name: 'Pr4',
     language: '2ndLanguage',
-    // type: 'project',
   },
   {
     projectId: '14',
@@ -35,7 +32,6 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
       'Project 3 - read-only This_is_a_project_with_a_very_long_name_01234567890_!/"§$%&/()=?_öäüß',
     name: 'Pr3',
     language: '2ndLanguage',
-    // type: 'project',
   },
   {
     projectId: '25',
@@ -43,7 +39,6 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'Project 5 - editable',
     name: 'Pr5',
     language: 'German',
-    // type: 'project',
   },
   {
     projectId: '26',
@@ -51,7 +46,6 @@ const staticLocalProjectsAndResources: LocalProjectInfo[] = [
     fullName: 'SDBH/SDBG',
     name: 'SdDict',
     language: 'Hebrew/Greek',
-    // type: 'dictionary',
   },
 ];
 
