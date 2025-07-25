@@ -354,19 +354,14 @@ export function Home({
 
   return (
     <Card className="tw-flex tw-h-screen tw-flex-col tw-rounded-none tw-border-0">
-      <CardHeader className="tw-flex-shrink-0">
+      <CardHeader className="tw-flex-shrink-0 [@media(max-height:24rem)]:!tw-pb-2">
         <div className="tw-flex tw-flex-wrap tw-justify-between tw-gap-4">
-          <div className="tw-flex tw-flex-col tw-gap-4">
-            <div className="tw-flex tw-gap-4 tw-items-center">
+          <div className="tw-flex tw-flex-col tw-gap-4 tw-max-w-72 tw-w-full">
+            <div className="tw-flex tw-gap-4 tw-items-center [@media(max-height:24rem)]:!tw-hidden">
               <HomeIcon size={36} />
               <CardTitle>{dialogTitleText}</CardTitle>
             </div>
-            <SearchBar
-              value={textFilter}
-              className="tw-min-w-72"
-              onSearch={setTextFilter}
-              placeholder={filterInputText}
-            />
+            <SearchBar value={textFilter} onSearch={setTextFilter} placeholder={filterInputText} />
           </div>
           <div className="tw-self-end">
             {showGetResourcesButton && (
@@ -383,7 +378,7 @@ export function Home({
           <Spinner />
         </CardContent>
       ) : (
-        <CardContent className="tw-flex-grow tw-overflow-auto tw-overflow-x-hidden">
+        <CardContent className="tw-flex-grow tw-overflow-auto tw-overflow-x-hidden tw-min-h-32">
           <div className="tw-flex tw-flex-col tw-gap-4">
             {!localProjectsInfo ? (
               <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
@@ -432,8 +427,8 @@ export function Home({
                     <TableHeader className="tw-bg-none" stickyHeader>
                       <TableRow>
                         <TableHead />
-                        {buildTableHead('fullName', fullNameText, 'tw-hidden full-name-row')}
-                        {buildTableHead('language', languageText, 'tw-hidden md:tw-table-cell')}
+                        {buildTableHead('fullName', fullNameText, 'tw-hidden md:tw-table-cell')}
+                        {buildTableHead('language', languageText, 'tw-hidden sm:tw-table-cell')}
                         {filteredAndSortedProjects.some((project) => project.isSendReceivable) &&
                           buildTableHead('activity', activityText, 'tw-hidden sm:tw-table-cell')}
                         {buildTableHead('action', actionText)}
@@ -459,16 +454,16 @@ export function Home({
                                 style={{ minWidth: '24px' }}
                               />
                             )}
-                            <div className="short-name tw-py-4">{project.name}</div>
+                            <div className="tw-py-4 tw-whitespace-nowrap">{project.name}</div>
                           </TableCell>
-                          <TableCell className="cell full-name-row tw-hidden tw-font-medium">
+                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap tw-max-w-0">
                             {project.fullName}
                           </TableCell>
-                          <TableCell className="cell tw-hidden md:tw-table-cell">
+                          <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap tw-max-w-0">
                             {project.language}
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell className="cell tw-hidden sm:tw-table-cell">
+                            <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap tw-max-w-0">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
@@ -519,7 +514,7 @@ export function Home({
           </div>
         </CardContent>
       )}
-      <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2">
+      <CardFooter className="tw-flex-shrink-0 tw-flex-col tw-justify-center tw-p-4 tw-border-t tw-gap-2 [@media(max-height:24rem)]:!tw-hidden">
         <p className="tw-font-normal">{`${filteredAndSortedProjects.length} ${itemsText}`}</p>
       </CardFooter>
     </Card>
