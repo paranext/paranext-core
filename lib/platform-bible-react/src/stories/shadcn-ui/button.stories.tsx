@@ -5,7 +5,7 @@ import { ThemeProvider } from '@/preview/preview-components/theme-provider.compo
 const meta: Meta<typeof Button> = {
   title: 'Shadcn/Button',
   component: Button,
-  tags: ['autodocs'],
+  tags: ['autodocs', 'test'],
   argTypes: {
     variant: {
       options: ['default', 'destructive', 'outline', 'secondary', 'ghost', 'link'],
@@ -86,5 +86,33 @@ export const Playground: Story = {
     children: 'Playground Button',
     variant: 'default',
     size: 'default',
+  },
+};
+
+export const ClickTest: Story = {
+  args: {
+    children: 'Click Me',
+    variant: 'default',
+  },
+};
+
+export const DisabledTest: Story = {
+  args: {
+    children: 'Disabled Button',
+    disabled: true,
+  },
+};
+
+export const VariantTest: Story = {
+  args: {
+    children: 'Variant Test',
+    variant: 'destructive',
+  },
+};
+
+export const SizeTest: Story = {
+  args: {
+    children: 'Size Test',
+    size: 'lg',
   },
 };
