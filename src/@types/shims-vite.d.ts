@@ -12,4 +12,5 @@ declare module 'vite' {
   export type ConfigEnv = any;
   export type ViteDevServer = any;
   export type ModuleNode = any;
+  export type HookHandler<T = any> = T;
 }
