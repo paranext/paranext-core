@@ -32,8 +32,12 @@ const preview: Preview = {
       return Story();
     },
   ],
-  // Enables auto-generated documentation for all stories
-  tags: ['autodocs'],
+  tags: [
+    // Enables auto-generated documentation for all stories
+    'autodocs',
+    // Enables testing with Storybook's Vitest plugin
+    'test',
+  ],
 };
 
 export default preview;
