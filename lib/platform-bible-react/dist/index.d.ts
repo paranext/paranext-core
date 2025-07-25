@@ -1875,7 +1875,9 @@ export declare const TableBody: React$1.ForwardRefExoticComponent<React$1.HTMLAt
 /** @inheritdoc Table */
 export declare const TableFooter: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableSectionElement> & React$1.RefAttributes<HTMLTableSectionElement>>;
 /** @inheritdoc Table */
-export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & React$1.RefAttributes<HTMLTableRowElement>>;
+export declare const TableRow: React$1.ForwardRefExoticComponent<React$1.HTMLAttributes<HTMLTableRowElement> & {
+	setFocusAlsoRunsSelect?: boolean;
+} & React$1.RefAttributes<HTMLTableRowElement>>;
 /** @inheritdoc Table */
 export declare const TableHead: React$1.ForwardRefExoticComponent<React$1.ThHTMLAttributes<HTMLTableCellElement> & React$1.RefAttributes<HTMLTableCellElement>>;
 /** @inheritdoc Table */
