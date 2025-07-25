@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { expect, fn } from 'storybook/test';
 import { Button } from '@/components/shadcn-ui/button';
 import { ThemeProvider } from '@/preview/preview-components/theme-provider.component';
 
@@ -93,6 +94,21 @@ export const ClickTest: Story = {
   args: {
     children: 'Click Me',
     variant: 'default',
+    onClick: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const button = canvas.getByRole('button', { name: /click me/i });
+
+    // Verify button is rendered
+    await expect(button).toBeInTheDocument();
+    await expect(button).toBeVisible();
+
+    // Click the button
+    await userEvent.click(button);
+
+    // Verify the onClick handler was called
+    await expect(args.onClick).toHaveBeenCalled();
+    await expect(args.onClick).toHaveBeenCalledTimes(1);
   },
 };
 
@@ -100,6 +116,17 @@ export const DisabledTest: Story = {
   args: {
     children: 'Disabled Button',
     disabled: true,
+    onClick: fn(),
+  },
+  play: async ({ args, canvas }) => {
+    const button = canvas.getByRole('button', { name: /disabled button/i });
+
+    // Verify button is rendered and disabled
+    await expect(button).toBeInTheDocument();
+    await expect(button).toBeDisabled();
+
+    // Verify the onClick handler was not called (disabled buttons don't trigger clicks)
+    await expect(args.onClick).not.toHaveBeenCalled();
   },
 };
 
@@ -107,6 +134,26 @@ export const VariantTest: Story = {
   args: {
     children: 'Variant Test',
     variant: 'destructive',
+    onClick: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const button = canvas.getByRole('button', { name: /variant test/i });
+
+    // Verify button is rendered with destructive variant styles
+    await expect(button).toBeInTheDocument();
+    await expect(button).toHaveClass('tw-bg-destructive');
+
+    // Test button interaction
+    await userEvent.click(button);
+    await expect(args.onClick).toHaveBeenCalledTimes(1);
+
+    // Test hover state by hovering over the button
+    await userEvent.hover(button);
+    await expect(button).toBeInTheDocument();
+
+    // Test unhover
+    await userEvent.unhover(button);
+    await expect(button).toBeInTheDocument();
   },
 };
 
@@ -114,5 +161,74 @@ export const SizeTest: Story = {
   args: {
     children: 'Size Test',
     size: 'lg',
+    onClick: fn(),
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    const button = canvas.getByRole('button', { name: /size test/i });
+
+    // Verify button is rendered with large size styles
+    await expect(button).toBeInTheDocument();
+    await expect(button).toHaveClass('tw-h-11'); // Large size class
+
+    // Test double click
+    await userEvent.dblClick(button);
+    await expect(args.onClick).toHaveBeenCalledTimes(2);
+
+    // Test focus and blur
+    button.focus();
+    await expect(button).toHaveFocus();
+
+    button.blur();
+    await expect(button).not.toHaveFocus();
+  },
+};
+
+export const ComplexInteraction: Story = {
+  args: {
+    children: 'Complex Test Button',
+    variant: 'default',
+    onClick: fn(),
+  },
+  play: async ({ args, canvas, userEvent, step }) => {
+    await step('Initial button verification', async () => {
+      const button = canvas.getByRole('button', { name: /complex test button/i });
+      await expect(button).toBeInTheDocument();
+      await expect(button).toBeVisible();
+      await expect(button).toBeEnabled();
+    });
+
+    await step('Mouse interactions', async () => {
+      const button = canvas.getByRole('button', { name: /complex test button/i });
+
+      // Hover and unhover
+      await userEvent.hover(button);
+      await userEvent.unhover(button);
+
+      // Single click
+      await userEvent.click(button);
+      await expect(args.onClick).toHaveBeenCalledTimes(1);
+    });
+
+    await step('Keyboard interactions', async () => {
+      const button = canvas.getByRole('button', { name: /complex test button/i });
+
+      // Focus the button directly
+      button.focus();
+      await expect(button).toHaveFocus();
+
+      // Activate via Enter key
+      await userEvent.keyboard('{Enter}');
+      await expect(args.onClick).toHaveBeenCalledTimes(2);
+
+      // Activate via Space key
+      await userEvent.keyboard(' ');
+      await expect(args.onClick).toHaveBeenCalledTimes(3);
+    });
+
+    await step('Final verification', async () => {
+      const button = canvas.getByRole('button', { name: /complex test button/i });
+      await expect(button).toBeInTheDocument();
+      await expect(args.onClick).toHaveBeenCalledTimes(3);
+    });
   },
 };
