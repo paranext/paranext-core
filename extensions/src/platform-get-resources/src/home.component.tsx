@@ -33,8 +33,6 @@ import { formatTimeSpan } from 'platform-bible-utils';
 import type { EditedStatus, SharedProjectsInfo } from 'platform-scripture';
 import { useMemo, useState } from 'react';
 
-import './home.web-view.scss';
-
 /**
  * Object containing all keys used for localization in this component. If you're using this
  * component in an extension, you can pass it into the useLocalizedStrings hook to easily obtain the
@@ -297,13 +295,7 @@ export function Home({
   };
 
   const buildTableHead = (key: SortConfig['key'], label: string, className?: string) => (
-    <TableHead
-      onClick={() => handleSort(key)}
-      className={className}
-      style={{ paddingLeft: '8px', paddingRight: '8px' }}
-    >
-      {' '}
-      {/* tw-px-4 */}
+    <TableHead onClick={() => handleSort(key)} className={className}>
       <div className="tw-flex tw-items-center tw-px-0">
         <div className="tw-font-normal">{label}</div>
         {sortConfig.key !== key && <ChevronsUpDown className="tw-pl-1" size={16} />}
@@ -391,7 +383,7 @@ export function Home({
           <Spinner />
         </CardContent>
       ) : (
-        <CardContent className="tw-flex-grow tw-overflow-auto">
+        <CardContent className="tw-flex-grow tw-overflow-auto tw-overflow-x-hidden">
           <div className="tw-flex tw-flex-col tw-gap-4">
             {!localProjectsInfo ? (
               <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
