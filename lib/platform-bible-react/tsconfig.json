@@ -18,7 +18,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "noImplicitReturns": true,
-    "skipLibCheck": false,
+    // I'd rather not do this, but I can't get Jest and Vitest to stop fighting
+    "skipLibCheck": true,
     "useDefineForClassFields": true,
     "outDir": "",
     "paths": {

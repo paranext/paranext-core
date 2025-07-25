@@ -361,8 +361,8 @@ interface MoreInfoProps {
  * number of downloads, languages, and links to the website and support
  *
  * @param MoreInfoProps
- * @returns {JSX.Element} - Returns the more info component that displays the category, number of
- *   downloads, languages, and links to the website and support
+ * @returns The more info component that displays the category, number of downloads, languages, and
+ *   links to the website and support
  */
 export declare function MoreInfo({ id, category, downloads, languages, moreInfoUrl, handleMoreInfoLinkClick, supportUrl, handleSupportLinkClick, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
 type VersionInformation = {
@@ -1186,8 +1186,8 @@ type VariantProps<Component extends (...args: any) => any> = Omit<OmitUndefined<
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const buttonVariants: (props?: ({
-	variant?: "link" | "default" | "outline" | "secondary" | "destructive" | "ghost" | null | undefined;
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+	variant?: "link" | "default" | "destructive" | "outline" | "secondary" | "ghost" | null | undefined;
+	size?: "default" | "sm" | "lg" | "icon" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for Button component
@@ -1370,7 +1370,7 @@ export declare const AvatarFallback: React$1.ForwardRefExoticComponent<Omit<Avat
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/badge}
  */
 export declare const badgeVariants: (props?: ({
-	variant?: "default" | "outline" | "muted" | "secondary" | "destructive" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
+	variant?: "default" | "muted" | "destructive" | "outline" | "secondary" | "ghost" | "blueIndicator" | "mutedIndicator" | null | undefined;
 } & ClassProp) | undefined) => string;
 /**
  * Props for the Badge component.
@@ -1437,7 +1437,7 @@ export declare const CommandInput: React$1.ForwardRefExoticComponent<Omit<Omit<P
 	ref?: React$1.Ref<HTMLInputElement>;
 } & {
 	asChild?: boolean;
-}, "key" | keyof React$1.InputHTMLAttributes<HTMLInputElement> | "asChild">, "type" | "value" | "onChange"> & {
+}, "key" | "asChild" | keyof React$1.InputHTMLAttributes<HTMLInputElement>>, "type" | "value" | "onChange"> & {
 	value?: string;
 	onValueChange?: (search: string) => void;
 } & React$1.RefAttributes<HTMLInputElement>, "ref"> & React$1.RefAttributes<HTMLInputElement>>;
@@ -1478,7 +1478,7 @@ export declare const CommandItem: React$1.ForwardRefExoticComponent<Omit<{
 	ref?: React$1.Ref<HTMLDivElement>;
 } & {
 	asChild?: boolean;
-}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "value" | "disabled" | "onSelect"> & {
+}, "key" | keyof React$1.HTMLAttributes<HTMLDivElement> | "asChild">, "disabled" | "value" | "onSelect"> & {
 	disabled?: boolean;
 	onSelect?: (value: string) => void;
 	value?: string;
@@ -1703,7 +1703,7 @@ export declare const SelectValue: React$1.ForwardRefExoticComponent<SelectPrimit
  * @see Shadcn UI Documentation: {@link https://ui.shadcn.com/docs/components/button}
  */
 export declare const selectTriggerVariants: (props?: ({
-	size?: "default" | "icon" | "sm" | "lg" | null | undefined;
+	size?: "default" | "sm" | "lg" | "icon" | null | undefined;
 } & ClassProp) | undefined) => string;
 /** @inheritdoc Select */
 export declare const SelectTrigger: React$1.ForwardRefExoticComponent<SelectTriggerProps & React$1.RefAttributes<HTMLButtonElement>>;
