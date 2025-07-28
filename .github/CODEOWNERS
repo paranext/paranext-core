@@ -1,0 +1,31 @@
+/.erb @tjcouch-sil @lyonsil @irahopkinson
+/.github @lyonsil @tjcouch-sil @irahopkinson
+
+# all of extensions but src folder
+/extensions @tjcouch-sil @lyonsil
+/extensions/src
+
+# extension apis
+/extensions/src/legacy-comment-manager/src/types/legacy-comment-manager.d.ts @lyonsil @tjcouch-sil @irahopkinson
+/extensions/src/paratext-registration/src/types/paratext-registration.d.ts @tjcouch-sil @lyonsil
+/extensions/src/platform-lexical-tools/src/types/platform-lexical-tools.d.ts @tjcouch-sil @lyonsil @jolierabideau
+/extensions/src/platform-scripture-editor/src/types/platform-scripture-editor.d.ts @tjcouch-sil @lyonsil @irahopkinson
+/extensions/src/platform-scripture/src/types/platform-scripture.d.ts @tjcouch-sil @lyonsil @irahopkinson
+
+# packages
+/lib/browserslist-config-detect-electron @tjcouch-sil
+/lib/papi-dts @tjcouch-sil @lyonsil
+# not papi.d.ts
+/lib/papi-dts/papi.d.ts
+/lib/platform-bible-react @jolierabideau @rolfheij-sil @tjcouch-sil @lyonsil @irahopkinson
+/lib/platform-bible-utils @rolfheij-sil @tjcouch-sil @lyonsil @jolierabideau @irahopkinson
+
+/src/**/services @tjcouch-sil @lyonsil @irahopkinson
+
+# various config files at top level
+/electron-builder.json5 @tjcouch-sil @lyonsil @irahopkinson
+/nodemon.json @tjcouch-sil @lyonsil @irahopkinson
+/package.json @tjcouch-sil @lyonsil @irahopkinson
+/tsconfig.json @tjcouch-sil @lyonsil @irahopkinson
+/tsconfig.lint.json @tjcouch-sil @lyonsil @irahopkinson
+/vitest.config.js @tjcouch-sil @lyonsil @irahopkinson
