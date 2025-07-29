@@ -31,20 +31,12 @@
   flex: 0 0 8px;
 }
 
-.dock-hbox > .dock-divider {
-  transform: scaleX(1);
-}
-
-.dock-vbox > .dock-divider {
-  transform: scaleY(1);
-}
-
 .dock-layout {
   flex-grow: 1;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible {
-  border: 0;
+  border: unset;
 }
 
 /*
