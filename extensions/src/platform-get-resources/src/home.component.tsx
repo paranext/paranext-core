@@ -440,8 +440,7 @@ export function Home({
                           onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
                           key={project.projectId}
                         >
-                          {/* setting a max-width on any column makes the columns evenly distribute */}
-                          <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4 tw-max-w-0">
+                          <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4">
                             {project.isEditable ? (
                               <ScrollText
                                 className="tw-pr-0"
