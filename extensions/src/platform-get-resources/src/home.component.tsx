@@ -456,14 +456,14 @@ export function Home({
                             )}
                             <div className="tw-py-4 tw-whitespace-nowrap">{project.name}</div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
+                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-break-all">
                             {project.fullName}
                           </TableCell>
-                          <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
+                          <TableCell className="tw-hidden sm:tw-table-cell">
                             {project.language}
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
+                            <TableCell className="tw-hidden sm:tw-table-cell">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
