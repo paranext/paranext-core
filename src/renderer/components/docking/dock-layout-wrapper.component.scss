@@ -181,30 +181,6 @@
   color: vars.$color--text;
   flex: 1 0 auto;
   max-width: fit-content;
-
-  // Apply responsive clipping to inactive tabs as rounded rectangles
-  // This creates a clip-path with rounded corners
-  @container (min-width: 200px) {
-    &:not(.dock-tab-active) {
-      // Rounded rectangle clip-path
-      clip-path: inset(0 round vars.$space--xs);
-      // Ensure the clip-path doesn't interfere with hover states
-      transition: clip-path 0.2s ease-in-out;
-    }
-
-    // Remove clipping on hover for better UX
-    &:not(.dock-tab-active):hover {
-      clip-path: none;
-    }
-  }
-
-  // Fallback for browsers without container query support
-  @supports not (container-type: inline-size) {
-    &:not(.dock-tab-active) {
-      // Fallback to inset with a fixed radius
-      clip-path: inset(0 round 8px);
-    }
-  }
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
