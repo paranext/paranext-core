@@ -42,7 +42,7 @@ export const BookChapterInput = forwardRef<HTMLInputElement, BookChapterInputPro
           {...props}
           type="text"
           className={cn(
-            'tw-relative tw-w-full tw-min-w-0 tw-flex-shrink tw-grow tw-basis-32 tw-gap-2.5 tw-text-ellipsis tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 !tw-pe-10 tw-ps-4 tw-font-medium tw-text-foreground tw-shadow-none tw-outline-none',
+            'tw-relative tw-h-8 tw-w-full tw-min-w-0 tw-flex-shrink tw-grow tw-basis-32 tw-gap-2.5 tw-text-ellipsis tw-rounded-lg tw-border tw-border-solid tw-bg-background tw-py-2 !tw-pe-10 tw-ps-4 tw-font-medium tw-text-foreground tw-shadow-none tw-outline-none',
             hasInputChanged &&
               (hasTopMatch
                 ? 'focus-visible:tw-ring-green-600'

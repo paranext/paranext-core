@@ -708,7 +708,7 @@ export function BookChapterControl({
 
   return (
     <DropdownMenu modal={false} open={isContentOpen} onOpenChange={controlMenuState}>
-      <DropdownMenuTrigger asChild className="tw-h-8">
+      <DropdownMenuTrigger asChild>
         <BookChapterInput
           ref={inputRef}
           value={bookChapterInputValue}

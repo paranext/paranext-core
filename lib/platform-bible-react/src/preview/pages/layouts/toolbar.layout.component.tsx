@@ -36,12 +36,12 @@ export function ToolbarExamples() {
         className="tw-h-8 tw-bg-muted tw-text-muted-foreground"
         configAreaChildren={
           <>
-            <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+            <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
             <UserRound />
           </>
         }
       >
-        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} className="tw-h-8" />
+        <BookChapterControl scrRef={scrRef} handleSubmit={() => {}} />
       </Toolbar>
       Mac
       <div>
