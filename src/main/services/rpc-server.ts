@@ -191,10 +191,13 @@ export class RpcServer implements IRpcHandler {
     this.jsonRpcClient.rejectAllPendingRequests(`Web socket ${this.name} has closed`);
     this.removeEventListenersFromWebSocket();
     this.connectionStatus = ConnectionStatus.Disconnected;
+    logger.info(
+      `Websocket ${this.name} closed. Removing ${this.rpcMethodDetailsByMethodName.size} methods`,
+    );
     this.rpcMethodDetailsByMethodName.forEach(({ handler }, methodName) => {
       if (handler !== this) return;
 
-      logger.info(`Method '${methodName}' removed since websocket ${this.name} closed`);
+      logger.debug(`Method '${methodName}' removed since websocket ${this.name} closed`);
       this.rpcMethodDetailsByMethodName.delete(methodName);
     });
   }

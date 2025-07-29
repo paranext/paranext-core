@@ -10,9 +10,14 @@ import {
   SettingTypes,
 } from 'papi-shared-types';
 import {
+  ERROR_DUMP_STRING_KEYS,
+  ErrorDump,
   Input,
   Label,
   LanguageInfo,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   Switch,
   Tooltip,
   TooltipContent,
@@ -115,6 +120,9 @@ const LOCALIZE_SETTING_KEYS: LocalizeKey[] = [
   '%settings_errorMessages_invalidNumber%',
   '%settings_errorMessages_invalidJSON%',
   '%settings_errorMessages_invalidValue%',
+  '%settings_errorMessages_errorOccurred%',
+  '%settings_errorMessages_viewError%',
+  '%settings_errorMessages_copiedError%',
   '%settings_uiLanguageSelector_selectFallbackLanguages%',
 ];
 
@@ -165,6 +173,8 @@ export function Setting({
     defaultLanguages,
   );
   const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
+
+  const [copySuccess, setCopySuccess] = useState<boolean>(false);
 
   useEffect(() => {
     setErrorMessage(isPlatformError(setting) ? setting.message : undefined);
@@ -224,11 +234,15 @@ export function Setting({
         setErrorMessage(localizedStrings['%settings_errorMessages_invalidValue%']);
       }
     } catch (error) {
-      setErrorMessage(getErrorMessage(error));
+      setErrorMessage(`Error changing setting ${settingKey}: ${getErrorMessage(error)}`);
     }
   };
 
   const debouncedHandleChange = debounce(handleChangeSetting, 500);
+
+  const [errorDumpLocalizedStrings] = useLocalizedStrings(
+    useMemo(() => [...ERROR_DUMP_STRING_KEYS], []),
+  );
 
   const generateComponent = useCallback(() => {
     let component = <p>{localizedStrings['%settings_defaultMessage_noSettingComponent%']}</p>;
@@ -267,7 +281,30 @@ export function Setting({
     return (
       <div className="setting-container">
         {component}
-        {errorMessage && <Label className="error-label">{errorMessage}</Label>}
+        {errorMessage && (
+          <>
+            <Label className="error-label">
+              {localizedStrings['%settings_errorMessages_errorOccurred%']}
+            </Label>
+            <Popover onOpenChange={() => setCopySuccess(false)}>
+              <PopoverTrigger asChild>
+                <Label className="error-view-link">
+                  {localizedStrings['%settings_errorMessages_viewError%']}
+                </Label>
+              </PopoverTrigger>
+              <PopoverContent className="error-popover-content" side="bottom" align="start">
+                {copySuccess && (
+                  <Label>{localizedStrings['%settings_errorMessages_copiedError%']}</Label>
+                )}
+                <ErrorDump
+                  errorDetails={errorMessage}
+                  localizedStrings={errorDumpLocalizedStrings}
+                  handleCopyNotify={() => setCopySuccess(true)}
+                />
+              </PopoverContent>
+            </Popover>
+          </>
+        )}
       </div>
     );
   }, [
@@ -276,6 +313,8 @@ export function Setting({
     settingKey,
     debouncedHandleChange,
     errorMessage,
+    copySuccess,
+    errorDumpLocalizedStrings,
     languages,
     defaultLanguages,
   ]);

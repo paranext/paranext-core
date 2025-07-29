@@ -1,4 +1,4 @@
-import { joinUriPaths } from '@node/utils/util';
+import { EXTENSION_DATA_DIR, joinUriPaths } from '@node/utils/util';
 import {
   readFileText,
   readFileBinary,
@@ -73,7 +73,7 @@ function buildUserDataUri(token: ExecutionToken, key: string): string {
   // "the ability to use the encoding result as filename or URL address"
   const encodedKey: string = Buffer.from(key, 'utf-8').toString('base64url');
 
-  return joinUriPaths('app://extensions', subDir, 'user-data', encodedKey);
+  return joinUriPaths(`app://${EXTENSION_DATA_DIR}`, subDir, 'user-data', encodedKey);
 }
 
 // #endregion

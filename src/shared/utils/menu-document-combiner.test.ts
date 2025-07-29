@@ -168,9 +168,10 @@ const videoExtensionContribution = {
       topMenu: {
         columns: {
           'videoExtension.video': { label: '%video%', order: 1 },
+          isExtensible: true,
         },
         groups: {
-          'videoExtension.videoTop': { column: 'videoExtension.project', order: 1 },
+          'videoExtension.videoTop': { column: 'videoExtension.video', order: 1 },
         },
         items: [
           {
@@ -184,6 +185,30 @@ const videoExtensionContribution = {
             group: 'videoExtension.videoTop',
             order: 2,
             command: 'videoExtension.editVideo',
+          },
+        ],
+      },
+    },
+  },
+};
+
+const video2ExtensionContribution = {
+  mainMenu: {},
+  webViewMenus: {
+    'videoExtension.playEditWebView': {
+      topMenu: {
+        columns: {
+          'videoExtension2.video': { label: '%video2%', order: 2 },
+        },
+        groups: {
+          'videoExtension2.videoBottom': { column: 'videoExtension2.video', order: 1 },
+        },
+        items: [
+          {
+            label: '%deleteVideo%',
+            group: 'videoExtension2.videoBottom',
+            order: 1,
+            command: 'videoExtension2.deleteVideo',
           },
         ],
       },
@@ -340,9 +365,12 @@ const expectedOutput = {
       topMenu: {
         columns: {
           'videoExtension.video': { label: '%video%', order: 1 },
+          'videoExtension2.video': { label: '%video2%', order: 2 },
+          isExtensible: true,
         },
         groups: {
-          'videoExtension.videoTop': { column: 'videoExtension.project', order: 1 },
+          'videoExtension.videoTop': { column: 'videoExtension.video', order: 1 },
+          'videoExtension2.videoBottom': { column: 'videoExtension2.video', order: 1 },
         },
         items: [
           {
@@ -357,6 +385,12 @@ const expectedOutput = {
             order: 2,
             command: 'videoExtension.editVideo',
           },
+          {
+            label: '%deleteVideo%',
+            group: 'videoExtension2.videoBottom',
+            order: 1,
+            command: 'videoExtension2.deleteVideo',
+          },
         ],
       },
     },
@@ -367,6 +401,7 @@ test('Sample documents all validate', () => {
   const menuCombiner = new MenuDocumentCombiner(startingDoc);
   menuCombiner.addOrUpdateContribution('paratext', paratextExtensionContribution);
   menuCombiner.addOrUpdateContribution('videoExtension', videoExtensionContribution);
+  menuCombiner.addOrUpdateContribution('videoExtension2', video2ExtensionContribution);
   expect(deepEqual(menuCombiner.rawOutput, expectedOutput)).toBeTruthy();
 });
 
@@ -458,7 +493,9 @@ test('isExtensible flags are honored', () => {
         },
       },
     }),
-  ).toThrow(/Cannot add new group test.group1 because isExtensible is not set/);
+  ).toThrow(
+    /Cannot add new group test.group1 because isExtensible is not set on %mainMenu_window%/,
+  );
 
   expect(() =>
     menuCombiner.addOrUpdateContribution('test', {
@@ -476,6 +513,21 @@ test('isExtensible flags are honored', () => {
   ).toThrow(
     /Cannot add new menu item %doSomething% to group platform.windowGroup2 because isExtensible is not set/,
   );
+
+  expect(() =>
+    menuCombiner.addOrUpdateContribution('test', {
+      mainMenu: {
+        items: [
+          {
+            label: '%doSomething%',
+            group: 'external.nonexistentGroup',
+            order: 1,
+            command: 'test.something',
+          },
+        ],
+      },
+    }),
+  ).toThrow(/Could not find a current group by the group name external.nonexistentGroup/);
 });
 
 test('Name prefixes are verified', () => {
@@ -508,7 +560,7 @@ test('Name prefixes are verified', () => {
         },
       },
     }),
-  ).toThrow(/Group name differentPrefix.group1 does not start with test./);
+  ).toThrow(/Group name 'differentPrefix.group1' does not start with test./);
 
   expect(() =>
     menuCombiner.addOrUpdateContribution('test', {
@@ -558,7 +610,7 @@ test('Name prefixes are verified', () => {
         },
       },
     }),
-  ).toThrow(/Cannot add a new web view unless it starts with test./);
+  ).toThrow(/Cannot add 'differentPrefix.something'. The new web view must start with test./);
 });
 
 test('Web view menu defaults are combined', () => {

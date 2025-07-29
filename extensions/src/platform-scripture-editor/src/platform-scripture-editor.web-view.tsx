@@ -13,9 +13,9 @@ import {
   Usj,
 } from '@biblionexus-foundation/scripture-utilities';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
-import { JSX, useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { WebViewProps } from '@papi/core';
-import { logger } from '@papi/frontend';
+import papi, { logger } from '@papi/frontend';
 import {
   useLocalizedStrings,
   useProjectData,
@@ -125,10 +125,11 @@ function scrollToVerse(verseLocation: SerializedVerseRef): HTMLElement | undefin
 }
 
 globalThis.webViewComponent = function PlatformScriptureEditor({
+  id: webViewId,
   projectId,
   useWebViewState,
   useWebViewScrollGroupScrRef,
-}: WebViewProps): JSX.Element {
+}: WebViewProps) {
   const [isReadOnly] = useWebViewState<boolean>('isReadOnly', true);
   const [decorations, setDecorations] = useWebViewState<EditorDecorations>(
     'decorations',
@@ -209,6 +210,22 @@ globalThis.webViewComponent = function PlatformScriptureEditor({
       window.removeEventListener('message', webViewMessageListener);
     };
   }, [scrRef, setScrRefWithScroll, decorations, setDecorations]);
+
+  // Listen for Ctrl+F to open find dialog
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.ctrlKey && event.key === 'f') {
+        event.preventDefault();
+        papi.commands.sendCommand('platformScripture.openFind', webViewId);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [webViewId]);
 
   const [decorationsLocalizedStringsBase] = useLocalizedStrings(
     useMemo(() => getLocalizeKeysFromDecorations(decorations), [decorations]),

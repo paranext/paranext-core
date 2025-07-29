@@ -1,4 +1,5 @@
 import '@renderer/global-this.model';
+import '@renderer/global-this-web-view.model';
 import { createRoot } from 'react-dom/client';
 import {
   applyThemeStylesheet,
@@ -20,6 +21,7 @@ import {
   initialize as initializeThemeService,
   localThemeService,
 } from '@renderer/services/theme.service-host';
+import { initialize as initializeWindowService } from '@renderer/services/window.service-host';
 import { App } from '@renderer/app.component';
 import SCROLLBAR_STYLES_RAW from '@renderer/styles/scrollbar.css?raw';
 
@@ -90,6 +92,7 @@ async function runPromisesAndThrowIfRejected(...promises: Promise<unknown>[]) {
       startScrollGroupService(),
       startNotificationService(),
       initializeThemeService(),
+      initializeWindowService(),
     );
 
     // Subscribe to updates to the current theme

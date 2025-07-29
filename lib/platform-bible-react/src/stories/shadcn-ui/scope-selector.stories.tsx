@@ -4,9 +4,34 @@ import { ThemeProvider } from '@/preview/preview-components/theme-provider.compo
 import { ComponentProps, useCallback, useState } from 'react';
 import { Scope } from '@/components/utils/scripture.util';
 
+const localizedStrings = {
+  '%webView_scope_selector_selected_text%': 'Selected text',
+  '%webView_scope_selector_current_verse%': 'Current verse',
+  '%webView_scope_selector_current_chapter%': 'Current chapter',
+  '%webView_scope_selector_current_book%': 'Current book',
+  '%webView_scope_selector_choose_books%': 'Choose books',
+  '%webView_scope_selector_scope%': 'Scope',
+  '%webView_scope_selector_select_books%': 'Select books',
+  '%webView_book_selector_books_selected%': 'Books selected',
+  '%webView_book_selector_select_books%': 'Select books...',
+  '%webView_book_selector_search_books%': 'Search books...',
+  '%webView_book_selector_select_all%': 'Select all',
+  '%webView_book_selector_clear_all%': 'Clear all',
+  '%webView_book_selector_no_book_found%': 'No book found.',
+  '%webView_book_selector_more%': 'more',
+  '%scripture_section_ot_long%': 'Old Testament',
+  '%scripture_section_ot_short%': 'OT',
+  '%scripture_section_nt_long%': 'New Testament',
+  '%scripture_section_nt_short%': 'NT',
+  '%scripture_section_dc_long%': 'Deuterocanonical',
+  '%scripture_section_dc_short%': 'DC',
+  '%scripture_section_extra_long%': 'Extra material',
+  '%scripture_section_extra_short%': 'Extra',
+};
+
 type ScopeSelectorWrapperProps = Omit<
   ComponentProps<typeof ScopeSelector>,
-  'scope' | 'selectedBookIds' | 'onSearchScopeChange' | 'onSelectedBookIdsChange'
+  'scope' | 'selectedBookIds' | 'onScopeChange' | 'onSelectedBookIdsChange'
 > & {
   scope: Scope;
   selectedBookIds: string[];
@@ -64,6 +89,7 @@ const meta: Meta<typeof ScopeSelector> = {
     availableBookInfo:
       '100111000000000000110000001000000000010111111111111111111111111111000000000000000000000000000000000000000000100000000000000',
     selectedBookIds: [],
+    localizedStrings,
     onScopeChange: (scope) => console.log('Search scope changed:', scope),
     onSelectedBookIdsChange: (books) => console.log('Selected books changed:', books),
   },

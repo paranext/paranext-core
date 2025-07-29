@@ -40,6 +40,12 @@ export type TabToolbarProps = PropsWithChildren<{
   endAreaChildren?: ReactNode;
 }>;
 
+/**
+ * Component for rendering a customizable tab toolbar.
+ *
+ * The toolbar includes three main areas to place children components: start, center, and end. It
+ * optionally displays dropdown menus for project and view info, populated by the given menu data.
+ */
 export function TabToolbar({
   onSelectProjectMenuItem,
   onSelectViewInfoMenuItem,

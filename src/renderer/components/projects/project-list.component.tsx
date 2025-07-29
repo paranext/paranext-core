@@ -1,7 +1,7 @@
 import { ProjectMetadata } from '@shared/models/project-metadata.model';
 import { Button, Checkbox, Label } from 'platform-bible-react';
 import { ProjectInterfaces } from 'papi-shared-types';
-import { PropsWithChildren, useCallback, JSX } from 'react';
+import { PropsWithChildren, useCallback } from 'react';
 import './project-list.component.scss';
 
 /** Project metadata and some display information */
@@ -120,7 +120,7 @@ export type ProjectListProps = PropsWithChildren<{
    * If multiselect is selected, then the array of selected project IDs is passed to control the
    * selected flag on ListItemButton
    */
-  selectedProjectIds?: string[] | undefined;
+  selectedProjectIds?: string[];
 
   /** Optional subheader */
   subheader?: string;
@@ -155,7 +155,7 @@ export function ProjectList({
     [isMultiselect, selectedProjectIds],
   );
 
-  const createListItemContents = (project: ProjectMetadataDisplay): JSX.Element => {
+  const createListItemContents = (project: ProjectMetadataDisplay) => {
     return (
       <Button variant="ghost" onClick={() => handleSelectProject(project.id)}>
         {isCheckable && (

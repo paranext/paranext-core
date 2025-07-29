@@ -72,6 +72,8 @@ export type TabSaver = (tabInfo: TabInfo) => SavedTabInfo | undefined;
 /** Information about a tab in a panel */
 interface TabLayout {
   type: 'tab';
+  /** Id of the parent dock box that the tab belongs to */
+  parentTabGroupId?: string;
 }
 
 /**
@@ -115,8 +117,14 @@ interface PanelLayout {
   targetTabId?: string;
 }
 
+interface ReplaceTabLayout {
+  type: 'replace-tab';
+  /** The ID of the tab to replace */
+  targetTabId: string;
+}
+
 /** Information about how a Paranext tab fits into the dock layout */
-export type Layout = TabLayout | FloatLayout | PanelLayout;
+export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
 
 /** Props that are passed to the web view tab component */
 export type WebViewTabProps = WebViewDefinition;
@@ -207,6 +215,14 @@ export type PapiDockLayout = {
     updateInfo: WebViewDefinitionUpdateInfo,
     shouldBringToFront?: boolean,
   ) => boolean;
+  /**
+   * Gets info for the tab that contains the specified DOM element
+   *
+   * @param tabElement The DOM element in the tab whose info to get
+   * @returns Info for the tab in question or `undefined` if tab is not found
+   * @throws If found a tab id in the DOM but there was no corresponding tab info in the dock layout
+   */
+  getTabInfoByElement: (tabElement: Element) => TabInfo | undefined;
   /**
    * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
    *

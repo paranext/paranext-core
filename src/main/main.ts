@@ -1,4 +1,4 @@
-﻿/**
+/**
  * This module executes inside of electron's main process. You can start electron renderer process
  * from here and communicate with the other processes through IPC.
  *
@@ -12,6 +12,7 @@ import path from 'path';
 // Removed until we have a release. See https://github.com/paranext/paranext-core/issues/83
 /* import { autoUpdater } from 'electron-updater'; */
 import '@main/global-this.model';
+import '@node/utils/log-archiver.util';
 import { subscribeCurrentMacosMenubar } from '@main/platform-macos-menubar.util';
 import {
   APP_NAME,
@@ -29,7 +30,8 @@ import { HANDLE_URI_REQUEST_TYPE } from '@node/services/extension.service-model'
 import { resolveHtmlPath } from '@node/utils/util';
 import {
   DEFAULT_ZOOM_FACTOR,
-  DEV_MODE_RENDERER_INDICATOR,
+  DEV_MODE_QUERY_PARAMETER,
+  LOG_LEVEL_QUERY_PARAMETER,
   MAX_ZOOM_FACTOR,
   MIN_ZOOM_FACTOR,
 } from '@shared/data/platform.data';
@@ -46,6 +48,7 @@ import { SerializedRequestType } from '@shared/utils/util';
 import windowStateKeeper from 'electron-window-state';
 import { CommandNames } from 'papi-shared-types';
 import { getErrorMessage, isPlatformError, serialize, wait } from 'platform-bible-utils';
+import { windowService } from '@shared/services/window.service';
 
 // #region Helper functions
 
@@ -190,7 +193,7 @@ async function main() {
   // Some extensions inside the extension host rely on the renderer to accept 'getWebView' commands.
   // The renderer relies on the extension host, so something has to break the dependency loop.
   // For now, the dependency loop is broken by retrying 'getWebView' in a loop for a while.
-  await extensionHostService.start();
+  await extensionHostService.start(PROCESS_CLOSE_TIME_OUT);
 
   // TODO (maybe): Wait for signal from the extension host process that it is ready (except 'getWebView')
   // We could then wait for the renderer to be ready and signal the extension host
@@ -360,6 +363,34 @@ async function main() {
       },
     );
 
+    mainWindow.webContents.on('before-input-event', async (_, event) => {
+      // Key up seems not to change focus in Windows, so we will only change on keyDown
+      if (event.type !== 'keyDown') return;
+
+      // Announce a possible focus change
+      try {
+        await windowService.setFocus('detect');
+      } catch (e) {
+        logger.warn(
+          `Failed to instruct window service to detect focus on ${event.type} ${event.key}: ${getErrorMessage(e)}`,
+        );
+      }
+    });
+
+    mainWindow.webContents.on('before-mouse-event', async (_, event) => {
+      // Mouse up and other events seem not to change focus in Windows, so we will only change on mouseDown
+      if (event.type !== 'mouseDown') return;
+
+      // Announce a possible focus change
+      try {
+        await windowService.setFocus('detect');
+      } catch (e) {
+        logger.warn(
+          `Failed to instruct window service to detect focus on ${event.type} ${event.button}: ${getErrorMessage(e)}`,
+        );
+      }
+    });
+
     mainWindow.on('ready-to-show', () => {
       logger.info('mainWindow is ready to show');
       if (!mainWindow) throw new Error('"mainWindow" is not defined');
@@ -407,15 +438,33 @@ async function main() {
       return { action: 'deny' };
     });
 
+    // Built URL search parameters for use in `src/renderer/global-this.model.ts`
+    const searchParamsObject: Record<string, string> = {
+      [LOG_LEVEL_QUERY_PARAMETER]: globalThis.logLevel,
+    };
+
+    if (globalThis.isNoisyDevModeEnabled) searchParamsObject[DEV_MODE_QUERY_PARAMETER] = '';
+
     // If the URL doesn't load, we might need to show something to the user
-    const urlToLoad = `${resolveHtmlPath('index.html')}${globalThis.isNoisyDevModeEnabled ? DEV_MODE_RENDERER_INDICATOR : ''}`;
+    const urlToLoad = `${resolveHtmlPath('index.html')}?${new URLSearchParams(searchParamsObject)}`;
     mainWindow.loadURL(urlToLoad).catch((e) => {
       logger.error(`mainWindow could not load URL "${urlToLoad}". ${getErrorMessage(e)}`);
     });
 
     // Register zoom keyboard shortcuts. MacOS already supports this natively
-    if (process.platform !== 'darwin') {
-      mainWindow.webContents.on('before-input-event', (event, input) => {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      // F12: Open dev tools in both development and production
+      if (input.key === 'F12') {
+        event.preventDefault();
+        if (mainWindow?.webContents.isDevToolsOpened()) {
+          mainWindow.webContents.closeDevTools();
+        } else {
+          mainWindow?.webContents.openDevTools();
+        }
+        return;
+      }
+
+      if (process.platform !== 'darwin') {
         // Zoom in: Ctrl++ or Ctrl+=
         if (input.control && (input.key === '=' || input.key === '+')) {
           event.preventDefault();
@@ -431,8 +480,8 @@ async function main() {
           event.preventDefault();
           resetZoomFactor();
         }
-      });
-    }
+      }
+    });
 
     // Set initial zoom factor from settings
     mainWindow.webContents.on('did-finish-load', async () => {

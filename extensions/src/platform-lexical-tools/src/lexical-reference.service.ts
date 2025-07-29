@@ -4,7 +4,6 @@ import type {
   LexicalEntriesById,
   LexicalEntriesByOccurrence,
   LexicalReferenceSelector,
-  LexicalReferenceTextRegistrar,
   LexicalReferenceDataTypes,
   LexicalSensesByOccurrence,
   LexicalSensesById,
@@ -14,7 +13,7 @@ import { LexicalReferenceTextManager } from './lexical-reference-text-manager.mo
 
 export class LexicalReferenceService
   extends DataProviderEngine<LexicalReferenceDataTypes>
-  implements IDataProviderEngine<LexicalReferenceDataTypes>, LexicalReferenceTextRegistrar
+  implements IDataProviderEngine<LexicalReferenceDataTypes>
 {
   #changeLexicalReferenceTextsUnsubscriber: Unsubscriber;
 
@@ -25,16 +24,6 @@ export class LexicalReferenceService
       this.lexicalReferenceTextManager.onDidChangeLexicalReferenceTexts(() =>
         this.notifyUpdate('*'),
       );
-  }
-
-  async registerLexicalReferenceText(fileUri: string): Promise<string> {
-    return this.lexicalReferenceTextManager.registerLexicalReferenceText(fileUri);
-  }
-
-  async unregisterLexicalReferenceText(lexicalReferenceTextGuid: string): Promise<void> {
-    return this.lexicalReferenceTextManager.unregisterLexicalReferenceText(
-      lexicalReferenceTextGuid,
-    );
   }
 
   async getEntriesById(selector: LexicalReferenceSelector): Promise<LexicalEntriesById> {

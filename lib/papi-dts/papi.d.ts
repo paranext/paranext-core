@@ -1,9 +1,3 @@
-/// <reference types="react" />
-/// <reference types="node" />
-/// <reference types="node" />
-/// <reference types="node" />
-/// <reference types="node" />
-/// <reference types="node" />
 declare module 'shared/utils/util' {
   import { ProcessType } from 'shared/global-this.model';
   /**
@@ -647,7 +641,7 @@ declare module 'shared/models/web-view.model' {
   export type GetWebViewOptions = OpenWebViewOptions;
 }
 declare module 'shared/global-this.model' {
-  import { LogLevel } from 'electron-log';
+  import type { LogLevel } from 'electron-log';
   import { FunctionComponent } from 'react';
   import {
     GetSavedWebViewDefinition,
@@ -832,18 +826,21 @@ declare module 'shared/utils/internal-util' {
    */
   export const getProcessType: () => ProcessType;
 }
-declare module 'shared/services/logger.service' {
-  import log from 'electron-log';
-  export const WARN_TAG = '<WARN>';
+declare module 'shared/utils/logger.utils' {
+  import { MainLogger, RendererLogger } from 'electron-log';
   /**
    * Format a string of a service message
    *
    * @param message Message from the service
    * @param serviceName Name of the service to show in the log
-   * @param tag Optional tag at the end of the service name
    * @returns Formatted string of a service message
    */
-  export function formatLog(message: string, serviceName: string, tag?: string): string;
+  export function formatLog(message: string, serviceName: string): string;
+  /** Does shared setup on the logger in any process */
+  export function setUpLogger(log: MainLogger | RendererLogger): void;
+}
+declare module 'shared/services/logger.service' {
+  import log from 'electron-log';
   /**
    *
    * All extensions and services should use this logger to provide a unified output of logs
@@ -1626,7 +1623,7 @@ declare module 'shared/services/network.service' {
    * @param args Arguments to send in the request (put in request.contents)
    * @returns Promise that resolves with the response message
    */
-  export const request: <TParam extends unknown[], TReturn>(
+  export const request: <TParam extends Array<unknown>, TReturn>(
     requestType: SerializedRequestType,
     ...args: TParam
   ) => Promise<TReturn>;
@@ -1654,7 +1651,7 @@ declare module 'shared/services/network.service' {
    * @returns Function to call with arguments of request that performs the request and resolves with
    *   the response contents
    */
-  export const createRequestFunction: <TParam extends unknown[], TReturn>(
+  export const createRequestFunction: <TParam extends Array<unknown>, TReturn>(
     requestType: SerializedRequestType,
   ) => (...args: TParam) => Promise<TReturn>;
   /**
@@ -1761,12 +1758,14 @@ declare module 'shared/services/network-object.service' {
       | undefined,
     objectDocumentation?: NetworkObjectDocumentation,
   ) => Promise<DisposableNetworkObject<T>>;
-  export interface MinimalNetworkObjectService {
+  export interface FrontendNetworkObjectService {
     get: typeof get;
-    set: typeof set;
     onDidCreateNetworkObject: typeof onDidCreateNetworkObject;
   }
-  export interface NetworkObjectService extends MinimalNetworkObjectService {
+  export interface BackendNetworkObjectService extends FrontendNetworkObjectService {
+    set: typeof set;
+  }
+  export interface NetworkObjectService extends BackendNetworkObjectService {
     initialize: typeof initialize;
     hasKnown: typeof hasKnown;
   }
@@ -1828,7 +1827,36 @@ declare module 'shared/services/network-object.service' {
    * event handler will be called. After an object is disposed, calls to its functions will no longer
    * be proxied to the original object.
    */
-  export const minimalNetworkObjectService: MinimalNetworkObjectService;
+  export const frontendNetworkObjectService: FrontendNetworkObjectService;
+  /**
+   *
+   * Network objects are distributed objects within PAPI for TS/JS objects. @see
+   * https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using
+   * {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+   * the registered object are proxied except for constructors, `dispose`, and functions starting with
+   * `on` since those should be events (which are not intended to be proxied) based on our naming
+   * convention. If you don't want a function to be proxied, don't make it a property of the
+   * registered object.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be called
+   * across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+   * of that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  export const backendNetworkObjectService: BackendNetworkObjectService;
 }
 declare module 'shared/models/network-object.model' {
   import {
@@ -2701,6 +2729,8 @@ declare module 'shared/models/docking-framework.model' {
   /** Information about a tab in a panel */
   interface TabLayout {
     type: 'tab';
+    /** Id of the parent dock box that the tab belongs to */
+    parentTabGroupId?: string;
   }
   /**
    * Indicates where to display a floating window
@@ -2740,8 +2770,13 @@ declare module 'shared/models/docking-framework.model' {
     /** If undefined, it will add in the `direction` relative to the previously added tab. */
     targetTabId?: string;
   }
+  interface ReplaceTabLayout {
+    type: 'replace-tab';
+    /** The ID of the tab to replace */
+    targetTabId: string;
+  }
   /** Information about how a Paranext tab fits into the dock layout */
-  export type Layout = TabLayout | FloatLayout | PanelLayout;
+  export type Layout = TabLayout | FloatLayout | PanelLayout | ReplaceTabLayout;
   /** Props that are passed to the web view tab component */
   export type WebViewTabProps = WebViewDefinition;
   /**
@@ -2829,6 +2864,14 @@ declare module 'shared/models/docking-framework.model' {
       updateInfo: WebViewDefinitionUpdateInfo,
       shouldBringToFront?: boolean,
     ) => boolean;
+    /**
+     * Gets info for the tab that contains the specified DOM element
+     *
+     * @param tabElement The DOM element in the tab whose info to get
+     * @returns Info for the tab in question or `undefined` if tab is not found
+     * @throws If found a tab id in the DOM but there was no corresponding tab info in the dock layout
+     */
+    getTabInfoByElement: (tabElement: Element) => TabInfo | undefined;
     /**
      * The layout to use as the default layout if the dockLayout doesn't have a layout loaded.
      *
@@ -3854,7 +3897,7 @@ declare module 'papi-shared-types' {
 }
 declare module 'shared/services/command.service' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
-  import { CommandHandlers } from 'papi-shared-types';
+  import { CommandHandlers, CommandNames } from 'papi-shared-types';
   import { SingleMethodDocumentation } from 'shared/models/openrpc.model';
   import { NetworkMethodHandlerOptions } from 'shared/models/network.model';
   /**
@@ -3872,14 +3915,14 @@ declare module 'shared/services/command.service' {
    * @returns Promise that resolves if the command successfully registered and unsubscriber function
    *   to run to stop the passed-in function from handling commands
    */
-  export const registerCommand: <CommandName extends keyof CommandHandlers>(
+  export const registerCommand: <CommandName extends CommandNames>(
     commandName: CommandName,
     handler: CommandHandlers[CommandName],
     commandDocs?: SingleMethodDocumentation,
     commandOptions?: NetworkMethodHandlerOptions,
   ) => Promise<UnsubscriberAsync>;
   /** Send a command to the backend. */
-  export const sendCommand: <CommandName extends keyof CommandHandlers>(
+  export const sendCommand: <CommandName extends CommandNames>(
     commandName: CommandName,
     ...args: Parameters<CommandHandlers[CommandName]>
   ) => Promise<Awaited<ReturnType<CommandHandlers[CommandName]>>>;
@@ -3891,7 +3934,7 @@ declare module 'shared/services/command.service' {
    * @returns Function to call with arguments of command that sends the command and resolves with the
    *   result of the command
    */
-  export const createSendCommandFunction: <CommandName extends keyof CommandHandlers>(
+  export const createSendCommandFunction: <CommandName extends CommandNames>(
     commandName: CommandName,
   ) => (
     ...args: Parameters<CommandHandlers[CommandName]>
@@ -5060,6 +5103,14 @@ declare module 'shared/data/file-system.model' {
 }
 declare module 'node/utils/util' {
   import { Uri } from 'shared/data/file-system.model';
+  /** Name of the directory in app that should be used to hold extension data */
+  export const EXTENSION_DATA_DIR = 'extensions';
+  /** Name of the directory in app where installed extensions live */
+  export const INSTALLED_EXTENSIONS_DIR = 'installed-extensions';
+  /** Name of the directory in app where disabled extensions live */
+  export const DISABLED_EXTENSIONS_DIR = 'disabled-extensions';
+  /** Name of the directory in cache where installed extensions are unzipped and run */
+  export const UNZIPPED_EXTENSIONS_CACHE_DIR = 'extensions';
   export const FILE_PROTOCOL = 'file://';
   export const RESOURCES_PROTOCOL = 'resources://';
   export function resolveHtmlPath(htmlFileName: string): string;
@@ -5097,13 +5148,27 @@ declare module 'node/services/node-file-system.service' {
   /** File system calls from Node */
   import fs, { BigIntStats } from 'fs';
   import { Uri } from 'shared/data/file-system.model';
+  /** Type containing the buffer encoding strings for the `readFileText` function */
+  export type BufferEncoding =
+    | 'ascii'
+    | 'utf8'
+    | 'utf-8'
+    | 'utf16le'
+    | 'utf-16le'
+    | 'ucs2'
+    | 'ucs-2'
+    | 'base64'
+    | 'base64url'
+    | 'latin1'
+    | 'binary'
+    | 'hex';
   /**
    * Read a text file
    *
    * @param uri URI of file
    * @returns Promise that resolves to the contents of the file
    */
-  export function readFileText(uri: Uri): Promise<string>;
+  export function readFileText(uri: Uri, encoding?: BufferEncoding): Promise<string>;
   /**
    * Read a binary file
    *
@@ -5609,8 +5674,7 @@ declare module 'shared/models/create-process-privilege.model' {
   /**
    *
    * Run {@link spawn} to create a child process. The platform will automatically kill all child
-   * processes created this way in packaged builds. Child processes are not killed when running in
-   * development.
+   * processes created this way in packaged builds.
    *
    * This method is essentially a layer over the [`spawn`
    * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
@@ -5656,8 +5720,7 @@ declare module 'shared/models/create-process-privilege.model' {
   /**
    *
    * Run {@link fork} to create a child process. The platform will automatically kill all child
-   * processes created this way in packaged builds. Child processes are not killed when running in
-   * development.
+   * processes created this way in packaged builds.
    *
    * This method is essentially a layer over the [`fork`
    * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
@@ -5701,8 +5764,7 @@ declare module 'shared/models/create-process-privilege.model' {
     /**
      *
      * Run {@link spawn} to create a child process. The platform will automatically kill all child
-     * processes created this way in packaged builds. Child processes are not killed when running in
-     * development.
+     * processes created this way in packaged builds.
      *
      * This method is essentially a layer over the [`spawn`
      * method](https://nodejs.org/api/child_process.html#child_processspawncommand-args-options) from
@@ -5743,8 +5805,7 @@ declare module 'shared/models/create-process-privilege.model' {
     /**
      *
      * Run {@link fork} to create a child process. The platform will automatically kill all child
-     * processes created this way in packaged builds. Child processes are not killed when running in
-     * development.
+     * processes created this way in packaged builds.
      *
      * This method is essentially a layer over the [`fork`
      * method](https://nodejs.org/api/child_process.html#child_processforkmodulepath-args-options) from
@@ -5774,7 +5835,122 @@ declare module 'shared/models/create-process-privilege.model' {
     osData: OperatingSystemData;
   };
 }
+declare module 'shared/models/elevated-privilege-names.model' {
+  /** String constants that are listed in an extension's manifest.json to state needed privileges */
+  export enum ElevatedPrivilegeNames {
+    createProcess = 'createProcess',
+    manageExtensions = 'manageExtensions',
+    handleUri = 'handleUri',
+  }
+}
+declare module 'extension-host/extension-types/extension-manifest.model' {
+  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privilege-names.model';
+  /** Information about an extension provided by the extension developer. */
+  export type ExtensionManifest = {
+    /** Name of the extension */
+    name: string;
+    /**
+     * Extension version - expected to be [semver](https://semver.org/) like `"0.1.3"`.
+     *
+     * Note: semver may become a hard requirement in the future, so we recommend using it now.
+     */
+    version: string;
+    /**
+     * Path to the JavaScript file to run in the extension host. Relative to the extension's root
+     * folder.
+     *
+     * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
+     */
+    main: string;
+    /** List of special permissions required by the extension to work as intended */
+    elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
+    /**
+     * Path to the TypeScript type declaration file that describes this extension and its interactions
+     * on the PAPI. Relative to the extension's root folder.
+     *
+     * If not provided, Platform.Bible will look in the following locations:
+     *
+     * 1. `<extension-name>.d.ts` (kebab-case version of the extension name)
+     * 2. `<extension-name><other_stuff>.d.ts` (kebab-case version of the extension name)
+     * 3. `index.d.ts`
+     *
+     * See [Extension Anatomy - Type Declaration
+     * Files](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#type-declaration-files-dts)
+     * for more information about extension type declaration files.
+     */
+    types?: string;
+    /** Path to the JSON file that defines the menu items this extension is adding. */
+    menus?: string;
+    /** Path to the JSON file that defines the settings this extension is adding. */
+    settings?: string;
+    /** Path to the JSON file that defines the project settings this extension is adding. */
+    projectSettings?: string;
+    /** Path to the JSON file that defines the localized strings this extension is adding. */
+    localizedStrings?: string;
+    /** Path to the JSON file that defines the themes this extension is adding. */
+    themes?: string;
+    /**
+     * List of events that occur that should cause this extension to be activated. Not yet
+     * implemented.
+     */
+    activationEvents: string[];
+    /** List of extension dependencies required for this extension to work */
+    extensionDependencies?: Record<string, string>;
+    /** Path to the JSON file that defines the display data this extension is adding */
+    displayData?: string;
+    /** Id of publisher who published this extension on the extension marketplace */
+    publisher?: string;
+  };
+}
+declare module 'shared/models/full-extension-data.model' {
+  import { ExtensionManifest } from 'extension-host/extension-types/extension-manifest.model';
+  import { LanguageStrings } from 'platform-bible-utils';
+  /** Interface that stores extension icon information */
+  export interface ExtensionIcon {
+    /** Path to the icon's file. Could be a URL */
+    filepath: string;
+    /** Icon file extension (png, svg, ...) */
+    filetype: string;
+    /** Raw binary data of the icon, intended to be encoded in a base64 string */
+    data: string;
+    /** True if this icon was submitted as a URL, else false. */
+    isUrl: boolean;
+  }
+  /**
+   * Full set of descriptive metadata for an extension including the extension manifest and
+   * visualization data that is useful for the extension marketplace
+   */
+  export type FullExtensionData = Readonly<
+    ExtensionManifest & {
+      /** Localized display name data used to visualize the extension name */
+      displayName: LanguageStrings;
+      /** Localized short summary for the extension which is used as a sort of subtitle for extensions */
+      shortSummary: LanguageStrings;
+      /** Localized descriptions for the extension to describe the functionality of the extension */
+      description: LanguageStrings;
+      /** Extension icon object used to visualize the extension icon */
+      icon: ExtensionIcon;
+      /** Locales that the extension supports which have been formatted to be in the BCP 47 format */
+      locales: string[];
+      /** Supplied URL to find more information about the extension */
+      moreInfoUrl: string;
+      /** Supplied URL to get support concerning the extension */
+      supportUrl: string;
+      /**
+       * File size of the extension ZIP file for extension file validation. Can be `-1` if the
+       * extension ZIP could not be found.
+       */
+      fileSize: number;
+      /**
+       * Generated hash codes for the extension ZIP file for extension file validation validation. Can
+       * be an empty object if the extension ZIP could not be found.
+       */
+      hashcode: Record<string, string>;
+    }
+  >;
+}
 declare module 'shared/models/manage-extensions-privilege.model' {
+  import { FullExtensionData } from 'shared/models/full-extension-data.model';
   /** Base64 encoded hash values */
   export type HashValues = Partial<{
     sha256: string;
@@ -5843,6 +6019,10 @@ declare module 'shared/models/manage-extensions-privilege.model' {
   ) => Promise<void>;
   /** Get extension identifiers of all extensions on the system */
   export type GetInstalledExtensionsFunction = () => Promise<InstalledExtensions>;
+  /** Get full extension data for a specified list of extensions */
+  export type GetExtensionsDataFunction = (
+    extensionIds: ExtensionIdentifier[],
+  ) => Promise<FullExtensionData[]>;
   /** Functions needed to manage extensions */
   export type ManageExtensions = {
     /** Function to download an extension and enable it */
@@ -5853,6 +6033,11 @@ declare module 'shared/models/manage-extensions-privilege.model' {
     disableExtension: DisableExtensionFunction;
     /** Function to retrieve details about all installed extensions */
     getInstalledExtensions: GetInstalledExtensionsFunction;
+    /**
+     * Function to retrieve descriptive metadata and visualization data for an extension. Useful for
+     * the extension marketplace.
+     */
+    getExtensionsData: GetExtensionsDataFunction;
   };
 }
 declare module 'shared/models/handle-uri-privilege.model' {
@@ -5910,15 +6095,9 @@ declare module 'shared/models/handle-uri-privilege.model' {
   };
 }
 declare module 'shared/models/elevated-privileges.model' {
-  import { CreateProcess } from 'shared/models/create-process-privilege.model';
-  import { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
-  import { HandleUri } from 'shared/models/handle-uri-privilege.model';
-  /** String constants that are listed in an extension's manifest.json to state needed privileges */
-  export enum ElevatedPrivilegeNames {
-    createProcess = 'createProcess',
-    manageExtensions = 'manageExtensions',
-    handleUri = 'handleUri',
-  }
+  import type { CreateProcess } from 'shared/models/create-process-privilege.model';
+  import type { ManageExtensions } from 'shared/models/manage-extensions-privilege.model';
+  import type { HandleUri } from 'shared/models/handle-uri-privilege.model';
   /** Object that contains properties with special capabilities for extensions that required them */
   export type ElevatedPrivileges = {
     /** Functions that can be run to start new processes */
@@ -6293,8 +6472,10 @@ declare module 'shared/data/platform.data' {
    * Platform.Bible core
    */
   export const PLATFORM_NAMESPACE = 'platform';
-  /** Query string passed to the renderer when starting if it should enable noisy dev mode */
-  export const DEV_MODE_RENDERER_INDICATOR = '?noisyDevMode';
+  /** Query parameter passed to the renderer. Determines which log level to use */
+  export const LOG_LEVEL_QUERY_PARAMETER = 'logLevel';
+  /** Query parameter passed to the renderer. Determines if it should enable noisy dev mode */
+  export const DEV_MODE_QUERY_PARAMETER = 'noisyDevMode';
   /** ID of the default theme family for use in the application */
   export const DEFAULT_THEME_FAMILY = '';
   /** Type of the default theme for use in the application */
@@ -6416,7 +6597,7 @@ declare module 'shared/services/settings.service-model' {
      * @param validator Function to call to validate the new setting value
      * @returns Unsubscriber that should be called whenever the providing extension is deactivated
      */
-    registerValidator: <SettingName extends keyof SettingTypes>(
+    registerValidator: <SettingName extends SettingNames>(
       key: SettingName,
       validator: SettingValidator<SettingName>,
     ) => Promise<UnsubscriberAsync>;
@@ -6542,6 +6723,142 @@ declare module 'shared/services/settings.service-model' {
     IDataProvider<SettingDataTypes> &
     typeof settingsServiceObjectToProxy;
 }
+declare module 'shared/services/window.service-model' {
+  import { OnDidDispose, UnsubscriberAsync, PlatformError } from 'platform-bible-utils';
+  import {
+    DataProviderDataType,
+    DataProviderSubscriberOptions,
+    DataProviderUpdateInstructions,
+  } from 'shared/models/data-provider.model';
+  import { IDataProvider } from 'shared/models/data-provider.interface';
+  /**
+   *
+   * This name is used to register the window data provider on the papi. You can use this name to
+   * find the data provider when accessing it using the useData hook
+   */
+  export const windowServiceProviderName = 'platform.windowServiceDataProvider';
+  export const windowServiceObjectToProxy: Readonly<{
+    /**
+     *
+     * This name is used to register the window data provider on the papi. You can use this name to
+     * find the data provider when accessing it using the useData hook
+     */
+    dataProviderName: 'platform.windowServiceDataProvider';
+  }>;
+  /** Focus of the app window is on a WebView iframe with the specified id */
+  export type FocusSubjectWebView = {
+    focusType: 'webView';
+    /** ID of the WebView in focus (its tab ID is the same) */
+    id: string;
+  };
+  /**
+   * Focus of the app window is somewhere in a tab (header, toolbar, menu, content, etc.)
+   *
+   * Note that the focused tab could be a WebView, in which case the tab is focused but it is not
+   * focused in the WebView's iframe
+   */
+  export type FocusSubjectTab = {
+    focusType: 'tab';
+    /** The type of tab. `webView` if it is a WebView tab. */
+    tabType: 'webView' | string;
+    /** ID of the tab in focus (if this is a WebView, its WebView ID is the same) */
+    id: string;
+  };
+  /** Focus of the app window is somewhere not in a tab (app menu, app toolbar, etc.) */
+  export type FocusSubjectOther = {
+    focusType: 'other';
+  };
+  /** Current item that is the subject of top-level app window focus */
+  export type FocusSubject = FocusSubjectWebView | FocusSubjectTab | FocusSubjectOther;
+  export type WindowDataTypes = {
+    Focus: DataProviderDataType<undefined, FocusSubject | undefined, FocusSubject | 'detect'>;
+  };
+  module 'papi-shared-types' {
+    interface DataProviders {
+      [windowServiceProviderName]: IWindowService;
+    }
+  }
+  /**
+   *
+   * Service that allows to interact with the main application window
+   */
+  export type IWindowService = {
+    /**
+     *
+     * Get information about the current subject of focus in the main app window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the main app window's current subject of focus
+     */
+    getFocus(selector: undefined): Promise<FocusSubject>;
+    /**
+     *
+     * Get information about the current subject of focus in the main app window
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @returns Information about the main app window's current subject of focus
+     */
+    getFocus(): Promise<FocusSubject>;
+    /**
+     * Sets the subject of focus in the main app window.
+     *
+     * Note: until https://paratextstudio.atlassian.net/browse/PT-2202 is complete, this function does
+     * not actually provide the ability to set the focus but only provides the ability to detect what
+     * is currently focused. As such, this is relatively useless for extensions right now.
+     *
+     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      focusSubject: FocusSubject | 'detect',
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Sets the subject of focus in the main app window.
+     *
+     * Note: until https://paratextstudio.atlassian.net/browse/PT-2202 is complete, this function does
+     * not actually provide the ability to set the focus but only provides the ability to detect what
+     * is currently focused. As such, this is relatively useless for extensions right now.
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param focusSubject What to set the main app window's focus to. Provide `'detect'` to instruct
+     *   the window to update the current focus based on what is actually focused in the window (only
+     *   necessary when an action happens that changes the focus but the window service does not
+     *   detect already). In most cases, you will not need to set `'detect'` manually.
+     *
+     *   Note: `'detect'` is on a debounce because it sometimes takes a moment for
+     *   `document.activeElement` to be updated. It may take a short moment when awaiting setting
+     *   `'detect'`.
+     * @returns `true` or an array of strings if the theme successfully updated; `false` otherwise
+     * @see {@link DataProviderUpdateInstructions} for more info on what to return
+     */
+    setFocus(
+      selector: undefined,
+      focusSubject: FocusSubject | 'detect',
+    ): Promise<DataProviderUpdateInstructions<WindowDataTypes>>;
+    /**
+     * Subscribe to run a callback function when the main app window's subject of focus is changed
+     *
+     * @param selector `undefined`. Does not have to be provided
+     * @param callback Function to run with the updated localized menuContent for this selector. If
+     *   there is an error while retrieving the updated data, the function will run with a
+     *   {@link PlatformError} instead of the data. You can call {@link isPlatformError} on this value
+     *   to check if it is an error.
+     * @param options Various options to adjust how the subscriber emits updates
+     * @returns Unsubscriber function (run to unsubscribe from listening for updates)
+     */
+    subscribeFocus(
+      selector: undefined,
+      callback: (focusSubject: FocusSubject | PlatformError) => void,
+      options?: DataProviderSubscriberOptions,
+    ): Promise<UnsubscriberAsync>;
+  } & OnDidDispose &
+    typeof windowServiceObjectToProxy &
+    IDataProvider<WindowDataTypes>;
+}
 declare module 'shared/utils/project-settings-document-combiner' {
   import { ProjectSettingNames, ProjectSettingTypes } from 'papi-shared-types';
   import {
@@ -6623,7 +6940,7 @@ declare module 'shared/services/project-settings.service-model' {
      * @param validator Function to call to validate the new setting value
      * @returns Unsubscriber that should be called whenever the providing extension is deactivated
      */
-    registerValidator: <ProjectSettingName extends keyof ProjectSettingTypes>(
+    registerValidator: <ProjectSettingName extends ProjectSettingNames>(
       key: ProjectSettingName,
       validator: ProjectSettingValidator<ProjectSettingName>,
     ) => Promise<UnsubscriberAsync>;
@@ -6788,6 +7105,7 @@ declare module '@papi/core' {
   export type { AppInfo } from 'shared/services/app.service-model';
   export type { SettingValidator } from 'shared/services/settings.service-model';
   export type { ScrollGroupScrRef } from 'shared/services/scroll-group.service-model';
+  export type { FocusSubject } from 'shared/services/window.service-model';
   export type {
     GetWebViewOptions,
     OpenWebViewOptions,
@@ -7149,6 +7467,10 @@ declare module 'shared/services/settings.service' {
   import { ISettingsService } from 'shared/services/settings.service-model';
   export const settingsService: ISettingsService;
   export default settingsService;
+}
+declare module 'shared/services/window.service' {
+  import { IWindowService } from 'shared/services/window.service-model';
+  export const windowService: IWindowService;
 }
 declare module 'shared/services/theme.service-model' {
   import {
@@ -7594,9 +7916,10 @@ declare module '@papi/backend' {
   import { IDatabaseService } from 'shared/services/database.service-model';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ILocalizationService } from 'shared/services/localization.service-model';
-  import { MinimalNetworkObjectService } from 'shared/services/network-object.service';
+  import { BackendNetworkObjectService } from 'shared/services/network-object.service';
   import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
+  import { IWindowService } from 'shared/services/window.service-model';
   import { IThemeService } from 'shared/services/theme.service-model';
   import { IProjectSettingsService } from 'shared/services/project-settings.service-model';
   import { WebViewFactory as PapiWebViewFactory } from 'shared/models/web-view-factory.model';
@@ -7758,7 +8081,7 @@ declare module '@papi/backend' {
      * event handler will be called. After an object is disposed, calls to its functions will no longer
      * be proxied to the original object.
      */
-    networkObjects: MinimalNetworkObjectService;
+    networkObjects: BackendNetworkObjectService;
     /**
      *
      * Provides functions related to the set of available network objects
@@ -7853,6 +8176,11 @@ declare module '@papi/backend' {
      * Service that sends notifications to users in the UI
      */
     notifications: INotificationService;
+    /**
+     *
+     * Service that allows to interact with the main application window
+     */
+    window: IWindowService;
   };
   export default papi;
   /**
@@ -8011,7 +8339,7 @@ declare module '@papi/backend' {
    * event handler will be called. After an object is disposed, calls to its functions will no longer
    * be proxied to the original object.
    */
-  export const networkObjects: MinimalNetworkObjectService;
+  export const networkObjects: BackendNetworkObjectService;
   /**
    *
    * Provides functions related to the set of available network objects
@@ -8106,6 +8434,11 @@ declare module '@papi/backend' {
    * Service that sends notifications to users in the UI
    */
   export const notifications: INotificationService;
+  /**
+   *
+   * Service that allows to interact with the main application window
+   */
+  export const window: IWindowService;
 }
 declare module 'extension-host/extension-types/extension.interface' {
   import { UnsubscriberAsync } from 'platform-bible-utils';
@@ -8127,61 +8460,6 @@ declare module 'extension-host/extension-types/extension.interface' {
      */
     deactivate?: UnsubscriberAsync;
   }
-}
-declare module 'extension-host/extension-types/extension-manifest.model' {
-  import { ElevatedPrivilegeNames } from 'shared/models/elevated-privileges.model';
-  /** Information about an extension provided by the extension developer. */
-  export type ExtensionManifest = {
-    /** Name of the extension */
-    name: string;
-    /**
-     * Extension version - expected to be [semver](https://semver.org/) like `"0.1.3"`.
-     *
-     * Note: semver may become a hard requirement in the future, so we recommend using it now.
-     */
-    version: string;
-    /**
-     * Path to the JavaScript file to run in the extension host. Relative to the extension's root
-     * folder.
-     *
-     * Must be specified. Can be an empty string if the extension does not have any JavaScript to run.
-     */
-    main: string;
-    /** List of special permissions required by the extension to work as intended */
-    elevatedPrivileges: `${ElevatedPrivilegeNames}`[];
-    /**
-     * Path to the TypeScript type declaration file that describes this extension and its interactions
-     * on the PAPI. Relative to the extension's root folder.
-     *
-     * If not provided, Platform.Bible will look in the following locations:
-     *
-     * 1. `<extension-name>.d.ts` (kebab-case version of the extension name)
-     * 2. `<extension-name><other_stuff>.d.ts` (kebab-case version of the extension name)
-     * 3. `index.d.ts`
-     *
-     * See [Extension Anatomy - Type Declaration
-     * Files](https://github.com/paranext/paranext-extension-template/wiki/Extension-Anatomy#type-declaration-files-dts)
-     * for more information about extension type declaration files.
-     */
-    types?: string;
-    /** Path to the JSON file that defines the menu items this extension is adding. */
-    menus?: string;
-    /** Path to the JSON file that defines the settings this extension is adding. */
-    settings?: string;
-    /** Path to the JSON file that defines the project settings this extension is adding. */
-    projectSettings?: string;
-    /** Path to the JSON file that defines the localized strings this extension is adding. */
-    localizedStrings?: string;
-    /** Path to the JSON file that defines the themes this extension is adding. */
-    themes?: string;
-    /**
-     * List of events that occur that should cause this extension to be activated. Not yet
-     * implemented.
-     */
-    activationEvents: string[];
-    /** Id of publisher who published this extension on the extension marketplace */
-    publisher?: string;
-  };
 }
 declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.util' {
   import { NetworkObject } from 'shared/models/network-object.model';
@@ -8208,7 +8486,7 @@ declare module 'renderer/hooks/hook-generators/create-use-network-object-hook.ut
   export default createUseNetworkObjectHook;
 }
 declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
-  import { DataProviders } from 'papi-shared-types';
+  import { DataProviderNames, DataProviders } from 'papi-shared-types';
   /**
    * Gets a data provider with specified provider name
    *
@@ -8219,7 +8497,7 @@ declare module 'renderer/hooks/papi-hooks/use-data-provider.hook' {
    * @returns Undefined if the data provider has not been retrieved, data provider if it has been
    *   retrieved and is not disposed, and undefined again if the data provider is disposed
    */
-  export const useDataProvider: <DataProviderName extends keyof DataProviders>(
+  export const useDataProvider: <DataProviderName extends DataProviderNames>(
     dataProviderSource: DataProviderName | DataProviders[DataProviderName] | undefined,
   ) => DataProviders[DataProviderName] | undefined;
   export default useDataProvider;
@@ -8476,7 +8754,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
     DataProviderUpdateInstructions,
   } from 'shared/models/data-provider.model';
   import { SettingDataTypes } from 'shared/services/settings.service-model';
-  import { SettingTypes } from 'papi-shared-types';
+  import { SettingNames, SettingTypes } from 'papi-shared-types';
   /**
    * Gets, sets and resets a setting on the PAPI. Also notifies subscribers when the setting changes
    * and gets updated when the setting is changed by others.
@@ -8502,7 +8780,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  export const useSetting: <SettingName extends keyof SettingTypes>(
+  export const useSetting: <SettingName extends SettingNames>(
     key: SettingName,
     defaultState: SettingTypes[SettingName],
     subscriberOptions?: DataProviderSubscriberOptions,
@@ -8517,7 +8795,7 @@ declare module 'renderer/hooks/papi-hooks/use-setting.hook' {
   export default useSetting;
 }
 declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
-  import { ProjectDataProviderInterfaces } from 'papi-shared-types';
+  import { ProjectDataProviderInterfaces, ProjectInterfaces } from 'papi-shared-types';
   /**
    * Gets a project data provider with specified provider name
    *
@@ -8535,9 +8813,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-data-provider.hook' {
    *   Data Provider if it has been retrieved and is not disposed, and undefined again if the Project
    *   Data Provider is disposed
    */
-  export const useProjectDataProvider: <
-    ProjectInterface extends keyof ProjectDataProviderInterfaces,
-  >(
+  export const useProjectDataProvider: <ProjectInterface extends ProjectInterfaces>(
     projectInterface: ProjectInterface,
     projectDataProviderSource: string | ProjectDataProviderInterfaces[ProjectInterface] | undefined,
     pdpFactoryId?: string,
@@ -8675,7 +8951,11 @@ declare module 'renderer/hooks/papi-hooks/use-project-data.hook' {
 declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
   import { PlatformError } from 'platform-bible-utils';
   import { DataProviderSubscriberOptions } from 'shared/models/data-provider.model';
-  import { IBaseProjectDataProvider, ProjectSettingTypes } from 'papi-shared-types';
+  import {
+    IBaseProjectDataProvider,
+    ProjectSettingNames,
+    ProjectSettingTypes,
+  } from 'papi-shared-types';
   /**
    * Gets, sets and resets a project setting on the papi for a specified project. Also notifies
    * subscribers when the project setting changes and gets updated when the project setting is changed
@@ -8716,7 +8996,7 @@ declare module 'renderer/hooks/papi-hooks/use-project-setting.hook' {
    * @throws When subscription callback function is called with an update that has an unexpected
    *   message type
    */
-  export const useProjectSetting: <ProjectSettingName extends keyof ProjectSettingTypes>(
+  export const useProjectSetting: <ProjectSettingName extends ProjectSettingNames>(
     projectDataProviderSource: string | IBaseProjectDataProvider<any> | undefined,
     key: ProjectSettingName,
     defaultValue: ProjectSettingTypes[ProjectSettingName],
@@ -8799,7 +9079,7 @@ declare module 'renderer/hooks/papi-hooks/use-localized-strings-hook' {
 declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
   import { NetworkObject } from 'shared/models/network-object.model';
   import { WebViewId } from 'shared/models/web-view.model';
-  import { WebViewControllers } from 'papi-shared-types';
+  import { WebViewControllerTypes, WebViewControllers } from 'papi-shared-types';
   /**
    * Gets a Web View Controller with specified provider name
    *
@@ -8817,7 +9097,7 @@ declare module 'renderer/hooks/papi-hooks/use-web-view-controller.hook' {
    *   Controller if it has been retrieved and is not disposed, and undefined again if the Web View
    *   Controller is disposed
    */
-  export const useWebViewController: <WebViewType extends keyof WebViewControllers>(
+  export const useWebViewController: <WebViewType extends WebViewControllerTypes>(
     webViewType: WebViewType,
     webViewId: WebViewId | NetworkObject<WebViewControllers[WebViewType]> | undefined,
   ) => NetworkObject<WebViewControllers[WebViewType]> | undefined;
@@ -9089,9 +9369,12 @@ declare module '@papi/frontend' {
   import { PapiFrontendProjectDataProviderService } from 'shared/services/project-data-provider.service';
   import { IScrollGroupService } from 'shared/services/scroll-group.service-model';
   import { ISettingsService } from 'shared/services/settings.service-model';
+  import { IWindowService } from 'shared/services/window.service-model';
   import { IThemeServiceLocal } from 'shared/services/theme.service-model';
   import { WebViewServiceType } from 'shared/services/web-view.service-model';
   import { PapiRendererXMLHttpRequest } from 'renderer/services/renderer-xml-http-request.service';
+  import { FrontendNetworkObjectService } from 'shared/services/network-object.service';
+  import { NetworkObjectStatusServiceType } from 'shared/models/network-object-status.service-model';
   const papi: {
     /** This is just an alias for internet.fetch */
     fetch: typeof globalThis.fetch;
@@ -9139,6 +9422,40 @@ declare module '@papi/frontend' {
      * Service that provides a way to send and receive network events
      */
     network: PapiNetworkService;
+    /**
+     *
+     * Network objects are distributed objects within PAPI for TS/JS objects. @see
+     * https://en.wikipedia.org/wiki/Distributed_object
+     *
+     * Objects registered via {@link networkObjectService.set} are retrievable using
+     * {@link networkObjectService.get}.
+     *
+     * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+     * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+     * the registered object are proxied except for constructors, `dispose`, and functions starting with
+     * `on` since those should be events (which are not intended to be proxied) based on our naming
+     * convention. If you don't want a function to be proxied, don't make it a property of the
+     * registered object.
+     *
+     * Functions on a network object will be called asynchronously by other processes regardless of
+     * whether the functions are synchronous or asynchronous, so it is best to make them all
+     * asynchronous. All shared functions' arguments and return values must be serializable to be called
+     * across processes.
+     *
+     * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+     * of that service, and only that service, to call `dispose` on that object when it is no longer
+     * intended to be shared with other services.
+     *
+     * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+     * event handler will be called. After an object is disposed, calls to its functions will no longer
+     * be proxied to the original object.
+     */
+    networkObjects: FrontendNetworkObjectService;
+    /**
+     *
+     * Provides functions related to the set of available network objects
+     */
+    networkObjectStatus: NetworkObjectStatusServiceType;
     /**
      *
      * All extensions and services should use this logger to provide a unified output of logs
@@ -9205,6 +9522,11 @@ declare module '@papi/frontend' {
      * Service that sends notifications to users in the UI
      */
     notifications: INotificationService;
+    /**
+     *
+     * Service that allows to interact with the main application window
+     */
+    window: IWindowService;
   };
   export default papi;
   /** This is just an alias for internet.fetch */
@@ -9253,6 +9575,40 @@ declare module '@papi/frontend' {
    * Service that provides a way to send and receive network events
    */
   export const network: PapiNetworkService;
+  /**
+   *
+   * Network objects are distributed objects within PAPI for TS/JS objects. @see
+   * https://en.wikipedia.org/wiki/Distributed_object
+   *
+   * Objects registered via {@link networkObjectService.set} are retrievable using
+   * {@link networkObjectService.get}.
+   *
+   * Function calls made on network objects retrieved via {@link networkObjectService.get} are proxied
+   * and sent to the original objects registered via {@link networkObjectService.set}. All functions on
+   * the registered object are proxied except for constructors, `dispose`, and functions starting with
+   * `on` since those should be events (which are not intended to be proxied) based on our naming
+   * convention. If you don't want a function to be proxied, don't make it a property of the
+   * registered object.
+   *
+   * Functions on a network object will be called asynchronously by other processes regardless of
+   * whether the functions are synchronous or asynchronous, so it is best to make them all
+   * asynchronous. All shared functions' arguments and return values must be serializable to be called
+   * across processes.
+   *
+   * When a service registers an object via {@link networkObjectService.set}, it is the responsibility
+   * of that service, and only that service, to call `dispose` on that object when it is no longer
+   * intended to be shared with other services.
+   *
+   * When an object is disposed by calling `dispose`, all functions registered with the `onDidDispose`
+   * event handler will be called. After an object is disposed, calls to its functions will no longer
+   * be proxied to the original object.
+   */
+  export const networkObjects: FrontendNetworkObjectService;
+  /**
+   *
+   * Provides functions related to the set of available network objects
+   */
+  export const networkObjectStatus: NetworkObjectStatusServiceType;
   /**
    *
    * All extensions and services should use this logger to provide a unified output of logs
@@ -9319,5 +9675,10 @@ declare module '@papi/frontend' {
    * Service that sends notifications to users in the UI
    */
   export const notifications: INotificationService;
+  /**
+   *
+   * Service that allows to interact with the main application window
+   */
+  export const window: IWindowService;
   export type Papi = typeof papi;
 }

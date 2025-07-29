@@ -27,9 +27,24 @@ const localizedStrings = {
   '%scripture_section_extra_short%': 'Extra',
 };
 
+const dutchBookLocalizations = new Map<string, { localizedId: string; localizedName: string }>([
+  ['GEN', { localizedId: 'GEN', localizedName: 'Genesis' }],
+  ['NUM', { localizedId: 'NUM', localizedName: 'Numeri' }],
+  ['DEU', { localizedId: 'DEU', localizedName: 'Deuteronomium' }],
+  ['JOS', { localizedId: 'JOZ', localizedName: 'Jozua' }],
+  ['PSA', { localizedId: 'PSA', localizedName: 'Psalmen' }],
+  ['PRO', { localizedId: 'SPR', localizedName: 'Spreuken' }],
+  ['DAN', { localizedId: 'DAN', localizedName: 'Daniël' }],
+  ['ZEC', { localizedId: 'ZAC', localizedName: 'Zacharia' }],
+  ['MAT', { localizedId: 'MAT', localizedName: 'Mattheüs' }],
+  ['MRK', { localizedId: 'MRK', localizedName: 'Markus' }],
+  ['LUK', { localizedId: 'LUK', localizedName: 'Lukas' }],
+  ['JHN', { localizedId: 'JOH', localizedName: 'Johannes' }],
+  ['ACT', { localizedId: 'HAN', localizedName: 'Handelingen' }],
+]);
+
 export function ScopeSelectorExample() {
-  const [searchScope1, setSearchScope1] = useState<Scope>('book');
-  const [searchScope2, setSearchScope2] = useState<Scope>('selectedBooks');
+  const [searchScope, setSearchScope] = useState<Scope>('selectedBooks');
   const [selectedBooks, setSelectedBooks] = useState<string[]>([
     'GEN',
     'PSA',
@@ -48,23 +63,14 @@ export function ScopeSelectorExample() {
   return (
     <div className="tw-flex tw-flex-col tw-gap-8">
       <ScopeSelector
-        availableBookInfo="100111000000000000110000001000000000010111111111111111111111111111000000000000000000000000000000000000000000100000000000000"
+        availableBookInfo="100111000000000000110000001000000000010111111111111111111111111111000000000000000000111000000000000000000000000100000001000"
         availableScopes={['selectedText', 'chapter', 'book', 'selectedBooks']}
-        scope={searchScope1}
-        onScopeChange={setSearchScope1}
+        scope={searchScope}
+        onScopeChange={setSearchScope}
         selectedBookIds={selectedBooks}
         onSelectedBookIdsChange={setSelectedBooks}
         localizedStrings={localizedStrings}
-      />
-
-      <ScopeSelector
-        availableBookInfo="100111000000000000110000001000000000010111111111111111111111111111000000000000000000111000000000000000000000000000000000000"
-        availableScopes={['selectedText', 'verse', 'book', 'selectedBooks']}
-        scope={searchScope2}
-        onScopeChange={setSearchScope2}
-        selectedBookIds={selectedBooks}
-        onSelectedBookIdsChange={setSelectedBooks}
-        localizedStrings={localizedStrings}
+        localizedBookNames={dutchBookLocalizations}
       />
     </div>
   );

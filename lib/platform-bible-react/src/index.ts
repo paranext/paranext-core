@@ -16,25 +16,16 @@ export type {
   SortDirection,
   TableContents,
 } from './components/advanced/data-table/data-table.component';
-export { default as InstallButton } from './components/advanced/extension-marketplace/buttons/install-button.component';
-export { default as EnableButton } from './components/advanced/extension-marketplace/buttons/enable-button.component';
-export { default as DisableButton } from './components/advanced/extension-marketplace/buttons/disable-button.component';
-export { default as UpdateButton } from './components/advanced/extension-marketplace/buttons/update-button.component';
 export { default as MarkdownRenderer } from './components/advanced/extension-marketplace/markdown-renderer.component';
+export { ErrorPopover } from './components/advanced/error-popover.component';
 export {
   default as FilterDropdown,
   DropdownMenuItemType,
   type DropdownItem,
   type DropdownGroup,
 } from './components/advanced/extension-marketplace/filter-dropdown.component';
-export { default as FilterButton } from './components/advanced/extension-marketplace/buttons/filter-button.component';
-export { default as NoExtensionsFound } from './components/advanced/extension-marketplace/no-extensions-found.component';
-export { default as MoreInfo } from './components/advanced/extension-marketplace/more-info.component';
-export {
-  default as VersionHistory,
-  type VersionInformation,
-  type VersionHistoryType,
-} from './components/advanced/extension-marketplace/version-history.component';
+export { MoreInfo } from './components/advanced/extension-marketplace/more-info.component';
+export type { VersionHistoryType } from './components/advanced/extension-marketplace/version-history.component';
 export { default as Footer } from './components/advanced/extension-marketplace/footer.component';
 
 export { default as Filter } from './components/advanced/filter.component';
@@ -118,6 +109,9 @@ export type {
   ComboBoxOption,
 } from './components/basics/combo-box.component';
 
+export { ErrorDump } from './components/basics/error-dump.component';
+export { ERROR_DUMP_STRING_KEYS } from './components/basics/error-dump.component';
+export type { ErrorDumpLocalizedStrings } from './components/basics/error-dump.component';
 export { default as SearchBar } from './components/basics/search-bar.component';
 export type { SearchBarProps } from './components/basics/search-bar.component';
 export { default as Spinner } from './components/basics/spinner.component';
@@ -146,14 +140,18 @@ export {
   CommandItem,
   CommandList,
 } from './components/shadcn-ui/command';
+export * from './components/shadcn-ui/drawer';
 export * from './components/shadcn-ui/dropdown-menu';
 export { Input } from './components/shadcn-ui/input';
 export { Label } from './components/shadcn-ui/label';
 export * from './components/shadcn-ui/popover';
+export { Progress } from './components/shadcn-ui/progress';
 export { RadioGroup, RadioGroupItem } from './components/shadcn-ui/radio-group';
 export * from './components/shadcn-ui/select';
 export { Separator } from './components/shadcn-ui/separator';
+export * from './components/shadcn-ui/sidebar';
 export * from './components/shadcn-ui/sonner';
+export * from './components/shadcn-ui/skeleton';
 export { Slider } from './components/shadcn-ui/slider';
 export { Switch } from './components/shadcn-ui/switch';
 export * from './components/shadcn-ui/table';
@@ -164,6 +162,7 @@ export {
   VerticalTabsContent,
   VerticalTabsTrigger,
 } from './components/basics/tabs-vertical';
+export { Textarea } from './components/shadcn-ui/textarea';
 export { ToggleGroup, ToggleGroupItem } from './components/shadcn-ui/toggle-group';
 export {
   Tooltip,
@@ -178,6 +177,11 @@ export { default as useEvent } from './hooks/use-event.hook';
 export { default as useEventAsync } from './hooks/use-event-async.hook';
 export { default as usePromise } from './hooks/use-promise.hook';
 export type { UsePromiseOptions } from './hooks/use-promise.hook';
+export {
+  useListbox,
+  type UseListboxProps,
+  type ListboxOption,
+} from './hooks/listbox-keyboard-navigation.hook';
 
 // Utils
 export { cn } from './utils/shadcn-ui.util';
