@@ -378,7 +378,7 @@ export function Home({
           <Spinner />
         </CardContent>
       ) : (
-        <CardContent className="tw-flex-grow tw-overflow-auto tw-overflow-x-hidden tw-min-h-32">
+        <CardContent className="tw-flex-grow tw-overflow-auto tw-min-h-32">
           <div className="tw-flex tw-flex-col tw-gap-4">
             {!localProjectsInfo ? (
               <div className="tw-flex-grow tw-h-full tw-border tw-border-muted tw-rounded-lg tw-p-6 tw-text-center tw-flex tw-flex-col tw-items-center tw-justify-center tw-gap-1">
@@ -440,8 +440,7 @@ export function Home({
                           onDoubleClick={() => onOpenProject(project.projectId, project.isEditable)}
                           key={project.projectId}
                         >
-                          {/* setting a max-width on any column makes the columns evenly distribute */}
-                          <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4 tw-max-w-0">
+                          <TableCell className="tw-ms-4 tw-flex tw-items-center tw-gap-4">
                             {project.isEditable ? (
                               <ScrollText
                                 className="tw-pr-0"
@@ -457,14 +456,14 @@ export function Home({
                             )}
                             <div className="tw-py-4 tw-whitespace-nowrap">{project.name}</div>
                           </TableCell>
-                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
+                          <TableCell className="tw-hidden md:tw-table-cell tw-font-medium tw-break-all">
                             {project.fullName}
                           </TableCell>
-                          <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
+                          <TableCell className="tw-hidden sm:tw-table-cell">
                             {project.language}
                           </TableCell>
                           {filteredAndSortedProjects.some((proj) => proj.isSendReceivable) && (
-                            <TableCell className="tw-hidden sm:tw-table-cell tw-text-ellipsis tw-overflow-hidden tw-whitespace-nowrap">
+                            <TableCell className="tw-hidden sm:tw-table-cell">
                               {project.lastSendReceiveDate &&
                                 formatTimeSpan(
                                   relativeTimeFormatter,
