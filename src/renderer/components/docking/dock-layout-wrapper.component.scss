@@ -117,6 +117,7 @@
   background: vars.$color--inactive-tab;
   color: vars.$color--text;
   flex: 1 0 auto;
+  max-width: fit-content;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
