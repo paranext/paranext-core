@@ -174,59 +174,56 @@ export const inventoryStatusColumn = (
       const status: Status = row.getValue('status');
       const item: string = row.getValue('item');
       return (
-        <div className="tw-flex tw-justify-center">
-          <ToggleGroup value={status} variant="outline" type="single">
-            <ToggleGroupItem
-              onClick={(event) => {
-                event.stopPropagation();
-                statusChangeHandler(
-                  [item],
-                  'approved',
-                  approvedItems,
-                  onApprovedItemsChange,
-                  unapprovedItems,
-                  onUnapprovedItemsChange,
-                );
-              }}
-              value="approved"
-            >
-              <CircleCheckIcon />
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              onClick={(event) => {
-                event.stopPropagation();
-                statusChangeHandler(
-                  [item],
-                  'unapproved',
-                  approvedItems,
-                  onApprovedItemsChange,
-                  unapprovedItems,
-                  onUnapprovedItemsChange,
-                );
-              }}
-              value="unapproved"
-            >
-              <CircleXIcon />
-            </ToggleGroupItem>
-            <ToggleGroupItem
-              onClick={(event) => {
-                event.stopPropagation();
-                statusChangeHandler(
-                  [item],
-                  'unknown',
-                  approvedItems,
-                  onApprovedItemsChange,
-                  unapprovedItems,
-                  onUnapprovedItemsChange,
-                );
-              }}
-              value="unknown"
-            >
-              <CircleHelpIcon />
-            </ToggleGroupItem>
-          </ToggleGroup>
-          <Button variant="ghost">Hello World</Button>
-        </div>
+        <ToggleGroup value={status} variant="outline" type="single">
+          <ToggleGroupItem
+            onClick={(event) => {
+              event.stopPropagation();
+              statusChangeHandler(
+                [item],
+                'approved',
+                approvedItems,
+                onApprovedItemsChange,
+                unapprovedItems,
+                onUnapprovedItemsChange,
+              );
+            }}
+            value="approved"
+          >
+            <CircleCheckIcon />
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            onClick={(event) => {
+              event.stopPropagation();
+              statusChangeHandler(
+                [item],
+                'unapproved',
+                approvedItems,
+                onApprovedItemsChange,
+                unapprovedItems,
+                onUnapprovedItemsChange,
+              );
+            }}
+            value="unapproved"
+          >
+            <CircleXIcon />
+          </ToggleGroupItem>
+          <ToggleGroupItem
+            onClick={(event) => {
+              event.stopPropagation();
+              statusChangeHandler(
+                [item],
+                'unknown',
+                approvedItems,
+                onApprovedItemsChange,
+                unapprovedItems,
+                onUnapprovedItemsChange,
+              );
+            }}
+            value="unknown"
+          >
+            <CircleHelpIcon />
+          </ToggleGroupItem>
+        </ToggleGroup>
       );
     },
   };
