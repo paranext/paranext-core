@@ -11,4 +11,3 @@ docs
 # Formats not supported by Prettier
 ## MDXv2+ (used by Storybook)
 *.mdx
-
