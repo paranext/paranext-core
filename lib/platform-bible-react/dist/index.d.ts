@@ -351,8 +351,8 @@ interface MoreInfoProps {
  * number of downloads, languages, and links to the website and support
  *
  * @param MoreInfoProps
- * @returns {JSX.Element} - Returns the more info component that displays the category, number of
- *   downloads, languages, and links to the website and support
+ * @returns The more info component that displays the category, number of downloads, languages, and
+ *   links to the website and support
  */
 export declare function MoreInfo({ id, category, downloads, languages, moreInfoUrl, handleMoreInfoLinkClick, supportUrl, handleSupportLinkClick, }: MoreInfoProps): import("react/jsx-runtime").JSX.Element;
 type VersionInformation = {
@@ -858,7 +858,7 @@ export type ScrollGroupSelectorProps = {
 	 * ```
 	 */
 	localizedStrings?: LanguageStrings;
-	/** Size of the scroll group dropdown button. Defaults to 'default' */
+	/** Size of the scroll group dropdown button. Defaults to 'sm' */
 	size?: "default" | "sm" | "lg" | "icon";
 	/** Additional css classes to help with unique styling */
 	className?: string;
