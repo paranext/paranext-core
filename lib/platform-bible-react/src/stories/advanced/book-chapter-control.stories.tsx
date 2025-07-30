@@ -538,33 +538,118 @@ export const TestInitialStateWithMatthew: Story = {
 export const TestKeyboardChapterNavigation: Story = {
   args: matthewArgs,
   play: async ({ canvas, userEvent, step }) => {
-    await step('Open dropdown with click', async () => {
+    await step('Initial dropdown navigation', async () => {
       const input = canvas.getByRole('textbox');
       await userEvent.click(input);
       expect(input).toHaveFocus();
-
       await expectDropdownToBeOpenAndVisible();
-    });
 
-    await step('Navigate with keyboard', async () => {
       const dropdownContent = getDropdown();
       const matthew = await getBookMenuItem(dropdownContent, 'Matthew');
 
-      // Use arrow keys to navigate
+      // Initial down arrow should focus Matthew (expanded book)
       await userEvent.keyboard('{ArrowDown}');
       expect(matthew).toHaveFocus();
       expect(await getChapter(matthew, 1)).toHaveAttribute('aria-current', 'true');
 
+      // Arrow up should return to input
+      await userEvent.keyboard('{ArrowUp}');
+      expect(input).toHaveFocus();
+      await expectDropdownToBeOpenAndVisible();
+    });
+
+    await step('Chapter navigation within expanded book', async () => {
+      const dropdownContent = getDropdown();
+      const matthew = await getBookMenuItem(dropdownContent, 'Matthew');
+
+      // Navigate to chapter area
       await userEvent.keyboard('{ArrowDown}');
-      expect(await getChapter(matthew, 1)).not.toHaveAttribute('aria-current', 'true');
+      expect(matthew).toHaveFocus();
+
+      // Test left/right navigation
+      await userEvent.keyboard('{ArrowRight}');
+      expect(await getChapter(matthew, 2)).toHaveAttribute('aria-current', 'true');
+
+      await userEvent.keyboard('{ArrowLeft}');
+      expect(await getChapter(matthew, 1)).toHaveAttribute('aria-current', 'true');
+
+      // Test up/down navigation (chapters are in rows of 6)
+      await userEvent.keyboard('{ArrowDown}');
       expect(await getChapter(matthew, 7)).toHaveAttribute('aria-current', 'true');
 
-      // Press Enter to select
-      await userEvent.keyboard('{Enter}');
+      await userEvent.keyboard('{ArrowUp}');
+      expect(await getChapter(matthew, 1)).toHaveAttribute('aria-current', 'true');
+    });
 
-      // Verify something was selected (dropdown should close)
+    await step('Single match navigation', async () => {
       const input = canvas.getByRole('textbox');
-      expectClosedDropdownStateWithCleanInput(input);
+
+      // Type to get single match
+      await userEvent.keyboard('mat');
+      await expectCheckmarkIconToExist(input);
+      await expectResultsVisibleAndToBe(['MAT 1:1', 'Matthew']);
+
+      // Down arrow should focus preview
+      await userEvent.keyboard('{ArrowDown}');
+      const preview = screen.getByText('MAT 1:1');
+      expect(preview).toHaveFocus();
+
+      // Down arrow should focus Matthew
+      await userEvent.keyboard('{ArrowDown}');
+      const matthew = await getBookMenuItem(getDropdown(), 'Matthew');
+      expect(matthew).toHaveFocus();
+
+      // Up arrow should return to preview
+      await userEvent.keyboard('{ArrowUp}');
+      expect(preview).toHaveFocus();
+
+      // Up arrow should return to input
+      await userEvent.keyboard('{ArrowUp}');
+      expect(input).toHaveFocus();
+    });
+
+    await step('Multiple matches navigation', async () => {
+      // Type to get multiple matches
+      await userEvent.keyboard('john');
+      await expectResultsVisibleAndToBe(['John', '1 John', '2 John', '3 John']);
+
+      // Navigate through matches
+      await userEvent.keyboard('{ArrowDown}');
+      expect(screen.getByText('John')).toHaveFocus();
+
+      await userEvent.keyboard('{ArrowDown}');
+      expect(screen.getByText('1 John')).toHaveFocus();
+
+      // Test navigation to end of list
+      await userEvent.keyboard('{ArrowDown}');
+      await userEvent.keyboard('{ArrowDown}');
+      await userEvent.keyboard('{ArrowDown}');
+      expect(screen.getByText('3 John')).toHaveFocus(); // Should stay on last item
+    });
+
+    await step('Test closing expanded chapters', async () => {
+      const input = canvas.getByRole('textbox');
+      await userEvent.keyboard('{Control>}a{/Control}');
+      await userEvent.click(input);
+
+      const dropdownContent = getDropdown();
+      const matthew = await getBookMenuItem(dropdownContent, 'Matthew');
+
+      // Click Matthew to expand chapters
+      await userEvent.click(matthew);
+      expect(await getChapters(matthew)).toHaveLength(28);
+
+      // Click again to collapse
+      await userEvent.click(matthew);
+      expect(await getChapters(matthew)).toHaveLength(0);
+
+      // Navigate should still work
+      await userEvent.keyboard('{ArrowDown}');
+      expect(matthew).toHaveFocus();
+
+      // Expanding with Enter key
+      await userEvent.keyboard('{Enter}');
+      expect(await getChapters(matthew)).toHaveLength(28);
     });
   },
 };
@@ -655,41 +740,122 @@ export const TestCursorPositioning: Story = {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
     const input = canvas.getByRole('textbox') as HTMLInputElement;
 
-    // Click at the end of the text
     await userEvent.click(input);
-    await userEvent.type(input, '{End}');
-    const cursorAtEnd = input.selectionStart === input.value.length;
-    expect(cursorAtEnd).toBe(true);
+    expect(input).toHaveFocus();
 
-    // TODO: this is not a realistic test and so it passes, when in manually testing this may fail
+    // Use pointer events to simulate clicks at specific positions
+    // First, store the initial text and get its measurements
+    const text = input.value;
+    const textWidth = input.offsetWidth;
+    const charWidth = textWidth / text.length;
 
-    // Click in the middle of the text (we'll simulate this by setting the selection manually
-    // since userEvent.click() doesn't support position-specific clicks)
-    input.setSelectionRange(3, 3);
-    const cursorInMiddle = input.selectionStart === 3;
-    expect(cursorInMiddle).toBe(true);
+    // Click near the start (25% of the way in)
+    const startClick = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: input.getBoundingClientRect().left + charWidth * 2,
+    });
+    input.dispatchEvent(startClick);
+    expect(input.selectionStart).toBeLessThan(text.length / 2);
+
+    // Click near the middle
+    const middleClick = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: input.getBoundingClientRect().left + textWidth / 2,
+    });
+    input.dispatchEvent(middleClick);
+    expect(input.selectionStart).toBeGreaterThan(2);
+    expect(input.selectionStart).toBeLessThan(text.length - 2);
+
+    // Click near the end
+    const endClick = new MouseEvent('click', {
+      bubbles: true,
+      cancelable: true,
+      clientX: input.getBoundingClientRect().right - charWidth * 2,
+    });
+    input.dispatchEvent(endClick);
+    expect(input.selectionStart).toBeGreaterThan(text.length / 2);
+
+    // Verify the cursor can be moved with arrow keys from any position
+    await userEvent.keyboard('{ArrowLeft}');
+    const originalPos = input.selectionStart;
+    await userEvent.keyboard('{ArrowRight}');
+    expect(input.selectionStart).toBe((originalPos || 0) + 1);
   },
 };
 
 export const TestNoKeystrokeLoss: Story = {
   args: defaultArgs,
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, userEvent, step }) => {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
     const input = canvas.getByRole('textbox') as HTMLInputElement;
 
-    // Click to focus without opening dropdown
-    await userEvent.tab();
-    await userEvent.tab();
-    expect(input).toHaveFocus();
-    await expectDropdownToBeClosed();
+    await step('Test typing when dropdown is closed', async () => {
+      // Click to focus without opening dropdown
+      await userEvent.tab();
+      await userEvent.tab();
+      expect(input).toHaveFocus();
+      await expectDropdownToBeClosed();
 
-    // Type quickly
-    const text = 'mat';
-    await userEvent.keyboard(text);
+      // Type quickly a matching book name
+      const text = 'mat';
+      await userEvent.keyboard(text);
+      expect(input.value.toLowerCase()).toContain(text);
+      await expectDropdownToBeOpenAndVisible();
+    });
 
-    // Verify all keystrokes were captured
-    expect(input.value.toLowerCase()).toContain(text);
-    await expectDropdownToBeOpenAndVisible();
+    await step('Test typing non-matching text', async () => {
+      await userEvent.keyboard('xyz');
+      expect(input.value).toBe('xyz');
+      await expectDropdownToBeClosed();
+      await expectNoMatchesIconToExist(input);
+    });
+
+    await step('Test backspace usage', async () => {
+      await userEvent.keyboard('genesis');
+      expect(input.value.toLowerCase()).toBe('genesis');
+      await expectCheckmarkIconToExist(input);
+
+      // Delete three characters
+      await userEvent.keyboard('{Backspace}{Backspace}{Backspace}');
+      expect(input.value.toLowerCase()).toBe('gen');
+      await expectDropdownToBeOpenAndVisible();
+    });
+
+    await step('Test typing with dropdown already open', async () => {
+      await userEvent.click(input);
+      await expectDropdownToBeOpenAndVisible();
+      await userEvent.keyboard('john');
+      expect(input.value.toLowerCase()).toBe('john');
+      await expectNoIconToExist(input);
+      await expectResultsVisibleAndToBe(['John', '1 John', '2 John', '3 John']);
+    });
+
+    await step('Test opening dropdown by typing', async () => {
+      // Close dropdown first
+      await userEvent.keyboard('{Escape}');
+      await expectDropdownToBeClosed();
+
+      // Type single character to open dropdown
+      await userEvent.keyboard('m');
+      await expectDropdownToBeOpenAndVisible();
+      expect(input.value.toLowerCase()).toBe('m');
+
+      // Continue typing to filter
+      await userEvent.keyboard('at');
+      expect(input.value.toLowerCase()).toBe('mat');
+      await expectCheckmarkIconToExist(input);
+
+      await userEvent.keyboard('{Backspace}');
+      expect(input.value.toLowerCase()).toBe('ma');
+
+      await userEvent.keyboard('{Backspace}');
+      expect(input.value.toLowerCase()).toBe('m');
+
+      await userEvent.keyboard('{Backspace}');
+      expect(input.value.toLowerCase()).toBe('');
+    });
   },
 };
 
