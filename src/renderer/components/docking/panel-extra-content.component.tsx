@@ -1,5 +1,6 @@
 import { sendCommand } from '@shared/services/command.service';
 import { logger } from '@shared/services/logger.service';
+import { Plus } from 'lucide-react';
 import { Button } from 'platform-bible-react';
 import { PanelData } from 'rc-dock';
 import React from 'react';
