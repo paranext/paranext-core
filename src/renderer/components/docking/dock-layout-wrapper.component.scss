@@ -3,6 +3,7 @@
 .dock {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
+  container-type: size;
 }
 
 .dock-dropdown,
@@ -117,6 +118,7 @@
   background: vars.$color--inactive-tab;
   color: vars.$color--text;
   flex: 1 0 auto;
+  max-width: fit-content;
 }
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab.dock-tab-active {
@@ -130,9 +132,8 @@
 
 .dock-layout .dock-panel.dock-style-platform-bible .dock-tab > div {
   padding-inline-start: vars.$space--xs;
-  padding-inline-end: 26px;
-  padding-top: vars.$space--xs;
-  padding-bottom: vars.$space--xs;
+  padding-inline-end: clamp(2rem, 3rem, 10cqw);
+  padding-block: vars.$space--xs;
 }
 
 .dock-dropdown-menu-item .title {
