@@ -2,27 +2,14 @@
 
 // Base class for panel buttons with shared styles
 %panel-button-base {
-  height: 24px !important;
+  height: 24px;
   width: 32px;
-  margin: 4px 4px 4px 0;
-
-  background-color: transparent;
-  transition: background-color 0.5s ease;
 
   &:hover {
-    background-color: hsl(var(--muted-foreground)) !important;
+    background-color: hsl(var(--muted-foreground));
   }
 }
 
 .new-tab-button {
-  @extend %panel-button-base;
-  margin-left: -10px;
-}
-
-.maximize-button {
-  @extend %panel-button-base;
-}
-
-.close-tab-group-button {
   @extend %panel-button-base;
 }
