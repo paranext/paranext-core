@@ -82,10 +82,12 @@ globalThis.webViewComponent = function Dictionary({
       const matchesSearch =
         entry.lemma.toLowerCase().includes(search) ||
         entry.strongsCodes.some((code) => code.toLowerCase().includes(search)) ||
-        getFormatGlossesStringFromDictionaryEntrySenses(entry).toLowerCase().includes(search);
+        getFormatGlossesStringFromDictionaryEntrySenses(entry, scrRef)
+          .toLowerCase()
+          .includes(search);
       return matchesSearch;
     });
-  }, [entriesById, searchQuery, scope, scrRef.book, scrRef.chapterNum, scrRef.verseNum]);
+  }, [entriesById, searchQuery, scrRef, scope]);
 
   const onSelectOccurrence = useCallback(
     (scrRefOfOccurrence: SerializedVerseRef) => {
