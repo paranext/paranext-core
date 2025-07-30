@@ -414,7 +414,13 @@ export function BookChapterCombobox({
   return (
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} className={className}>
+        <Button
+          variant="outline"
+          role="combobox"
+          data-testId="bcv-btn"
+          aria-expanded={open}
+          className={className}
+        >
           {currentDisplayValue}
         </Button>
       </PopoverTrigger>
@@ -426,6 +432,7 @@ export function BookChapterCombobox({
               placeholder="Search books or type reference (e.g., John 3:16)..."
               value={inputValue}
               onValueChange={setInputValue}
+              data-testId="book-search"
             />
           ) : (
             <div className="tw-flex tw-items-center tw-border-b tw-px-3 tw-py-2">
