@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { formatScrRef, getChaptersForBook } from 'platform-bible-utils';
 import { ArrowLeft } from 'lucide-react';
@@ -59,7 +59,7 @@ type BookWithOptionalChapterAndVerse = Omit<SerializedVerseRef, 'chapterNum' | '
   Partial<Pick<SerializedVerseRef, 'chapterNum' | 'verseNum'>>;
 
 // View modes for the component
-type ViewMode = 'books' | 'chapters';
+type ViewMode = 'books' | 'chapters' | 'hybrid';
 
 /** Gets a bookId from given English name */
 function getBookIdFromEnglishName(bookName: string): string | undefined {
@@ -126,11 +126,44 @@ export function BookChapterCombobox({
           const matches = format.exec(query);
           if (matches) {
             const [book, chapter = undefined, verse = undefined] = matches.slice(1);
-            const englishName = getBookIdFromEnglishName(book);
-            const validBookId =
-              englishName ?? (Canon.isBookIdValid(book) ? book.toLocaleUpperCase() : undefined);
 
-            if (validBookId && availableBooks.includes(validBookId)) {
+            // Try multiple ways to find the book
+            let validBookId: string | undefined;
+
+            // 1. Try exact English name match
+            const exactEnglishName = getBookIdFromEnglishName(book);
+            if (exactEnglishName && availableBooks.includes(exactEnglishName)) {
+              validBookId = exactEnglishName;
+            }
+
+            // 2. Try direct book ID validation
+            if (!validBookId && Canon.isBookIdValid(book)) {
+              const upperBook = book.toLocaleUpperCase();
+              if (availableBooks.includes(upperBook)) {
+                validBookId = upperBook;
+              }
+            }
+
+            // 3. Try partial matching (for cases like "jh" -> "JHN")
+            if (!validBookId) {
+              const searchLower = book.toLowerCase();
+
+              // Find all books that could match this search term
+              const allPotentialMatches = availableBooks.filter((bookId) => {
+                const bookEnglishName = ALL_ENGLISH_BOOK_NAMES[bookId].toLowerCase();
+                return (
+                  bookEnglishName.includes(searchLower) ||
+                  bookId.toLowerCase().includes(searchLower)
+                );
+              });
+
+              // Only create a topMatch if exactly one book could match
+              if (allPotentialMatches.length === 1) {
+                [validBookId] = allPotentialMatches;
+              }
+            }
+
+            if (validBookId) {
               const chapterNum = chapter ? parseInt(chapter, 10) : undefined;
               if (chapterNum && chapterNum > fetchEndChapter(validBookId)) return undefined;
               const verseNum = verse ? parseInt(verse, 10) : undefined;
@@ -164,13 +197,8 @@ export function BookChapterCombobox({
     return grouped;
   }, [availableBooks]);
 
-  // Filter books based on search input (only when not showing top match)
+  // Filter books based on search input
   const filteredBooks = useMemo(() => {
-    // If we have a top match, don't show the filtered book list to reduce noise
-    if (topMatch) {
-      return { OT: [], NT: [], DC: [] };
-    }
-
     if (!inputValue.trim()) return booksByType;
 
     const searchLower = inputValue.toLowerCase();
@@ -185,7 +213,34 @@ export function BookChapterCombobox({
     });
 
     return filtered;
-  }, [booksByType, inputValue, topMatch]);
+  }, [booksByType, inputValue]);
+
+  // Detect if we should show hybrid view (single book match + chapters)
+  const shouldShowHybridView = useMemo(() => {
+    if (!inputValue.trim()) return false;
+
+    // If we have a topMatch, always show chapter selector (smart parsing found a single book)
+    if (topMatch) {
+      return true;
+    }
+
+    // If no topMatch, show hybrid view only if exactly one book matches the text search
+    const allFilteredBooks = [...filteredBooks.OT, ...filteredBooks.NT, ...filteredBooks.DC];
+    return allFilteredBooks.length === 1;
+  }, [inputValue, filteredBooks, topMatch]);
+
+  const hybridBookId = useMemo(() => {
+    if (!shouldShowHybridView) return undefined;
+
+    // If we have a topMatch, use that book
+    if (topMatch) {
+      return topMatch.book;
+    }
+
+    // Otherwise use the single filtered book
+    const allFilteredBooks = [...filteredBooks.OT, ...filteredBooks.NT, ...filteredBooks.DC];
+    return allFilteredBooks[0];
+  }, [shouldShowHybridView, filteredBooks, topMatch]);
 
   const handleBookSelect = useCallback(
     (bookId: string) => {
@@ -229,11 +284,58 @@ export function BookChapterCombobox({
     [handleSubmit, selectedBookForChapters],
   );
 
+  const handleHybridChapterSelect = useCallback(
+    (chapterNumber: number) => {
+      if (!hybridBookId) return;
+
+      handleSubmit({
+        book: hybridBookId,
+        chapterNum: chapterNumber,
+        verseNum: 1,
+      });
+      setOpen(false);
+      setInputValue('');
+    },
+    [handleSubmit, hybridBookId],
+  );
+
   const handleBackToBooks = useCallback(() => {
     setViewMode('books');
     setSelectedBookForChapters(undefined);
-    setInputValue('');
   }, []);
+
+  // Handle keyboard navigation in chapter view
+  const handleKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (viewMode === 'chapters' && event.key === 'Backspace') {
+        event.preventDefault();
+        event.stopPropagation();
+        handleBackToBooks();
+      }
+    },
+    [viewMode, handleBackToBooks],
+  );
+
+  // Reset view state when popover opens
+  const handleOpenChange = useCallback(
+    (newOpen: boolean) => {
+      // If we're closing from chapter view, go back to books instead
+      if (!newOpen && viewMode === 'chapters') {
+        handleBackToBooks();
+        return; // Don't actually close the popover
+      }
+
+      setOpen(newOpen);
+
+      if (newOpen) {
+        // Reset to book view when opening
+        setViewMode('books');
+        setSelectedBookForChapters(undefined);
+        setInputValue('');
+      }
+    },
+    [viewMode, handleBackToBooks],
+  );
 
   const handleTopMatchSelect = useCallback(() => {
     if (!topMatch) return;
@@ -262,6 +364,20 @@ export function BookChapterCombobox({
       selectedChapter: scrRef.book === selectedBookForChapters ? scrRef.chapterNum : 0,
     };
   }, [viewMode, selectedBookForChapters, scrRef.book, scrRef.chapterNum]);
+
+  // Calculate hybrid view chapter data
+  const hybridChapterData = useMemo(() => {
+    if (!shouldShowHybridView || !hybridBookId) return undefined;
+
+    const endChapter = fetchEndChapter(hybridBookId);
+    const bookName = ALL_ENGLISH_BOOK_NAMES[hybridBookId];
+
+    return {
+      endChapter,
+      bookName,
+      selectedChapter: scrRef.book === hybridBookId ? scrRef.chapterNum : 0,
+    };
+  }, [shouldShowHybridView, hybridBookId, scrRef.book, scrRef.chapterNum]);
 
   // Auto-scroll to currently selected book when dropdown opens in book view
   useLayoutEffect(() => {
@@ -296,13 +412,13 @@ export function BookChapterCombobox({
   }, [open, viewMode, inputValue, topMatch]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button variant="outline" role="combobox" aria-expanded={open} className={className}>
           {currentDisplayValue}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
+      <PopoverContent className="tw-w-[300px] tw-p-0" align="start" onKeyDown={handleKeyDown}>
         <Command>
           {/* Input for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
@@ -328,7 +444,7 @@ export function BookChapterCombobox({
           )}
 
           <CommandList ref={commandListRef}>
-            {viewMode === 'books' ? (
+            {viewMode === 'books' && (
               <>
                 <CommandEmpty>No books found.</CommandEmpty>
 
@@ -356,29 +472,74 @@ export function BookChapterCombobox({
                   </>
                 )}
 
-                {/* Book List - Only show when no top match */}
-                {Object.entries(filteredBooks).map(([type, books]) => {
-                  if (books.length === 0) return undefined;
+                {/* Chapter Selector - Show when we have a single book match (with or without topMatch) */}
+                {shouldShowHybridView && hybridBookId && hybridChapterData && (
+                  <>
+                    {!topMatch && (
+                      /* Only show the book match item if we don't already have a topMatch */
+                      <>
+                        <CommandGroup heading="Scripture Reference">
+                          <CommandItem
+                            key="hybrid-match"
+                            value={`hybrid-match-${hybridBookId}`}
+                            onSelect={() => handleBookSelect(hybridBookId)}
+                            className="tw-font-semibold tw-text-primary"
+                          >
+                            {formatScrRef({
+                              book: hybridBookId,
+                              chapterNum: 1,
+                              verseNum: 1,
+                            })}
+                            <span className="tw-ml-auto tw-text-xs tw-text-muted-foreground">
+                              Press Enter ↵
+                            </span>
+                          </CommandItem>
+                        </CommandGroup>
+                        <CommandSeparator />
+                      </>
+                    )}
 
-                  return (
-                    // eslint-disable-next-line no-type-assertion/no-type-assertion
-                    <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
-                      {books.map((bookId) => (
-                        <CommandItem
-                          key={bookId}
-                          value={bookId}
-                          onSelect={() => handleBookSelect(bookId)}
-                          ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
-                        >
-                          {ALL_ENGLISH_BOOK_NAMES[bookId]}
-                        </CommandItem>
-                      ))}
-                    </CommandGroup>
-                  );
-                })}
+                    <div className="tw-p-4">
+                      <div className="tw-mb-2 tw-text-sm tw-font-medium tw-text-muted-foreground">
+                        {hybridChapterData.bookName} - Select Chapter
+                      </div>
+                      <ChapterSelect
+                        handleSelectChapter={handleHybridChapterSelect}
+                        endChapter={hybridChapterData.endChapter}
+                        selectedChapter={hybridChapterData.selectedChapter}
+                        highlightedChapter={highlightedChapter}
+                        handleHighlightedChapter={setHighlightedChapter}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {/* Book List - Show when we have multiple book matches (not hybrid view) */}
+                {!shouldShowHybridView &&
+                  Object.entries(filteredBooks).map(([type, books]) => {
+                    if (books.length === 0) return undefined;
+
+                    return (
+                      // eslint-disable-next-line no-type-assertion/no-type-assertion
+                      <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
+                        {books.map((bookId) => (
+                          <CommandItem
+                            key={bookId}
+                            value={bookId}
+                            onSelect={() => handleBookSelect(bookId)}
+                            ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
+                          >
+                            {ALL_ENGLISH_BOOK_NAMES[bookId]}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    );
+                  })}
               </>
-            ) : (
-              /* Chapter View */
+            )}
+
+            {viewMode === 'chapters' && (
+              /* Regular Chapter View */
               <div className="tw-p-4">
                 {chapterViewData && (
                   <ChapterSelect
