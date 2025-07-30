@@ -13,7 +13,7 @@ import {
   CommandSeparator,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
-import { ChapterSelect } from '@/components/advanced/book-chapter-control/chapter-select.component';
+import { cn } from '@/utils/shadcn-ui.util';
 
 export type BookChapterComboboxProps = {
   /** The current scripture reference */
@@ -76,17 +76,25 @@ function fetchEndChapter(bookId: string) {
 
 /**
  * `BookChapterCombobox` is an alternative implementation of BookChapterControl using
- * Popover+Command instead of DropdownMenu. This should provide better control over focus behavior
- * and interaction patterns.
+ * Popover+Command instead of DropdownMenu. This provides better control over focus behavior and
+ * interaction patterns.
  *
  * Features implemented:
  *
  * - Smart parsing logic for "John 3:16" style input
  * - Book selection with automatic chapter view transition
- * - ChapterSelect component integration
+ * - Native Command keyboard navigation for chapter selection
+ * - Grid-based CommandItem chapter layout with built-in accessibility
+ * - Custom grid navigation: ↑↓ for rows, ←→ for columns in 6-column layout
  * - Back navigation between views
+ * - Home/End key support for input cursor movement
  *
- * TODO: Advanced keyboard navigation, topMatchChapters filtering, etc.
+ * Chapter selection uses CommandItems in a 6-column grid with intuitive keyboard navigation:
+ *
+ * - Arrow Up/Down: Move between rows (6 chapters up/down)
+ * - Arrow Left/Right: Move between columns (previous/next chapter)
+ * - Enter: Select chapter
+ * - Backspace: Return to book selection
  */
 export function BookChapterCombobox({
   scrRef,
@@ -100,7 +108,7 @@ export function BookChapterCombobox({
   const [selectedBookForChapters, setSelectedBookForChapters] = useState<string | undefined>(
     undefined,
   );
-  const [highlightedChapter, setHighlightedChapter] = useState<number>(1);
+  const [currentChapterFocus, setCurrentChapterFocus] = useState<number>(1);
 
   // Refs for scrolling to selected book
   // eslint-disable-next-line no-type-assertion/no-type-assertion
@@ -123,7 +131,7 @@ export function BookChapterCombobox({
         (result: BookWithOptionalChapterAndVerse | undefined, format) => {
           if (result) return result;
 
-          const matches = format.exec(query);
+          const matches = format.exec(query.trim());
           if (matches) {
             const [book, chapter = undefined, verse = undefined] = matches.slice(1);
 
@@ -261,10 +269,10 @@ export function BookChapterCombobox({
       // Book has multiple chapters - transition to chapter view
       setSelectedBookForChapters(bookId);
       setViewMode('chapters');
-      setHighlightedChapter(scrRef.book === bookId ? scrRef.chapterNum : 1);
       setInputValue(''); // Clear search when transitioning
+      setCurrentChapterFocus(1); // Reset chapter focus to first chapter
     },
-    [handleSubmit, scrRef.book, scrRef.chapterNum],
+    [handleSubmit],
   );
 
   const handleChapterSelect = useCallback(
@@ -304,17 +312,13 @@ export function BookChapterCombobox({
     setSelectedBookForChapters(undefined);
   }, []);
 
-  // Handle keyboard navigation in chapter view
-  const handleKeyDown = useCallback(
-    (event: KeyboardEvent<HTMLDivElement>) => {
-      if (viewMode === 'chapters' && event.key === 'Backspace') {
-        event.preventDefault();
-        event.stopPropagation();
-        handleBackToBooks();
-      }
-    },
-    [viewMode, handleBackToBooks],
-  );
+  // Handle keyboard navigation for CommandInput
+  const handleInputKeyDown = useCallback((event: KeyboardEvent<HTMLInputElement>) => {
+    // Allow Home and End keys to work normally for cursor movement
+    if (event.key === 'Home' || event.key === 'End') {
+      event.stopPropagation(); // Prevent Command component from handling these
+    }
+  }, []);
 
   // Reset view state when popover opens
   const handleOpenChange = useCallback(
@@ -332,6 +336,7 @@ export function BookChapterCombobox({
         setViewMode('books');
         setSelectedBookForChapters(undefined);
         setInputValue('');
+        setCurrentChapterFocus(1); // Reset chapter focus
       }
     },
     [viewMode, handleBackToBooks],
@@ -379,6 +384,116 @@ export function BookChapterCombobox({
     };
   }, [shouldShowHybridView, hybridBookId, scrRef.book, scrRef.chapterNum]);
 
+  // Custom grid navigation for chapter selection
+  const handleChapterKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      console.log('yo!');
+
+      // Handle backspace for going back to books
+      if (viewMode === 'chapters' && event.key === 'Backspace') {
+        event.preventDefault();
+        event.stopPropagation();
+        handleBackToBooks();
+        return;
+      }
+
+      // Handle Enter key to select current chapter
+      if ((viewMode === 'chapters' || shouldShowHybridView) && event.key === 'Enter') {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (viewMode === 'chapters') {
+          handleChapterSelect(currentChapterFocus);
+        } else if (shouldShowHybridView) {
+          handleHybridChapterSelect(currentChapterFocus);
+        }
+        return;
+      }
+
+      // Only handle arrow keys when in chapter selection mode
+      if (
+        !(viewMode === 'chapters' || shouldShowHybridView) ||
+        !['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
+      ) {
+        return; // Let other keys pass through normally
+      }
+
+      const currentData = chapterViewData || hybridChapterData;
+      if (!currentData) return;
+
+      // Prevent default arrow key behavior
+      event.preventDefault();
+      event.stopPropagation();
+
+      const { endChapter } = currentData;
+      const chapters = Array.from({ length: endChapter }, (_, i) => i + 1);
+
+      // Use our state-tracked current chapter instead of DOM focus
+      let targetChapter = currentChapterFocus;
+      const cols = 6; // tw-grid-cols-6
+
+      console.log('Handling chapter key down:', {
+        eventKey: event.key,
+        currentChapter: currentChapterFocus,
+        targetChapter,
+        endChapter,
+        cols,
+      });
+
+      switch (event.key) {
+        case 'ArrowRight':
+          // Move to next item (right)
+          if (currentChapterFocus < endChapter) {
+            targetChapter = currentChapterFocus + 1;
+          }
+          break;
+        case 'ArrowLeft':
+          // Move to previous item (left)
+          if (currentChapterFocus > 1) {
+            targetChapter = currentChapterFocus - 1;
+          }
+          break;
+        case 'ArrowDown':
+          // Move down a row (6 items forward)
+          if (currentChapterFocus + cols <= endChapter) {
+            targetChapter = currentChapterFocus + cols;
+          }
+          break;
+        case 'ArrowUp':
+          // Move up a row (6 items backward)
+          if (currentChapterFocus - cols > 0) {
+            targetChapter = currentChapterFocus - cols;
+          }
+          break;
+        default:
+          return; // Let other keys pass through
+      }
+
+      if (targetChapter !== currentChapterFocus && chapters.includes(targetChapter)) {
+        // Update our focus state
+        setCurrentChapterFocus(targetChapter);
+
+        // Focus the target chapter element for visual feedback
+        const targetElement = document.querySelector(`[data-chapter="${targetChapter}"]`);
+        if (targetElement) {
+          // eslint-disable-next-line no-type-assertion/no-type-assertion
+          (targetElement as HTMLElement).focus();
+        }
+      }
+    },
+    [
+      viewMode,
+      handleBackToBooks,
+      shouldShowHybridView,
+      chapterViewData,
+      hybridChapterData,
+      currentChapterFocus,
+      setCurrentChapterFocus,
+      handleChapterSelect,
+      handleHybridChapterSelect,
+    ],
+  );
+
   // Auto-scroll to currently selected book when dropdown opens in book view
   useLayoutEffect(() => {
     const scrollTimeout = setTimeout(() => {
@@ -418,14 +533,15 @@ export function BookChapterCombobox({
           {currentDisplayValue}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="tw-w-[300px] tw-p-0" align="start" onKeyDown={handleKeyDown}>
-        <Command>
+      <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
+        <Command onKeyDown={handleChapterKeyDown}>
           {/* Input for book view, fixed header for chapter view */}
           {viewMode === 'books' ? (
             <CommandInput
-              placeholder="Search books or type reference (e.g., John 3:16)..."
+              placeholder="Search reference (e.g., John 3:16)..."
               value={inputValue}
               onValueChange={setInputValue}
+              onKeyDown={handleInputKeyDown}
             />
           ) : (
             <div className="tw-flex tw-items-center tw-border-b tw-px-3 tw-py-2">
@@ -454,7 +570,9 @@ export function BookChapterCombobox({
                     <CommandGroup heading="Scripture Reference">
                       <CommandItem
                         key="top-match"
-                        value={`top-match-${topMatch.book}-${topMatch.chapterNum || 1}-${topMatch.verseNum || 1}`}
+                        value={`${topMatch.book} ${ALL_ENGLISH_BOOK_NAMES[topMatch.book]} ${
+                          topMatch.chapterNum || ''
+                        }:${topMatch.verseNum || ''})}`}
                         onSelect={handleTopMatchSelect}
                         className="tw-font-semibold tw-text-primary"
                       >
@@ -481,7 +599,7 @@ export function BookChapterCombobox({
                         <CommandGroup heading="Scripture Reference">
                           <CommandItem
                             key="hybrid-match"
-                            value={`hybrid-match-${hybridBookId}`}
+                            value={`${hybridBookId} ${ALL_ENGLISH_BOOK_NAMES[hybridBookId]}`}
                             onSelect={() => handleBookSelect(hybridBookId)}
                             className="tw-font-semibold tw-text-primary"
                           >
@@ -503,14 +621,31 @@ export function BookChapterCombobox({
                       <div className="tw-mb-2 tw-text-sm tw-font-medium tw-text-muted-foreground">
                         {hybridChapterData.bookName} - Select Chapter
                       </div>
-                      <ChapterSelect
-                        handleSelectChapter={handleHybridChapterSelect}
-                        endChapter={hybridChapterData.endChapter}
-                        selectedChapter={hybridChapterData.selectedChapter}
-                        highlightedChapter={highlightedChapter}
-                        handleHighlightedChapter={setHighlightedChapter}
-                      />
                     </div>
+                    <CommandGroup>
+                      <div className="tw-grid tw-grid-cols-6 tw-gap-1 tw-px-4 tw-pb-4">
+                        {Array.from({ length: hybridChapterData.endChapter }, (_, i) => i + 1).map(
+                          (chapter) => (
+                            <CommandItem
+                              key={chapter}
+                              value={`${hybridBookId} ${ALL_ENGLISH_BOOK_NAMES[hybridBookId]} ${chapter}`}
+                              onSelect={() => handleHybridChapterSelect(chapter)}
+                              data-chapter={chapter}
+                              className={cn(
+                                'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+                                {
+                                  'tw-bg-primary tw-text-primary-foreground':
+                                    chapter === hybridChapterData.selectedChapter,
+                                  'tw-ring-2 tw-ring-blue-500': chapter === currentChapterFocus,
+                                },
+                              )}
+                            >
+                              {chapter}
+                            </CommandItem>
+                          ),
+                        )}
+                      </div>
+                    </CommandGroup>
                   </>
                 )}
 
@@ -525,7 +660,7 @@ export function BookChapterCombobox({
                         {books.map((bookId) => (
                           <CommandItem
                             key={bookId}
-                            value={bookId}
+                            value={`${bookId} ${ALL_ENGLISH_BOOK_NAMES[bookId]}`}
                             onSelect={() => handleBookSelect(bookId)}
                             ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
                           >
@@ -540,17 +675,38 @@ export function BookChapterCombobox({
 
             {viewMode === 'chapters' && (
               /* Regular Chapter View */
-              <div className="tw-p-4">
-                {chapterViewData && (
-                  <ChapterSelect
-                    handleSelectChapter={handleChapterSelect}
-                    endChapter={chapterViewData.endChapter}
-                    selectedChapter={chapterViewData.selectedChapter}
-                    highlightedChapter={highlightedChapter}
-                    handleHighlightedChapter={setHighlightedChapter}
-                  />
-                )}
-              </div>
+              <>
+                <div className="tw-p-4 tw-pb-2">
+                  <div className="tw-text-sm tw-font-medium tw-text-muted-foreground">
+                    Select Chapter
+                  </div>
+                </div>
+                <CommandGroup>
+                  <div className="tw-grid tw-grid-cols-6 tw-gap-1 tw-px-4 tw-pb-4">
+                    {chapterViewData &&
+                      Array.from({ length: chapterViewData.endChapter }, (_, i) => i + 1).map(
+                        (chapter) => (
+                          <CommandItem
+                            key={chapter}
+                            value={`${selectedBookForChapters || ''} ${chapterViewData ? ALL_ENGLISH_BOOK_NAMES[selectedBookForChapters || ''] || '' : ''} ${chapter}`}
+                            onSelect={() => handleChapterSelect(chapter)}
+                            data-chapter={chapter}
+                            className={cn(
+                              'tw-h-8 tw-w-8 tw-cursor-pointer tw-justify-center tw-rounded-md tw-text-center tw-text-sm',
+                              {
+                                'tw-bg-primary tw-text-primary-foreground':
+                                  chapter === chapterViewData.selectedChapter,
+                                'tw-ring-2 tw-ring-blue-500': chapter === currentChapterFocus,
+                              },
+                            )}
+                          >
+                            {chapter}
+                          </CommandItem>
+                        ),
+                      )}
+                  </div>
+                </CommandGroup>
+              </>
             )}
           </CommandList>
         </Command>
