@@ -57,10 +57,16 @@ BookChapterCombobox is an alternative implementation of BookChapterControl using
 - Shows "top match" suggestions for parsed references
 - Press Enter on top match for immediate navigation
 
-**Current Status:** Smart parsing + basic book selection
-**TODO:** Chapter selection UI, advanced keyboard navigation
+**Chapter Selection Features:**
+- Click a book to see its chapters (if it has multiple chapters)
+- Integrated ChapterSelect component with grid layout
+- Back navigation with arrow button
+- Books with 1 chapter (like Obadiah) navigate immediately
 
-Try typing in the search: "John 3:16", "Romans 8", "PSA 23:1", or "1 Corinthians 13:4"
+**Current Status:** Smart parsing + chapter selection
+**TODO:** Advanced keyboard navigation, topMatchChapters filtering
+
+Try typing: "John 3:16", "Romans 8", or click "Romans" to see chapter selection!
         `,
       },
     },
@@ -124,6 +130,33 @@ export const WithCustomClassName: Story = {
     docs: {
       description: {
         story: 'Shows the component with custom styling applied.',
+      },
+    },
+  },
+};
+
+export const ChapterSelectionDemo: Story = {
+  args: {
+    scrRef: {
+      book: 'ROM',
+      chapterNum: 8,
+      verseNum: 1,
+    },
+  },
+  parameters: {
+    docs: {
+      description: {
+        story: `
+**Chapter Selection Demo** - Starting with Romans 8:1 selected.
+
+1. Click to open the component
+2. Search for books like "Psalms", "John", or "Romans"
+3. Click a book with multiple chapters to see the chapter grid
+4. Use the back arrow to return to book selection
+5. Try books with single chapters like "Obadiah" or "Philemon" - they navigate immediately!
+
+The chapter grid shows the current chapter highlighted and allows easy selection.
+        `,
       },
     },
   },

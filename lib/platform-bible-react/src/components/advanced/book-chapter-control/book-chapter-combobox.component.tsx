@@ -1,6 +1,7 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Canon, SerializedVerseRef } from '@sillsdev/scripture';
 import { formatScrRef, getChaptersForBook } from 'platform-bible-utils';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/shadcn-ui/button';
 import {
   Command,
@@ -12,6 +13,7 @@ import {
   CommandSeparator,
 } from '@/components/shadcn-ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/shadcn-ui/popover';
+import { ChapterSelect } from '@/components/advanced/book-chapter-control/chapter-select.component';
 
 export type BookChapterComboboxProps = {
   /** The current scripture reference */
@@ -56,6 +58,9 @@ const SEARCH_QUERY_FORMATS = [
 type BookWithOptionalChapterAndVerse = Omit<SerializedVerseRef, 'chapterNum' | 'verseNum'> &
   Partial<Pick<SerializedVerseRef, 'chapterNum' | 'verseNum'>>;
 
+// View modes for the component
+type ViewMode = 'books' | 'chapters';
+
 /** Gets a bookId from given English name */
 function getBookIdFromEnglishName(bookName: string): string | undefined {
   const matchingBookId = ALL_BOOK_IDS.find(
@@ -74,8 +79,14 @@ function fetchEndChapter(bookId: string) {
  * Popover+Command instead of DropdownMenu. This should provide better control over focus behavior
  * and interaction patterns.
  *
- * This is a step-by-step implementation - starting with basic book selection functionality. TODO:
- * Add chapter selection, keyboard navigation, top match logic, etc.
+ * Features implemented:
+ *
+ * - Smart parsing logic for "John 3:16" style input
+ * - Book selection with automatic chapter view transition
+ * - ChapterSelect component integration
+ * - Back navigation between views
+ *
+ * TODO: Advanced keyboard navigation, topMatchChapters filtering, etc.
  */
 export function BookChapterCombobox({
   scrRef,
@@ -85,6 +96,17 @@ export function BookChapterCombobox({
 }: BookChapterComboboxProps) {
   const [open, setOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('books');
+  const [selectedBookForChapters, setSelectedBookForChapters] = useState<string | undefined>(
+    undefined,
+  );
+  const [highlightedChapter, setHighlightedChapter] = useState<number>(1);
+
+  // Refs for scrolling to selected book
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const commandListRef = useRef<HTMLDivElement>(undefined!);
+  // eslint-disable-next-line no-type-assertion/no-type-assertion
+  const selectedBookItemRef = useRef<HTMLDivElement>(undefined!);
 
   // Get available books (same logic as original)
   const availableBooks = useMemo(() => {
@@ -167,22 +189,55 @@ export function BookChapterCombobox({
 
   const handleBookSelect = useCallback(
     (bookId: string) => {
-      // For now, just select the book with chapter 1, verse 1
-      // TODO: Add chapter selection logic
+      // Check if book has chapters - if not, submit immediately
+      const endChapter = fetchEndChapter(bookId);
+      if (endChapter <= 1) {
+        // Book has no chapters or only 1 chapter - submit immediately
+        handleSubmit({
+          book: bookId,
+          chapterNum: 1,
+          verseNum: 1,
+        });
+        setOpen(false);
+        setInputValue('');
+        return;
+      }
+
+      // Book has multiple chapters - transition to chapter view
+      setSelectedBookForChapters(bookId);
+      setViewMode('chapters');
+      setHighlightedChapter(scrRef.book === bookId ? scrRef.chapterNum : 1);
+      setInputValue(''); // Clear search when transitioning
+    },
+    [handleSubmit, scrRef.book, scrRef.chapterNum],
+  );
+
+  const handleChapterSelect = useCallback(
+    (chapterNumber: number) => {
+      if (!selectedBookForChapters) return;
+
       handleSubmit({
-        book: bookId,
-        chapterNum: 1,
+        book: selectedBookForChapters,
+        chapterNum: chapterNumber,
         verseNum: 1,
       });
       setOpen(false);
+      setViewMode('books');
+      setSelectedBookForChapters(undefined);
       setInputValue('');
     },
-    [handleSubmit],
+    [handleSubmit, selectedBookForChapters],
   );
+
+  const handleBackToBooks = useCallback(() => {
+    setViewMode('books');
+    setSelectedBookForChapters(undefined);
+    setInputValue('');
+  }, []);
 
   const handleTopMatchSelect = useCallback(() => {
     if (!topMatch) return;
-    
+
     handleSubmit({
       book: topMatch.book,
       chapterNum: topMatch.chapterNum ?? 1,
@@ -194,6 +249,52 @@ export function BookChapterCombobox({
 
   const currentDisplayValue = formatScrRef(scrRef, 'English');
 
+  // Calculate chapter-related data when in chapter view
+  const chapterViewData = useMemo(() => {
+    if (viewMode !== 'chapters' || !selectedBookForChapters) return undefined;
+
+    const endChapter = fetchEndChapter(selectedBookForChapters);
+    const bookName = ALL_ENGLISH_BOOK_NAMES[selectedBookForChapters];
+
+    return {
+      endChapter,
+      bookName,
+      selectedChapter: scrRef.book === selectedBookForChapters ? scrRef.chapterNum : 0,
+    };
+  }, [viewMode, selectedBookForChapters, scrRef.book, scrRef.chapterNum]);
+
+  // Auto-scroll to currently selected book when dropdown opens in book view
+  useLayoutEffect(() => {
+    const scrollTimeout = setTimeout(() => {
+      if (
+        open &&
+        viewMode === 'books' &&
+        !inputValue.trim() && // Only auto-scroll when not searching
+        !topMatch && // Only auto-scroll when not showing top match
+        commandListRef.current &&
+        selectedBookItemRef.current
+      ) {
+        const listElement = commandListRef.current;
+        const itemElement = selectedBookItemRef.current;
+
+        // Calculate scroll position to center the selected item
+        const itemOffsetTop = itemElement.offsetTop;
+        const listHeight = listElement.clientHeight;
+        const itemHeight = itemElement.clientHeight;
+        const scrollPosition = itemOffsetTop - listHeight / 2 + itemHeight / 2;
+
+        listElement.scrollTo({
+          top: Math.max(0, scrollPosition),
+          behavior: 'smooth',
+        });
+      }
+    }, 10); // Small delay to ensure DOM is ready
+
+    return () => {
+      clearTimeout(scrollTimeout);
+    };
+  }, [open, viewMode, inputValue, topMatch]);
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -203,57 +304,93 @@ export function BookChapterCombobox({
       </PopoverTrigger>
       <PopoverContent className="tw-w-[300px] tw-p-0" align="start">
         <Command>
-          <CommandInput
-            placeholder="Search books or type reference (e.g., John 3:16)..."
-            value={inputValue}
-            onValueChange={setInputValue}
-          />
-          <CommandList>
-            <CommandEmpty>No books found.</CommandEmpty>
-            
-            {/* Top Match - Show parsed scripture reference */}
-            {topMatch && (
+          {/* Input for book view, fixed header for chapter view */}
+          {viewMode === 'books' ? (
+            <CommandInput
+              placeholder="Search books or type reference (e.g., John 3:16)..."
+              value={inputValue}
+              onValueChange={setInputValue}
+            />
+          ) : (
+            <div className="tw-flex tw-items-center tw-border-b tw-px-3 tw-py-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleBackToBooks}
+                className="tw-mr-2 tw-h-6 tw-w-6 tw-p-0"
+              >
+                <ArrowLeft className="tw-h-4 tw-w-4" />
+              </Button>
+              <span className="tw-text-sm tw-font-medium">
+                {chapterViewData?.bookName} - Select Chapter
+              </span>
+            </div>
+          )}
+
+          <CommandList ref={commandListRef}>
+            {viewMode === 'books' ? (
               <>
-                <CommandGroup heading="Scripture Reference">
-                  <CommandItem
-                    key="top-match"
-                    value={`top-match-${topMatch.book}-${topMatch.chapterNum || 1}-${topMatch.verseNum || 1}`}
-                    onSelect={handleTopMatchSelect}
-                    className="tw-font-semibold tw-text-primary"
-                  >
-                    {formatScrRef({
-                      book: topMatch.book,
-                      chapterNum: topMatch.chapterNum ?? 1,
-                      verseNum: topMatch.verseNum ?? 1,
-                    })}
-                    <span className="tw-ml-auto tw-text-xs tw-text-muted-foreground">
-                      Press Enter ↵
-                    </span>
-                  </CommandItem>
-                </CommandGroup>
-                <CommandSeparator />
+                <CommandEmpty>No books found.</CommandEmpty>
+
+                {/* Top Match - Show parsed scripture reference */}
+                {topMatch && (
+                  <>
+                    <CommandGroup heading="Scripture Reference">
+                      <CommandItem
+                        key="top-match"
+                        value={`top-match-${topMatch.book}-${topMatch.chapterNum || 1}-${topMatch.verseNum || 1}`}
+                        onSelect={handleTopMatchSelect}
+                        className="tw-font-semibold tw-text-primary"
+                      >
+                        {formatScrRef({
+                          book: topMatch.book,
+                          chapterNum: topMatch.chapterNum ?? 1,
+                          verseNum: topMatch.verseNum ?? 1,
+                        })}
+                        <span className="tw-ml-auto tw-text-xs tw-text-muted-foreground">
+                          Press Enter ↵
+                        </span>
+                      </CommandItem>
+                    </CommandGroup>
+                    <CommandSeparator />
+                  </>
+                )}
+
+                {/* Book List - Only show when no top match */}
+                {Object.entries(filteredBooks).map(([type, books]) => {
+                  if (books.length === 0) return undefined;
+
+                  return (
+                    // eslint-disable-next-line no-type-assertion/no-type-assertion
+                    <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
+                      {books.map((bookId) => (
+                        <CommandItem
+                          key={bookId}
+                          value={bookId}
+                          onSelect={() => handleBookSelect(bookId)}
+                          ref={bookId === scrRef.book ? selectedBookItemRef : undefined}
+                        >
+                          {ALL_ENGLISH_BOOK_NAMES[bookId]}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  );
+                })}
               </>
+            ) : (
+              /* Chapter View */
+              <div className="tw-p-4">
+                {chapterViewData && (
+                  <ChapterSelect
+                    handleSelectChapter={handleChapterSelect}
+                    endChapter={chapterViewData.endChapter}
+                    selectedChapter={chapterViewData.selectedChapter}
+                    highlightedChapter={highlightedChapter}
+                    handleHighlightedChapter={setHighlightedChapter}
+                  />
+                )}
+              </div>
             )}
-            
-            {/* Book List - Only show when no top match */}
-            {Object.entries(filteredBooks).map(([type, books]) => {
-              if (books.length === 0) return undefined;
-              
-              return (
-                // eslint-disable-next-line no-type-assertion/no-type-assertion
-                <CommandGroup key={type} heading={BOOK_TYPE_LABELS[type as BookType]}>
-                  {books.map((bookId) => (
-                    <CommandItem
-                      key={bookId}
-                      value={bookId}
-                      onSelect={() => handleBookSelect(bookId)}
-                    >
-                      {ALL_ENGLISH_BOOK_NAMES[bookId]}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              );
-            })}
           </CommandList>
         </Command>
       </PopoverContent>
