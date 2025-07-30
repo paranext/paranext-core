@@ -55,6 +55,7 @@ export function ChapterSelect({
                 matchingChapters && !matchingChapters.includes(chapter),
             },
           )}
+          aria-current={chapter === highlightedChapter}
           onClick={(event) => {
             event.preventDefault();
             event.stopPropagation();
