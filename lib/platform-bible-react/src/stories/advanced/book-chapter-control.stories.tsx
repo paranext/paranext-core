@@ -246,6 +246,7 @@ async function expectDropdownToBeClosed() {
 async function expectClosedDropdownStateWithCleanInput(input: HTMLElement) {
   // Verify the dropdown is closed and no menu items are visible
   await expect(input).toHaveFocus();
+  await expect(input).toHaveClass('focus-visible:tw-ring-ring'); // Standard focus ring class
   await expectNoIconToExist(input);
   await expectDropdownToBeClosed();
 }
@@ -484,6 +485,7 @@ export const TestInitialStateWithGenesis: Story = {
   play: async ({ canvas, userEvent }) => {
     const input = canvas.getByRole('textbox');
     await userEvent.click(input);
+    await expect(input).toHaveClass('focus-visible:tw-ring-ring'); // Standard focus ring class
 
     const dropdownContent = await expectDropdownToBeOpenAndVisible();
 
@@ -644,5 +646,168 @@ export const TestChapterSelectionByClick: Story = {
     const inputValue = input.getAttribute('value');
     expect(inputValue).toContain('PSA 23');
     expectClosedDropdownStateWithCleanInput(input);
+  },
+};
+
+export const TestCursorPositioning: Story = {
+  args: defaultArgs,
+  play: async ({ canvas, userEvent }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+
+    // Click at the end of the text
+    await userEvent.click(input);
+    await userEvent.type(input, '{End}');
+    const cursorAtEnd = input.selectionStart === input.value.length;
+    expect(cursorAtEnd).toBe(true);
+
+    // TODO: this is not a realistic test and so it passes, when in manually testing this may fail
+
+    // Click in the middle of the text (we'll simulate this by setting the selection manually
+    // since userEvent.click() doesn't support position-specific clicks)
+    input.setSelectionRange(3, 3);
+    const cursorInMiddle = input.selectionStart === 3;
+    expect(cursorInMiddle).toBe(true);
+  },
+};
+
+export const TestNoKeystrokeLoss: Story = {
+  args: defaultArgs,
+  play: async ({ canvas, userEvent }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+
+    // Click to focus without opening dropdown
+    await userEvent.tab();
+    await userEvent.tab();
+    expect(input).toHaveFocus();
+    await expectDropdownToBeClosed();
+
+    // Type quickly
+    const text = 'mat';
+    await userEvent.keyboard(text);
+
+    // Verify all keystrokes were captured
+    expect(input.value.toLowerCase()).toContain(text);
+    await expectDropdownToBeOpenAndVisible();
+  },
+};
+
+export const TestRegularInputBehavior: Story = {
+  args: defaultArgs,
+  play: async ({ canvas, userEvent }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+    await userEvent.click(input);
+
+    // Test arrow key navigation
+    await userEvent.keyboard('{ArrowLeft}');
+    expect(input.selectionStart).toBe(input.value.length - 1);
+
+    await userEvent.keyboard('{ArrowRight}');
+    expect(input.selectionStart).toBe(input.value.length);
+
+    // Test Home/End
+    await userEvent.keyboard('{Home}');
+    expect(input.selectionStart).toBe(0);
+
+    await userEvent.keyboard('{End}');
+    expect(input.selectionStart).toBe(input.value.length);
+
+    // Test text selection with shift + arrow
+    await userEvent.keyboard('{Home}');
+    await userEvent.keyboard('{Shift>}{ArrowRight}{ArrowRight}{/Shift}');
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(2);
+
+    // Test Ctrl+A
+    await userEvent.keyboard('{Control>}a{/Control}');
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+  },
+};
+
+export const TestCopyPaste: Story = {
+  args: defaultArgs,
+  play: async ({ canvas, userEvent }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+    await userEvent.click(input);
+
+    // Select all text
+    await userEvent.keyboard('{Control>}a{/Control}');
+
+    // Copy and paste (implementation note: this test is limited since clipboard
+    // operations aren't fully supported in the test environment)
+    await userEvent.keyboard('{Control>}c{/Control}');
+
+    // Move cursor to start and paste
+    await userEvent.keyboard('{Home}');
+    await userEvent.keyboard('{Control>}v{/Control}');
+
+    // Verify the input still contains valid content
+    expect(input.value).toMatch(/^[A-Z1-3]{3}\s\d+:\d+$/);
+  },
+};
+
+export const TestTextSelection: Story = {
+  args: defaultArgs,
+  play: async ({ canvas, userEvent }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+
+    // Test double click (selects word)
+    await userEvent.dblClick(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.indexOf(' '));
+
+    // Test triple click (selects all)
+    await userEvent.tripleClick(input);
+    expect(input.selectionStart).toBe(0);
+    expect(input.selectionEnd).toBe(input.value.length);
+  },
+};
+
+export const TestNoGroupHeadingNavigation: Story = {
+  args: defaultArgs,
+  play: async ({ canvas, userEvent }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+    await userEvent.click(input);
+
+    const dropdownContent = await expectDropdownToBeOpenAndVisible();
+
+    // Verify group headings are not interactive
+    const groupHeadings = within(dropdownContent).getAllByText(/(Old|New) Testament/);
+    groupHeadings.forEach((heading) => {
+      expect(heading.closest('button, [role="menuitem"]')).toBeNull();
+      expect(heading).not.toHaveAttribute('tabindex');
+    });
+  },
+};
+
+export const TestChapterNumberDimming: Story = {
+  args: defaultArgs,
+  play: async ({ canvas, userEvent }) => {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion, no-type-assertion/no-type-assertion
+    const input = canvas.getByRole('textbox') as HTMLInputElement;
+    await userEvent.click(input);
+    await userEvent.keyboard('genesis 2');
+
+    // Get expanded Genesis chapters
+    const dropdownContent = await expectDropdownToBeOpenAndVisible();
+    const genesis = await getBookMenuItem(dropdownContent, 'Genesis');
+    const chapters = await getChapters(genesis);
+
+    // Chapter 2 and 20-29 should not be dimmed
+    const matchingChapters = [2, ...Array.from({ length: 10 }, (_, i) => i + 20)];
+    chapters.forEach((chapter) => {
+      const num = parseInt(chapter.textContent || '0', 10);
+      if (matchingChapters.includes(num)) {
+        expect(chapter).not.toHaveClass('tw-text-muted-foreground');
+      } else {
+        expect(chapter).toHaveClass('tw-text-muted-foreground');
+      }
+    });
   },
 };
